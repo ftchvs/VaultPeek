@@ -6,8 +6,10 @@ struct MenuBarLabel: View {
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: "dollarsign.circle.fill")
+                .foregroundStyle(.green)
             Text(appState.menuBarText)
                 .monospacedDigit()
         }
+        .help("PlaidBar — Net: \(appState.menuBarText)")
     }
 }

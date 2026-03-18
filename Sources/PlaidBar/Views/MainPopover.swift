@@ -11,18 +11,31 @@ struct MainPopover: View {
             if !appState.isSetupComplete {
                 SetupView()
             } else {
-                // Header
-                HStack {
-                    Text("PlaidBar")
-                        .font(.headline)
-                    Spacer()
+                // Header — balance as hero
+                VStack(spacing: 2) {
                     Text(Formatters.currency(appState.netBalance, format: .full))
-                        .font(.headline)
+                        .font(.title2.bold())
                         .monospacedDigit()
+                        .contentTransition(.numericText())
+                        .animation(.default, value: appState.netBalance)
+
+                    HStack(spacing: 6) {
+                        Text("PlaidBar")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        if let syncText = appState.lastSyncRelative {
+                            Text("·")
+                                .font(.caption)
+                                .foregroundStyle(.quaternary)
+                            Text("Synced \(syncText)")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
                 }
-                .padding(.horizontal)
-                .padding(.top, 12)
-                .padding(.bottom, 8)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 14)
+                .padding(.bottom, 10)
 
                 // Tab picker
                 Picker("View", selection: $state.selectedTab) {
@@ -37,36 +50,40 @@ struct MainPopover: View {
 
                 Divider()
 
-                // Content
+                // Content with tab animation
                 ScrollView {
-                    switch appState.selectedTab {
-                    case .accounts:
-                        AccountsView()
-                    case .transactions:
-                        TransactionsView()
-                    case .spending:
-                        SpendingView()
-                    case .credit:
-                        CreditView()
+                    Group {
+                        switch appState.selectedTab {
+                        case .accounts:
+                            AccountsView()
+                        case .transactions:
+                            TransactionsView()
+                        case .spending:
+                            SpendingView()
+                        case .credit:
+                            CreditView()
+                        }
                     }
+                    .animation(.easeInOut(duration: 0.2), value: appState.selectedTab)
                 }
-                .frame(maxHeight: 400)
+                .scrollContentBackground(.hidden)
+                .frame(minHeight: 300, maxHeight: 480)
 
                 Divider()
 
                 // Footer
-                HStack {
-                    Button("Add Account") {
+                HStack(spacing: 12) {
+                    Button {
                         Task { await appState.addAccount() }
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.body)
+                            .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.borderless)
+                    .help("Add Account")
 
                     Spacer()
-
-                    if appState.isLoading {
-                        ProgressView()
-                            .scaleEffect(0.7)
-                    }
 
                     Button {
                         Task {
@@ -74,7 +91,7 @@ struct MainPopover: View {
                             await appState.syncTransactions()
                         }
                     } label: {
-                        Image(systemName: "arrow.clockwise")
+                        RefreshIcon(isLoading: appState.isLoading)
                     }
                     .buttonStyle(.borderless)
                     .help("Refresh")
@@ -107,9 +124,11 @@ struct MainPopover: View {
                 .padding(.horizontal)
                 .padding(.vertical, 6)
                 .background(.red.opacity(0.1))
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .frame(width: 360)
+        .animation(.easeInOut(duration: 0.25), value: appState.error != nil)
         .task {
             await appState.loadInitialData()
         }

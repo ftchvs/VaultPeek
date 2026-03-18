@@ -22,11 +22,13 @@ struct TransactionsView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Search bar
-            HStack {
+            HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
+                    .font(.caption)
                 TextField("Search transactions...", text: $searchText)
                     .textFieldStyle(.plain)
+                    .font(.body)
                 if !searchText.isEmpty {
                     Button {
                         searchText = ""
@@ -37,6 +39,9 @@ struct TransactionsView: View {
                     .buttonStyle(.borderless)
                 }
             }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
             .padding(.horizontal)
             .padding(.vertical, 8)
 
@@ -61,6 +66,7 @@ struct TransactionsView: View {
                         .padding(.horizontal)
                         .padding(.top, 10)
                         .padding(.bottom, 4)
+                        .background(.quaternary.opacity(0.3))
 
                     ForEach(transactions) { transaction in
                         TransactionRow(transaction: transaction)
@@ -106,7 +112,7 @@ struct TransactionRow: View {
             // Amount
             VStack(alignment: .trailing) {
                 Text(amountText)
-                    .foregroundStyle(transaction.isIncome ? .green : .primary)
+                    .foregroundStyle(amountColor)
                     .monospacedDigit()
 
                 if transaction.pending {
@@ -117,11 +123,18 @@ struct TransactionRow: View {
             }
         }
         .padding(.horizontal)
-        .padding(.vertical, 5)
+        .padding(.vertical, 8)
+        .hoverHighlight()
     }
 
     private var amountText: String {
-        let prefix = transaction.isIncome ? "+" : "-"
-        return "\(prefix)\(Formatters.currency(transaction.displayAmount, format: .full))"
+        if transaction.isIncome {
+            return "+\(Formatters.currency(transaction.displayAmount, format: .full))"
+        }
+        return Formatters.currency(transaction.displayAmount, format: .full)
+    }
+
+    private var amountColor: Color {
+        transaction.isIncome ? .green : .primary
     }
 }

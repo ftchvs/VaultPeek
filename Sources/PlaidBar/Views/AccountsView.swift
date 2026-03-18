@@ -41,7 +41,7 @@ struct AccountsView: View {
                     }
                 }
 
-                // Net balance footer
+                // Net balance footer (inside scroll)
                 Divider()
                     .padding(.top, 4)
                 HStack {
@@ -51,6 +51,8 @@ struct AccountsView: View {
                     Text(Formatters.currency(appState.netBalance, format: .full))
                         .fontWeight(.semibold)
                         .monospacedDigit()
+                        .contentTransition(.numericText())
+                        .animation(.default, value: appState.netBalance)
                 }
                 .padding(.horizontal)
                 .padding(.vertical, 8)
@@ -63,9 +65,37 @@ struct AccountsView: View {
             .font(.caption)
             .foregroundStyle(.secondary)
             .textCase(.uppercase)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal)
             .padding(.top, 12)
             .padding(.bottom, 4)
+            .background(.quaternary.opacity(0.3))
+    }
+}
+
+// MARK: - Institution Avatar
+
+private struct InstitutionAvatar: View {
+    let name: String
+
+    private var initial: String {
+        String(name.prefix(1)).uppercased()
+    }
+
+    private static let avatarColors: [Color] = [.blue, .green, .orange, .purple, .pink, .teal, .indigo, .mint]
+
+    private var color: Color {
+        // DJB2 hash for deterministic color across launches (hashValue is randomized per process)
+        let hash = name.utf8.reduce(5381) { ($0 &<< 5) &+ $0 &+ Int($1) }
+        return Self.avatarColors[abs(hash) % Self.avatarColors.count]
+    }
+
+    var body: some View {
+        Text(initial)
+            .font(.caption.bold())
+            .foregroundStyle(.white)
+            .frame(width: 28, height: 28)
+            .background(color, in: Circle())
     }
 }
 
@@ -73,7 +103,9 @@ struct AccountRow: View {
     let account: AccountDTO
 
     var body: some View {
-        HStack {
+        HStack(spacing: 10) {
+            InstitutionAvatar(name: account.institutionName ?? account.name)
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(account.name)
                     .font(.body)
@@ -85,22 +117,31 @@ struct AccountRow: View {
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
-                let amount = account.balances.current ?? account.balances.effectiveBalance
-                Text(Formatters.currency(
-                    account.type == .credit ? -abs(amount) : amount,
-                    format: .full
-                ))
-                .monospacedDigit()
-                .foregroundStyle(account.type == .credit ? .red : .primary)
+                Text(formattedAmount)
+                    .monospacedDigit()
+                    .foregroundStyle(amountColor)
 
                 if let utilization = account.balances.utilizationPercent {
                     Text(Formatters.percent(utilization))
                         .font(.caption)
-                        .foregroundStyle(utilization > 30 ? .orange : .secondary)
+                        .foregroundStyle(utilization > PlaidBarConstants.creditUtilizationWarningThreshold ? .orange : .secondary)
                 }
             }
         }
         .padding(.horizontal)
         .padding(.vertical, 6)
+        .hoverHighlight()
+    }
+
+    private var formattedAmount: String {
+        let amount = account.balances.current ?? account.balances.effectiveBalance
+        if account.type == .credit {
+            return Formatters.currency(abs(amount), format: .full)
+        }
+        return Formatters.currency(amount, format: .full)
+    }
+
+    private var amountColor: Color {
+        account.type == .credit ? .red : .primary
     }
 }

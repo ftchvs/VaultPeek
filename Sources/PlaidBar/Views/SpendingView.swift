@@ -38,11 +38,22 @@ struct SpendingView: View {
         }.sorted { $0.1 > $1.1 }
     }
 
+    /// Top 5 categories + "Other" rollup to prevent tiny chart slivers
+    private var chartCategories: [(SpendingCategory, Double)] {
+        guard filteredSpending.count > 5 else { return filteredSpending }
+        let top5 = Array(filteredSpending.prefix(5))
+        let otherTotal = filteredSpending.dropFirst(5).reduce(0) { $0 + $1.1 }
+        return top5 + [(.other, otherTotal)]
+    }
+
     private var totalFiltered: Double {
         filteredSpending.reduce(0) { $0 + $1.1 }
     }
 
     var body: some View {
+        let categories = chartCategories
+        let total = totalFiltered
+
         VStack(spacing: 12) {
             // Period picker
             Picker("Period", selection: $selectedPeriod) {
@@ -55,14 +66,42 @@ struct SpendingView: View {
             .padding(.horizontal)
             .padding(.top, 8)
 
-            // Total
-            Text("Total: \(Formatters.currency(totalFiltered, format: .full))")
-                .font(.title3)
-                .fontWeight(.semibold)
+            // Total — hero amount, no redundant label
+            Text(Formatters.currency(total, format: .full))
+                .font(.title2.bold())
+                .monospacedDigit()
+                .contentTransition(.numericText())
+                .animation(.default, value: total)
+
+            // Category breakdown legend (above chart so it's always visible)
+            VStack(spacing: 4) {
+                ForEach(categories, id: \.0) { category, amount in
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(Color(hex: category.colorHex) ?? .gray)
+                            .frame(width: 10, height: 10)
+
+                        Text(category.displayName)
+                            .font(.body)
+
+                        Spacer()
+
+                        Text(Formatters.currency(amount, format: .full))
+                            .monospacedDigit()
+
+                        Text(total > 0 ? Formatters.percent(amount / total * 100, decimals: 0) : "—")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 35, alignment: .trailing)
+                    }
+                    .padding(.horizontal)
+                    .padding(.vertical, 2)
+                }
+            }
 
             // Donut chart
-            if !filteredSpending.isEmpty {
-                Chart(filteredSpending, id: \.0) { category, amount in
+            if !categories.isEmpty && total > 0 {
+                Chart(categories, id: \.0) { category, amount in
                     SectorMark(
                         angle: .value("Amount", amount),
                         innerRadius: .ratio(0.6),
@@ -70,49 +109,24 @@ struct SpendingView: View {
                     )
                     .foregroundStyle(Color(hex: category.colorHex) ?? .gray)
                     .annotation(position: .overlay) {
-                        if amount / totalFiltered > 0.1 {
-                            Text(Formatters.percent(amount / totalFiltered * 100, decimals: 0))
+                        if amount / total > 0.1 {
+                            Text(Formatters.percent(amount / total * 100, decimals: 0))
                                 .font(.caption2)
                                 .fontWeight(.semibold)
                                 .foregroundStyle(.white)
                         }
                     }
                 }
-                .frame(height: 150)
+                .chartLegend(.hidden)
+                .frame(height: 170)
                 .padding(.horizontal)
-            }
-
-            // Category breakdown
-            ForEach(filteredSpending, id: \.0) { category, amount in
-                HStack(spacing: 8) {
-                    Circle()
-                        .fill(Color(hex: category.colorHex) ?? .gray)
-                        .frame(width: 10, height: 10)
-
-                    Text(category.displayName)
-                        .font(.body)
-
-                    Spacer()
-
-                    Text(Formatters.currency(amount, format: .full))
-                        .monospacedDigit()
-
-                    Text(Formatters.percent(amount / totalFiltered * 100, decimals: 0))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 35, alignment: .trailing)
-                }
-                .padding(.horizontal)
-                .padding(.vertical, 2)
             }
         }
         .padding(.bottom, 8)
     }
 
     private static func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: date)
+        Formatters.transactionDateString(date)
     }
 }
 

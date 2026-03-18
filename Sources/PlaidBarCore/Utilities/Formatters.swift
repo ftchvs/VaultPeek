@@ -84,6 +84,10 @@ public enum Formatters {
         transactionDateFormatter.date(from: dateString)
     }
 
+    public static func transactionDateString(_ date: Date) -> String {
+        transactionDateFormatter.string(from: date)
+    }
+
     public static func displayDate(_ date: Date) -> String {
         let calendar = Calendar.current
         if calendar.isDateInToday(date) {

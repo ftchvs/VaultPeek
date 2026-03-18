@@ -49,15 +49,23 @@ struct CreditView: View {
                     Spacer()
                     Text(Formatters.percent(totalUtilization))
                         .fontWeight(.semibold)
-                        .foregroundStyle(
-                            totalUtilization > appState.creditUtilizationThreshold
-                                ? .orange : .primary
-                        )
+                        .foregroundStyle(utilizationColor(for: totalUtilization))
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 8)
             }
         }
+    }
+}
+
+// MARK: - Utilization Color
+
+private func utilizationColor(for percent: Double) -> Color {
+    switch percent {
+    case 0..<30: return .green
+    case 30..<50: return .yellow
+    case 50..<75: return .orange
+    default: return .red
     }
 }
 
@@ -78,8 +86,12 @@ struct CreditCardRow: View {
         return (balance / limit) * 100
     }
 
-    private var isWarning: Bool {
-        utilization > threshold
+    private var available: Double {
+        max(0, limit - balance)
+    }
+
+    private var barColor: Color {
+        utilizationColor(for: utilization)
     }
 
     var body: some View {
@@ -88,21 +100,21 @@ struct CreditCardRow: View {
                 Text(account.name)
                     .font(.body)
                 Spacer()
-                if isWarning {
+                if utilization > threshold {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
                         .font(.caption)
                 }
             }
 
-            // Progress bar
+            // Progress bar — thicker with rounded ends
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 4)
+                    RoundedRectangle(cornerRadius: 6)
                         .fill(.quaternary)
 
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(isWarning ? .orange : .blue)
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(barColor)
                         .frame(
                             width: max(
                                 0,
@@ -111,17 +123,23 @@ struct CreditCardRow: View {
                         )
                 }
             }
-            .frame(height: 8)
+            .frame(height: 12)
 
             HStack {
                 Text("\(Formatters.currency(balance, format: .compact)) / \(Formatters.currency(limit, format: .compact))")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
+                Text("Avail: \(Formatters.currency(available, format: .compact))")
+                    .font(.caption)
+                    .foregroundStyle(.green)
+                Text("·")
+                    .font(.caption)
+                    .foregroundStyle(.quaternary)
                 Text(Formatters.percent(utilization))
                     .font(.caption)
                     .fontWeight(.medium)
-                    .foregroundStyle(isWarning ? .orange : .secondary)
+                    .foregroundStyle(barColor)
             }
         }
         .padding(.horizontal)

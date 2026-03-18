@@ -14,6 +14,7 @@ final class AppState {
     var selectedTab: PopoverTab = .accounts
     var isSetupComplete = false
     var serverConnected = false
+    var lastSyncDate: Date?
 
     // MARK: - Settings
     var showBalanceInMenuBar = true
@@ -44,6 +45,11 @@ final class AppState {
         guard !accounts.isEmpty else { return "PlaidBar" }
         guard showBalanceInMenuBar else { return "\u{1F4B0}" }
         return Formatters.currency(netBalance, format: balanceFormat)
+    }
+
+    var lastSyncRelative: String? {
+        guard let lastSyncDate else { return nil }
+        return Formatters.relativeDate(lastSyncDate)
     }
 
     var creditAccounts: [AccountDTO] {
@@ -107,6 +113,7 @@ final class AppState {
         error = nil
         do {
             accounts = try await serverClient.getBalances()
+            lastSyncDate = Date()
         } catch {
             self.error = error.localizedDescription
         }
@@ -131,6 +138,7 @@ final class AppState {
             if response.hasMore {
                 await syncTransactions()
             }
+            lastSyncDate = Date()
         } catch {
             self.error = error.localizedDescription
         }
@@ -256,13 +264,12 @@ final class AppState {
 
         isSetupComplete = true
         serverConnected = true
+        lastSyncDate = Date()
     }
 
     private static func dateString(daysAgo: Int) -> String {
         let date = Calendar.current.date(byAdding: .day, value: -daysAgo, to: Date())!
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: date)
+        return Formatters.transactionDateString(date)
     }
 }
 

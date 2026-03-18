@@ -1,0 +1,54 @@
+name: Changelog
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  update-changelog:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Generate changelog entry
+        run: |
+          TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M UTC")
+          HASH=$(git rev-parse --short HEAD)
+          MSG=$(git log -1 --pretty=%s)
+
+          # Detect category from conventional commit prefix
+          case "$MSG" in
+            feat:*|feat\(*) CATEGORY="Feature" ;;
+            fix:*|fix\(*)   CATEGORY="Fix" ;;
+            docs:*)         CATEGORY="Documentation" ;;
+            refactor:*)     CATEGORY="Update" ;;
+            chore:*)        CATEGORY="Chore" ;;
+            *)              CATEGORY="Update" ;;
+          esac
+
+          BODY=$(git log -1 --pretty=%b | head -5)
+          DESC="${MSG#*: }"
+
+          # Build entry
+          ENTRY="## [$TIMESTAMP] — $CATEGORY\n\n${DESC}\n\n\`$HASH\`\n\n---\n"
+
+          # Insert after header (line 5)
+          if [ -f CHANGELOG.md ]; then
+            head -5 CHANGELOG.md > /tmp/cl_top
+            printf "\n$ENTRY\n" > /tmp/cl_entry
+            tail -n +6 CHANGELOG.md > /tmp/cl_rest
+            cat /tmp/cl_top /tmp/cl_entry /tmp/cl_rest > CHANGELOG.md
+          fi
+
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git diff --quiet CHANGELOG.md && exit 0
+          git add CHANGELOG.md
+          git commit -m "docs: auto-update changelog [skip ci]"
+          git push
