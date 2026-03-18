@@ -51,6 +51,7 @@ struct SpendingView: View {
                 }
             }
             .pickerStyle(.segmented)
+            .labelsHidden()
             .padding(.horizontal)
             .padding(.top, 8)
 

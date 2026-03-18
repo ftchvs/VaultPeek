@@ -179,12 +179,90 @@ final class AppState {
     }
 
     func loadInitialData() async {
+        if CommandLine.arguments.contains("--demo") {
+            loadDemoData()
+            // Allow --tab flag to set initial tab for screenshots
+            if let tabIdx = CommandLine.arguments.firstIndex(of: "--tab"),
+               tabIdx + 1 < CommandLine.arguments.count,
+               let tab = PopoverTab.allCases.first(where: { $0.rawValue.lowercased() == CommandLine.arguments[tabIdx + 1].lowercased() }) {
+                selectedTab = tab
+            }
+            return
+        }
         await checkServerConnection()
         if serverConnected {
             await refreshAccounts()
             await syncTransactions()
             startBackgroundRefresh()
         }
+    }
+
+    // MARK: - Demo Data
+
+    func loadDemoData() {
+        let today = Self.dateString(daysAgo: 0)
+        let yesterday = Self.dateString(daysAgo: 1)
+        let twoDaysAgo = Self.dateString(daysAgo: 2)
+        let threeDaysAgo = Self.dateString(daysAgo: 3)
+
+        accounts = [
+            AccountDTO(
+                id: "demo_checking", itemId: "demo_chase", name: "Chase Checking",
+                officialName: "Chase Total Checking", type: .depository, subtype: "checking",
+                mask: "4892", balances: BalanceDTO(available: 8_241.56, current: 8_241.56, isoCurrencyCode: "USD"),
+                institutionName: "Chase"
+            ),
+            AccountDTO(
+                id: "demo_savings", itemId: "demo_chase", name: "Chase Savings",
+                officialName: "Chase Savings", type: .depository, subtype: "savings",
+                mask: "7731", balances: BalanceDTO(available: 15_420.00, current: 15_420.00, isoCurrencyCode: "USD"),
+                institutionName: "Chase"
+            ),
+            AccountDTO(
+                id: "demo_amex", itemId: "demo_amex_item", name: "Amex Platinum",
+                officialName: "American Express Platinum Card", type: .credit, subtype: "credit card",
+                mask: "1008", balances: BalanceDTO(current: -1_847.32, limit: 20_000, isoCurrencyCode: "USD"),
+                institutionName: "American Express"
+            ),
+            AccountDTO(
+                id: "demo_visa", itemId: "demo_chase", name: "Chase Freedom",
+                officialName: "Chase Freedom Unlimited", type: .credit, subtype: "credit card",
+                mask: "3345", balances: BalanceDTO(current: -4_210.00, limit: 5_000, isoCurrencyCode: "USD"),
+                institutionName: "Chase"
+            ),
+        ]
+
+        transactions = [
+            // Today
+            TransactionDTO(id: "tx1", accountId: "demo_checking", amount: 67.42, date: today, name: "WHOLEFDS MKT 10234", merchantName: "Whole Foods", category: .foodAndDrink),
+            TransactionDTO(id: "tx2", accountId: "demo_checking", amount: 23.50, date: today, name: "UBER TRIP", merchantName: "Uber", category: .transportation),
+            TransactionDTO(id: "tx3", accountId: "demo_checking", amount: -3_200.00, date: today, name: "STRIPE TRANSFER", merchantName: "Stripe", category: .income),
+            TransactionDTO(id: "tx4", accountId: "demo_amex", amount: 142.80, date: today, name: "AMAZON.COM", merchantName: "Amazon", category: .shopping),
+            // Yesterday
+            TransactionDTO(id: "tx5", accountId: "demo_checking", amount: 15.99, date: yesterday, name: "NETFLIX.COM", merchantName: "Netflix", category: .entertainment),
+            TransactionDTO(id: "tx6", accountId: "demo_checking", amount: 45.00, date: yesterday, name: "SHELL OIL 57422", merchantName: "Shell", category: .transportation),
+            TransactionDTO(id: "tx7", accountId: "demo_amex", amount: 89.00, date: yesterday, name: "BLUE APRON", merchantName: "Blue Apron", category: .foodAndDrink),
+            TransactionDTO(id: "tx8", accountId: "demo_visa", amount: 34.50, date: yesterday, name: "SPOTIFY", merchantName: "Spotify", category: .entertainment),
+            // 2 days ago
+            TransactionDTO(id: "tx9", accountId: "demo_checking", amount: 250.00, date: twoDaysAgo, name: "VERIZON WIRELESS", merchantName: "Verizon", category: .billsAndUtilities),
+            TransactionDTO(id: "tx10", accountId: "demo_amex", amount: 320.00, date: twoDaysAgo, name: "DELTA AIR LINES", merchantName: "Delta Airlines", category: .travel),
+            TransactionDTO(id: "tx11", accountId: "demo_checking", amount: 12.50, date: twoDaysAgo, name: "STARBUCKS 8823", merchantName: "Starbucks", category: .foodAndDrink),
+            // 3 days ago
+            TransactionDTO(id: "tx12", accountId: "demo_visa", amount: 75.00, date: threeDaysAgo, name: "PLANET FITNESS", merchantName: "Planet Fitness", category: .healthAndFitness),
+            TransactionDTO(id: "tx13", accountId: "demo_checking", amount: -1_500.00, date: threeDaysAgo, name: "VENMO PAYMENT", merchantName: "Venmo", category: .income),
+            TransactionDTO(id: "tx14", accountId: "demo_amex", amount: 55.00, date: threeDaysAgo, name: "TARGET 0392", merchantName: "Target", category: .shopping),
+            TransactionDTO(id: "tx15", accountId: "demo_checking", amount: 1_850.00, date: threeDaysAgo, name: "RENT PAYMENT", merchantName: "Landlord", category: .billsAndUtilities),
+        ]
+
+        isSetupComplete = true
+        serverConnected = true
+    }
+
+    private static func dateString(daysAgo: Int) -> String {
+        let date = Calendar.current.date(byAdding: .day, value: -daysAgo, to: Date())!
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
     }
 }
 

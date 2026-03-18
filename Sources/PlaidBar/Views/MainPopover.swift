@@ -31,6 +31,7 @@ struct MainPopover: View {
                     }
                 }
                 .pickerStyle(.segmented)
+                .labelsHidden()
                 .padding(.horizontal)
                 .padding(.bottom, 8)
 

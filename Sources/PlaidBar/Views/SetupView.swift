@@ -41,7 +41,7 @@ struct SetupView: View {
                 .font(.title2)
                 .fontWeight(.bold)
 
-            Text("Connect your bank accounts to see balances and spending in your menu bar.")
+            Text("Connect your bank accounts to see\nbalances and spending in your menu bar.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
 
