@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-03-19 06:02 UTC] — Fix
+
+correct test count in CHANGELOG from 80+ to 86
+
+`7f6d6bc`
+
+---
+
+
 ## [2026-03-19 06:00 UTC] — Feature
 
 PlaidBar v0.3.0 — Data Exploration, Recurring Detection, Notifications (#11)
