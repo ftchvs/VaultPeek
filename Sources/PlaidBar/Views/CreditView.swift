@@ -16,21 +16,28 @@ struct CreditView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Spacing.md) {
             if appState.creditAccounts.isEmpty {
                 ContentUnavailableView {
                     Label("No Credit Cards", systemImage: "creditcard")
                 } description: {
-                    Text("Link a credit card to see utilization.")
+                    Text("Link a credit card to track utilization and available credit.")
+                } actions: {
+                    Button {
+                        Task { await appState.addAccount() }
+                    } label: {
+                        Label("Add Account", systemImage: "plus.circle")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
                 }
                 .padding()
             } else {
                 Text("Credit Utilization")
-                    .font(.caption)
+                    .sectionTitle()
                     .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
-                    .padding(.horizontal)
-                    .padding(.top, 8)
+                    .padding(.horizontal, Spacing.lg)
+                    .padding(.top, Spacing.sm)
 
                 ForEach(appState.creditAccounts) { card in
                     CreditCardRow(
@@ -40,32 +47,35 @@ struct CreditView: View {
                 }
 
                 Divider()
-                    .padding(.horizontal)
+                    .padding(.horizontal, Spacing.lg)
 
-                // Total
-                HStack {
-                    Text("Total Utilization")
-                        .fontWeight(.semibold)
+                // Total with gauge
+                HStack(spacing: Spacing.md) {
+                    Gauge(value: min(totalUtilization, 100), in: 0...100) {
+                        EmptyView()
+                    }
+                    .gaugeStyle(.accessoryCircular)
+                    .tint(SemanticColors.utilization(for: totalUtilization, threshold: appState.creditUtilizationThreshold))
+                    .scaleEffect(0.7)
+                    .frame(width: 36, height: 36)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Total Utilization")
+                            .fontWeight(.semibold)
+                        Text(Formatters.percent(totalUtilization))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(SemanticColors.utilization(for: totalUtilization, threshold: appState.creditUtilizationThreshold))
+                    }
                     Spacer()
-                    Text(Formatters.percent(totalUtilization))
-                        .fontWeight(.semibold)
-                        .foregroundStyle(utilizationColor(for: totalUtilization))
+                    Image(systemName: SemanticColors.utilizationIcon(for: totalUtilization))
+                        .foregroundStyle(SemanticColors.utilization(for: totalUtilization, threshold: appState.creditUtilizationThreshold))
                 }
-                .padding(.horizontal)
-                .padding(.bottom, 8)
+                .padding(.horizontal, Spacing.lg)
+                .padding(.bottom, Spacing.sm)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Total credit utilization \(Formatters.percent(totalUtilization))")
             }
         }
-    }
-}
-
-// MARK: - Utilization Color
-
-private func utilizationColor(for percent: Double) -> Color {
-    switch percent {
-    case 0..<30: return .green
-    case 30..<50: return .yellow
-    case 50..<75: return .orange
-    default: return .red
     }
 }
 
@@ -91,7 +101,7 @@ struct CreditCardRow: View {
     }
 
     private var barColor: Color {
-        utilizationColor(for: utilization)
+        SemanticColors.utilization(for: utilization, threshold: threshold)
     }
 
     var body: some View {
@@ -100,11 +110,10 @@ struct CreditCardRow: View {
                 Text(account.name)
                     .font(.body)
                 Spacer()
-                if utilization > threshold {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
-                        .font(.caption)
-                }
+                // Issue #4: threshold-specific icons
+                Image(systemName: SemanticColors.utilizationIcon(for: utilization))
+                    .foregroundStyle(barColor)
+                    .font(.caption)
             }
 
             // Progress bar — thicker with rounded ends
@@ -127,22 +136,24 @@ struct CreditCardRow: View {
 
             HStack {
                 Text("\(Formatters.currency(balance, format: .compact)) / \(Formatters.currency(limit, format: .compact))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .detailText()
                 Spacer()
                 Text("Avail: \(Formatters.currency(available, format: .compact))")
                     .font(.caption)
-                    .foregroundStyle(.green)
-                Text("·")
+                    .foregroundStyle(SemanticColors.available)
+                Text("\u{00B7}")
                     .font(.caption)
                     .foregroundStyle(.quaternary)
                 Text(Formatters.percent(utilization))
                     .font(.caption)
-                    .fontWeight(.medium)
+                    // Issue #4: bold percentage at warning thresholds
+                    .fontWeight(utilization >= threshold ? .semibold : .medium)
                     .foregroundStyle(barColor)
             }
         }
-        .padding(.horizontal)
+        .padding(.horizontal, Spacing.lg)
         .padding(.vertical, 6)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(account.name), \(Formatters.percent(utilization)) utilization, \(Formatters.currency(available, format: .compact)) available")
     }
 }

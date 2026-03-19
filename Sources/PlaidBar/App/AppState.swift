@@ -5,6 +5,15 @@ import Combine
 @Observable
 @MainActor
 final class AppState {
+    // MARK: - UserDefaults Keys
+    private enum Keys {
+        static let showBalanceInMenuBar = "showBalanceInMenuBar"
+        static let balanceFormat = "balanceFormat"
+        static let creditUtilizationThreshold = "creditUtilizationThreshold"
+        static let refreshInterval = "refreshInterval"
+        static let balanceHistory = "balanceHistory"
+    }
+
     // MARK: - State
     var accounts: [AccountDTO] = []
     var transactions: [TransactionDTO] = []
@@ -15,16 +24,70 @@ final class AppState {
     var isSetupComplete = false
     var serverConnected = false
     var lastSyncDate: Date?
+    var balanceHistory: [BalanceSnapshot] = []
 
-    // MARK: - Settings
-    var showBalanceInMenuBar = true
-    var balanceFormat: CurrencyFormat = .abbreviated
-    var creditUtilizationThreshold: Double = 30.0
-    var refreshInterval: TimeInterval = PlaidBarConstants.backgroundRefreshInterval
+    // MARK: - Settings (persisted to UserDefaults)
+    var showBalanceInMenuBar: Bool = true {
+        didSet { UserDefaults.standard.set(showBalanceInMenuBar, forKey: Keys.showBalanceInMenuBar) }
+    }
+    var balanceFormat: CurrencyFormat = .abbreviated {
+        didSet { UserDefaults.standard.set(balanceFormat.rawValue, forKey: Keys.balanceFormat) }
+    }
+    var creditUtilizationThreshold: Double = 30.0 {
+        didSet { UserDefaults.standard.set(creditUtilizationThreshold, forKey: Keys.creditUtilizationThreshold) }
+    }
+    var refreshInterval: TimeInterval = PlaidBarConstants.backgroundRefreshInterval {
+        didSet {
+            UserDefaults.standard.set(refreshInterval, forKey: Keys.refreshInterval)
+            // Restart background refresh with new interval
+            if refreshTask != nil { startBackgroundRefresh() }
+        }
+    }
+    var launchAtLogin: Bool = false {
+        didSet {
+            guard launchAtLogin != oldValue else { return }
+            do {
+                try LaunchService.setEnabled(launchAtLogin)
+            } catch {
+                self.error = "Launch at login failed: \(error.localizedDescription)"
+                launchAtLogin = oldValue
+            }
+        }
+    }
 
     // MARK: - Services
     private let serverClient = ServerClient()
     private var refreshTask: Task<Void, Never>?
+
+    // MARK: - Init
+
+    init() {
+        loadSettings()
+    }
+
+    private func loadSettings() {
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: Keys.showBalanceInMenuBar) != nil {
+            showBalanceInMenuBar = defaults.bool(forKey: Keys.showBalanceInMenuBar)
+        }
+        if let format = defaults.string(forKey: Keys.balanceFormat),
+           let f = CurrencyFormat(rawValue: format) {
+            balanceFormat = f
+        }
+        if defaults.object(forKey: Keys.creditUtilizationThreshold) != nil {
+            creditUtilizationThreshold = defaults.double(forKey: Keys.creditUtilizationThreshold)
+        }
+        if defaults.object(forKey: Keys.refreshInterval) != nil {
+            refreshInterval = defaults.double(forKey: Keys.refreshInterval)
+        }
+        // Balance history
+        if let data = defaults.data(forKey: Keys.balanceHistory),
+           let history = try? JSONDecoder().decode([BalanceSnapshot].self, from: data) {
+            balanceHistory = history
+        }
+        // Launch at login
+        launchAtLogin = LaunchService.isEnabled
+    }
 
     // MARK: - Computed
 
@@ -114,6 +177,7 @@ final class AppState {
         do {
             accounts = try await serverClient.getBalances()
             lastSyncDate = Date()
+            recordBalanceSnapshot()
         } catch {
             self.error = error.localizedDescription
         }
@@ -122,21 +186,21 @@ final class AppState {
 
     func syncTransactions() async {
         do {
-            let response = try await serverClient.syncTransactions()
-            // Add new transactions
-            transactions.append(contentsOf: response.added)
-            // Update modified
-            for modified in response.modified {
-                if let index = transactions.firstIndex(where: { $0.id == modified.id }) {
-                    transactions[index] = modified
+            var hasMore = true
+            while hasMore {
+                let response = try await serverClient.syncTransactions()
+                // Add new transactions
+                transactions.append(contentsOf: response.added)
+                // Update modified
+                for modified in response.modified {
+                    if let index = transactions.firstIndex(where: { $0.id == modified.id }) {
+                        transactions[index] = modified
+                    }
                 }
-            }
-            // Remove deleted
-            transactions.removeAll { response.removed.contains($0.id) }
-
-            // Continue if there's more
-            if response.hasMore {
-                await syncTransactions()
+                // Remove deleted
+                let removedIds = Set(response.removed)
+                transactions.removeAll { removedIds.contains($0.id) }
+                hasMore = response.hasMore
             }
             lastSyncDate = Date()
         } catch {
@@ -205,6 +269,20 @@ final class AppState {
         }
     }
 
+    // MARK: - Balance History
+
+    private func recordBalanceSnapshot() {
+        let snapshot = BalanceSnapshot(date: Date(), balance: netBalance)
+        balanceHistory.append(snapshot)
+        // Keep last 90 days
+        let cutoff = Calendar.current.date(byAdding: .day, value: -90, to: Date()) ?? Date()
+        balanceHistory.removeAll { $0.date < cutoff }
+        // Persist
+        if let data = try? JSONEncoder().encode(balanceHistory) {
+            UserDefaults.standard.set(data, forKey: Keys.balanceHistory)
+        }
+    }
+
     // MARK: - Demo Data
 
     func loadDemoData() {
@@ -261,6 +339,13 @@ final class AppState {
             TransactionDTO(id: "tx14", accountId: "demo_amex", amount: 55.00, date: threeDaysAgo, name: "TARGET 0392", merchantName: "Target", category: .shopping),
             TransactionDTO(id: "tx15", accountId: "demo_checking", amount: 1_850.00, date: threeDaysAgo, name: "RENT PAYMENT", merchantName: "Landlord", category: .billsAndUtilities),
         ]
+
+        // Generate demo balance history (7 days)
+        balanceHistory = (0..<7).reversed().map { daysAgo in
+            let date = Calendar.current.date(byAdding: .day, value: -daysAgo, to: Date())!
+            let jitter = Double.random(in: -500...500)
+            return BalanceSnapshot(date: date, balance: 17_604.24 + jitter)
+        }
 
         isSetupComplete = true
         serverConnected = true
