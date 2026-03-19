@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-03-19 18:41 UTC] — Documentation
+
+autoresearch-optimized PRD and DESIGN.md for v0.3
+
+`5322f69`
+
+---
+
+
 ## [2026-03-19 06:02 UTC] — Fix
 
 correct test count in CHANGELOG from 80+ to 86
