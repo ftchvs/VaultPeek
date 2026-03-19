@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-03-19 19:16 UTC] — Documentation
+
+comprehensive PRD and DESIGN.md updates for v0.3 (#18)
+
+`79fd8e9`
+
+---
+
+
 ## [2026-03-19 18:41 UTC] — Documentation
 
 autoresearch-optimized PRD and DESIGN.md for v0.3
