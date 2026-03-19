@@ -23,7 +23,7 @@ struct MainPopover: View {
                     if appState.balanceHistory.count >= 2 {
                         BalanceSparkline(history: appState.balanceHistory)
                             .frame(height: 24)
-                            .padding(.horizontal, 60)
+                            .padding(.horizontal, Spacing.xl * 2)
                             .padding(.top, Spacing.xs)
                     }
 
@@ -41,8 +41,8 @@ struct MainPopover: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.top, 14)
-                .padding(.bottom, 10)
+                .padding(.top, Spacing.lg)
+                .padding(.bottom, Spacing.md)
 
                 // Tab picker
                 Picker("View", selection: $state.selectedTab) {

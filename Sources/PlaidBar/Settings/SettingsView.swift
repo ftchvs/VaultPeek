@@ -137,8 +137,10 @@ struct AboutView: View {
                     updater.checkForUpdates()
                 }
 
-                Link("View on GitHub", destination: URL(string: "https://github.com/ftchvs/PlaidBar")!)
-                    .font(.callout)
+                if let repoURL = URL(string: "https://github.com/ftchvs/PlaidBar") {
+                    Link("View on GitHub", destination: repoURL)
+                        .font(.callout)
+                }
             }
 
             Text("MIT License")

@@ -30,13 +30,13 @@ public enum Formatters {
     public static func currency(_ amount: Double, format: CurrencyFormat = .full, currencyCode: String = "USD") -> String {
         switch format {
         case .full:
-            let formatter = fullFormatter.copy() as! NumberFormatter
+            guard let formatter = fullFormatter.copy() as? NumberFormatter else { return "$\(amount)" }
             formatter.currencyCode = currencyCode
             return formatter.string(from: NSNumber(value: amount)) ?? "$\(amount)"
         case .abbreviated:
             return abbreviatedCurrency(amount, currencyCode: currencyCode)
         case .compact:
-            let formatter = compactFormatter.copy() as! NumberFormatter
+            guard let formatter = compactFormatter.copy() as? NumberFormatter else { return "$\(amount)" }
             formatter.currencyCode = currencyCode
             return formatter.string(from: NSNumber(value: amount)) ?? "$\(amount)"
         }

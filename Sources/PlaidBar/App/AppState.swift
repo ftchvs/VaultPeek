@@ -5,6 +5,15 @@ import Combine
 @Observable
 @MainActor
 final class AppState {
+    // MARK: - UserDefaults Keys
+    private enum Keys {
+        static let showBalanceInMenuBar = "showBalanceInMenuBar"
+        static let balanceFormat = "balanceFormat"
+        static let creditUtilizationThreshold = "creditUtilizationThreshold"
+        static let refreshInterval = "refreshInterval"
+        static let balanceHistory = "balanceHistory"
+    }
+
     // MARK: - State
     var accounts: [AccountDTO] = []
     var transactions: [TransactionDTO] = []
@@ -19,24 +28,29 @@ final class AppState {
 
     // MARK: - Settings (persisted to UserDefaults)
     var showBalanceInMenuBar: Bool = true {
-        didSet { UserDefaults.standard.set(showBalanceInMenuBar, forKey: "showBalanceInMenuBar") }
+        didSet { UserDefaults.standard.set(showBalanceInMenuBar, forKey: Keys.showBalanceInMenuBar) }
     }
     var balanceFormat: CurrencyFormat = .abbreviated {
-        didSet { UserDefaults.standard.set(balanceFormat.rawValue, forKey: "balanceFormat") }
+        didSet { UserDefaults.standard.set(balanceFormat.rawValue, forKey: Keys.balanceFormat) }
     }
     var creditUtilizationThreshold: Double = 30.0 {
-        didSet { UserDefaults.standard.set(creditUtilizationThreshold, forKey: "creditUtilizationThreshold") }
+        didSet { UserDefaults.standard.set(creditUtilizationThreshold, forKey: Keys.creditUtilizationThreshold) }
     }
     var refreshInterval: TimeInterval = PlaidBarConstants.backgroundRefreshInterval {
         didSet {
-            UserDefaults.standard.set(refreshInterval, forKey: "refreshInterval")
+            UserDefaults.standard.set(refreshInterval, forKey: Keys.refreshInterval)
             // Restart background refresh with new interval
             if refreshTask != nil { startBackgroundRefresh() }
         }
     }
     var launchAtLogin: Bool = false {
         didSet {
-            try? LaunchService.setEnabled(launchAtLogin)
+            do {
+                try LaunchService.setEnabled(launchAtLogin)
+            } catch {
+                self.error = "Launch at login failed: \(error.localizedDescription)"
+                launchAtLogin = !launchAtLogin
+            }
         }
     }
 
@@ -52,21 +66,21 @@ final class AppState {
 
     private func loadSettings() {
         let defaults = UserDefaults.standard
-        if defaults.object(forKey: "showBalanceInMenuBar") != nil {
-            showBalanceInMenuBar = defaults.bool(forKey: "showBalanceInMenuBar")
+        if defaults.object(forKey: Keys.showBalanceInMenuBar) != nil {
+            showBalanceInMenuBar = defaults.bool(forKey: Keys.showBalanceInMenuBar)
         }
-        if let format = defaults.string(forKey: "balanceFormat"),
+        if let format = defaults.string(forKey: Keys.balanceFormat),
            let f = CurrencyFormat(rawValue: format) {
             balanceFormat = f
         }
-        if defaults.object(forKey: "creditUtilizationThreshold") != nil {
-            creditUtilizationThreshold = defaults.double(forKey: "creditUtilizationThreshold")
+        if defaults.object(forKey: Keys.creditUtilizationThreshold) != nil {
+            creditUtilizationThreshold = defaults.double(forKey: Keys.creditUtilizationThreshold)
         }
-        if defaults.object(forKey: "refreshInterval") != nil {
-            refreshInterval = defaults.double(forKey: "refreshInterval")
+        if defaults.object(forKey: Keys.refreshInterval) != nil {
+            refreshInterval = defaults.double(forKey: Keys.refreshInterval)
         }
         // Balance history
-        if let data = defaults.data(forKey: "balanceHistory"),
+        if let data = defaults.data(forKey: Keys.balanceHistory),
            let history = try? JSONDecoder().decode([BalanceSnapshot].self, from: data) {
             balanceHistory = history
         }
@@ -171,21 +185,21 @@ final class AppState {
 
     func syncTransactions() async {
         do {
-            let response = try await serverClient.syncTransactions()
-            // Add new transactions
-            transactions.append(contentsOf: response.added)
-            // Update modified
-            for modified in response.modified {
-                if let index = transactions.firstIndex(where: { $0.id == modified.id }) {
-                    transactions[index] = modified
+            var hasMore = true
+            while hasMore {
+                let response = try await serverClient.syncTransactions()
+                // Add new transactions
+                transactions.append(contentsOf: response.added)
+                // Update modified
+                for modified in response.modified {
+                    if let index = transactions.firstIndex(where: { $0.id == modified.id }) {
+                        transactions[index] = modified
+                    }
                 }
-            }
-            // Remove deleted
-            transactions.removeAll { response.removed.contains($0.id) }
-
-            // Continue if there's more
-            if response.hasMore {
-                await syncTransactions()
+                // Remove deleted
+                let removedIds = Set(response.removed)
+                transactions.removeAll { removedIds.contains($0.id) }
+                hasMore = response.hasMore
             }
             lastSyncDate = Date()
         } catch {
@@ -264,7 +278,7 @@ final class AppState {
         balanceHistory.removeAll { $0.date < cutoff }
         // Persist
         if let data = try? JSONEncoder().encode(balanceHistory) {
-            UserDefaults.standard.set(data, forKey: "balanceHistory")
+            UserDefaults.standard.set(data, forKey: Keys.balanceHistory)
         }
     }
 

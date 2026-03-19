@@ -5,8 +5,14 @@ import PlaidBarCore
 struct IncomeExpenseChart: View {
     let transactions: [TransactionDTO]
 
+    private static let monthFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM"
+        return f
+    }()
+
     private struct MonthlyData: Identifiable {
-        let id = UUID()
+        var id: Date { month }
         let month: Date
         let label: String
         let income: Double
@@ -24,16 +30,13 @@ struct IncomeExpenseChart: View {
             return calendar.dateInterval(of: .month, for: date)?.start ?? date
         }
 
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM"
-
         return grouped.map { monthStart, txns in
             let income = txns.filter(\.isIncome).reduce(0.0) { $0 + $1.displayAmount }
             let expenses = txns.filter { !$0.isIncome && $0.category != .transfer && $0.category != .transferOut }
                 .reduce(0.0) { $0 + $1.displayAmount }
             return MonthlyData(
                 month: monthStart,
-                label: formatter.string(from: monthStart),
+                label: Self.monthFormatter.string(from: monthStart),
                 income: income,
                 expenses: expenses
             )

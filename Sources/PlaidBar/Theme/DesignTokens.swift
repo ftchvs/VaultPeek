@@ -16,10 +16,10 @@ enum SemanticColors {
     static let pending = Color.orange
 
     // Utilization thresholds
-    static func utilization(for percent: Double) -> Color {
+    static func utilization(for percent: Double, threshold: Double = 30) -> Color {
+        guard percent >= threshold else { return .green }
         switch percent {
-        case ..<30: return .green
-        case 30..<50: return .yellow
+        case ..<50: return .yellow
         case 50..<75: return .orange
         default: return .red
         }
@@ -30,7 +30,7 @@ enum SemanticColors {
         switch percent {
         case ..<30: return "checkmark.circle"
         case 30..<50: return "exclamationmark.triangle"
-        case 50..<75: return "exclamationmark.triangle"
+        case 50..<75: return "exclamationmark.triangle.fill"
         default: return "xmark.octagon"
         }
     }

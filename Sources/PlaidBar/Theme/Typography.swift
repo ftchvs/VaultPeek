@@ -20,7 +20,7 @@ struct SectionTitle: ViewModifier {
     }
 }
 
-/// Level 4 — Detail: Masks, categories, dates
+/// Level 3 — Detail: Masks, categories, dates
 struct DetailText: ViewModifier {
     func body(content: Content) -> some View {
         content
@@ -29,7 +29,7 @@ struct DetailText: ViewModifier {
     }
 }
 
-/// Level 5 — Micro: Pending badge, percentages
+/// Level 4 — Micro: Pending badge, percentages
 struct MicroText: ViewModifier {
     func body(content: Content) -> some View {
         content

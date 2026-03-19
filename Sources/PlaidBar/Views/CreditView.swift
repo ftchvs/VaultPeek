@@ -101,7 +101,7 @@ struct CreditCardRow: View {
     }
 
     private var barColor: Color {
-        SemanticColors.utilization(for: utilization)
+        SemanticColors.utilization(for: utilization, threshold: threshold)
     }
 
     var body: some View {
