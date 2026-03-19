@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-03-19 20:21 UTC] — Documentation
+
+update README screenshots and roadmap for v0.4
+
+`f2751a5`
+
+---
+
+
 ## [2026-03-19 19:48 UTC] — Fix
 
 resolve all 9 open issues for v0.4 (#19)
