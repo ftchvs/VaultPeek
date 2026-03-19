@@ -55,7 +55,7 @@ struct CreditView: View {
                         EmptyView()
                     }
                     .gaugeStyle(.accessoryCircular)
-                    .tint(SemanticColors.utilization(for: totalUtilization))
+                    .tint(SemanticColors.utilization(for: totalUtilization, threshold: appState.creditUtilizationThreshold))
                     .scaleEffect(0.7)
                     .frame(width: 36, height: 36)
 
@@ -64,11 +64,11 @@ struct CreditView: View {
                             .fontWeight(.semibold)
                         Text(Formatters.percent(totalUtilization))
                             .fontWeight(.semibold)
-                            .foregroundStyle(SemanticColors.utilization(for: totalUtilization))
+                            .foregroundStyle(SemanticColors.utilization(for: totalUtilization, threshold: appState.creditUtilizationThreshold))
                     }
                     Spacer()
                     Image(systemName: SemanticColors.utilizationIcon(for: totalUtilization))
-                        .foregroundStyle(SemanticColors.utilization(for: totalUtilization))
+                        .foregroundStyle(SemanticColors.utilization(for: totalUtilization, threshold: appState.creditUtilizationThreshold))
                 }
                 .padding(.horizontal, Spacing.lg)
                 .padding(.bottom, Spacing.sm)
@@ -147,7 +147,7 @@ struct CreditCardRow: View {
                 Text(Formatters.percent(utilization))
                     .font(.caption)
                     // Issue #4: bold percentage at warning thresholds
-                    .fontWeight(utilization >= 30 ? .semibold : .medium)
+                    .fontWeight(utilization >= threshold ? .semibold : .medium)
                     .foregroundStyle(barColor)
             }
         }

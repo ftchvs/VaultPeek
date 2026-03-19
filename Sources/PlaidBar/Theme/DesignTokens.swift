@@ -15,6 +15,9 @@ enum SemanticColors {
     static let negative = Color.red
     static let pending = Color.orange
 
+    // Charts
+    static let sparkline = Color.blue
+
     // Utilization thresholds
     static func utilization(for percent: Double, threshold: Double = 30) -> Color {
         guard percent >= threshold else { return .green }

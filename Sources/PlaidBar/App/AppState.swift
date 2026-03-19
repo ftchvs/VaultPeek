@@ -45,11 +45,12 @@ final class AppState {
     }
     var launchAtLogin: Bool = false {
         didSet {
+            guard launchAtLogin != oldValue else { return }
             do {
                 try LaunchService.setEnabled(launchAtLogin)
             } catch {
                 self.error = "Launch at login failed: \(error.localizedDescription)"
-                launchAtLogin = !launchAtLogin
+                launchAtLogin = oldValue
             }
         }
     }

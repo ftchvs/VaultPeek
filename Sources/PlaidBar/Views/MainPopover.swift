@@ -171,14 +171,14 @@ private struct BalanceSparkline: View {
                 y: .value("Balance", snapshot.balance)
             )
             .interpolationMethod(.catmullRom)
-            .foregroundStyle(.blue.opacity(0.6))
+            .foregroundStyle(SemanticColors.sparkline.opacity(0.6))
 
             AreaMark(
                 x: .value("Date", snapshot.date),
                 y: .value("Balance", snapshot.balance)
             )
             .interpolationMethod(.catmullRom)
-            .foregroundStyle(.blue.opacity(0.08))
+            .foregroundStyle(SemanticColors.sparkline.opacity(0.08))
         }
         .chartXAxis(.hidden)
         .chartYAxis(.hidden)
