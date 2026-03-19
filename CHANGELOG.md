@@ -21,6 +21,13 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-03-18 23:44 UTC] — Feature
+
+polish UI with animations, hover states, and layout refinements (#1)
+
+`e05f814`
+
+---
 ## [2026-03-18 23:39 UTC] — Update
 
 Refactor after 3-agent code review: fix deterministic avatar colors (DJB2 hash), extract HoverHighlight ViewModifier, smooth RefreshIcon spin, collapse utilizationColor ranges, use shared DateFormatter, cache SpendingView computed properties.
