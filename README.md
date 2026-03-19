@@ -45,12 +45,13 @@ Personal finance data lives behind bank website logins. The closest thing to a m
 ## Screenshots
 
 <p align="center">
-  <img src="Assets/accounts.png" width="320" alt="Accounts tab"/>
-  <img src="Assets/transactions.png" width="320" alt="Transactions tab"/>
+  <img src="Assets/accounts.png" width="280" alt="Accounts tab"/>
+  <img src="Assets/transactions.png" width="280" alt="Transactions tab"/>
+  <img src="Assets/recurring.png" width="280" alt="Recurring transactions"/>
 </p>
 <p align="center">
-  <img src="Assets/spending.png" width="320" alt="Spending tab"/>
-  <img src="Assets/credit.png" width="320" alt="Credit tab"/>
+  <img src="Assets/spending.png" width="280" alt="Spending tab"/>
+  <img src="Assets/credit.png" width="280" alt="Credit utilization tab"/>
 </p>
 
 > Generate screenshots: `./Scripts/screenshots.sh` (requires building in release mode)
@@ -262,11 +263,11 @@ The companion server exposes these localhost endpoints:
 - [ ] Investment account tracking (Plaid Investments)
 - [ ] CSV/JSON export for tax/accounting
 - [ ] Webhook support for real-time updates
-- [ ] macOS notifications for large transactions
+- [x] macOS notifications for large transactions
 - [ ] Homebrew cask distribution
 - [ ] Dark/light theme customization
 - [ ] [Teller](https://teller.io/) as alternative provider (free tier)
-- [ ] Recurring transaction detection
+- [x] Recurring transaction detection
 
 ## Inspiration
 
