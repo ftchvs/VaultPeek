@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-03-19 04:10 UTC] — Update
+
+Merge pull request #6 from ftchvs/dev
+
+`71d79c6`
+
+---
+
+
 ## [v0.2.0] — Design System & Charts
 
 - **Design system**: Semantic color tokens, 5-level typography scale, 8pt spacing grid
