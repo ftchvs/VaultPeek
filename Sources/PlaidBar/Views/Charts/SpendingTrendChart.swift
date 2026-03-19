@@ -20,7 +20,8 @@ struct SpendingTrendChart: View {
     }
 
     var body: some View {
-        if dailySpending.isEmpty {
+        let data = dailySpending
+        if data.isEmpty {
             ContentUnavailableView {
                 Label("No Spending Data", systemImage: "chart.line.downtrend.xyaxis")
             } description: {
@@ -28,7 +29,7 @@ struct SpendingTrendChart: View {
             }
             .padding()
         } else {
-            Chart(dailySpending, id: \.0) { date, amount in
+            Chart(data, id: \.0) { date, amount in
                 LineMark(
                     x: .value("Date", date, unit: .day),
                     y: .value("Amount", amount)

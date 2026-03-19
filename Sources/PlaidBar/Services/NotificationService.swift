@@ -3,7 +3,18 @@ import UserNotifications
 import PlaidBarCore
 
 @MainActor
-final class NotificationService {
+protocol NotificationServiceProtocol {
+    func requestPermission() async -> Bool
+    func checkPermissionStatus() async -> UNAuthorizationStatus
+    func evaluateTriggers(
+        transactions: [TransactionDTO],
+        accounts: [AccountDTO],
+        config: NotificationTriggers
+    ) async
+}
+
+@MainActor
+final class NotificationService: NotificationServiceProtocol {
     static let shared = NotificationService()
 
     private static let notifiedTxKey = "notifiedTransactionIds"

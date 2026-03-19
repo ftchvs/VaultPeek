@@ -128,7 +128,7 @@ struct NotificationSettingsView: View {
                 .onChange(of: appState.notificationsEnabled) { _, enabled in
                     if enabled {
                         Task {
-                            let granted = await NotificationService.shared.requestPermission()
+                            let granted = await appState.requestNotificationPermission()
                             if !granted {
                                 permissionDenied = true
                                 appState.notificationsEnabled = false

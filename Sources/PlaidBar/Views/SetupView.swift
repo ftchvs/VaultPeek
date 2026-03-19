@@ -4,13 +4,10 @@ import PlaidBarCore
 struct SetupView: View {
     @Environment(AppState.self) private var appState
     @State private var setupMode: SetupMode = .welcome
-    @State private var clientId = ""
-    @State private var secret = ""
 
     enum SetupMode: Sendable {
         case welcome
         case sandbox
-        case credentials
         case connecting
     }
 
@@ -18,7 +15,7 @@ struct SetupView: View {
         VStack(spacing: Spacing.lg) {
             // Step indicator
             HStack(spacing: Spacing.sm) {
-                ForEach(0..<3) { step in
+                ForEach(0..<2) { step in
                     Circle()
                         .fill(stepIndex >= step ? SemanticColors.brand : Color.gray.opacity(0.3))
                         .frame(width: 6, height: 6)
@@ -31,8 +28,6 @@ struct SetupView: View {
                 welcomeView
             case .sandbox:
                 sandboxView
-            case .credentials:
-                credentialsView
             case .connecting:
                 connectingView
             }
@@ -45,8 +40,8 @@ struct SetupView: View {
     private var stepIndex: Int {
         switch setupMode {
         case .welcome: return 0
-        case .sandbox, .credentials: return 1
-        case .connecting: return 2
+        case .sandbox: return 1
+        case .connecting: return 1
         }
     }
 
@@ -76,16 +71,6 @@ struct SetupView: View {
                 }
                 .buttonStyle(.borderedProminent)
 
-                Button {
-                    setupMode = .credentials
-                } label: {
-                    HStack {
-                        Image(systemName: "key")
-                        Text("Use my Plaid credentials")
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
             }
         }
     }
@@ -110,42 +95,6 @@ struct SetupView: View {
                 Task { await appState.addAccount() }
             }
             .buttonStyle(.borderedProminent)
-
-            Button("Back") {
-                setupMode = .welcome
-            }
-            .buttonStyle(.borderless)
-        }
-    }
-
-    private var credentialsView: some View {
-        VStack(spacing: Spacing.lg) {
-            Image(systemName: "key.fill")
-                .font(.system(size: 36))
-                .foregroundStyle(SemanticColors.brand)
-
-            Text("Plaid Credentials")
-                .font(.title3)
-                .fontWeight(.semibold)
-
-            Text("Enter your Plaid API credentials. Get them at dashboard.plaid.com")
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
-                .font(.callout)
-
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                TextField("Client ID", text: $clientId)
-                    .textFieldStyle(.roundedBorder)
-                SecureField("Secret", text: $secret)
-                    .textFieldStyle(.roundedBorder)
-            }
-
-            Button("Connect") {
-                setupMode = .connecting
-                Task { await appState.addAccount() }
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(clientId.isEmpty || secret.isEmpty)
 
             Button("Back") {
                 setupMode = .welcome

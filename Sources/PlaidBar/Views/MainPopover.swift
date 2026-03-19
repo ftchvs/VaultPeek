@@ -5,6 +5,7 @@ import PlaidBarCore
 struct MainPopover: View {
     @Environment(AppState.self) private var appState
     @Environment(\.openSettings) private var openSettings
+    @State private var settingsCloseObserver: NSObjectProtocol?
 
     var body: some View {
         @Bindable var state = appState
@@ -108,12 +109,28 @@ struct MainPopover: View {
 
                     Button {
                         openSettings()
-                        // Menu bar apps need activation policy switch to bring Settings to front
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                             NSApp.setActivationPolicy(.regular)
                             NSApp.activate(ignoringOtherApps: true)
-                            for window in NSApp.windows where window.title == "General" || window.title == "Settings" {
-                                window.orderFrontRegardless()
+                            if let settingsWindow = NSApp.keyWindow ?? NSApp.windows.first(where: {
+                                $0.canBecomeKey && $0.isVisible && $0.level == .normal
+                            }) {
+                                settingsWindow.orderFrontRegardless()
+                                // Remove previous observer to prevent stacking
+                                if let existing = settingsCloseObserver {
+                                    NotificationCenter.default.removeObserver(existing)
+                                }
+                                settingsCloseObserver = NotificationCenter.default.addObserver(
+                                    forName: NSWindow.willCloseNotification,
+                                    object: settingsWindow,
+                                    queue: .main
+                                ) { _ in
+                                    NSApp.setActivationPolicy(.accessory)
+                                    if let observer = settingsCloseObserver {
+                                        NotificationCenter.default.removeObserver(observer)
+                                    }
+                                    settingsCloseObserver = nil
+                                }
                             }
                         }
                     } label: {

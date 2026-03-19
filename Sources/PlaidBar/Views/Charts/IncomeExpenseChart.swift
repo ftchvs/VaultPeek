@@ -44,7 +44,8 @@ struct IncomeExpenseChart: View {
     }
 
     var body: some View {
-        if monthlyData.isEmpty {
+        let data = monthlyData
+        if data.isEmpty {
             ContentUnavailableView {
                 Label("No Data", systemImage: "chart.bar")
             } description: {
@@ -52,7 +53,7 @@ struct IncomeExpenseChart: View {
             }
             .padding()
         } else {
-            Chart(monthlyData) { data in
+            Chart(data) { data in
                 BarMark(
                     x: .value("Month", data.label),
                     y: .value("Amount", data.income)

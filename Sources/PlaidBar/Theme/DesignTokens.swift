@@ -3,26 +3,56 @@ import SwiftUI
 // MARK: - Semantic Colors
 
 enum SemanticColors {
-    // Financial meaning
+
+    // MARK: - Financial Meaning
+
+    /// Money received — paycheck deposits, refunds, Venmo inflows.
+    /// Used in transaction rows and Income vs Expense chart bars.
     static let income = Color.green
+
+    /// Default text color for outgoing transactions
+    /// (uses `.primary` to follow system appearance).
     static let expense = Color.primary
+
+    /// Outstanding credit card balance shown in account rows
+    /// and credit utilization display.
     static let creditDebt = Color.red
+
+    /// Available/spendable balance in depository account rows.
     static let available = Color.green
 
-    // Status
+    // MARK: - Status Indicators
+
+    /// General caution indicator — moderate credit utilization (30-50%),
+    /// stale sync badge.
     static let warning = Color.orange
+
+    /// Favorable delta — spending decreased vs. prior period, balance increased.
     static let positive = Color.green
+
+    /// Unfavorable delta — spending increased vs. prior period,
+    /// "Remove" destructive actions.
     static let negative = Color.red
+
+    /// Uncommitted transactions that haven't cleared yet.
     static let pending = Color.orange
 
-    // Charts
+    // MARK: - Charts
+
+    /// Balance history mini-chart and spending trend line/area fill.
     static let sparkline = Color.blue
 
-    // Brand
+    // MARK: - Brand Identity
+
+    /// Primary app accent — hero icons, step dots, active controls.
     static let brand = Color.blue
+
+    /// Secondary accent — sandbox mode icon, complementary highlights.
     static let brandSecondary = Color.orange
 
-    // Recurring
+    // MARK: - Recurring
+
+    /// Detected recurring charges badge and recurring transaction section header.
     static let recurring = Color.indigo
 
     // Utilization thresholds

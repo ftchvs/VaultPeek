@@ -36,16 +36,26 @@ final class AppState {
 
     // MARK: - Settings (persisted to UserDefaults)
     var showBalanceInMenuBar: Bool = true {
-        didSet { UserDefaults.standard.set(showBalanceInMenuBar, forKey: Keys.showBalanceInMenuBar) }
+        didSet {
+            guard showBalanceInMenuBar != oldValue else { return }
+            UserDefaults.standard.set(showBalanceInMenuBar, forKey: Keys.showBalanceInMenuBar)
+        }
     }
     var balanceFormat: CurrencyFormat = .abbreviated {
-        didSet { UserDefaults.standard.set(balanceFormat.rawValue, forKey: Keys.balanceFormat) }
+        didSet {
+            guard balanceFormat != oldValue else { return }
+            UserDefaults.standard.set(balanceFormat.rawValue, forKey: Keys.balanceFormat)
+        }
     }
     var creditUtilizationThreshold: Double = 30.0 {
-        didSet { UserDefaults.standard.set(creditUtilizationThreshold, forKey: Keys.creditUtilizationThreshold) }
+        didSet {
+            guard creditUtilizationThreshold != oldValue else { return }
+            UserDefaults.standard.set(creditUtilizationThreshold, forKey: Keys.creditUtilizationThreshold)
+        }
     }
     var refreshInterval: TimeInterval = PlaidBarConstants.backgroundRefreshInterval {
         didSet {
+            guard refreshInterval != oldValue else { return }
             UserDefaults.standard.set(refreshInterval, forKey: Keys.refreshInterval)
             // Restart background refresh with new interval
             if refreshTask != nil { startBackgroundRefresh() }
@@ -58,19 +68,34 @@ final class AppState {
         }
     }
     var largeTransactionThreshold: Double = 500.0 {
-        didSet { UserDefaults.standard.set(largeTransactionThreshold, forKey: Keys.largeTransactionThreshold) }
+        didSet {
+            guard largeTransactionThreshold != oldValue else { return }
+            UserDefaults.standard.set(largeTransactionThreshold, forKey: Keys.largeTransactionThreshold)
+        }
     }
     var lowBalanceThreshold: Double = 100.0 {
-        didSet { UserDefaults.standard.set(lowBalanceThreshold, forKey: Keys.lowBalanceThreshold) }
+        didSet {
+            guard lowBalanceThreshold != oldValue else { return }
+            UserDefaults.standard.set(lowBalanceThreshold, forKey: Keys.lowBalanceThreshold)
+        }
     }
     var notifyLargeTransaction: Bool = true {
-        didSet { UserDefaults.standard.set(notifyLargeTransaction, forKey: Keys.notifyLargeTransaction) }
+        didSet {
+            guard notifyLargeTransaction != oldValue else { return }
+            UserDefaults.standard.set(notifyLargeTransaction, forKey: Keys.notifyLargeTransaction)
+        }
     }
     var notifyLowBalance: Bool = true {
-        didSet { UserDefaults.standard.set(notifyLowBalance, forKey: Keys.notifyLowBalance) }
+        didSet {
+            guard notifyLowBalance != oldValue else { return }
+            UserDefaults.standard.set(notifyLowBalance, forKey: Keys.notifyLowBalance)
+        }
     }
     var notifyHighUtilization: Bool = true {
-        didSet { UserDefaults.standard.set(notifyHighUtilization, forKey: Keys.notifyHighUtilization) }
+        didSet {
+            guard notifyHighUtilization != oldValue else { return }
+            UserDefaults.standard.set(notifyHighUtilization, forKey: Keys.notifyHighUtilization)
+        }
     }
 
     var launchAtLogin: Bool = false {
@@ -87,11 +112,13 @@ final class AppState {
 
     // MARK: - Services
     private let serverClient = ServerClient()
+    private let notificationService: any NotificationServiceProtocol
     private var refreshTask: Task<Void, Never>?
 
     // MARK: - Init
 
-    init() {
+    init(notificationService: any NotificationServiceProtocol = NotificationService.shared) {
+        self.notificationService = notificationService
         loadSettings()
     }
 
@@ -330,11 +357,15 @@ final class AppState {
             lowBalanceThreshold: lowBalanceThreshold,
             creditUtilizationThreshold: creditUtilizationThreshold
         )
-        await NotificationService.shared.evaluateTriggers(
+        await notificationService.evaluateTriggers(
             transactions: transactions,
             accounts: accounts,
             config: config
         )
+    }
+
+    func requestNotificationPermission() async -> Bool {
+        await notificationService.requestPermission()
     }
 
     func stopBackgroundRefresh() {
@@ -345,7 +376,7 @@ final class AppState {
     func loadInitialData() async {
         // Recheck notification permission at startup (user may have revoked in System Settings)
         if notificationsEnabled {
-            let status = await NotificationService.shared.checkPermissionStatus()
+            let status = await notificationService.checkPermissionStatus()
             if status == .denied || status == .notDetermined {
                 notificationsEnabled = false
             }

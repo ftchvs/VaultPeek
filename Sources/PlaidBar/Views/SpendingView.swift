@@ -92,6 +92,9 @@ struct SpendingView: View {
     var body: some View {
         let categories = chartCategories
         let total = totalFiltered
+        let prevSpending = previousPeriodSpending
+        let delta = spendingDelta
+        let deltaPercent = spendingDeltaPercent
 
         VStack(spacing: Spacing.md) {
             // Period picker
@@ -112,24 +115,24 @@ struct SpendingView: View {
                 .animation(.default, value: total)
 
             // Month-over-month comparison
-            if previousPeriodSpending > 0 {
+            if prevSpending > 0 {
                 VStack(spacing: Spacing.xxs) {
                     HStack(spacing: Spacing.xs) {
-                        Image(systemName: spendingDelta >= 0 ? "arrow.up.right" : "arrow.down.right")
+                        Image(systemName: delta >= 0 ? "arrow.up.right" : "arrow.down.right")
                             .font(.caption)
-                        Text("\(spendingDelta >= 0 ? "+" : "")\(Formatters.currency(abs(spendingDelta), format: .full)) (\(Formatters.percent(abs(spendingDeltaPercent), decimals: 1)))")
+                        Text("\(delta >= 0 ? "+" : "")\(Formatters.currency(abs(delta), format: .full)) (\(Formatters.percent(abs(deltaPercent), decimals: 1)))")
                             .font(.callout.weight(.medium))
                     }
-                    .foregroundStyle(spendingDelta >= 0 ? SemanticColors.negative : SemanticColors.positive)
+                    .foregroundStyle(delta >= 0 ? SemanticColors.negative : SemanticColors.positive)
                     .contentTransition(.numericText())
-                    .animation(.default, value: spendingDelta)
+                    .animation(.default, value: delta)
 
                     Text("vs. last period")
                         .microText()
                         .foregroundStyle(.secondary)
                 }
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel("Spending \(spendingDelta >= 0 ? "increased" : "decreased") by \(Formatters.currency(abs(spendingDelta), format: .full)), \(Formatters.percent(abs(spendingDeltaPercent), decimals: 1)) \(spendingDelta >= 0 ? "more" : "less") than last period")
+                .accessibilityLabel("Spending \(delta >= 0 ? "increased" : "decreased") by \(Formatters.currency(abs(delta), format: .full)), \(Formatters.percent(abs(deltaPercent), decimals: 1)) \(delta >= 0 ? "more" : "less") than last period")
             }
 
             // Chart type picker
