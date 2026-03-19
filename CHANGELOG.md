@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-03-19 19:48 UTC] — Fix
+
+resolve all 9 open issues for v0.4 (#19)
+
+`4296072`
+
+---
+
+
 ## [2026-03-19 19:16 UTC] — Documentation
 
 comprehensive PRD and DESIGN.md updates for v0.3 (#18)
