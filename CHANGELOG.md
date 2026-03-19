@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-03-19 06:00 UTC] — Feature
+
+PlaidBar v0.3.0 — Data Exploration, Recurring Detection, Notifications (#11)
+
+`72278e3`
+
+---
+
+
 ## [v0.3.0] — Data Exploration, Recurring Detection, Notifications
 
 - **Transaction detail sheet**: Tap any transaction to see merchant, raw name, category, amount, date, account, and pending status
