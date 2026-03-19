@@ -1,8 +1,10 @@
 import SwiftUI
 import PlaidBarCore
+import Sparkle
 
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
+    let updater: SPUUpdater
 
     var body: some View {
         TabView {
@@ -18,7 +20,7 @@ struct SettingsView: View {
                     Label("Accounts", systemImage: "building.columns")
                 }
 
-            AboutView()
+            AboutView(updater: updater)
                 .tabItem {
                     Label("About", systemImage: "info.circle")
                 }
@@ -63,7 +65,7 @@ struct GeneralSettingsView: View {
                 Text("%")
             }
 
-            Toggle("Launch at login", isOn: .constant(false))  // TODO: implement with SMAppService
+            Toggle("Launch at login", isOn: $state.launchAtLogin)
         }
         .padding()
     }
@@ -83,14 +85,13 @@ struct AccountSettingsView: View {
                             VStack(alignment: .leading) {
                                 Text(account.name)
                                 Text(account.type.rawValue.capitalized)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .detailText()
                             }
                             Spacer()
                             Button("Remove") {
                                 Task { await appState.removeAccount(itemId: account.itemId) }
                             }
-                            .foregroundStyle(.red)
+                            .foregroundStyle(SemanticColors.negative)
                         }
                     }
                 }
@@ -109,8 +110,10 @@ struct AccountSettingsView: View {
 }
 
 struct AboutView: View {
+    let updater: SPUUpdater
+
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: Spacing.md) {
             Image(systemName: "dollarsign.circle.fill")
                 .font(.system(size: 48))
                 .foregroundStyle(.blue)
@@ -129,8 +132,14 @@ struct AboutView: View {
 
             Divider()
 
-            Link("View on GitHub", destination: URL(string: "https://github.com/ftchvs/PlaidBar")!)
-                .font(.callout)
+            HStack(spacing: Spacing.lg) {
+                Button("Check for Updates\u{2026}") {
+                    updater.checkForUpdates()
+                }
+
+                Link("View on GitHub", destination: URL(string: "https://github.com/ftchvs/PlaidBar")!)
+                    .font(.callout)
+            }
 
             Text("MIT License")
                 .font(.caption)

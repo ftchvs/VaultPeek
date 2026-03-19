@@ -1,9 +1,19 @@
 import SwiftUI
 import MenuBarExtraAccess
+import Sparkle
 
 @main
 struct PlaidBarApp: App {
     @State private var appState = AppState()
+    private let updaterController: SPUStandardUpdaterController
+
+    init() {
+        updaterController = SPUStandardUpdaterController(
+            startingUpdater: false,
+            updaterDelegate: nil,
+            userDriverDelegate: nil
+        )
+    }
 
     var body: some Scene {
         MenuBarExtra {
@@ -17,7 +27,7 @@ struct PlaidBarApp: App {
         .menuBarExtraStyle(.window)
 
         Settings {
-            SettingsView()
+            SettingsView(updater: updaterController.updater)
                 .environment(appState)
         }
     }

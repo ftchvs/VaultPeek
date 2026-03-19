@@ -28,14 +28,28 @@ Personal finance data lives behind bank website logins. The closest thing to a m
 - **Glanceable** — Net balance visible right in the menu bar
 - **Account Balances** — All bank accounts and credit cards at a glance
 - **Recent Transactions** — Searchable list grouped by day with category icons
-- **Spending Breakdown** — Donut chart by category with time period filters
-- **Credit Utilization** — Progress bars with configurable warning thresholds
+- **Spending Breakdown** — Donut chart, trend line, and income vs expense views
+- **Credit Utilization** — Progress bars with configurable warning thresholds and gauge
+- **Balance History** — Sparkline showing net balance trend over time
+- **Keyboard Shortcuts** — Cmd+1-4 to switch tabs, Cmd+R to refresh, Cmd+N to add account
+- **Settings Persistence** — Preferences saved across launches
+- **Launch at Login** — Optional auto-start via macOS Login Items
+- **Auto-Updates** — Sparkle integration for seamless updates
 - **Sandbox Mode** — Try with demo data, no Plaid credentials needed
 - **Private** — Everything stored locally on your Mac, period
 
 ## Screenshots
 
-> *Coming soon — the app compiles and runs but screenshots will be added after visual polish.*
+<p align="center">
+  <img src="Assets/accounts.png" width="320" alt="Accounts tab"/>
+  <img src="Assets/transactions.png" width="320" alt="Transactions tab"/>
+</p>
+<p align="center">
+  <img src="Assets/spending.png" width="320" alt="Spending tab"/>
+  <img src="Assets/credit.png" width="320" alt="Credit tab"/>
+</p>
+
+> Generate screenshots: `./Scripts/screenshots.sh` (requires building in release mode)
 
 ## Quick Start
 
@@ -68,6 +82,17 @@ export PLAID_SECRET=your_secret
 ```
 
 Get credentials free at [dashboard.plaid.com](https://dashboard.plaid.com). Sandbox works immediately; production requires Plaid approval.
+
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Cmd+1` | Accounts tab |
+| `Cmd+2` | Transactions tab |
+| `Cmd+3` | Spending tab |
+| `Cmd+4` | Credit tab |
+| `Cmd+R` | Refresh balances |
+| `Cmd+N` | Add account |
 
 ## Requirements
 
@@ -113,10 +138,12 @@ PlaidBar uses a **two-process architecture** — a SwiftUI menu bar app talks to
 |-------|-----------|-----|
 | Menu bar app | SwiftUI `MenuBarExtra` (.window) | Native macOS, modern API |
 | Charts | Swift Charts | Built-in, no dependencies |
+| Design system | Semantic tokens + 8pt grid | Consistent, maintainable |
 | Local server | [Hummingbird 2](https://github.com/hummingbird-project/hummingbird) | Lightweight, SwiftNIO-based, same language as app |
 | Database | SQLite via [Fluent ORM](https://github.com/vapor/fluent-kit) | Migrations, queries, Hummingbird-native |
 | Secrets (app) | macOS Keychain | OS-level secure storage |
 | Auto-updates | [Sparkle 2](https://github.com/sparkle-project/Sparkle) | Standard for open-source macOS apps |
+| Launch at login | SMAppService | Native macOS Login Items API |
 
 ### Project Structure
 
@@ -125,14 +152,16 @@ PlaidBar/
 ├── Sources/
 │   ├── PlaidBar/                    # macOS menu bar app
 │   │   ├── App/                     # @main entry, AppState
-│   │   ├── Views/                   # SwiftUI views (5 tabs)
+│   │   ├── Theme/                   # Design tokens, typography
+│   │   ├── Views/                   # SwiftUI views (4 tabs)
 │   │   │   ├── AccountsView.swift   # Balance list by account type
 │   │   │   ├── TransactionsView.swift # Searchable grouped list
-│   │   │   ├── SpendingView.swift   # Donut chart + breakdown
-│   │   │   ├── CreditView.swift     # Utilization progress bars
-│   │   │   └── SetupView.swift      # Onboarding flow
+│   │   │   ├── SpendingView.swift   # Donut/trend/bar charts
+│   │   │   ├── CreditView.swift     # Utilization bars + gauge
+│   │   │   ├── SetupView.swift      # Onboarding flow
+│   │   │   └── Charts/             # Chart components
 │   │   ├── Models/                  # Local cache models
-│   │   ├── Services/                # HTTP client, refresh, sync
+│   │   ├── Services/                # HTTP client, refresh, launch
 │   │   └── Settings/                # Preferences window
 │   ├── PlaidBarServer/              # Local companion server
 │   │   ├── Routes/                  # REST endpoints
@@ -143,7 +172,10 @@ PlaidBar/
 │       ├── Models/                  # DTOs (Account, Transaction, etc.)
 │       └── Utilities/               # Currency formatters, constants
 ├── Tests/                           # 61 tests across 3 suites
-├── Scripts/                         # build.sh, run.sh, setup.sh
+├── Scripts/                         # build.sh, run.sh, screenshots.sh
+├── Assets/                          # README screenshots
+├── DESIGN.md                        # Design system spec
+├── PRD.md                           # Product requirements
 ├── .github/workflows/ci.yml        # GitHub Actions CI
 ├── Package.swift                    # SPM with 3 targets
 └── LICENSE                          # MIT
@@ -193,6 +225,9 @@ swift run PlaidBarServer --sandbox
 
 # Run both (server + app)
 ./Scripts/run.sh --sandbox
+
+# Capture screenshots (demo mode)
+./Scripts/screenshots.sh
 
 # First-time setup helper
 ./Scripts/setup.sh

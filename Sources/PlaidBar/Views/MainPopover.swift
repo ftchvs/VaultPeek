@@ -1,4 +1,5 @@
 import SwiftUI
+import Charts
 import PlaidBarCore
 
 struct MainPopover: View {
@@ -11,20 +12,26 @@ struct MainPopover: View {
             if !appState.isSetupComplete {
                 SetupView()
             } else {
-                // Header — balance as hero
+                // Header — balance as hero with sparkline
                 VStack(spacing: 2) {
                     Text(Formatters.currency(appState.netBalance, format: .full))
-                        .font(.title2.bold())
-                        .monospacedDigit()
+                        .heroBalance()
                         .contentTransition(.numericText())
                         .animation(.default, value: appState.netBalance)
 
+                    // Balance sparkline
+                    if appState.balanceHistory.count >= 2 {
+                        BalanceSparkline(history: appState.balanceHistory)
+                            .frame(height: 24)
+                            .padding(.horizontal, 60)
+                            .padding(.top, Spacing.xs)
+                    }
+
                     HStack(spacing: 6) {
                         Text("PlaidBar")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .detailText()
                         if let syncText = appState.lastSyncRelative {
-                            Text("·")
+                            Text("\u{00B7}")
                                 .font(.caption)
                                 .foregroundStyle(.quaternary)
                             Text("Synced \(syncText)")
@@ -45,8 +52,8 @@ struct MainPopover: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
-                .padding(.horizontal)
-                .padding(.bottom, 8)
+                .padding(.horizontal, Spacing.lg)
+                .padding(.bottom, Spacing.sm)
 
                 Divider()
 
@@ -72,16 +79,17 @@ struct MainPopover: View {
                 Divider()
 
                 // Footer
-                HStack(spacing: 12) {
+                HStack(spacing: Spacing.md) {
                     Button {
                         Task { await appState.addAccount() }
                     } label: {
-                        Image(systemName: "plus.circle.fill")
+                        Image(systemName: "plus.circle")
                             .font(.body)
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.borderless)
-                    .help("Add Account")
+                    .help("Add Account (Cmd+N)")
+                    .keyboardShortcut("n", modifiers: .command)
 
                     Spacer()
 
@@ -94,15 +102,16 @@ struct MainPopover: View {
                         RefreshIcon(isLoading: appState.isLoading)
                     }
                     .buttonStyle(.borderless)
-                    .help("Refresh")
+                    .help("Refresh (Cmd+R)")
+                    .keyboardShortcut("r", modifiers: .command)
 
                     SettingsLink {
                         Image(systemName: "gear")
                     }
                     .buttonStyle(.borderless)
                 }
-                .padding(.horizontal)
-                .padding(.vertical, 8)
+                .padding(.horizontal, Spacing.lg)
+                .padding(.vertical, Spacing.sm)
             }
 
             // Error banner
@@ -121,7 +130,7 @@ struct MainPopover: View {
                     }
                     .buttonStyle(.borderless)
                 }
-                .padding(.horizontal)
+                .padding(.horizontal, Spacing.lg)
                 .padding(.vertical, 6)
                 .background(.red.opacity(0.1))
                 .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -129,8 +138,50 @@ struct MainPopover: View {
         }
         .frame(width: 360)
         .animation(.easeInOut(duration: 0.25), value: appState.error != nil)
+        // Keyboard shortcuts for tab switching
+        .background {
+            Group {
+                Button("") { appState.selectedTab = .accounts }
+                    .keyboardShortcut("1", modifiers: .command)
+                Button("") { appState.selectedTab = .transactions }
+                    .keyboardShortcut("2", modifiers: .command)
+                Button("") { appState.selectedTab = .spending }
+                    .keyboardShortcut("3", modifiers: .command)
+                Button("") { appState.selectedTab = .credit }
+                    .keyboardShortcut("4", modifiers: .command)
+            }
+            .frame(width: 0, height: 0)
+            .opacity(0)
+        }
         .task {
             await appState.loadInitialData()
         }
+    }
+}
+
+// MARK: - Balance Sparkline
+
+private struct BalanceSparkline: View {
+    let history: [BalanceSnapshot]
+
+    var body: some View {
+        Chart(history, id: \.date) { snapshot in
+            LineMark(
+                x: .value("Date", snapshot.date),
+                y: .value("Balance", snapshot.balance)
+            )
+            .interpolationMethod(.catmullRom)
+            .foregroundStyle(.blue.opacity(0.6))
+
+            AreaMark(
+                x: .value("Date", snapshot.date),
+                y: .value("Balance", snapshot.balance)
+            )
+            .interpolationMethod(.catmullRom)
+            .foregroundStyle(.blue.opacity(0.08))
+        }
+        .chartXAxis(.hidden)
+        .chartYAxis(.hidden)
+        .chartLegend(.hidden)
     }
 }

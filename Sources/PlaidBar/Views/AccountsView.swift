@@ -10,7 +10,15 @@ struct AccountsView: View {
                 ContentUnavailableView {
                     Label("No Accounts", systemImage: "building.columns")
                 } description: {
-                    Text("Add a bank account to get started.")
+                    Text("Connect a bank to see your balances here.")
+                } actions: {
+                    Button {
+                        Task { await appState.addAccount() }
+                    } label: {
+                        Label("Add Account", systemImage: "plus.circle")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
                 }
                 .padding()
             } else {
@@ -43,7 +51,7 @@ struct AccountsView: View {
 
                 // Net balance footer (inside scroll)
                 Divider()
-                    .padding(.top, 4)
+                    .padding(.top, Spacing.xs)
                 HStack {
                     Text("Net Balance")
                         .fontWeight(.semibold)
@@ -54,21 +62,20 @@ struct AccountsView: View {
                         .contentTransition(.numericText())
                         .animation(.default, value: appState.netBalance)
                 }
-                .padding(.horizontal)
-                .padding(.vertical, 8)
+                .padding(.horizontal, Spacing.lg)
+                .padding(.vertical, Spacing.sm)
             }
         }
     }
 
     private func sectionHeader(_ title: String) -> some View {
         Text(title)
-            .font(.caption)
+            .sectionTitle()
             .foregroundStyle(.secondary)
-            .textCase(.uppercase)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal)
-            .padding(.top, 12)
-            .padding(.bottom, 4)
+            .padding(.horizontal, Spacing.lg)
+            .padding(.top, Spacing.md)
+            .padding(.bottom, Spacing.xs)
             .background(.quaternary.opacity(0.3))
     }
 }
@@ -111,26 +118,35 @@ struct AccountRow: View {
                     .font(.body)
                 if let mask = account.mask {
                     Text("\u{2022}\u{2022}\u{2022}\u{2022} \(mask)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .detailText()
                 }
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
-                Text(formattedAmount)
-                    .monospacedDigit()
-                    .foregroundStyle(amountColor)
+                HStack(spacing: Spacing.xs) {
+                    // Issue #3: secondary cue for credit amounts (not color-only)
+                    if account.type == .credit {
+                        Image(systemName: "creditcard")
+                            .font(.caption2)
+                            .foregroundStyle(SemanticColors.creditDebt)
+                    }
+                    Text(formattedAmount)
+                        .monospacedDigit()
+                        .foregroundStyle(amountColor)
+                }
 
                 if let utilization = account.balances.utilizationPercent {
                     Text(Formatters.percent(utilization))
-                        .font(.caption)
-                        .foregroundStyle(utilization > PlaidBarConstants.creditUtilizationWarningThreshold ? .orange : .secondary)
+                        .microText()
+                        .foregroundStyle(utilization > PlaidBarConstants.creditUtilizationWarningThreshold ? SemanticColors.warning : .secondary)
                 }
             }
         }
-        .padding(.horizontal)
+        .padding(.horizontal, Spacing.lg)
         .padding(.vertical, 6)
         .hoverHighlight()
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(account.name), \(formattedAmount)\(account.type == .credit ? " owed" : "")")
     }
 
     private var formattedAmount: String {
@@ -142,6 +158,6 @@ struct AccountRow: View {
     }
 
     private var amountColor: Color {
-        account.type == .credit ? .red : .primary
+        account.type == .credit ? SemanticColors.creditDebt : .primary
     }
 }

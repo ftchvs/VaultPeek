@@ -1,6 +1,6 @@
 import Foundation
 
-public enum CurrencyFormat {
+public enum CurrencyFormat: String, Sendable {
     case full       // $12,450.32
     case abbreviated // $12.4K
     case compact    // $12,450
@@ -72,13 +72,13 @@ public enum Formatters {
         return f
     }()
 
-    // nonisolated(unsafe) because RelativeDateTimeFormatter is not Sendable but
-    // this static is only read (thread-safe in practice).
-    nonisolated(unsafe) private static let relativeDateFormatter: RelativeDateTimeFormatter = {
+    // Computed property — creates a new formatter per call.
+    // Called infrequently (once per sync label render), avoids nonisolated(unsafe).
+    private static var relativeDateFormatter: RelativeDateTimeFormatter {
         let f = RelativeDateTimeFormatter()
         f.unitsStyle = .short
         return f
-    }()
+    }
 
     public static func parseTransactionDate(_ dateString: String) -> Date? {
         transactionDateFormatter.date(from: dateString)

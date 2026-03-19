@@ -5,11 +5,18 @@ import PlaidBarCore
 struct SpendingView: View {
     @Environment(AppState.self) private var appState
     @State private var selectedPeriod: SpendingPeriod = .thisMonth
+    @State private var chartType: ChartType = .donut
 
     enum SpendingPeriod: String, CaseIterable, Sendable {
         case thisWeek = "This Week"
         case thisMonth = "This Month"
         case last30Days = "Last 30 Days"
+    }
+
+    enum ChartType: String, CaseIterable, Sendable {
+        case donut = "Categories"
+        case trend = "Trend"
+        case incomeExpense = "In vs Out"
     }
 
     private var filteredSpending: [(SpendingCategory, Double)] {
@@ -54,7 +61,7 @@ struct SpendingView: View {
         let categories = chartCategories
         let total = totalFiltered
 
-        VStack(spacing: 12) {
+        VStack(spacing: Spacing.md) {
             // Period picker
             Picker("Period", selection: $selectedPeriod) {
                 ForEach(SpendingPeriod.allCases, id: \.self) { period in
@@ -63,66 +70,87 @@ struct SpendingView: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .padding(.horizontal)
-            .padding(.top, 8)
+            .padding(.horizontal, Spacing.lg)
+            .padding(.top, Spacing.sm)
 
-            // Total — hero amount, no redundant label
+            // Total — hero amount
             Text(Formatters.currency(total, format: .full))
-                .font(.title2.bold())
-                .monospacedDigit()
+                .heroBalance()
                 .contentTransition(.numericText())
                 .animation(.default, value: total)
 
-            // Category breakdown legend (above chart so it's always visible)
-            VStack(spacing: 4) {
-                ForEach(categories, id: \.0) { category, amount in
-                    HStack(spacing: 8) {
-                        Circle()
-                            .fill(Color(hex: category.colorHex) ?? .gray)
-                            .frame(width: 10, height: 10)
-
-                        Text(category.displayName)
-                            .font(.body)
-
-                        Spacer()
-
-                        Text(Formatters.currency(amount, format: .full))
-                            .monospacedDigit()
-
-                        Text(total > 0 ? Formatters.percent(amount / total * 100, decimals: 0) : "—")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .frame(width: 35, alignment: .trailing)
-                    }
-                    .padding(.horizontal)
-                    .padding(.vertical, 2)
+            // Chart type picker
+            Picker("Chart", selection: $chartType) {
+                ForEach(ChartType.allCases, id: \.self) { type in
+                    Text(type.rawValue).tag(type)
                 }
             }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(.horizontal, Spacing.lg)
 
-            // Donut chart
-            if !categories.isEmpty && total > 0 {
-                Chart(categories, id: \.0) { category, amount in
-                    SectorMark(
-                        angle: .value("Amount", amount),
-                        innerRadius: .ratio(0.6),
-                        angularInset: 1.5
-                    )
-                    .foregroundStyle(Color(hex: category.colorHex) ?? .gray)
-                    .annotation(position: .overlay) {
-                        if amount / total > 0.1 {
-                            Text(Formatters.percent(amount / total * 100, decimals: 0))
-                                .font(.caption2)
-                                .fontWeight(.semibold)
-                                .foregroundStyle(.white)
-                        }
-                    }
-                }
-                .chartLegend(.hidden)
-                .frame(height: 170)
-                .padding(.horizontal)
+            // Chart content
+            switch chartType {
+            case .donut:
+                donutChart(categories: categories, total: total)
+            case .trend:
+                SpendingTrendChart(transactions: appState.transactions)
+            case .incomeExpense:
+                IncomeExpenseChart(transactions: appState.transactions)
             }
         }
-        .padding(.bottom, 8)
+        .padding(.bottom, Spacing.sm)
+    }
+
+    @ViewBuilder
+    private func donutChart(categories: [(SpendingCategory, Double)], total: Double) -> some View {
+        // Category breakdown legend
+        VStack(spacing: Spacing.xs) {
+            ForEach(categories, id: \.0) { category, amount in
+                HStack(spacing: Spacing.sm) {
+                    Circle()
+                        .fill(Color(hex: category.colorHex) ?? .gray)
+                        .frame(width: 10, height: 10)
+
+                    Text(category.displayName)
+                        .font(.body)
+
+                    Spacer()
+
+                    Text(Formatters.currency(amount, format: .full))
+                        .monospacedDigit()
+
+                    Text(total > 0 ? Formatters.percent(amount / total * 100, decimals: 0) : "\u{2014}")
+                        .microText()
+                        .foregroundStyle(.secondary)
+                        .frame(width: 35, alignment: .trailing)
+                }
+                .padding(.horizontal, Spacing.lg)
+                .padding(.vertical, 2)
+            }
+        }
+
+        // Donut chart
+        if !categories.isEmpty && total > 0 {
+            Chart(categories, id: \.0) { category, amount in
+                SectorMark(
+                    angle: .value("Amount", amount),
+                    innerRadius: .ratio(0.6),
+                    angularInset: 1.5
+                )
+                .foregroundStyle(Color(hex: category.colorHex) ?? .gray)
+                .annotation(position: .overlay) {
+                    if amount / total > 0.1 {
+                        Text(Formatters.percent(amount / total * 100, decimals: 0))
+                            .microText()
+                            .foregroundStyle(.white)
+                    }
+                }
+            }
+            .chartLegend(.hidden)
+            .frame(height: 170)
+            .padding(.horizontal, Spacing.lg)
+        }
     }
 
     private static func formatDate(_ date: Date) -> String {

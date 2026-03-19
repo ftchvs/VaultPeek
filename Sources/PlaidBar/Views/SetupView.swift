@@ -15,7 +15,17 @@ struct SetupView: View {
     }
 
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: Spacing.lg) {
+            // Step indicator
+            HStack(spacing: Spacing.sm) {
+                ForEach(0..<3) { step in
+                    Circle()
+                        .fill(stepIndex >= step ? Color.blue : Color.gray.opacity(0.3))
+                        .frame(width: 6, height: 6)
+                }
+            }
+            .padding(.top, Spacing.sm)
+
             switch setupMode {
             case .welcome:
                 welcomeView
@@ -29,10 +39,19 @@ struct SetupView: View {
         }
         .padding()
         .frame(width: 360)
+        .animation(.easeInOut(duration: 0.25), value: setupMode)
+    }
+
+    private var stepIndex: Int {
+        switch setupMode {
+        case .welcome: return 0
+        case .sandbox, .credentials: return 1
+        case .connecting: return 2
+        }
     }
 
     private var welcomeView: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: Spacing.lg) {
             Image(systemName: "dollarsign.circle.fill")
                 .font(.system(size: 48))
                 .foregroundStyle(.blue)
@@ -45,7 +64,7 @@ struct SetupView: View {
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
 
-            VStack(spacing: 12) {
+            VStack(spacing: Spacing.md) {
                 Button {
                     setupMode = .sandbox
                 } label: {
@@ -72,7 +91,7 @@ struct SetupView: View {
     }
 
     private var sandboxView: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: Spacing.lg) {
             Image(systemName: "testtube.2")
                 .font(.system(size: 36))
                 .foregroundStyle(.orange)
@@ -100,7 +119,7 @@ struct SetupView: View {
     }
 
     private var credentialsView: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: Spacing.lg) {
             Image(systemName: "key.fill")
                 .font(.system(size: 36))
                 .foregroundStyle(.blue)
@@ -114,7 +133,7 @@ struct SetupView: View {
                 .foregroundStyle(.secondary)
                 .font(.callout)
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
                 TextField("Client ID", text: $clientId)
                     .textFieldStyle(.roundedBorder)
                 SecureField("Secret", text: $secret)
@@ -136,7 +155,7 @@ struct SetupView: View {
     }
 
     private var connectingView: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: Spacing.lg) {
             ProgressView()
                 .scaleEffect(1.5)
 

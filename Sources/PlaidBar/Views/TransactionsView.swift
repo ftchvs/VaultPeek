@@ -22,7 +22,7 @@ struct TransactionsView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Search bar
-            HStack(spacing: 8) {
+            HStack(spacing: Spacing.sm) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
                     .font(.caption)
@@ -42,30 +42,33 @@ struct TransactionsView: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
             .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
-            .padding(.horizontal)
-            .padding(.vertical, 8)
+            .padding(.horizontal, Spacing.lg)
+            .padding(.vertical, Spacing.sm)
 
             Divider()
 
             if filteredTransactions.isEmpty {
                 ContentUnavailableView {
-                    Label("No Transactions", systemImage: "creditcard")
+                    Label(
+                        searchText.isEmpty ? "No Transactions" : "No Results",
+                        systemImage: searchText.isEmpty ? "tray" : "magnifyingglass"
+                    )
                 } description: {
                     Text(searchText.isEmpty
-                        ? "Transactions will appear after syncing."
-                        : "No matches found.")
+                        ? "Transactions will appear after syncing with your bank."
+                        : "No transactions match \"\(searchText)\".")
                 }
                 .padding()
             } else {
                 ForEach(filteredTransactions, id: \.0) { date, transactions in
                     // Date header
                     Text(Self.formatDateHeader(date))
-                        .font(.caption)
+                        .sectionTitle()
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal)
+                        .padding(.horizontal, Spacing.lg)
                         .padding(.top, 10)
-                        .padding(.bottom, 4)
+                        .padding(.bottom, Spacing.xs)
                         .background(.quaternary.opacity(0.3))
 
                     ForEach(transactions) { transaction in
@@ -102,8 +105,7 @@ struct TransactionRow: View {
                     .lineLimit(1)
                 if let category = transaction.category {
                     Text(category.displayName)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .detailText()
                 }
             }
 
@@ -117,14 +119,16 @@ struct TransactionRow: View {
 
                 if transaction.pending {
                     Text("Pending")
-                        .font(.caption2)
-                        .foregroundStyle(.orange)
+                        .microText()
+                        .foregroundStyle(SemanticColors.pending)
                 }
             }
         }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
+        .padding(.horizontal, Spacing.lg)
+        .padding(.vertical, Spacing.sm)
         .hoverHighlight()
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(transaction.displayName), \(amountText)\(transaction.pending ? ", pending" : "")")
     }
 
     private var amountText: String {
@@ -135,6 +139,6 @@ struct TransactionRow: View {
     }
 
     private var amountColor: Color {
-        transaction.isIncome ? .green : .primary
+        transaction.isIncome ? SemanticColors.income : SemanticColors.expense
     }
 }

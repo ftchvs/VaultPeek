@@ -15,16 +15,64 @@ final class AppState {
     var isSetupComplete = false
     var serverConnected = false
     var lastSyncDate: Date?
+    var balanceHistory: [BalanceSnapshot] = []
 
-    // MARK: - Settings
-    var showBalanceInMenuBar = true
-    var balanceFormat: CurrencyFormat = .abbreviated
-    var creditUtilizationThreshold: Double = 30.0
-    var refreshInterval: TimeInterval = PlaidBarConstants.backgroundRefreshInterval
+    // MARK: - Settings (persisted to UserDefaults)
+    var showBalanceInMenuBar: Bool = true {
+        didSet { UserDefaults.standard.set(showBalanceInMenuBar, forKey: "showBalanceInMenuBar") }
+    }
+    var balanceFormat: CurrencyFormat = .abbreviated {
+        didSet { UserDefaults.standard.set(balanceFormat.rawValue, forKey: "balanceFormat") }
+    }
+    var creditUtilizationThreshold: Double = 30.0 {
+        didSet { UserDefaults.standard.set(creditUtilizationThreshold, forKey: "creditUtilizationThreshold") }
+    }
+    var refreshInterval: TimeInterval = PlaidBarConstants.backgroundRefreshInterval {
+        didSet {
+            UserDefaults.standard.set(refreshInterval, forKey: "refreshInterval")
+            // Restart background refresh with new interval
+            if refreshTask != nil { startBackgroundRefresh() }
+        }
+    }
+    var launchAtLogin: Bool = false {
+        didSet {
+            try? LaunchService.setEnabled(launchAtLogin)
+        }
+    }
 
     // MARK: - Services
     private let serverClient = ServerClient()
     private var refreshTask: Task<Void, Never>?
+
+    // MARK: - Init
+
+    init() {
+        loadSettings()
+    }
+
+    private func loadSettings() {
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: "showBalanceInMenuBar") != nil {
+            showBalanceInMenuBar = defaults.bool(forKey: "showBalanceInMenuBar")
+        }
+        if let format = defaults.string(forKey: "balanceFormat"),
+           let f = CurrencyFormat(rawValue: format) {
+            balanceFormat = f
+        }
+        if defaults.object(forKey: "creditUtilizationThreshold") != nil {
+            creditUtilizationThreshold = defaults.double(forKey: "creditUtilizationThreshold")
+        }
+        if defaults.object(forKey: "refreshInterval") != nil {
+            refreshInterval = defaults.double(forKey: "refreshInterval")
+        }
+        // Balance history
+        if let data = defaults.data(forKey: "balanceHistory"),
+           let history = try? JSONDecoder().decode([BalanceSnapshot].self, from: data) {
+            balanceHistory = history
+        }
+        // Launch at login
+        launchAtLogin = LaunchService.isEnabled
+    }
 
     // MARK: - Computed
 
@@ -114,6 +162,7 @@ final class AppState {
         do {
             accounts = try await serverClient.getBalances()
             lastSyncDate = Date()
+            recordBalanceSnapshot()
         } catch {
             self.error = error.localizedDescription
         }
@@ -205,6 +254,20 @@ final class AppState {
         }
     }
 
+    // MARK: - Balance History
+
+    private func recordBalanceSnapshot() {
+        let snapshot = BalanceSnapshot(date: Date(), balance: netBalance)
+        balanceHistory.append(snapshot)
+        // Keep last 90 days
+        let cutoff = Calendar.current.date(byAdding: .day, value: -90, to: Date()) ?? Date()
+        balanceHistory.removeAll { $0.date < cutoff }
+        // Persist
+        if let data = try? JSONEncoder().encode(balanceHistory) {
+            UserDefaults.standard.set(data, forKey: "balanceHistory")
+        }
+    }
+
     // MARK: - Demo Data
 
     func loadDemoData() {
@@ -261,6 +324,13 @@ final class AppState {
             TransactionDTO(id: "tx14", accountId: "demo_amex", amount: 55.00, date: threeDaysAgo, name: "TARGET 0392", merchantName: "Target", category: .shopping),
             TransactionDTO(id: "tx15", accountId: "demo_checking", amount: 1_850.00, date: threeDaysAgo, name: "RENT PAYMENT", merchantName: "Landlord", category: .billsAndUtilities),
         ]
+
+        // Generate demo balance history (7 days)
+        balanceHistory = (0..<7).reversed().map { daysAgo in
+            let date = Calendar.current.date(byAdding: .day, value: -daysAgo, to: Date())!
+            let jitter = Double.random(in: -500...500)
+            return BalanceSnapshot(date: date, balance: 17_604.24 + jitter)
+        }
 
         isSetupComplete = true
         serverConnected = true
