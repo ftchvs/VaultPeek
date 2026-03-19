@@ -4,6 +4,7 @@ import PlaidBarCore
 
 struct MainPopover: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         @Bindable var state = appState
@@ -13,7 +14,7 @@ struct MainPopover: View {
                 SetupView()
             } else {
                 // Header — balance as hero with sparkline
-                VStack(spacing: 2) {
+                VStack(spacing: Spacing.xxs) {
                     Text(Formatters.currency(appState.netBalance, format: .full))
                         .heroBalance()
                         .contentTransition(.numericText())
@@ -27,7 +28,7 @@ struct MainPopover: View {
                             .padding(.top, Spacing.xs)
                     }
 
-                    HStack(spacing: 6) {
+                    HStack(spacing: Spacing.rowVertical) {
                         Text("PlaidBar")
                             .detailText()
                         if let syncText = appState.lastSyncRelative {
@@ -105,10 +106,21 @@ struct MainPopover: View {
                     .help("Refresh (Cmd+R)")
                     .keyboardShortcut("r", modifiers: .command)
 
-                    SettingsLink {
+                    Button {
+                        openSettings()
+                        // Menu bar apps need activation policy switch to bring Settings to front
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            NSApp.setActivationPolicy(.regular)
+                            NSApp.activate(ignoringOtherApps: true)
+                            for window in NSApp.windows where window.title == "General" || window.title == "Settings" {
+                                window.orderFrontRegardless()
+                            }
+                        }
+                    } label: {
                         Image(systemName: "gear")
                     }
                     .buttonStyle(.borderless)
+                    .help("Settings")
                 }
                 .padding(.horizontal, Spacing.lg)
                 .padding(.vertical, Spacing.sm)
@@ -131,7 +143,7 @@ struct MainPopover: View {
                     .buttonStyle(.borderless)
                 }
                 .padding(.horizontal, Spacing.lg)
-                .padding(.vertical, 6)
+                .padding(.vertical, Spacing.rowVertical)
                 .background(.red.opacity(0.1))
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }

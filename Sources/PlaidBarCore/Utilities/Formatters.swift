@@ -103,6 +103,13 @@ public enum Formatters {
         relativeDateFormatter.localizedString(for: date, relativeTo: Date())
     }
 
+    /// Parse a YYYY-MM-DD transaction date string and return a display string (Today/Yesterday/medium date).
+    /// Returns the raw string if parsing fails.
+    public static func displayTransactionDate(_ dateString: String) -> String {
+        guard let date = parseTransactionDate(dateString) else { return dateString }
+        return displayDate(date)
+    }
+
     // MARK: - Percentages
 
     public static func percent(_ value: Double, decimals: Int = 1) -> String {

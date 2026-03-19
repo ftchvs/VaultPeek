@@ -20,12 +20,18 @@ struct SettingsView: View {
                     Label("Accounts", systemImage: "building.columns")
                 }
 
+            NotificationSettingsView()
+                .environment(appState)
+                .tabItem {
+                    Label("Notifications", systemImage: "bell")
+                }
+
             AboutView(updater: updater)
                 .tabItem {
                     Label("About", systemImage: "info.circle")
                 }
         }
-        .frame(width: 450, height: 300)
+        .frame(width: 480, height: 380)
     }
 }
 
@@ -53,7 +59,7 @@ struct GeneralSettingsView: View {
             }
 
             HStack {
-                Text("Credit warning threshold")
+                Text("Credit warning")
                 Spacer()
                 TextField(
                     "",
@@ -64,6 +70,7 @@ struct GeneralSettingsView: View {
                 .textFieldStyle(.roundedBorder)
                 Text("%")
             }
+            .help("Credit cards above this utilization threshold show warning colors")
 
             Toggle("Launch at login", isOn: $state.launchAtLogin)
         }
@@ -109,6 +116,84 @@ struct AccountSettingsView: View {
     }
 }
 
+struct NotificationSettingsView: View {
+    @Environment(AppState.self) private var appState
+    @State private var permissionDenied = false
+
+    var body: some View {
+        @Bindable var state = appState
+
+        Form {
+            Toggle("Enable notifications", isOn: $state.notificationsEnabled)
+                .onChange(of: appState.notificationsEnabled) { _, enabled in
+                    if enabled {
+                        Task {
+                            let granted = await NotificationService.shared.requestPermission()
+                            if !granted {
+                                permissionDenied = true
+                                appState.notificationsEnabled = false
+                            }
+                        }
+                    }
+                }
+
+            if permissionDenied {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle")
+                        .foregroundStyle(SemanticColors.warning)
+                    Text("Notifications denied. Enable in System Settings > Notifications.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Section("Transaction Alerts") {
+                Toggle("Large transactions", isOn: $state.notifyLargeTransaction)
+                    .disabled(!appState.notificationsEnabled)
+
+                HStack {
+                    Text("Threshold")
+                    Spacer()
+                    Text("$")
+                    TextField(
+                        "",
+                        value: $state.largeTransactionThreshold,
+                        format: .number.precision(.fractionLength(0))
+                    )
+                    .frame(width: 60)
+                    .textFieldStyle(.roundedBorder)
+                }
+                .disabled(!appState.notificationsEnabled || !appState.notifyLargeTransaction)
+
+                Toggle("Low balance warning", isOn: $state.notifyLowBalance)
+                    .disabled(!appState.notificationsEnabled)
+
+                HStack {
+                    Text("Threshold")
+                    Spacer()
+                    Text("$")
+                    TextField(
+                        "",
+                        value: $state.lowBalanceThreshold,
+                        format: .number.precision(.fractionLength(0))
+                    )
+                    .frame(width: 60)
+                    .textFieldStyle(.roundedBorder)
+                }
+                .disabled(!appState.notificationsEnabled || !appState.notifyLowBalance)
+            }
+
+            Section("Credit Alerts") {
+                Toggle("High utilization", isOn: $state.notifyHighUtilization)
+                    .disabled(!appState.notificationsEnabled)
+                Text("Uses credit warning threshold (\(Formatters.percent(appState.creditUtilizationThreshold, decimals: 0)))")
+                    .detailText()
+            }
+        }
+        .padding()
+    }
+}
+
 struct AboutView: View {
     let updater: SPUUpdater
 
@@ -116,7 +201,7 @@ struct AboutView: View {
         VStack(spacing: Spacing.md) {
             Image(systemName: "dollarsign.circle.fill")
                 .font(.system(size: 48))
-                .foregroundStyle(.blue)
+                .foregroundStyle(SemanticColors.brand)
 
             Text("PlaidBar")
                 .font(.title2)

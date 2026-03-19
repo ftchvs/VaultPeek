@@ -347,4 +347,207 @@ struct PlaidBarCoreTests {
         #expect(!PlaidBarConstants.appVersion.isEmpty)
         #expect(!PlaidBarConstants.appName.isEmpty)
     }
+
+    @Test("Version bumped to 0.3.0")
+    func versionBump() {
+        #expect(PlaidBarConstants.appVersion == "0.3.0")
+    }
+
+    // MARK: - RecurringTransaction Model Tests
+
+    @Test("RecurringTransaction identity by merchantName")
+    func recurringIdentity() {
+        let r = RecurringTransaction(
+            merchantName: "Netflix",
+            frequency: .monthly,
+            averageAmount: 15.99,
+            lastDate: "2026-03-15",
+            nextExpectedDate: "2026-04-15",
+            category: .entertainment,
+            transactionCount: 3,
+            confidence: 0.95
+        )
+        #expect(r.id == "Netflix-monthly")
+    }
+
+    @Test("RecurringFrequency display names")
+    func recurringFrequencyDisplay() {
+        for freq in RecurringFrequency.allCases {
+            #expect(!freq.displayName.isEmpty)
+            #expect(!freq.iconName.isEmpty)
+            #expect(freq.estimatedDays > 0)
+        }
+    }
+
+    @Test("RecurringFrequency estimated days")
+    func recurringFrequencyDays() {
+        #expect(RecurringFrequency.weekly.estimatedDays == 7)
+        #expect(RecurringFrequency.biweekly.estimatedDays == 14)
+        #expect(RecurringFrequency.monthly.estimatedDays == 30)
+        #expect(RecurringFrequency.quarterly.estimatedDays == 90)
+        #expect(RecurringFrequency.annual.estimatedDays == 365)
+    }
+
+    @Test("RecurringFrequency monthly multiplier normalization")
+    func recurringFrequencyMultiplier() {
+        #expect(RecurringFrequency.monthly.monthlyMultiplier == 1.0)
+        #expect(abs(RecurringFrequency.weekly.monthlyMultiplier - 4.333) < 0.01)
+        #expect(abs(RecurringFrequency.quarterly.monthlyMultiplier - 0.333) < 0.01)
+        #expect(abs(RecurringFrequency.annual.monthlyMultiplier - 0.0833) < 0.01)
+    }
+
+    // MARK: - RecurringDetector Tests
+
+    @Test("RecurringDetector detects monthly pattern")
+    func detectMonthly() {
+        let txns = [
+            TransactionDTO(id: "1", accountId: "a", amount: 15.99, date: "2026-01-15", name: "NETFLIX", merchantName: "Netflix", category: .entertainment),
+            TransactionDTO(id: "2", accountId: "a", amount: 15.99, date: "2026-02-15", name: "NETFLIX", merchantName: "Netflix", category: .entertainment),
+            TransactionDTO(id: "3", accountId: "a", amount: 15.99, date: "2026-03-15", name: "NETFLIX", merchantName: "Netflix", category: .entertainment),
+        ]
+
+        let recurring = RecurringDetector.detect(from: txns)
+        #expect(recurring.count == 1)
+        #expect(recurring[0].merchantName == "Netflix")
+        #expect(recurring[0].frequency == .monthly)
+        #expect(abs(recurring[0].averageAmount - 15.99) < 0.01)
+        #expect(recurring[0].confidence > 0.5)
+    }
+
+    @Test("RecurringDetector ignores single-occurrence merchants")
+    func detectSingleOccurrence() {
+        let txns = [
+            TransactionDTO(id: "1", accountId: "a", amount: 50.00, date: "2026-01-15", name: "Random Store", merchantName: "Random Store"),
+        ]
+
+        let recurring = RecurringDetector.detect(from: txns)
+        #expect(recurring.isEmpty)
+    }
+
+    @Test("RecurringDetector ignores income")
+    func detectIgnoresIncome() {
+        let txns = [
+            TransactionDTO(id: "1", accountId: "a", amount: -3000, date: "2026-01-15", name: "Salary", merchantName: "Employer", category: .income),
+            TransactionDTO(id: "2", accountId: "a", amount: -3000, date: "2026-02-15", name: "Salary", merchantName: "Employer", category: .income),
+            TransactionDTO(id: "3", accountId: "a", amount: -3000, date: "2026-03-15", name: "Salary", merchantName: "Employer", category: .income),
+        ]
+
+        let recurring = RecurringDetector.detect(from: txns)
+        #expect(recurring.isEmpty)
+    }
+
+    @Test("RecurringDetector empty input")
+    func detectEmpty() {
+        let recurring = RecurringDetector.detect(from: [])
+        #expect(recurring.isEmpty)
+    }
+
+    @Test("RecurringDetector rejects irregular intervals")
+    func detectIrregular() {
+        let txns = [
+            TransactionDTO(id: "1", accountId: "a", amount: 50, date: "2026-01-01", name: "Shop", merchantName: "Shop"),
+            TransactionDTO(id: "2", accountId: "a", amount: 50, date: "2026-01-10", name: "Shop", merchantName: "Shop"),
+            TransactionDTO(id: "3", accountId: "a", amount: 50, date: "2026-03-15", name: "Shop", merchantName: "Shop"),
+        ]
+
+        let recurring = RecurringDetector.detect(from: txns)
+        #expect(recurring.isEmpty)
+    }
+
+    @Test("RecurringDetector ignores nil merchantName")
+    func detectNilMerchant() {
+        let txns = [
+            TransactionDTO(id: "1", accountId: "a", amount: 10, date: "2026-01-15", name: "Payment"),
+            TransactionDTO(id: "2", accountId: "a", amount: 10, date: "2026-02-15", name: "Payment"),
+        ]
+
+        let recurring = RecurringDetector.detect(from: txns)
+        #expect(recurring.isEmpty)
+    }
+
+    @Test("RecurringDetector computes next expected date")
+    func detectNextDate() {
+        let txns = [
+            TransactionDTO(id: "1", accountId: "a", amount: 75, date: "2026-01-15", name: "Gym", merchantName: "Planet Fitness"),
+            TransactionDTO(id: "2", accountId: "a", amount: 75, date: "2026-02-15", name: "Gym", merchantName: "Planet Fitness"),
+            TransactionDTO(id: "3", accountId: "a", amount: 75, date: "2026-03-15", name: "Gym", merchantName: "Planet Fitness"),
+        ]
+
+        let recurring = RecurringDetector.detect(from: txns)
+        #expect(recurring.count == 1)
+        #expect(recurring[0].nextExpectedDate == "2026-04-15")
+    }
+
+    @Test("RecurringDetector median calculation")
+    func medianCalculation() {
+        #expect(RecurringDetector.median([1, 2, 3]) == 2.0)
+        #expect(RecurringDetector.median([1, 3]) == 2.0)
+        #expect(RecurringDetector.median([5]) == 5.0)
+        #expect(RecurringDetector.median([]) == 0.0)
+        #expect(RecurringDetector.median([10, 20, 30, 40]) == 25.0)
+    }
+
+    @Test("RecurringDetector frequency classification")
+    func frequencyClassification() {
+        #expect(RecurringDetector.classifyFrequency(medianInterval: 7) == .weekly)
+        #expect(RecurringDetector.classifyFrequency(medianInterval: 14) == .biweekly)
+        #expect(RecurringDetector.classifyFrequency(medianInterval: 30) == .monthly)
+        #expect(RecurringDetector.classifyFrequency(medianInterval: 90) == .quarterly)
+        #expect(RecurringDetector.classifyFrequency(medianInterval: 365) == .annual)
+        #expect(RecurringDetector.classifyFrequency(medianInterval: 3) == nil)
+        #expect(RecurringDetector.classifyFrequency(medianInterval: 50) == nil)
+    }
+
+    @Test("RecurringDetector confidence calculation")
+    func confidenceCalculation() {
+        // Perfect consistency
+        let perfect = RecurringDetector.computeConfidence(intervals: [30, 30, 30], medianInterval: 30)
+        #expect(perfect == 1.0)
+
+        // Some variance
+        let moderate = RecurringDetector.computeConfidence(intervals: [28, 30, 32], medianInterval: 30)
+        #expect(moderate > 0.9)
+        #expect(moderate < 1.0)
+
+        // High variance
+        let high = RecurringDetector.computeConfidence(intervals: [10, 30, 50], medianInterval: 30)
+        #expect(high < 0.6)
+    }
+
+    @Test("RecurringDetector multiple merchants")
+    func detectMultipleMerchants() {
+        let txns = [
+            // Netflix monthly
+            TransactionDTO(id: "n1", accountId: "a", amount: 15.99, date: "2026-01-15", name: "NETFLIX", merchantName: "Netflix"),
+            TransactionDTO(id: "n2", accountId: "a", amount: 15.99, date: "2026-02-15", name: "NETFLIX", merchantName: "Netflix"),
+            TransactionDTO(id: "n3", accountId: "a", amount: 15.99, date: "2026-03-15", name: "NETFLIX", merchantName: "Netflix"),
+            // Spotify monthly
+            TransactionDTO(id: "s1", accountId: "a", amount: 9.99, date: "2026-01-10", name: "SPOTIFY", merchantName: "Spotify"),
+            TransactionDTO(id: "s2", accountId: "a", amount: 9.99, date: "2026-02-10", name: "SPOTIFY", merchantName: "Spotify"),
+            TransactionDTO(id: "s3", accountId: "a", amount: 9.99, date: "2026-03-10", name: "SPOTIFY", merchantName: "Spotify"),
+            // Random one-off
+            TransactionDTO(id: "r1", accountId: "a", amount: 500, date: "2026-02-20", name: "Random", merchantName: "Random"),
+        ]
+
+        let recurring = RecurringDetector.detect(from: txns)
+        #expect(recurring.count == 2)
+        let merchants = Set(recurring.map(\.merchantName))
+        #expect(merchants.contains("Netflix"))
+        #expect(merchants.contains("Spotify"))
+    }
+
+    @Test("RecurringDetector sorted by amount descending")
+    func detectSortedByAmount() {
+        let txns = [
+            TransactionDTO(id: "a1", accountId: "a", amount: 10, date: "2026-01-15", name: "A", merchantName: "Cheap"),
+            TransactionDTO(id: "a2", accountId: "a", amount: 10, date: "2026-02-15", name: "A", merchantName: "Cheap"),
+            TransactionDTO(id: "b1", accountId: "a", amount: 100, date: "2026-01-15", name: "B", merchantName: "Expensive"),
+            TransactionDTO(id: "b2", accountId: "a", amount: 100, date: "2026-02-15", name: "B", merchantName: "Expensive"),
+        ]
+
+        let recurring = RecurringDetector.detect(from: txns)
+        #expect(recurring.count == 2)
+        #expect(recurring[0].merchantName == "Expensive")
+        #expect(recurring[1].merchantName == "Cheap")
+    }
 }

@@ -18,6 +18,13 @@ enum SemanticColors {
     // Charts
     static let sparkline = Color.blue
 
+    // Brand
+    static let brand = Color.blue
+    static let brandSecondary = Color.orange
+
+    // Recurring
+    static let recurring = Color.indigo
+
     // Utilization thresholds
     static func utilization(for percent: Double, threshold: Double = 30) -> Color {
         guard percent >= threshold else { return .green }
@@ -42,9 +49,11 @@ enum SemanticColors {
 // MARK: - Spacing (8pt grid)
 
 enum Spacing {
+    static let xxs: CGFloat = 2
     static let xs: CGFloat = 4
     static let sm: CGFloat = 8
     static let md: CGFloat = 12
     static let lg: CGFloat = 16
     static let xl: CGFloat = 24
+    static let rowVertical: CGFloat = 6
 }

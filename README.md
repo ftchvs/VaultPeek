@@ -27,9 +27,13 @@ Personal finance data lives behind bank website logins. The closest thing to a m
 
 - **Glanceable** — Net balance visible right in the menu bar
 - **Account Balances** — All bank accounts and credit cards at a glance
-- **Recent Transactions** — Searchable list grouped by day with category icons
-- **Spending Breakdown** — Donut chart, trend line, and income vs expense views
+- **Recent Transactions** — Searchable, filterable list grouped by day with category icons
+- **Transaction Detail** — Tap any transaction for merchant, category, account, and status details
+- **Transaction Filtering** — Filter by category, account, or date range with chip controls
+- **Recurring Detection** — Automatic identification of subscriptions and recurring charges with monthly total
+- **Spending Breakdown** — Donut chart, trend line, income vs expense views, and month-over-month comparison
 - **Credit Utilization** — Progress bars with configurable warning thresholds and gauge
+- **Smart Notifications** — Alerts for large transactions, low balances, and high credit utilization
 - **Balance History** — Sparkline showing net balance trend over time
 - **Keyboard Shortcuts** — Cmd+1-4 to switch tabs, Cmd+R to refresh, Cmd+N to add account
 - **Settings Persistence** — Preferences saved across launches

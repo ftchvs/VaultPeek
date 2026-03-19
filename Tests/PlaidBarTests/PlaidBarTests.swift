@@ -296,4 +296,168 @@ struct PlaidBarTests {
         #expect(recent.count == PlaidBarConstants.maxRecentTransactions)
         #expect(recent.count == 50)
     }
+
+    // MARK: - Account Transaction Filtering (mirrors AppState.transactionsForAccount)
+
+    @Test("Filter transactions by account ID")
+    func transactionsByAccount() {
+        let transactions = [
+            TransactionDTO(id: "1", accountId: "checking", amount: 50, date: "2026-01-15", name: "A"),
+            TransactionDTO(id: "2", accountId: "credit", amount: 30, date: "2026-01-15", name: "B"),
+            TransactionDTO(id: "3", accountId: "checking", amount: 20, date: "2026-01-14", name: "C"),
+            TransactionDTO(id: "4", accountId: "savings", amount: 10, date: "2026-01-13", name: "D"),
+        ]
+
+        let checkingTxns = transactions.filter { $0.accountId == "checking" }
+            .sorted { $0.date > $1.date }
+        #expect(checkingTxns.count == 2)
+        #expect(checkingTxns[0].id == "1")
+        #expect(checkingTxns[1].id == "3")
+    }
+
+    // MARK: - Merchant Transaction Filtering (mirrors AppState.transactionsForMerchant)
+
+    @Test("Filter transactions by merchant excluding current")
+    func transactionsByMerchant() {
+        let transactions = [
+            TransactionDTO(id: "1", accountId: "a", amount: 15.99, date: "2026-03-15", name: "NETFLIX", merchantName: "Netflix"),
+            TransactionDTO(id: "2", accountId: "a", amount: 15.99, date: "2026-02-15", name: "NETFLIX", merchantName: "Netflix"),
+            TransactionDTO(id: "3", accountId: "a", amount: 15.99, date: "2026-01-15", name: "NETFLIX", merchantName: "Netflix"),
+            TransactionDTO(id: "4", accountId: "a", amount: 50, date: "2026-03-15", name: "Other", merchantName: "Other"),
+        ]
+
+        let otherNetflix = transactions.filter { $0.merchantName == "Netflix" && $0.id != "1" }
+            .sorted { $0.date > $1.date }
+        #expect(otherNetflix.count == 2)
+        #expect(otherNetflix[0].id == "2")
+        #expect(otherNetflix[1].id == "3")
+    }
+
+    // MARK: - Spending Delta Calculation (mirrors SpendingView logic)
+
+    @Test("Spending delta calculation")
+    func spendingDelta() {
+        let transactions = [
+            // Current month
+            TransactionDTO(id: "1", accountId: "a", amount: 100, date: "2026-03-15", name: "A", category: .foodAndDrink),
+            TransactionDTO(id: "2", accountId: "a", amount: 200, date: "2026-03-10", name: "B", category: .shopping),
+            // Previous month
+            TransactionDTO(id: "3", accountId: "a", amount: 150, date: "2026-02-15", name: "C", category: .foodAndDrink),
+            TransactionDTO(id: "4", accountId: "a", amount: 100, date: "2026-02-10", name: "D", category: .shopping),
+            // Income (should be excluded)
+            TransactionDTO(id: "5", accountId: "a", amount: -3000, date: "2026-03-01", name: "Salary", category: .income),
+        ]
+
+        let currentStart = "2026-03-01"
+        let prevStart = "2026-02-01"
+
+        let currentSpending = transactions.filter {
+            $0.date >= currentStart && !$0.isIncome && $0.category != .transfer && $0.category != .transferOut
+        }.reduce(0.0) { $0 + $1.displayAmount }
+
+        let prevSpending = transactions.filter {
+            $0.date >= prevStart && $0.date < currentStart &&
+            !$0.isIncome && $0.category != .transfer && $0.category != .transferOut
+        }.reduce(0.0) { $0 + $1.displayAmount }
+
+        #expect(currentSpending == 300)
+        #expect(prevSpending == 250)
+
+        let delta = currentSpending - prevSpending
+        #expect(delta == 50)
+
+        let percent = (delta / prevSpending) * 100
+        #expect(abs(percent - 20.0) < 0.01)
+    }
+
+    // MARK: - Category Filter Logic (mirrors TransactionsView)
+
+    @Test("Category filter")
+    func categoryFilter() {
+        let transactions = [
+            TransactionDTO(id: "1", accountId: "a", amount: 50, date: "2026-01-15", name: "Food", category: .foodAndDrink),
+            TransactionDTO(id: "2", accountId: "a", amount: 30, date: "2026-01-15", name: "Gas", category: .transportation),
+            TransactionDTO(id: "3", accountId: "a", amount: 20, date: "2026-01-14", name: "Lunch", category: .foodAndDrink),
+        ]
+
+        let foodOnly = transactions.filter { $0.category == .foodAndDrink }
+        #expect(foodOnly.count == 2)
+        #expect(foodOnly.allSatisfy { $0.category == .foodAndDrink })
+    }
+
+    @Test("Combined category and account filter")
+    func combinedFilter() {
+        let transactions = [
+            TransactionDTO(id: "1", accountId: "checking", amount: 50, date: "2026-01-15", name: "Food", category: .foodAndDrink),
+            TransactionDTO(id: "2", accountId: "credit", amount: 30, date: "2026-01-15", name: "Food", category: .foodAndDrink),
+            TransactionDTO(id: "3", accountId: "checking", amount: 20, date: "2026-01-14", name: "Gas", category: .transportation),
+        ]
+
+        let filtered = transactions.filter { $0.category == .foodAndDrink && $0.accountId == "checking" }
+        #expect(filtered.count == 1)
+        #expect(filtered[0].id == "1")
+    }
+
+    // MARK: - Notification Trigger Logic
+
+    @Test("Large transaction detection")
+    func largeTransactionTrigger() {
+        let transactions = [
+            TransactionDTO(id: "1", accountId: "a", amount: 650, date: "2026-03-15", name: "Big Purchase"),
+            TransactionDTO(id: "2", accountId: "a", amount: 50, date: "2026-03-15", name: "Small"),
+            TransactionDTO(id: "3", accountId: "a", amount: -1000, date: "2026-03-15", name: "Income", category: .income),
+        ]
+
+        let threshold = 500.0
+        let large = transactions.filter { !$0.isIncome && $0.displayAmount >= threshold }
+        #expect(large.count == 1)
+        #expect(large[0].id == "1")
+    }
+
+    @Test("Low balance detection")
+    func lowBalanceTrigger() {
+        let accounts = [
+            AccountDTO(id: "1", itemId: "i", name: "Checking", type: .depository, balances: BalanceDTO(available: 50)),
+            AccountDTO(id: "2", itemId: "i", name: "Savings", type: .depository, balances: BalanceDTO(available: 5000)),
+            AccountDTO(id: "3", itemId: "i", name: "Credit", type: .credit, balances: BalanceDTO(current: -100, limit: 1000)),
+        ]
+
+        let threshold = 100.0
+        let lowBalance = accounts.filter { $0.type == .depository && $0.balances.effectiveBalance < threshold }
+        #expect(lowBalance.count == 1)
+        #expect(lowBalance[0].id == "1")
+    }
+
+    @Test("High utilization detection")
+    func highUtilizationTrigger() {
+        let accounts = [
+            AccountDTO(id: "1", itemId: "i", name: "Amex", type: .credit, balances: BalanceDTO(current: -200, limit: 10000)),
+            AccountDTO(id: "2", itemId: "i", name: "Visa", type: .credit, balances: BalanceDTO(current: -4500, limit: 5000)),
+        ]
+
+        let threshold = 30.0
+        let highUtil = accounts.filter {
+            $0.type == .credit && ($0.balances.utilizationPercent ?? 0) > threshold
+        }
+        #expect(highUtil.count == 1)
+        #expect(highUtil[0].id == "2")
+    }
+
+    // MARK: - Estimated Monthly Recurring Total
+
+    @Test("Estimated monthly recurring normalizes all frequencies")
+    func estimatedMonthlyRecurring() {
+        let recurring = [
+            RecurringTransaction(merchantName: "Netflix", frequency: .monthly, averageAmount: 15.99, lastDate: "2026-03-15", nextExpectedDate: "2026-04-15", category: .entertainment, transactionCount: 3, confidence: 0.95),
+            RecurringTransaction(merchantName: "Gym", frequency: .monthly, averageAmount: 75.00, lastDate: "2026-03-15", nextExpectedDate: "2026-04-15", category: .healthAndFitness, transactionCount: 3, confidence: 0.90),
+            RecurringTransaction(merchantName: "Weekly Sub", frequency: .weekly, averageAmount: 5.00, lastDate: "2026-03-15", nextExpectedDate: "2026-03-22", category: .entertainment, transactionCount: 5, confidence: 0.85),
+        ]
+
+        // Monthly: 15.99 + 75.00 = 90.99
+        // Weekly $5 * (52/12) = ~$21.67
+        // Total ≈ $112.66
+        let estimated = recurring.reduce(0) { $0 + $1.averageAmount * $1.frequency.monthlyMultiplier }
+
+        #expect(abs(estimated - 112.66) < 0.01)
+    }
 }

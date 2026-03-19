@@ -34,14 +34,14 @@ struct SpendingTrendChart: View {
                     y: .value("Amount", amount)
                 )
                 .interpolationMethod(.catmullRom)
-                .foregroundStyle(.blue.gradient)
+                .foregroundStyle(SemanticColors.sparkline.gradient)
 
                 AreaMark(
                     x: .value("Date", date, unit: .day),
                     y: .value("Amount", amount)
                 )
                 .interpolationMethod(.catmullRom)
-                .foregroundStyle(.blue.opacity(0.1).gradient)
+                .foregroundStyle(SemanticColors.sparkline.opacity(0.1).gradient)
             }
             .chartXAxis {
                 AxisMarks(values: .stride(by: .day)) { value in

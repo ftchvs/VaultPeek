@@ -12,11 +12,19 @@ final class AppState {
         static let creditUtilizationThreshold = "creditUtilizationThreshold"
         static let refreshInterval = "refreshInterval"
         static let balanceHistory = "balanceHistory"
+        static let notificationsEnabled = "notificationsEnabled"
+        static let largeTransactionThreshold = "largeTransactionThreshold"
+        static let lowBalanceThreshold = "lowBalanceThreshold"
+        static let notifyLargeTransaction = "notifyLargeTransaction"
+        static let notifyLowBalance = "notifyLowBalance"
+        static let notifyHighUtilization = "notifyHighUtilization"
     }
 
     // MARK: - State
     var accounts: [AccountDTO] = []
-    var transactions: [TransactionDTO] = []
+    var transactions: [TransactionDTO] = [] {
+        didSet { _cachedRecurringTransactions = nil }
+    }
     var isLoading = false
     var error: String?
     var isPopoverPresented = false
@@ -43,6 +51,28 @@ final class AppState {
             if refreshTask != nil { startBackgroundRefresh() }
         }
     }
+    var notificationsEnabled: Bool = false {
+        didSet {
+            guard notificationsEnabled != oldValue else { return }
+            UserDefaults.standard.set(notificationsEnabled, forKey: Keys.notificationsEnabled)
+        }
+    }
+    var largeTransactionThreshold: Double = 500.0 {
+        didSet { UserDefaults.standard.set(largeTransactionThreshold, forKey: Keys.largeTransactionThreshold) }
+    }
+    var lowBalanceThreshold: Double = 100.0 {
+        didSet { UserDefaults.standard.set(lowBalanceThreshold, forKey: Keys.lowBalanceThreshold) }
+    }
+    var notifyLargeTransaction: Bool = true {
+        didSet { UserDefaults.standard.set(notifyLargeTransaction, forKey: Keys.notifyLargeTransaction) }
+    }
+    var notifyLowBalance: Bool = true {
+        didSet { UserDefaults.standard.set(notifyLowBalance, forKey: Keys.notifyLowBalance) }
+    }
+    var notifyHighUtilization: Bool = true {
+        didSet { UserDefaults.standard.set(notifyHighUtilization, forKey: Keys.notifyHighUtilization) }
+    }
+
     var launchAtLogin: Bool = false {
         didSet {
             guard launchAtLogin != oldValue else { return }
@@ -79,6 +109,25 @@ final class AppState {
         }
         if defaults.object(forKey: Keys.refreshInterval) != nil {
             refreshInterval = defaults.double(forKey: Keys.refreshInterval)
+        }
+        // Notification settings
+        if defaults.object(forKey: Keys.notificationsEnabled) != nil {
+            notificationsEnabled = defaults.bool(forKey: Keys.notificationsEnabled)
+        }
+        if defaults.object(forKey: Keys.largeTransactionThreshold) != nil {
+            largeTransactionThreshold = defaults.double(forKey: Keys.largeTransactionThreshold)
+        }
+        if defaults.object(forKey: Keys.lowBalanceThreshold) != nil {
+            lowBalanceThreshold = defaults.double(forKey: Keys.lowBalanceThreshold)
+        }
+        if defaults.object(forKey: Keys.notifyLargeTransaction) != nil {
+            notifyLargeTransaction = defaults.bool(forKey: Keys.notifyLargeTransaction)
+        }
+        if defaults.object(forKey: Keys.notifyLowBalance) != nil {
+            notifyLowBalance = defaults.bool(forKey: Keys.notifyLowBalance)
+        }
+        if defaults.object(forKey: Keys.notifyHighUtilization) != nil {
+            notifyHighUtilization = defaults.bool(forKey: Keys.notifyHighUtilization)
         }
         // Balance history
         if let data = defaults.data(forKey: Keys.balanceHistory),
@@ -144,6 +193,31 @@ final class AppState {
 
     var totalSpending: Double {
         spendingByCategory.reduce(0) { $0 + $1.1 }
+    }
+
+    /// Cached recurring detection — invalidated via transactions.didSet
+    private var _cachedRecurringTransactions: [RecurringTransaction]?
+
+    var recurringTransactions: [RecurringTransaction] {
+        if let cached = _cachedRecurringTransactions { return cached }
+        let result = RecurringDetector.detect(from: transactions)
+        _cachedRecurringTransactions = result
+        return result
+    }
+
+    /// Monthly equivalent of all recurring charges (normalizes weekly/annual to monthly)
+    var estimatedMonthlyRecurring: Double {
+        recurringTransactions.reduce(0) { $0 + $1.averageAmount * $1.frequency.monthlyMultiplier }
+    }
+
+    func transactionsForAccount(_ accountId: String) -> [TransactionDTO] {
+        transactions.filter { $0.accountId == accountId }
+            .sorted { $0.date > $1.date }
+    }
+
+    func transactionsForMerchant(_ merchantName: String, excluding transactionId: String) -> [TransactionDTO] {
+        transactions.filter { $0.merchantName == merchantName && $0.id != transactionId }
+            .sorted { $0.date > $1.date }
     }
 
     // MARK: - Actions
@@ -240,9 +314,27 @@ final class AppState {
             while !Task.isCancelled {
                 await refreshAccounts()
                 await syncTransactions()
+                await evaluateNotifications()
                 try? await Task.sleep(for: .seconds(refreshInterval))
             }
         }
+    }
+
+    private func evaluateNotifications() async {
+        guard notificationsEnabled else { return }
+        let config = NotificationTriggers(
+            largeTransaction: notifyLargeTransaction,
+            lowBalance: notifyLowBalance,
+            highUtilization: notifyHighUtilization,
+            largeTransactionThreshold: largeTransactionThreshold,
+            lowBalanceThreshold: lowBalanceThreshold,
+            creditUtilizationThreshold: creditUtilizationThreshold
+        )
+        await NotificationService.shared.evaluateTriggers(
+            transactions: transactions,
+            accounts: accounts,
+            config: config
+        )
     }
 
     func stopBackgroundRefresh() {
@@ -251,6 +343,14 @@ final class AppState {
     }
 
     func loadInitialData() async {
+        // Recheck notification permission at startup (user may have revoked in System Settings)
+        if notificationsEnabled {
+            let status = await NotificationService.shared.checkPermissionStatus()
+            if status == .denied || status == .notDetermined {
+                notificationsEnabled = false
+            }
+        }
+
         if CommandLine.arguments.contains("--demo") {
             loadDemoData()
             // Allow --tab flag to set initial tab for screenshots
@@ -318,6 +418,14 @@ final class AppState {
             ),
         ]
 
+        let oneWeekAgo = Self.dateString(daysAgo: 8)
+        let twoWeeksAgo = Self.dateString(daysAgo: 15)
+        let threeWeeksAgo = Self.dateString(daysAgo: 22)
+        let oneMonthAgo = Self.dateString(daysAgo: 30)
+        let fiveWeeksAgo = Self.dateString(daysAgo: 35)
+        let sixWeeksAgo = Self.dateString(daysAgo: 42)
+        let twoMonthsAgo = Self.dateString(daysAgo: 60)
+
         transactions = [
             // Today
             TransactionDTO(id: "tx1", accountId: "demo_checking", amount: 67.42, date: today, name: "WHOLEFDS MKT 10234", merchantName: "Whole Foods", category: .foodAndDrink),
@@ -333,17 +441,50 @@ final class AppState {
             TransactionDTO(id: "tx9", accountId: "demo_checking", amount: 250.00, date: twoDaysAgo, name: "VERIZON WIRELESS", merchantName: "Verizon", category: .billsAndUtilities),
             TransactionDTO(id: "tx10", accountId: "demo_amex", amount: 320.00, date: twoDaysAgo, name: "DELTA AIR LINES", merchantName: "Delta Airlines", category: .travel),
             TransactionDTO(id: "tx11", accountId: "demo_checking", amount: 12.50, date: twoDaysAgo, name: "STARBUCKS 8823", merchantName: "Starbucks", category: .foodAndDrink),
+            TransactionDTO(id: "tx12", accountId: "demo_amex", amount: 650.00, date: twoDaysAgo, name: "FURNITURE STORE", merchantName: "West Elm", category: .shopping, pending: true),
             // 3 days ago
-            TransactionDTO(id: "tx12", accountId: "demo_visa", amount: 75.00, date: threeDaysAgo, name: "PLANET FITNESS", merchantName: "Planet Fitness", category: .healthAndFitness),
-            TransactionDTO(id: "tx13", accountId: "demo_checking", amount: -1_500.00, date: threeDaysAgo, name: "VENMO PAYMENT", merchantName: "Venmo", category: .income),
-            TransactionDTO(id: "tx14", accountId: "demo_amex", amount: 55.00, date: threeDaysAgo, name: "TARGET 0392", merchantName: "Target", category: .shopping),
-            TransactionDTO(id: "tx15", accountId: "demo_checking", amount: 1_850.00, date: threeDaysAgo, name: "RENT PAYMENT", merchantName: "Landlord", category: .billsAndUtilities),
+            TransactionDTO(id: "tx13", accountId: "demo_visa", amount: 75.00, date: threeDaysAgo, name: "PLANET FITNESS", merchantName: "Planet Fitness", category: .healthAndFitness),
+            TransactionDTO(id: "tx14", accountId: "demo_checking", amount: -1_500.00, date: threeDaysAgo, name: "VENMO PAYMENT", merchantName: "Venmo", category: .income),
+            TransactionDTO(id: "tx15", accountId: "demo_amex", amount: 55.00, date: threeDaysAgo, name: "TARGET 0392", merchantName: "Target", category: .shopping),
+            TransactionDTO(id: "tx16", accountId: "demo_checking", amount: 1_850.00, date: threeDaysAgo, name: "RENT PAYMENT", merchantName: "Rent Payment", category: .billsAndUtilities),
+            // ~1 week ago
+            TransactionDTO(id: "tx17", accountId: "demo_checking", amount: 85.00, date: oneWeekAgo, name: "COSTCO WHOLESALE", merchantName: "Costco", category: .shopping),
+            TransactionDTO(id: "tx18", accountId: "demo_amex", amount: 220.00, date: oneWeekAgo, name: "AIRBNB", merchantName: "Airbnb", category: .travel),
+            TransactionDTO(id: "tx19", accountId: "demo_checking", amount: -2_800.00, date: oneWeekAgo, name: "DIRECT DEPOSIT", merchantName: "Employer", category: .income),
+            TransactionDTO(id: "tx20", accountId: "demo_visa", amount: 42.00, date: oneWeekAgo, name: "DOORDASH", merchantName: "DoorDash", category: .foodAndDrink),
+            // ~2 weeks ago
+            TransactionDTO(id: "tx21", accountId: "demo_checking", amount: 130.00, date: twoWeeksAgo, name: "CON EDISON", merchantName: "Con Edison", category: .billsAndUtilities),
+            TransactionDTO(id: "tx22", accountId: "demo_amex", amount: 64.99, date: twoWeeksAgo, name: "ADOBE CREATIVE", merchantName: "Adobe", category: .entertainment),
+            TransactionDTO(id: "tx23", accountId: "demo_checking", amount: 95.00, date: twoWeeksAgo, name: "CVS PHARMACY", merchantName: "CVS", category: .healthAndFitness),
+            // ~3 weeks ago
+            TransactionDTO(id: "tx24", accountId: "demo_visa", amount: 175.00, date: threeWeeksAgo, name: "NORDSTROM", merchantName: "Nordstrom", category: .shopping),
+            TransactionDTO(id: "tx25", accountId: "demo_checking", amount: 48.00, date: threeWeeksAgo, name: "LYFT RIDE", merchantName: "Lyft", category: .transportation),
+            TransactionDTO(id: "tx26", accountId: "demo_amex", amount: 35.00, date: threeWeeksAgo, name: "HULU", merchantName: "Hulu", category: .entertainment),
+
+            // === ~1 month ago — recurring merchants (2nd occurrence) ===
+            TransactionDTO(id: "tx27", accountId: "demo_checking", amount: 15.99, date: oneMonthAgo, name: "NETFLIX.COM", merchantName: "Netflix", category: .entertainment),
+            TransactionDTO(id: "tx28", accountId: "demo_visa", amount: 34.50, date: oneMonthAgo, name: "SPOTIFY", merchantName: "Spotify", category: .entertainment),
+            TransactionDTO(id: "tx29", accountId: "demo_visa", amount: 75.00, date: oneMonthAgo, name: "PLANET FITNESS", merchantName: "Planet Fitness", category: .healthAndFitness),
+            TransactionDTO(id: "tx30", accountId: "demo_checking", amount: 1_850.00, date: oneMonthAgo, name: "RENT PAYMENT", merchantName: "Rent Payment", category: .billsAndUtilities),
+            TransactionDTO(id: "tx31", accountId: "demo_checking", amount: -2_800.00, date: oneMonthAgo, name: "DIRECT DEPOSIT", merchantName: "Employer", category: .income),
+            TransactionDTO(id: "tx32", accountId: "demo_checking", amount: 72.00, date: fiveWeeksAgo, name: "WHOLEFDS MKT 10234", merchantName: "Whole Foods", category: .foodAndDrink),
+            TransactionDTO(id: "tx33", accountId: "demo_amex", amount: 38.00, date: fiveWeeksAgo, name: "HULU", merchantName: "Hulu", category: .entertainment),
+            TransactionDTO(id: "tx34", accountId: "demo_amex", amount: 64.99, date: sixWeeksAgo, name: "ADOBE CREATIVE", merchantName: "Adobe", category: .entertainment),
+
+            // === ~2 months ago — recurring merchants (3rd occurrence) ===
+            TransactionDTO(id: "tx35", accountId: "demo_checking", amount: 15.99, date: twoMonthsAgo, name: "NETFLIX.COM", merchantName: "Netflix", category: .entertainment),
+            TransactionDTO(id: "tx36", accountId: "demo_visa", amount: 34.50, date: twoMonthsAgo, name: "SPOTIFY", merchantName: "Spotify", category: .entertainment),
+            TransactionDTO(id: "tx37", accountId: "demo_visa", amount: 75.00, date: twoMonthsAgo, name: "PLANET FITNESS", merchantName: "Planet Fitness", category: .healthAndFitness),
+            TransactionDTO(id: "tx38", accountId: "demo_checking", amount: 1_850.00, date: twoMonthsAgo, name: "RENT PAYMENT", merchantName: "Rent Payment", category: .billsAndUtilities),
+            TransactionDTO(id: "tx39", accountId: "demo_checking", amount: -2_800.00, date: twoMonthsAgo, name: "DIRECT DEPOSIT", merchantName: "Employer", category: .income),
+            TransactionDTO(id: "tx40", accountId: "demo_amex", amount: 64.99, date: twoMonthsAgo, name: "ADOBE CREATIVE", merchantName: "Adobe", category: .entertainment),
+            TransactionDTO(id: "tx41", accountId: "demo_amex", amount: 36.00, date: twoMonthsAgo, name: "HULU", merchantName: "Hulu", category: .entertainment),
         ]
 
-        // Generate demo balance history (7 days)
-        balanceHistory = (0..<7).reversed().map { daysAgo in
+        // Generate demo balance history (60 days for richer sparkline)
+        balanceHistory = (0..<60).reversed().map { daysAgo in
             let date = Calendar.current.date(byAdding: .day, value: -daysAgo, to: Date())!
-            let jitter = Double.random(in: -500...500)
+            let jitter = Double.random(in: -800...800)
             return BalanceSnapshot(date: date, balance: 17_604.24 + jitter)
         }
 

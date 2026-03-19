@@ -110,10 +110,10 @@ struct AccountRow: View {
     let account: AccountDTO
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Spacing.md) {
             InstitutionAvatar(name: account.institutionName ?? account.name)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(account.name)
                     .font(.body)
                 if let mask = account.mask {
@@ -122,7 +122,7 @@ struct AccountRow: View {
                 }
             }
             Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
+            VStack(alignment: .trailing, spacing: Spacing.xxs) {
                 HStack(spacing: Spacing.xs) {
                     // Issue #3: secondary cue for credit amounts (not color-only)
                     if account.type == .credit {
@@ -143,7 +143,7 @@ struct AccountRow: View {
             }
         }
         .padding(.horizontal, Spacing.lg)
-        .padding(.vertical, 6)
+        .padding(.vertical, Spacing.rowVertical)
         .hoverHighlight()
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(account.name), \(formattedAmount)\(account.type == .credit ? " owed" : "")")

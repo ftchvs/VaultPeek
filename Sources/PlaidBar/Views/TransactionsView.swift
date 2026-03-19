@@ -4,94 +4,176 @@ import PlaidBarCore
 struct TransactionsView: View {
     @Environment(AppState.self) private var appState
     @State private var searchText = ""
+    @State private var selectedTransaction: TransactionDTO?
+    @State private var viewMode: TransactionViewMode = .recent
+    @State private var selectedCategory: SpendingCategory?
+    @State private var selectedAccountId: String?
+    @State private var selectedDateRange: DateRangeFilter = .all
+
+    enum TransactionViewMode: String, CaseIterable, Sendable {
+        case recent = "Recent"
+        case recurring = "Recurring"
+    }
+
+    private var availableCategories: [SpendingCategory] {
+        let categories = Set(appState.transactions.compactMap(\.category))
+        return SpendingCategory.allCases.filter { categories.contains($0) && $0 != .income && $0 != .transfer && $0 != .transferOut }
+    }
 
     private var filteredTransactions: [(String, [TransactionDTO])] {
-        if searchText.isEmpty {
-            return appState.transactionsByDate
-        }
-        let query = searchText.lowercased()
-        return appState.transactionsByDate.compactMap { (date, txns) in
-            let filtered = txns.filter {
-                $0.displayName.lowercased().contains(query) ||
-                ($0.category?.displayName.lowercased().contains(query) ?? false)
+        var base = appState.transactionsByDate
+
+        // Text search
+        if !searchText.isEmpty {
+            let query = searchText.lowercased()
+            base = base.compactMap { (date, txns) in
+                let filtered = txns.filter {
+                    $0.displayName.lowercased().contains(query) ||
+                    ($0.category?.displayName.lowercased().contains(query) ?? false)
+                }
+                return filtered.isEmpty ? nil : (date, filtered)
             }
-            return filtered.isEmpty ? nil : (date, filtered)
         }
+
+        // Category filter
+        if let category = selectedCategory {
+            base = base.compactMap { (date, txns) in
+                let filtered = txns.filter { $0.category == category }
+                return filtered.isEmpty ? nil : (date, filtered)
+            }
+        }
+
+        // Account filter
+        if let accountId = selectedAccountId {
+            base = base.compactMap { (date, txns) in
+                let filtered = txns.filter { $0.accountId == accountId }
+                return filtered.isEmpty ? nil : (date, filtered)
+            }
+        }
+
+        // Date range filter
+        if let startDate = selectedDateRange.startDate() {
+            base = base.compactMap { (date, txns) in
+                let filtered = txns.filter { $0.date >= startDate }
+                return filtered.isEmpty ? nil : (date, filtered)
+            }
+        }
+
+        return base
+    }
+
+    private var hasActiveFilters: Bool {
+        selectedCategory != nil || selectedAccountId != nil || selectedDateRange != .all
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            // Search bar
-            HStack(spacing: Spacing.sm) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                    .font(.caption)
-                TextField("Search transactions...", text: $searchText)
-                    .textFieldStyle(.plain)
-                    .font(.body)
-                if !searchText.isEmpty {
-                    Button {
-                        searchText = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.borderless)
+            // Segmented toggle: Recent / Recurring
+            Picker("View", selection: $viewMode) {
+                ForEach(TransactionViewMode.allCases, id: \.self) { mode in
+                    Text(mode.rawValue).tag(mode)
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+            .pickerStyle(.segmented)
+            .labelsHidden()
             .padding(.horizontal, Spacing.lg)
-            .padding(.vertical, Spacing.sm)
+            .padding(.top, Spacing.sm)
+            .padding(.bottom, Spacing.sm)
 
-            Divider()
-
-            if filteredTransactions.isEmpty {
-                ContentUnavailableView {
-                    Label(
-                        searchText.isEmpty ? "No Transactions" : "No Results",
-                        systemImage: searchText.isEmpty ? "tray" : "magnifyingglass"
-                    )
-                } description: {
-                    Text(searchText.isEmpty
-                        ? "Transactions will appear after syncing with your bank."
-                        : "No transactions match \"\(searchText)\".")
-                }
-                .padding()
+            if viewMode == .recurring {
+                RecurringView()
             } else {
-                ForEach(filteredTransactions, id: \.0) { date, transactions in
-                    // Date header
-                    Text(Self.formatDateHeader(date))
-                        .sectionTitle()
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, Spacing.lg)
-                        .padding(.top, 10)
-                        .padding(.bottom, Spacing.xs)
-                        .background(.quaternary.opacity(0.3))
+                recentView
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: viewMode)
+        .sheet(item: $selectedTransaction) { tx in
+            TransactionDetailView(transaction: tx)
+                .environment(appState)
+        }
+    }
 
-                    ForEach(transactions) { transaction in
-                        TransactionRow(transaction: transaction)
-                    }
+    @ViewBuilder
+    private var recentView: some View {
+        // Search bar
+        HStack(spacing: Spacing.sm) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+                .font(.caption)
+            TextField("Search transactions...", text: $searchText)
+                .textFieldStyle(.plain)
+                .font(.body)
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.borderless)
+            }
+        }
+        .padding(.horizontal, Spacing.md)
+        .padding(.vertical, Spacing.sm)
+        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+        .padding(.horizontal, Spacing.lg)
+        .padding(.vertical, Spacing.sm)
+
+        // Filter chips
+        FilterChipsView(
+            selectedCategory: $selectedCategory,
+            selectedAccountId: $selectedAccountId,
+            selectedDateRange: $selectedDateRange,
+            accounts: appState.accounts,
+            availableCategories: availableCategories
+        )
+        .animation(.easeInOut(duration: 0.15), value: selectedCategory)
+        .animation(.easeInOut(duration: 0.15), value: selectedAccountId)
+        .animation(.easeInOut(duration: 0.15), value: selectedDateRange)
+
+        Divider()
+
+        if filteredTransactions.isEmpty {
+            ContentUnavailableView {
+                Label(
+                    searchText.isEmpty && !hasActiveFilters ? "No Transactions" : "No Results",
+                    systemImage: searchText.isEmpty && !hasActiveFilters ? "tray" : "magnifyingglass"
+                )
+            } description: {
+                Text(searchText.isEmpty && !hasActiveFilters
+                    ? "Transactions will appear after syncing with your bank."
+                    : "No transactions match your filters.")
+            }
+            .padding()
+        } else {
+            ForEach(filteredTransactions, id: \.0) { date, transactions in
+                // Date header
+                Text(Formatters.displayTransactionDate(date))
+                    .sectionTitle()
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, Spacing.lg)
+                    .padding(.top, Spacing.md)
+                    .padding(.bottom, Spacing.xs)
+                    .background(.quaternary.opacity(0.3))
+
+                ForEach(transactions) { transaction in
+                    TransactionRow(transaction: transaction)
+                        .onTapGesture {
+                            selectedTransaction = transaction
+                        }
                 }
             }
         }
     }
 
-    private static func formatDateHeader(_ dateString: String) -> String {
-        guard let date = Formatters.parseTransactionDate(dateString) else {
-            return dateString
-        }
-        return Formatters.displayDate(date)
-    }
 }
 
 struct TransactionRow: View {
     let transaction: TransactionDTO
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Spacing.md) {
             // Category icon
             Image(systemName: (transaction.category ?? .other).iconName)
                 .font(.body)
@@ -99,7 +181,7 @@ struct TransactionRow: View {
                 .frame(width: 24)
 
             // Name and category
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(transaction.displayName)
                     .font(.body)
                     .lineLimit(1)
@@ -126,6 +208,7 @@ struct TransactionRow: View {
         }
         .padding(.horizontal, Spacing.lg)
         .padding(.vertical, Spacing.sm)
+        .contentShape(Rectangle())
         .hoverHighlight()
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(transaction.displayName), \(amountText)\(transaction.pending ? ", pending" : "")")

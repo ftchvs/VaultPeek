@@ -20,7 +20,7 @@ struct SetupView: View {
             HStack(spacing: Spacing.sm) {
                 ForEach(0..<3) { step in
                     Circle()
-                        .fill(stepIndex >= step ? Color.blue : Color.gray.opacity(0.3))
+                        .fill(stepIndex >= step ? SemanticColors.brand : Color.gray.opacity(0.3))
                         .frame(width: 6, height: 6)
                 }
             }
@@ -54,7 +54,7 @@ struct SetupView: View {
         VStack(spacing: Spacing.lg) {
             Image(systemName: "dollarsign.circle.fill")
                 .font(.system(size: 48))
-                .foregroundStyle(.blue)
+                .foregroundStyle(SemanticColors.brand)
 
             Text("Welcome to PlaidBar")
                 .font(.title2)
@@ -94,7 +94,7 @@ struct SetupView: View {
         VStack(spacing: Spacing.lg) {
             Image(systemName: "testtube.2")
                 .font(.system(size: 36))
-                .foregroundStyle(.orange)
+                .foregroundStyle(SemanticColors.brandSecondary)
 
             Text("Sandbox Mode")
                 .font(.title3)
@@ -122,7 +122,7 @@ struct SetupView: View {
         VStack(spacing: Spacing.lg) {
             Image(systemName: "key.fill")
                 .font(.system(size: 36))
-                .foregroundStyle(.blue)
+                .foregroundStyle(SemanticColors.brand)
 
             Text("Plaid Credentials")
                 .font(.title3)

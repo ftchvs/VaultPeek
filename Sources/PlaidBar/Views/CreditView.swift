@@ -59,7 +59,7 @@ struct CreditView: View {
                     .scaleEffect(0.7)
                     .frame(width: 36, height: 36)
 
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: Spacing.xxs) {
                         Text("Total Utilization")
                             .fontWeight(.semibold)
                         Text(Formatters.percent(totalUtilization))
@@ -105,7 +105,7 @@ struct CreditCardRow: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: Spacing.rowVertical) {
             HStack {
                 Text(account.name)
                     .font(.body)
@@ -152,7 +152,7 @@ struct CreditCardRow: View {
             }
         }
         .padding(.horizontal, Spacing.lg)
-        .padding(.vertical, 6)
+        .padding(.vertical, Spacing.rowVertical)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(account.name), \(Formatters.percent(utilization)) utilization, \(Formatters.currency(available, format: .compact)) available")
     }

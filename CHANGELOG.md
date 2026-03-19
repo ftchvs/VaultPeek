@@ -4,6 +4,21 @@ All notable changes to PlaidBar.
 
 ---
 
+## [v0.3.0] — Data Exploration, Recurring Detection, Notifications
+
+- **Transaction detail sheet**: Tap any transaction to see merchant, raw name, category, amount, date, account, and pending status
+- **Transaction filtering**: Category, account, and date range filter chips below search bar
+- **Recurring detection**: Automatic detection of recurring charges (Netflix, Spotify, rent, etc.) with frequency badges and monthly total
+- **Recent/Recurring toggle**: Segmented picker in Transactions tab switches between recent and recurring views
+- **Month-over-month comparison**: SpendingView shows delta vs previous period with arrow, amount, and percentage
+- **Notification system**: Large transaction (>$500), low balance (<$100), and high utilization alerts via macOS notifications
+- **Notification settings**: New Settings tab with master toggle, per-trigger controls, and thresholds
+- **Design token cleanup**: Added `Spacing.xxs` (2pt), `Spacing.rowVertical` (6pt), `SemanticColors.brand`, `.brandSecondary`, `.recurring` — replaced 15+ hardcoded values
+- **Expanded demo data**: 41 transactions spanning 60 days with 3 months of recurring merchants for algorithm demonstration
+- **80+ tests**: RecurringDetector unit tests, filter logic, spending delta, notification triggers
+
+---
+
 ## [2026-03-19 04:10 UTC] — Update
 
 Merge pull request #6 from ftchvs/dev
