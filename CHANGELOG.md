@@ -24,7 +24,7 @@ PlaidBar v0.3.0 — Data Exploration, Recurring Detection, Notifications (#11)
 - **Notification settings**: New Settings tab with master toggle, per-trigger controls, and thresholds
 - **Design token cleanup**: Added `Spacing.xxs` (2pt), `Spacing.rowVertical` (6pt), `SemanticColors.brand`, `.brandSecondary`, `.recurring` — replaced 15+ hardcoded values
 - **Expanded demo data**: 41 transactions spanning 60 days with 3 months of recurring merchants for algorithm demonstration
-- **80+ tests**: RecurringDetector unit tests, filter logic, spending delta, notification triggers
+- **86 tests**: RecurringDetector unit tests, filter logic, spending delta, notification triggers
 
 ---
 
