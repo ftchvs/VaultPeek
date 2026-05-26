@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-26 23:56 UTC] — Feature
+
+add menu bar summary modes (#24)
+
+`35dd335`
+
+---
+
+
 ## [2026-05-26 23:11 UTC] — Feature
 
 add spending heatmap (#23)
