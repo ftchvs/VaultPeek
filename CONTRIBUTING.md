@@ -59,6 +59,22 @@ Configuration files: `.swiftformat` and `.swiftlint.yml` in the repo root.
 
 - Use the [bug report template](https://github.com/ftchvs/PlaidBar/issues/new?template=bug_report.yml) for bugs
 - Use the [feature request template](https://github.com/ftchvs/PlaidBar/issues/new?template=feature_request.yml) for ideas
+- Use the accessibility issue template for VoiceOver, keyboard, chart, contrast, or reduced-motion barriers
+
+## Accessibility Expectations
+
+- Keep controls reachable by keyboard.
+- Add useful labels for VoiceOver.
+- Preserve visible focus states.
+- Do not communicate balance, risk, utilization, errors, or chart meaning through color alone.
+- Use sandbox or synthetic financial data in screenshots, tests, and examples.
+
+## Pull Request Checklist
+
+- [ ] I ran `swift test` or documented why not.
+- [ ] I checked relevant accessibility expectations from [ACCESSIBILITY.md](ACCESSIBILITY.md).
+- [ ] I used sandbox or synthetic financial data in screenshots, tests, and examples.
+- [ ] I updated docs if user-facing behavior changed.
 
 ## License
 
