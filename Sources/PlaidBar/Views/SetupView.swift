@@ -65,7 +65,7 @@ struct SetupView: View {
                 } label: {
                     HStack {
                         Image(systemName: "play.circle")
-                        Text("Try with sandbox (demo data)")
+                        Text("Connect sandbox")
                     }
                     .frame(maxWidth: .infinity)
                 }
