@@ -57,21 +57,26 @@ Prioritize these before adding new finance features:
    - Let users choose the menu bar label: Net cash, total cash, credit utilization, recent spend, or compact icon-only.
    - Keep the default conservative: net cash or account health, not noisy transaction counts.
 
-3. **CodexBar-style health panel**
+3. **Spending heatmap**
+   - Add a GitHub-style daily grid for recent spending intensity.
+   - Support both total spend and net cashflow so income/refunds do not disappear from the story.
+   - Keep day details local and glanceable: amount, transaction count, and date.
+
+4. **CodexBar-style health panel**
    - Add a small diagnostics/settings surface for local server URL, Plaid environment, item count, last sync, and refresh cadence.
    - Make failures actionable: missing credentials, server offline, token expired, Plaid error.
 
-4. **Cleaner onboarding**
+5. **Cleaner onboarding**
    - Separate "View Demo", "Connect Sandbox", and "Use Production Credentials".
    - Never imply sandbox works without credentials unless the app can actually do that.
    - Explain what data is stored before the user links an account.
 
-5. **Sharper empty and error states**
+6. **Sharper empty and error states**
    - Accounts: explain whether there is no data, no server, or no linked institution.
    - Transactions: distinguish no synced history from filters returning zero results.
    - Credit: explain if no credit accounts are linked.
 
-6. **Trust-first settings**
+7. **Trust-first settings**
    - Add a local data section with `~/.plaidbar/` storage path, reset/delete options, and clear warnings.
    - Keep dangerous actions explicit and confirmation-gated.
 
@@ -81,6 +86,7 @@ Prioritize these before adding new finance features:
 - Real production credential setup documentation.
 - Local server health/status visibility.
 - Manual refresh plus background refresh with visible stale-data state.
+- GitHub-style spending heatmap for daily spend intensity and net cashflow.
 - Account reconnect/token-expired handling.
 - Polished demo fixtures and screenshots.
 - Security and privacy docs that match actual implementation.

@@ -84,6 +84,63 @@ struct PlaidBarCoreTests {
         #expect(tx.displayAmount == 0)
     }
 
+    @Test("Spending heatmap fills every day in range")
+    func spendingHeatmapFillsDateRange() {
+        let start = Formatters.parseTransactionDate("2026-01-01")!
+        let end = Formatters.parseTransactionDate("2026-01-03")!
+
+        let days = SpendingHeatmap.days(
+            from: [
+                TransactionDTO(id: "1", accountId: "a", amount: 25, date: "2026-01-02", name: "Coffee")
+            ],
+            startDate: start,
+            endDate: end,
+            mode: .spending
+        )
+
+        #expect(days.map(\.date) == ["2026-01-01", "2026-01-02", "2026-01-03"])
+        #expect(days[0].value == 0)
+        #expect(days[1].value == 25)
+        #expect(days[1].transactionCount == 1)
+    }
+
+    @Test("Spending heatmap excludes income and transfers")
+    func spendingHeatmapExcludesIncomeAndTransfers() {
+        let day = Formatters.parseTransactionDate("2026-01-02")!
+
+        let days = SpendingHeatmap.days(
+            from: [
+                TransactionDTO(id: "1", accountId: "a", amount: 25, date: "2026-01-02", name: "Coffee"),
+                TransactionDTO(id: "2", accountId: "a", amount: -100, date: "2026-01-02", name: "Refund"),
+                TransactionDTO(id: "3", accountId: "a", amount: 200, date: "2026-01-02", name: "Transfer", category: .transfer)
+            ],
+            startDate: day,
+            endDate: day,
+            mode: .spending
+        )
+
+        #expect(days.first?.value == 25)
+        #expect(days.first?.transactionCount == 1)
+    }
+
+    @Test("Net cashflow heatmap keeps Plaid amount signs")
+    func netCashflowHeatmapKeepsSigns() {
+        let day = Formatters.parseTransactionDate("2026-01-02")!
+
+        let days = SpendingHeatmap.days(
+            from: [
+                TransactionDTO(id: "1", accountId: "a", amount: 75, date: "2026-01-02", name: "Groceries"),
+                TransactionDTO(id: "2", accountId: "a", amount: -250, date: "2026-01-02", name: "Payroll")
+            ],
+            startDate: day,
+            endDate: day,
+            mode: .netCashflow
+        )
+
+        #expect(days.first?.value == -175)
+        #expect(days.first?.transactionCount == 2)
+    }
+
     // MARK: - AccountDTO Tests
 
     @Test("AccountDTO Codable roundtrip")
