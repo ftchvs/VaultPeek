@@ -16,6 +16,23 @@ for arg in "$@"; do
     esac
 done
 
+if [[ -z "${PLAID_CLIENT_ID:-}" || -z "${PLAID_SECRET:-}" ]]; then
+    echo "Missing Plaid credentials."
+    echo ""
+    if [[ "$SANDBOX_FLAG" == "--sandbox" ]]; then
+        echo "Set sandbox credentials first:"
+        echo "  export PLAID_CLIENT_ID=your_sandbox_client_id"
+        echo "  export PLAID_SECRET=your_sandbox_secret"
+    else
+        echo "Set production credentials first:"
+        echo "  export PLAID_CLIENT_ID=your_client_id"
+        echo "  export PLAID_SECRET=your_secret"
+    fi
+    echo ""
+    echo "For screenshot/demo data without Plaid, run: swift run PlaidBar --demo"
+    exit 1
+fi
+
 echo "Building PlaidBar..."
 swift build 2>&1
 

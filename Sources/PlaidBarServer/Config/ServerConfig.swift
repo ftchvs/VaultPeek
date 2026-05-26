@@ -32,11 +32,13 @@ struct ServerConfig: Sendable {
             ? .sandbox
             : .production
 
-        // Load credentials from environment variables
-        let clientId = ProcessInfo.processInfo.environment["PLAID_CLIENT_ID"]
-            ?? PlaidBarConstants.plaidSandboxClientId
-        let secret = ProcessInfo.processInfo.environment["PLAID_SECRET"]
-            ?? "sandbox_secret"
+        let environmentValues = ProcessInfo.processInfo.environment
+        guard let clientId = environmentValues["PLAID_CLIENT_ID"]?.trimmedNonEmpty else {
+            throw ServerConfigError.missingEnvironmentVariable("PLAID_CLIENT_ID")
+        }
+        guard let secret = environmentValues["PLAID_SECRET"]?.trimmedNonEmpty else {
+            throw ServerConfigError.missingEnvironmentVariable("PLAID_SECRET")
+        }
 
         // Generate or load persistent auth token for app<->server auth
         let authTokenPath = "\(dataDir)/auth-token"
@@ -68,5 +70,23 @@ struct ServerConfig: Sendable {
     static func dataDirectory() -> String {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         return "\(home)/.plaidbar"
+    }
+}
+
+enum ServerConfigError: LocalizedError {
+    case missingEnvironmentVariable(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .missingEnvironmentVariable(let name):
+            "Missing required environment variable: \(name)"
+        }
+    }
+}
+
+private extension String {
+    var trimmedNonEmpty: String? {
+        let value = trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
     }
 }

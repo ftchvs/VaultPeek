@@ -26,6 +26,5 @@ public enum PlaidBarConstants {
     public static let appName: String = "PlaidBar"
 
     // Plaid
-    public static let plaidSandboxClientId: String = "SANDBOX_CLIENT_ID"
     public static let plaidSandboxRedirectUri: String = "http://localhost:8484/oauth/callback"
 }

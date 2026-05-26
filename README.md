@@ -17,7 +17,7 @@
 
 ---
 
-PlaidBar is an open-source macOS menu bar app that integrates with [Plaid](https://plaid.com) to display bank account balances, credit card utilization, recent transactions, and spending breakdowns — all from your status bar.
+PlaidBar is an open-source macOS menu bar dashboard for [Plaid](https://plaid.com) data. It is designed in the spirit of tools like CodexBar: keep the high-signal numbers one click away, stay native to macOS, and avoid a hosted backend.
 
 **No cloud. No telemetry. All data stays local.**
 
@@ -39,7 +39,8 @@ Personal finance data lives behind bank website logins. The closest thing to a m
 - **Settings Persistence** — Preferences saved across launches
 - **Launch at Login** — Optional auto-start via macOS Login Items
 - **Auto-Updates** — Sparkle integration for seamless updates
-- **Sandbox Mode** — Try with demo data, no Plaid credentials needed
+- **Sandbox Mode** — Test the real Plaid sandbox flow before using production credentials
+- **Demo Mode** — Render screenshot/demo data without hitting Plaid
 - **Private** — Everything stored locally on your Mac, period
 
 ## Screenshots
@@ -66,17 +67,25 @@ cd PlaidBar
 swift build
 ```
 
-### 2. Run in sandbox mode (no credentials needed)
+### 2. Run in sandbox mode
 
 ```bash
+export PLAID_CLIENT_ID=your_sandbox_client_id
+export PLAID_SECRET=your_sandbox_secret
 ./Scripts/run.sh --sandbox
 ```
 
-This starts both the local server and the menu bar app with Plaid's sandbox environment (demo bank data).
+This starts both the local server and the menu bar app with Plaid's sandbox environment. Sandbox uses demo bank institutions and demo balances/transactions from Plaid, but it still requires Plaid sandbox credentials.
+
+If you only need static UI screenshots without Plaid credentials, run the app in demo mode:
+
+```bash
+swift run PlaidBar --demo
+```
 
 ### 3. Click the PlaidBar icon in your menu bar
 
-Select **"Try with sandbox"** → **Add Account** → complete the demo bank login in your browser → data appears instantly.
+Select **"Try with sandbox"** -> **Add Account** -> complete the Plaid sandbox login in your browser -> data appears after the account sync.
 
 ### 4. Use with real bank data (optional)
 
@@ -87,6 +96,14 @@ export PLAID_SECRET=your_secret
 ```
 
 Get credentials free at [dashboard.plaid.com](https://dashboard.plaid.com). Sandbox works immediately; production requires Plaid approval.
+
+## Data Modes
+
+| Mode | Command | Plaid network calls | Data source | Intended use |
+|------|---------|---------------------|-------------|--------------|
+| Demo | `swift run PlaidBar --demo` | No | Hardcoded local fixtures | Screenshots and UI review |
+| Sandbox | `./Scripts/run.sh --sandbox` | Yes, sandbox API | Plaid sandbox credentials | Public demo and development |
+| Production | `./Scripts/run.sh` | Yes, production API | Your Plaid-approved credentials | Personal use after Plaid approval |
 
 ## Keyboard Shortcuts
 
@@ -136,11 +153,12 @@ PlaidBar uses a **two-process architecture** — a SwiftUI menu bar app talks to
 └─────────────────────────────────────┘
 ```
 
-**Why a companion server?** Plaid requires that `client_secret` and `access_token` never exist in client code. The server:
-1. Holds all secrets in a local SQLite database
-2. Binds to `127.0.0.1` only — zero network exposure
-3. Can be restarted independently of the UI
-4. Opens the door for future CLI tools or iOS companion
+**Why a companion server?** Plaid requires that `client_secret` and `access_token` never exist in the menu bar client. The server:
+1. Keeps Plaid credentials and access tokens out of the SwiftUI app process
+2. Stores item tokens in a local SQLite database under `~/.plaidbar/`
+3. Binds to `127.0.0.1` only — no LAN or cloud exposure
+4. Can be restarted independently of the UI
+5. Opens the door for future CLI tools or iOS companion
 
 ### Technology Stack
 
@@ -209,14 +227,16 @@ Rate limits are well within Plaid's allowances for personal use (~2-4 requests/h
 
 | Concern | How PlaidBar handles it |
 |---------|------------------------|
-| Plaid secrets | Stored in server SQLite, never in app binary |
-| Access tokens | Encrypted at rest, localhost-only server |
+| Plaid secrets | Read from environment variables at server startup, never embedded in the app binary |
+| Plaid access tokens | Stored in local SQLite under `~/.plaidbar/`; protect your Mac user account and disk |
 | Network exposure | Server binds to `127.0.0.1` only |
 | App ↔ Server auth | Shared token generated at first run |
 | Data at rest | macOS encrypted APFS volume |
 | Distribution | Hardened runtime + notarized DMG (planned) |
 
 **PlaidBar has no cloud backend, no analytics, no telemetry, and no tracking.** Your financial data never leaves your machine.
+
+Do not share real Plaid credentials, access tokens, account IDs, screenshots with balances, or bank transaction exports in public issues or pull requests. See [SECURITY.md](SECURITY.md) for responsible disclosure and local data handling notes.
 
 ## Development
 
@@ -244,6 +264,8 @@ swift run PlaidBarServer --sandbox
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for code style, PR process, and architecture guidelines.
+
+See [GOAL.md](GOAL.md) for the CodexBar-style product direction, design principles, and implementation priorities.
 
 ## Server API Reference
 
