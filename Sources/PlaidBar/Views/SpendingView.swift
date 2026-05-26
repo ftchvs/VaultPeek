@@ -11,17 +11,19 @@ struct SpendingView: View {
         case thisWeek = "This Week"
         case thisMonth = "This Month"
         case last30Days = "Last 30 Days"
+        case last90Days = "Last 90 Days"
     }
 
     enum ChartType: String, CaseIterable, Sendable {
         case donut = "Categories"
+        case heatmap = "Heatmap"
         case trend = "Trend"
         case incomeExpense = "In vs Out"
     }
 
-    /// Returns (currentPeriodStart, previousPeriodStart) as formatted date strings.
+    /// Returns current/previous period starts for filtering and comparisons.
     /// Computed once per render — both `filteredTransactions` and `previousPeriodSpending` use this.
-    private var periodInterval: (current: String, previous: String) {
+    private var periodInterval: (currentDate: Date, previousDate: Date, current: String, previous: String) {
         let calendar = Calendar.current
         let now = Date()
 
@@ -37,8 +39,11 @@ struct SpendingView: View {
         case .last30Days:
             startDate = calendar.date(byAdding: .day, value: -30, to: now) ?? now
             previousStart = calendar.date(byAdding: .day, value: -30, to: startDate) ?? now
+        case .last90Days:
+            startDate = calendar.date(byAdding: .day, value: -90, to: now) ?? now
+            previousStart = calendar.date(byAdding: .day, value: -90, to: startDate) ?? now
         }
-        return (Self.formatDate(startDate), Self.formatDate(previousStart))
+        return (startDate, previousStart, Self.formatDate(startDate), Self.formatDate(previousStart))
     }
 
     private var filteredTransactions: [TransactionDTO] {
@@ -149,6 +154,12 @@ struct SpendingView: View {
             switch chartType {
             case .donut:
                 donutChart(categories: categories, total: total)
+            case .heatmap:
+                SpendingHeatmapView(
+                    transactions: filteredTransactions,
+                    startDate: periodInterval.currentDate,
+                    endDate: Date()
+                )
             case .trend:
                 SpendingTrendChart(transactions: filteredTransactions)
             case .incomeExpense:

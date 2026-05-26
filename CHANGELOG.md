@@ -4,6 +4,14 @@ All notable changes to PlaidBar.
 
 ---
 
+## [Unreleased] — Feature
+
+- Add a GitHub-style spending heatmap to the Spending tab, with daily intensity cells for spend and net cashflow modes.
+- Add core heatmap bucketing tests for date ranges, transfer/income exclusions, and net cashflow signs.
+- Add a `Last 90 Days` spending period so the heatmap has enough history to be useful.
+
+---
+
 ## [2026-05-26 21:42 UTC] — Feature
 
 add PlaidBar trust goal and status strip (#22)

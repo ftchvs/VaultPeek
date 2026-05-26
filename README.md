@@ -31,7 +31,7 @@ Personal finance data lives behind bank website logins. The closest thing to a m
 - **Transaction Detail** — Tap any transaction for merchant, category, account, and status details
 - **Transaction Filtering** — Filter by category, account, or date range with chip controls
 - **Recurring Detection** — Automatic identification of subscriptions and recurring charges with monthly total
-- **Spending Breakdown** — Donut chart, trend line, income vs expense views, and month-over-month comparison
+- **Spending Breakdown** — Donut chart, GitHub-style daily spending heatmap, trend line, income vs expense views, and month-over-month comparison
 - **Credit Utilization** — Progress bars with configurable warning thresholds and gauge
 - **Smart Notifications** — Alerts for large transactions, low balances, and high credit utilization
 - **Balance History** — Sparkline showing net balance trend over time
@@ -184,7 +184,7 @@ PlaidBar/
 │   │   ├── Views/                   # SwiftUI views (4 tabs)
 │   │   │   ├── AccountsView.swift   # Balance list by account type
 │   │   │   ├── TransactionsView.swift # Searchable grouped list
-│   │   │   ├── SpendingView.swift   # Donut/trend/bar charts
+│   │   │   ├── SpendingView.swift   # Donut/heatmap/trend/bar charts
 │   │   │   ├── CreditView.swift     # Utilization bars + gauge
 │   │   │   ├── SetupView.swift      # Onboarding flow
 │   │   │   └── Charts/             # Chart components
