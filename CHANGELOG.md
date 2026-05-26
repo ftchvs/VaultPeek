@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-26 03:57 UTC] — Documentation
+
+add accessibility guidance
+
+`10ee235`
+
+---
+
+
 ## [2026-03-19 20:21 UTC] — Documentation
 
 update README screenshots and roadmap for v0.4
