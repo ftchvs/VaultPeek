@@ -31,6 +31,9 @@ final class AppState {
     var selectedTab: PopoverTab = .accounts
     var isSetupComplete = false
     var serverConnected = false
+    var serverEnvironment: PlaidEnvironment?
+    var serverItemCount: Int?
+    var isDemoMode = false
     var lastSyncDate: Date?
     var balanceHistory: [BalanceSnapshot] = []
 
@@ -191,6 +194,37 @@ final class AppState {
         return Formatters.relativeDate(lastSyncDate)
     }
 
+    var statusModeText: String {
+        if isDemoMode { return "Demo" }
+        switch serverEnvironment {
+        case .sandbox: return "Sandbox"
+        case .production: return "Production"
+        case nil: return "Unknown"
+        }
+    }
+
+    var statusServerText: String {
+        if isLoading { return "Syncing" }
+        if error != nil { return "Error" }
+        return serverConnected ? "Connected" : "Offline"
+    }
+
+    var statusItemCount: Int {
+        if let serverItemCount { return serverItemCount }
+        return Set(accounts.map(\.itemId)).count
+    }
+
+    var isSyncStale: Bool {
+        guard let lastSyncDate else { return true }
+        let staleAfter = max(refreshInterval * 2, PlaidBarConstants.transactionSyncInterval * 2)
+        return Date().timeIntervalSince(lastSyncDate) > staleAfter
+    }
+
+    var statusSyncText: String {
+        guard let lastSyncRelative else { return "Never synced" }
+        return isSyncStale ? "Stale \(lastSyncRelative)" : "Synced \(lastSyncRelative)"
+    }
+
     var creditAccounts: [AccountDTO] {
         accounts.filter { $0.type == .credit }
     }
@@ -253,9 +287,14 @@ final class AppState {
         do {
             let status = try await serverClient.getStatus()
             serverConnected = true
+            serverEnvironment = status.environment
+            serverItemCount = status.itemCount
+            lastSyncDate = status.lastSync
             isSetupComplete = status.itemCount > 0
         } catch {
             serverConnected = false
+            serverEnvironment = nil
+            serverItemCount = nil
             isSetupComplete = false
         }
     }
@@ -265,6 +304,7 @@ final class AppState {
         error = nil
         do {
             accounts = try await serverClient.getAccounts()
+            serverItemCount = Set(accounts.map(\.itemId)).count
             isSetupComplete = !accounts.isEmpty
         } catch {
             self.error = error.localizedDescription
@@ -330,6 +370,7 @@ final class AppState {
             )
             accounts.removeAll { $0.itemId == removedItemId }
             transactions.removeAll { accountIdsForItem.contains($0.accountId) }
+            serverItemCount = Set(accounts.map(\.itemId)).count
         } catch {
             self.error = error.localizedDescription
         }
@@ -383,6 +424,7 @@ final class AppState {
         }
 
         if CommandLine.arguments.contains("--demo") {
+            isDemoMode = true
             loadDemoData()
             // Allow --tab flag to set initial tab for screenshots
             if let tabIdx = CommandLine.arguments.firstIndex(of: "--tab"),
@@ -521,6 +563,8 @@ final class AppState {
 
         isSetupComplete = true
         serverConnected = true
+        serverEnvironment = .sandbox
+        serverItemCount = Set(accounts.map(\.itemId)).count
         lastSyncDate = Date()
     }
 

@@ -11,6 +11,20 @@ struct MainPopover: View {
         @Bindable var state = appState
 
         VStack(spacing: 0) {
+            TopStatusStrip(
+                mode: appState.statusModeText,
+                serverState: appState.statusServerText,
+                itemCount: appState.statusItemCount,
+                syncState: appState.statusSyncText,
+                serverColor: statusColor,
+                syncColor: appState.isSyncStale ? SemanticColors.warning : SemanticColors.positive
+            )
+            .padding(.horizontal, Spacing.lg)
+            .padding(.vertical, Spacing.xs)
+            .background(Color.primary.opacity(0.035))
+
+            Divider()
+
             if !appState.isSetupComplete {
                 SetupView()
             } else {
@@ -32,14 +46,6 @@ struct MainPopover: View {
                     HStack(spacing: Spacing.rowVertical) {
                         Text("PlaidBar")
                             .detailText()
-                        if let syncText = appState.lastSyncRelative {
-                            Text("\u{00B7}")
-                                .font(.caption)
-                                .foregroundStyle(.quaternary)
-                            Text("Synced \(syncText)")
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                        }
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -185,6 +191,70 @@ struct MainPopover: View {
         .task {
             await appState.loadInitialData()
         }
+    }
+
+    private var statusColor: Color {
+        if appState.isLoading { return SemanticColors.warning }
+        if appState.error != nil { return SemanticColors.negative }
+        return appState.serverConnected ? SemanticColors.positive : .secondary
+    }
+}
+
+// MARK: - Top Status Strip
+
+private struct TopStatusStrip: View {
+    let mode: String
+    let serverState: String
+    let itemCount: Int
+    let syncState: String
+    let serverColor: Color
+    let syncColor: Color
+
+    var body: some View {
+        HStack(spacing: Spacing.sm) {
+            Text(mode)
+                .statusToken()
+                .foregroundStyle(.primary)
+
+            StatusDotLabel(color: serverColor, text: serverState)
+
+            Text("\(itemCount) \(itemCount == 1 ? "item" : "items")")
+                .statusToken()
+
+            Spacer(minLength: Spacing.xs)
+
+            StatusDotLabel(color: syncColor, text: syncState)
+                .layoutPriority(1)
+        }
+        .frame(maxWidth: .infinity, minHeight: 20)
+    }
+}
+
+private struct StatusDotLabel: View {
+    let color: Color
+    let text: String
+
+    var body: some View {
+        HStack(spacing: Spacing.xs) {
+            Circle()
+                .fill(color)
+                .frame(width: 6, height: 6)
+            Text(text)
+                .statusToken()
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.82)
+    }
+}
+
+private extension View {
+    func statusToken() -> some View {
+        self
+            .font(.caption2.weight(.medium))
+            .foregroundStyle(.secondary)
+            .monospacedDigit()
+            .lineLimit(1)
+            .minimumScaleFactor(0.82)
     }
 }
 

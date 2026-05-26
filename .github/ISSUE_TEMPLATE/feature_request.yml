@@ -2,6 +2,11 @@ name: Feature Request
 description: Suggest a new feature for PlaidBar
 labels: [enhancement]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Keep examples public-safe. Do not include real Plaid credentials, access tokens, account numbers, transaction exports, or screenshots that reveal balances.
+
   - type: textarea
     id: problem
     attributes:
