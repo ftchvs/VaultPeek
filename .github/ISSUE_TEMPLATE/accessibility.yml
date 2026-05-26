@@ -1,0 +1,34 @@
+name: Accessibility issue
+description: Report a barrier in the macOS app, menu bar UI, docs, or screenshots.
+title: "[Accessibility]: "
+labels: ["accessibility"]
+body:
+  - type: textarea
+    id: barrier
+    attributes:
+      label: Accessibility barrier
+      description: What was difficult or impossible to use?
+    validations:
+      required: true
+  - type: textarea
+    id: surface
+    attributes:
+      label: Surface
+      description: Menu bar, account view, transactions, spending, credit, settings, local server, or docs.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: macOS version, PlaidBar version or commit, VoiceOver, keyboard-only use, display settings, or other setup.
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Steps using sandbox or synthetic data only.
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What would make this accessible?

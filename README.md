@@ -99,6 +99,11 @@ Get credentials free at [dashboard.plaid.com](https://dashboard.plaid.com). Sand
 | `Cmd+R` | Refresh balances |
 | `Cmd+N` | Add account |
 
+## Accessibility
+
+Accessibility expectations for keyboard navigation, VoiceOver labels, charts,
+status indicators, and screenshots are in [ACCESSIBILITY.md](ACCESSIBILITY.md).
+
 ## Requirements
 
 | Requirement | Version |
