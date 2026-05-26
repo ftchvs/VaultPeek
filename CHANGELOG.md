@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-26 21:42 UTC] — Feature
+
+add PlaidBar trust goal and status strip (#22)
+
+`98b2c91`
+
+---
+
+
 ## [2026-05-26 04:31 UTC] — Documentation
 
 add repo health baseline
