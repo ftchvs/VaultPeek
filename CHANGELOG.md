@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-26 23:11 UTC] — Feature
+
+add spending heatmap (#23)
+
+`7173f3a`
+
+---
+
+
 ## [Unreleased] — Feature
 
 - Add a GitHub-style spending heatmap to the Spending tab, with daily intensity cells for spend and net cashflow modes.
