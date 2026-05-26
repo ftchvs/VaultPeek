@@ -25,7 +25,7 @@ PlaidBar is an open-source macOS menu bar dashboard for [Plaid](https://plaid.co
 
 Personal finance data lives behind bank website logins. The closest thing to a menu bar finance app was [Balance](https://balancemy.money/) — commercial and now defunct. PlaidBar fills that gap as an open-source, privacy-first alternative.
 
-- **Glanceable** — Net balance visible right in the menu bar
+- **Glanceable** — Choose whether the menu bar shows net cash, total cash, credit utilization, recent spend, or icon-only
 - **Account Balances** — All bank accounts and credit cards at a glance
 - **Recent Transactions** — Searchable, filterable list grouped by day with category icons
 - **Transaction Detail** — Tap any transaction for merchant, category, account, and status details

@@ -56,6 +56,7 @@ Prioritize these before adding new finance features:
 2. **Menu bar summary modes**
    - Let users choose the menu bar label: Net cash, total cash, credit utilization, recent spend, or compact icon-only.
    - Keep the default conservative: net cash or account health, not noisy transaction counts.
+   - Implemented local slice: settings picker, persisted mode, shared summary calculator, and focused tests.
 
 3. **Spending heatmap**
    - Add a GitHub-style daily grid for recent spending intensity.

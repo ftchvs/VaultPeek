@@ -42,14 +42,18 @@ struct GeneralSettingsView: View {
         @Bindable var state = appState
 
         Form {
-            Toggle("Show balance in menu bar", isOn: $state.showBalanceInMenuBar)
+            Picker("Menu bar shows", selection: $state.menuBarSummaryMode) {
+                ForEach(MenuBarSummaryMode.allCases, id: \.self) { mode in
+                    Text(mode.displayName).tag(mode)
+                }
+            }
 
             Picker("Balance format", selection: $state.balanceFormat) {
                 Text("$12,450.32").tag(CurrencyFormat.full)
                 Text("$12.4K").tag(CurrencyFormat.abbreviated)
                 Text("$12,450").tag(CurrencyFormat.compact)
             }
-            .disabled(!appState.showBalanceInMenuBar)
+            .disabled(appState.menuBarSummaryMode == .creditUtilization || appState.menuBarSummaryMode == .iconOnly)
 
             Picker("Refresh interval", selection: $state.refreshInterval) {
                 Text("5 minutes").tag(TimeInterval(5 * 60))

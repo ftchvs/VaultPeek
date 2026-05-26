@@ -8,6 +8,7 @@ final class AppState {
     // MARK: - UserDefaults Keys
     private enum Keys {
         static let showBalanceInMenuBar = "showBalanceInMenuBar"
+        static let menuBarSummaryMode = "menuBarSummaryMode"
         static let balanceFormat = "balanceFormat"
         static let creditUtilizationThreshold = "creditUtilizationThreshold"
         static let refreshInterval = "refreshInterval"
@@ -38,10 +39,10 @@ final class AppState {
     var balanceHistory: [BalanceSnapshot] = []
 
     // MARK: - Settings (persisted to UserDefaults)
-    var showBalanceInMenuBar: Bool = true {
+    var menuBarSummaryMode: MenuBarSummaryMode = .netCash {
         didSet {
-            guard showBalanceInMenuBar != oldValue else { return }
-            UserDefaults.standard.set(showBalanceInMenuBar, forKey: Keys.showBalanceInMenuBar)
+            guard menuBarSummaryMode != oldValue else { return }
+            UserDefaults.standard.set(menuBarSummaryMode.rawValue, forKey: Keys.menuBarSummaryMode)
         }
     }
     var balanceFormat: CurrencyFormat = .abbreviated {
@@ -127,8 +128,12 @@ final class AppState {
 
     private func loadSettings() {
         let defaults = UserDefaults.standard
-        if defaults.object(forKey: Keys.showBalanceInMenuBar) != nil {
-            showBalanceInMenuBar = defaults.bool(forKey: Keys.showBalanceInMenuBar)
+        if let mode = defaults.string(forKey: Keys.menuBarSummaryMode),
+           let summaryMode = MenuBarSummaryMode(rawValue: mode) {
+            menuBarSummaryMode = summaryMode
+        } else if defaults.object(forKey: Keys.showBalanceInMenuBar) != nil,
+                  !defaults.bool(forKey: Keys.showBalanceInMenuBar) {
+            menuBarSummaryMode = .iconOnly
         }
         if let format = defaults.string(forKey: Keys.balanceFormat),
            let f = CurrencyFormat(rawValue: format) {
@@ -171,22 +176,58 @@ final class AppState {
     // MARK: - Computed
 
     var netBalance: Double {
-        accounts.reduce(0) { total, account in
-            switch account.type {
-            case .depository, .investment:
-                return total + account.balances.effectiveBalance
-            case .credit, .loan:
-                return total - abs(account.balances.current ?? 0)
-            case .other:
-                return total + account.balances.effectiveBalance
-            }
-        }
+        MenuBarSummary.netCash(from: accounts)
+    }
+
+    var totalCash: Double {
+        MenuBarSummary.totalCash(from: accounts)
+    }
+
+    var totalCreditUtilization: Double? {
+        MenuBarSummary.creditUtilization(from: accounts)
+    }
+
+    var recentSpend: Double {
+        MenuBarSummary.recentSpend(from: transactions)
     }
 
     var menuBarText: String {
-        guard !accounts.isEmpty else { return "PlaidBar" }
-        guard showBalanceInMenuBar else { return "\u{1F4B0}" }
-        return Formatters.currency(netBalance, format: balanceFormat)
+        MenuBarSummary.text(
+            mode: menuBarSummaryMode,
+            accounts: accounts,
+            transactions: transactions,
+            currencyFormat: balanceFormat
+        )
+    }
+
+    var menuBarHelpText: String {
+        switch menuBarSummaryMode {
+        case .netCash:
+            return "PlaidBar - Net cash: \(menuBarText)"
+        case .totalCash:
+            return "PlaidBar - Total cash: \(menuBarText)"
+        case .creditUtilization:
+            return "PlaidBar - Credit utilization: \(menuBarText)"
+        case .recentSpend:
+            return "PlaidBar - Recent spend: \(menuBarText)"
+        case .iconOnly:
+            return "PlaidBar"
+        }
+    }
+
+    var menuBarAccessibilityLabel: String {
+        switch menuBarSummaryMode {
+        case .netCash:
+            return "PlaidBar net cash \(menuBarText)"
+        case .totalCash:
+            return "PlaidBar total cash \(menuBarText)"
+        case .creditUtilization:
+            return "PlaidBar credit utilization \(menuBarText)"
+        case .recentSpend:
+            return "PlaidBar recent spend \(menuBarText)"
+        case .iconOnly:
+            return "PlaidBar"
+        }
     }
 
     var lastSyncRelative: String? {

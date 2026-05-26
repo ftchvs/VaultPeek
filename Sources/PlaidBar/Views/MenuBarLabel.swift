@@ -7,10 +7,12 @@ struct MenuBarLabel: View {
         HStack(spacing: Spacing.xs) {
             Image(systemName: "dollarsign.circle.fill")
                 .foregroundStyle(SemanticColors.income)
-            Text(appState.menuBarText)
-                .monospacedDigit()
+            if !appState.menuBarText.isEmpty {
+                Text(appState.menuBarText)
+                    .monospacedDigit()
+            }
         }
-        .help("PlaidBar \u{2014} Net: \(appState.menuBarText)")
-        .accessibilityLabel("PlaidBar net balance \(appState.menuBarText)")
+        .help(appState.menuBarHelpText)
+        .accessibilityLabel(appState.menuBarAccessibilityLabel)
     }
 }

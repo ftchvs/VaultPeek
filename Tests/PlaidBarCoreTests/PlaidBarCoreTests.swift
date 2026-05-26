@@ -123,6 +123,72 @@ struct PlaidBarCoreTests {
         #expect(days.first?.transactionCount == 1)
     }
 
+    // MARK: - Menu Bar Summary Tests
+
+    @Test("Menu bar summary calculates net cash")
+    func menuBarSummaryNetCash() {
+        let accounts = [
+            AccountDTO(id: "1", itemId: "i", name: "Checking", type: .depository, balances: BalanceDTO(available: 8_200)),
+            AccountDTO(id: "2", itemId: "i", name: "Savings", type: .depository, balances: BalanceDTO(available: 5_100)),
+            AccountDTO(id: "3", itemId: "i", name: "Amex", type: .credit, balances: BalanceDTO(current: -850.68)),
+        ]
+
+        #expect(abs(MenuBarSummary.netCash(from: accounts) - 12_449.32) < 0.01)
+    }
+
+    @Test("Menu bar summary total cash uses depository accounts only")
+    func menuBarSummaryTotalCash() {
+        let accounts = [
+            AccountDTO(id: "1", itemId: "i", name: "Checking", type: .depository, balances: BalanceDTO(available: 8_200)),
+            AccountDTO(id: "2", itemId: "i", name: "Brokerage", type: .investment, balances: BalanceDTO(current: 50_000)),
+            AccountDTO(id: "3", itemId: "i", name: "Visa", type: .credit, balances: BalanceDTO(current: -1_500, limit: 10_000)),
+        ]
+
+        #expect(MenuBarSummary.totalCash(from: accounts) == 8_200)
+    }
+
+    @Test("Menu bar summary aggregates credit utilization")
+    func menuBarSummaryCreditUtilization() {
+        let accounts = [
+            AccountDTO(id: "1", itemId: "i", name: "Checking", type: .depository, balances: BalanceDTO(available: 8_200)),
+            AccountDTO(id: "2", itemId: "i", name: "Amex", type: .credit, balances: BalanceDTO(current: -1_000, limit: 10_000)),
+            AccountDTO(id: "3", itemId: "i", name: "Visa", type: .credit, balances: BalanceDTO(current: -2_000, limit: 5_000)),
+        ]
+
+        #expect(MenuBarSummary.creditUtilization(from: accounts) == 20)
+    }
+
+    @Test("Menu bar summary recent spend excludes income and transfers")
+    func menuBarSummaryRecentSpend() {
+        let now = Formatters.parseTransactionDate("2026-01-15")!
+        let transactions = [
+            TransactionDTO(id: "1", accountId: "a", amount: 25, date: "2026-01-15", name: "Coffee"),
+            TransactionDTO(id: "2", accountId: "a", amount: 75, date: "2026-01-10", name: "Groceries"),
+            TransactionDTO(id: "3", accountId: "a", amount: -200, date: "2026-01-15", name: "Refund"),
+            TransactionDTO(id: "4", accountId: "a", amount: 500, date: "2026-01-15", name: "Transfer", category: .transfer),
+            TransactionDTO(id: "5", accountId: "a", amount: 40, date: "2026-01-01", name: "Old")
+        ]
+
+        #expect(MenuBarSummary.recentSpend(from: transactions, now: now) == 100)
+    }
+
+    @Test("Menu bar summary text supports every mode")
+    func menuBarSummaryTextModes() {
+        let accounts = [
+            AccountDTO(id: "1", itemId: "i", name: "Checking", type: .depository, balances: BalanceDTO(available: 8_200)),
+            AccountDTO(id: "2", itemId: "i", name: "Visa", type: .credit, balances: BalanceDTO(current: -1_500, limit: 10_000)),
+        ]
+        let transactions = [
+            TransactionDTO(id: "1", accountId: "a", amount: 25, date: Formatters.transactionDateString(Date()), name: "Coffee")
+        ]
+
+        #expect(!MenuBarSummary.text(mode: .netCash, accounts: accounts, transactions: transactions, currencyFormat: .compact).isEmpty)
+        #expect(!MenuBarSummary.text(mode: .totalCash, accounts: accounts, transactions: transactions, currencyFormat: .compact).isEmpty)
+        #expect(MenuBarSummary.text(mode: .creditUtilization, accounts: accounts, transactions: transactions, currencyFormat: .compact) == "15%")
+        #expect(!MenuBarSummary.text(mode: .recentSpend, accounts: accounts, transactions: transactions, currencyFormat: .compact).isEmpty)
+        #expect(MenuBarSummary.text(mode: .iconOnly, accounts: accounts, transactions: transactions, currencyFormat: .compact).isEmpty)
+    }
+
     @Test("Net cashflow heatmap keeps Plaid amount signs")
     func netCashflowHeatmapKeepsSigns() {
         let day = Formatters.parseTransactionDate("2026-01-02")!
