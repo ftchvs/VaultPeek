@@ -13,6 +13,12 @@ struct MenuBarLabel: View {
                         .frame(width: 6, height: 6)
                         .offset(x: 2, y: 1)
                 }
+            if let attentionText = appState.menuBarAttentionText {
+                Text(attentionText)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(statusTint)
+                    .lineLimit(1)
+            }
             if !appState.menuBarText.isEmpty {
                 Text(appState.menuBarText)
                     .monospacedDigit()
@@ -32,6 +38,6 @@ struct MenuBarLabel: View {
         if appState.serverConnected || appState.isDemoMode {
             return SemanticColors.positive
         }
-        return .secondary
+        return SemanticColors.negative
     }
 }
