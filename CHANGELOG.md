@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 23:53 UTC] — Fix
+
+enforce local API bearer auth (#70)
+
+`f3361e3`
+
+---
+
+
 ## [2026-05-27 23:26 UTC] — Fix
 
 persist transaction cache across restarts (#69)
