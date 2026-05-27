@@ -38,6 +38,12 @@ public enum MenuBarSummary {
             .reduce(0) { $0 + $1.balances.effectiveBalance }
     }
 
+    public static func totalDebt(from accounts: [AccountDTO]) -> Double {
+        accounts
+            .filter(AccountPresentation.isDebt)
+            .reduce(0) { $0 + AccountPresentation.displayBalance(for: $1) }
+    }
+
     public static func creditUtilization(from accounts: [AccountDTO]) -> Double? {
         let creditBalances = accounts
             .filter { $0.type == .credit }

@@ -147,6 +147,18 @@ struct PlaidBarCoreTests {
         #expect(MenuBarSummary.totalCash(from: accounts) == 8_200)
     }
 
+    @Test("Menu bar summary totals credit and loan debt")
+    func menuBarSummaryTotalDebt() {
+        let accounts = [
+            AccountDTO(id: "1", itemId: "i", name: "Checking", type: .depository, balances: BalanceDTO(available: 8_200)),
+            AccountDTO(id: "2", itemId: "i", name: "Visa", type: .credit, balances: BalanceDTO(current: -1_500, limit: 10_000)),
+            AccountDTO(id: "3", itemId: "i", name: "Auto Loan", type: .loan, balances: BalanceDTO(current: -7_250)),
+            AccountDTO(id: "4", itemId: "i", name: "Brokerage", type: .investment, balances: BalanceDTO(current: 50_000)),
+        ]
+
+        #expect(MenuBarSummary.totalDebt(from: accounts) == 8_750)
+    }
+
     @Test("Menu bar summary aggregates credit utilization")
     func menuBarSummaryCreditUtilization() {
         let accounts = [
@@ -213,6 +225,7 @@ struct PlaidBarCoreTests {
         let checking = AccountDTO(id: "1", itemId: "i", name: "Checking", type: .depository, balances: BalanceDTO(current: 500))
         let credit = AccountDTO(id: "2", itemId: "i", name: "Card", type: .credit, balances: BalanceDTO(current: -125))
         let loan = AccountDTO(id: "3", itemId: "i", name: "Loan", type: .loan, balances: BalanceDTO(current: -750))
+        let availableCredit = AccountDTO(id: "4", itemId: "i", name: "Available", type: .credit, balances: BalanceDTO(available: 900))
 
         #expect(AccountPresentation.isDebt(checking) == false)
         #expect(AccountPresentation.isDebt(credit))
@@ -220,6 +233,7 @@ struct PlaidBarCoreTests {
         #expect(AccountPresentation.displayBalance(for: checking) == 500)
         #expect(AccountPresentation.displayBalance(for: credit) == 125)
         #expect(AccountPresentation.displayBalance(for: loan) == 750)
+        #expect(AccountPresentation.displayBalance(for: availableCredit) == 0)
     }
 
     @Test("Menu bar summary estimates runway from recent monthly spend")
