@@ -682,7 +682,27 @@ private struct SelectedAccountPanel: View {
     let account: AccountDTO
 
     private var transactions: [TransactionDTO] {
-        Array(appState.transactionsForAccount(account.id).prefix(5))
+        Array(accountTransactions.prefix(5))
+    }
+
+    private var accountTransactions: [TransactionDTO] {
+        appState.transactionsForAccount(account.id)
+    }
+
+    private var pendingTransactions: [TransactionDTO] {
+        accountTransactions.filter(\.pending)
+    }
+
+    private var outflowTotal: Double {
+        accountTransactions
+            .filter { !$0.isIncome && $0.category != .transfer && $0.category != .transferOut }
+            .reduce(0) { $0 + $1.displayAmount }
+    }
+
+    private var inflowTotal: Double {
+        accountTransactions
+            .filter(\.isIncome)
+            .reduce(0) { $0 + $1.displayAmount }
     }
 
     var body: some View {
@@ -702,15 +722,14 @@ private struct SelectedAccountPanel: View {
 
                 Spacer()
 
-                HStack(spacing: 5) {
-                    Image(systemName: "ellipsis.circle")
-                    Image(systemName: "chevron.down")
-                        .font(.caption.weight(.bold))
-                }
-                .foregroundStyle(.secondary)
+                AccountConnectionBadge(
+                    label: connectionLabel,
+                    icon: connectionIcon,
+                    tint: connectionTint
+                )
             }
 
-            HStack(spacing: 46) {
+            HStack(spacing: 10) {
                 DetailValue(title: "Available", value: availableText, tint: SemanticColors.available)
                 DetailValue(title: "Current", value: currentText, tint: .primary)
 
@@ -720,9 +739,62 @@ private struct SelectedAccountPanel: View {
                         value: Formatters.percent(utilization, decimals: 0),
                         tint: SemanticColors.utilization(for: utilization)
                     )
+                } else {
+                    DetailValue(title: "Activity", value: activityText, tint: connectionTint)
                 }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-                Spacer()
+            HStack(spacing: 10) {
+                AccountSignalPill(
+                    title: "Pending",
+                    value: "\(pendingTransactions.count)",
+                    icon: "clock.fill",
+                    tint: pendingTransactions.isEmpty ? .secondary : SemanticColors.pending
+                )
+                AccountSignalPill(
+                    title: "Out",
+                    value: Formatters.currency(outflowTotal, format: .compact),
+                    icon: "arrow.up.right.circle.fill",
+                    tint: outflowTotal > 0 ? SemanticColors.negative : .secondary
+                )
+                AccountSignalPill(
+                    title: "In",
+                    value: Formatters.currency(inflowTotal, format: .compact),
+                    icon: "arrow.down.left.circle.fill",
+                    tint: inflowTotal > 0 ? SemanticColors.positive : .secondary
+                )
+                AccountSignalPill(
+                    title: "Sync",
+                    value: syncSignalText,
+                    icon: connectionIcon,
+                    tint: connectionTint
+                )
+            }
+
+            if shouldShowRecoveryActions {
+                HStack(spacing: 8) {
+                    if itemStatus == .loginRequired || itemStatus == .error {
+                        Button {
+                            Task { await appState.reconnectItem(itemId: account.itemId) }
+                        } label: {
+                            Label("Reconnect", systemImage: "link.badge.plus")
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+
+                    Button {
+                        Task {
+                            await appState.refreshBalances()
+                            await appState.syncTransactions()
+                        }
+                    } label: {
+                        Label("Refresh", systemImage: "arrow.clockwise")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
             }
 
             VStack(alignment: .leading, spacing: 8) {
@@ -743,6 +815,10 @@ private struct SelectedAccountPanel: View {
         }
         .padding(18)
         .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 8))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(connectionTint.opacity(0.18), lineWidth: 1)
+        }
     }
 
     private var selectedSubtitle: String {
@@ -758,6 +834,120 @@ private struct SelectedAccountPanel: View {
     private var currentText: String {
         let amount = account.balances.current ?? account.balances.effectiveBalance
         return Formatters.currency(account.type == .credit ? abs(amount) : amount, format: .compact)
+    }
+
+    private var itemStatus: ItemConnectionStatus? {
+        appState.itemStatuses.first { $0.id == account.itemId }?.status
+    }
+
+    private var connectionLabel: String {
+        if appState.isDemoMode { return "Demo data" }
+        if !appState.serverConnected { return "Server offline" }
+
+        switch itemStatus {
+        case .connected:
+            return appState.statusSyncText
+        case .loginRequired:
+            return "Login required"
+        case .error:
+            return "Item error"
+        case nil:
+            return appState.statusSyncText
+        }
+    }
+
+    private var connectionIcon: String {
+        if appState.isDemoMode { return "play.circle.fill" }
+        if !appState.serverConnected { return "server.rack" }
+
+        switch itemStatus {
+        case .connected:
+            return appState.isSyncStale ? "clock.badge.exclamationmark.fill" : "checkmark.circle.fill"
+        case .loginRequired:
+            return "person.crop.circle.badge.exclamationmark.fill"
+        case .error:
+            return "exclamationmark.triangle.fill"
+        case nil:
+            return appState.isSyncStale ? "clock.badge.exclamationmark.fill" : "link.circle.fill"
+        }
+    }
+
+    private var connectionTint: Color {
+        if appState.isDemoMode { return SemanticColors.brandSecondary }
+        if !appState.serverConnected { return .secondary }
+
+        switch itemStatus {
+        case .connected:
+            return appState.isSyncStale ? SemanticColors.warning : SemanticColors.positive
+        case .loginRequired:
+            return SemanticColors.warning
+        case .error:
+            return SemanticColors.negative
+        case nil:
+            return appState.isSyncStale ? SemanticColors.warning : .secondary
+        }
+    }
+
+    private var activityText: String {
+        "\(accountTransactions.count) tx"
+    }
+
+    private var syncSignalText: String {
+        if itemStatus == .loginRequired { return "Login" }
+        if itemStatus == .error { return "Error" }
+        if appState.isSyncStale { return "Stale" }
+        return "Fresh"
+    }
+
+    private var shouldShowRecoveryActions: Bool {
+        !appState.isDemoMode && (appState.isSyncStale || itemStatus == .loginRequired || itemStatus == .error)
+    }
+}
+
+private struct AccountConnectionBadge: View {
+    let label: String
+    let icon: String
+    let tint: Color
+
+    var body: some View {
+        Label(label, systemImage: icon)
+            .font(.caption.weight(.semibold))
+            .lineLimit(1)
+            .foregroundStyle(tint)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(tint.opacity(0.12), in: Capsule())
+    }
+}
+
+private struct AccountSignalPill: View {
+    let title: String
+    let value: String
+    let icon: String
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Image(systemName: icon)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(tint)
+                .frame(width: 14)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .microText()
+                    .foregroundStyle(.secondary)
+                Text(value)
+                    .font(.caption.weight(.bold))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 7))
     }
 }
 
