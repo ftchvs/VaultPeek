@@ -8,17 +8,17 @@ struct SpendingView: View {
     @State private var chartType: ChartType = .donut
 
     enum SpendingPeriod: String, CaseIterable, Sendable {
-        case thisWeek = "This Week"
-        case thisMonth = "This Month"
-        case last30Days = "Last 30 Days"
-        case last90Days = "Last 90 Days"
+        case thisWeek = "Week"
+        case thisMonth = "Month"
+        case last30Days = "30D"
+        case last90Days = "90D"
     }
 
     enum ChartType: String, CaseIterable, Sendable {
         case donut = "Categories"
         case heatmap = "Heatmap"
         case trend = "Trend"
-        case incomeExpense = "In vs Out"
+        case incomeExpense = "Flow"
     }
 
     /// Returns current/previous period starts for filtering and comparisons.

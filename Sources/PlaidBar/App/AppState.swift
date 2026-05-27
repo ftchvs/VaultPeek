@@ -123,8 +123,8 @@ final class AppState {
 
     // MARK: - Init
 
-    init(notificationService: any NotificationServiceProtocol = NotificationService.shared) {
-        self.notificationService = notificationService
+    init(notificationService: (any NotificationServiceProtocol)? = nil) {
+        self.notificationService = notificationService ?? NotificationService.shared
         loadSettings()
     }
 

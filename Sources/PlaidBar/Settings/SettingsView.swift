@@ -32,7 +32,7 @@ struct SettingsView: View {
                     Label("About", systemImage: "info.circle")
                 }
         }
-        .frame(width: 520, height: 500)
+        .frame(width: 620, height: 560)
     }
 }
 
@@ -45,56 +45,78 @@ struct GeneralSettingsView: View {
     var body: some View {
         @Bindable var state = appState
 
-        Form {
-            Picker("Menu bar shows", selection: $state.menuBarSummaryMode) {
-                ForEach(MenuBarSummaryMode.allCases, id: \.self) { mode in
-                    Text(mode.displayName).tag(mode)
-                }
-            }
-
-            Picker("Balance format", selection: $state.balanceFormat) {
-                Text("$12,450.32").tag(CurrencyFormat.full)
-                Text("$12.4K").tag(CurrencyFormat.abbreviated)
-                Text("$12,450").tag(CurrencyFormat.compact)
-            }
-            .disabled(appState.menuBarSummaryMode == .creditUtilization || appState.menuBarSummaryMode == .iconOnly)
-
-            Picker("Refresh interval", selection: $state.refreshInterval) {
-                Text("5 minutes").tag(TimeInterval(5 * 60))
-                Text("15 minutes").tag(TimeInterval(15 * 60))
-                Text("30 minutes").tag(TimeInterval(30 * 60))
-                Text("1 hour").tag(TimeInterval(60 * 60))
-            }
-
-            HStack {
-                Text("Credit warning")
-                Spacer()
-                TextField(
-                    "",
-                    value: $state.creditUtilizationThreshold,
-                    format: .number.precision(.fractionLength(0))
-                )
-                .frame(width: 60)
-                .textFieldStyle(.roundedBorder)
-                Text("%")
-            }
-            .help("Credit cards above this utilization threshold show warning colors")
-
-            Toggle("Launch at login", isOn: $state.launchAtLogin)
-
-            Section("Local Data") {
-                VStack(alignment: .leading, spacing: Spacing.sm) {
-                    LabeledContent("Storage path") {
-                        Text(appState.localStoragePathText)
-                            .font(.system(.body, design: .monospaced))
-                            .textSelection(.enabled)
+        ScrollView {
+            VStack(alignment: .leading, spacing: Spacing.lg) {
+                SettingsCard {
+                    settingsRow("Menu bar shows") {
+                        Picker("Menu bar shows", selection: $state.menuBarSummaryMode) {
+                            ForEach(MenuBarSummaryMode.allCases, id: \.self) { mode in
+                                Text(mode.displayName).tag(mode)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(width: 230)
                     }
 
-                    Text(appState.localStorageResolvedPathText)
-                        .detailText()
-                        .textSelection(.enabled)
+                    settingsRow("Balance format") {
+                        Picker("Balance format", selection: $state.balanceFormat) {
+                            Text("$12,450.32").tag(CurrencyFormat.full)
+                            Text("$12.4K").tag(CurrencyFormat.abbreviated)
+                            Text("$12,450").tag(CurrencyFormat.compact)
+                        }
+                        .labelsHidden()
+                        .frame(width: 230)
+                        .disabled(appState.menuBarSummaryMode == .creditUtilization || appState.menuBarSummaryMode == .iconOnly)
+                    }
 
-                    HStack {
+                    settingsRow("Refresh interval") {
+                        Picker("Refresh interval", selection: $state.refreshInterval) {
+                            Text("5 minutes").tag(TimeInterval(5 * 60))
+                            Text("15 minutes").tag(TimeInterval(15 * 60))
+                            Text("30 minutes").tag(TimeInterval(30 * 60))
+                            Text("1 hour").tag(TimeInterval(60 * 60))
+                        }
+                        .labelsHidden()
+                        .frame(width: 230)
+                    }
+
+                    settingsRow("Credit warning") {
+                        HStack(spacing: Spacing.sm) {
+                            TextField(
+                                "",
+                                value: $state.creditUtilizationThreshold,
+                                format: .number.precision(.fractionLength(0))
+                            )
+                            .frame(width: 72)
+                            .textFieldStyle(.roundedBorder)
+                            Text("%")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .help("Credit cards above this utilization threshold show warning colors")
+
+                    Toggle("Launch at login", isOn: $state.launchAtLogin)
+                        .padding(.top, Spacing.xs)
+                }
+
+                SettingsCard(title: "Local Data") {
+                    settingsRow("Storage path", alignment: .top) {
+                        VStack(alignment: .trailing, spacing: Spacing.xs) {
+                            Text(appState.localStoragePathText)
+                                .font(.system(.body, design: .monospaced))
+                                .lineLimit(2)
+                                .multilineTextAlignment(.trailing)
+                                .textSelection(.enabled)
+
+                            Text(appState.localStorageResolvedPathText)
+                                .detailText()
+                                .lineLimit(2)
+                                .multilineTextAlignment(.trailing)
+                                .textSelection(.enabled)
+                        }
+                    }
+
+                    HStack(spacing: Spacing.sm) {
                         Button {
                             revealStorageDirectory()
                         } label: {
@@ -112,16 +134,17 @@ struct GeneralSettingsView: View {
                         Button(role: .destructive) {
                             isShowingResetConfirmation = true
                         } label: {
-                            Label("Reset Local Data", systemImage: "trash")
+                            Label("Reset", systemImage: "trash")
                         }
                     }
 
-                    Text("Stores the local server database, Plaid item tokens, sync cursors, and app/server auth token. App preferences such as menu bar display, notification thresholds, and launch-at-login are kept.")
+                    Text("Stores the local server database, Plaid item tokens, sync cursors, and app/server auth token. App preferences stay in macOS preferences.")
                         .detailText()
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
+            .padding(Spacing.lg)
         }
-        .padding()
         .alert("Reset Local PlaidBar Data?", isPresented: $isShowingResetConfirmation) {
             Button("Reset Local Data", role: .destructive) {
                 resetLocalData()
@@ -170,6 +193,50 @@ struct GeneralSettingsView: View {
         } catch {
             resetErrorMessage = error.localizedDescription
         }
+    }
+}
+
+private struct SettingsCard<Content: View>: View {
+    let title: String?
+    @ViewBuilder let content: Content
+
+    init(title: String? = nil, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            if let title {
+                Text(title)
+                    .sectionTitle()
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                content
+            }
+        }
+        .padding(Spacing.md)
+        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+@ViewBuilder
+private func settingsRow<Content: View>(
+    _ title: String,
+    alignment: VerticalAlignment = .center,
+    @ViewBuilder content: () -> Content
+) -> some View {
+    HStack(alignment: alignment, spacing: Spacing.md) {
+        Text(title)
+            .foregroundStyle(.secondary)
+            .frame(width: 150, alignment: .leading)
+
+        Spacer(minLength: Spacing.md)
+
+        content()
+            .frame(maxWidth: 330, alignment: .trailing)
     }
 }
 
