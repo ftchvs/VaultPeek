@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 22:14 UTC] — Update
+
+Reuse account icons in settings (#64)
+
+`7982802`
+
+---
+
+
 ## [2026-05-27 22:07 UTC] — Update
 
 Extract transaction sync reducer (#63)
