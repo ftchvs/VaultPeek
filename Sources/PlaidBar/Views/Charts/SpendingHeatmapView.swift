@@ -144,19 +144,24 @@ struct SpendingHeatmapView: View {
 
     private var legend: some View {
         HStack(spacing: Spacing.xs) {
-            Text("Less")
-                .microText()
-                .foregroundStyle(.secondary)
+            if mode == .spending {
+                Text("Less")
+                    .microText()
+                    .foregroundStyle(.secondary)
 
-            ForEach([0.0, 0.25, 0.5, 0.75, 1.0], id: \.self) { intensity in
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(HeatmapCell.fillColor(intensity: intensity, value: intensity, mode: mode))
-                    .frame(width: 13, height: 13)
+                ForEach([0.0, 0.25, 0.5, 0.75, 1.0], id: \.self) { intensity in
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(HeatmapCell.fillColor(intensity: intensity, value: intensity, mode: mode))
+                        .frame(width: 13, height: 13)
+                }
+
+                Text("More")
+                    .microText()
+                    .foregroundStyle(.secondary)
+            } else {
+                HeatmapLegendKey(label: "Income", tint: SemanticColors.positive, size: 13)
+                HeatmapLegendKey(label: "Outflow", tint: SemanticColors.negative, size: 13)
             }
-
-            Text("More")
-                .microText()
-                .foregroundStyle(.secondary)
 
             Spacer()
 
@@ -214,6 +219,23 @@ struct SpendingHeatmapView: View {
     }
 }
 
+private struct HeatmapLegendKey: View {
+    let label: String
+    let tint: Color
+    let size: CGFloat
+
+    var body: some View {
+        HStack(spacing: Spacing.xs) {
+            RoundedRectangle(cornerRadius: 3)
+                .fill(tint.opacity(0.72))
+                .frame(width: size, height: size)
+            Text(label)
+                .microText()
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
 private struct HeatmapCell: View {
     let day: SpendingHeatmapDay
     let peakValue: Double
@@ -259,7 +281,7 @@ private struct HeatmapCell: View {
         if mode == .netCashflow && value < 0 {
             base = SemanticColors.positive
         } else {
-            base = SemanticColors.brand
+            base = mode == .netCashflow ? SemanticColors.negative : SemanticColors.brand
         }
 
         return base.opacity(0.18 + (0.72 * intensity))

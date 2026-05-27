@@ -453,19 +453,24 @@ private struct BalanceActivityHeatmap: View {
             .frame(height: monthLabelHeight + 4 + 7 * 9 + 6 * spacing)
 
             HStack(spacing: 5) {
-                Text("Less")
-                    .microText()
-                    .foregroundStyle(.secondary)
+                if mode == .spending {
+                    Text("Less")
+                        .microText()
+                        .foregroundStyle(.secondary)
 
-                ForEach([0.0, 0.25, 0.5, 0.75, 1.0], id: \.self) { intensity in
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(BalanceHeatmapCell.fillColor(intensity: intensity, value: intensity, mode: mode))
-                        .frame(width: 9, height: 9)
+                    ForEach([0.0, 0.25, 0.5, 0.75, 1.0], id: \.self) { intensity in
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(BalanceHeatmapCell.fillColor(intensity: intensity, value: intensity, mode: mode))
+                            .frame(width: 9, height: 9)
+                    }
+
+                    Text("More")
+                        .microText()
+                        .foregroundStyle(.secondary)
+                } else {
+                    NetLegendKey(label: "Income", tint: SemanticColors.positive)
+                    NetLegendKey(label: "Outflow", tint: SemanticColors.negative)
                 }
-
-                Text("More")
-                    .microText()
-                    .foregroundStyle(.secondary)
 
                 Spacer()
 
@@ -482,6 +487,22 @@ private struct BalanceActivityHeatmap: View {
 
     private func monthLabel(for date: Date) -> String {
         calendar.shortMonthSymbols[calendar.component(.month, from: date) - 1]
+    }
+}
+
+private struct NetLegendKey: View {
+    let label: String
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 4) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(tint.opacity(0.72))
+                .frame(width: 9, height: 9)
+            Text(label)
+                .microText()
+                .foregroundStyle(.secondary)
+        }
     }
 }
 
