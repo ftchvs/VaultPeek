@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 16:44 UTC] — Feature
+
+add menu bar health signal
+
+`5abfc6c`
+
+---
+
+
 ## [2026-05-27 16:37 UTC] — Feature
 
 polish menu bar onboarding
