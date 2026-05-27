@@ -374,6 +374,10 @@ final class AppState {
         accounts.filter { $0.type == .credit }
     }
 
+    var loanAccounts: [AccountDTO] {
+        accounts.filter { $0.type == .loan }
+    }
+
     var debtAccounts: [AccountDTO] {
         accounts.filter(AccountPresentation.isDebt)
     }
