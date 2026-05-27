@@ -313,6 +313,7 @@ private struct BalanceActivityHeatmap: View {
     private let calendar = Calendar.current
     private let spacing: CGFloat = 3
     private let monthLabelHeight: CGFloat = 12
+    private let monthLabelWidth: CGFloat = 26
 
     private var days: [SpendingHeatmapDay] {
         let end = calendar.startOfDay(for: Date())
@@ -353,6 +354,30 @@ private struct BalanceActivityHeatmap: View {
         }
     }
 
+    private var monthMarkers: [HeatmapMonthMarker] {
+        var seenMonths = Set<String>()
+
+        return weekColumns.enumerated().compactMap { weekIndex, week in
+            for day in week.compactMap(\.self) {
+                guard let date = Formatters.parseTransactionDate(day.date),
+                      calendar.component(.day, from: date) <= 7 else {
+                    continue
+                }
+
+                let monthKey = "\(calendar.component(.year, from: date))-\(calendar.component(.month, from: date))"
+                guard !seenMonths.contains(monthKey) else { continue }
+                seenMonths.insert(monthKey)
+
+                return HeatmapMonthMarker(
+                    id: "\(weekIndex)-\(day.date)",
+                    weekIndex: weekIndex,
+                    label: monthLabel(for: date)
+                )
+            }
+            return nil
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 11) {
             HStack(alignment: .firstTextBaseline) {
@@ -372,16 +397,18 @@ private struct BalanceActivityHeatmap: View {
                 let weeks = max(weekColumns.count, 1)
                 let cell = max(6, min(9, floor((proxy.size.width - (CGFloat(weeks - 1) * spacing)) / CGFloat(weeks))))
 
-                HStack(alignment: .top, spacing: spacing) {
-                    ForEach(Array(weekColumns.enumerated()), id: \.offset) { _, week in
-                        VStack(spacing: 4) {
-                            Text(monthLabel(for: week))
-                                .font(.system(size: 8, weight: .semibold))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .frame(width: cell, height: monthLabelHeight, alignment: .leading)
-                                .fixedSize(horizontal: true, vertical: false)
+                ZStack(alignment: .topLeading) {
+                    ForEach(monthMarkers) { marker in
+                        Text(marker.label)
+                            .font(.system(size: 8, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .frame(width: monthLabelWidth, height: monthLabelHeight, alignment: .leading)
+                            .offset(x: CGFloat(marker.weekIndex) * (cell + spacing), y: 0)
+                    }
 
+                    HStack(alignment: .top, spacing: spacing) {
+                        ForEach(Array(weekColumns.enumerated()), id: \.offset) { _, week in
                             VStack(spacing: spacing) {
                                 ForEach(Array(week.enumerated()), id: \.offset) { _, day in
                                     if let day {
@@ -395,8 +422,9 @@ private struct BalanceActivityHeatmap: View {
                             }
                         }
                     }
+                    .offset(y: monthLabelHeight + 4)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(height: monthLabelHeight + 4 + 7 * 9 + 6 * spacing)
 
@@ -428,14 +456,15 @@ private struct BalanceActivityHeatmap: View {
         .accessibilityLabel("Spending activity heatmap for the last 365 days with \(activeDayCount) active days.")
     }
 
-    private func monthLabel(for week: [SpendingHeatmapDay?]) -> String {
-        for day in week.compactMap(\.self) {
-            guard let date = Formatters.parseTransactionDate(day.date) else { continue }
-            guard calendar.component(.day, from: date) <= 7 else { continue }
-            return date.formatted(.dateTime.month(.abbreviated))
-        }
-        return ""
+    private func monthLabel(for date: Date) -> String {
+        calendar.shortMonthSymbols[calendar.component(.month, from: date) - 1]
     }
+}
+
+private struct HeatmapMonthMarker: Identifiable {
+    let id: String
+    let weekIndex: Int
+    let label: String
 }
 
 private struct BalanceHeatmapCell: View {
