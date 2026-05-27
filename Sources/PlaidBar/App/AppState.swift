@@ -205,6 +205,15 @@ final class AppState {
         )
     }
 
+    var menuBarAttentionText: String? {
+        if isDemoMode { return nil }
+        if error != nil || erroredItemCount > 0 { return "Error" }
+        if !serverConnected { return "Offline" }
+        if needsLoginItemCount > 0 { return "Login" }
+        if isSyncStale { return lastSyncDate == nil ? "Never" : "Stale" }
+        return nil
+    }
+
     var menuBarHelpText: String {
         let status = "Status: \(diagnosticsSummary)"
         switch menuBarSummaryMode {
