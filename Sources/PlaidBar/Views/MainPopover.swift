@@ -1110,16 +1110,8 @@ private struct SelectedAccountPanel: View {
         accountTransactions.filter(\.pending)
     }
 
-    private var outflowTotal: Double {
-        accountTransactions
-            .filter { !$0.isIncome && $0.category != .transfer && $0.category != .transferOut }
-            .reduce(0) { $0 + $1.displayAmount }
-    }
-
-    private var inflowTotal: Double {
-        accountTransactions
-            .filter(\.isIncome)
-            .reduce(0) { $0 + $1.displayAmount }
+    private var activitySummary: AccountActivitySummary {
+        AccountActivitySummary.recent(from: accountTransactions)
     }
 
     var body: some View {
@@ -1170,16 +1162,16 @@ private struct SelectedAccountPanel: View {
                     tint: pendingTransactions.isEmpty ? .secondary : SemanticColors.pending
                 )
                 AccountSignalPill(
-                    title: "Out",
-                    value: Formatters.currency(outflowTotal, format: .compact),
+                    title: "30D Out",
+                    value: Formatters.currency(activitySummary.outflowTotal, format: .compact),
                     icon: "arrow.up.right.circle.fill",
-                    tint: outflowTotal > 0 ? SemanticColors.negative : .secondary
+                    tint: activitySummary.outflowTotal > 0 ? SemanticColors.negative : .secondary
                 )
                 AccountSignalPill(
-                    title: "In",
-                    value: Formatters.currency(inflowTotal, format: .compact),
+                    title: "30D In",
+                    value: Formatters.currency(activitySummary.inflowTotal, format: .compact),
                     icon: "arrow.down.left.circle.fill",
-                    tint: inflowTotal > 0 ? SemanticColors.positive : .secondary
+                    tint: activitySummary.inflowTotal > 0 ? SemanticColors.positive : .secondary
                 )
                 AccountSignalPill(
                     title: "Sync",
