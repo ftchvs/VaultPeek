@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 16:51 UTC] — Feature
+
+polish dashboard heatmap legend
+
+`6358770`
+
+---
+
+
 ## [2026-05-27 16:44 UTC] — Feature
 
 add menu bar health signal
