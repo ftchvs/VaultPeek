@@ -312,6 +312,7 @@ private struct BalanceActivityHeatmap: View {
 
     private let calendar = Calendar.current
     private let spacing: CGFloat = 3
+    private let monthLabelHeight: CGFloat = 12
 
     private var days: [SpendingHeatmapDay] {
         let end = calendar.startOfDay(for: Date())
@@ -333,6 +334,10 @@ private struct BalanceActivityHeatmap: View {
         days.filter { $0.transactionCount > 0 }.count
     }
 
+    private var totalSpend: Double {
+        days.reduce(0) { $0 + $1.value }
+    }
+
     private var weekColumns: [[SpendingHeatmapDay?]] {
         guard let firstDay = days.first,
               let firstDate = Formatters.parseTransactionDate(firstDay.date) else {
@@ -351,13 +356,13 @@ private struct BalanceActivityHeatmap: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 11) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Balance Activity")
+                Text("365D Spending Activity")
                     .sectionTitle()
                     .foregroundStyle(.secondary)
 
                 Spacer()
 
-                Text("Last 365D")
+                Text(Formatters.currency(totalSpend, format: .compact))
                     .font(.caption.weight(.bold))
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
@@ -369,14 +374,23 @@ private struct BalanceActivityHeatmap: View {
 
                 HStack(alignment: .top, spacing: spacing) {
                     ForEach(Array(weekColumns.enumerated()), id: \.offset) { _, week in
-                        VStack(spacing: spacing) {
-                            ForEach(Array(week.enumerated()), id: \.offset) { _, day in
-                                if let day {
-                                    BalanceHeatmapCell(day: day, peakValue: peakValue, size: cell)
-                                } else {
-                                    RoundedRectangle(cornerRadius: 2)
-                                        .fill(.clear)
-                                        .frame(width: cell, height: cell)
+                        VStack(spacing: 4) {
+                            Text(monthLabel(for: week))
+                                .font(.system(size: 8, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .frame(width: cell, height: monthLabelHeight, alignment: .leading)
+                                .fixedSize(horizontal: true, vertical: false)
+
+                            VStack(spacing: spacing) {
+                                ForEach(Array(week.enumerated()), id: \.offset) { _, day in
+                                    if let day {
+                                        BalanceHeatmapCell(day: day, peakValue: peakValue, size: cell)
+                                    } else {
+                                        RoundedRectangle(cornerRadius: 2)
+                                            .fill(.clear)
+                                            .frame(width: cell, height: cell)
+                                    }
                                 }
                             }
                         }
@@ -384,7 +398,7 @@ private struct BalanceActivityHeatmap: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(height: 7 * 9 + 6 * spacing)
+            .frame(height: monthLabelHeight + 4 + 7 * 9 + 6 * spacing)
 
             HStack(spacing: 5) {
                 Text("Less")
@@ -403,7 +417,7 @@ private struct BalanceActivityHeatmap: View {
 
                 Spacer()
 
-                Text("\(activeDayCount) active days")
+                Text("\(activeDayCount) days · Last 365D")
                     .microText()
                     .foregroundStyle(.secondary)
             }
@@ -411,7 +425,16 @@ private struct BalanceActivityHeatmap: View {
         .padding(18)
         .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 8))
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Balance activity heatmap for the last 365 days with \(activeDayCount) active days.")
+        .accessibilityLabel("Spending activity heatmap for the last 365 days with \(activeDayCount) active days.")
+    }
+
+    private func monthLabel(for week: [SpendingHeatmapDay?]) -> String {
+        for day in week.compactMap(\.self) {
+            guard let date = Formatters.parseTransactionDate(day.date) else { continue }
+            guard calendar.component(.day, from: date) <= 7 else { continue }
+            return date.formatted(.dateTime.month(.abbreviated))
+        }
+        return ""
     }
 }
 
