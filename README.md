@@ -106,6 +106,11 @@ Get credentials free at [dashboard.plaid.com](https://dashboard.plaid.com). Sand
 | Sandbox | `./Scripts/run.sh --sandbox` | Yes, sandbox API | Plaid sandbox credentials | Public demo and development |
 | Production | `./Scripts/run.sh` | Yes, production API | Your Plaid-approved credentials | Personal use after Plaid approval |
 
+For a fast sandbox preflight without opening the menu bar app, export sandbox
+credentials and run `./Scripts/smoke-sandbox.sh`. It builds the server, starts
+it on `127.0.0.1:${PLAIDBAR_SMOKE_PORT:-18484}`, checks `/health`, and verifies
+that `/api/status` reports sandbox mode with credentials configured.
+
 ## Keyboard Shortcuts
 
 | Shortcut | Action |
@@ -254,6 +259,9 @@ swift run PlaidBarServer --sandbox
 
 # Run both (server + app)
 ./Scripts/run.sh --sandbox
+
+# Smoke-test sandbox server status
+./Scripts/smoke-sandbox.sh
 
 # Capture screenshots (demo mode)
 ./Scripts/screenshots.sh
