@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 21:48 UTC] — Update
+
+Clarify selected account cash flow window (#61)
+
+`8ad3ea9`
+
+---
+
+
 ## [2026-05-27 21:37 UTC] — Update
 
 print Swift toolchain diagnostics (#60)
