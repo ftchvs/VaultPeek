@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 18:29 UTC] — Feature
+
+clarify bidirectional heatmap legend (#46)
+
+`268fb87`
+
+---
+
+
 ## [2026-05-27 18:20 UTC] — Fix
 
 render net heatmap income intensity (#45)
