@@ -64,8 +64,16 @@ if ! curl -fsS "http://127.0.0.1:$PORT/health" >/dev/null; then
     cat "$SERVER_LOG"
     exit 1
 fi
-STATUS_JSON="$(curl -fsS "http://127.0.0.1:$PORT/api/status")"
-ITEMS_JSON="$(curl -fsS "http://127.0.0.1:$PORT/api/items")"
+AUTH_TOKEN_PATH="$PLAIDBAR_DATA_DIR/auth-token"
+AUTH_TOKEN="$(tr -d '\r\n' < "$AUTH_TOKEN_PATH")"
+
+if curl -fsS "http://127.0.0.1:$PORT/api/status" >/dev/null 2>&1; then
+    echo "Smoke check failed: unauthenticated API status request succeeded" >&2
+    exit 1
+fi
+
+STATUS_JSON="$(curl -fsS -H "Authorization: Bearer $AUTH_TOKEN" "http://127.0.0.1:$PORT/api/status")"
+ITEMS_JSON="$(curl -fsS -H "Authorization: Bearer $AUTH_TOKEN" "http://127.0.0.1:$PORT/api/items")"
 
 python3 - "$STATUS_JSON" "$ITEMS_JSON" "$PLAIDBAR_DATA_DIR" <<'PY'
 import json
@@ -97,6 +105,14 @@ if not os.path.exists(auth_token_path):
     errors.append(f"auth token was not created at {auth_token_path}")
 elif os.path.getsize(auth_token_path) == 0:
     errors.append(f"auth token is empty at {auth_token_path}")
+else:
+    token_mode = os.stat(auth_token_path).st_mode & 0o777
+    if token_mode != 0o600:
+        errors.append(f"expected auth token permissions 0600, got {token_mode:04o}")
+
+data_dir_mode = os.stat(data_dir).st_mode & 0o777
+if data_dir_mode != 0o700:
+    errors.append(f"expected data directory permissions 0700, got {data_dir_mode:04o}")
 
 if errors:
     for error in errors:

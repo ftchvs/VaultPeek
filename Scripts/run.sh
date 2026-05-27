@@ -71,7 +71,18 @@ for _ in {1..30}; do
 done
 
 curl -fsS "http://127.0.0.1:$SERVER_PORT/health" >/dev/null
-STATUS_JSON="$(curl -fsS "http://127.0.0.1:$SERVER_PORT/api/status")"
+DATA_DIR="${PLAIDBAR_DATA_DIR:-$HOME/.plaidbar}"
+case "$DATA_DIR" in
+    "~")
+        DATA_DIR="$HOME"
+        ;;
+    "~/"*)
+        DATA_DIR="$HOME/${DATA_DIR#"~/"}"
+        ;;
+esac
+AUTH_TOKEN_PATH="$DATA_DIR/auth-token"
+AUTH_TOKEN="$(tr -d '\r\n' < "$AUTH_TOKEN_PATH")"
+STATUS_JSON="$(curl -fsS -H "Authorization: Bearer $AUTH_TOKEN" "http://127.0.0.1:$SERVER_PORT/api/status")"
 python3 - "$STATUS_JSON" <<'PY'
 import json
 import sys
