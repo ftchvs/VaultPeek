@@ -310,6 +310,8 @@ private struct MetricCard: View {
 private struct BalanceActivityHeatmap: View {
     let transactions: [TransactionDTO]
 
+    @State private var mode: SpendingHeatmapMode = .spending
+
     private let calendar = Calendar.current
     private let spacing: CGFloat = 3
     private let monthLabelHeight: CGFloat = 12
@@ -322,21 +324,38 @@ private struct BalanceActivityHeatmap: View {
             from: transactions,
             startDate: start,
             endDate: end,
-            mode: .spending,
+            mode: mode,
             calendar: calendar
         )
     }
 
     private var peakValue: Double {
-        max(days.map(\.value).max() ?? 0, 1)
+        max(days.map { abs($0.value) }.max() ?? 0, 1)
     }
 
     private var activeDayCount: Int {
         days.filter { $0.transactionCount > 0 }.count
     }
 
-    private var totalSpend: Double {
+    private var totalValue: Double {
         days.reduce(0) { $0 + $1.value }
+    }
+
+    private var title: String {
+        mode == .spending ? "365D Spending Activity" : "365D Cashflow Activity"
+    }
+
+    private var totalLabel: String {
+        guard mode == .netCashflow else {
+            return Formatters.currency(totalValue, format: .compact)
+        }
+        let prefix = totalValue > 0 ? "+" : totalValue < 0 ? "-" : ""
+        return "\(prefix)\(Formatters.currency(abs(totalValue), format: .compact))"
+    }
+
+    private var totalTint: Color {
+        guard mode == .netCashflow else { return .secondary }
+        return totalValue < 0 ? SemanticColors.positive : SemanticColors.negative
     }
 
     private var weekColumns: [[SpendingHeatmapDay?]] {
@@ -381,16 +400,26 @@ private struct BalanceActivityHeatmap: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 11) {
             HStack(alignment: .firstTextBaseline) {
-                Text("365D Spending Activity")
+                Text(title)
                     .sectionTitle()
                     .foregroundStyle(.secondary)
 
                 Spacer()
 
-                Text(Formatters.currency(totalSpend, format: .compact))
+                Picker("Heatmap metric", selection: $mode) {
+                    Text("Spend").tag(SpendingHeatmapMode.spending)
+                    Text("Net").tag(SpendingHeatmapMode.netCashflow)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .controlSize(.mini)
+                .frame(width: 116)
+
+                Text(totalLabel)
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(totalTint)
                     .monospacedDigit()
+                    .lineLimit(1)
             }
 
             GeometryReader { proxy in
@@ -412,7 +441,7 @@ private struct BalanceActivityHeatmap: View {
                             VStack(spacing: spacing) {
                                 ForEach(Array(week.enumerated()), id: \.offset) { _, day in
                                     if let day {
-                                        BalanceHeatmapCell(day: day, peakValue: peakValue, size: cell)
+                                        BalanceHeatmapCell(day: day, peakValue: peakValue, mode: mode, size: cell)
                                     } else {
                                         RoundedRectangle(cornerRadius: 2)
                                             .fill(.clear)
@@ -435,7 +464,7 @@ private struct BalanceActivityHeatmap: View {
 
                 ForEach([0.0, 0.25, 0.5, 0.75, 1.0], id: \.self) { intensity in
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(BalanceHeatmapCell.fillColor(intensity: intensity))
+                        .fill(BalanceHeatmapCell.fillColor(intensity: intensity, value: intensity, mode: mode))
                         .frame(width: 9, height: 9)
                 }
 
@@ -453,7 +482,7 @@ private struct BalanceActivityHeatmap: View {
         .padding(18)
         .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 8))
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Spending activity heatmap for the last 365 days with \(activeDayCount) active days.")
+        .accessibilityLabel("\(title) heatmap for the last 365 days with \(activeDayCount) active days.")
     }
 
     private func monthLabel(for date: Date) -> String {
@@ -470,11 +499,12 @@ private struct HeatmapMonthMarker: Identifiable {
 private struct BalanceHeatmapCell: View {
     let day: SpendingHeatmapDay
     let peakValue: Double
+    let mode: SpendingHeatmapMode
     let size: CGFloat
 
     var body: some View {
         RoundedRectangle(cornerRadius: 2)
-            .fill(Self.fillColor(intensity: intensity))
+            .fill(Self.fillColor(intensity: intensity, value: day.value, mode: mode))
             .frame(width: size, height: size)
             .help(helpText)
     }
@@ -485,12 +515,26 @@ private struct BalanceHeatmapCell: View {
     }
 
     private var helpText: String {
-        "\(Formatters.displayTransactionDate(day.date)): \(Formatters.currency(day.value, format: .full)) across \(day.transactionCount) transaction\(day.transactionCount == 1 ? "" : "s")"
+        let amount: String
+        if mode == .netCashflow {
+            let prefix = day.value > 0 ? "+" : day.value < 0 ? "-" : ""
+            amount = "\(prefix)\(Formatters.currency(abs(day.value), format: .full))"
+        } else {
+            amount = Formatters.currency(day.value, format: .full)
+        }
+        return "\(Formatters.displayTransactionDate(day.date)): \(amount) across \(day.transactionCount) transaction\(day.transactionCount == 1 ? "" : "s")"
     }
 
-    static func fillColor(intensity: Double) -> Color {
+    static func fillColor(intensity: Double, value: Double, mode: SpendingHeatmapMode) -> Color {
         guard intensity > 0 else { return Color.primary.opacity(0.08) }
-        return SemanticColors.positive.opacity(0.18 + (0.72 * intensity))
+
+        let base: Color
+        if mode == .netCashflow && value < 0 {
+            base = SemanticColors.positive
+        } else {
+            base = mode == .netCashflow ? SemanticColors.negative : SemanticColors.positive
+        }
+        return base.opacity(0.18 + (0.72 * intensity))
     }
 }
 

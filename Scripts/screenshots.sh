@@ -59,5 +59,6 @@ fi
 
 echo "Capturing dashboard popover..."
 screencapture -R"$WINDOW_RECT" "$ASSETS_DIR/dashboard.png"
+chmod 644 "$ASSETS_DIR/dashboard.png"
 
 echo "Done! Screenshot saved to $ASSETS_DIR/dashboard.png"
