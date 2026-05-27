@@ -19,6 +19,7 @@ public struct LocalDataResetResult: Equatable, Sendable {
 
 public enum LocalDataStore {
     public static let displayPath = "~/.plaidbar/"
+    public static let dataDirectoryEnvironmentVariable = "PLAIDBAR_DATA_DIR"
 
     public static func accountHomeDirectoryURL() -> URL {
         #if os(macOS)
@@ -32,9 +33,14 @@ public enum LocalDataStore {
     }
 
     public static func storageDirectoryURL(
-        homeDirectory: URL = accountHomeDirectoryURL()
+        homeDirectory: URL = accountHomeDirectoryURL(),
+        environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> URL {
-        homeDirectory.appendingPathComponent(".plaidbar", isDirectory: true)
+        if let override = environment[dataDirectoryEnvironmentVariable]?.trimmedNonEmpty {
+            return URL(fileURLWithPath: NSString(string: override).expandingTildeInPath, isDirectory: true)
+        }
+
+        return homeDirectory.appendingPathComponent(".plaidbar", isDirectory: true)
     }
 
     @discardableResult
@@ -64,5 +70,12 @@ public enum LocalDataStore {
             directoryPath: directory.path,
             removedEntries: removedEntries
         )
+    }
+}
+
+private extension String {
+    var trimmedNonEmpty: String? {
+        let value = trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
     }
 }

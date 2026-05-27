@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 PORT="${PLAIDBAR_SMOKE_PORT:-18484}"
 SERVER_LOG="$(mktemp -t plaidbar-smoke-server.XXXXXX.log)"
+CREATED_DATA_DIR=""
 SERVER_PID=""
 
 cd "$PROJECT_DIR"
@@ -13,6 +14,9 @@ cleanup() {
     if [[ -n "$SERVER_PID" ]]; then
         kill "$SERVER_PID" 2>/dev/null || true
         wait "$SERVER_PID" 2>/dev/null || true
+    fi
+    if [[ -n "$CREATED_DATA_DIR" ]]; then
+        rm -rf "$CREATED_DATA_DIR"
     fi
 }
 trap cleanup EXIT INT TERM
@@ -31,6 +35,11 @@ fi
 
 echo "Building PlaidBarServer..."
 swift build --target PlaidBarServer --skip-update --disable-keychain
+
+if [[ -z "${PLAIDBAR_DATA_DIR:-}" ]]; then
+    CREATED_DATA_DIR="$(mktemp -d -t plaidbar-smoke-data.XXXXXX)"
+    export PLAIDBAR_DATA_DIR="$CREATED_DATA_DIR"
+fi
 
 echo "Starting sandbox server on http://127.0.0.1:$PORT..."
 swift run PlaidBarServer --sandbox --port "$PORT" >"$SERVER_LOG" 2>&1 &
