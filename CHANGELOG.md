@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 16:37 UTC] — Feature
+
+polish menu bar onboarding
+
+`1ecb418`
+
+---
+
+
 ## [2026-05-27 16:30 UTC] — Feature
 
 polish dashboard empty states
