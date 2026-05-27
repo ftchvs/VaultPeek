@@ -213,6 +213,20 @@ struct PlaidBarCoreTests {
         #expect(MenuBarSummary.text(mode: .iconOnly, accounts: accounts, transactions: transactions, currencyFormat: .compact).isEmpty)
     }
 
+    @Test("Server endpoints percent encode item IDs in query and path components")
+    func serverEndpointsEncodeItemIds() throws {
+        let baseURL = "http://127.0.0.1:8484"
+        let itemId = "item with/slash?and&symbols"
+
+        let syncURL = try #require(ServerEndpoint.transactionSyncURL(baseURL: baseURL, itemId: itemId))
+        let updateURL = try #require(ServerEndpoint.updateLinkTokenURL(baseURL: baseURL, itemId: itemId))
+        let removeURL = try #require(ServerEndpoint.removeItemURL(baseURL: baseURL, itemId: itemId))
+
+        #expect(syncURL.absoluteString == "http://127.0.0.1:8484/api/transactions/sync?item_id=item%20with%2Fslash%3Fand%26symbols")
+        #expect(updateURL.absoluteString == "http://127.0.0.1:8484/api/link/update/item%20with%2Fslash%3Fand%26symbols")
+        #expect(removeURL.absoluteString == "http://127.0.0.1:8484/api/accounts/item%20with%2Fslash%3Fand%26symbols")
+    }
+
     @Test("Net cashflow heatmap keeps Plaid amount signs")
     func netCashflowHeatmapKeepsSigns() {
         let day = Formatters.parseTransactionDate("2026-01-02")!
