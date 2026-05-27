@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 21:27 UTC] — Fix
+
+encode server item endpoints (#58)
+
+`8f52b4e`
+
+---
+
+
 ## [2026-05-27 21:26 UTC] — Update
 
 Clarify dashboard runway context (#57)
