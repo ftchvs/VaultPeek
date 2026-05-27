@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 15:42 UTC] — Feature
+
+open PlaidBar dashboard popover by default
+
+`d080fd0`
+
+---
+
+
 ## [2026-05-27 03:00 UTC] — Feature
 
 make spending heatmap primary graph (#29)
