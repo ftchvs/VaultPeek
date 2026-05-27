@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 20:16 UTC] — Update
+
+run sandbox smoke preflight (#54)
+
+`857421d`
+
+---
+
+
 ## [2026-05-27 20:08 UTC] — Feature
 
 allow local data directory override (#53)
