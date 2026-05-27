@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 18:05 UTC] — Documentation
+
+align dashboard interaction docs (#43)
+
+`c6d05e0`
+
+---
+
+
 ## [2026-05-27 17:56 UTC] — Feature
 
 show account drilldown inline (#42)
