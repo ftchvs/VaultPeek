@@ -30,6 +30,7 @@ public struct TransactionCacheContext: Codable, Equatable, Sendable {
 public enum LocalDataStore {
     public static let displayPath = "~/.plaidbar/"
     public static let dataDirectoryEnvironmentVariable = "PLAIDBAR_DATA_DIR"
+    public static let authTokenFilename = "auth-token"
     public static let transactionCacheFilename = "transactions.json"
 
     public static func accountHomeDirectoryURL() -> URL {
@@ -64,15 +65,20 @@ public enum LocalDataStore {
 
         if fileManager.fileExists(atPath: directory.path, isDirectory: &isDirectory) {
             if isDirectory.boolValue {
-                removedEntries = try fileManager
-                    .contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
-                    .map(\.lastPathComponent)
+                let entries = try fileManager.contentsOfDirectory(
+                    at: directory,
+                    includingPropertiesForKeys: nil
+                )
+                for entry in entries where entry.lastPathComponent != authTokenFilename {
+                    try fileManager.removeItem(at: entry)
+                    removedEntries.append(entry.lastPathComponent)
+                }
+                removedEntries = removedEntries
                     .sorted()
             } else {
                 removedEntries = [directory.lastPathComponent]
+                try fileManager.removeItem(at: directory)
             }
-
-            try fileManager.removeItem(at: directory)
         }
 
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -88,6 +94,12 @@ public enum LocalDataStore {
         context: TransactionCacheContext? = nil
     ) -> URL {
         directory.appendingPathComponent(transactionCacheFilename(for: context))
+    }
+
+    public static func authTokenURL(
+        in directory: URL = storageDirectoryURL()
+    ) -> URL {
+        directory.appendingPathComponent(authTokenFilename)
     }
 
     public static func loadTransactions(

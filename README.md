@@ -109,9 +109,10 @@ Get credentials free at [dashboard.plaid.com](https://dashboard.plaid.com). Sand
 For a fast sandbox preflight without opening the menu bar app, export sandbox
 credentials and run `./Scripts/smoke-sandbox.sh`. It builds the server, starts
 it on `127.0.0.1:${PLAIDBAR_SMOKE_PORT:-18484}`, checks `/health`, and verifies
-that `/api/status` reports sandbox mode with credentials configured. The smoke
-script uses a temporary data directory by default; set `PLAIDBAR_DATA_DIR` when
-you intentionally want to point it at a specific local store.
+that unauthenticated `/api` calls are rejected before checking `/api/status`
+with the generated local bearer token. The smoke script uses a temporary data
+directory by default; set `PLAIDBAR_DATA_DIR` when you intentionally want to
+point it at a specific local store.
 
 ## Keyboard Shortcuts
 
@@ -295,7 +296,9 @@ commit, push, review, and production-readiness work.
 
 ## Server API Reference
 
-The companion server exposes these localhost endpoints:
+The companion server exposes these localhost endpoints. `/health` and
+`/oauth/callback` are unauthenticated; `/api/*` requires the local bearer token
+stored under `~/.plaidbar/auth-token` or `PLAIDBAR_DATA_DIR/auth-token`.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|

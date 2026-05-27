@@ -138,7 +138,7 @@ struct GeneralSettingsView: View {
                         }
                     }
 
-                    Text("Stores the local server database, Plaid item tokens, sync cursors, and app/server auth token. App preferences stay in macOS preferences.")
+                    Text("Stores the local server database, Plaid item tokens, and sync cursors. App preferences and the app/server auth token stay in place.")
                         .detailText()
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -151,7 +151,7 @@ struct GeneralSettingsView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This deletes files under \(appState.localStoragePathText), including the SQLite database, stored Plaid access tokens, sync cursors, and the app/server auth token. It also clears currently loaded accounts, transactions, and balance history from this app. It does not revoke bank permissions, remove Plaid dashboard Items, delete Plaid credentials from your shell environment, or change app preferences. Stop and restart PlaidBarServer after resetting.")
+            Text("This deletes files under \(appState.localStoragePathText), including the SQLite database, stored Plaid access tokens, and sync cursors. It keeps the app/server auth token so the running local server stays reachable. It also clears currently loaded accounts, transactions, and balance history from this app. It does not revoke bank permissions, remove Plaid dashboard Items, delete Plaid credentials from your shell environment, or change app preferences. Stop and restart PlaidBarServer after resetting.")
         }
         .alert("Local Data Reset", isPresented: Binding(
             get: { resetResultMessage != nil },

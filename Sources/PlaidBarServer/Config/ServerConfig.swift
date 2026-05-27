@@ -27,6 +27,10 @@ struct ServerConfig: Sendable {
             atPath: dataDir,
             withIntermediateDirectories: true
         )
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o700],
+            ofItemAtPath: dataDir
+        )
 
         let environment: PlaidEnvironment = (sandboxOverride == true)
             ? .sandbox
@@ -41,16 +45,26 @@ struct ServerConfig: Sendable {
         }
 
         // Generate or load persistent auth token for app<->server auth
-        let authTokenPath = "\(dataDir)/auth-token"
+        let authTokenURL = LocalDataStore.authTokenURL(
+            in: URL(fileURLWithPath: dataDir, isDirectory: true)
+        )
         let authToken: String
-        if let existing = try? String(contentsOfFile: authTokenPath, encoding: .utf8)
+        if let existing = try? String(contentsOf: authTokenURL, encoding: .utf8)
             .trimmingCharacters(in: .whitespacesAndNewlines),
             !existing.isEmpty
         {
+            try FileManager.default.setAttributes(
+                [.posixPermissions: 0o600],
+                ofItemAtPath: authTokenURL.path
+            )
             authToken = existing
         } else {
             let generated = UUID().uuidString
-            try generated.write(toFile: authTokenPath, atomically: true, encoding: .utf8)
+            try generated.write(to: authTokenURL, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes(
+                [.posixPermissions: 0o600],
+                ofItemAtPath: authTokenURL.path
+            )
             authToken = generated
         }
 
