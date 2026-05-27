@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 18:35 UTC] — Update
+
+align spending heatmap color (#47)
+
+`26caa79`
+
+---
+
+
 ## [2026-05-27 18:29 UTC] — Feature
 
 clarify bidirectional heatmap legend (#46)
