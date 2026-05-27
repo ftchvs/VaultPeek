@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 17:07 UTC] — Documentation
+
+update dashboard design docs
+
+`2e1b215`
+
+---
+
+
 ## [2026-05-27 16:59 UTC] — Documentation
 
 align README with dashboard-first app
