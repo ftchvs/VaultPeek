@@ -33,6 +33,7 @@ add spending heatmap (#23)
 
 ## [Unreleased] — Feature
 
+- Add cleaner first-run onboarding that separates View Demo, Connect Sandbox, and Use Production Credentials, with local storage disclosure and server environment checks before Plaid Link.
 - Add a Status tab with CodexBar-style diagnostics for server health, sync recency, account/transaction counts, Plaid item state, and recovery actions.
 - Add CodexBar-style menu bar summary modes for net cash, total cash, credit utilization, recent spend, and icon-only.
 - Add a GitHub-style spending heatmap to the Spending tab, with daily intensity cells for spend and net cashflow modes.

@@ -3,33 +3,38 @@ import PlaidBarCore
 
 struct SetupView: View {
     @Environment(AppState.self) private var appState
-    @State private var setupMode: SetupMode = .welcome
+    @State private var setupMode: SetupMode = .choose
 
-    enum SetupMode: Sendable {
-        case welcome
+    enum SetupMode: Sendable, Equatable {
+        case choose
         case sandbox
-        case connecting
+        case production
+        case connecting(PlaidEnvironment)
     }
 
     var body: some View {
         VStack(spacing: Spacing.lg) {
-            // Step indicator
-            HStack(spacing: Spacing.sm) {
-                ForEach(0..<2) { step in
-                    Circle()
-                        .fill(stepIndex >= step ? SemanticColors.brand : Color.gray.opacity(0.3))
-                        .frame(width: 6, height: 6)
-                }
-            }
-            .padding(.top, Spacing.sm)
-
             switch setupMode {
-            case .welcome:
-                welcomeView
+            case .choose:
+                choiceView
             case .sandbox:
-                sandboxView
-            case .connecting:
-                connectingView
+                linkPrepView(
+                    environment: .sandbox,
+                    icon: "testtube.2",
+                    title: "Connect Sandbox",
+                    summary: "Uses Plaid's sandbox API with Plaid-hosted test institutions. This still requires your sandbox client ID and secret on the local server.",
+                    primaryTitle: "Open Sandbox Link"
+                )
+            case .production:
+                linkPrepView(
+                    environment: .production,
+                    icon: "lock.shield",
+                    title: "Use Production Credentials",
+                    summary: "Uses real Plaid production access. Production requires Plaid approval and will connect accounts with real financial data.",
+                    primaryTitle: "Open Production Link"
+                )
+            case .connecting(let environment):
+                connectingView(environment: environment)
             }
         }
         .padding()
@@ -37,99 +42,204 @@ struct SetupView: View {
         .animation(.easeInOut(duration: 0.25), value: setupMode)
     }
 
-    private var stepIndex: Int {
-        switch setupMode {
-        case .welcome: return 0
-        case .sandbox: return 1
-        case .connecting: return 1
-        }
-    }
-
-    private var welcomeView: some View {
+    private var choiceView: some View {
         VStack(spacing: Spacing.lg) {
             Image(systemName: "dollarsign.circle.fill")
-                .font(.system(size: 48))
+                .font(.system(size: 44))
                 .foregroundStyle(SemanticColors.brand)
 
-            Text("Welcome to PlaidBar")
-                .font(.title2)
-                .fontWeight(.bold)
+            VStack(spacing: Spacing.xs) {
+                Text("Welcome to PlaidBar")
+                    .font(.title2)
+                    .fontWeight(.bold)
 
-            Text("Connect your bank accounts to see\nbalances and spending in your menu bar.")
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
+                Text("Choose exactly what data source to use before anything connects.")
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+                    .font(.callout)
+            }
 
-            VStack(spacing: Spacing.md) {
-                Button {
-                    setupMode = .sandbox
-                } label: {
-                    HStack {
-                        Image(systemName: "play.circle")
-                        Text("Connect sandbox")
-                    }
-                    .frame(maxWidth: .infinity)
+            VStack(spacing: Spacing.sm) {
+                OnboardingChoiceButton(
+                    title: "View Demo",
+                    subtitle: "Local fixture data. No Plaid credentials or network calls.",
+                    icon: "play.circle",
+                    color: SemanticColors.brandSecondary
+                ) {
+                    appState.startDemoMode()
                 }
-                .buttonStyle(.borderedProminent)
 
+                OnboardingChoiceButton(
+                    title: "Connect Sandbox",
+                    subtitle: "Requires sandbox credentials on PlaidBarServer.",
+                    icon: "testtube.2",
+                    color: SemanticColors.brand
+                ) {
+                    setupMode = .sandbox
+                }
+
+                OnboardingChoiceButton(
+                    title: "Use Production Credentials",
+                    subtitle: "Requires Plaid approval. Connects real accounts.",
+                    icon: "lock.shield",
+                    color: SemanticColors.positive
+                ) {
+                    setupMode = .production
+                }
             }
         }
     }
 
-    private var sandboxView: some View {
+    private func linkPrepView(
+        environment: PlaidEnvironment,
+        icon: String,
+        title: String,
+        summary: String,
+        primaryTitle: String
+    ) -> some View {
         VStack(spacing: Spacing.lg) {
-            Image(systemName: "testtube.2")
+            Image(systemName: icon)
                 .font(.system(size: 36))
-                .foregroundStyle(SemanticColors.brandSecondary)
+                .foregroundStyle(environment == .production ? SemanticColors.positive : SemanticColors.brand)
 
-            Text("Sandbox Mode")
-                .font(.title3)
-                .fontWeight(.semibold)
+            VStack(spacing: Spacing.xs) {
+                Text(title)
+                    .font(.title3)
+                    .fontWeight(.semibold)
 
-            Text("This will connect to Plaid's sandbox with demo bank data. No real financial data is used.")
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
-                .font(.callout)
+                Text(summary)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+                    .font(.callout)
+            }
 
-            Button("Add Demo Account") {
-                setupMode = .connecting
-                Task { await appState.addAccount() }
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                StorageDisclosureRow(
+                    icon: "externaldrive",
+                    text: "PlaidBar stores access tokens and synced account data locally under \(appState.localStoragePathText)."
+                )
+                StorageDisclosureRow(
+                    icon: "server.rack",
+                    text: "Plaid credentials stay in the local server environment, not in the menu bar app."
+                )
+                StorageDisclosureRow(
+                    icon: "eye.slash",
+                    text: "There is no PlaidBar cloud backend, analytics, or telemetry."
+                )
+            }
+            .padding(Spacing.md)
+            .background(.quaternary.opacity(0.5))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+
+            Button {
+                setupMode = .connecting(environment)
+                Task {
+                    let opened = await appState.connectForOnboarding(expectedEnvironment: environment)
+                    if !opened {
+                        setupMode = environment == .production ? .production : .sandbox
+                    }
+                }
+            } label: {
+                Label(primaryTitle, systemImage: "link")
+                    .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
+            .disabled(appState.isLoading)
 
             Button("Back") {
-                setupMode = .welcome
+                setupMode = .choose
             }
             .buttonStyle(.borderless)
         }
     }
 
-    private var connectingView: some View {
+    private func connectingView(environment: PlaidEnvironment) -> some View {
         VStack(spacing: Spacing.lg) {
             ProgressView()
                 .scaleEffect(1.5)
 
-            Text("Connecting...")
+            Text("Opening Plaid Link...")
                 .font(.title3)
 
-            Text("Complete the bank login in your browser, then return here.")
+            Text("Complete the \(environment.rawValue) login in your browser, then return here.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
                 .font(.callout)
 
-            Button("Check Connection") {
+            Button {
                 Task {
                     await appState.refreshAccounts()
                     if appState.isSetupComplete {
                         await appState.syncTransactions()
                     }
                 }
+            } label: {
+                Label("Check Connection", systemImage: "arrow.clockwise")
             }
             .buttonStyle(.bordered)
 
             Button("Cancel") {
-                setupMode = .welcome
+                setupMode = environment == .production ? .production : .sandbox
             }
             .buttonStyle(.borderless)
+        }
+    }
+}
+
+private struct OnboardingChoiceButton: View {
+    let title: String
+    let subtitle: String
+    let icon: String
+    let color: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: Spacing.md) {
+                Image(systemName: icon)
+                    .font(.title3)
+                    .foregroundStyle(color)
+                    .frame(width: 24)
+
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    Text(title)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.leading)
+                }
+
+                Spacer(minLength: Spacing.sm)
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(Spacing.md)
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(.quaternary.opacity(0.45))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct StorageDisclosureRow: View {
+    let icon: String
+    let text: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: Spacing.sm) {
+            Image(systemName: icon)
+                .foregroundStyle(.secondary)
+                .frame(width: 18)
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

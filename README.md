@@ -86,7 +86,13 @@ swift run PlaidBar --demo
 
 ### 3. Click the PlaidBar icon in your menu bar
 
-Select **"Try with sandbox"** -> **Add Account** -> complete the Plaid sandbox login in your browser -> data appears after the account sync.
+First run now asks you to choose a data source:
+
+- **View Demo** loads local fixture accounts and transactions. It does not call Plaid and does not require credentials.
+- **Connect Sandbox** opens Plaid Link only when the local server is running in sandbox mode with sandbox credentials.
+- **Use Production Credentials** opens the same connect flow only when the local server reports production mode. Production uses real account data and requires Plaid approval.
+
+Before Plaid Link opens, the app explains that Plaid access tokens and synced account data are stored locally under `~/.plaidbar/`, while Plaid credentials remain in the local server environment.
 
 ### 4. Use with real bank data (optional)
 
@@ -96,7 +102,7 @@ export PLAID_SECRET=your_secret
 ./Scripts/run.sh
 ```
 
-Get credentials free at [dashboard.plaid.com](https://dashboard.plaid.com). Sandbox works immediately; production requires Plaid approval.
+Get credentials free at [dashboard.plaid.com](https://dashboard.plaid.com). Sandbox credentials can be used immediately; production requires Plaid approval.
 
 ## Data Modes
 
