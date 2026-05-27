@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 17:41 UTC] — Feature
+
+add dashboard heatmap mode toggle (#41)
+
+`3b416dc`
+
+---
+
+
 ## [2026-05-27 17:31 UTC] — Feature
 
 densify demo heatmap data (#40)
