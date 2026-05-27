@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 17:56 UTC] — Feature
+
+show account drilldown inline (#42)
+
+`0cc9c8f`
+
+---
+
+
 ## [2026-05-27 17:41 UTC] — Feature
 
 add dashboard heatmap mode toggle (#41)
