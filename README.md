@@ -35,7 +35,8 @@ Personal finance data lives behind bank website logins. The closest thing to a m
 - **Credit Utilization** — Progress bars with configurable warning thresholds and gauge
 - **Smart Notifications** — Alerts for large transactions, low balances, and high credit utilization
 - **Balance History** — Sparkline showing net balance trend over time
-- **Keyboard Shortcuts** — Cmd+1-4 to switch tabs, Cmd+R to refresh, Cmd+N to add account
+- **Diagnostics** — Status tab for server health, sync recency, item state, data counts, and recovery actions
+- **Keyboard Shortcuts** — Cmd+1-5 to switch tabs, Cmd+R to refresh, Cmd+N to add account
 - **Settings Persistence** — Preferences saved across launches
 - **Launch at Login** — Optional auto-start via macOS Login Items
 - **Auto-Updates** — Sparkle integration for seamless updates
@@ -113,6 +114,7 @@ Get credentials free at [dashboard.plaid.com](https://dashboard.plaid.com). Sand
 | `Cmd+2` | Transactions tab |
 | `Cmd+3` | Spending tab |
 | `Cmd+4` | Credit tab |
+| `Cmd+5` | Status tab |
 | `Cmd+R` | Refresh balances |
 | `Cmd+N` | Add account |
 
@@ -181,11 +183,12 @@ PlaidBar/
 │   ├── PlaidBar/                    # macOS menu bar app
 │   │   ├── App/                     # @main entry, AppState
 │   │   ├── Theme/                   # Design tokens, typography
-│   │   ├── Views/                   # SwiftUI views (4 tabs)
+│   │   ├── Views/                   # SwiftUI views (5 tabs)
 │   │   │   ├── AccountsView.swift   # Balance list by account type
 │   │   │   ├── TransactionsView.swift # Searchable grouped list
 │   │   │   ├── SpendingView.swift   # Donut/heatmap/trend/bar charts
 │   │   │   ├── CreditView.swift     # Utilization bars + gauge
+│   │   │   ├── StatusView.swift     # Diagnostics and recovery actions
 │   │   │   ├── SetupView.swift      # Onboarding flow
 │   │   │   └── Charts/             # Chart components
 │   │   ├── Models/                  # Local cache models

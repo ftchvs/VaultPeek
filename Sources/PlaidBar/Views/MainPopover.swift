@@ -77,6 +77,8 @@ struct MainPopover: View {
                             SpendingView()
                         case .credit:
                             CreditView()
+                        case .status:
+                            StatusView()
                         }
                     }
                     .animation(.easeInOut(duration: 0.2), value: appState.selectedTab)
@@ -184,6 +186,8 @@ struct MainPopover: View {
                     .keyboardShortcut("3", modifiers: .command)
                 Button("") { appState.selectedTab = .credit }
                     .keyboardShortcut("4", modifiers: .command)
+                Button("") { appState.selectedTab = .status }
+                    .keyboardShortcut("5", modifiers: .command)
             }
             .frame(width: 0, height: 0)
             .opacity(0)

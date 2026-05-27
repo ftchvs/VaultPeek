@@ -33,7 +33,9 @@ final class AppState {
     var isSetupComplete = false
     var serverConnected = false
     var serverEnvironment: PlaidEnvironment?
+    var serverVersion: String?
     var serverItemCount: Int?
+    var itemStatuses: [ItemStatus] = []
     var isDemoMode = false
     var lastSyncDate: Date?
     var balanceHistory: [BalanceSnapshot] = []
@@ -255,6 +257,47 @@ final class AppState {
         return Set(accounts.map(\.itemId)).count
     }
 
+    var accountCount: Int {
+        accounts.count
+    }
+
+    var transactionCount: Int {
+        transactions.count
+    }
+
+    var localServerURLText: String {
+        PlaidBarConstants.serverBaseURL
+    }
+
+    var localStoragePathText: String {
+        "~/.plaidbar/"
+    }
+
+    var refreshCadenceText: String {
+        "\(Int(refreshInterval / 60)) min"
+    }
+
+    var connectedItemCount: Int {
+        itemStatuses.filter { $0.status == .connected }.count
+    }
+
+    var needsLoginItemCount: Int {
+        itemStatuses.filter { $0.status == .loginRequired }.count
+    }
+
+    var erroredItemCount: Int {
+        itemStatuses.filter { $0.status == .error }.count
+    }
+
+    var diagnosticsSummary: String {
+        if isDemoMode { return "Demo data loaded" }
+        if !serverConnected { return "Server offline" }
+        if statusItemCount == 0 { return "No Plaid items connected" }
+        if erroredItemCount > 0 { return "\(erroredItemCount) item\(erroredItemCount == 1 ? "" : "s") need attention" }
+        if needsLoginItemCount > 0 { return "\(needsLoginItemCount) item\(needsLoginItemCount == 1 ? "" : "s") need login" }
+        return "Plaid connection healthy"
+    }
+
     var isSyncStale: Bool {
         guard let lastSyncDate else { return true }
         let staleAfter = max(refreshInterval * 2, PlaidBarConstants.transactionSyncInterval * 2)
@@ -329,13 +372,17 @@ final class AppState {
             let status = try await serverClient.getStatus()
             serverConnected = true
             serverEnvironment = status.environment
+            serverVersion = status.version
             serverItemCount = status.itemCount
             lastSyncDate = status.lastSync
             isSetupComplete = status.itemCount > 0
+            itemStatuses = (try? await serverClient.getItems()) ?? []
         } catch {
             serverConnected = false
             serverEnvironment = nil
+            serverVersion = nil
             serverItemCount = nil
+            itemStatuses = []
             isSetupComplete = false
         }
     }
@@ -347,6 +394,7 @@ final class AppState {
             accounts = try await serverClient.getAccounts()
             serverItemCount = Set(accounts.map(\.itemId)).count
             isSetupComplete = !accounts.isEmpty
+            itemStatuses = (try? await serverClient.getItems()) ?? itemStatuses
         } catch {
             self.error = error.localizedDescription
         }
@@ -385,6 +433,7 @@ final class AppState {
                 hasMore = response.hasMore
             }
             lastSyncDate = Date()
+            itemStatuses = (try? await serverClient.getItems()) ?? itemStatuses
         } catch {
             self.error = error.localizedDescription
         }
@@ -605,7 +654,12 @@ final class AppState {
         isSetupComplete = true
         serverConnected = true
         serverEnvironment = .sandbox
+        serverVersion = PlaidBarConstants.appVersion
         serverItemCount = Set(accounts.map(\.itemId)).count
+        itemStatuses = [
+            ItemStatus(id: "demo_chase", institutionName: "Chase", status: .connected, lastSync: Date()),
+            ItemStatus(id: "demo_amex_item", institutionName: "American Express", status: .connected, lastSync: Date()),
+        ]
         lastSyncDate = Date()
     }
 
@@ -620,4 +674,5 @@ enum PopoverTab: String, CaseIterable, Sendable {
     case transactions = "Transactions"
     case spending = "Spending"
     case credit = "Credit"
+    case status = "Status"
 }

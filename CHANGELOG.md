@@ -24,6 +24,7 @@ add spending heatmap (#23)
 
 ## [Unreleased] — Feature
 
+- Add a Status tab with CodexBar-style diagnostics for server health, sync recency, account/transaction counts, Plaid item state, and recovery actions.
 - Add CodexBar-style menu bar summary modes for net cash, total cash, credit utilization, recent spend, and icon-only.
 - Add a GitHub-style spending heatmap to the Spending tab, with daily intensity cells for spend and net cashflow modes.
 - Add core heatmap bucketing tests for date ranges, transfer/income exclusions, and net cashflow signs.

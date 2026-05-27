@@ -18,6 +18,10 @@ actor ServerClient {
         try await get("/api/status")
     }
 
+    func getItems() async throws -> [ItemStatus] {
+        try await get("/api/items")
+    }
+
     func getAccounts() async throws -> [AccountDTO] {
         try await get("/api/accounts")
     }

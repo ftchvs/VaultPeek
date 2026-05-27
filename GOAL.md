@@ -66,6 +66,7 @@ Prioritize these before adding new finance features:
 4. **CodexBar-style health panel**
    - Add a small diagnostics/settings surface for local server URL, Plaid environment, item count, last sync, and refresh cadence.
    - Make failures actionable: missing credentials, server offline, token expired, Plaid error.
+   - Implemented local slice: Status tab with server/sync/data/item diagnostics and refresh/connect/settings recovery actions.
 
 5. **Cleaner onboarding**
    - Separate "View Demo", "Connect Sandbox", and "Use Production Credentials".
