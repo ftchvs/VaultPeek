@@ -196,12 +196,20 @@ final class AppState {
         MenuBarSummary.recentSpend(from: transactions)
     }
 
+    var runwayMonthlySpend: Double {
+        MenuBarSummary.runwayMonthlySpend(from: transactions)
+    }
+
     var runwayMonths: Double? {
-        MenuBarSummary.runwayMonths(cash: totalCash, transactions: transactions)
+        MenuBarSummary.runwayMonths(cash: totalCash, monthlySpend: runwayMonthlySpend)
     }
 
     var runwayText: String {
         MenuBarSummary.runwayText(months: runwayMonths)
+    }
+
+    var runwayBasisText: String {
+        MenuBarSummary.runwayBasisText(cash: totalCash, monthlySpend: runwayMonthlySpend)
     }
 
     var menuBarText: String {

@@ -183,11 +183,17 @@ struct PlaidBarCoreTests {
         ]
 
         let months = MenuBarSummary.runwayMonths(cash: 6_000, transactions: transactions, now: now)
+        let monthlySpend = MenuBarSummary.runwayMonthlySpend(from: transactions, now: now)
 
         #expect(months == 4)
+        #expect(monthlySpend == 1_500)
+        #expect(MenuBarSummary.runwayMonths(cash: 6_000, monthlySpend: monthlySpend) == 4)
         #expect(MenuBarSummary.runwayText(months: months) == "4.0 mo")
         #expect(MenuBarSummary.runwayText(months: nil) == "No spend")
         #expect(MenuBarSummary.runwayText(months: 0.5) == "15d")
+        #expect(MenuBarSummary.runwayBasisText(cash: 6_000, monthlySpend: monthlySpend) == "30D spend $1,500")
+        #expect(MenuBarSummary.runwayBasisText(cash: 0, monthlySpend: monthlySpend) == "No cash buffer")
+        #expect(MenuBarSummary.runwayBasisText(cash: 6_000, monthlySpend: 0) == "No 30D spend")
     }
 
     @Test("Menu bar summary text supports every mode")

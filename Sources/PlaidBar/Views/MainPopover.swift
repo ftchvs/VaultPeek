@@ -263,19 +263,22 @@ private struct DashboardSummaryCards: View {
             MetricCard(
                 title: "Cash",
                 value: Formatters.currency(appState.totalCash, format: .compact),
+                detail: "\(appState.depositoryAccounts.count) cash account\(appState.depositoryAccounts.count == 1 ? "" : "s")",
                 tint: SemanticColors.available
             )
 
             MetricCard(
                 title: "Debt",
                 value: Formatters.currency(totalDebt, format: .compact),
+                detail: debtDetail,
                 tint: SemanticColors.creditDebt
             )
 
             MetricCard(
                 title: "Runway",
                 value: appState.runwayText,
-                tint: SemanticColors.brand
+                detail: appState.runwayBasisText,
+                tint: runwayTint
             )
         }
     }
@@ -285,21 +288,41 @@ private struct DashboardSummaryCards: View {
             total + abs(account.balances.current ?? 0)
         }
     }
+
+    private var debtDetail: String {
+        guard let utilization = appState.totalCreditUtilization else {
+            return appState.creditAccounts.isEmpty ? "No credit linked" : "No limit data"
+        }
+        return "\(Formatters.percent(utilization, decimals: 0)) utilization"
+    }
+
+    private var runwayTint: Color {
+        guard let months = appState.runwayMonths else { return .secondary }
+        if months < 1 { return SemanticColors.negative }
+        if months < 3 { return SemanticColors.warning }
+        return SemanticColors.available
+    }
 }
 
 private struct MetricCard: View {
     let title: String
     let value: String
+    let detail: String
     let tint: Color
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.callout.weight(.semibold))
                 .foregroundStyle(.secondary)
             Text(value)
                 .font(.headline.weight(.bold))
                 .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+            Text(detail)
+                .microText()
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
         }
