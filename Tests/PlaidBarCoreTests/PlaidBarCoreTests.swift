@@ -884,4 +884,61 @@ struct PlaidBarCoreTests {
         #expect(isDirectory.boolValue)
         #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty)
     }
+
+    @Test("Transaction cache survives incremental sync from existing cursor")
+    func transactionCacheMergesIncrementalSync() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let directory = root.appendingPathComponent(".plaidbar", isDirectory: true)
+        let context = TransactionCacheContext(environment: .sandbox, storagePath: "\(directory.path)/plaidbar.sqlite")
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let cached = [
+            TransactionDTO(id: "old", accountId: "checking", amount: 12, date: "2026-01-01", name: "Coffee")
+        ]
+        try LocalDataStore.saveTransactions(cached, to: directory, context: context)
+
+        let loaded = try LocalDataStore.loadTransactions(from: directory, context: context)
+        let delta = SyncResponse(
+            added: [
+                TransactionDTO(id: "new", accountId: "checking", amount: 25, date: "2026-01-02", name: "Lunch")
+            ],
+            modified: [],
+            removed: [],
+            hasMore: false
+        )
+        let merged = TransactionSyncReducer.applying(delta, to: loaded)
+        try LocalDataStore.saveTransactions(merged, to: directory, context: context)
+
+        let reloaded = try LocalDataStore.loadTransactions(from: directory, context: context)
+        #expect(reloaded.map(\.id) == ["old", "new"])
+        #expect(try LocalDataStore.loadTransactions(
+            from: directory,
+            context: TransactionCacheContext(environment: .production, storagePath: context.storagePath)
+        ).isEmpty)
+        #expect(LocalDataStore.transactionCacheURL(in: directory).lastPathComponent == LocalDataStore.transactionCacheFilename)
+        #expect(LocalDataStore.transactionCacheURL(in: directory, context: context).lastPathComponent != LocalDataStore.transactionCacheFilename)
+    }
+
+    @Test("Transaction cache persists account removal cleanup")
+    func transactionCachePersistsAccountRemovalCleanup() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let directory = root.appendingPathComponent(".plaidbar", isDirectory: true)
+        let context = TransactionCacheContext(environment: .production, storagePath: "\(directory.path)/plaidbar.sqlite")
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let transactions = [
+            TransactionDTO(id: "keep", accountId: "checking", amount: 10, date: "2026-01-01", name: "Coffee"),
+            TransactionDTO(id: "drop", accountId: "closed", amount: 100, date: "2026-01-02", name: "Old card")
+        ]
+        try LocalDataStore.saveTransactions(transactions, to: directory, context: context)
+
+        let cleaned = try LocalDataStore.loadTransactions(from: directory, context: context)
+            .filter { $0.accountId != "closed" }
+        try LocalDataStore.saveTransactions(cleaned, to: directory, context: context)
+
+        let reloaded = try LocalDataStore.loadTransactions(from: directory, context: context)
+        #expect(reloaded.map(\.id) == ["keep"])
+    }
 }

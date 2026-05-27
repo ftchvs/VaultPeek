@@ -493,13 +493,22 @@ final class AppState {
     func syncTransactions() async {
         do {
             var hasMore = true
+            var cachePersistenceError: Error?
             while hasMore {
                 let response = try await serverClient.syncTransactions()
                 transactions = TransactionSyncReducer.applying(response, to: transactions)
+                do {
+                    try LocalDataStore.saveTransactions(transactions, context: transactionCacheContext)
+                } catch {
+                    cachePersistenceError = error
+                }
                 hasMore = response.hasMore
             }
             lastSyncDate = Date()
             itemStatuses = (try? await serverClient.getItems()) ?? itemStatuses
+            if let cachePersistenceError {
+                self.error = "Transaction cache failed to save: \(cachePersistenceError.localizedDescription)"
+            }
         } catch {
             self.error = error.localizedDescription
         }
@@ -572,6 +581,11 @@ final class AppState {
             accounts.removeAll { $0.itemId == removedItemId }
             transactions.removeAll { accountIdsForItem.contains($0.accountId) }
             serverItemCount = Set(accounts.map(\.itemId)).count
+            do {
+                try LocalDataStore.saveTransactions(transactions, context: transactionCacheContext)
+            } catch {
+                self.error = "Transaction cache failed to save: \(error.localizedDescription)"
+            }
         } catch {
             self.error = error.localizedDescription
         }
@@ -661,6 +675,11 @@ final class AppState {
         }
         await checkServerConnection()
         if serverConnected {
+            if statusItemCount > 0 {
+                loadCachedTransactions()
+            } else {
+                clearCachedTransactions()
+            }
             await refreshAccounts()
             await syncTransactions()
             startBackgroundRefresh()
@@ -668,6 +687,27 @@ final class AppState {
     }
 
     // MARK: - Balance History
+
+    private func loadCachedTransactions() {
+        do {
+            transactions = try LocalDataStore.loadTransactions(context: transactionCacheContext)
+        } catch {
+            self.error = "Transaction cache failed to load: \(error.localizedDescription)"
+        }
+    }
+
+    private func clearCachedTransactions() {
+        transactions = []
+        try? LocalDataStore.saveTransactions(transactions, context: transactionCacheContext)
+    }
+
+    private var transactionCacheContext: TransactionCacheContext? {
+        guard let serverEnvironment, let serverStoragePath else { return nil }
+        return TransactionCacheContext(
+            environment: serverEnvironment,
+            storagePath: serverStoragePath
+        )
+    }
 
     private func recordBalanceSnapshot() {
         let snapshot = BalanceSnapshot(date: Date(), balance: netBalance)

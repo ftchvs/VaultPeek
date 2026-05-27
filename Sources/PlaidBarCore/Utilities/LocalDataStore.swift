@@ -17,9 +17,20 @@ public struct LocalDataResetResult: Equatable, Sendable {
     }
 }
 
+public struct TransactionCacheContext: Codable, Equatable, Sendable {
+    public let environment: PlaidEnvironment
+    public let storagePath: String
+
+    public init(environment: PlaidEnvironment, storagePath: String) {
+        self.environment = environment
+        self.storagePath = storagePath
+    }
+}
+
 public enum LocalDataStore {
     public static let displayPath = "~/.plaidbar/"
     public static let dataDirectoryEnvironmentVariable = "PLAIDBAR_DATA_DIR"
+    public static let transactionCacheFilename = "transactions.json"
 
     public static func accountHomeDirectoryURL() -> URL {
         #if os(macOS)
@@ -71,6 +82,62 @@ public enum LocalDataStore {
             removedEntries: removedEntries
         )
     }
+
+    public static func transactionCacheURL(
+        in directory: URL = storageDirectoryURL(),
+        context: TransactionCacheContext? = nil
+    ) -> URL {
+        directory.appendingPathComponent(transactionCacheFilename(for: context))
+    }
+
+    public static func loadTransactions(
+        from directory: URL = storageDirectoryURL(),
+        context: TransactionCacheContext? = nil,
+        fileManager: FileManager = .default
+    ) throws -> [TransactionDTO] {
+        let url = transactionCacheURL(in: directory, context: context)
+        guard fileManager.fileExists(atPath: url.path) else { return [] }
+
+        let data = try Data(contentsOf: url)
+        let cache = try JSONDecoder().decode(TransactionCache.self, from: data)
+        guard context == nil || cache.context == context else { return [] }
+        return cache.transactions
+    }
+
+    public static func saveTransactions(
+        _ transactions: [TransactionDTO],
+        to directory: URL = storageDirectoryURL(),
+        context: TransactionCacheContext? = nil,
+        fileManager: FileManager = .default
+    ) throws {
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        let url = transactionCacheURL(in: directory, context: context)
+        let cache = TransactionCache(context: context, transactions: transactions)
+        let data = try JSONEncoder().encode(cache)
+        try data.write(to: url, options: [.atomic])
+    }
+
+    private static func transactionCacheFilename(for context: TransactionCacheContext?) -> String {
+        guard let context else { return transactionCacheFilename }
+
+        let key = "\(context.environment.rawValue)|\(context.storagePath)"
+        return "transactions-\(context.environment.rawValue)-\(stableHashHex(key)).json"
+    }
+
+    private static func stableHashHex(_ value: String) -> String {
+        var hash: UInt64 = 14_695_981_039_346_656_037
+        for byte in value.utf8 {
+            hash ^= UInt64(byte)
+            hash &*= 1_099_511_628_211
+        }
+        return String(format: "%016llx", hash)
+    }
+}
+
+private struct TransactionCache: Codable, Sendable {
+    let context: TransactionCacheContext?
+    let transactions: [TransactionDTO]
 }
 
 private extension String {
