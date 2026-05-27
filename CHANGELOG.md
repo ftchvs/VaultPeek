@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 18:13 UTC] — Chore
+
+silence PlaidBar resource warnings (#44)
+
+`80d40d6`
+
+---
+
+
 ## [2026-05-27 18:05 UTC] — Documentation
 
 align dashboard interaction docs (#43)
