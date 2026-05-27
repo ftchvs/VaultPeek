@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 03:00 UTC] — Feature
+
+make spending heatmap primary graph (#29)
+
+`73357f0`
+
+---
+
+
 ## [2026-05-27 02:42 UTC] — Feature
 
 add local data controls (#28)
