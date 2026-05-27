@@ -80,12 +80,24 @@ public enum MenuBarSummary {
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> Double? {
-        let monthlySpend = recentSpend(
+        let monthlySpend = runwayMonthlySpend(from: transactions, now: now, calendar: calendar)
+        return runwayMonths(cash: cash, monthlySpend: monthlySpend)
+    }
+
+    public static func runwayMonthlySpend(
+        from transactions: [TransactionDTO],
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> Double {
+        recentSpend(
             from: transactions,
             now: now,
             calendar: calendar,
             days: 30
         )
+    }
+
+    public static func runwayMonths(cash: Double, monthlySpend: Double) -> Double? {
         guard cash > 0, monthlySpend > 0 else { return nil }
         return cash / monthlySpend
     }
@@ -100,6 +112,16 @@ public enum MenuBarSummary {
             return String(format: "%.1f mo", months)
         }
         return "\(Int(months.rounded())) mo"
+    }
+
+    public static func runwayBasisText(
+        cash: Double,
+        monthlySpend: Double,
+        currencyFormat: CurrencyFormat = .compact
+    ) -> String {
+        guard cash > 0 else { return "No cash buffer" }
+        guard monthlySpend > 0 else { return "No 30D spend" }
+        return "30D spend \(Formatters.currency(monthlySpend, format: currencyFormat))"
     }
 
     public static func text(
