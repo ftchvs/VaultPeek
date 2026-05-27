@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 20:08 UTC] — Feature
+
+allow local data directory override (#53)
+
+`db7c0af`
+
+---
+
+
 ## [2026-05-27 19:59 UTC] — Chore
 
 wait for server health in run script (#52)
