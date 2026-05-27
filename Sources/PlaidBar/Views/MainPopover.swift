@@ -274,7 +274,7 @@ private struct DashboardSummaryCards: View {
 
             MetricCard(
                 title: "Runway",
-                value: Formatters.currency(appState.netBalance, format: .compact),
+                value: appState.runwayText,
                 tint: SemanticColors.brand
             )
         }

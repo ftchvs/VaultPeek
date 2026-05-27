@@ -172,6 +172,24 @@ struct PlaidBarCoreTests {
         #expect(MenuBarSummary.recentSpend(from: transactions, now: now) == 100)
     }
 
+    @Test("Menu bar summary estimates runway from recent monthly spend")
+    func menuBarSummaryRunwayMonths() {
+        let now = Formatters.parseTransactionDate("2026-01-30")!
+        let transactions = [
+            TransactionDTO(id: "1", accountId: "a", amount: 1_000, date: "2026-01-30", name: "Rent"),
+            TransactionDTO(id: "2", accountId: "a", amount: 500, date: "2026-01-20", name: "Groceries"),
+            TransactionDTO(id: "3", accountId: "a", amount: -2_000, date: "2026-01-15", name: "Payroll"),
+            TransactionDTO(id: "4", accountId: "a", amount: 200, date: "2025-12-01", name: "Old spend")
+        ]
+
+        let months = MenuBarSummary.runwayMonths(cash: 6_000, transactions: transactions, now: now)
+
+        #expect(months == 4)
+        #expect(MenuBarSummary.runwayText(months: months) == "4.0 mo")
+        #expect(MenuBarSummary.runwayText(months: nil) == "No spend")
+        #expect(MenuBarSummary.runwayText(months: 0.5) == "15d")
+    }
+
     @Test("Menu bar summary text supports every mode")
     func menuBarSummaryTextModes() {
         let accounts = [
