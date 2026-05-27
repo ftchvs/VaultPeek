@@ -26,18 +26,17 @@ PlaidBar is an open-source macOS menu bar dashboard for [Plaid](https://plaid.co
 Personal finance data lives behind bank website logins. The closest thing to a menu bar finance app was [Balance](https://balancemy.money/) — commercial and now defunct. PlaidBar fills that gap as an open-source, privacy-first alternative.
 
 - **Menu bar first** — A RepoBar-style popover with a 365-day heatmap, dense finance rows, and fast account drill-down
-- **Glanceable** — Choose whether the menu bar shows net cash, total cash, credit utilization, recent spend, or icon-only
-- **Account Balances** — All bank accounts and credit cards at a glance
-- **Recent Transactions** — Searchable, filterable list grouped by day with category icons
-- **Transaction Detail** — Tap any transaction for merchant, category, account, and status details
-- **Transaction Filtering** — Filter by category, account, or date range with chip controls
+- **Glanceable label** — Choose whether the menu bar shows net cash, total cash, credit utilization, recent spend, or icon-only, with a compact health signal on the icon
+- **Dashboard overview** — One surface for cash, credit, savings, debt, sync health, and selected-account details
+- **Account drill-down** — Click any row for balances, utilization, pending activity, inflow/outflow, recent transactions, and reconnect/refresh actions
+- **Status-rich filtering** — Switch between All, Cash, Credit, Savings, Debt, and Status without leaving the primary popover
 - **Recurring Detection** — Automatic identification of subscriptions and recurring charges with monthly total
-- **Spending Breakdown** — Donut chart, GitHub-style daily spending heatmap, trend line, income vs expense views, and month-over-month comparison
+- **Spending Activity** — GitHub-style daily spending heatmap, trend line, income vs expense views, and month-over-month comparison
 - **Credit Utilization** — Progress bars with configurable warning thresholds and gauge
 - **Smart Notifications** — Alerts for large transactions, low balances, and high credit utilization
 - **Balance History** — Sparkline showing net balance trend over time
-- **Diagnostics** — Status tab for server health, sync recency, item state, data counts, and recovery actions
-- **Keyboard Shortcuts** — Cmd+1-5 to switch tabs, Cmd+R to refresh, Cmd+N to add account
+- **Diagnostics** — Popover status strip plus diagnostics surfaces for server health, sync recency, item state, data counts, and recovery actions
+- **Keyboard Shortcuts** — Cmd+R to refresh and Cmd+N to add an account
 - **Settings Persistence** — Preferences saved across launches
 - **Launch at Login** — Optional auto-start via macOS Login Items
 - **Auto-Updates** — Sparkle integration for seamless updates
@@ -48,12 +47,12 @@ Personal finance data lives behind bank website logins. The closest thing to a m
 ## Screenshots
 
 <p align="center">
-  <img src="Assets/accounts.png" width="280" alt="Accounts tab"/>
-  <img src="Assets/transactions.png" width="280" alt="Transactions tab"/>
+  <img src="Assets/accounts.png" width="280" alt="Dashboard account rows"/>
+  <img src="Assets/transactions.png" width="280" alt="Recent transactions"/>
   <img src="Assets/recurring.png" width="280" alt="Recurring transactions"/>
 </p>
 <p align="center">
-  <img src="Assets/spending.png" width="280" alt="Spending tab"/>
+  <img src="Assets/spending.png" width="280" alt="Spending activity heatmap"/>
   <img src="Assets/credit.png" width="280" alt="Credit utilization tab"/>
 </p>
 
@@ -275,7 +274,7 @@ swift run PlaidBarServer --sandbox
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for code style, PR process, and architecture guidelines.
 
-See [GOAL.md](GOAL.md) for the CodexBar-style product direction, design principles, and implementation priorities.
+See [GOAL.md](GOAL.md) for the RepoBar/CodexBar-style product direction, design principles, and implementation priorities.
 
 ### Agentic Development Loop
 
@@ -289,7 +288,8 @@ production-readiness work:
 The entrypoint lives in [`commands/goal.md`](commands/goal.md) and delegates to
 [`commands/plaidbar-prod-loop.md`](commands/plaidbar-prod-loop.md) for the full
 multi-hour loop. It is designed for focused production-readiness work around
-trust, onboarding, local data controls, diagnostics, and empty/error states.
+the menu bar dashboard, trust, onboarding, local data controls, diagnostics,
+and empty/error states.
 Repo-local Codex skills in `.codex/skills/` provide companion instructions for
 commit, push, review, and production-readiness work.
 
