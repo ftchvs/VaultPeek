@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 22:47 UTC] — Update
+
+Show loans in accounts section (#68)
+
+`2bb3b16`
+
+---
+
+
 ## [2026-05-27 22:40 UTC] — Update
 
 Include loans in dashboard debt total (#67)
