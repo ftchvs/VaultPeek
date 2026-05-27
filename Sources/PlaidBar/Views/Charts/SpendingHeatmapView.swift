@@ -80,11 +80,12 @@ struct SpendingHeatmapView: View {
             }
         }
         .padding(.horizontal, Spacing.lg)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
     }
 
     private var header: some View {
-        HStack(alignment: .firstTextBaseline) {
+        HStack(alignment: .top, spacing: Spacing.sm) {
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text("Spending heatmap")
                     .sectionTitle()
@@ -98,6 +99,8 @@ struct SpendingHeatmapView: View {
                 .font(.callout.weight(.semibold))
                 .monospacedDigit()
                 .foregroundStyle(mode == .netCashflow && totalValue < 0 ? SemanticColors.positive : .primary)
+                .lineLimit(1)
+                .layoutPriority(1)
         }
     }
 

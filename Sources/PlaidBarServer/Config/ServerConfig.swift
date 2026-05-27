@@ -68,8 +68,7 @@ struct ServerConfig: Sendable {
     }
 
     static func dataDirectory() -> String {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        return "\(home)/.plaidbar"
+        LocalDataStore.storageDirectoryURL().path
     }
 }
 

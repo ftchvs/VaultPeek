@@ -123,8 +123,8 @@ final class AppState {
 
     // MARK: - Init
 
-    init(notificationService: any NotificationServiceProtocol = NotificationService.shared) {
-        self.notificationService = notificationService
+    init(notificationService: (any NotificationServiceProtocol)? = nil) {
+        self.notificationService = notificationService ?? NotificationService.shared
         loadSettings()
     }
 
@@ -270,7 +270,15 @@ final class AppState {
     }
 
     var localStoragePathText: String {
-        "~/.plaidbar/"
+        LocalDataStore.displayPath
+    }
+
+    var localStorageDirectoryURL: URL {
+        LocalDataStore.storageDirectoryURL()
+    }
+
+    var localStorageResolvedPathText: String {
+        localStorageDirectoryURL.path
     }
 
     var refreshCadenceText: String {
@@ -498,6 +506,27 @@ final class AppState {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    @discardableResult
+    func resetLocalData() throws -> LocalDataResetResult {
+        stopBackgroundRefresh()
+
+        let result = try LocalDataStore.resetLocalData(at: localStorageDirectoryURL)
+
+        accounts = []
+        transactions = []
+        itemStatuses = []
+        serverItemCount = 0
+        lastSyncDate = nil
+        isSetupComplete = false
+        isDemoMode = false
+        error = nil
+
+        balanceHistory = []
+        UserDefaults.standard.removeObject(forKey: Keys.balanceHistory)
+
+        return result
     }
 
     func startBackgroundRefresh() {

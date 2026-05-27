@@ -673,4 +673,50 @@ struct PlaidBarCoreTests {
         #expect(recurring[0].merchantName == "Expensive")
         #expect(recurring[1].merchantName == "Cheap")
     }
+
+    // MARK: - Local Data Store
+
+    @Test("Local data store resolves hidden PlaidBar directory")
+    func localDataStorePathResolution() {
+        let home = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+
+        let directory = LocalDataStore.storageDirectoryURL(homeDirectory: home)
+
+        #expect(LocalDataStore.displayPath == "~/.plaidbar/")
+        #expect(directory.lastPathComponent == ".plaidbar")
+        #expect(directory.deletingLastPathComponent() == home)
+    }
+
+    @Test("Local data store resolves from account home by default")
+    func localDataStoreDefaultPathUsesAccountHome() {
+        let directory = LocalDataStore.storageDirectoryURL()
+
+        #expect(directory.lastPathComponent == ".plaidbar")
+        #expect(directory.deletingLastPathComponent() == LocalDataStore.accountHomeDirectoryURL())
+    }
+
+    @Test("Local data reset removes directory contents and recreates directory")
+    func localDataResetRemovesContents() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let directory = root.appendingPathComponent(".plaidbar", isDirectory: true)
+        let database = directory.appendingPathComponent("plaidbar.sqlite")
+        let authToken = directory.appendingPathComponent("auth-token")
+
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try "db".write(to: database, atomically: true, encoding: .utf8)
+        try "token".write(to: authToken, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let result = try LocalDataStore.resetLocalData(at: directory)
+
+        #expect(result.directoryPath == directory.path)
+        #expect(result.removedEntries == ["auth-token", "plaidbar.sqlite"])
+
+        var isDirectory: ObjCBool = false
+        #expect(FileManager.default.fileExists(atPath: directory.path, isDirectory: &isDirectory))
+        #expect(isDirectory.boolValue)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty)
+    }
 }
