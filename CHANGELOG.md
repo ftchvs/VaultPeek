@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 20:24 UTC] — Feature
+
+show dashboard balance mix (#55)
+
+`6cba6aa`
+
+---
+
+
 ## [2026-05-27 20:16 UTC] — Update
 
 run sandbox smoke preflight (#54)
