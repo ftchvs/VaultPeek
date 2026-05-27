@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 16:22 UTC] — Feature
+
+polish account drilldown panel
+
+`b6ebae7`
+
+---
+
+
 ## [2026-05-27 16:13 UTC] — Feature
 
 refine RepoBar-style finance instrument
