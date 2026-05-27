@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 18:42 UTC] — Documentation
+
+document heatmap color semantics (#48)
+
+`1e30e2e`
+
+---
+
+
 ## [2026-05-27 18:35 UTC] — Update
 
 align spending heatmap color (#47)
