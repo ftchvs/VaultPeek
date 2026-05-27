@@ -17,7 +17,7 @@
 
 ---
 
-PlaidBar is an open-source macOS menu bar dashboard for [Plaid](https://plaid.com) data. It is designed in the spirit of tools like CodexBar: keep the high-signal numbers one click away, stay native to macOS, and avoid a hosted backend.
+PlaidBar is an open-source macOS menu bar dashboard for [Plaid](https://plaid.com) data. It is designed in the spirit of tools like RepoBar and CodexBar: keep the high-signal numbers one click away, stay native to macOS, and avoid a hosted backend.
 
 **No cloud. No telemetry. All data stays local.**
 
@@ -25,6 +25,7 @@ PlaidBar is an open-source macOS menu bar dashboard for [Plaid](https://plaid.co
 
 Personal finance data lives behind bank website logins. The closest thing to a menu bar finance app was [Balance](https://balancemy.money/) — commercial and now defunct. PlaidBar fills that gap as an open-source, privacy-first alternative.
 
+- **Menu bar first** — A RepoBar-style popover with a 365-day heatmap, dense finance rows, and fast account drill-down
 - **Glanceable** — Choose whether the menu bar shows net cash, total cash, credit utilization, recent spend, or icon-only
 - **Account Balances** — All bank accounts and credit cards at a glance
 - **Recent Transactions** — Searchable, filterable list grouped by day with category icons
