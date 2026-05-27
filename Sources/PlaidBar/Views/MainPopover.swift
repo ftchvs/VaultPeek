@@ -44,6 +44,7 @@ struct MainPopover: View {
 
                         AccountsSection(
                             accounts: filteredAccounts,
+                            filter: selectedFilter,
                             selectedAccountId: selectedAccount?.id,
                             onSelect: { selectedAccountId = $0.id }
                         )
@@ -515,6 +516,7 @@ private struct DashboardFilterBar: View {
 private struct AccountsSection: View {
     @Environment(AppState.self) private var appState
     let accounts: [AccountDTO]
+    let filter: DashboardAccountFilter
     let selectedAccountId: String?
     let onSelect: (AccountDTO) -> Void
 
@@ -533,10 +535,8 @@ private struct AccountsSection: View {
             .padding(.bottom, 7)
 
             if accounts.isEmpty {
-                Text("No accounts match this filter.")
-                    .detailText()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 18)
+                DashboardEmptyAccountState(filter: filter)
+                    .environment(appState)
             } else {
                 VStack(spacing: 0) {
                     ForEach(accounts) { account in
@@ -554,6 +554,117 @@ private struct AccountsSection: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             }
         }
+    }
+}
+
+private struct DashboardEmptyAccountState: View {
+    @Environment(AppState.self) private var appState
+    let filter: DashboardAccountFilter
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 11) {
+                Image(systemName: icon)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 34, height: 34)
+                    .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 8))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.callout.weight(.semibold))
+                    Text(message)
+                        .detailText()
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            HStack(spacing: 8) {
+                if showsAddAccount {
+                    Button {
+                        Task { await appState.addAccount() }
+                    } label: {
+                        Label("Add Account", systemImage: "plus.circle")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+
+                Button {
+                    Task {
+                        if !appState.serverConnected {
+                            await appState.checkServerConnection()
+                        } else {
+                            await appState.refreshAccounts()
+                            await appState.syncTransactions()
+                        }
+                    }
+                } label: {
+                    Label(actionTitle, systemImage: actionIcon)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 8))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(tint.opacity(0.18), lineWidth: 1)
+        }
+    }
+
+    private var title: String {
+        if !appState.isDemoMode && !appState.serverConnected { return "Server offline" }
+        if appState.statusItemCount == 0 { return "No bank linked" }
+        if appState.accounts.isEmpty { return "No account data" }
+        if filter == .status { return "No accounts need attention" }
+        return "No \(filter.rawValue.lowercased()) accounts"
+    }
+
+    private var message: String {
+        if !appState.isDemoMode && !appState.serverConnected {
+            return "Start PlaidBarServer, then check the connection again."
+        }
+        if appState.statusItemCount == 0 {
+            return "Connect a Plaid institution to show balances in this menu bar dashboard."
+        }
+        if appState.accounts.isEmpty {
+            return "The server has linked items, but balances have not loaded yet."
+        }
+        if filter == .status {
+            return "Every linked item looks healthy. Switch filters to inspect balances."
+        }
+        return "This filter has no matching linked accounts. Switch filters or add another institution."
+    }
+
+    private var icon: String {
+        if !appState.isDemoMode && !appState.serverConnected { return "server.rack" }
+        if appState.statusItemCount == 0 { return "building.columns" }
+        if appState.accounts.isEmpty { return "tray" }
+        if filter == .status { return "checkmark.circle.fill" }
+        return "line.3.horizontal.decrease.circle"
+    }
+
+    private var tint: Color {
+        if !appState.isDemoMode && !appState.serverConnected { return .secondary }
+        if appState.statusItemCount == 0 { return SemanticColors.brand }
+        if appState.accounts.isEmpty { return SemanticColors.warning }
+        if filter == .status { return SemanticColors.positive }
+        return .secondary
+    }
+
+    private var showsAddAccount: Bool {
+        appState.serverConnected && appState.statusItemCount == 0
+    }
+
+    private var actionTitle: String {
+        !appState.serverConnected ? "Check Server" : "Refresh"
+    }
+
+    private var actionIcon: String {
+        "arrow.clockwise"
     }
 }
 
