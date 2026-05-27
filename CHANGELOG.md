@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 19:59 UTC] — Chore
+
+wait for server health in run script (#52)
+
+`299e217`
+
+---
+
+
 ## [2026-05-27 19:52 UTC] — Documentation
 
 add sandbox smoke preflight (#51)
