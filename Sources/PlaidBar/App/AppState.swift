@@ -206,32 +206,34 @@ final class AppState {
     }
 
     var menuBarHelpText: String {
+        let status = "Status: \(diagnosticsSummary)"
         switch menuBarSummaryMode {
         case .netCash:
-            return "PlaidBar - Net cash: \(menuBarText)"
+            return "PlaidBar - Net cash: \(menuBarText). \(status)"
         case .totalCash:
-            return "PlaidBar - Total cash: \(menuBarText)"
+            return "PlaidBar - Total cash: \(menuBarText). \(status)"
         case .creditUtilization:
-            return "PlaidBar - Credit utilization: \(menuBarText)"
+            return "PlaidBar - Credit utilization: \(menuBarText). \(status)"
         case .recentSpend:
-            return "PlaidBar - Recent spend: \(menuBarText)"
+            return "PlaidBar - Recent spend: \(menuBarText). \(status)"
         case .iconOnly:
-            return "PlaidBar"
+            return "PlaidBar. \(status)"
         }
     }
 
     var menuBarAccessibilityLabel: String {
+        let status = "Status \(diagnosticsSummary)"
         switch menuBarSummaryMode {
         case .netCash:
-            return "PlaidBar net cash \(menuBarText)"
+            return "PlaidBar net cash \(menuBarText). \(status)"
         case .totalCash:
-            return "PlaidBar total cash \(menuBarText)"
+            return "PlaidBar total cash \(menuBarText). \(status)"
         case .creditUtilization:
-            return "PlaidBar credit utilization \(menuBarText)"
+            return "PlaidBar credit utilization \(menuBarText). \(status)"
         case .recentSpend:
-            return "PlaidBar recent spend \(menuBarText)"
+            return "PlaidBar recent spend \(menuBarText). \(status)"
         case .iconOnly:
-            return "PlaidBar"
+            return "PlaidBar. \(status)"
         }
     }
 
