@@ -58,14 +58,23 @@ for _ in {1..30}; do
     sleep 1
 done
 
-curl -fsS "http://127.0.0.1:$PORT/health" >/dev/null
+if ! curl -fsS "http://127.0.0.1:$PORT/health" >/dev/null; then
+    echo "Server did not become healthy before timeout."
+    echo "Server log: $SERVER_LOG"
+    cat "$SERVER_LOG"
+    exit 1
+fi
 STATUS_JSON="$(curl -fsS "http://127.0.0.1:$PORT/api/status")"
+ITEMS_JSON="$(curl -fsS "http://127.0.0.1:$PORT/api/items")"
 
-python3 - "$STATUS_JSON" <<'PY'
+python3 - "$STATUS_JSON" "$ITEMS_JSON" "$PLAIDBAR_DATA_DIR" <<'PY'
 import json
+import os
 import sys
 
 status = json.loads(sys.argv[1])
+items = json.loads(sys.argv[2])
+data_dir = os.path.realpath(sys.argv[3])
 errors = []
 
 if status.get("environment") != "sandbox":
@@ -76,6 +85,18 @@ if "itemCount" not in status:
     errors.append("status response missing itemCount")
 if not status.get("storagePath"):
     errors.append("status response missing storagePath")
+else:
+    storage_path = os.path.realpath(status["storagePath"])
+    if not storage_path.startswith(data_dir + os.sep):
+        errors.append(f"expected storage path under {data_dir}, got {storage_path}")
+if not isinstance(items, list):
+    errors.append("items response is not a JSON array")
+
+auth_token_path = os.path.join(data_dir, "auth-token")
+if not os.path.exists(auth_token_path):
+    errors.append(f"auth token was not created at {auth_token_path}")
+elif os.path.getsize(auth_token_path) == 0:
+    errors.append(f"auth token is empty at {auth_token_path}")
 
 if errors:
     for error in errors:
@@ -86,6 +107,7 @@ print("Sandbox smoke check passed.")
 print(f"  Environment: {status['environment']}")
 print(f"  Items: {status['itemCount']}")
 print(f"  Storage: {status['storagePath']}")
+print(f"  Isolated data dir: {data_dir}")
 PY
 
 echo "Server log: $SERVER_LOG"
