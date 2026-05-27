@@ -42,6 +42,9 @@ struct MainPopover: View {
                         DashboardSummaryCards()
                             .environment(appState)
 
+                        BalanceCompositionStrip()
+                            .environment(appState)
+
                         BalanceActivityHeatmap(transactions: appState.transactions)
 
                         DashboardFilterBar(selection: filterBinding)
@@ -308,6 +311,132 @@ private struct MetricCard: View {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(tint.opacity(0.16), lineWidth: 1)
         }
+    }
+}
+
+private struct BalanceCompositionStrip: View {
+    @Environment(AppState.self) private var appState
+
+    private var segments: [BalanceCompositionSegment] {
+        [
+            BalanceCompositionSegment(
+                title: "Cash",
+                value: sum(for: .depository),
+                tint: SemanticColors.available
+            ),
+            BalanceCompositionSegment(
+                title: "Investments",
+                value: sum(for: .investment),
+                tint: SemanticColors.brand
+            ),
+            BalanceCompositionSegment(
+                title: "Credit",
+                value: debt(for: .credit),
+                tint: SemanticColors.creditDebt
+            ),
+            BalanceCompositionSegment(
+                title: "Loans",
+                value: debt(for: .loan),
+                tint: SemanticColors.warning
+            )
+        ]
+    }
+
+    private var activeSegments: [BalanceCompositionSegment] {
+        segments.filter { $0.value > 0 }
+    }
+
+    private var total: Double {
+        max(activeSegments.reduce(0) { $0 + $1.value }, 1)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack {
+                Text("Balance Mix")
+                    .font(.caption.weight(.semibold))
+                Spacer()
+                Text("\(appState.accountCount) accounts")
+                    .microText()
+                    .foregroundStyle(.secondary)
+            }
+
+            GeometryReader { proxy in
+                HStack(spacing: 3) {
+                    ForEach(activeSegments) { segment in
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(segment.tint.gradient)
+                            .frame(width: segmentWidth(segment, totalWidth: proxy.size.width))
+                            .accessibilityLabel("\(segment.title), \(Formatters.currency(segment.value, format: .compact))")
+                    }
+                }
+            }
+            .frame(height: 8)
+
+            HStack(spacing: 12) {
+                ForEach(segments) { segment in
+                    BalanceCompositionLegend(segment: segment)
+                }
+            }
+        }
+        .padding(.horizontal, 13)
+        .padding(.vertical, 12)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.primary.opacity(0.07), lineWidth: 1)
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private func segmentWidth(_ segment: BalanceCompositionSegment, totalWidth: CGFloat) -> CGFloat {
+        let gaps = CGFloat(max(activeSegments.count - 1, 0)) * 3
+        let availableWidth = max(totalWidth - gaps, 0)
+        return max(availableWidth * CGFloat(segment.value / total), 6)
+    }
+
+    private func sum(for type: AccountType) -> Double {
+        appState.accounts
+            .filter { $0.type == type }
+            .reduce(0) { $0 + max($1.balances.effectiveBalance, 0) }
+    }
+
+    private func debt(for type: AccountType) -> Double {
+        appState.accounts
+            .filter { $0.type == type }
+            .reduce(0) { $0 + abs($1.balances.current ?? 0) }
+    }
+}
+
+private struct BalanceCompositionSegment: Identifiable {
+    let title: String
+    let value: Double
+    let tint: Color
+
+    var id: String { title }
+}
+
+private struct BalanceCompositionLegend: View {
+    let segment: BalanceCompositionSegment
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Circle()
+                .fill(segment.tint)
+                .frame(width: 6, height: 6)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(segment.title)
+                    .microText()
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Text(Formatters.currency(segment.value, format: .compact))
+                    .font(.caption2.weight(.semibold))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
