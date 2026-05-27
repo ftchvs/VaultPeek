@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 00:33 UTC] — Feature
+
+add diagnostics status panel (#25)
+
+`c47f90a`
+
+---
+
+
 ## [2026-05-26 23:56 UTC] — Feature
 
 add menu bar summary modes (#24)
