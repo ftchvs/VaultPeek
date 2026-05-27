@@ -72,6 +72,7 @@ Prioritize these before adding new finance features:
    - Separate "View Demo", "Connect Sandbox", and "Use Production Credentials".
    - Never imply sandbox works without credentials unless the app can actually do that.
    - Explain what data is stored before the user links an account.
+   - Implemented local slice: first-run chooser with Demo, Sandbox, and Production paths; server environment checks before Plaid Link; local storage disclosure before linking.
 
 6. **Sharper empty and error states**
    - Accounts: explain whether there is no data, no server, or no linked institution.
