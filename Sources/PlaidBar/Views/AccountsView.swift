@@ -25,9 +25,16 @@ struct AccountsView: View {
                     }
                 }
 
+                if !appState.loanAccounts.isEmpty {
+                    sectionHeader("Loans")
+                    ForEach(appState.loanAccounts) { account in
+                        AccountRow(account: account)
+                    }
+                }
+
                 // Other accounts
                 let otherAccounts = appState.accounts.filter {
-                    $0.type != .depository && $0.type != .credit
+                    $0.type != .depository && $0.type != .credit && $0.type != .loan
                 }
                 if !otherAccounts.isEmpty {
                     sectionHeader("Other")
