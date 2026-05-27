@@ -109,7 +109,9 @@ Get credentials free at [dashboard.plaid.com](https://dashboard.plaid.com). Sand
 For a fast sandbox preflight without opening the menu bar app, export sandbox
 credentials and run `./Scripts/smoke-sandbox.sh`. It builds the server, starts
 it on `127.0.0.1:${PLAIDBAR_SMOKE_PORT:-18484}`, checks `/health`, and verifies
-that `/api/status` reports sandbox mode with credentials configured.
+that `/api/status` reports sandbox mode with credentials configured. The smoke
+script uses a temporary data directory by default; set `PLAIDBAR_DATA_DIR` when
+you intentionally want to point it at a specific local store.
 
 ## Keyboard Shortcuts
 

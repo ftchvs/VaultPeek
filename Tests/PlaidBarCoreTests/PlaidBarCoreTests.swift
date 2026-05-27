@@ -718,6 +718,19 @@ struct PlaidBarCoreTests {
         #expect(directory.deletingLastPathComponent() == LocalDataStore.accountHomeDirectoryURL())
     }
 
+    @Test("Local data store supports data directory override")
+    func localDataStorePathOverride() {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let directory = root.appendingPathComponent("plaidbar-smoke", isDirectory: true)
+
+        let resolved = LocalDataStore.storageDirectoryURL(
+            environment: [LocalDataStore.dataDirectoryEnvironmentVariable: directory.path]
+        )
+
+        #expect(resolved == directory)
+    }
+
     @Test("Local data reset removes directory contents and recreates directory")
     func localDataResetRemovesContents() throws {
         let root = URL(fileURLWithPath: NSTemporaryDirectory())
