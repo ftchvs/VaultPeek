@@ -314,9 +314,9 @@ struct AccountSettingsView: View {
 
                                     Spacer()
 
-                                    Text(Formatters.currency(account.balances.effectiveBalance, format: .compact))
+                                    Text(balanceText(for: account))
                                         .monospacedDigit()
-                                        .foregroundStyle(account.type == .credit ? SemanticColors.creditDebt : .secondary)
+                                        .foregroundStyle(balanceTint(for: account))
                                 }
                                 .padding(.leading, Spacing.md)
                             }
@@ -402,6 +402,20 @@ struct AccountSettingsView: View {
         case .other:
             .secondary
         }
+    }
+
+    private func balanceText(for account: AccountDTO) -> String {
+        let amount = account.balances.current ?? account.balances.effectiveBalance
+        let displayAmount = isDebtAccount(account) ? abs(amount) : amount
+        return Formatters.currency(displayAmount, format: .compact)
+    }
+
+    private func balanceTint(for account: AccountDTO) -> Color {
+        isDebtAccount(account) ? SemanticColors.creditDebt : .secondary
+    }
+
+    private func isDebtAccount(_ account: AccountDTO) -> Bool {
+        account.type == .credit || account.type == .loan
     }
 
     private func label(for status: ItemConnectionStatus) -> String {
