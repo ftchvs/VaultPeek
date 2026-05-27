@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 22:40 UTC] — Update
+
+Include loans in dashboard debt total (#67)
+
+`ebb7ba9`
+
+---
+
+
 ## [2026-05-27 22:30 UTC] — Update
 
 Centralize debt balance presentation (#66)
