@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 01:14 UTC] — Feature
+
+clarify production onboarding (#26)
+
+`aacb40a`
+
+---
+
+
 ## [2026-05-27 00:33 UTC] — Feature
 
 add diagnostics status panel (#25)
