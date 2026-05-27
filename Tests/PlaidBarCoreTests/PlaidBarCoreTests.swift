@@ -172,6 +172,27 @@ struct PlaidBarCoreTests {
         #expect(MenuBarSummary.recentSpend(from: transactions, now: now) == 100)
     }
 
+    @Test("Account activity summary uses recent non-transfer cash flow")
+    func accountActivitySummaryRecentCashFlow() {
+        let now = Formatters.parseTransactionDate("2026-01-30")!
+        let transactions = [
+            TransactionDTO(id: "1", accountId: "a", amount: 100, date: "2026-01-30", name: "Groceries"),
+            TransactionDTO(id: "2", accountId: "a", amount: -2_000, date: "2026-01-25", name: "Payroll", category: .income),
+            TransactionDTO(id: "3", accountId: "a", amount: 250, date: "2026-01-20", name: "Transfer Out", category: .transferOut),
+            TransactionDTO(id: "4", accountId: "a", amount: -500, date: "2026-01-18", name: "Transfer In", category: .transfer),
+            TransactionDTO(id: "5", accountId: "a", amount: 40, date: "2026-01-10", name: "Pending", pending: true),
+            TransactionDTO(id: "6", accountId: "a", amount: 75, date: "2025-12-01", name: "Old")
+        ]
+
+        let summary = AccountActivitySummary.recent(from: transactions, now: now)
+
+        #expect(summary.transactionCount == 5)
+        #expect(summary.pendingCount == 1)
+        #expect(summary.outflowTotal == 140)
+        #expect(summary.inflowTotal == 2_000)
+        #expect(summary.days == 30)
+    }
+
     @Test("Menu bar summary estimates runway from recent monthly spend")
     func menuBarSummaryRunwayMonths() {
         let now = Formatters.parseTransactionDate("2026-01-30")!
