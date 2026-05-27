@@ -281,7 +281,7 @@ private struct HeatmapCell: View {
         if mode == .netCashflow && value < 0 {
             base = SemanticColors.positive
         } else {
-            base = mode == .netCashflow ? SemanticColors.negative : SemanticColors.brand
+            base = mode == .netCashflow ? SemanticColors.negative : SemanticColors.positive
         }
 
         return base.opacity(0.18 + (0.72 * intensity))
