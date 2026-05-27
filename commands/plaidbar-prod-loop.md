@@ -10,8 +10,9 @@ local-first macOS finance utility.
 
 The default goal is:
 
-> Make PlaidBar feel trustworthy and useful with real Plaid data before
-> optimizing for packaging, distribution, or new finance verticals.
+> Make PlaidBar feel like RepoBar for personal finance: a native macOS menu-bar
+> instrument with a GitHub-style heatmap header, dense account/card rows,
+> financial scope filters, and drill-in details for each account.
 
 ## Usage
 
@@ -19,6 +20,7 @@ The default goal is:
 /plaidbar-prod-loop
 /plaidbar-prod-loop "local data controls" --hours=2
 /plaidbar-prod-loop "empty states and error recovery" --hours=3 --no-commit
+/plaidbar-prod-loop "RepoBar-style finance dashboard" --hours=4
 ```
 
 For Codex CLI non-interactive runs:
@@ -55,11 +57,15 @@ Repeat these phases until the timebox ends or a blocker appears:
    - Prefer the explicit focus area in `$ARGUMENTS`.
    - Otherwise use the production-readiness backlog below.
    - Keep the slice small enough to finish with verification evidence.
+   - If the focus mentions RepoBar, heatmap-first design, account rows, or the
+     attached screenshot, use the RepoBar-style finance dashboard slice first.
 
 3. Implement:
    - Follow the app's existing SwiftUI, theme, and local-server patterns.
    - Put finance calculations in `PlaidBarCore` when they are testable logic.
    - Keep UI dense, native, status-rich, and non-marketing.
+   - For the main popover, prefer a single overview surface with drill-in
+     details over adding another tab.
    - Update docs only when behavior or setup changes.
 
 4. Verify:
@@ -85,34 +91,57 @@ Repeat these phases until the timebox ends or a blocker appears:
 
 Work in this order unless Felipe gives a better focus:
 
-1. **Trust-first local data controls**
+1. **RepoBar-style finance dashboard**
+   - Study RepoBar's live app/site and source before editing:
+     - `https://repobar.app`
+     - `https://github.com/steipete/RepoBar`
+     - local clone if available: `/Users/otto/.openclaw/workspace/repos/RepoBar`
+   - Target the attached reference screenshot:
+     - translucent macOS popover,
+     - heatmap header,
+     - segmented filter bar,
+     - dense rows with selected/highlighted state,
+     - chevron/drill-in affordance.
+   - Translate RepoBar concepts into finance:
+     - contribution heatmap -> daily spend/cashflow heatmap,
+     - repo rows -> checking, savings, credit card, loan, and other account rows,
+     - repo stats -> balance, available credit, utilization, pending count, sync freshness,
+     - repo submenu -> account/card detail view or sheet,
+     - All/Pinned/Local/Work -> All/Cash/Credit/Savings/Debt/Status.
+   - Build the first slice as an overview UI, not a full budgeting product:
+     - top heatmap from existing transaction/demo data,
+     - filterable account/card rows,
+     - one selected row detail surface for a specific credit card/account,
+     - preserve Status/Settings recovery actions.
+
+2. **Trust-first local data controls**
    - Show the local storage path (`~/.plaidbar/`) in Settings.
    - Add copy/reveal actions for the storage directory when practical.
    - Add confirmation-gated reset/delete local data flow.
    - Keep language explicit about what is removed and what remains in Plaid.
 
-2. **Sharper empty and error states**
+3. **Sharper empty and error states**
    - Accounts: no server, no linked institution, no synced account data.
    - Transactions: no synced history vs filters returning zero results.
    - Credit: no linked credit accounts vs data unavailable.
    - Include one clear recovery action per state.
 
-3. **Server/config preflight**
+4. **Server/config preflight**
    - Add a server endpoint or client helper that reports environment,
      credential readiness, storage path, item count, and sync readiness.
    - Use it before Plaid Link and in the Status tab.
    - Avoid exposing secrets or raw tokens.
 
-4. **Reconnect and degraded-item handling**
+5. **Reconnect and degraded-item handling**
    - Surface item errors and token-expired states in the Status tab.
    - Provide a clear reconnect/add-account path.
 
-5. **Demo and screenshot polish**
+6. **Demo and screenshot polish**
    - Keep demo data realistic but synthetic.
    - Ensure screenshots show the current product story:
      menu summary, status, spending heatmap, onboarding, and settings.
 
-6. **Distribution readiness, later**
+7. **Distribution readiness, later**
    - Only after sandbox and production setup are reliable.
    - Focus on packaging docs, signing assumptions, and release checklist.
    - Do not implement notarization prematurely.

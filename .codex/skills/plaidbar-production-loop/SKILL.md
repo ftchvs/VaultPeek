@@ -11,8 +11,8 @@ ready, or run the repo-local `/goal` command.
 ## Goal
 
 PlaidBar should become a local-first macOS menu bar dashboard for Plaid data:
-CodexBar for personal finance. Favor trustworthy real-data readiness over new
-feature breadth.
+RepoBar/CodexBar for personal finance. Favor a dense, trustworthy, heatmap-first
+menu-bar instrument over new feature breadth.
 
 ## Rules
 
@@ -28,6 +28,7 @@ feature breadth.
 1. Inspect `git status --short --branch`, `GOAL.md`, `README.md`,
    `DESIGN.md`, and the files likely to change.
 2. Choose one production-readiness slice:
+   - RepoBar-style finance dashboard,
    - local data controls,
    - empty/error states,
    - server/config preflight,
@@ -46,7 +47,19 @@ feature breadth.
 
 ## Preferred Next Slice
 
-When no focus is supplied, implement trust-first local data controls:
+When no focus is supplied, implement the RepoBar-style finance dashboard:
+
+- study `https://repobar.app`, `https://github.com/steipete/RepoBar`, and the
+  local reference clone at `/Users/otto/.openclaw/workspace/repos/RepoBar` when
+  available,
+- lead the popover with a GitHub-style daily spend/cashflow heatmap,
+- add All/Cash/Credit/Savings/Debt/Status filters,
+- show checking, savings, credit cards, loans, and other accounts as compact
+  rows with balance/utilization/status/freshness,
+- open a focused account/card detail surface from a selected row,
+- keep finance semantics explicit and avoid full budgeting workflows.
+
+After that, continue with trust-first local data controls:
 
 - show `~/.plaidbar/` in Settings,
 - add copy/reveal actions if practical,
