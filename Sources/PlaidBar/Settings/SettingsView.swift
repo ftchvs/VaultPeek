@@ -302,8 +302,8 @@ struct AccountSettingsView: View {
 
                             ForEach(group.accounts) { account in
                                 HStack {
-                                    Image(systemName: account.type == .credit ? "creditcard" : "building.columns")
-                                        .foregroundStyle(.secondary)
+                                    Image(systemName: AccountPresentation.iconName(for: account))
+                                        .foregroundStyle(accountIconTint(for: account))
                                         .frame(width: 18)
 
                                     VStack(alignment: .leading, spacing: Spacing.xxs) {
@@ -388,6 +388,19 @@ struct AccountSettingsView: View {
         case .connected: SemanticColors.positive
         case .loginRequired: SemanticColors.warning
         case .error: SemanticColors.negative
+        }
+    }
+
+    private func accountIconTint(for account: AccountDTO) -> Color {
+        switch account.type {
+        case .credit, .loan:
+            SemanticColors.creditDebt
+        case .investment:
+            SemanticColors.sparkline
+        case .depository:
+            SemanticColors.available
+        case .other:
+            .secondary
         }
     }
 
