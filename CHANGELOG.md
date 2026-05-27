@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 16:13 UTC] — Feature
+
+refine RepoBar-style finance instrument
+
+`d0b07b0`
+
+---
+
+
 ## [2026-05-27 15:42 UTC] — Feature
 
 open PlaidBar dashboard popover by default
