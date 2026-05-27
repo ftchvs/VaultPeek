@@ -83,6 +83,11 @@ Prioritize these before adding new finance features:
    - Add a local data section with `~/.plaidbar/` storage path, reset/delete options, and clear warnings.
    - Keep dangerous actions explicit and confirmation-gated.
 
+8. **Long-running production loop**
+   - Use `/goal` for multi-hour, Codex-assisted production-readiness work.
+   - Keep each run focused on one reviewable slice with verification evidence.
+   - Stop before push, PR, or merge unless explicitly approved.
+
 ## Worth Implementing
 
 - Reliable Plaid sandbox onboarding.

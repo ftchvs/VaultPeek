@@ -276,6 +276,22 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for code style, PR process, and architect
 
 See [GOAL.md](GOAL.md) for the CodexBar-style product direction, design principles, and implementation priorities.
 
+### Agentic Development Loop
+
+This repo includes a local slash-command style runbook for long-running
+production-readiness work:
+
+```bash
+/goal
+```
+
+The entrypoint lives in [`commands/goal.md`](commands/goal.md) and delegates to
+[`commands/plaidbar-prod-loop.md`](commands/plaidbar-prod-loop.md) for the full
+multi-hour loop. It is designed for focused production-readiness work around
+trust, onboarding, local data controls, diagnostics, and empty/error states.
+Repo-local Codex skills in `.codex/skills/` provide companion instructions for
+commit, push, review, and production-readiness work.
+
 ## Server API Reference
 
 The companion server exposes these localhost endpoints:
