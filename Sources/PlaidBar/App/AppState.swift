@@ -451,6 +451,40 @@ final class AppState {
         }
     }
 
+    func startDemoMode() {
+        isDemoMode = true
+        loadDemoData()
+    }
+
+    func connectForOnboarding(expectedEnvironment: PlaidEnvironment) async -> Bool {
+        error = nil
+        await checkServerConnection()
+
+        guard serverConnected else {
+            switch expectedEnvironment {
+            case .sandbox:
+                error = "Start PlaidBarServer with --sandbox and sandbox credentials before connecting."
+            case .production:
+                error = "Start PlaidBarServer with production credentials before connecting real accounts."
+            }
+            return false
+        }
+
+        guard serverEnvironment == expectedEnvironment else {
+            let currentMode = statusModeText.lowercased()
+            switch expectedEnvironment {
+            case .sandbox:
+                error = "Server is running in \(currentMode), not sandbox. Restart with ./Scripts/run.sh --sandbox."
+            case .production:
+                error = "Server is running in \(currentMode), not production. Restart with ./Scripts/run.sh after Plaid production approval."
+            }
+            return false
+        }
+
+        await addAccount()
+        return error == nil
+    }
+
     func removeAccount(itemId: String) async {
         do {
             try await serverClient.removeItem(itemId: itemId)
@@ -652,6 +686,7 @@ final class AppState {
         }
 
         isSetupComplete = true
+        isDemoMode = true
         serverConnected = true
         serverEnvironment = .sandbox
         serverVersion = PlaidBarConstants.appVersion
