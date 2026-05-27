@@ -32,6 +32,10 @@ let package = Package(
                 .product(name: "KeychainAccess", package: "KeychainAccess"),
             ],
             path: "Sources/PlaidBar",
+            exclude: [
+                "Resources/Info.plist",
+                "Resources/PlaidBar.entitlements",
+            ],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
 
