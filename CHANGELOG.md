@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 17:31 UTC] — Feature
+
+densify demo heatmap data (#40)
+
+`969eaf3`
+
+---
+
+
 ## [2026-05-27 17:22 UTC] — Documentation
 
 refresh dashboard screenshot workflow (#39)
