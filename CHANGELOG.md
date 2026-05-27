@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 21:08 UTC] — Feature
+
+calculate runway from spend
+
+`d9dda3f`
+
+---
+
+
 ## [2026-05-27 20:24 UTC] — Feature
 
 show dashboard balance mix (#55)
