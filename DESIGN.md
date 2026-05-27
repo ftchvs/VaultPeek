@@ -287,13 +287,13 @@ Pattern for all empty states:
 
 | Screen | Components Used | Nav Pattern |
 |--------|----------------|-------------|
-| Menu bar popover (main) | TabView with 4 tabs: Accounts, Transactions, Spending, Credit | `Cmd+1` through `Cmd+4` |
-| Accounts tab | AccountRow list grouped by `.depository` / `.credit` | Scroll; pull-to-refresh via `Cmd+R` |
-| Transactions tab | Segmented picker (Recent/Recurring) + Search bar + FilterChipsView + TransactionRow list + date group headers → tap: TransactionDetailView sheet; OR RecurringView | Scroll; search via `Cmd+F` |
-| Spending tab | Period picker (segmented) + Hero total + SpendingComparison + Chart picker (Categories/Trend/In vs Out) + Donut/SpendingTrendChart/IncomeExpenseChart | Scroll; period and chart type selectable |
-| Credit tab | CreditCardRow list + Utilization gauge | Scroll |
+| Menu bar popover (main) | Dashboard header, status strip, summary values, 365-day heatmap, segmented finance filters, dense account rows, selected account drill-down, footer actions | One scroll surface; row selection drives drill-down; `Cmd+R` refreshes and `Cmd+N` adds account |
+| Account rows | Compact account/card rows with balance, utilization/status, sync freshness, pending count, and chevron affordance | Click row to update selected account panel |
+| Selected account panel | Connection badge, balance metrics, pending/inflow/outflow/sync pills, recent transactions, reconnect/refresh actions | Contextual recovery actions for stale or degraded items |
+| Spending activity | GitHub-style 365-day grid with month labels, intensity legend, and total spend header | Hover cells for day-level transaction count and spend |
+| Legacy detail views | AccountsView, TransactionsView, SpendingView, CreditView, StatusView remain available as implementation surfaces and screenshot/reference components | Prefer dashboard-first entry unless adding a focused detail surface |
 | Settings | 4-tab TabView: General, Accounts, Notifications, About (480×380) | TabView |
-| Onboarding | 3-step flow: Welcome → Plaid Link → Success | Next/Back buttons |
+| Onboarding | Demo/Sandbox/Production choice with local-storage disclosure before Plaid Link | Mode choice, Back, Check Connection |
 
 ## Extending the Design System
 

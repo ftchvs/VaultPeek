@@ -116,12 +116,7 @@ Get credentials free at [dashboard.plaid.com](https://dashboard.plaid.com). Sand
 
 | Shortcut | Action |
 |----------|--------|
-| `Cmd+1` | Accounts tab |
-| `Cmd+2` | Transactions tab |
-| `Cmd+3` | Spending tab |
-| `Cmd+4` | Credit tab |
-| `Cmd+5` | Status tab |
-| `Cmd+R` | Refresh balances |
+| `Cmd+R` | Refresh balances and sync transactions |
 | `Cmd+N` | Add account |
 
 ## Accessibility
@@ -189,7 +184,8 @@ PlaidBar/
 │   ├── PlaidBar/                    # macOS menu bar app
 │   │   ├── App/                     # @main entry, AppState
 │   │   ├── Theme/                   # Design tokens, typography
-│   │   ├── Views/                   # SwiftUI views (5 tabs)
+│   │   ├── Views/                   # Dashboard popover, setup, settings surfaces
+│   │   │   ├── MainPopover.swift    # Dashboard-first menu bar popover
 │   │   │   ├── AccountsView.swift   # Balance list by account type
 │   │   │   ├── TransactionsView.swift # Searchable grouped list
 │   │   │   ├── SpendingView.swift   # Donut/heatmap/trend/bar charts
