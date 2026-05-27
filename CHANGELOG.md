@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 16:30 UTC] — Feature
+
+polish dashboard empty states
+
+`744253e`
+
+---
+
+
 ## [2026-05-27 16:22 UTC] — Feature
 
 polish account drilldown panel
