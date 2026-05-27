@@ -24,7 +24,10 @@ struct StatusRoutes: Sendable {
             version: PlaidBarConstants.appVersion,
             environment: config.plaidEnvironment,
             itemCount: itemCount,
-            lastSync: lastSync
+            lastSync: lastSync,
+            credentialsConfigured: !config.plaidClientId.isEmpty && !config.plaidSecret.isEmpty,
+            storagePath: config.databasePath,
+            syncReady: itemCount > 0
         )
 
         let encoder = JSONEncoder()

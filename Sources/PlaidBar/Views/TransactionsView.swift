@@ -134,17 +134,7 @@ struct TransactionsView: View {
         Divider()
 
         if filteredTransactions.isEmpty {
-            ContentUnavailableView {
-                Label(
-                    searchText.isEmpty && !hasActiveFilters ? "No Transactions" : "No Results",
-                    systemImage: searchText.isEmpty && !hasActiveFilters ? "tray" : "magnifyingglass"
-                )
-            } description: {
-                Text(searchText.isEmpty && !hasActiveFilters
-                    ? "Transactions will appear after syncing with your bank."
-                    : "No transactions match your filters.")
-            }
-            .padding()
+            emptyState
         } else {
             ForEach(filteredTransactions, id: \.0) { date, transactions in
                 // Date header
@@ -165,6 +155,78 @@ struct TransactionsView: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private var emptyState: some View {
+        if !searchText.isEmpty || hasActiveFilters {
+            ContentUnavailableView {
+                Label("No Results", systemImage: "magnifyingglass")
+            } description: {
+                Text("No transactions match the current search or filters.")
+            } actions: {
+                Button {
+                    clearSearchAndFilters()
+                } label: {
+                    Label("Clear Filters", systemImage: "xmark.circle")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            }
+            .padding()
+        } else if !appState.isDemoMode && !appState.serverConnected {
+            ContentUnavailableView {
+                Label("Server Offline", systemImage: "server.rack")
+            } description: {
+                Text("Start PlaidBarServer before syncing transaction history.")
+            } actions: {
+                Button {
+                    Task { await appState.checkServerConnection() }
+                } label: {
+                    Label("Check Server", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            }
+            .padding()
+        } else if appState.statusItemCount == 0 {
+            ContentUnavailableView {
+                Label("No Bank Linked", systemImage: "building.columns")
+            } description: {
+                Text("Connect a Plaid institution before transaction history can sync.")
+            } actions: {
+                Button {
+                    Task { await appState.addAccount() }
+                } label: {
+                    Label("Add Account", systemImage: "plus.circle")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            }
+            .padding()
+        } else {
+            ContentUnavailableView {
+                Label("No Synced Transactions", systemImage: "tray")
+            } description: {
+                Text("Run a transaction sync to load recent history for linked accounts.")
+            } actions: {
+                Button {
+                    Task { await appState.syncTransactions() }
+                } label: {
+                    Label("Sync Transactions", systemImage: "arrow.triangle.2.circlepath")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            }
+            .padding()
+        }
+    }
+
+    private func clearSearchAndFilters() {
+        searchText = ""
+        selectedCategory = nil
+        selectedAccountId = nil
+        selectedDateRange = .all
     }
 
 }

@@ -23,13 +23,23 @@ struct AccountRoutes: Sendable {
         var allAccounts: [AccountDTO] = []
 
         for item in items {
-            let response = try await plaidClient.getAccounts(
-                accessToken: item.accessToken
-            )
+            guard let itemId = item.id else { continue }
+
+            let response: PlaidAccountsResponse
+            do {
+                response = try await plaidClient.getAccounts(
+                    accessToken: item.accessToken
+                )
+                try await tokenStore.updateItemStatus(id: itemId, status: ItemConnectionStatus.connected.rawValue)
+            } catch {
+                try await tokenStore.updateItemStatus(id: itemId, status: itemStatus(for: error).rawValue)
+                continue
+            }
+
             let accounts = response.accounts.map { account in
                 AccountDTO(
                     id: account.accountId,
-                    itemId: item.id ?? "",
+                    itemId: itemId,
                     name: account.name,
                     officialName: account.officialName,
                     type: AccountType(rawValue: account.type) ?? .other,
@@ -59,13 +69,23 @@ struct AccountRoutes: Sendable {
         var allAccounts: [AccountDTO] = []
 
         for item in items {
-            let response = try await plaidClient.getBalances(
-                accessToken: item.accessToken
-            )
+            guard let itemId = item.id else { continue }
+
+            let response: PlaidAccountsResponse
+            do {
+                response = try await plaidClient.getBalances(
+                    accessToken: item.accessToken
+                )
+                try await tokenStore.updateItemStatus(id: itemId, status: ItemConnectionStatus.connected.rawValue)
+            } catch {
+                try await tokenStore.updateItemStatus(id: itemId, status: itemStatus(for: error).rawValue)
+                continue
+            }
+
             let accounts = response.accounts.map { account in
                 AccountDTO(
                     id: account.accountId,
-                    itemId: item.id ?? "",
+                    itemId: itemId,
                     name: account.name,
                     officialName: account.officialName,
                     type: AccountType(rawValue: account.type) ?? .other,
@@ -115,5 +135,13 @@ struct AccountRoutes: Sendable {
             headers: [.contentType: "application/json"],
             body: .init(byteBuffer: ByteBuffer(data: data))
         )
+    }
+
+    private func itemStatus(for error: Error) -> ItemConnectionStatus {
+        if case PlaidError.apiError(_, _, let errorCode, _) = error,
+           errorCode == "ITEM_LOGIN_REQUIRED" {
+            return .loginRequired
+        }
+        return .error
     }
 }

@@ -83,6 +83,18 @@ struct StatusView: View {
                 color: itemHealthColor
             )
             DiagnosticTile(
+                title: "Credentials",
+                value: appState.serverCredentialsText,
+                icon: "key",
+                color: credentialsColor
+            )
+            DiagnosticTile(
+                title: "Sync ready",
+                value: appState.serverSyncReadinessText,
+                icon: "checklist.checked",
+                color: syncReadinessColor
+            )
+            DiagnosticTile(
                 title: "Version",
                 value: appState.serverVersion ?? PlaidBarConstants.appVersion,
                 icon: "number",
@@ -92,6 +104,12 @@ struct StatusView: View {
                 title: "Endpoint",
                 value: appState.localServerURLText.replacingOccurrences(of: "http://", with: ""),
                 icon: "network",
+                color: .secondary
+            )
+            DiagnosticTile(
+                title: "Storage",
+                value: appState.serverStorageDisplayText,
+                icon: "internaldrive",
                 color: .secondary
             )
             DiagnosticTile(
@@ -121,15 +139,27 @@ struct StatusView: View {
                                 .font(.callout.weight(.medium))
                                 .lineLimit(1)
 
-                            Text(item.lastSync.map { "Updated \(Formatters.relativeDate($0))" } ?? "No sync recorded")
+                            Text(statusDetail(for: item))
                                 .detailText()
                         }
 
                         Spacer()
 
-                        Text(label(for: item.status))
-                            .microText()
-                            .foregroundStyle(color(for: item.status))
+                        VStack(alignment: .trailing, spacing: Spacing.xs) {
+                            Text(label(for: item.status))
+                                .microText()
+                                .foregroundStyle(color(for: item.status))
+
+                            if item.status != .connected {
+                                Button {
+                                    Task { await appState.reconnectItem(itemId: item.id) }
+                                } label: {
+                                    Label("Reconnect", systemImage: "link.badge.plus")
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.mini)
+                            }
+                        }
                     }
                     .padding(.vertical, Spacing.xs)
                 }
@@ -141,7 +171,7 @@ struct StatusView: View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             HStack(spacing: Spacing.xs) {
                 Image(systemName: "lock.doc")
-                Text("Local data path: \(appState.localStoragePathText)")
+                Text("Local data path: \(appState.serverStorageDisplayText)")
             }
             .detailText()
 
@@ -201,6 +231,16 @@ struct StatusView: View {
         return SemanticColors.positive
     }
 
+    private var credentialsColor: Color {
+        guard appState.serverConnected else { return .secondary }
+        return appState.serverCredentialsConfigured == true ? SemanticColors.positive : SemanticColors.negative
+    }
+
+    private var syncReadinessColor: Color {
+        guard appState.serverConnected else { return .secondary }
+        return appState.serverSyncReady == true ? SemanticColors.positive : .secondary
+    }
+
     private func icon(for status: ItemConnectionStatus) -> String {
         switch status {
         case .connected: "checkmark.circle.fill"
@@ -222,6 +262,17 @@ struct StatusView: View {
         case .connected: "Connected"
         case .loginRequired: "Login"
         case .error: "Error"
+        }
+    }
+
+    private func statusDetail(for item: ItemStatus) -> String {
+        switch item.status {
+        case .connected:
+            item.lastSync.map { "Updated \(Formatters.relativeDate($0))" } ?? "No sync recorded"
+        case .loginRequired:
+            "Plaid requires a fresh bank login. Reconnect this item."
+        case .error:
+            "The last Plaid request failed. Reconnect or try refreshing again."
         }
     }
 }

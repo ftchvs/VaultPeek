@@ -193,6 +193,9 @@ struct PlaidBarTests {
         #expect(decoded.version == "0.1.0")
         #expect(decoded.environment == .sandbox)
         #expect(decoded.itemCount == 2)
+        #expect(decoded.credentialsConfigured)
+        #expect(decoded.storagePath == LocalDataStore.displayPath)
+        #expect(decoded.syncReady)
     }
 
     // MARK: - Account Filtering (mirrors AppState computed properties)

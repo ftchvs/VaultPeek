@@ -38,6 +38,20 @@ actor PlaidClient {
         return try await post("/link/token/create", body: body)
     }
 
+    func createUpdateLinkToken(userId: String, accessToken: String) async throws -> PlaidLinkTokenResponse {
+        let body = PlaidLinkTokenRequest(
+            clientId: config.plaidClientId,
+            secret: config.plaidSecret,
+            clientName: "PlaidBar",
+            user: .init(clientUserId: userId),
+            countryCodes: ["US"],
+            language: "en",
+            redirectUri: config.redirectUri,
+            accessToken: accessToken
+        )
+        return try await post("/link/token/create", body: body)
+    }
+
     // MARK: - Token Exchange
 
     func exchangePublicToken(_ publicToken: String) async throws -> PlaidTokenExchangeResponse {

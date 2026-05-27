@@ -35,6 +35,9 @@ final class AppState {
     var serverEnvironment: PlaidEnvironment?
     var serverVersion: String?
     var serverItemCount: Int?
+    var serverCredentialsConfigured: Bool?
+    var serverStoragePath: String?
+    var serverSyncReady: Bool?
     var itemStatuses: [ItemStatus] = []
     var isDemoMode = false
     var lastSyncDate: Date?
@@ -281,6 +284,25 @@ final class AppState {
         localStorageDirectoryURL.path
     }
 
+    var serverStoragePathText: String {
+        serverStoragePath ?? localStoragePathText
+    }
+
+    var serverStorageDisplayText: String {
+        guard let serverStoragePath else { return localStoragePathText }
+        return serverStoragePath.replacingOccurrences(of: NSHomeDirectory(), with: "~")
+    }
+
+    var serverCredentialsText: String {
+        guard serverConnected else { return "Unknown" }
+        return serverCredentialsConfigured == true ? "Ready" : "Missing"
+    }
+
+    var serverSyncReadinessText: String {
+        guard serverConnected else { return "Unknown" }
+        return serverSyncReady == true ? "Ready" : "No items"
+    }
+
     var refreshCadenceText: String {
         "\(Int(refreshInterval / 60)) min"
     }
@@ -382,6 +404,9 @@ final class AppState {
             serverEnvironment = status.environment
             serverVersion = status.version
             serverItemCount = status.itemCount
+            serverCredentialsConfigured = status.credentialsConfigured
+            serverStoragePath = status.storagePath
+            serverSyncReady = status.syncReady
             lastSyncDate = status.lastSync
             isSetupComplete = status.itemCount > 0
             itemStatuses = (try? await serverClient.getItems()) ?? []
@@ -390,6 +415,9 @@ final class AppState {
             serverEnvironment = nil
             serverVersion = nil
             serverItemCount = nil
+            serverCredentialsConfigured = nil
+            serverStoragePath = nil
+            serverSyncReady = nil
             itemStatuses = []
             isSetupComplete = false
         }
@@ -401,6 +429,7 @@ final class AppState {
         do {
             accounts = try await serverClient.getAccounts()
             serverItemCount = Set(accounts.map(\.itemId)).count
+            serverSyncReady = (serverItemCount ?? 0) > 0
             isSetupComplete = !accounts.isEmpty
             itemStatuses = (try? await serverClient.getItems()) ?? itemStatuses
         } catch {
@@ -451,6 +480,17 @@ final class AppState {
         do {
             let linkResponse = try await serverClient.createLinkToken()
             // Open Plaid Link in browser
+            if let url = URL(string: linkResponse.linkUrl) {
+                NSWorkspace.shared.open(url)
+            }
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    func reconnectItem(itemId: String) async {
+        do {
+            let linkResponse = try await serverClient.createUpdateLinkToken(itemId: itemId)
             if let url = URL(string: linkResponse.linkUrl) {
                 NSWorkspace.shared.open(url)
             }
@@ -518,6 +558,9 @@ final class AppState {
         transactions = []
         itemStatuses = []
         serverItemCount = 0
+        serverCredentialsConfigured = nil
+        serverStoragePath = nil
+        serverSyncReady = nil
         lastSyncDate = nil
         isSetupComplete = false
         isDemoMode = false
@@ -720,6 +763,9 @@ final class AppState {
         serverEnvironment = .sandbox
         serverVersion = PlaidBarConstants.appVersion
         serverItemCount = Set(accounts.map(\.itemId)).count
+        serverCredentialsConfigured = true
+        serverStoragePath = LocalDataStore.displayPath
+        serverSyncReady = true
         itemStatuses = [
             ItemStatus(id: "demo_chase", institutionName: "Chase", status: .connected, lastSync: Date()),
             ItemStatus(id: "demo_amex_item", institutionName: "American Express", status: .connected, lastSync: Date()),

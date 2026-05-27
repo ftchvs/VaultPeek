@@ -7,20 +7,7 @@ struct AccountsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if appState.accounts.isEmpty {
-                ContentUnavailableView {
-                    Label("No Accounts", systemImage: "building.columns")
-                } description: {
-                    Text("Connect a bank to see your balances here.")
-                } actions: {
-                    Button {
-                        Task { await appState.addAccount() }
-                    } label: {
-                        Label("Add Account", systemImage: "plus.circle")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                }
-                .padding()
+                emptyState
             } else {
                 // Depository accounts
                 if !appState.depositoryAccounts.isEmpty {
@@ -65,6 +52,56 @@ struct AccountsView: View {
                 .padding(.horizontal, Spacing.lg)
                 .padding(.vertical, Spacing.sm)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var emptyState: some View {
+        if !appState.isDemoMode && !appState.serverConnected {
+            ContentUnavailableView {
+                Label("Server Offline", systemImage: "server.rack")
+            } description: {
+                Text("Start PlaidBarServer, then check the connection again.")
+            } actions: {
+                Button {
+                    Task { await appState.checkServerConnection() }
+                } label: {
+                    Label("Check Server", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            }
+            .padding()
+        } else if appState.statusItemCount == 0 {
+            ContentUnavailableView {
+                Label("No Bank Linked", systemImage: "building.columns")
+            } description: {
+                Text("Connect a Plaid institution before balances can appear here.")
+            } actions: {
+                Button {
+                    Task { await appState.addAccount() }
+                } label: {
+                    Label("Add Account", systemImage: "plus.circle")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            }
+            .padding()
+        } else {
+            ContentUnavailableView {
+                Label("No Account Data", systemImage: "tray")
+            } description: {
+                Text("The server has a linked item, but no balances are loaded in the app yet.")
+            } actions: {
+                Button {
+                    Task { await appState.refreshAccounts() }
+                } label: {
+                    Label("Refresh Accounts", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            }
+            .padding()
         }
     }
 

@@ -9,8 +9,10 @@ struct LinkRoutes: Sendable {
     let config: ServerConfig
 
     func register(with group: RouterGroup<some RequestContext>) {
-        group.group("link")
-            .post("create", use: createLinkToken)
+        let link = group.group("link")
+        link.post("create", use: createLinkToken)
+        link.group("update")
+            .post("{itemId}", use: createUpdateLinkToken)
     }
 
     @Sendable
@@ -20,6 +22,35 @@ struct LinkRoutes: Sendable {
     ) async throws -> Response {
         let userId = "plaidbar-user-\(UUID().uuidString.prefix(8))"
         let plaidResponse = try await plaidClient.createLinkToken(userId: userId)
+
+        let linkUrl = plaidResponse.hostedLinkUrl(redirectUri: config.redirectUri)
+        let dto = LinkResponse(linkToken: plaidResponse.linkToken, linkUrl: linkUrl)
+
+        let data = try JSONEncoder().encode(dto)
+        return Response(
+            status: .ok,
+            headers: [.contentType: "application/json"],
+            body: .init(byteBuffer: ByteBuffer(data: data))
+        )
+    }
+
+    @Sendable
+    func createUpdateLinkToken(
+        request: Request,
+        context: some RequestContext
+    ) async throws -> Response {
+        guard let itemId = context.parameters.get("itemId") else {
+            throw HTTPError(.badRequest, message: "Missing itemId parameter")
+        }
+        guard let item = try await tokenStore.getItem(id: itemId) else {
+            throw HTTPError(.notFound, message: "Plaid item not found")
+        }
+
+        let userId = "plaidbar-user-\(UUID().uuidString.prefix(8))"
+        let plaidResponse = try await plaidClient.createUpdateLinkToken(
+            userId: userId,
+            accessToken: item.accessToken
+        )
 
         let linkUrl = plaidResponse.hostedLinkUrl(redirectUri: config.redirectUri)
         let dto = LinkResponse(linkToken: plaidResponse.linkToken, linkUrl: linkUrl)

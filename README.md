@@ -302,6 +302,7 @@ The companion server exposes these localhost endpoints:
 | `GET` | `/api/status` | Server version, environment, item count |
 | `GET` | `/api/items` | List connected bank items |
 | `POST` | `/api/link/create` | Create Plaid Link token + URL |
+| `POST` | `/api/link/update/:itemId` | Create Plaid Link update-mode URL for reconnect |
 | `GET` | `/oauth/callback` | Plaid OAuth redirect handler |
 | `GET` | `/api/accounts` | List all accounts (cached) |
 | `GET` | `/api/accounts/balances` | Real-time balances |

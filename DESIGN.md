@@ -105,6 +105,40 @@ Category colors from `SpendingCategory.colorHex` — fixed hex values for chart 
 
 ## Component Catalog
 
+### RepoBar-Style Finance Overview
+
+**Reference:** RepoBar menu popover pattern: contribution heatmap header, compact
+filter bar, dense rows, selected row highlight, and chevron-based drill-in. Use
+the RepoBar visual language as inspiration, not as literal GitHub UI.
+
+**Target anatomy:** VStack | Financial heatmap header (`last 12 months` or
+shorter fallback when data is limited) | segmented filter bar (`All`, `Cash`,
+`Credit`, `Savings`, `Debt`, `Status`) | list of account/card rows | selected
+account/card detail surface.
+
+| Element | PlaidBar Meaning |
+|---------|------------------|
+| Heatmap header | Daily spending intensity or net cashflow from transactions |
+| Repo row | Account/card row with institution, type, balance, status, and freshness |
+| Repo stats | Balance, available credit, utilization, pending count, sync state |
+| Selected repo highlight | Selected account/card detail target |
+| Submenu/drill-in | Account/card detail sheet or inline detail surface |
+
+**Account/card row anatomy:** status dot or account-type icon | institution +
+account name | secondary line with type, mask, sync freshness, pending count |
+trailing primary metric (balance owed/cash balance) | secondary metric
+(utilization, available credit, or last updated) | chevron.
+
+| State | Behavior |
+|-------|----------|
+| Healthy cash account | Green/neutral status, cash balance primary, latest sync secondary |
+| Savings account | Cash row with savings label; preserve same density as checking |
+| Credit card | Credit balance owed primary, utilization and available credit secondary |
+| High utilization | Warning/negative utilization color plus text label, not color alone |
+| Degraded item | Warning status and `Reconnect` in detail surface |
+| Selected | Blue/accent highlight matching native menu selection; detail surface opens |
+| No data | Keep overview shell and show one compact recovery action |
+
 ### AccountRow
 
 **Anatomy:** Institution avatar (28×28 circle, DJB2-hashed color) | Account name (`.body`) + mask (`.detailText()`) | Amount (`.monospacedDigit`) with semantic color | Credit accounts: `creditcard` icon prefix + utilization badge

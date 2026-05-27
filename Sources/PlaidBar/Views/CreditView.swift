@@ -18,20 +18,7 @@ struct CreditView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
             if appState.creditAccounts.isEmpty {
-                ContentUnavailableView {
-                    Label("No Credit Cards", systemImage: "creditcard")
-                } description: {
-                    Text("Link a credit card to track utilization and available credit.")
-                } actions: {
-                    Button {
-                        Task { await appState.addAccount() }
-                    } label: {
-                        Label("Add Account", systemImage: "plus.circle")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                }
-                .padding()
+                emptyState
             } else {
                 Text("Credit Utilization")
                     .sectionTitle()
@@ -75,6 +62,71 @@ struct CreditView: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Total credit utilization \(Formatters.percent(totalUtilization))")
             }
+        }
+    }
+
+    @ViewBuilder
+    private var emptyState: some View {
+        if !appState.isDemoMode && !appState.serverConnected {
+            ContentUnavailableView {
+                Label("Server Offline", systemImage: "server.rack")
+            } description: {
+                Text("Start PlaidBarServer before checking credit utilization.")
+            } actions: {
+                Button {
+                    Task { await appState.checkServerConnection() }
+                } label: {
+                    Label("Check Server", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            }
+            .padding()
+        } else if appState.statusItemCount == 0 {
+            ContentUnavailableView {
+                Label("No Bank Linked", systemImage: "creditcard")
+            } description: {
+                Text("Connect a Plaid institution with a credit card to track utilization.")
+            } actions: {
+                Button {
+                    Task { await appState.addAccount() }
+                } label: {
+                    Label("Add Account", systemImage: "plus.circle")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            }
+            .padding()
+        } else if appState.accounts.isEmpty {
+            ContentUnavailableView {
+                Label("No Account Data", systemImage: "tray")
+            } description: {
+                Text("The linked item has not loaded account balances yet.")
+            } actions: {
+                Button {
+                    Task { await appState.refreshAccounts() }
+                } label: {
+                    Label("Refresh Accounts", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            }
+            .padding()
+        } else {
+            ContentUnavailableView {
+                Label("No Credit Accounts", systemImage: "creditcard")
+            } description: {
+                Text("Your linked accounts do not include a credit card with utilization data.")
+            } actions: {
+                Button {
+                    Task { await appState.addAccount() }
+                } label: {
+                    Label("Add Credit Card", systemImage: "plus.circle")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+            .padding()
         }
     }
 }

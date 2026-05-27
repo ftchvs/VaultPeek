@@ -7,10 +7,33 @@ struct PlaidLinkTokenRequest: Encodable, Sendable {
     let secret: String
     let clientName: String
     let user: PlaidUser
-    let products: [String]
+    let products: [String]?
     let countryCodes: [String]
     let language: String
     let redirectUri: String
+    let accessToken: String?
+
+    init(
+        clientId: String,
+        secret: String,
+        clientName: String,
+        user: PlaidUser,
+        products: [String]? = nil,
+        countryCodes: [String],
+        language: String,
+        redirectUri: String,
+        accessToken: String? = nil
+    ) {
+        self.clientId = clientId
+        self.secret = secret
+        self.clientName = clientName
+        self.user = user
+        self.products = products
+        self.countryCodes = countryCodes
+        self.language = language
+        self.redirectUri = redirectUri
+        self.accessToken = accessToken
+    }
 
     struct PlaidUser: Encodable, Sendable {
         let clientUserId: String

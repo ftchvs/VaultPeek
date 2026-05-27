@@ -400,6 +400,9 @@ struct PlaidBarCoreTests {
         #expect(decoded.environment == .sandbox)
         #expect(decoded.itemCount == 2)
         #expect(decoded.lastSync == nil)
+        #expect(decoded.credentialsConfigured)
+        #expect(decoded.storagePath == LocalDataStore.displayPath)
+        #expect(decoded.syncReady)
     }
 
     @Test("ServerStatus with lastSync")
@@ -414,6 +417,25 @@ struct PlaidBarCoreTests {
         let decoded = try decoder.decode(ServerStatus.self, from: data)
         #expect(decoded.environment == .production)
         #expect(decoded.lastSync != nil)
+    }
+
+    @Test("ServerStatus preflight fields")
+    func serverStatusPreflightFields() throws {
+        let status = ServerStatus(
+            version: "0.1.0",
+            environment: .sandbox,
+            itemCount: 0,
+            credentialsConfigured: false,
+            storagePath: "/tmp/plaidbar.sqlite",
+            syncReady: false
+        )
+
+        let data = try JSONEncoder().encode(status)
+        let decoded = try JSONDecoder().decode(ServerStatus.self, from: data)
+
+        #expect(decoded.credentialsConfigured == false)
+        #expect(decoded.storagePath == "/tmp/plaidbar.sqlite")
+        #expect(decoded.syncReady == false)
     }
 
     // MARK: - ItemStatus Tests

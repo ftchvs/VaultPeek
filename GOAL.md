@@ -34,6 +34,14 @@ The public repo should prove three things:
 
 PlaidBar should feel like a compact financial instrument, not a bank website squeezed into a popover.
 
+The near-term visual target is RepoBar-style density adapted to finance:
+
+- **Heatmap first:** lead with a GitHub-contribution-style financial heatmap that makes daily spend/cashflow intensity visible before the user reads rows.
+- **Instrument rows:** show cash, savings, credit cards, loans, and other accounts as compact status rows with a dot/icon, name, key metric, secondary detail, and last-updated/sync clue.
+- **Filterable scope:** use a RepoBar-like segmented control for All, Cash, Credit, Savings, Debt, and Status so the popover stays one surface instead of separate finance silos.
+- **Drill-in details:** selecting an account or card opens a focused detail view/sheet with transactions, limits/utilization, due-date metadata when available, sync status, and reconnect/remove actions.
+- **Native translucency:** match the macOS menu-bar feel in the attached RepoBar reference: material background, separators, compact row height, subtle selected state, and minimal decorative chrome.
+
 Design principles:
 
 - **At-a-glance first:** the menu bar label and top popover area should prioritize one clear financial summary plus sync health.
@@ -48,42 +56,48 @@ Design principles:
 
 Prioritize these before adding new finance features:
 
-1. **Top status strip**
+1. **RepoBar-style finance dashboard**
+   - Reshape the main popover around a heatmap header, segmented finance filters, and dense account/card rows.
+   - Replace the tab-first mental model with one glanceable overview while preserving deeper screens through row selection.
+   - Make credit cards, savings/checking, and sync health readable from the same list.
+   - Use the attached RepoBar screenshot and `https://repobar.app` as the visual reference, but keep PlaidBar finance semantics.
+
+2. **Top status strip**
    - Show environment: Demo, Sandbox, or Production.
    - Show server state: Connected, Offline, Syncing, Error.
    - Show last sync time and stale-data warning.
 
-2. **Menu bar summary modes**
+3. **Menu bar summary modes**
    - Let users choose the menu bar label: Net cash, total cash, credit utilization, recent spend, or compact icon-only.
    - Keep the default conservative: net cash or account health, not noisy transaction counts.
    - Implemented local slice: settings picker, persisted mode, shared summary calculator, and focused tests.
 
-3. **Spending heatmap**
+4. **Spending heatmap**
    - Add a GitHub-style daily grid for recent spending intensity.
    - Support both total spend and net cashflow so income/refunds do not disappear from the story.
    - Keep day details local and glanceable: amount, transaction count, and date.
 
-4. **CodexBar-style health panel**
+5. **CodexBar-style health panel**
    - Add a small diagnostics/settings surface for local server URL, Plaid environment, item count, last sync, and refresh cadence.
    - Make failures actionable: missing credentials, server offline, token expired, Plaid error.
    - Implemented local slice: Status tab with server/sync/data/item diagnostics and refresh/connect/settings recovery actions.
 
-5. **Cleaner onboarding**
+6. **Cleaner onboarding**
    - Separate "View Demo", "Connect Sandbox", and "Use Production Credentials".
    - Never imply sandbox works without credentials unless the app can actually do that.
    - Explain what data is stored before the user links an account.
    - Implemented local slice: first-run chooser with Demo, Sandbox, and Production paths; server environment checks before Plaid Link; local storage disclosure before linking.
 
-6. **Sharper empty and error states**
+7. **Sharper empty and error states**
    - Accounts: explain whether there is no data, no server, or no linked institution.
    - Transactions: distinguish no synced history from filters returning zero results.
    - Credit: explain if no credit accounts are linked.
 
-7. **Trust-first settings**
+8. **Trust-first settings**
    - Add a local data section with `~/.plaidbar/` storage path, reset/delete options, and clear warnings.
    - Keep dangerous actions explicit and confirmation-gated.
 
-8. **Long-running production loop**
+9. **Long-running production loop**
    - Use `/goal` for multi-hour, Codex-assisted production-readiness work.
    - Keep each run focused on one reviewable slice with verification evidence.
    - Stop before push, PR, or merge unless explicitly approved.

@@ -246,22 +246,82 @@ struct AccountSettingsView: View {
     var body: some View {
         VStack(alignment: .leading) {
             if appState.accounts.isEmpty {
-                ContentUnavailableView("No Accounts", systemImage: "building.columns")
+                ContentUnavailableView {
+                    Label(emptyTitle, systemImage: emptyIcon)
+                } description: {
+                    Text(emptyMessage)
+                } actions: {
+                    Button {
+                        Task { await appState.addAccount() }
+                    } label: {
+                        Label("Add Account", systemImage: "plus.circle")
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .padding()
             } else {
                 List {
-                    ForEach(appState.accounts) { account in
-                        HStack {
-                            VStack(alignment: .leading) {
-                                Text(account.name)
-                                Text(account.type.rawValue.capitalized)
+                    ForEach(accountGroups) { group in
+                        VStack(alignment: .leading, spacing: Spacing.sm) {
+                            HStack(alignment: .top) {
+                                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                                    Text(group.institutionName)
+                                        .font(.headline)
+
+                                    HStack(spacing: Spacing.xs) {
+                                        Image(systemName: icon(for: group.status))
+                                            .foregroundStyle(color(for: group.status))
+                                        Text(label(for: group.status))
+                                            .foregroundStyle(color(for: group.status))
+                                        Text("\u{00B7}")
+                                            .foregroundStyle(.tertiary)
+                                        Text("\(group.accounts.count) account\(group.accounts.count == 1 ? "" : "s")")
+                                            .foregroundStyle(.secondary)
+                                    }
                                     .detailText()
+                                }
+
+                                Spacer()
+
+                                if group.status != .connected {
+                                    Button {
+                                        Task { await appState.reconnectItem(itemId: group.id) }
+                                    } label: {
+                                        Label("Reconnect", systemImage: "link.badge.plus")
+                                    }
+                                    .buttonStyle(.bordered)
+                                }
+
+                                Button(role: .destructive) {
+                                    Task { await appState.removeAccount(itemId: group.id) }
+                                } label: {
+                                    Label("Remove", systemImage: "trash")
+                                }
+                                .buttonStyle(.bordered)
                             }
-                            Spacer()
-                            Button("Remove") {
-                                Task { await appState.removeAccount(itemId: account.itemId) }
+
+                            ForEach(group.accounts) { account in
+                                HStack {
+                                    Image(systemName: account.type == .credit ? "creditcard" : "building.columns")
+                                        .foregroundStyle(.secondary)
+                                        .frame(width: 18)
+
+                                    VStack(alignment: .leading, spacing: Spacing.xxs) {
+                                        Text(account.name)
+                                        Text(account.type.rawValue.capitalized)
+                                            .detailText()
+                                    }
+
+                                    Spacer()
+
+                                    Text(Formatters.currency(account.balances.effectiveBalance, format: .compact))
+                                        .monospacedDigit()
+                                        .foregroundStyle(account.type == .credit ? SemanticColors.creditDebt : .secondary)
+                                }
+                                .padding(.leading, Spacing.md)
                             }
-                            .foregroundStyle(SemanticColors.negative)
                         }
+                        .padding(.vertical, Spacing.xs)
                     }
                 }
             }
@@ -276,6 +336,75 @@ struct AccountSettingsView: View {
             .padding()
         }
     }
+
+    private var accountGroups: [AccountItemGroup] {
+        Dictionary(grouping: appState.accounts, by: \.itemId)
+            .map { itemId, accounts in
+                let status = appState.itemStatuses.first(where: { $0.id == itemId })
+                let institutionName = accounts.compactMap(\.institutionName).first
+                    ?? status?.institutionName
+                    ?? "Plaid item"
+                return AccountItemGroup(
+                    id: itemId,
+                    institutionName: institutionName,
+                    status: status?.status ?? .connected,
+                    accounts: accounts.sorted { $0.name < $1.name }
+                )
+            }
+            .sorted { $0.institutionName < $1.institutionName }
+    }
+
+    private var emptyTitle: String {
+        if !appState.isDemoMode && !appState.serverConnected { return "Server Offline" }
+        if appState.statusItemCount == 0 { return "No Bank Linked" }
+        return "No Account Data"
+    }
+
+    private var emptyIcon: String {
+        if !appState.isDemoMode && !appState.serverConnected { return "server.rack" }
+        return "building.columns"
+    }
+
+    private var emptyMessage: String {
+        if !appState.isDemoMode && !appState.serverConnected {
+            return "Start PlaidBarServer before managing linked accounts."
+        }
+        if appState.statusItemCount == 0 {
+            return "Connect a Plaid institution to manage linked accounts here."
+        }
+        return "The server has a linked item, but account details are not loaded yet."
+    }
+
+    private func icon(for status: ItemConnectionStatus) -> String {
+        switch status {
+        case .connected: "checkmark.circle.fill"
+        case .loginRequired: "person.crop.circle.badge.exclamationmark"
+        case .error: "xmark.octagon.fill"
+        }
+    }
+
+    private func color(for status: ItemConnectionStatus) -> Color {
+        switch status {
+        case .connected: SemanticColors.positive
+        case .loginRequired: SemanticColors.warning
+        case .error: SemanticColors.negative
+        }
+    }
+
+    private func label(for status: ItemConnectionStatus) -> String {
+        switch status {
+        case .connected: "Connected"
+        case .loginRequired: "Login required"
+        case .error: "Error"
+        }
+    }
+}
+
+private struct AccountItemGroup: Identifiable {
+    let id: String
+    let institutionName: String
+    let status: ItemConnectionStatus
+    let accounts: [AccountDTO]
 }
 
 struct NotificationSettingsView: View {

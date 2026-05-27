@@ -41,10 +41,17 @@ struct TransactionRoutes: Sendable {
             guard let itemId = item.id else { continue }
 
             let cursor = try await tokenStore.getSyncCursor(itemId: itemId)
-            let response = try await plaidClient.syncTransactions(
-                accessToken: item.accessToken,
-                cursor: cursor
-            )
+            let response: PlaidTransactionsSyncResponse
+            do {
+                response = try await plaidClient.syncTransactions(
+                    accessToken: item.accessToken,
+                    cursor: cursor
+                )
+                try await tokenStore.updateItemStatus(id: itemId, status: ItemConnectionStatus.connected.rawValue)
+            } catch {
+                try await tokenStore.updateItemStatus(id: itemId, status: itemStatus(for: error).rawValue)
+                continue
+            }
 
             allAdded.append(contentsOf: response.added.map { Self.toDTO($0) })
             allModified.append(contentsOf: response.modified.map { Self.toDTO($0) })
@@ -97,5 +104,13 @@ struct TransactionRoutes: Sendable {
             pending: plaidTx.pending,
             isoCurrencyCode: plaidTx.isoCurrencyCode
         )
+    }
+
+    private func itemStatus(for error: Error) -> ItemConnectionStatus {
+        if case PlaidError.apiError(_, _, let errorCode, _) = error,
+           errorCode == "ITEM_LOGIN_REQUIRED" {
+            return .loginRequired
+        }
+        return .error
     }
 }

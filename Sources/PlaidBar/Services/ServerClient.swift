@@ -42,6 +42,10 @@ actor ServerClient {
         try await post("/api/link/create")
     }
 
+    func createUpdateLinkToken(itemId: String) async throws -> LinkResponse {
+        try await post("/api/link/update/\(itemId)")
+    }
+
     func removeItem(itemId: String) async throws {
         guard let url = URL(string: "\(baseURL)/api/accounts/\(itemId)") else {
             throw ServerClientError.requestFailed
