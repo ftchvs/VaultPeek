@@ -1011,7 +1011,7 @@ private struct DashboardAccountRow: View {
                 Text(amountText)
                     .font(.callout.weight(.bold))
                     .monospacedDigit()
-                    .foregroundStyle(account.type == .credit ? SemanticColors.creditDebt : .primary)
+                    .foregroundStyle(AccountPresentation.isDebt(account) ? SemanticColors.creditDebt : .primary)
                     .lineLimit(1)
 
                 if let utilization = account.balances.utilizationPercent {
@@ -1047,8 +1047,7 @@ private struct DashboardAccountRow: View {
     }
 
     private var amountText: String {
-        let amount = account.balances.current ?? account.balances.effectiveBalance
-        return Formatters.currency(account.type == .credit ? abs(amount) : amount, format: .full)
+        Formatters.currency(AccountPresentation.displayBalance(for: account), format: .full)
     }
 
     private var accountTint: Color {
@@ -1254,8 +1253,7 @@ private struct SelectedAccountPanel: View {
     }
 
     private var currentText: String {
-        let amount = account.balances.current ?? account.balances.effectiveBalance
-        return Formatters.currency(account.type == .credit ? abs(amount) : amount, format: .compact)
+        Formatters.currency(AccountPresentation.displayBalance(for: account), format: .compact)
     }
 
     private var itemStatus: ItemConnectionStatus? {
