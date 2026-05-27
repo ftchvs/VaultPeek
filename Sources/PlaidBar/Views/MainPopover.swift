@@ -269,7 +269,7 @@ private struct DashboardSummaryCards: View {
 
             MetricCard(
                 title: "Debt",
-                value: Formatters.currency(totalDebt, format: .compact),
+                value: Formatters.currency(appState.totalDebt, format: .compact),
                 detail: debtDetail,
                 tint: SemanticColors.creditDebt
             )
@@ -283,17 +283,14 @@ private struct DashboardSummaryCards: View {
         }
     }
 
-    private var totalDebt: Double {
-        appState.creditAccounts.reduce(0) { total, account in
-            total + abs(account.balances.current ?? 0)
-        }
-    }
-
     private var debtDetail: String {
+        let debtCount = appState.debtAccounts.count
+        guard debtCount > 0 else { return "No debt linked" }
+
         guard let utilization = appState.totalCreditUtilization else {
-            return appState.creditAccounts.isEmpty ? "No credit linked" : "No limit data"
+            return "\(debtCount) debt account\(debtCount == 1 ? "" : "s")"
         }
-        return "\(Formatters.percent(utilization, decimals: 0)) utilization"
+        return "\(Formatters.percent(utilization, decimals: 0)) credit util"
     }
 
     private var runwayTint: Color {
@@ -427,7 +424,7 @@ private struct BalanceCompositionStrip: View {
     private func debt(for type: AccountType) -> Double {
         appState.accounts
             .filter { $0.type == type }
-            .reduce(0) { $0 + abs($1.balances.current ?? 0) }
+            .reduce(0) { $0 + AccountPresentation.displayBalance(for: $1) }
     }
 }
 
@@ -752,7 +749,7 @@ private enum DashboardAccountFilter: String, CaseIterable, Identifiable {
         case .savings:
             return account.subtype?.localizedCaseInsensitiveContains("saving") == true
         case .debt:
-            return account.type == .credit || account.type == .loan
+            return AccountPresentation.isDebt(account)
         case .status:
             guard appState.needsLoginItemCount > 0 || appState.erroredItemCount > 0 else { return true }
             let degradedItemIds = Set(
