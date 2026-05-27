@@ -15,6 +15,12 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_16.app
 
+      - name: Toolchain diagnostics
+        run: |
+          xcode-select -p
+          xcrun --find swift
+          swift --version
+
       - name: Resolve dependencies
         run: swift package resolve
 
