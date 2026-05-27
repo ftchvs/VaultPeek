@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 21:37 UTC] — Update
+
+print Swift toolchain diagnostics (#60)
+
+`05c2841`
+
+---
+
+
 ## [2026-05-27 21:27 UTC] — Fix
 
 encode server item endpoints (#58)
