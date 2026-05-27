@@ -32,6 +32,9 @@ struct MainPopover: View {
                         DashboardHeader()
                             .environment(appState)
 
+                        DashboardStatusStrip()
+                            .environment(appState)
+
                         DashboardSummaryCards()
                             .environment(appState)
 
@@ -120,6 +123,125 @@ private struct DashboardHeader: View {
             }
             .padding(.top, 3)
         }
+    }
+}
+
+private struct DashboardStatusStrip: View {
+    @Environment(AppState.self) private var appState
+
+    var body: some View {
+        HStack(spacing: 0) {
+            StatusStripItem(
+                title: "Mode",
+                value: appState.statusModeText,
+                icon: appState.isDemoMode ? "play.circle.fill" : "server.rack",
+                tint: appState.isDemoMode ? SemanticColors.brandSecondary : SemanticColors.brand
+            )
+
+            StatusDivider()
+
+            StatusStripItem(
+                title: "Server",
+                value: appState.statusServerText,
+                icon: serverIcon,
+                tint: serverTint
+            )
+
+            StatusDivider()
+
+            StatusStripItem(
+                title: "Sync",
+                value: appState.statusSyncText,
+                icon: appState.isSyncStale ? "clock.badge.exclamationmark.fill" : "checkmark.circle.fill",
+                tint: appState.isSyncStale ? SemanticColors.warning : SemanticColors.positive
+            )
+
+            StatusDivider()
+
+            StatusStripItem(
+                title: "Items",
+                value: itemsText,
+                icon: itemIcon,
+                tint: itemTint
+            )
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private var serverIcon: String {
+        if appState.isLoading { return "arrow.triangle.2.circlepath" }
+        if appState.error != nil { return "xmark.octagon.fill" }
+        return appState.serverConnected ? "checkmark.circle.fill" : "server.rack"
+    }
+
+    private var serverTint: Color {
+        if appState.isLoading { return SemanticColors.warning }
+        if appState.error != nil { return SemanticColors.negative }
+        return appState.serverConnected ? SemanticColors.positive : .secondary
+    }
+
+    private var itemsText: String {
+        if appState.needsLoginItemCount > 0 {
+            return "\(appState.needsLoginItemCount) login"
+        }
+        if appState.erroredItemCount > 0 {
+            return "\(appState.erroredItemCount) error"
+        }
+        return "\(appState.statusItemCount) linked"
+    }
+
+    private var itemIcon: String {
+        if appState.needsLoginItemCount > 0 { return "person.crop.circle.badge.exclamationmark.fill" }
+        if appState.erroredItemCount > 0 { return "exclamationmark.triangle.fill" }
+        return "link.circle.fill"
+    }
+
+    private var itemTint: Color {
+        if appState.erroredItemCount > 0 { return SemanticColors.negative }
+        if appState.needsLoginItemCount > 0 { return SemanticColors.warning }
+        return appState.statusItemCount > 0 ? SemanticColors.positive : .secondary
+    }
+}
+
+private struct StatusStripItem: View {
+    let title: String
+    let value: String
+    let icon: String
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Image(systemName: icon)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(tint)
+                .frame(width: 15)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .microText()
+                    .foregroundStyle(.secondary)
+                Text(value)
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct StatusDivider: View {
+    var body: some View {
+        Divider()
+            .padding(.vertical, 3)
+            .padding(.horizontal, 10)
     }
 }
 
@@ -436,20 +558,30 @@ private struct AccountsSection: View {
 }
 
 private struct DashboardAccountRow: View {
+    @Environment(AppState.self) private var appState
     let account: AccountDTO
     let isSelected: Bool
 
     var body: some View {
-        HStack(spacing: 13) {
+        HStack(spacing: 11) {
             Image(systemName: account.type == .credit ? "creditcard.fill" : "building.columns.fill")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(account.type == .credit ? SemanticColors.creditDebt : SemanticColors.available)
-                .frame(width: 40, height: 40)
+                .frame(width: 34, height: 34)
                 .background((account.type == .credit ? SemanticColors.creditDebt : SemanticColors.available).opacity(0.16), in: RoundedRectangle(cornerRadius: 8))
+                .overlay(alignment: .bottomTrailing) {
+                    Circle()
+                        .fill(statusTint)
+                        .frame(width: 9, height: 9)
+                        .overlay {
+                            Circle()
+                                .stroke(Color(nsColor: .windowBackgroundColor), lineWidth: 1.5)
+                        }
+                }
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(account.name)
-                    .font(.title3.weight(.semibold))
+                    .font(.callout.weight(.semibold))
                     .lineLimit(1)
                 Text(subtitle)
                     .detailText()
@@ -460,7 +592,7 @@ private struct DashboardAccountRow: View {
 
             VStack(alignment: .trailing, spacing: 4) {
                 Text(amountText)
-                    .font(.title3.weight(.bold))
+                    .font(.callout.weight(.bold))
                     .monospacedDigit()
                     .foregroundStyle(account.type == .credit ? SemanticColors.creditDebt : .primary)
                     .lineLimit(1)
@@ -469,23 +601,77 @@ private struct DashboardAccountRow: View {
                     Text(Formatters.percent(utilization, decimals: 0))
                         .font(.caption.weight(.bold))
                         .foregroundStyle(SemanticColors.utilization(for: utilization))
+                } else {
+                    Text(statusText)
+                        .microText()
+                        .foregroundStyle(statusTint)
+                        .lineLimit(1)
                 }
             }
+
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.tertiary)
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(isSelected ? SemanticColors.brand.opacity(0.14) : Color.clear)
+        .padding(.vertical, 8)
+        .background(isSelected ? SemanticColors.brand.opacity(0.14) : Color.primary.opacity(0.018))
+        .overlay(alignment: .bottom) {
+            Divider()
+                .opacity(0.55)
+        }
         .contentShape(Rectangle())
     }
 
     private var subtitle: String {
         let mask = account.mask.map { " •••• \($0)" } ?? ""
-        return "\(account.institutionName ?? account.type.rawValue.capitalized)\(mask)"
+        let pending = pendingCount > 0 ? " • \(pendingCount) pending" : ""
+        return "\(account.institutionName ?? account.type.rawValue.capitalized)\(mask) • \(statusText)\(pending)"
     }
 
     private var amountText: String {
         let amount = account.balances.current ?? account.balances.effectiveBalance
         return Formatters.currency(account.type == .credit ? abs(amount) : amount, format: .full)
+    }
+
+    private var pendingCount: Int {
+        appState.transactionsForAccount(account.id).filter(\.pending).count
+    }
+
+    private var itemStatus: ItemConnectionStatus? {
+        appState.itemStatuses.first { $0.id == account.itemId }?.status
+    }
+
+    private var statusText: String {
+        if appState.isDemoMode { return "Demo" }
+        if !appState.serverConnected { return "Server offline" }
+
+        switch itemStatus {
+        case .connected:
+            return appState.statusSyncText
+        case .loginRequired:
+            return "Reconnect"
+        case .error:
+            return "Item error"
+        case nil:
+            return appState.statusSyncText
+        }
+    }
+
+    private var statusTint: Color {
+        if appState.isDemoMode { return SemanticColors.brandSecondary }
+        if !appState.serverConnected { return .secondary }
+
+        switch itemStatus {
+        case .connected:
+            return appState.isSyncStale ? SemanticColors.warning : SemanticColors.positive
+        case .loginRequired:
+            return SemanticColors.warning
+        case .error:
+            return SemanticColors.negative
+        case nil:
+            return appState.isSyncStale ? SemanticColors.warning : .secondary
+        }
     }
 }
 
