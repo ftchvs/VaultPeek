@@ -6,8 +6,25 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
 cd "$PROJECT_DIR"
 
+SERVER_PID=""
+APP_PID=""
+
+cleanup() {
+    local exit_code=$?
+    if [[ -n "$APP_PID" ]]; then
+        kill "$APP_PID" 2>/dev/null || true
+    fi
+    if [[ -n "$SERVER_PID" ]]; then
+        kill "$SERVER_PID" 2>/dev/null || true
+    fi
+    exit "$exit_code"
+}
+
+trap cleanup EXIT INT TERM
+
 # Parse args
 SANDBOX_FLAG=""
+SERVER_PORT="${PLAIDBAR_SERVER_PORT:-8484}"
 for arg in "$@"; do
     case $arg in
         --sandbox)
@@ -38,11 +55,35 @@ swift build 2>&1
 
 echo ""
 echo "Starting PlaidBar server..."
-swift run PlaidBarServer $SANDBOX_FLAG &
+swift run PlaidBarServer $SANDBOX_FLAG --port "$SERVER_PORT" &
 SERVER_PID=$!
 
-# Wait for server to start
-sleep 2
+echo "Waiting for server health..."
+for _ in {1..30}; do
+    if curl -fsS "http://127.0.0.1:$SERVER_PORT/health" >/dev/null 2>&1; then
+        break
+    fi
+    if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+        echo "PlaidBar server exited before becoming healthy."
+        exit 1
+    fi
+    sleep 1
+done
+
+curl -fsS "http://127.0.0.1:$SERVER_PORT/health" >/dev/null
+STATUS_JSON="$(curl -fsS "http://127.0.0.1:$SERVER_PORT/api/status")"
+python3 - "$STATUS_JSON" <<'PY'
+import json
+import sys
+
+status = json.loads(sys.argv[1])
+print(
+    "Server ready: "
+    f"{status.get('environment', 'unknown')} | "
+    f"{status.get('itemCount', 0)} item(s) | "
+    f"credentials {'ready' if status.get('credentialsConfigured') else 'missing'}"
+)
+PY
 
 echo "Starting PlaidBar app..."
 swift run PlaidBar &
@@ -54,14 +95,4 @@ echo "  Server PID: $SERVER_PID"
 echo "  App PID: $APP_PID"
 echo ""
 echo "Press Ctrl+C to stop"
-
-cleanup() {
-    echo ""
-    echo "Stopping PlaidBar..."
-    kill $APP_PID 2>/dev/null || true
-    kill $SERVER_PID 2>/dev/null || true
-    exit 0
-}
-
-trap cleanup INT TERM
 wait
