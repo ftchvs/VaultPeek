@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 17:22 UTC] — Documentation
+
+refresh dashboard screenshot workflow (#39)
+
+`07e8cd3`
+
+---
+
+
 ## [2026-05-27 17:07 UTC] — Documentation
 
 update dashboard design docs
