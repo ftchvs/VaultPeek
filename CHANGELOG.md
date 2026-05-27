@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 19:52 UTC] — Documentation
+
+add sandbox smoke preflight (#51)
+
+`54fd9b2`
+
+---
+
+
 ## [2026-05-27 19:44 UTC] — Feature
 
 surface menu bar attention states (#50)
