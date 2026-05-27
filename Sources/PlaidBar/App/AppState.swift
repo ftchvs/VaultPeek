@@ -751,6 +751,7 @@ final class AppState {
             TransactionDTO(id: "tx40", accountId: "demo_amex", amount: 64.99, date: twoMonthsAgo, name: "ADOBE CREATIVE", merchantName: "Adobe", category: .entertainment),
             TransactionDTO(id: "tx41", accountId: "demo_amex", amount: 36.00, date: twoMonthsAgo, name: "HULU", merchantName: "Hulu", category: .entertainment),
         ]
+        transactions.append(contentsOf: Self.historicalDemoTransactions())
 
         // Generate demo balance history (60 days for richer sparkline)
         balanceHistory = (0..<60).reversed().map { daysAgo in
@@ -778,6 +779,51 @@ final class AppState {
     private static func dateString(daysAgo: Int) -> String {
         let date = Calendar.current.date(byAdding: .day, value: -daysAgo, to: Date())!
         return Formatters.transactionDateString(date)
+    }
+
+    private static func historicalDemoTransactions() -> [TransactionDTO] {
+        struct DemoMerchant {
+            let interval: Int
+            let offset: Int
+            let accountId: String
+            let amount: Double
+            let name: String
+            let merchantName: String
+            let category: SpendingCategory
+        }
+
+        let merchants = [
+            DemoMerchant(interval: 7, offset: 4, accountId: "demo_checking", amount: 78.40, name: "WHOLEFDS MKT 10234", merchantName: "Whole Foods", category: .foodAndDrink),
+            DemoMerchant(interval: 10, offset: 6, accountId: "demo_amex", amount: 42.25, name: "SWEETGREEN", merchantName: "Sweetgreen", category: .foodAndDrink),
+            DemoMerchant(interval: 14, offset: 9, accountId: "demo_checking", amount: 28.60, name: "UBER TRIP", merchantName: "Uber", category: .transportation),
+            DemoMerchant(interval: 16, offset: 12, accountId: "demo_visa", amount: 63.15, name: "TARGET 0392", merchantName: "Target", category: .shopping),
+            DemoMerchant(interval: 21, offset: 17, accountId: "demo_amex", amount: 118.90, name: "COSTCO WHOLESALE", merchantName: "Costco", category: .shopping),
+            DemoMerchant(interval: 30, offset: 24, accountId: "demo_checking", amount: 132.00, name: "CON EDISON", merchantName: "Con Edison", category: .billsAndUtilities),
+            DemoMerchant(interval: 31, offset: 30, accountId: "demo_checking", amount: 1_850.00, name: "RENT PAYMENT", merchantName: "Rent Payment", category: .billsAndUtilities),
+            DemoMerchant(interval: 45, offset: 38, accountId: "demo_amex", amount: 310.00, name: "DELTA AIR LINES", merchantName: "Delta Airlines", category: .travel),
+        ]
+
+        return merchants.flatMap { merchant in
+            stride(from: merchant.offset + 70, through: 364, by: merchant.interval).map { daysAgo in
+                let merchantSlug = merchant.merchantName
+                    .lowercased()
+                    .replacingOccurrences(of: " ", with: "_")
+                return TransactionDTO(
+                    id: "demo_hist_\(merchantSlug)_\(daysAgo)",
+                    accountId: merchant.accountId,
+                    amount: merchant.amount + seasonalAdjustment(daysAgo: daysAgo, interval: merchant.interval),
+                    date: dateString(daysAgo: daysAgo),
+                    name: merchant.name,
+                    merchantName: merchant.merchantName,
+                    category: merchant.category
+                )
+            }
+        }
+    }
+
+    private static func seasonalAdjustment(daysAgo: Int, interval: Int) -> Double {
+        let cycle = Double((daysAgo / max(interval, 1)) % 5)
+        return cycle * 8.75
     }
 }
 
