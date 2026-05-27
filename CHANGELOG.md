@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 22:20 UTC] — Update
+
+Normalize debt balances in settings (#65)
+
+`98748c0`
+
+---
+
+
 ## [2026-05-27 22:14 UTC] — Update
 
 Reuse account icons in settings (#64)
