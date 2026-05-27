@@ -74,6 +74,34 @@ public enum MenuBarSummary {
         }
     }
 
+    public static func runwayMonths(
+        cash: Double,
+        transactions: [TransactionDTO],
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> Double? {
+        let monthlySpend = recentSpend(
+            from: transactions,
+            now: now,
+            calendar: calendar,
+            days: 30
+        )
+        guard cash > 0, monthlySpend > 0 else { return nil }
+        return cash / monthlySpend
+    }
+
+    public static func runwayText(months: Double?) -> String {
+        guard let months else { return "No spend" }
+        if months < 1 {
+            let days = max(Int((months * 30).rounded()), 1)
+            return "\(days)d"
+        }
+        if months < 10 {
+            return String(format: "%.1f mo", months)
+        }
+        return "\(Int(months.rounded())) mo"
+    }
+
     public static func text(
         mode: MenuBarSummaryMode,
         accounts: [AccountDTO],
