@@ -28,10 +28,10 @@ Personal finance data lives behind bank website logins. The closest thing to a m
 - **Menu bar first** — A RepoBar-style popover with a 365-day heatmap, dense finance rows, and fast account drill-down
 - **Glanceable label** — Choose whether the menu bar shows net cash, total cash, credit utilization, recent spend, or icon-only, with a compact health signal on the icon
 - **Dashboard overview** — One surface for cash, credit, savings, debt, sync health, and selected-account details
-- **Account drill-down** — Click any row for balances, utilization, pending activity, inflow/outflow, recent transactions, and reconnect/refresh actions
+- **Inline account drill-down** — Click any row to expand balances, utilization, pending activity, inflow/outflow, recent transactions, and reconnect/refresh actions in place
 - **Status-rich filtering** — Switch between All, Cash, Credit, Savings, Debt, and Status without leaving the primary popover
 - **Recurring Detection** — Automatic identification of subscriptions and recurring charges with monthly total
-- **Spending Activity** — GitHub-style daily spending heatmap, trend line, income vs expense views, and month-over-month comparison
+- **Spending Activity** — GitHub-style daily heatmap with Spend/Net modes, trend line, income vs expense views, and month-over-month comparison
 - **Credit Utilization** — Progress bars with configurable warning thresholds and gauge
 - **Smart Notifications** — Alerts for large transactions, low balances, and high credit utilization
 - **Balance History** — Sparkline showing net balance trend over time

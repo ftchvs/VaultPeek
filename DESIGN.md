@@ -111,18 +111,18 @@ Category colors from `SpendingCategory.colorHex` — fixed hex values for chart 
 filter bar, dense rows, selected row highlight, and chevron-based drill-in. Use
 the RepoBar visual language as inspiration, not as literal GitHub UI.
 
-**Target anatomy:** VStack | Financial heatmap header (`last 12 months` or
-shorter fallback when data is limited) | segmented filter bar (`All`, `Cash`,
-`Credit`, `Savings`, `Debt`, `Status`) | list of account/card rows | selected
-account/card detail surface.
+**Target anatomy:** VStack | Financial heatmap header (`last 365 days`, Spend
+or Net mode) | segmented filter bar (`All`, `Cash`, `Credit`, `Savings`,
+`Debt`, `Status`) | list of account/card rows | inline selected account/card
+detail surface.
 
 | Element | PlaidBar Meaning |
 |---------|------------------|
-| Heatmap header | Daily spending intensity or net cashflow from transactions |
+| Heatmap header | Daily spending intensity or net cashflow from transactions, switchable in place |
 | Repo row | Account/card row with institution, type, balance, status, and freshness |
 | Repo stats | Balance, available credit, utilization, pending count, sync state |
 | Selected repo highlight | Selected account/card detail target |
-| Submenu/drill-in | Account/card detail sheet or inline detail surface |
+| Submenu/drill-in | Inline account/card detail surface below the selected row |
 
 **Account/card row anatomy:** status dot or account-type icon | institution +
 account name | secondary line with type, mask, sync freshness, pending count |
@@ -287,10 +287,10 @@ Pattern for all empty states:
 
 | Screen | Components Used | Nav Pattern |
 |--------|----------------|-------------|
-| Menu bar popover (main) | Dashboard header, status strip, summary values, 365-day heatmap, segmented finance filters, dense account rows, selected account drill-down, footer actions | One scroll surface; row selection drives drill-down; `Cmd+R` refreshes and `Cmd+N` adds account |
-| Account rows | Compact account/card rows with balance, utilization/status, sync freshness, pending count, and chevron affordance | Click row to update selected account panel |
-| Selected account panel | Connection badge, balance metrics, pending/inflow/outflow/sync pills, recent transactions, reconnect/refresh actions | Contextual recovery actions for stale or degraded items |
-| Spending activity | GitHub-style 365-day grid with month labels, intensity legend, and total spend header | Hover cells for day-level transaction count and spend |
+| Menu bar popover (main) | Dashboard header, status strip, summary values, 365-day heatmap, segmented finance filters, dense account rows, inline selected account drill-down, footer actions | One scroll surface; row selection expands drill-down in place; `Cmd+R` refreshes and `Cmd+N` adds account |
+| Account rows | Compact account/card rows with balance, utilization/status, sync freshness, pending count, and chevron affordance | Click row to expand the selected account details inline |
+| Selected account panel | Connection badge, balance metrics, pending/inflow/outflow/sync pills, recent transactions, reconnect/refresh actions | Inline recovery actions for stale or degraded items |
+| Spending activity | GitHub-style 365-day grid with month labels, Spend/Net toggle, intensity legend, and total header | Hover cells for day-level transaction count plus spend or net cashflow |
 | Legacy detail views | AccountsView, TransactionsView, SpendingView, CreditView, StatusView remain available as implementation surfaces and screenshot/reference components | Prefer dashboard-first entry unless adding a focused detail surface |
 | Settings | 4-tab TabView: General, Accounts, Notifications, About (480×380) | TabView |
 | Onboarding | Demo/Sandbox/Production choice with local-storage disclosure before Plaid Link | Mode choice, Back, Check Connection |

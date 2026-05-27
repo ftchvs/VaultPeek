@@ -12,6 +12,8 @@ status, and clear local-server errors.
 - Account, transaction, spending, and credit-utilization states do not rely on
   color alone.
 - Charts and gauges have text equivalents or summaries.
+- Heatmap cells expose date, transaction count, and the current Spend/Net value
+  through hover/help text instead of relying on color alone.
 - Alerts and errors are written clearly and announced through standard macOS UI
   patterns where practical.
 - Motion and loading states do not create barriers.
