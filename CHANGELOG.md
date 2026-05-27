@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 19:44 UTC] — Feature
+
+surface menu bar attention states (#50)
+
+`59d9bfb`
+
+---
+
+
 ## [2026-05-27 19:36 UTC] — Feature
 
 persist dashboard selection state (#49)
