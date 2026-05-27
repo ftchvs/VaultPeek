@@ -2,7 +2,7 @@
 
 ## North Star
 
-Build PlaidBar into a local-first macOS menu bar dashboard for Plaid data: CodexBar for personal finance.
+Build PlaidBar into a local-first macOS menu bar dashboard for Plaid data: RepoBar/CodexBar for personal finance.
 
 The app should make the user's financial state glanceable without becoming a full budgeting product. One click should answer:
 
@@ -11,6 +11,12 @@ The app should make the user's financial state glanceable without becoming a ful
 - What changed recently?
 - Is my Plaid sync healthy?
 - Do I need to act?
+
+## Current Slash-Goal Direction
+
+After PR #30, keep `/goal` focused on the RepoBar-style finance instrument:
+instant one-click popover, dense finance rows, GitHub-style 365D heatmap,
+quiet native macOS polish, and fast account/card drill-down.
 
 ## Product Positioning
 
