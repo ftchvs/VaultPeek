@@ -1,6 +1,15 @@
 import Foundation
 
 public enum AccountPresentation {
+    public static func isDebt(_ account: AccountDTO) -> Bool {
+        account.type == .credit || account.type == .loan
+    }
+
+    public static func displayBalance(for account: AccountDTO) -> Double {
+        let amount = account.balances.current ?? account.balances.effectiveBalance
+        return isDebt(account) ? abs(amount) : amount
+    }
+
     public static func iconName(for account: AccountDTO) -> String {
         switch account.type {
         case .credit:

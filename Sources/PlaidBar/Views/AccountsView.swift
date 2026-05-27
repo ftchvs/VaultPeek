@@ -161,9 +161,9 @@ struct AccountRow: View {
             Spacer()
             VStack(alignment: .trailing, spacing: Spacing.xxs) {
                 HStack(spacing: Spacing.xs) {
-                    // Issue #3: secondary cue for credit amounts (not color-only)
-                    if account.type == .credit {
-                        Image(systemName: "creditcard")
+                    // Issue #3: secondary cue for debt amounts (not color-only)
+                    if AccountPresentation.isDebt(account) {
+                        Image(systemName: AccountPresentation.iconName(for: account))
                             .font(.caption2)
                             .foregroundStyle(SemanticColors.creditDebt)
                     }
@@ -183,18 +183,14 @@ struct AccountRow: View {
         .padding(.vertical, Spacing.rowVertical)
         .hoverHighlight()
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(account.name), \(formattedAmount)\(account.type == .credit ? " owed" : "")")
+        .accessibilityLabel("\(account.name), \(formattedAmount)\(AccountPresentation.isDebt(account) ? " owed" : "")")
     }
 
     private var formattedAmount: String {
-        let amount = account.balances.current ?? account.balances.effectiveBalance
-        if account.type == .credit {
-            return Formatters.currency(abs(amount), format: .full)
-        }
-        return Formatters.currency(amount, format: .full)
+        Formatters.currency(AccountPresentation.displayBalance(for: account), format: .full)
     }
 
     private var amountColor: Color {
-        account.type == .credit ? SemanticColors.creditDebt : .primary
+        AccountPresentation.isDebt(account) ? SemanticColors.creditDebt : .primary
     }
 }

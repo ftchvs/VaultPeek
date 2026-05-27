@@ -208,6 +208,20 @@ struct PlaidBarCoreTests {
         #expect(AccountPresentation.iconName(for: loan) == "dollarsign.circle.fill")
     }
 
+    @Test("Account presentation normalizes debt balances")
+    func accountPresentationDebtBalances() {
+        let checking = AccountDTO(id: "1", itemId: "i", name: "Checking", type: .depository, balances: BalanceDTO(current: 500))
+        let credit = AccountDTO(id: "2", itemId: "i", name: "Card", type: .credit, balances: BalanceDTO(current: -125))
+        let loan = AccountDTO(id: "3", itemId: "i", name: "Loan", type: .loan, balances: BalanceDTO(current: -750))
+
+        #expect(AccountPresentation.isDebt(checking) == false)
+        #expect(AccountPresentation.isDebt(credit))
+        #expect(AccountPresentation.isDebt(loan))
+        #expect(AccountPresentation.displayBalance(for: checking) == 500)
+        #expect(AccountPresentation.displayBalance(for: credit) == 125)
+        #expect(AccountPresentation.displayBalance(for: loan) == 750)
+    }
+
     @Test("Menu bar summary estimates runway from recent monthly spend")
     func menuBarSummaryRunwayMonths() {
         let now = Formatters.parseTransactionDate("2026-01-30")!
