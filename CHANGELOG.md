@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 18:20 UTC] — Fix
+
+render net heatmap income intensity (#45)
+
+`b3e4802`
+
+---
+
+
 ## [2026-05-27 18:13 UTC] — Chore
 
 silence PlaidBar resource warnings (#44)
