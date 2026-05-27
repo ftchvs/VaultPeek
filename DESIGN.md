@@ -118,7 +118,7 @@ detail surface.
 
 | Element | PlaidBar Meaning |
 |---------|------------------|
-| Heatmap header | Daily spending intensity or net cashflow from transactions, switchable in place |
+| Heatmap header | Daily spending intensity or net cashflow from transactions, switchable in place. Spend mode uses a GitHub-style green Less/More legend; Net mode uses bidirectional Income/Outflow color keys. |
 | Repo row | Account/card row with institution, type, balance, status, and freshness |
 | Repo stats | Balance, available credit, utilization, pending count, sync state |
 | Selected repo highlight | Selected account/card detail target |

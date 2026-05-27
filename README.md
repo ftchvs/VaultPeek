@@ -31,7 +31,7 @@ Personal finance data lives behind bank website logins. The closest thing to a m
 - **Inline account drill-down** — Click any row to expand balances, utilization, pending activity, inflow/outflow, recent transactions, and reconnect/refresh actions in place
 - **Status-rich filtering** — Switch between All, Cash, Credit, Savings, Debt, and Status without leaving the primary popover
 - **Recurring Detection** — Automatic identification of subscriptions and recurring charges with monthly total
-- **Spending Activity** — GitHub-style daily heatmap with Spend/Net modes, trend line, income vs expense views, and month-over-month comparison
+- **Spending Activity** — GitHub-style daily heatmap with Spend/Net modes, bidirectional Income/Outflow color keys, trend line, income vs expense views, and month-over-month comparison
 - **Credit Utilization** — Progress bars with configurable warning thresholds and gauge
 - **Smart Notifications** — Alerts for large transactions, low balances, and high credit utilization
 - **Balance History** — Sparkline showing net balance trend over time
