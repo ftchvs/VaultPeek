@@ -49,11 +49,6 @@ struct MainPopover: View {
                             onSelect: { selectedAccountId = $0.id }
                         )
                         .environment(appState)
-
-                        if let selectedAccount {
-                            SelectedAccountPanel(account: selectedAccount)
-                                .environment(appState)
-                        }
                     }
                     .padding(.horizontal, 22)
                     .padding(.top, 22)
@@ -636,18 +631,38 @@ private struct AccountsSection: View {
             } else {
                 VStack(spacing: 0) {
                     ForEach(accounts) { account in
-                        Button {
-                            onSelect(account)
-                        } label: {
-                            DashboardAccountRow(
-                                account: account,
-                                isSelected: selectedAccountId == account.id
-                            )
-                        }
-                        .buttonStyle(.plain)
+                        AccountRowWithDrilldown(
+                            account: account,
+                            isSelected: selectedAccountId == account.id,
+                            onSelect: { onSelect(account) }
+                        )
+                        .environment(appState)
                     }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+        }
+    }
+}
+
+private struct AccountRowWithDrilldown: View {
+    @Environment(AppState.self) private var appState
+    let account: AccountDTO
+    let isSelected: Bool
+    let onSelect: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Button(action: onSelect) {
+                DashboardAccountRow(account: account, isSelected: isSelected)
+            }
+            .buttonStyle(.plain)
+
+            if isSelected {
+                SelectedAccountPanel(account: account)
+                    .environment(appState)
+                    .padding(.top, 10)
+                    .padding(.bottom, 12)
             }
         }
     }
@@ -916,7 +931,7 @@ private struct SelectedAccountPanel: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Selected")
+                    Text("Details")
                         .sectionTitle()
                         .foregroundStyle(.secondary)
                     Text(account.officialName ?? account.name)
