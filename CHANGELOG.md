@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 16:59 UTC] — Documentation
+
+align README with dashboard-first app
+
+`64db572`
+
+---
+
+
 ## [2026-05-27 16:51 UTC] — Feature
 
 polish dashboard heatmap legend
