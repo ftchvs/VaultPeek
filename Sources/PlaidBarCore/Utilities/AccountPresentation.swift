@@ -6,8 +6,10 @@ public enum AccountPresentation {
     }
 
     public static func displayBalance(for account: AccountDTO) -> Double {
-        let amount = account.balances.current ?? account.balances.effectiveBalance
-        return isDebt(account) ? abs(amount) : amount
+        if isDebt(account) {
+            return abs(account.balances.current ?? 0)
+        }
+        return account.balances.effectiveBalance
     }
 
     public static func iconName(for account: AccountDTO) -> String {

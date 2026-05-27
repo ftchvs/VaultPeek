@@ -188,6 +188,10 @@ final class AppState {
         MenuBarSummary.totalCash(from: accounts)
     }
 
+    var totalDebt: Double {
+        MenuBarSummary.totalDebt(from: accounts)
+    }
+
     var totalCreditUtilization: Double? {
         MenuBarSummary.creditUtilization(from: accounts)
     }
@@ -368,6 +372,10 @@ final class AppState {
 
     var creditAccounts: [AccountDTO] {
         accounts.filter { $0.type == .credit }
+    }
+
+    var debtAccounts: [AccountDTO] {
+        accounts.filter(AccountPresentation.isDebt)
     }
 
     var depositoryAccounts: [AccountDTO] {
