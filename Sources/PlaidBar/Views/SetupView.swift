@@ -38,26 +38,34 @@ struct SetupView: View {
             }
         }
         .padding()
-        .frame(width: 360)
+        .frame(width: 520)
         .animation(.easeInOut(duration: 0.25), value: setupMode)
     }
 
     private var choiceView: some View {
         VStack(spacing: Spacing.lg) {
-            Image(systemName: "dollarsign.circle.fill")
-                .font(.system(size: 44))
-                .foregroundStyle(SemanticColors.brand)
+            HStack(alignment: .top, spacing: Spacing.md) {
+                Image(systemName: "menubar.rectangle")
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundStyle(SemanticColors.brand)
+                    .frame(width: 42, height: 42)
+                    .background(SemanticColors.brand.opacity(0.14), in: RoundedRectangle(cornerRadius: 8))
 
-            VStack(spacing: Spacing.xs) {
-                Text("Welcome to PlaidBar")
-                    .font(.title2)
-                    .fontWeight(.bold)
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text("PlaidBar")
+                        .font(.title2.weight(.bold))
+                    Text("Menu bar finance, one click away.")
+                        .font(.callout.weight(.medium))
+                    Text("Choose a data source before anything connects. Demo mode is local; sandbox and production require your local PlaidBarServer.")
+                        .detailText()
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
-                Text("Choose exactly what data source to use before anything connects.")
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.secondary)
-                    .font(.callout)
+                Spacer(minLength: Spacing.sm)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            OnboardingModeStrip()
 
             VStack(spacing: Spacing.sm) {
                 OnboardingChoiceButton(
@@ -183,6 +191,44 @@ struct SetupView: View {
             }
             .buttonStyle(.borderless)
         }
+    }
+}
+
+private struct OnboardingModeStrip: View {
+    var body: some View {
+        HStack(spacing: Spacing.sm) {
+            ModePill(title: "Demo", subtitle: "Local", icon: "play.circle.fill", tint: SemanticColors.brandSecondary)
+            ModePill(title: "Sandbox", subtitle: "Plaid test", icon: "testtube.2", tint: SemanticColors.brand)
+            ModePill(title: "Production", subtitle: "Real data", icon: "lock.shield.fill", tint: SemanticColors.positive)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+private struct ModePill: View {
+    let title: String
+    let subtitle: String
+    let icon: String
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(tint)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.caption.weight(.bold))
+                Text(subtitle)
+                    .microText()
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
     }
 }
 
