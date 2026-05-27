@@ -193,6 +193,21 @@ struct PlaidBarCoreTests {
         #expect(summary.days == 30)
     }
 
+    @Test("Account presentation picks subtype-aware icons")
+    func accountPresentationIcons() {
+        let checking = AccountDTO(id: "1", itemId: "i", name: "Checking", type: .depository, subtype: "checking", balances: BalanceDTO(available: 100))
+        let savings = AccountDTO(id: "2", itemId: "i", name: "Savings", type: .depository, subtype: "savings", balances: BalanceDTO(available: 100))
+        let credit = AccountDTO(id: "3", itemId: "i", name: "Card", type: .credit, subtype: "credit card", balances: BalanceDTO(current: -10, limit: 100))
+        let investment = AccountDTO(id: "4", itemId: "i", name: "Brokerage", type: .investment, balances: BalanceDTO(current: 100))
+        let loan = AccountDTO(id: "5", itemId: "i", name: "Loan", type: .loan, balances: BalanceDTO(current: -100))
+
+        #expect(AccountPresentation.iconName(for: checking) == "banknote.fill")
+        #expect(AccountPresentation.iconName(for: savings) == "tray.full.fill")
+        #expect(AccountPresentation.iconName(for: credit) == "creditcard.fill")
+        #expect(AccountPresentation.iconName(for: investment) == "chart.line.uptrend.xyaxis")
+        #expect(AccountPresentation.iconName(for: loan) == "dollarsign.circle.fill")
+    }
+
     @Test("Menu bar summary estimates runway from recent monthly spend")
     func menuBarSummaryRunwayMonths() {
         let now = Formatters.parseTransactionDate("2026-01-30")!

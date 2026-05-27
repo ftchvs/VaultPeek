@@ -981,11 +981,11 @@ private struct DashboardAccountRow: View {
 
     var body: some View {
         HStack(spacing: 11) {
-            Image(systemName: account.type == .credit ? "creditcard.fill" : "building.columns.fill")
+            Image(systemName: AccountPresentation.iconName(for: account))
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(account.type == .credit ? SemanticColors.creditDebt : SemanticColors.available)
+                .foregroundStyle(accountTint)
                 .frame(width: 34, height: 34)
-                .background((account.type == .credit ? SemanticColors.creditDebt : SemanticColors.available).opacity(0.16), in: RoundedRectangle(cornerRadius: 8))
+                .background(accountTint.opacity(0.16), in: RoundedRectangle(cornerRadius: 8))
                 .overlay(alignment: .bottomTrailing) {
                     Circle()
                         .fill(statusTint)
@@ -1049,6 +1049,19 @@ private struct DashboardAccountRow: View {
     private var amountText: String {
         let amount = account.balances.current ?? account.balances.effectiveBalance
         return Formatters.currency(account.type == .credit ? abs(amount) : amount, format: .full)
+    }
+
+    private var accountTint: Color {
+        switch account.type {
+        case .credit, .loan:
+            return SemanticColors.creditDebt
+        case .investment:
+            return SemanticColors.sparkline
+        case .depository:
+            return SemanticColors.available
+        case .other:
+            return .secondary
+        }
     }
 
     private var pendingCount: Int {
