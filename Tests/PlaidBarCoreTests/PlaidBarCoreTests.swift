@@ -861,8 +861,8 @@ struct PlaidBarCoreTests {
         #expect(resolved == directory)
     }
 
-    @Test("Local data reset removes directory contents and recreates directory")
-    func localDataResetRemovesContents() throws {
+    @Test("Local data reset removes data files and keeps server auth token")
+    func localDataResetRemovesDataFilesAndKeepsAuthToken() throws {
         let root = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         let directory = root.appendingPathComponent(".plaidbar", isDirectory: true)
@@ -877,12 +877,13 @@ struct PlaidBarCoreTests {
         let result = try LocalDataStore.resetLocalData(at: directory)
 
         #expect(result.directoryPath == directory.path)
-        #expect(result.removedEntries == ["auth-token", "plaidbar.sqlite"])
+        #expect(result.removedEntries == ["plaidbar.sqlite"])
 
         var isDirectory: ObjCBool = false
         #expect(FileManager.default.fileExists(atPath: directory.path, isDirectory: &isDirectory))
         #expect(isDirectory.boolValue)
-        #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path) == ["auth-token"])
+        #expect(try String(contentsOf: authToken, encoding: .utf8) == "token")
     }
 
     @Test("Transaction cache survives incremental sync from existing cursor")

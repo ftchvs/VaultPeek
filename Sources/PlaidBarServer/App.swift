@@ -46,14 +46,16 @@ struct PlaidBarServer: AsyncParsableCommand {
         }
 
         // API routes
+        let api = router.group("api")
+        api.add(middleware: APITokenMiddleware(authToken: serverConfig.authToken))
         LinkRoutes(plaidClient: plaidClient, tokenStore: tokenStore, config: serverConfig)
-            .register(with: router.group("api"))
+            .register(with: api)
         AccountRoutes(plaidClient: plaidClient, tokenStore: tokenStore)
-            .register(with: router.group("api"))
+            .register(with: api)
         TransactionRoutes(plaidClient: plaidClient, tokenStore: tokenStore)
-            .register(with: router.group("api"))
+            .register(with: api)
         StatusRoutes(tokenStore: tokenStore, config: serverConfig)
-            .register(with: router.group("api"))
+            .register(with: api)
 
         // OAuth callback (top-level, not under /api)
         OAuthCallbackRoute(plaidClient: plaidClient, tokenStore: tokenStore)
