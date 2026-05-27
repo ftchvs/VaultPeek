@@ -5,6 +5,8 @@ struct SpendingHeatmapView: View {
     let transactions: [TransactionDTO]
     let startDate: Date
     let endDate: Date
+    let cellSize: CGFloat
+    let showModePicker: Bool
 
     @State private var mode: SpendingHeatmapMode = .spending
     @State private var selectedDate: String?
@@ -27,6 +29,10 @@ struct SpendingHeatmapView: View {
 
     private var totalValue: Double {
         days.reduce(0) { $0 + $1.value }
+    }
+
+    private var activeDayCount: Int {
+        days.filter { $0.transactionCount > 0 }.count
     }
 
     private var totalLabel: String {
@@ -61,14 +67,17 @@ struct SpendingHeatmapView: View {
         VStack(alignment: .leading, spacing: Spacing.md) {
             header
 
-            Picker("Heatmap metric", selection: $mode) {
-                Text("Spend").tag(SpendingHeatmapMode.spending)
-                Text("Net").tag(SpendingHeatmapMode.netCashflow)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .onChange(of: mode) { _, _ in
-                selectedDate = nil
+            if showModePicker {
+                Picker("Heatmap metric", selection: $mode) {
+                    Text("Spend").tag(SpendingHeatmapMode.spending)
+                    Text("Net").tag(SpendingHeatmapMode.netCashflow)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 236)
+                .onChange(of: mode) { _, _ in
+                    selectedDate = nil
+                }
             }
 
             if days.allSatisfy({ $0.transactionCount == 0 }) {
@@ -105,16 +114,17 @@ struct SpendingHeatmapView: View {
     }
 
     private var heatmapGrid: some View {
-        HStack(alignment: .top, spacing: Spacing.xs) {
+        HStack(alignment: .top, spacing: cellSpacing) {
             ForEach(Array(weekColumns.enumerated()), id: \.offset) { _, week in
-                VStack(spacing: Spacing.xs) {
+                VStack(spacing: cellSpacing) {
                     ForEach(Array(week.enumerated()), id: \.offset) { _, day in
                         if let day {
                             HeatmapCell(
                                 day: day,
                                 peakValue: peakValue,
                                 mode: mode,
-                                isSelected: selectedDate == day.date
+                                isSelected: selectedDate == day.date,
+                                size: cellSize
                             )
                             .onTapGesture {
                                 selectedDate = selectedDate == day.date ? nil : day.date
@@ -122,7 +132,7 @@ struct SpendingHeatmapView: View {
                         } else {
                             RoundedRectangle(cornerRadius: 3)
                                 .fill(.clear)
-                                .frame(width: 13, height: 13)
+                                .frame(width: cellSize, height: cellSize)
                         }
                     }
                 }
@@ -149,6 +159,10 @@ struct SpendingHeatmapView: View {
                 .foregroundStyle(.secondary)
 
             Spacer()
+
+            Text("\(activeDayCount) active days")
+                .microText()
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -194,6 +208,10 @@ struct SpendingHeatmapView: View {
         let prefix = day.value > 0 ? "+" : day.value < 0 ? "-" : ""
         return "\(prefix)\(Formatters.currency(abs(day.value), format: .full))"
     }
+
+    private var cellSpacing: CGFloat {
+        cellSize >= 16 ? 5 : Spacing.xs
+    }
 }
 
 private struct HeatmapCell: View {
@@ -201,6 +219,7 @@ private struct HeatmapCell: View {
     let peakValue: Double
     let mode: SpendingHeatmapMode
     let isSelected: Bool
+    let size: CGFloat
 
     var body: some View {
         RoundedRectangle(cornerRadius: 3)
@@ -211,7 +230,7 @@ private struct HeatmapCell: View {
                         .stroke(.primary, lineWidth: 1.5)
                 }
             }
-            .frame(width: 13, height: 13)
+            .frame(width: size, height: size)
             .contentShape(Rectangle())
             .help(helpText)
             .accessibilityLabel(helpText)
