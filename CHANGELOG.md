@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 23:26 UTC] — Fix
+
+persist transaction cache across restarts (#69)
+
+`3cd5871`
+
+---
+
+
 ## [2026-05-27 22:47 UTC] — Update
 
 Show loans in accounts section (#68)
