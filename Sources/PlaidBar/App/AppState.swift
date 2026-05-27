@@ -483,17 +483,7 @@ final class AppState {
             var hasMore = true
             while hasMore {
                 let response = try await serverClient.syncTransactions()
-                // Add new transactions
-                transactions.append(contentsOf: response.added)
-                // Update modified
-                for modified in response.modified {
-                    if let index = transactions.firstIndex(where: { $0.id == modified.id }) {
-                        transactions[index] = modified
-                    }
-                }
-                // Remove deleted
-                let removedIds = Set(response.removed)
-                transactions.removeAll { removedIds.contains($0.id) }
+                transactions = TransactionSyncReducer.applying(response, to: transactions)
                 hasMore = response.hasMore
             }
             lastSyncDate = Date()

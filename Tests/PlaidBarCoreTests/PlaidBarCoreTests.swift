@@ -263,6 +263,34 @@ struct PlaidBarCoreTests {
         #expect(removeURL.absoluteString == "http://127.0.0.1:8484/api/accounts/item%20with%2Fslash%3Fand%26symbols")
     }
 
+    @Test("Transaction sync reducer upserts and removes transactions")
+    func transactionSyncReducerUpsertsAndRemoves() {
+        let existing = [
+            TransactionDTO(id: "old", accountId: "a", amount: 10, date: "2026-01-01", name: "Old"),
+            TransactionDTO(id: "changed", accountId: "a", amount: 20, date: "2026-01-02", name: "Before"),
+            TransactionDTO(id: "duplicate", accountId: "a", amount: 30, date: "2026-01-03", name: "First duplicate"),
+            TransactionDTO(id: "duplicate", accountId: "a", amount: 40, date: "2026-01-04", name: "Second duplicate")
+        ]
+        let response = SyncResponse(
+            added: [
+                TransactionDTO(id: "new", accountId: "a", amount: 50, date: "2026-01-05", name: "New"),
+                TransactionDTO(id: "old", accountId: "a", amount: 15, date: "2026-01-01", name: "Old replacement")
+            ],
+            modified: [
+                TransactionDTO(id: "changed", accountId: "a", amount: 25, date: "2026-01-02", name: "After")
+            ],
+            removed: ["duplicate"],
+            hasMore: false
+        )
+
+        let transactions = TransactionSyncReducer.applying(response, to: existing)
+
+        #expect(transactions.map(\.id) == ["old", "changed", "new"])
+        #expect(transactions.first { $0.id == "old" }?.amount == 15)
+        #expect(transactions.first { $0.id == "changed" }?.name == "After")
+        #expect(transactions.first { $0.id == "new" }?.amount == 50)
+    }
+
     @Test("Net cashflow heatmap keeps Plaid amount signs")
     func netCashflowHeatmapKeepsSigns() {
         let day = Formatters.parseTransactionDate("2026-01-02")!
