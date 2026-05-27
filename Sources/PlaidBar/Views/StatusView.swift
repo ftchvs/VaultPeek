@@ -83,6 +83,18 @@ struct StatusView: View {
                 color: itemHealthColor
             )
             DiagnosticTile(
+                title: "Credentials",
+                value: appState.serverCredentialsText,
+                icon: "key",
+                color: credentialsColor
+            )
+            DiagnosticTile(
+                title: "Sync ready",
+                value: appState.serverSyncReadinessText,
+                icon: "checklist.checked",
+                color: syncReadinessColor
+            )
+            DiagnosticTile(
                 title: "Version",
                 value: appState.serverVersion ?? PlaidBarConstants.appVersion,
                 icon: "number",
@@ -92,6 +104,12 @@ struct StatusView: View {
                 title: "Endpoint",
                 value: appState.localServerURLText.replacingOccurrences(of: "http://", with: ""),
                 icon: "network",
+                color: .secondary
+            )
+            DiagnosticTile(
+                title: "Storage",
+                value: appState.serverStorageDisplayText,
+                icon: "internaldrive",
                 color: .secondary
             )
             DiagnosticTile(
@@ -141,7 +159,7 @@ struct StatusView: View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             HStack(spacing: Spacing.xs) {
                 Image(systemName: "lock.doc")
-                Text("Local data path: \(appState.localStoragePathText)")
+                Text("Local data path: \(appState.serverStorageDisplayText)")
             }
             .detailText()
 
@@ -199,6 +217,16 @@ struct StatusView: View {
         if appState.connectedItemCount < appState.statusItemCount { return SemanticColors.warning }
         if appState.erroredItemCount > 0 || appState.needsLoginItemCount > 0 { return SemanticColors.warning }
         return SemanticColors.positive
+    }
+
+    private var credentialsColor: Color {
+        guard appState.serverConnected else { return .secondary }
+        return appState.serverCredentialsConfigured == true ? SemanticColors.positive : SemanticColors.negative
+    }
+
+    private var syncReadinessColor: Color {
+        guard appState.serverConnected else { return .secondary }
+        return appState.serverSyncReady == true ? SemanticColors.positive : .secondary
     }
 
     private func icon(for status: ItemConnectionStatus) -> String {

@@ -31,6 +31,9 @@ struct PlaidBarServerTests {
         #expect(decoded.version == "0.1.0")
         #expect(decoded.environment == .sandbox)
         #expect(decoded.itemCount == 2)
+        #expect(decoded.credentialsConfigured)
+        #expect(decoded.storagePath == LocalDataStore.displayPath)
+        #expect(decoded.syncReady)
     }
 
     @Test func linkResponseCodable() throws {
