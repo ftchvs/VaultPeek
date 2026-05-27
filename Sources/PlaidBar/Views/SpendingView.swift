@@ -4,8 +4,8 @@ import PlaidBarCore
 
 struct SpendingView: View {
     @Environment(AppState.self) private var appState
-    @State private var selectedPeriod: SpendingPeriod = .thisMonth
-    @State private var chartType: ChartType = .donut
+    @State private var selectedPeriod: SpendingPeriod = .last90Days
+    @State private var breakdownType: BreakdownType = .categories
 
     enum SpendingPeriod: String, CaseIterable, Sendable {
         case thisWeek = "Week"
@@ -14,9 +14,8 @@ struct SpendingView: View {
         case last90Days = "90D"
     }
 
-    enum ChartType: String, CaseIterable, Sendable {
-        case donut = "Categories"
-        case heatmap = "Heatmap"
+    enum BreakdownType: String, CaseIterable, Sendable {
+        case categories = "Categories"
         case trend = "Trend"
         case incomeExpense = "Flow"
     }
@@ -140,9 +139,20 @@ struct SpendingView: View {
                 .accessibilityLabel("Spending \(delta >= 0 ? "increased" : "decreased") by \(Formatters.currency(abs(delta), format: .full)), \(Formatters.percent(abs(deltaPercent), decimals: 1)) \(delta >= 0 ? "more" : "less") than last period")
             }
 
-            // Chart type picker
-            Picker("Chart", selection: $chartType) {
-                ForEach(ChartType.allCases, id: \.self) { type in
+            SpendingHeatmapView(
+                transactions: filteredTransactions,
+                startDate: periodInterval.currentDate,
+                endDate: Date(),
+                cellSize: 14,
+                showModePicker: true
+            )
+            .padding(.top, Spacing.xs)
+
+            Divider()
+                .padding(.horizontal, Spacing.lg)
+
+            Picker("Breakdown", selection: $breakdownType) {
+                ForEach(BreakdownType.allCases, id: \.self) { type in
                     Text(type.rawValue).tag(type)
                 }
             }
@@ -150,16 +160,9 @@ struct SpendingView: View {
             .labelsHidden()
             .padding(.horizontal, Spacing.lg)
 
-            // Chart content
-            switch chartType {
-            case .donut:
+            switch breakdownType {
+            case .categories:
                 donutChart(categories: categories, total: total)
-            case .heatmap:
-                SpendingHeatmapView(
-                    transactions: filteredTransactions,
-                    startDate: periodInterval.currentDate,
-                    endDate: Date()
-                )
             case .trend:
                 SpendingTrendChart(transactions: filteredTransactions)
             case .incomeExpense:
