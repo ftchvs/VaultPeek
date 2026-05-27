@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 22:07 UTC] — Update
+
+Extract transaction sync reducer (#63)
+
+`7251ca8`
+
+---
+
+
 ## [2026-05-27 21:57 UTC] — Update
 
 Add subtype-aware account icons (#62)
