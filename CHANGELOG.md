@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 01:26 UTC] — Chore
+
+add PlaidBar production loop command (#27)
+
+`f2825de`
+
+---
+
+
 ## [2026-05-27 01:14 UTC] — Feature
 
 clarify production onboarding (#26)
