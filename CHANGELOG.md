@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-27 22:30 UTC] — Update
+
+Centralize debt balance presentation (#66)
+
+`2c40964`
+
+---
+
+
 ## [2026-05-27 22:20 UTC] — Update
 
 Normalize debt balances in settings (#65)
