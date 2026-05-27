@@ -506,7 +506,7 @@ private struct BalanceHeatmapCell: View {
 
     private var intensity: Double {
         guard day.transactionCount > 0 else { return 0 }
-        return min(max(day.value / peakValue, 0), 1)
+        return min(max(abs(day.value) / peakValue, 0), 1)
     }
 
     private var helpText: String {
