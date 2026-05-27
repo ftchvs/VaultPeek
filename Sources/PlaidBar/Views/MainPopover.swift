@@ -4,13 +4,17 @@ import PlaidBarCore
 struct MainPopover: View {
     @Environment(AppState.self) private var appState
     @Environment(\.openSettings) private var openSettings
-    @State private var selectedFilter: DashboardAccountFilter = .all
-    @State private var selectedAccountId: String?
+    @AppStorage("dashboard.accountFilter") private var selectedFilterRawValue = DashboardAccountFilter.all.rawValue
+    @AppStorage("dashboard.selectedAccountId") private var selectedAccountId = ""
     @State private var settingsCloseObserver: NSObjectProtocol?
+
+    private var selectedFilter: DashboardAccountFilter {
+        DashboardAccountFilter(rawValue: selectedFilterRawValue) ?? .all
+    }
 
     private var selectedAccount: AccountDTO? {
         let accounts = filteredAccounts
-        if let selectedAccountId,
+        if !selectedAccountId.isEmpty,
            let account = accounts.first(where: { $0.id == selectedAccountId }) {
             return account
         }
@@ -40,7 +44,7 @@ struct MainPopover: View {
 
                         BalanceActivityHeatmap(transactions: appState.transactions)
 
-                        DashboardFilterBar(selection: $selectedFilter)
+                        DashboardFilterBar(selection: filterBinding)
 
                         AccountsSection(
                             accounts: filteredAccounts,
@@ -79,12 +83,19 @@ struct MainPopover: View {
             await appState.loadInitialData()
         }
         .onChange(of: appState.accounts) { _, accounts in
-            guard selectedAccountId == nil || !accounts.contains(where: { $0.id == selectedAccountId }) else { return }
-            selectedAccountId = accounts.first?.id
+            guard selectedAccountId.isEmpty || !accounts.contains(where: { $0.id == selectedAccountId }) else { return }
+            selectedAccountId = accounts.first?.id ?? ""
         }
-        .onChange(of: selectedFilter) { _, _ in
-            selectedAccountId = filteredAccounts.first?.id
+        .onChange(of: selectedFilterRawValue) { _, _ in
+            selectedAccountId = filteredAccounts.first?.id ?? ""
         }
+    }
+
+    private var filterBinding: Binding<DashboardAccountFilter> {
+        Binding(
+            get: { selectedFilter },
+            set: { selectedFilterRawValue = $0.rawValue }
+        )
     }
 }
 
@@ -305,12 +316,16 @@ private struct MetricCard: View {
 private struct BalanceActivityHeatmap: View {
     let transactions: [TransactionDTO]
 
-    @State private var mode: SpendingHeatmapMode = .spending
+    @AppStorage("dashboard.heatmapMode") private var modeRawValue = SpendingHeatmapMode.spending.rawValue
 
     private let calendar = Calendar.current
     private let spacing: CGFloat = 3
     private let monthLabelHeight: CGFloat = 12
     private let monthLabelWidth: CGFloat = 26
+
+    private var mode: SpendingHeatmapMode {
+        SpendingHeatmapMode(rawValue: modeRawValue) ?? .spending
+    }
 
     private var days: [SpendingHeatmapDay] {
         let end = calendar.startOfDay(for: Date())
@@ -401,7 +416,7 @@ private struct BalanceActivityHeatmap: View {
 
                 Spacer()
 
-                Picker("Heatmap metric", selection: $mode) {
+                Picker("Heatmap metric", selection: modeBinding) {
                     Text("Spend").tag(SpendingHeatmapMode.spending)
                     Text("Net").tag(SpendingHeatmapMode.netCashflow)
                 }
@@ -483,6 +498,13 @@ private struct BalanceActivityHeatmap: View {
         .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 8))
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(title) heatmap for the last 365 days with \(activeDayCount) active days.")
+    }
+
+    private var modeBinding: Binding<SpendingHeatmapMode> {
+        Binding(
+            get: { mode },
+            set: { modeRawValue = $0.rawValue }
+        )
     }
 
     private func monthLabel(for date: Date) -> String {
