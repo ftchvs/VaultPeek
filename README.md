@@ -47,16 +47,10 @@ Personal finance data lives behind bank website logins. The closest thing to a m
 ## Screenshots
 
 <p align="center">
-  <img src="Assets/accounts.png" width="280" alt="Dashboard account rows"/>
-  <img src="Assets/transactions.png" width="280" alt="Recent transactions"/>
-  <img src="Assets/recurring.png" width="280" alt="Recurring transactions"/>
-</p>
-<p align="center">
-  <img src="Assets/spending.png" width="280" alt="Spending activity heatmap"/>
-  <img src="Assets/credit.png" width="280" alt="Credit utilization tab"/>
+  <img src="Assets/dashboard.png" width="420" alt="PlaidBar dashboard popover with net worth, sync status, 365-day spending activity, account rows, and drill-down controls"/>
 </p>
 
-> Generate screenshots: `./Scripts/screenshots.sh` (requires building in release mode)
+> Generate the screenshot: `./Scripts/screenshots.sh` (requires macOS Screen Recording permission for Terminal)
 
 ## Quick Start
 

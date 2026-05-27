@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # PlaidBar screenshot pipeline
-# Captures each tab in demo mode for README.md
+# Captures the dashboard-first MenuBarExtra popover in demo mode for README.md.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -11,36 +11,53 @@ mkdir -p "$ASSETS_DIR"
 
 echo "Building PlaidBar in release mode..."
 cd "$PROJECT_DIR"
-swift build -c release 2>/dev/null
+swift build -c release --skip-update --disable-keychain
 
 BINARY=".build/release/PlaidBar"
+APP_PID=""
 
-for tab in accounts transactions spending credit; do
-    echo "Capturing $tab tab..."
-    $BINARY --demo --tab "$tab" &
-    APP_PID=$!
-    sleep 3
+cleanup() {
+    if [ -n "${APP_PID:-}" ]; then
+        kill "$APP_PID" 2>/dev/null || true
+        wait "$APP_PID" 2>/dev/null || true
+    fi
+}
+trap cleanup EXIT
 
-    # Find the PlaidBar window and capture it
-    WINDOW_ID=$(osascript -e '
+echo "Opening dashboard popover..."
+"$BINARY" --demo --show-popover >/tmp/plaidbar-screenshots.log 2>&1 &
+APP_PID=$!
+
+WINDOW_RECT=""
+for _ in {1..20}; do
+    WINDOW_RECT=$(osascript -e '
         tell application "System Events"
-            set plaidWindows to every window of every process whose name contains "PlaidBar"
-            if (count of plaidWindows) > 0 then
-                return id of item 1 of item 1 of plaidWindows
+            if exists process "PlaidBar" then
+                tell process "PlaidBar"
+                    if (count of windows) > 0 then
+                        set windowPosition to position of window 1
+                        set windowSize to size of window 1
+                        return (item 1 of windowPosition as text) & "," & (item 2 of windowPosition as text) & "," & (item 1 of windowSize as text) & "," & (item 2 of windowSize as text)
+                    end if
+                end tell
             end if
         end tell
-    ' 2>/dev/null || echo "")
+    ' 2>/dev/null || true)
 
-    if [ -n "$WINDOW_ID" ]; then
-        screencapture -l"$WINDOW_ID" "$ASSETS_DIR/$tab.png"
-        echo "  Saved $ASSETS_DIR/$tab.png"
-    else
-        echo "  Warning: Could not find PlaidBar window for $tab"
+    if [ -n "$WINDOW_RECT" ] && [ "$WINDOW_RECT" != "missing value" ]; then
+        break
     fi
-
-    kill "$APP_PID" 2>/dev/null || true
-    wait "$APP_PID" 2>/dev/null || true
-    sleep 1
+    sleep 0.5
 done
 
-echo "Done! Screenshots saved to $ASSETS_DIR/"
+if [ -z "$WINDOW_RECT" ] || [ "$WINDOW_RECT" = "missing value" ]; then
+    echo "Error: Could not find the PlaidBar popover window."
+    echo "App log:"
+    cat /tmp/plaidbar-screenshots.log 2>/dev/null || true
+    exit 1
+fi
+
+echo "Capturing dashboard popover..."
+screencapture -R"$WINDOW_RECT" "$ASSETS_DIR/dashboard.png"
+
+echo "Done! Screenshot saved to $ASSETS_DIR/dashboard.png"
