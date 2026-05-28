@@ -577,40 +577,125 @@ struct AboutView: View {
     let updater: SPUUpdater
 
     var body: some View {
-        VStack(spacing: Spacing.md) {
-            Image(systemName: "dollarsign.circle.fill")
-                .font(.system(size: 48))
-                .foregroundStyle(SemanticColors.brand)
+        ScrollView {
+            VStack(alignment: .leading, spacing: Spacing.lg) {
+                HStack(alignment: .top, spacing: Spacing.md) {
+                    Image(systemName: "dollarsign.circle.fill")
+                        .font(.system(size: 46))
+                        .foregroundStyle(SemanticColors.brand)
+                        .accessibilityHidden(true)
 
-            Text("PlaidBar")
-                .font(.title2)
-                .fontWeight(.bold)
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        Text("PlaidBar")
+                            .font(.title2)
+                            .fontWeight(.bold)
 
-            Text("Version \(PlaidBarConstants.appVersion)")
-                .foregroundStyle(.secondary)
+                        Text("Version \(PlaidBarConstants.appVersion)")
+                            .foregroundStyle(.secondary)
 
-            Text("Your bank accounts, credit cards, and spending -- always one click away.")
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal)
+                        Text("Your bank accounts, credit cards, and spending -- always one click away.")
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
 
-            Divider()
-
-            HStack(spacing: Spacing.lg) {
-                Button("Check for Updates\u{2026}") {
-                    updater.checkForUpdates()
+                    Spacer()
                 }
 
-                if let repoURL = URL(string: "https://github.com/ftchvs/PlaidBar") {
-                    Link("View on GitHub", destination: repoURL)
-                        .font(.callout)
+                SettingsCard(title: "Support") {
+                    supportLink(
+                        "Troubleshooting",
+                        systemImage: "wrench.and.screwdriver",
+                        url: "https://github.com/ftchvs/PlaidBar/blob/main/docs/troubleshooting.md",
+                        detail: "Setup, server, Plaid Link, notifications, and screenshot fixes."
+                    )
+
+                    supportLink(
+                        "Privacy",
+                        systemImage: "lock.shield",
+                        url: "https://github.com/ftchvs/PlaidBar/blob/main/docs/privacy.md",
+                        detail: "What stays local, what calls Plaid, and what not to share."
+                    )
+
+                    supportLink(
+                        "Security",
+                        systemImage: "exclamationmark.shield",
+                        url: "https://github.com/ftchvs/PlaidBar/blob/main/SECURITY.md",
+                        detail: "Private reporting path for token, credential, or data exposure."
+                    )
+                }
+
+                SettingsCard(title: "Project") {
+                    supportLink(
+                        "GitHub Repository",
+                        systemImage: "chevron.left.forwardslash.chevron.right",
+                        url: "https://github.com/ftchvs/PlaidBar",
+                        detail: "Source, issues, releases, and contribution workflow."
+                    )
+
+                    supportLink(
+                        "1.0 Roadmap",
+                        systemImage: "map",
+                        url: "https://github.com/ftchvs/PlaidBar/blob/main/docs/v1.0-roadmap.md",
+                        detail: "Product, design, system, security, and open-source release plan."
+                    )
+
+                    supportLink(
+                        "Release Notes",
+                        systemImage: "doc.text",
+                        url: "https://github.com/ftchvs/PlaidBar/blob/main/docs/release-notes.md",
+                        detail: "Curated release summary for current and upcoming versions."
+                    )
+                }
+
+                HStack {
+                    Button {
+                        updater.checkForUpdates()
+                    } label: {
+                        Label("Check for Updates", systemImage: "arrow.triangle.2.circlepath")
+                    }
+
+                    Spacer()
+
+                    Text("MIT License")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
                 }
             }
-
-            Text("MIT License")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+            .padding(Spacing.lg)
         }
-        .padding()
+    }
+
+    @ViewBuilder
+    private func supportLink(
+        _ title: String,
+        systemImage: String,
+        url: String,
+        detail: String
+    ) -> some View {
+        if let destination = URL(string: url) {
+            Link(destination: destination) {
+                HStack(alignment: .top, spacing: Spacing.sm) {
+                    Image(systemName: systemImage)
+                        .foregroundStyle(SemanticColors.brand)
+                        .frame(width: 20)
+
+                    VStack(alignment: .leading, spacing: Spacing.xxs) {
+                        Text(title)
+                            .foregroundStyle(.primary)
+                        Text(detail)
+                            .detailText()
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "arrow.up.right")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
     }
 }
