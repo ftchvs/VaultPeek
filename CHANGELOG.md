@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 15:59 UTC] — Update
+
+Harden source run script arguments (#109)
+
+`e43b1b2`
+
+---
+
+
 ## [2026-05-28 15:47 UTC] — Update
 
 Validate runtime version during release (#108)
