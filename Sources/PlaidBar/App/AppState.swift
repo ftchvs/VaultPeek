@@ -379,6 +379,22 @@ final class AppState {
         )
     }
 
+    var dashboardStatusReadiness: DashboardStatusReadiness {
+        DashboardStatusReadiness.evaluate(
+            isDemoMode: isDemoMode,
+            serverConnected: serverConnected,
+            credentialsConfigured: serverCredentialsConfigured,
+            linkedItemCount: statusItemCount,
+            accountCount: accountCount,
+            syncedItemCount: serverSyncedItemCount ?? 0,
+            needsLoginItemCount: needsLoginItemCount,
+            erroredItemCount: erroredItemCount,
+            isSyncStale: isSyncStale,
+            lastSyncRelative: lastSyncRelative,
+            errorMessage: error
+        )
+    }
+
     var isSyncStale: Bool {
         guard let lastSyncDate else { return true }
         let staleAfter = max(refreshInterval * 2, PlaidBarConstants.transactionSyncInterval * 2)
