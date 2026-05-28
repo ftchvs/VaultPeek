@@ -8,6 +8,8 @@ struct PlaidBarApp: App {
     private let updaterController: SPUStandardUpdaterController
 
     init() {
+        Self.applyScreenshotDefaults()
+
         let state = AppState()
         _appState = State(initialValue: state)
         updaterController = SPUStandardUpdaterController(
@@ -38,5 +40,33 @@ struct PlaidBarApp: App {
             SettingsView(updater: updaterController.updater)
                 .environment(appState)
         }
+    }
+
+    private static func applyScreenshotDefaults() {
+        guard CommandLine.arguments.contains("--demo") else { return }
+
+        if let filter = argumentValue(for: "--screenshot-filter") {
+            let normalizedFilter = ["all", "cash", "credit", "savings", "debt", "status"]
+                .first { $0 == filter.lowercased() }
+                .map { $0.prefix(1).uppercased() + $0.dropFirst() }
+
+            if let normalizedFilter {
+                UserDefaults.standard.set(String(normalizedFilter), forKey: "dashboard.accountFilter")
+            }
+        }
+
+        if let accountId = argumentValue(for: "--screenshot-account") {
+            UserDefaults.standard.set(accountId, forKey: "dashboard.selectedAccountId")
+        } else if CommandLine.arguments.contains("--screenshot-filter") {
+            UserDefaults.standard.removeObject(forKey: "dashboard.selectedAccountId")
+        }
+    }
+
+    private static func argumentValue(for flag: String) -> String? {
+        guard let index = CommandLine.arguments.firstIndex(of: flag),
+              index + 1 < CommandLine.arguments.count else {
+            return nil
+        }
+        return CommandLine.arguments[index + 1]
     }
 }
