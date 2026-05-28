@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 14:55 UTC] — Update
+
+Fix Homebrew Swift toolchain dependency (#104)
+
+`3f5ac36`
+
+---
+
+
 ## [2026-05-28 14:44 UTC] — Update
 
 Add Homebrew release packaging (#103)
