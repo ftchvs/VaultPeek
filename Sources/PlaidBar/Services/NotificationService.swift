@@ -6,6 +6,7 @@ import PlaidBarCore
 protocol NotificationServiceProtocol {
     func requestPermission() async -> Bool
     func checkPermissionStatus() async -> UNAuthorizationStatus
+    func resetDeduplicationState()
     func evaluateTriggers(
         transactions: [TransactionDTO],
         accounts: [AccountDTO],
@@ -37,6 +38,16 @@ final class NotificationService: NotificationServiceProtocol {
         let defaults = UserDefaults.standard
         defaults.set(notifiedTransactionIds, forKey: Self.notifiedTxKey)
         defaults.set(Array(notifiedAccountIds), forKey: Self.notifiedAccountKey)
+    }
+
+    func resetDeduplicationState() {
+        notifiedTransactionIds = []
+        notifiedTransactionIdSet = []
+        notifiedAccountIds = []
+
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: Self.notifiedTxKey)
+        defaults.removeObject(forKey: Self.notifiedAccountKey)
     }
 
     // MARK: - Notification Key Helpers
