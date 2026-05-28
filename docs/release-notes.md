@@ -4,7 +4,26 @@ This file holds human-written release summaries before they are copied into a
 GitHub release. `CHANGELOG.md` may be generated from repository history, so keep
 curated release messaging here.
 
-## v0.5.0 - In progress
+## v0.6.0 - Unreleased
+
+### Added
+
+- First-run completion state for Plaid Link return: setup now distinguishes
+  waiting for Link, linked item without accounts, accounts without first sync,
+  blocked errors, and dashboard-ready completion.
+
+### Changed
+
+- Onboarding only completes after a linked item has loaded accounts and the
+  first transaction sync check has completed.
+
+### Verification Targets
+
+- Clean-profile sandbox QA with `PLAIDBAR_DATA_DIR=$(mktemp -d)`.
+- `swift test --filter FirstRunCompletion --skip-update --disable-keychain`
+- `swift build --target PlaidBar --skip-update --disable-keychain`
+
+## v0.5.0 - Published
 
 ### Added
 

@@ -99,6 +99,10 @@ if status.get("credentialsConfigured") is not True:
     errors.append("expected credentialsConfigured=true")
 if "itemCount" not in status:
     errors.append("status response missing itemCount")
+if "syncedItemCount" not in status:
+    errors.append("status response missing syncedItemCount")
+elif not isinstance(status["syncedItemCount"], int):
+    errors.append("status response syncedItemCount is not an integer")
 storage_path = None
 if not status.get("storagePath"):
     errors.append("status response missing storagePath")
