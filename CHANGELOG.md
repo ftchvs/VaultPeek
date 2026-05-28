@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 11:24 UTC] — Update
+
+Use random server auth tokens (#91)
+
+`a980527`
+
+---
+
+
 ## [2026-05-28 11:15 UTC] — Update
 
 Keep auth token private after reset (#90)
