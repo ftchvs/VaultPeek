@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 03:49 UTC] — Update
+
+Persist pending Plaid Link sessions (#86)
+
+`deb2f54`
+
+---
+
+
 ## [2026-05-28 03:40 UTC] — Update
 
 store Plaid access tokens in Keychain (#85)
