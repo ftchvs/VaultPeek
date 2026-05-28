@@ -34,6 +34,7 @@ struct PlaidBarServer: AsyncParsableCommand {
         await fluent.migrations.add(CreateItems())
         await fluent.migrations.add(CreateSyncCursors())
         try await fluent.migrate()
+        try ServerConfig.enforcePrivateSQLiteStorePermissions(at: serverConfig.databasePath)
 
         let plaidClient = PlaidClient(config: serverConfig)
         let tokenStore = TokenStore(fluent: fluent)

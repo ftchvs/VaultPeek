@@ -294,6 +294,31 @@ struct PlaidBarServerTests {
         #expect(try Data(contentsOf: URL(fileURLWithPath: sandboxPath)) == Data("legacy".utf8))
     }
 
+    @Test func serverKeepsSQLiteStoreFilesPrivate() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-config-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let databasePath = ServerConfig.databasePath(in: directory.path, environment: .production)
+        let databaseURL = URL(fileURLWithPath: databasePath)
+        let walURL = URL(fileURLWithPath: databasePath + "-wal")
+        let shmURL = URL(fileURLWithPath: databasePath + "-shm")
+
+        try Data("database".utf8).write(to: databaseURL)
+        try Data("wal".utf8).write(to: walURL)
+        try Data("shm".utf8).write(to: shmURL)
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: databaseURL.path)
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: walURL.path)
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: shmURL.path)
+
+        try ServerConfig.enforcePrivateSQLiteStorePermissions(at: databasePath)
+
+        #expect(try posixPermissions(at: databaseURL) == 0o600)
+        #expect(try posixPermissions(at: walURL) == 0o600)
+        #expect(try posixPermissions(at: shmURL) == 0o600)
+    }
+
     @Test func transactionSyncFailsOnlyWhenEveryAttemptedItemFails() {
         #expect(!TransactionRoutes.shouldFailSync(attemptedItemCount: 0, successfulItemCount: 0))
         #expect(TransactionRoutes.shouldFailSync(attemptedItemCount: 1, successfulItemCount: 0))
@@ -461,5 +486,10 @@ struct PlaidBarServerTests {
         #expect(!AccountRoutes.shouldFailRefresh(attemptedItemCount: 0, successfulItemCount: 0))
         #expect(AccountRoutes.shouldFailRefresh(attemptedItemCount: 2, successfulItemCount: 0))
         #expect(!AccountRoutes.shouldFailRefresh(attemptedItemCount: 2, successfulItemCount: 1))
+    }
+
+    private func posixPermissions(at url: URL) throws -> Int {
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        return (attributes[.posixPermissions] as? NSNumber)?.intValue ?? -1
     }
 }
