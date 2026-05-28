@@ -173,7 +173,7 @@ struct GeneralSettingsView: View {
 
     private func revealStorageDirectory() {
         let url = appState.localStorageDirectoryURL
-        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        try? LocalDataStore.prepareStorageDirectory(at: url)
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 

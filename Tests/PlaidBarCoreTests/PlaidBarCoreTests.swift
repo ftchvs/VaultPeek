@@ -892,6 +892,36 @@ struct PlaidBarCoreTests {
         #expect(try String(contentsOf: authToken, encoding: .utf8) == "token")
     }
 
+    @Test("Local data reset keeps data directory private")
+    func localDataResetKeepsDirectoryPrivate() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let directory = root.appendingPathComponent(".plaidbar", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o777]
+        )
+
+        try LocalDataStore.resetLocalData(at: directory)
+
+        #expect(try posixPermissions(at: directory) == 0o700)
+    }
+
+    @Test("Preparing storage directory keeps it private")
+    func prepareStorageDirectoryKeepsDirectoryPrivate() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let directory = root.appendingPathComponent(".plaidbar", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try LocalDataStore.prepareStorageDirectory(at: directory)
+
+        #expect(try posixPermissions(at: directory) == 0o700)
+    }
+
     @Test("Transaction cache survives incremental sync from existing cursor")
     func transactionCacheMergesIncrementalSync() throws {
         let root = URL(fileURLWithPath: NSTemporaryDirectory())
@@ -927,6 +957,24 @@ struct PlaidBarCoreTests {
         #expect(LocalDataStore.transactionCacheURL(in: directory, context: context).lastPathComponent != LocalDataStore.transactionCacheFilename)
     }
 
+    @Test("Transaction cache saves with private file permissions")
+    func transactionCacheSavesWithPrivatePermissions() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let directory = root.appendingPathComponent(".plaidbar", isDirectory: true)
+        let context = TransactionCacheContext(environment: .sandbox, storagePath: "\(directory.path)/plaidbar.sqlite")
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try LocalDataStore.saveTransactions(
+            [TransactionDTO(id: "txn", accountId: "checking", amount: 12, date: "2026-01-01", name: "Coffee")],
+            to: directory,
+            context: context
+        )
+
+        #expect(try posixPermissions(at: directory) == 0o700)
+        #expect(try posixPermissions(at: LocalDataStore.transactionCacheURL(in: directory, context: context)) == 0o600)
+    }
+
     @Test("Transaction cache persists account removal cleanup")
     func transactionCachePersistsAccountRemovalCleanup() throws {
         let root = URL(fileURLWithPath: NSTemporaryDirectory())
@@ -947,5 +995,10 @@ struct PlaidBarCoreTests {
 
         let reloaded = try LocalDataStore.loadTransactions(from: directory, context: context)
         #expect(reloaded.map(\.id) == ["keep"])
+    }
+
+    private func posixPermissions(at url: URL) throws -> Int {
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        return (attributes[.posixPermissions] as? NSNumber)?.intValue ?? -1
     }
 }
