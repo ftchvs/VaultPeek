@@ -5,7 +5,7 @@ Homebrew tap formula.
 
 ## Release Shape
 
-- GitHub release tag: `v0.3.1`
+- GitHub release tag: `v0.3.2`
 - Homebrew tap command:
 
 ```bash
