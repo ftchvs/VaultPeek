@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 23:05 UTC] — Update
+
+Merge pull request #128 from ftchvs/feature/v0-7-status-readiness-panel
+
+`aa92ebe`
+
+---
+
+
 ## [2026-05-28 22:45 UTC] — Update
 
 Merge pull request #127 from ftchvs/feature/v0.6-first-run-completion
