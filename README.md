@@ -54,7 +54,30 @@ Personal finance data lives behind bank website logins. The closest thing to a m
 
 ## Quick Start
 
-### 1. Clone and build
+### Homebrew
+
+After the first tagged release, install PlaidBar from the repository tap:
+
+```bash
+brew tap ftchvs/plaidbar https://github.com/ftchvs/PlaidBar
+brew install plaidbar
+```
+
+Run local demo data without Plaid credentials:
+
+```bash
+plaidbar --demo
+```
+
+Run Plaid sandbox mode with the installed server and app:
+
+```bash
+export PLAID_CLIENT_ID=your_sandbox_client_id
+export PLAID_SECRET=your_sandbox_secret
+plaidbar-run --sandbox
+```
+
+### Source build
 
 ```bash
 git clone https://github.com/ftchvs/PlaidBar.git
@@ -276,6 +299,11 @@ swift build
 
 # Build release
 swift build -c release
+
+# Run installed Homebrew commands
+plaidbar --demo
+plaidbar-server --sandbox
+plaidbar-run --sandbox
 
 # Run tests
 swift test
