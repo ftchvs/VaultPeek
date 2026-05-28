@@ -1,6 +1,12 @@
 import Foundation
+#if canImport(Darwin)
+import Darwin
+#endif
 
 actor PendingLinkSessionStore {
+    private static let directoryPermissions = 0o700
+    private static let filePermissions = 0o600
+
     private let ttl: TimeInterval
     private let storageURL: URL?
     private let now: @Sendable () -> Date
@@ -60,14 +66,15 @@ actor PendingLinkSessionStore {
             let directory = storageURL.deletingLastPathComponent()
             try FileManager.default.createDirectory(
                 at: directory,
-                withIntermediateDirectories: true
+                withIntermediateDirectories: true,
+                attributes: [.posixPermissions: Self.directoryPermissions]
+            )
+            try FileManager.default.setAttributes(
+                [.posixPermissions: Self.directoryPermissions],
+                ofItemAtPath: directory.path
             )
             let data = try JSONEncoder().encode(sessions)
-            try data.write(to: storageURL, options: [.atomic])
-            try FileManager.default.setAttributes(
-                [.posixPermissions: 0o600],
-                ofItemAtPath: storageURL.path
-            )
+            try Self.writePrivateFile(data, to: storageURL)
         } catch {
             // Pending Link sessions are short-lived; failing closed is better
             // than failing Link token creation because persistence is unavailable.
@@ -81,7 +88,70 @@ actor PendingLinkSessionStore {
         else {
             return [:]
         }
+        try? FileManager.default.setAttributes(
+            [.posixPermissions: directoryPermissions],
+            ofItemAtPath: storageURL.deletingLastPathComponent().path
+        )
+        try? FileManager.default.setAttributes(
+            [.posixPermissions: filePermissions],
+            ofItemAtPath: storageURL.path
+        )
         return sessions
+    }
+
+    private static func writePrivateFile(_ data: Data, to url: URL) throws {
+        #if canImport(Darwin)
+        let temporaryURL = url
+            .deletingLastPathComponent()
+            .appendingPathComponent(".\(url.lastPathComponent).\(UUID().uuidString).tmp")
+        let descriptor = open(
+            temporaryURL.path,
+            O_WRONLY | O_CREAT | O_EXCL,
+            S_IRUSR | S_IWUSR
+        )
+        guard descriptor >= 0 else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
+        var shouldRemoveTemporaryFile = true
+        defer {
+            close(descriptor)
+            if shouldRemoveTemporaryFile {
+                try? FileManager.default.removeItem(at: temporaryURL)
+            }
+        }
+
+        try data.withUnsafeBytes { buffer in
+            guard let baseAddress = buffer.baseAddress else { return }
+            var bytesWritten = 0
+            while bytesWritten < buffer.count {
+                let result = write(
+                    descriptor,
+                    baseAddress.advanced(by: bytesWritten),
+                    buffer.count - bytesWritten
+                )
+                if result < 0 {
+                    if errno == EINTR { continue }
+                    throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+                }
+                guard result > 0 else {
+                    throw POSIXError(.EIO)
+                }
+                bytesWritten += result
+            }
+        }
+
+        guard rename(temporaryURL.path, url.path) == 0 else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
+        shouldRemoveTemporaryFile = false
+        #else
+        try data.write(to: url, options: [.atomic])
+        #endif
+
+        try FileManager.default.setAttributes(
+            [.posixPermissions: filePermissions],
+            ofItemAtPath: url.path
+        )
     }
 }
 

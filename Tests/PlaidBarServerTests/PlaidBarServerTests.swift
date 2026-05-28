@@ -430,6 +430,40 @@ struct PlaidBarServerTests {
         #expect(restored?.linkToken == "link-token")
         #expect(restored?.updateItemId == "item-1")
         #expect(replay == nil)
+        #expect(try posixPermissions(at: directory) == 0o700)
+        #expect(try posixPermissions(at: storageURL) == 0o600)
+    }
+
+    @Test func pendingLinkSessionLoadTightensPersistedFilePermissions() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-link-session-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o777]
+        )
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let storageURL = directory.appendingPathComponent("pending-link-sessions.json")
+        let state = "state-\(UUID().uuidString)"
+        let sessions = [
+            state: PendingLinkSession(
+                linkToken: "link-token",
+                updateItemId: "item-1",
+                createdAt: Date()
+            )
+        ]
+        try JSONEncoder().encode(sessions).write(to: storageURL)
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: storageURL.path)
+
+        let restartedStore = PendingLinkSessionStore(storageURL: storageURL)
+        #expect(try posixPermissions(at: directory) == 0o700)
+        #expect(try posixPermissions(at: storageURL) == 0o600)
+
+        let restored = await restartedStore.consume(state: state)
+
+        #expect(restored?.linkToken == "link-token")
+        #expect(restored?.updateItemId == "item-1")
     }
 
     @Test func linkTokenGetResponseReadsHostedLinkSessionResults() throws {
