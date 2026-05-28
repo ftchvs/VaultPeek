@@ -47,13 +47,20 @@ Current local data may include:
 
 - local app-server auth token
 - Plaid item records
-- Plaid access tokens
+- Plaid access-token references in SQLite, with access-token bytes in macOS
+  Keychain when Security framework support is available
 - account metadata
 - balances
 - transaction cache
 - pending link-session state
 
 Sandbox and production use separate scoped stores.
+
+`/api/status` is authenticated and intentionally limited to readiness metadata:
+server version, Plaid environment, credential availability, storage path, item
+counts, synced item count, sync readiness, and last sync time. It should not
+contain Plaid secrets, Plaid access tokens, public tokens, local auth tokens,
+account IDs, item IDs, balances, or transactions.
 
 ## Credentials
 

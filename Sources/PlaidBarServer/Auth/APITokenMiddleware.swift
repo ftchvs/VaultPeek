@@ -13,7 +13,7 @@ struct APITokenMiddleware<Context: RequestContext>: RouterMiddleware {
         context: Context,
         next: (Request, Context) async throws -> Response
     ) async throws -> Response {
-        guard Self.constantTimeEquals(
+        guard APITokenAuthorization.constantTimeEquals(
             request.headers[.authorization] ?? "",
             expectedAuthorizationHeader
         ) else {
@@ -22,8 +22,10 @@ struct APITokenMiddleware<Context: RequestContext>: RouterMiddleware {
 
         return try await next(request, context)
     }
+}
 
-    private static func constantTimeEquals(_ lhs: String, _ rhs: String) -> Bool {
+enum APITokenAuthorization {
+    static func constantTimeEquals(_ lhs: String, _ rhs: String) -> Bool {
         let lhsBytes = Array(lhs.utf8)
         let rhsBytes = Array(rhs.utf8)
         let maxCount = max(lhsBytes.count, rhsBytes.count)
