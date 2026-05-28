@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 03:56 UTC] — Update
+
+Classify local server transport failures (#87)
+
+`60b1184`
+
+---
+
+
 ## [2026-05-28 03:49 UTC] — Update
 
 Persist pending Plaid Link sessions (#86)
