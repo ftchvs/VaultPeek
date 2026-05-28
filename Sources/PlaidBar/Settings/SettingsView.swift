@@ -5,35 +5,47 @@ import AppKit
 
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
+    @AppStorage("settings.selectedTab") private var selectedTab = SettingsTab.general.rawValue
     let updater: SPUUpdater
 
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             GeneralSettingsView()
                 .environment(appState)
                 .tabItem {
                     Label("General", systemImage: "gear")
                 }
+                .tag(SettingsTab.general.rawValue)
 
             AccountSettingsView()
                 .environment(appState)
                 .tabItem {
                     Label("Accounts", systemImage: "building.columns")
                 }
+                .tag(SettingsTab.accounts.rawValue)
 
             NotificationSettingsView()
                 .environment(appState)
                 .tabItem {
                     Label("Notifications", systemImage: "bell")
                 }
+                .tag(SettingsTab.notifications.rawValue)
 
             AboutView(updater: updater)
                 .tabItem {
                     Label("About", systemImage: "info.circle")
                 }
+                .tag(SettingsTab.about.rawValue)
         }
         .frame(width: 620, height: 560)
     }
+}
+
+private enum SettingsTab: String {
+    case general
+    case accounts
+    case notifications
+    case about
 }
 
 struct GeneralSettingsView: View {

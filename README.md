@@ -90,8 +90,20 @@ Generate fresh dashboard screenshots with demo data:
 ```
 
 The screenshot script launches PlaidBar locally, captures the sandbox preflight
-screen plus each dashboard filter state, and requires macOS Screen Recording and
-Accessibility permission for Terminal.
+screen, each dashboard filter state, and current settings surfaces. It requires
+macOS Screen Recording and Accessibility permission for Terminal.
+
+### Settings
+
+| Local Data | Accounts |
+|------------|----------|
+| <img src="Assets/settings-local-data.png" width="380" alt="Settings General tab showing local data storage path, reveal, copy, and reset controls"> | <img src="Assets/settings-accounts.png" width="380" alt="Settings Accounts tab showing linked institutions, item health, reconnect, remove, and add account controls"> |
+| Local storage is explicit: users can inspect the resolved path, reveal/copy it, and reset local PlaidBar data with confirmation copy. | Linked institutions are grouped with account counts, balances, item health, reconnect, and destructive removal gates. |
+
+| Notifications |
+|---------------|
+| <img src="Assets/settings-notifications.png" width="380" alt="Settings Notifications tab showing notification permission, transaction alert, threshold, and credit utilization controls"> |
+| Notification controls keep permission state, transaction thresholds, low-balance alerts, and credit-utilization warnings in one place. |
 
 ## Quick Start
 
