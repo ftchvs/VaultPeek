@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 16:39 UTC] — Update
+
+Log keychain cleanup failures (#112)
+
+`cab472a`
+
+---
+
+
 ## [2026-05-28 16:31 UTC] — Update
 
 Harden release script checks (#111)
