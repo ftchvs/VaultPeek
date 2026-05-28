@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 14:08 UTC] — Update
+
+Harden auth token file creation (#100)
+
+`5bb45d3`
+
+---
+
+
 ## [2026-05-28 13:36 UTC] — Update
 
 Fail strict-concurrency warnings in CI (#99)
