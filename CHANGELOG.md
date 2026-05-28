@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 12:43 UTC] — Update
+
+Upsert Plaid Keychain tokens (#94)
+
+`d1ab001`
+
+---
+
+
 ## [2026-05-28 11:35 UTC] — Update
 
 Restrict CI workflow permissions (#92)
