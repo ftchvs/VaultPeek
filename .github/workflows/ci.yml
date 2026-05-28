@@ -25,6 +25,12 @@ jobs:
           xcrun --find swift
           swift --version
 
+      - name: Packaging checks
+        run: |
+          bash -n Scripts/plaidbar-run Scripts/release.sh
+          ruby -c Formula/plaidbar.rb
+          brew style Formula/plaidbar.rb
+
       - name: Resolve dependencies
         run: swift package resolve
 
