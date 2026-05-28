@@ -18,6 +18,7 @@ cleanup() {
     if [[ -n "$CREATED_DATA_DIR" ]]; then
         rm -rf "$CREATED_DATA_DIR"
     fi
+    rm -f "$SERVER_LOG"
 }
 trap cleanup EXIT INT TERM
 
@@ -91,6 +92,7 @@ if status.get("credentialsConfigured") is not True:
     errors.append("expected credentialsConfigured=true")
 if "itemCount" not in status:
     errors.append("status response missing itemCount")
+storage_path = None
 if not status.get("storagePath"):
     errors.append("status response missing storagePath")
 else:
@@ -113,6 +115,16 @@ else:
 data_dir_mode = os.stat(data_dir).st_mode & 0o777
 if data_dir_mode != 0o700:
     errors.append(f"expected data directory permissions 0700, got {data_dir_mode:04o}")
+
+if storage_path:
+    if not os.path.exists(storage_path):
+        errors.append(f"SQLite store was not created at {storage_path}")
+    else:
+        for path in [storage_path, f"{storage_path}-wal", f"{storage_path}-shm"]:
+            if os.path.exists(path):
+                store_mode = os.stat(path).st_mode & 0o777
+                if store_mode != 0o600:
+                    errors.append(f"expected SQLite store permissions 0600 for {path}, got {store_mode:04o}")
 
 if errors:
     for error in errors:
