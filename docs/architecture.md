@@ -85,13 +85,34 @@ Current important files:
 | File | Purpose |
 |------|---------|
 | `auth-token` | Local app-server bearer token |
-| `plaidbar-sandbox.sqlite` | Sandbox Plaid item/token/account storage |
-| `plaidbar-production.sqlite` | Production Plaid item/token/account storage |
+| `plaidbar-sandbox.sqlite` | Sandbox Plaid item/account storage and token references |
+| `plaidbar-production.sqlite` | Production Plaid item/account storage and token references |
 | `transactions-*.json` | Environment/path-scoped transaction cache |
 | `pending-link-sessions.json` | Pending Plaid Hosted Link state |
 
 The data directory is created with private user permissions. Cache/token files
 are written with private file permissions where the platform supports it.
+On macOS runtime builds with Security framework support, Plaid access-token
+bytes are stored in Keychain and SQLite stores `keychain:<item_id>` references.
+Fallback builds without Keychain support may store token bytes locally in the
+SQLite store, so release/security docs must stay explicit about that boundary.
+
+## Status Endpoint Contract
+
+`GET /api/status` is authenticated and release-auditable. It may expose only:
+
+- app/server version
+- Plaid environment
+- whether Plaid credentials are configured
+- local storage path
+- linked item count
+- synced item count
+- sync readiness
+- last sync time
+
+It must not expose Plaid client secrets, access tokens, public tokens, local
+auth tokens, account IDs, item IDs, account balances, transaction rows, or raw
+Plaid error payloads.
 
 ## Sandbox and Production Separation
 
@@ -131,7 +152,6 @@ states if any later step fails.
 ## 1.0 Architecture Debt
 
 - Add a clean architecture diagram to README or docs.
-- Add focused tests around local auth-token file permissions where practical.
 - Add endpoint-level documentation for request/response DTOs.
 - Add a clean duplicate-instance strategy and document expected behavior.
 - Decide whether the 1.0 install story is formula-only or notarized app bundle.

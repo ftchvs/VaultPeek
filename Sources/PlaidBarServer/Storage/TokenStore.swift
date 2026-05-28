@@ -51,7 +51,7 @@ actor TokenStore {
             try PlaidTokenVault.delete(storedToken: item.accessToken, fallbackItemId: id)
         } catch {
             logger.warning(
-                "Failed to delete Plaid access token from Keychain for item \(id): \(String(describing: error))"
+                "Failed to delete Plaid access token from Keychain: \(String(describing: error))"
             )
         }
     }
