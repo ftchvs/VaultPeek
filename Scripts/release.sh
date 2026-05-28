@@ -65,6 +65,10 @@ fi
 
 INFO_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Sources/PlaidBar/Resources/Info.plist)"
 INFO_BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' Sources/PlaidBar/Resources/Info.plist)"
+RUNTIME_VERSION="$(
+    sed -n 's/.*appVersion: String = "\([^"]*\)".*/\1/p' \
+        Sources/PlaidBarCore/Utilities/Constants.swift
+)"
 
 if [[ "$INFO_VERSION" != "$VERSION" ]]; then
     echo "Info.plist version $INFO_VERSION does not match version.env $VERSION" >&2
@@ -73,6 +77,11 @@ fi
 
 if [[ "$INFO_BUILD" != "$BUILD" ]]; then
     echo "Info.plist build $INFO_BUILD does not match version.env $BUILD" >&2
+    exit 1
+fi
+
+if [[ "$RUNTIME_VERSION" != "$VERSION" ]]; then
+    echo "PlaidBarConstants.appVersion $RUNTIME_VERSION does not match version.env $VERSION" >&2
     exit 1
 fi
 
