@@ -19,6 +19,7 @@ struct StatusRoutes: Sendable {
     ) async throws -> Response {
         let itemCount = try await tokenStore.itemCount()
         let lastSync = try await tokenStore.lastSyncDate()
+        let syncedItemCount = try await tokenStore.syncedItemCount()
 
         let status = ServerStatus(
             version: PlaidBarConstants.appVersion,
@@ -27,7 +28,8 @@ struct StatusRoutes: Sendable {
             lastSync: lastSync,
             credentialsConfigured: !config.plaidClientId.isEmpty && !config.plaidSecret.isEmpty,
             storagePath: config.databasePath,
-            syncReady: itemCount > 0
+            syncReady: itemCount > 0,
+            syncedItemCount: syncedItemCount
         )
 
         let encoder = JSONEncoder()

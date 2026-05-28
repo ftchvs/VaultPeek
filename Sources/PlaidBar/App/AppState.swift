@@ -38,6 +38,7 @@ final class AppState {
     var serverCredentialsConfigured: Bool?
     var serverStoragePath: String?
     var serverSyncReady: Bool?
+    var serverSyncedItemCount: Int?
     var itemStatuses: [ItemStatus] = []
     var isDemoMode = false
     var lastSyncDate: Date?
@@ -366,6 +367,18 @@ final class AppState {
         return "Plaid connection healthy"
     }
 
+    var firstRunCompletionState: FirstRunCompletionState {
+        FirstRunCompletionState.evaluate(
+            isDemoMode: isDemoMode,
+            serverConnected: serverConnected,
+            linkedItemCount: statusItemCount,
+            accountCount: accountCount,
+            transactionCount: transactionCount,
+            syncedItemCount: serverSyncedItemCount ?? 0,
+            errorMessage: error
+        )
+    }
+
     var isSyncStale: Bool {
         guard let lastSyncDate else { return true }
         let staleAfter = max(refreshInterval * 2, PlaidBarConstants.transactionSyncInterval * 2)
@@ -453,10 +466,12 @@ final class AppState {
             serverCredentialsConfigured = status.credentialsConfigured
             serverStoragePath = status.storagePath
             serverSyncReady = status.syncReady
+            serverSyncedItemCount = status.syncedItemCount
             lastSyncDate = status.lastSync
-            isSetupComplete = status.itemCount > 0
+            updateSetupCompletion()
             if !(await refreshItemStatuses()) {
                 itemStatuses = []
+                updateSetupCompletion()
             }
         } catch {
             serverConnected = false
@@ -466,8 +481,9 @@ final class AppState {
             serverCredentialsConfigured = nil
             serverStoragePath = nil
             serverSyncReady = nil
+            serverSyncedItemCount = nil
             itemStatuses = []
-            isSetupComplete = false
+            updateSetupCompletion()
         }
     }
 
@@ -478,7 +494,7 @@ final class AppState {
             accounts = try await serverClient.getAccounts()
             serverItemCount = Set(accounts.map(\.itemId)).count
             serverSyncReady = (serverItemCount ?? 0) > 0
-            isSetupComplete = (serverItemCount ?? 0) > 0
+            updateSetupCompletion()
             await refreshItemStatuses()
         } catch {
             await refreshItemStatuses()
@@ -521,7 +537,9 @@ final class AppState {
                 hasMore = response.hasMore
             }
             lastSyncDate = Date()
+            serverSyncedItemCount = statusItemCount
             await refreshItemStatuses()
+            updateSetupCompletion()
         } catch {
             await refreshItemStatuses()
             self.error = error.localizedDescription
@@ -536,6 +554,7 @@ final class AppState {
             isSetupComplete = false
             serverConnected = false
             serverEnvironment = nil
+            serverSyncedItemCount = nil
             return
         }
 
@@ -616,6 +635,28 @@ final class AppState {
         return error == nil
     }
 
+    @discardableResult
+    func completeFirstRunCheck() async -> Bool {
+        error = nil
+        await checkServerConnection()
+
+        guard serverConnected, statusItemCount > 0 else {
+            updateSetupCompletion()
+            return false
+        }
+
+        await refreshAccounts()
+
+        guard !accounts.isEmpty else {
+            updateSetupCompletion()
+            return false
+        }
+
+        await syncTransactions()
+        updateSetupCompletion()
+        return firstRunCompletionState.isReady
+    }
+
     func removeAccount(itemId: String) async {
         do {
             try await serverClient.removeItem(itemId: itemId)
@@ -629,11 +670,12 @@ final class AppState {
                 itemStatuses.removeAll { $0.id == removedItemId }
                 serverItemCount = max(itemStatuses.count, fallbackItemCount)
                 serverSyncReady = (serverItemCount ?? 0) > 0
-                isSetupComplete = (serverItemCount ?? 0) > 0
+                updateSetupCompletion()
             }
             let remainingItemCount = serverItemCount ?? 0
             if remainingItemCount == 0 {
                 lastSyncDate = nil
+                serverSyncedItemCount = 0
             }
             transactions.removeAll { transaction in
                 transaction.itemId == removedItemId ||
@@ -662,6 +704,7 @@ final class AppState {
         serverCredentialsConfigured = nil
         serverStoragePath = nil
         serverSyncReady = nil
+        serverSyncedItemCount = nil
         lastSyncDate = nil
         isSetupComplete = false
         isDemoMode = false
@@ -786,7 +829,11 @@ final class AppState {
         itemStatuses = statuses
         serverItemCount = statuses.count
         serverSyncReady = !statuses.isEmpty
-        isSetupComplete = !statuses.isEmpty
+        updateSetupCompletion()
+    }
+
+    private func updateSetupCompletion() {
+        isSetupComplete = firstRunCompletionState.isReady
     }
 
     private func recordBalanceSnapshot() {
@@ -916,6 +963,7 @@ final class AppState {
         serverCredentialsConfigured = true
         serverStoragePath = LocalDataStore.displayPath
         serverSyncReady = true
+        serverSyncedItemCount = serverItemCount
         itemStatuses = [
             ItemStatus(id: "demo_chase", institutionName: "Chase", status: .connected, lastSync: Date()),
             ItemStatus(id: "demo_amex_item", institutionName: "American Express", status: .connected, lastSync: Date()),
