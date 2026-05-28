@@ -221,9 +221,20 @@ No data races by construction.
 
 ```
 ~/.plaidbar/
-├── plaidbar.sqlite    # Fluent database (items + sync cursors)
+├── plaidbar-sandbox.sqlite       # Sandbox items + sync cursors
+├── plaidbar-production.sqlite    # Production items + sync cursors
 └── auth-token         # App ↔ server shared secret
 ```
+
+On upgrade, a legacy `plaidbar.sqlite`, its SQLite sidecar files, and its
+matching transaction cache are copied into an environment-scoped database only
+when the legacy environment is explicit
+(`PLAIDBAR_MIGRATE_LEGACY_DATABASE=sandbox|production`) or can be inferred from
+the existing transaction-cache context. Ambiguous legacy databases stay
+untouched to avoid sandbox/production token crossover. Explicit migration backs
+up any existing scoped SQLite store and transaction cache before copying legacy
+data, then writes a migration marker so restarts do not reapply stale legacy
+data.
 
 ## Testing Strategy
 

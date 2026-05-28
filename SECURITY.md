@@ -30,7 +30,9 @@ Use GitHub private vulnerability reporting if available, or contact the reposito
 - PlaidBar has no hosted backend, analytics, telemetry, or tracking.
 - The companion server should bind to `127.0.0.1` only.
 - Plaid secrets and access tokens must not be embedded in the app binary.
-- The local server stores Plaid item access tokens in SQLite under `~/.plaidbar/plaidbar.sqlite`.
+- The local server stores Plaid item access tokens in environment-scoped SQLite files under `~/.plaidbar/`:
+  `plaidbar-sandbox.sqlite` for sandbox and `plaidbar-production.sqlite` for production.
+- Existing legacy `plaidbar.sqlite` data, SQLite sidecar files, and matching transaction cache are copied into a scoped database only when the legacy environment is explicit (`PLAIDBAR_MIGRATE_LEGACY_DATABASE=sandbox|production`) or can be inferred from the existing transaction-cache context. Ambiguous legacy databases are left untouched to avoid sandbox/production token crossover. Explicit migration can replace an existing scoped store, backs up the previous scoped SQLite store and transaction cache before copying legacy data, and writes a migration marker so restarts do not reapply stale legacy data.
 - The app/server auth token is generated locally under `~/.plaidbar/auth-token`.
 - Protect your macOS user account, disk encryption, backups, and shell history.
 - App-server communication should preserve local-only assumptions unless a future change explicitly documents otherwise.
