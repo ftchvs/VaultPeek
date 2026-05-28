@@ -40,6 +40,8 @@ class Plaidbar < Formula
 
   test do
     assert_match "USAGE:", shell_output("#{bin}/plaidbar-server --help")
+    assert_equal "#{version}\n", shell_output("#{bin}/plaidbar-server --version")
+    assert_match "Invalid port: nope", shell_output("#{bin}/plaidbar-run --port nope 2>&1", 2)
     assert_match "Missing Plaid credentials", shell_output("#{bin}/plaidbar-run --sandbox 2>&1", 1)
   end
 end
