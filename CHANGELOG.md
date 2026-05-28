@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 21:17 UTC] — Update
+
+Merge pull request #123 from ftchvs/fix/setup-mode-pills-clickable
+
+`3aa6048`
+
+---
+
+
 ## [2026-05-28 20:11 UTC] — Update
 
 Merge pull request #122 from ftchvs/fix/add-account-action
