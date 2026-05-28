@@ -105,6 +105,11 @@ macOS Screen Recording and Accessibility permission for Terminal.
 | <img src="Assets/settings-notifications.png" width="380" alt="Settings Notifications tab showing notification permission, transaction alert, threshold, and credit utilization controls"> |
 | Notification controls keep permission state, transaction thresholds, low-balance alerts, and credit-utilization warnings in one place. |
 
+| About |
+|-------|
+| <img src="Assets/settings-about.png" width="380" alt="Settings About tab showing PlaidBar version, update action, support links, privacy, security, roadmap, and release notes"> |
+| About doubles as a support hub with links to troubleshooting, privacy, security, roadmap, release notes, updates, and the project repository. |
+
 ## Quick Start
 
 ### Homebrew

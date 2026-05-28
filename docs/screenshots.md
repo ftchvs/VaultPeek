@@ -35,6 +35,7 @@ The script launches PlaidBar locally and captures:
 - Settings > General / Local Data
 - Settings > Accounts
 - Settings > Notifications
+- Settings > About
 
 ## macOS Permissions
 
@@ -60,6 +61,7 @@ app running the script.
 | `Assets/settings-local-data.png` | Local data controls |
 | `Assets/settings-accounts.png` | Linked items and account management |
 | `Assets/settings-notifications.png` | Notification permission and thresholds |
+| `Assets/settings-about.png` | Version, support, privacy, security, roadmap, and release links |
 
 ## Review Checklist
 
