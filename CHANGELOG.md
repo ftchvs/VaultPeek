@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 22:11 UTC] — Update
+
+Merge pull request #125 from ftchvs/feature/v0.6-support-polish
+
+`3a80d8b`
+
+---
+
+
 ## [2026-05-28 21:59 UTC] — Update
 
 Merge pull request #124 from ftchvs/feature/v0.5-product-readiness
