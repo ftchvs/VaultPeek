@@ -455,7 +455,7 @@ when the local app created the Hosted Link session.
 ## Roadmap
 
 The detailed 1.0 plan lives in [docs/v1.0-roadmap.md](docs/v1.0-roadmap.md).
-It maps the remaining path from the v0.9 formula-only candidate to a stable
+It maps the remaining path from the v1.0 formula-only candidate to a stable
 public release:
 product flows, design/frontend polish, local system architecture, security and
 privacy checks, distribution, docs, QA, and open-source readiness.
