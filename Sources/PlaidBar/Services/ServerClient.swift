@@ -74,11 +74,8 @@ actor ServerClient {
         }
         var request = try authorizedRequest(url: url)
         request.httpMethod = "DELETE"
-        let (_, response) = try await session.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
-            throw ServerClientError.requestFailed
-        }
+        let (data, response) = try await session.data(for: request)
+        try Self.validateHTTPResponse(response, data: data)
     }
 
     // MARK: - Private
@@ -86,10 +83,7 @@ actor ServerClient {
     private func get<T: Decodable & Sendable>(_ url: URL) async throws -> T {
         let request = try authorizedRequest(url: url)
         let (data, response) = try await session.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
-            throw ServerClientError.requestFailed
-        }
+        try Self.validateHTTPResponse(response, data: data)
         return try decoder.decode(T.self, from: data)
     }
 
@@ -98,11 +92,56 @@ actor ServerClient {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         let (data, response) = try await session.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
+        try Self.validateHTTPResponse(response, data: data)
+        return try decoder.decode(T.self, from: data)
+    }
+
+    private static func validateHTTPResponse(
+        _ response: URLResponse,
+        data: Data
+    ) throws {
+        guard let httpResponse = response as? HTTPURLResponse else {
             throw ServerClientError.requestFailed
         }
-        return try decoder.decode(T.self, from: data)
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw ServerClientError.httpError(
+                statusCode: httpResponse.statusCode,
+                message: errorMessage(from: data, statusCode: httpResponse.statusCode)
+            )
+        }
+    }
+
+    private static func errorMessage(from data: Data, statusCode: Int) -> String {
+        if let jsonMessage = jsonErrorMessage(from: data) {
+            return jsonMessage
+        }
+
+        if let body = String(data: data, encoding: .utf8)?.trimmedNonEmpty {
+            return truncate(body)
+        }
+
+        return HTTPURLResponse.localizedString(forStatusCode: statusCode)
+    }
+
+    private static func jsonErrorMessage(from data: Data) -> String? {
+        guard let object = try? JSONSerialization.jsonObject(with: data),
+              let dictionary = object as? [String: Any] else {
+            return nil
+        }
+
+        for key in ["message", "reason", "error", "detail", "title"] {
+            if let value = dictionary[key] as? String,
+               let message = value.trimmedNonEmpty {
+                return truncate(message)
+            }
+        }
+        return nil
+    }
+
+    private static func truncate(_ message: String) -> String {
+        let normalized = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard normalized.count > 500 else { return normalized }
+        return String(normalized.prefix(500)) + "..."
     }
 
     private func authorizedRequest(url: URL) throws -> URLRequest {
@@ -122,12 +161,22 @@ enum ServerClientError: Error, LocalizedError, Sendable {
     case requestFailed
     case serverNotRunning
     case authTokenUnavailable
+    case httpError(statusCode: Int, message: String)
 
     var errorDescription: String? {
         switch self {
         case .requestFailed: "Request to PlaidBar server failed"
         case .serverNotRunning: "PlaidBar server is not running"
         case .authTokenUnavailable: "PlaidBar server auth token is unavailable"
+        case .httpError(let statusCode, let message):
+            "PlaidBar server returned \(statusCode): \(message)"
         }
+    }
+}
+
+private extension String {
+    var trimmedNonEmpty: String? {
+        let value = trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
     }
 }
