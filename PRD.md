@@ -127,7 +127,7 @@ The focus is readiness, recovery, and explicit local-data boundaries.
 | 5.5 | Recovery-specific empty states | **Given** an account/transaction/credit surface has no data, **When** the app can distinguish cause, **Then** it explains server offline, no linked item, no loaded account data, no synced history, or filters returning zero results with one clear action |
 | 5.6 | Degraded item recovery | **Given** Plaid reports `login_required` or item error, **When** Status, Settings, or account detail surfaces render, **Then** the user sees item health and a reconnect action |
 | 5.7 | Current screenshots | **Given** the README screenshots are used for public review, **When** screenshots are regenerated, **Then** they show the current design system and include dashboard, onboarding, status, and settings surfaces |
-| 5.8 | Release metadata | **Given** v0.5 is ready to tag, **When** release metadata is prepared, **Then** `version.env`, `Info.plist`, runtime constants, formula tag, tests, changelog, and release docs agree on `0.5.0` |
+| 5.8 | Release metadata | **Given** a release candidate is ready to tag, **When** release metadata is prepared, **Then** `version.env`, `Info.plist`, runtime constants, formula tag, tests, changelog, and release docs agree on the candidate version |
 
 ### v1.0 (planned)
 
