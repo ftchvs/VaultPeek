@@ -32,6 +32,8 @@ public enum LocalDataStore {
     public static let dataDirectoryEnvironmentVariable = "PLAIDBAR_DATA_DIR"
     public static let authTokenFilename = "auth-token"
     public static let transactionCacheFilename = "transactions.json"
+    private static let directoryPermissions = 0o700
+    private static let cacheFilePermissions = 0o600
 
     public static func accountHomeDirectoryURL() -> URL {
         #if os(macOS)
@@ -81,7 +83,7 @@ public enum LocalDataStore {
             }
         }
 
-        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        try ensurePrivateDirectory(directory, fileManager: fileManager)
 
         return LocalDataResetResult(
             directoryPath: directory.path,
@@ -100,6 +102,13 @@ public enum LocalDataStore {
         in directory: URL = storageDirectoryURL()
     ) -> URL {
         directory.appendingPathComponent(authTokenFilename)
+    }
+
+    public static func prepareStorageDirectory(
+        at directory: URL = storageDirectoryURL(),
+        fileManager: FileManager = .default
+    ) throws {
+        try ensurePrivateDirectory(directory, fileManager: fileManager)
     }
 
     public static func loadTransactions(
@@ -122,12 +131,13 @@ public enum LocalDataStore {
         context: TransactionCacheContext? = nil,
         fileManager: FileManager = .default
     ) throws {
-        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        try ensurePrivateDirectory(directory, fileManager: fileManager)
 
         let url = transactionCacheURL(in: directory, context: context)
         let cache = TransactionCache(context: context, transactions: transactions)
         let data = try JSONEncoder().encode(cache)
         try data.write(to: url, options: [.atomic])
+        try setPrivateCacheFilePermissions(url, fileManager: fileManager)
     }
 
     private static func transactionCacheFilename(for context: TransactionCacheContext?) -> String {
@@ -144,6 +154,31 @@ public enum LocalDataStore {
             hash &*= 1_099_511_628_211
         }
         return String(format: "%016llx", hash)
+    }
+
+    private static func ensurePrivateDirectory(
+        _ directory: URL,
+        fileManager: FileManager
+    ) throws {
+        try fileManager.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: directoryPermissions]
+        )
+        try fileManager.setAttributes(
+            [.posixPermissions: directoryPermissions],
+            ofItemAtPath: directory.path
+        )
+    }
+
+    private static func setPrivateCacheFilePermissions(
+        _ url: URL,
+        fileManager: FileManager
+    ) throws {
+        try fileManager.setAttributes(
+            [.posixPermissions: cacheFilePermissions],
+            ofItemAtPath: url.path
+        )
     }
 }
 
