@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 03:11 UTC] — Update
+
+Restrict on-demand Claude triggers
+
+`7d8e8d8`
+
+---
+
+
 ## [2026-05-28 03:09 UTC] — Update
 
 Retry transient Plaid API failures
