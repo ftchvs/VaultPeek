@@ -43,6 +43,7 @@ public enum PlaidBarConstants {
     public static let creditUtilizationWarningThreshold: Double = 30.0
     public static let maxRecentTransactions: Int = 50
     public static let initialSyncDays: Int = 90
+    public static let maxTransactionSyncPages: Int = 100
 
     // Keychain
     public static let keychainServiceName: String = "com.ftchvs.PlaidBar"

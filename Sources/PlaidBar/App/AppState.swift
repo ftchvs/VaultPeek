@@ -502,7 +502,14 @@ final class AppState {
     func syncTransactions() async {
         do {
             var hasMore = true
+            var pageCount = 0
             while hasMore {
+                pageCount += 1
+                guard pageCount <= PlaidBarConstants.maxTransactionSyncPages else {
+                    throw AppStateError.transactionSyncPageLimitExceeded(
+                        maxPages: PlaidBarConstants.maxTransactionSyncPages
+                    )
+                }
                 let response = try await serverClient.syncTransactions()
                 let updatedTransactions = TransactionSyncReducer.applying(response, to: transactions)
                 try LocalDataStore.saveTransactions(updatedTransactions, context: transactionCacheContext)
@@ -916,6 +923,17 @@ final class AppState {
     private static func seasonalAdjustment(daysAgo: Int, interval: Int) -> Double {
         let cycle = Double((daysAgo / max(interval, 1)) % 5)
         return cycle * 8.75
+    }
+}
+
+private enum AppStateError: LocalizedError {
+    case transactionSyncPageLimitExceeded(maxPages: Int)
+
+    var errorDescription: String? {
+        switch self {
+        case .transactionSyncPageLimitExceeded(let maxPages):
+            "Transaction sync did not finish after \(maxPages) pages. Try again later."
+        }
     }
 }
 

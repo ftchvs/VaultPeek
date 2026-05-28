@@ -693,6 +693,12 @@ struct PlaidBarCoreTests {
         #expect(PlaidBarConstants.normalizedBackgroundRefreshInterval(.nan) == PlaidBarConstants.backgroundRefreshInterval)
     }
 
+    @Test("Transaction sync page cap is generous and finite")
+    func transactionSyncPageCapIsGenerousAndFinite() {
+        #expect(PlaidBarConstants.maxTransactionSyncPages >= 50)
+        #expect(PlaidBarConstants.maxTransactionSyncPages < Int.max)
+    }
+
     @Test("Version bumped to 0.3.0")
     func versionBump() {
         #expect(PlaidBarConstants.appVersion == "0.3.0")
