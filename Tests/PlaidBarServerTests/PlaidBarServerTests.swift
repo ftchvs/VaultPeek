@@ -37,6 +37,185 @@ struct PlaidBarServerTests {
         #expect(decoded.syncReady)
     }
 
+    @Test func serverDatabasePathIsScopedByPlaidEnvironment() {
+        let dataDir = "/tmp/plaidbar-test-data"
+
+        let sandboxPath = ServerConfig.databasePath(in: dataDir, environment: .sandbox)
+        let productionPath = ServerConfig.databasePath(in: dataDir, environment: .production)
+
+        #expect(sandboxPath.hasSuffix("/plaidbar-sandbox.sqlite"))
+        #expect(productionPath.hasSuffix("/plaidbar-production.sqlite"))
+        #expect(sandboxPath != productionPath)
+    }
+
+    @Test func serverCopiesLegacyDatabaseIntoFirstScopedEnvironment() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-config-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let legacyURL = directory.appendingPathComponent(ServerConfig.legacyDatabaseFilename)
+        try Data("legacy".utf8).write(to: legacyURL)
+        try Data("wal".utf8).write(to: URL(fileURLWithPath: legacyURL.path + "-wal"))
+        try Data("shm".utf8).write(to: URL(fileURLWithPath: legacyURL.path + "-shm"))
+        try Data("journal".utf8).write(to: URL(fileURLWithPath: legacyURL.path + "-journal"))
+        let legacyCacheContext = TransactionCacheContext(
+            environment: .sandbox,
+            storagePath: legacyURL.path
+        )
+        let cachedTransactions = [
+            TransactionDTO(id: "tx-old", accountId: "checking", amount: 12, date: "2026-01-01", name: "Coffee")
+        ]
+        try LocalDataStore.saveTransactions(
+            cachedTransactions,
+            to: directory,
+            context: legacyCacheContext
+        )
+
+        let sandboxPath = try ServerConfig.databasePathForStartup(
+            in: directory.path,
+            environment: .sandbox
+        )
+
+        #expect(sandboxPath.hasSuffix("/plaidbar-sandbox.sqlite"))
+        #expect(FileManager.default.fileExists(atPath: sandboxPath))
+        #expect(try Data(contentsOf: URL(fileURLWithPath: sandboxPath + "-wal")) == Data("wal".utf8))
+        #expect(try Data(contentsOf: URL(fileURLWithPath: sandboxPath + "-shm")) == Data("shm".utf8))
+        #expect(try Data(contentsOf: URL(fileURLWithPath: sandboxPath + "-journal")) == Data("journal".utf8))
+        #expect(!FileManager.default.fileExists(
+            atPath: ServerConfig.databasePath(in: directory.path, environment: .production)
+        ))
+        let migratedCache = try LocalDataStore.loadTransactions(
+            from: directory,
+            context: TransactionCacheContext(environment: .sandbox, storagePath: sandboxPath)
+        )
+        #expect(migratedCache.map(\.id) == ["tx-old"])
+    }
+
+    @Test func serverDoesNotCopyAmbiguousLegacyDatabase() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-config-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let legacyURL = directory.appendingPathComponent(ServerConfig.legacyDatabaseFilename)
+        try Data("legacy".utf8).write(to: legacyURL)
+
+        let sandboxPath = try ServerConfig.databasePathForStartup(
+            in: directory.path,
+            environment: .sandbox
+        )
+
+        #expect(sandboxPath.hasSuffix("/plaidbar-sandbox.sqlite"))
+        #expect(!FileManager.default.fileExists(atPath: sandboxPath))
+    }
+
+    @Test func serverCopiesExplicitLegacyDatabaseEnvironment() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-config-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let legacyURL = directory.appendingPathComponent(ServerConfig.legacyDatabaseFilename)
+        try Data("legacy".utf8).write(to: legacyURL)
+
+        let productionPath = try ServerConfig.databasePathForStartup(
+            in: directory.path,
+            environment: .production,
+            legacyMigrationEnvironment: .production
+        )
+
+        #expect(productionPath.hasSuffix("/plaidbar-production.sqlite"))
+        #expect(try Data(contentsOf: URL(fileURLWithPath: productionPath)) == Data("legacy".utf8))
+    }
+
+    @Test func serverBacksUpExistingScopedDatabaseBeforeExplicitLegacyMigration() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-config-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let legacyURL = directory.appendingPathComponent(ServerConfig.legacyDatabaseFilename)
+        try Data("legacy".utf8).write(to: legacyURL)
+        let productionPath = ServerConfig.databasePath(in: directory.path, environment: .production)
+        try Data("empty-production-db".utf8).write(to: URL(fileURLWithPath: productionPath))
+        let legacyCacheContext = TransactionCacheContext(
+            environment: .production,
+            storagePath: legacyURL.path
+        )
+        let scopedCacheContext = TransactionCacheContext(
+            environment: .production,
+            storagePath: productionPath
+        )
+        try LocalDataStore.saveTransactions(
+            [TransactionDTO(id: "tx-legacy", accountId: "checking", amount: 12, date: "2026-01-01", name: "Coffee")],
+            to: directory,
+            context: legacyCacheContext
+        )
+        try LocalDataStore.saveTransactions(
+            [TransactionDTO(id: "tx-stale", accountId: "checking", amount: 20, date: "2026-01-02", name: "Lunch")],
+            to: directory,
+            context: scopedCacheContext
+        )
+
+        let migratedPath = try ServerConfig.databasePathForStartup(
+            in: directory.path,
+            environment: .production,
+            legacyMigrationEnvironment: .production
+        )
+
+        let backupFiles = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+            .filter { $0.hasPrefix("plaidbar-production.sqlite.backup-") }
+
+        #expect(migratedPath == productionPath)
+        #expect(try Data(contentsOf: URL(fileURLWithPath: productionPath)) == Data("legacy".utf8))
+        #expect(backupFiles.count == 1)
+        #expect(try Data(contentsOf: directory.appendingPathComponent(backupFiles[0])) == Data("empty-production-db".utf8))
+        #expect(try LocalDataStore.loadTransactions(
+            from: directory,
+            context: scopedCacheContext
+        ).map(\.id) == ["tx-legacy"])
+
+        try Data("new-production-db".utf8).write(to: URL(fileURLWithPath: productionPath))
+        let restartedPath = try ServerConfig.databasePathForStartup(
+            in: directory.path,
+            environment: .production,
+            legacyMigrationEnvironment: .production
+        )
+
+        #expect(restartedPath == productionPath)
+        #expect(try Data(contentsOf: URL(fileURLWithPath: productionPath)) == Data("new-production-db".utf8))
+    }
+
+    @Test func serverCanCopyLegacyDatabaseAfterWrongEnvironmentCreatedEmptyDatabase() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-config-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let legacyURL = directory.appendingPathComponent(ServerConfig.legacyDatabaseFilename)
+        try Data("legacy".utf8).write(to: legacyURL)
+        let sandboxCacheContext = TransactionCacheContext(
+            environment: .sandbox,
+            storagePath: legacyURL.path
+        )
+        try LocalDataStore.saveTransactions(
+            [TransactionDTO(id: "tx-old", accountId: "checking", amount: 12, date: "2026-01-01", name: "Coffee")],
+            to: directory,
+            context: sandboxCacheContext
+        )
+        let productionPath = ServerConfig.databasePath(in: directory.path, environment: .production)
+        try Data("empty-production-db".utf8).write(to: URL(fileURLWithPath: productionPath))
+
+        let sandboxPath = try ServerConfig.databasePathForStartup(
+            in: directory.path,
+            environment: .sandbox
+        )
+
+        #expect(sandboxPath.hasSuffix("/plaidbar-sandbox.sqlite"))
+        #expect(try Data(contentsOf: URL(fileURLWithPath: sandboxPath)) == Data("legacy".utf8))
+    }
+
     @Test func linkResponseCodable() throws {
         let response = LinkResponse(linkToken: "token_123", linkUrl: "https://example.com/link")
         let data = try JSONEncoder().encode(response)
