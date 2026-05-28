@@ -37,6 +37,14 @@ struct PlaidBarServerTests {
         #expect(decoded.syncReady)
     }
 
+    @Test func oauthCallbackErrorPageEscapesDynamicMessage() {
+        let html = OAuthCallbackRoute.errorPage("<script>alert('x')</script> & retry \"soon\"")
+
+        #expect(!html.contains("<script>"))
+        #expect(html.contains("&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt;"))
+        #expect(html.contains("&amp; retry &quot;soon&quot;"))
+    }
+
     @Test func serverDatabasePathIsScopedByPlaidEnvironment() {
         let dataDir = "/tmp/plaidbar-test-data"
 
