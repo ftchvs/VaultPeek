@@ -4,6 +4,26 @@ This file holds human-written release summaries before they are copied into a
 GitHub release. `CHANGELOG.md` may be generated from repository history, so keep
 curated release messaging here.
 
+## v0.7.0 - Unreleased
+
+### Added
+
+- Dashboard Status readiness panel with mode, server state, linked item count,
+  synced item count, credential readiness, last sync, and recovery actions.
+
+### Changed
+
+- Status filter is now a recovery surface, not only an account filter. It
+  prioritizes server offline, missing credentials, no linked item, unloaded
+  balances, item errors, login-required items, incomplete first sync, and stale
+  sync.
+
+### Verification Targets
+
+- Select Status in demo mode and verify healthy local demo readiness.
+- Verify offline server and stale sync states expose a single primary action.
+- `swift build --target PlaidBar --skip-update --disable-keychain`
+
 ## v0.6.0 - Unreleased
 
 ### Added

@@ -29,13 +29,13 @@ Personal finance data lives behind bank website logins. The closest thing to a m
 - **Glanceable label** — Choose whether the menu bar shows net cash, total cash, credit utilization, recent spend, or icon-only, with a compact health signal on the icon
 - **Dashboard overview** — One surface for cash, credit, savings, debt, sync health, and selected-account details
 - **Inline account drill-down** — Click any row to expand balances, utilization, pending activity, inflow/outflow, recent transactions, and reconnect/refresh actions in place
-- **Status-rich filtering** — Switch between All, Cash, Credit, Savings, Debt, and Status without leaving the primary popover
+- **Status-rich filtering** — Switch between All, Cash, Credit, Savings, Debt, and a recovery-oriented Status panel without leaving the primary popover
 - **Recurring Detection** — Automatic identification of subscriptions and recurring charges with monthly total
 - **Spending Activity** — GitHub-style daily heatmap with Spend/Net modes, bidirectional Income/Outflow color keys, trend line, income vs expense views, and month-over-month comparison
 - **Credit Utilization** — Progress bars with configurable warning thresholds and gauge
 - **Smart Notifications** — Alerts for large transactions, low balances, and high credit utilization
 - **Balance History** — Sparkline showing net balance trend over time
-- **Diagnostics** — Popover status strip plus diagnostics surfaces for server health, sync recency, item state, data counts, and recovery actions
+- **Diagnostics** — Popover status strip plus a dashboard readiness panel for server health, credential state, synced item count, item recovery, and settings handoff
 - **Keyboard Shortcuts** — Cmd+R to refresh and Cmd+N to add an account
 - **Settings Persistence** — Preferences saved across launches
 - **Launch at Login** — Optional auto-start via macOS Login Items
@@ -80,8 +80,8 @@ while focusing the account list and drill-down controls.
 
 | Debt | Status |
 |------|--------|
-| <img src="Assets/dashboard-debt.png" width="380" alt="Dashboard debt filter showing debt-oriented accounts and selected credit account detail"> | <img src="Assets/dashboard-status.png" width="380" alt="Dashboard status filter showing linked item health, server sync state, and account status context"> |
-| Debt view emphasizes owed balances and high-utilization cards so risk is visible at a glance. | Status view keeps linked-item health, local server status, sync recency, and account recovery paths close to the data. |
+| <img src="Assets/dashboard-debt.png" width="380" alt="Dashboard debt filter showing debt-oriented accounts and selected credit account detail"> | <img src="Assets/dashboard-status.png" width="380" alt="Dashboard status filter showing linked item health, server sync state, synced item count, and recovery actions"> |
+| Debt view emphasizes owed balances and high-utilization cards so risk is visible at a glance. | Status view now acts as a compact recovery surface for server state, credentials, synced items, stale sync, item login, reconnect, refresh, and settings handoff. |
 
 Generate fresh dashboard screenshots with demo data:
 

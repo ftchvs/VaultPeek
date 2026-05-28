@@ -32,6 +32,8 @@ local storage, notifications, and distribution.
 | Wrong mode | App expects sandbox but server is production, or reverse | Preflight shows environment mismatch |
 | Server offline | App opens without server in non-demo mode | Recovery state explains server offline |
 | Dashboard filters | All/Cash/Credit/Savings/Debt/Status | Rows and details match selected scope |
+| Dashboard Status | Select Status filter | Readiness panel shows mode, server state, credentials, linked/synced items, last sync, and one primary recovery action |
+| Dashboard stale sync | Last sync is beyond the configured stale window | Status panel shows stale sync and offers Refresh |
 | Account drill-down | Select account row | Detail surface shows balances, status, and actions |
 | Transactions | Apply date/category/account filters | Matching rows update; zero state can clear filters |
 | Recurring | Open recurring view with insufficient history | Empty state explains history requirement |
