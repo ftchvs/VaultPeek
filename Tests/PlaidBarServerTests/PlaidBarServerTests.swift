@@ -482,6 +482,23 @@ struct PlaidBarServerTests {
         #expect(try PlaidTokenVault.resolve(storedToken: storedToken) == "access-sandbox-token")
     }
 
+    @Test func plaidTokenVaultUpdatesExistingKeychainToken() throws {
+        let itemId = "test_item_\(UUID().uuidString)"
+        let firstReference = try PlaidTokenVault.store(
+            accessToken: "access-sandbox-token-old",
+            itemId: itemId
+        )
+        defer { try? PlaidTokenVault.delete(storedToken: firstReference, fallbackItemId: itemId) }
+
+        let secondReference = try PlaidTokenVault.store(
+            accessToken: "access-sandbox-token-new",
+            itemId: itemId
+        )
+
+        #expect(firstReference == secondReference)
+        #expect(try PlaidTokenVault.resolve(storedToken: secondReference) == "access-sandbox-token-new")
+    }
+
     @Test func accountRefreshFailsOnlyWhenEveryLinkedItemFails() {
         #expect(!AccountRoutes.shouldFailRefresh(attemptedItemCount: 0, successfulItemCount: 0))
         #expect(AccountRoutes.shouldFailRefresh(attemptedItemCount: 2, successfulItemCount: 0))
