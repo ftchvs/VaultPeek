@@ -529,11 +529,42 @@ final class AppState {
     }
 
     func addAccount() async {
+        error = nil
+
+        if isDemoMode {
+            isDemoMode = false
+            isSetupComplete = false
+            serverConnected = false
+            serverEnvironment = nil
+            return
+        }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        if !serverConnected {
+            await checkServerConnection()
+        }
+
+        guard serverConnected else {
+            error = "Start PlaidBarServer before adding an account."
+            return
+        }
+
+        guard serverCredentialsConfigured != false else {
+            error = "Plaid credentials are not configured on PlaidBarServer."
+            return
+        }
+
         do {
             let linkResponse = try await serverClient.createLinkToken()
-            // Open Plaid Link in browser
-            if let url = URL(string: linkResponse.linkUrl) {
-                NSWorkspace.shared.open(url)
+            guard let url = URL(string: linkResponse.linkUrl) else {
+                error = "PlaidBarServer returned an invalid Plaid Link URL."
+                return
+            }
+
+            if !NSWorkspace.shared.open(url) {
+                error = "Could not open Plaid Link in the browser."
             }
         } catch {
             self.error = error.localizedDescription
