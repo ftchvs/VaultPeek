@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 01:31 UTC] — Fix
+
+scope Plaid storage by environment (#74)
+
+`01c64b2`
+
+---
+
+
 ## [2026-05-28 00:43 UTC] — Fix
 
 fail all-item account refresh explicitly (#73)
