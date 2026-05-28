@@ -22,13 +22,46 @@ cleanup() {
 
 trap cleanup EXIT INT TERM
 
-# Parse args
+usage() {
+    cat <<'EOF'
+Usage: ./Scripts/run.sh [--sandbox] [--port PORT]
+
+Builds and starts the PlaidBar server and menu bar app from a source checkout.
+Set PLAID_CLIENT_ID and PLAID_SECRET before running against sandbox or
+production Plaid data.
+
+Options:
+  --sandbox       Use Plaid sandbox environment
+  --port PORT     Local server port (default: PLAIDBAR_SERVER_PORT or 8484)
+  -h, --help      Show this help
+EOF
+}
+
 SANDBOX_FLAG=""
 SERVER_PORT="${PLAIDBAR_SERVER_PORT:-8484}"
-for arg in "$@"; do
-    case $arg in
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
         --sandbox)
             SANDBOX_FLAG="--sandbox"
+            shift
+            ;;
+        --port)
+            if [[ $# -lt 2 || -z "$2" ]]; then
+                echo "Missing value for --port" >&2
+                exit 2
+            fi
+            SERVER_PORT="$2"
+            shift 2
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "Unknown argument: $1" >&2
+            usage >&2
+            exit 2
             ;;
     esac
 done
@@ -81,6 +114,14 @@ case "$DATA_DIR" in
         ;;
 esac
 AUTH_TOKEN_PATH="$DATA_DIR/auth-token"
+if [[ ! -r "$AUTH_TOKEN_PATH" ]]; then
+    echo "Server is healthy, but the local auth token is not readable at:"
+    echo "  $AUTH_TOKEN_PATH"
+    echo ""
+    echo "Check PLAIDBAR_DATA_DIR and the server startup logs, then retry."
+    exit 1
+fi
+
 AUTH_TOKEN="$(tr -d '\r\n' < "$AUTH_TOKEN_PATH")"
 STATUS_JSON="$(curl -fsS -H "Authorization: Bearer $AUTH_TOKEN" "http://127.0.0.1:$SERVER_PORT/api/status")"
 python3 - "$STATUS_JSON" <<'PY'
