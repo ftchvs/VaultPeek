@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 14:29 UTC] — Update
+
+Write transaction cache privately (#102)
+
+`3ab93ff`
+
+---
+
+
 ## [2026-05-28 14:17 UTC] — Update
 
 Keep pending Link sessions private (#101)
