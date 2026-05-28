@@ -10,6 +10,7 @@ struct TransactionRoutes: Sendable {
     func register(with group: RouterGroup<some RequestContext>) {
         group.group("transactions")
             .get("sync", use: syncTransactions)
+            .post("sync/cursors", use: commitSyncCursors)
     }
 
     @Sendable
@@ -36,6 +37,7 @@ struct TransactionRoutes: Sendable {
         var allRemoved: [String] = []
         var hasMore = false
         var latestCursor: String?
+        var pendingCursors: [String: String] = [:]
         var attemptedItemCount = 0
         var successfulItemCount = 0
 
@@ -63,11 +65,8 @@ struct TransactionRoutes: Sendable {
             allRemoved.append(contentsOf: response.removed.map(\.transactionId))
 
             if !response.nextCursor.isEmpty {
-                try await tokenStore.saveSyncCursor(
-                    itemId: itemId,
-                    cursor: response.nextCursor
-                )
                 latestCursor = response.nextCursor
+                pendingCursors[itemId] = response.nextCursor
             }
 
             if response.hasMore {
@@ -84,7 +83,8 @@ struct TransactionRoutes: Sendable {
             modified: allModified,
             removed: allRemoved,
             hasMore: hasMore,
-            nextCursor: latestCursor
+            nextCursor: latestCursor,
+            pendingCursors: pendingCursors
         )
 
         let data = try JSONEncoder().encode(syncResponse)
@@ -93,6 +93,23 @@ struct TransactionRoutes: Sendable {
             headers: [.contentType: "application/json"],
             body: .init(byteBuffer: ByteBuffer(data: data))
         )
+    }
+
+    @Sendable
+    func commitSyncCursors(
+        request: Request,
+        context: some RequestContext
+    ) async throws -> HTTPResponse.Status {
+        let commitRequest = try await request.decode(as: SyncCursorCommitRequest.self, context: context)
+        for (itemId, cursor) in commitRequest.cursors {
+            let trimmedCursor = cursor.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmedCursor.isEmpty else { continue }
+            guard try await tokenStore.getItem(id: itemId) != nil else {
+                throw HTTPError(.badRequest, message: "Cannot commit cursor for unknown item")
+            }
+            try await tokenStore.saveSyncCursor(itemId: itemId, cursor: trimmedCursor)
+        }
+        return .ok
     }
 
     // MARK: - Helpers

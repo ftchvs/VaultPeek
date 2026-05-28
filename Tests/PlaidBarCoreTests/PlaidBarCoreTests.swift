@@ -319,10 +319,12 @@ struct PlaidBarCoreTests {
         let itemId = "item with/slash?and&symbols"
 
         let syncURL = try #require(ServerEndpoint.transactionSyncURL(baseURL: baseURL, itemId: itemId))
+        let cursorCommitURL = try #require(ServerEndpoint.transactionCursorCommitURL(baseURL: baseURL))
         let updateURL = try #require(ServerEndpoint.updateLinkTokenURL(baseURL: baseURL, itemId: itemId))
         let removeURL = try #require(ServerEndpoint.removeItemURL(baseURL: baseURL, itemId: itemId))
 
         #expect(syncURL.absoluteString == "http://127.0.0.1:8484/api/transactions/sync?item_id=item%20with%2Fslash%3Fand%26symbols")
+        #expect(cursorCommitURL.absoluteString == "http://127.0.0.1:8484/api/transactions/sync/cursors")
         #expect(updateURL.absoluteString == "http://127.0.0.1:8484/api/link/update/item%20with%2Fslash%3Fand%26symbols")
         #expect(removeURL.absoluteString == "http://127.0.0.1:8484/api/accounts/item%20with%2Fslash%3Fand%26symbols")
     }
@@ -517,7 +519,8 @@ struct PlaidBarCoreTests {
             modified: [],
             removed: ["old_id"],
             hasMore: false,
-            nextCursor: "cursor_abc"
+            nextCursor: "cursor_abc",
+            pendingCursors: ["item_1": "cursor_abc"]
         )
         let data = try JSONEncoder().encode(response)
         let decoded = try JSONDecoder().decode(SyncResponse.self, from: data)
@@ -526,6 +529,7 @@ struct PlaidBarCoreTests {
         #expect(decoded.removed == ["old_id"])
         #expect(decoded.hasMore == false)
         #expect(decoded.nextCursor == "cursor_abc")
+        #expect(decoded.pendingCursors == ["item_1": "cursor_abc"])
     }
 
     @Test("SyncResponse empty")
@@ -538,6 +542,19 @@ struct PlaidBarCoreTests {
         #expect(decoded.removed.isEmpty)
         #expect(decoded.hasMore == false)
         #expect(decoded.nextCursor == nil)
+        #expect(decoded.pendingCursors.isEmpty)
+    }
+
+    @Test("SyncResponse decodes legacy responses without pending cursors")
+    func syncResponseDecodesLegacyPayload() throws {
+        let data = Data("""
+        {"added":[],"modified":[],"removed":[],"hasMore":false,"nextCursor":"cursor_legacy"}
+        """.utf8)
+
+        let decoded = try JSONDecoder().decode(SyncResponse.self, from: data)
+
+        #expect(decoded.nextCursor == "cursor_legacy")
+        #expect(decoded.pendingCursors.isEmpty)
     }
 
     // MARK: - LinkResponse Tests

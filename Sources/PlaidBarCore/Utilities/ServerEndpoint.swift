@@ -16,6 +16,10 @@ public enum ServerEndpoint {
         return components.url
     }
 
+    public static func transactionCursorCommitURL(baseURL: String) -> URL? {
+        url(baseURL: baseURL, path: "/api/transactions/sync/cursors")
+    }
+
     public static func updateLinkTokenURL(baseURL: String, itemId: String) -> URL? {
         url(baseURL: baseURL, path: "/api/link/update/\(percentEncodedPathComponent(itemId))")
     }

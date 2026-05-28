@@ -61,6 +61,14 @@ actor ServerClient {
         return try await get(url)
     }
 
+    func commitSyncCursors(_ cursors: [String: String]) async throws {
+        guard !cursors.isEmpty else { return }
+        guard let url = ServerEndpoint.transactionCursorCommitURL(baseURL: baseURL) else {
+            throw ServerClientError.requestFailed
+        }
+        try await post(url, body: SyncCursorCommitRequest(cursors: cursors))
+    }
+
     func createLinkToken() async throws -> LinkResponse {
         guard let url = ServerEndpoint.url(baseURL: baseURL, path: "/api/link/create") else {
             throw ServerClientError.requestFailed
@@ -101,6 +109,15 @@ actor ServerClient {
         let (data, response) = try await data(for: request)
         try Self.validateHTTPResponse(response, data: data)
         return try decoder.decode(T.self, from: data)
+    }
+
+    private func post<T: Encodable & Sendable>(_ url: URL, body: T) async throws {
+        var request = try authorizedRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(body)
+        let (data, response) = try await data(for: request)
+        try Self.validateHTTPResponse(response, data: data)
     }
 
     private func data(for request: URLRequest) async throws -> (Data, URLResponse) {
