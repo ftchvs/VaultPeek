@@ -154,4 +154,5 @@ states if any later step fails.
 - Add a clean architecture diagram to README or docs.
 - Add endpoint-level documentation for request/response DTOs.
 - Add a clean duplicate-instance strategy and document expected behavior.
-- Decide whether the 1.0 install story is formula-only or notarized app bundle.
+- Ship 1.0 as formula-only unless Developer ID signing, notarization, appcast,
+  and clean-machine Gatekeeper checks are completed separately.
