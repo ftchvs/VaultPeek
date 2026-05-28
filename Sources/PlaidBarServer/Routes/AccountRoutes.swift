@@ -30,8 +30,9 @@ struct AccountRoutes: Sendable {
 
             let response: PlaidAccountsResponse
             do {
+                let accessToken = try tokenStore.accessToken(for: item)
                 response = try await plaidClient.getAccounts(
-                    accessToken: item.accessToken
+                    accessToken: accessToken
                 )
                 try await tokenStore.updateItemStatus(id: itemId, status: ItemConnectionStatus.connected.rawValue)
                 successfulItemCount += 1
@@ -84,8 +85,9 @@ struct AccountRoutes: Sendable {
 
             let response: PlaidAccountsResponse
             do {
+                let accessToken = try tokenStore.accessToken(for: item)
                 response = try await plaidClient.getBalances(
-                    accessToken: item.accessToken
+                    accessToken: accessToken
                 )
                 try await tokenStore.updateItemStatus(id: itemId, status: ItemConnectionStatus.connected.rawValue)
                 successfulItemCount += 1
@@ -135,7 +137,8 @@ struct AccountRoutes: Sendable {
         // available for retry instead of leaving an orphaned Plaid Item active.
         if let item = try await tokenStore.getItem(id: itemId) {
             do {
-                try await plaidClient.removeItem(accessToken: item.accessToken)
+                let accessToken = try tokenStore.accessToken(for: item)
+                try await plaidClient.removeItem(accessToken: accessToken)
             } catch {
                 guard Self.canDeleteLocalItemAfterPlaidRemoveError(error) else {
                     try await tokenStore.updateItemStatus(id: itemId, status: ItemConnectionStatus.error.rawValue)

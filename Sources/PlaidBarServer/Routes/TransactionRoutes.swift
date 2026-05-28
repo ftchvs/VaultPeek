@@ -46,8 +46,9 @@ struct TransactionRoutes: Sendable {
             let cursor = try await tokenStore.getSyncCursor(itemId: itemId)
             let response: PlaidTransactionsSyncResponse
             do {
+                let accessToken = try tokenStore.accessToken(for: item)
                 response = try await plaidClient.syncTransactions(
-                    accessToken: item.accessToken,
+                    accessToken: accessToken,
                     cursor: cursor
                 )
                 try await tokenStore.updateItemStatus(id: itemId, status: ItemConnectionStatus.connected.rawValue)

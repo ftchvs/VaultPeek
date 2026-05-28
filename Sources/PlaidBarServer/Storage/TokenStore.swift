@@ -17,9 +17,13 @@ actor TokenStore {
         institutionId: String?,
         institutionName: String?
     ) async throws {
+        let storedAccessToken = try PlaidTokenVault.store(
+            accessToken: accessToken,
+            itemId: id
+        )
         let item = ItemModel(
             id: id,
-            accessToken: accessToken,
+            accessToken: storedAccessToken,
             institutionId: institutionId,
             institutionName: institutionName
         )
@@ -36,12 +40,16 @@ actor TokenStore {
 
     func deleteItem(id: String) async throws {
         guard let item = try await ItemModel.find(id, on: fluent.db()) else { return }
-        try await item.delete(on: fluent.db())
-
-        // Also delete associated sync cursor
         if let cursor = try await SyncCursorModel.find(id, on: fluent.db()) {
             try await cursor.delete(on: fluent.db())
         }
+        try await item.delete(on: fluent.db())
+        _ = try? PlaidTokenVault.delete(storedToken: item.accessToken, fallbackItemId: id)
+    }
+
+    func pruneOrphanedKeychainTokens() async throws {
+        let referencedItemIds = Set(try await getAllItems().compactMap(\.id))
+        try PlaidTokenVault.deleteOrphanedTokens(referencedItemIds: referencedItemIds)
     }
 
     func updateItemStatus(id: String, status: String) async throws {
@@ -77,5 +85,9 @@ actor TokenStore {
             .sort(\.$updatedAt, .descending)
             .first()?
             .updatedAt
+    }
+
+    nonisolated func accessToken(for item: ItemModel) throws -> String {
+        try PlaidTokenVault.resolve(storedToken: item.accessToken)
     }
 }

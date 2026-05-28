@@ -53,12 +53,13 @@ struct LinkRoutes: Sendable {
         guard let item = try await tokenStore.getItem(id: itemId) else {
             throw HTTPError(.notFound, message: "Plaid item not found")
         }
+        let accessToken = try tokenStore.accessToken(for: item)
 
         let userId = "plaidbar-user-\(UUID().uuidString.prefix(8))"
         let state = await pendingLinkSessions.issueState()
         let plaidResponse = try await plaidClient.createUpdateLinkToken(
             userId: userId,
-            accessToken: item.accessToken,
+            accessToken: accessToken,
             completionRedirectUri: callbackURL(state: state)
         )
 

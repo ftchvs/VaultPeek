@@ -916,10 +916,14 @@ struct PlaidBarCoreTests {
         try "token".write(to: authToken, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: root) }
 
-        let result = try LocalDataStore.resetLocalData(at: directory)
+        var didResetKeychainTokens = false
+        let result = try LocalDataStore.resetLocalData(at: directory) {
+            didResetKeychainTokens = true
+        }
 
         #expect(result.directoryPath == directory.path)
         #expect(result.removedEntries == ["plaidbar.sqlite"])
+        #expect(didResetKeychainTokens)
 
         var isDirectory: ObjCBool = false
         #expect(FileManager.default.fileExists(atPath: directory.path, isDirectory: &isDirectory))
@@ -941,9 +945,13 @@ struct PlaidBarCoreTests {
             attributes: [.posixPermissions: 0o777]
         )
 
-        try LocalDataStore.resetLocalData(at: directory)
+        var didResetKeychainTokens = false
+        try LocalDataStore.resetLocalData(at: directory) {
+            didResetKeychainTokens = true
+        }
 
         #expect(try posixPermissions(at: directory) == 0o700)
+        #expect(didResetKeychainTokens)
     }
 
     @Test("Preparing storage directory keeps it private")

@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(Security)
+import Security
+#endif
 #if os(macOS)
 import Darwin
 #endif
@@ -11,7 +14,10 @@ public struct LocalDataResetResult: Equatable, Sendable {
         removedEntries.count
     }
 
-    public init(directoryPath: String, removedEntries: [String]) {
+    public init(
+        directoryPath: String,
+        removedEntries: [String]
+    ) {
         self.directoryPath = directoryPath
         self.removedEntries = removedEntries
     }
@@ -32,6 +38,7 @@ public enum LocalDataStore {
     public static let dataDirectoryEnvironmentVariable = "PLAIDBAR_DATA_DIR"
     public static let authTokenFilename = "auth-token"
     public static let transactionCacheFilename = "transactions.json"
+    public static let plaidAccessTokenKeychainService = "PlaidBar.PlaidAccessToken"
     private static let directoryPermissions = 0o700
     private static let cacheFilePermissions = 0o600
 
@@ -60,7 +67,9 @@ public enum LocalDataStore {
     @discardableResult
     public static func resetLocalData(
         at directory: URL = storageDirectoryURL(),
-        fileManager: FileManager = .default
+        fileManager: FileManager = .default,
+        resetKeychainTokens: Bool = true,
+        keychainTokenReset: (() throws -> Void)? = nil
     ) throws -> LocalDataResetResult {
         var removedEntries: [String] = []
         var isDirectory: ObjCBool = false
@@ -85,11 +94,39 @@ public enum LocalDataStore {
 
         try ensurePrivateDirectory(directory, fileManager: fileManager)
 
+        if resetKeychainTokens {
+            try (keychainTokenReset ?? resetPlaidAccessTokenKeychainItems)()
+        }
+
         return LocalDataResetResult(
             directoryPath: directory.path,
             removedEntries: removedEntries
         )
     }
+
+    private static func resetPlaidAccessTokenKeychainItems() throws {
+        #if canImport(Security)
+        let status = SecItemDelete(plaidAccessTokenKeychainServiceQuery() as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw NSError(
+                domain: NSOSStatusErrorDomain,
+                code: Int(status),
+                userInfo: [
+                    NSLocalizedDescriptionKey: "Failed to delete stored Plaid access tokens from Keychain (status \(status))"
+                ]
+            )
+        }
+        #endif
+    }
+
+    #if canImport(Security)
+    private static func plaidAccessTokenKeychainServiceQuery() -> [String: Any] {
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: plaidAccessTokenKeychainService
+        ]
+    }
+    #endif
 
     public static func transactionCacheURL(
         in directory: URL = storageDirectoryURL(),
