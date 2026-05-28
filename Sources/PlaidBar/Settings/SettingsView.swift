@@ -223,6 +223,7 @@ private struct SettingsCard<Content: View>: View {
 }
 
 @ViewBuilder
+@MainActor
 private func settingsRow<Content: View>(
     _ title: String,
     alignment: VerticalAlignment = .center,

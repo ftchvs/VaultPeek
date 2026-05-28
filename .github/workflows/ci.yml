@@ -32,7 +32,7 @@ jobs:
         run: swift build -c release
 
       - name: Strict concurrency build
-        run: swift build -Xswiftc -strict-concurrency=complete
+        run: swift build -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
 
       - name: Test
         run: swift test
