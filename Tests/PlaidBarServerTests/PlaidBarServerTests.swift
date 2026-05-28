@@ -133,4 +133,10 @@ struct PlaidBarServerTests {
         #expect(AccountRoutes.canDeleteLocalItemAfterPlaidRemoveError(invalidToken))
         #expect(!AccountRoutes.canDeleteLocalItemAfterPlaidRemoveError(transient))
     }
+
+    @Test func accountRefreshFailsOnlyWhenEveryLinkedItemFails() {
+        #expect(!AccountRoutes.shouldFailRefresh(attemptedItemCount: 0, successfulItemCount: 0))
+        #expect(AccountRoutes.shouldFailRefresh(attemptedItemCount: 2, successfulItemCount: 0))
+        #expect(!AccountRoutes.shouldFailRefresh(attemptedItemCount: 2, successfulItemCount: 1))
+    }
 }
