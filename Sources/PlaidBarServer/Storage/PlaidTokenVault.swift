@@ -60,13 +60,22 @@ enum PlaidTokenVault {
 
     #if canImport(Security)
     private static func saveToKeychain(accessToken: String, itemId: String) throws {
-        var query = keychainQuery(itemId: itemId)
-        SecItemDelete(query as CFDictionary)
+        let query = keychainQuery(itemId: itemId)
+        let attributes: [String: Any] = [
+            kSecValueData as String: Data(accessToken.utf8),
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        ]
 
-        query[kSecValueData as String] = Data(accessToken.utf8)
-        query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        let updateStatus = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        if updateStatus == errSecSuccess {
+            return
+        }
+        guard updateStatus == errSecItemNotFound else {
+            throw PlaidTokenVaultError.keychainSaveFailed(Int32(updateStatus))
+        }
 
-        let status = SecItemAdd(query as CFDictionary, nil)
+        let addQuery = query.merging(attributes) { _, new in new }
+        let status = SecItemAdd(addQuery as CFDictionary, nil)
         guard status == errSecSuccess else {
             throw PlaidTokenVaultError.keychainSaveFailed(Int32(status))
         }
