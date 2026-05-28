@@ -120,7 +120,7 @@ struct GeneralSettingsView: View {
                                 .multilineTextAlignment(.trailing)
                                 .textSelection(.enabled)
 
-                            Text(appState.localStorageResolvedPathText)
+                            Text(appState.localStorageResolvedDisplayPathText)
                                 .detailText()
                                 .lineLimit(2)
                                 .multilineTextAlignment(.trailing)

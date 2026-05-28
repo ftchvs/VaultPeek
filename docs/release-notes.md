@@ -4,7 +4,30 @@ This file holds human-written release summaries before they are copied into a
 GitHub release. `CHANGELOG.md` may be generated from repository history, so keep
 curated release messaging here.
 
-## v0.9.0 - Unreleased
+## v1.0.0 - Unreleased
+
+### Added
+
+- First stable formula-only release candidate for a local-first macOS Plaid menu
+  bar dashboard.
+- Public release train aligned around install docs, QA matrix, release runbook,
+  security model, support links, and current screenshots.
+
+### Changed
+
+- Version metadata now targets `1.0.0` across `version.env`, `Info.plist`,
+  runtime constants, tests, and the Homebrew formula tag.
+- 1.0 remains intentionally formula-only; notarized app/cask and Sparkle appcast
+  distribution are documented as post-1.0 work until signing is real.
+
+### Verification Targets
+
+- `./Scripts/release.sh --allow-current-branch`
+- `PLAID_CLIENT_ID=ci_smoke_client PLAID_SECRET=ci_smoke_secret ./Scripts/smoke-sandbox.sh`
+- `./Scripts/screenshots.sh`
+- Published tag install check: `brew install --build-from-source plaidbar`
+
+## v0.9.0 - Published
 
 ### Added
 

@@ -6,7 +6,7 @@ until the signing and clean-machine Gatekeeper path is real.
 
 ## Current Candidate
 
-- Candidate version: `v0.9.0`
+- Candidate version: `v1.0.0`
 - 1.0 distribution shape: formula-only SwiftPM executable install
 - GitHub release: tagged from clean `main`
 - Homebrew tap command:
