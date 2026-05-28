@@ -4,6 +4,7 @@ import PlaidBarCore
 struct SetupView: View {
     @Environment(AppState.self) private var appState
     @State private var setupMode: SetupMode = .choose
+    var onComplete: (() -> Void)?
 
     enum SetupMode: Sendable, Equatable {
         case choose
@@ -65,7 +66,11 @@ struct SetupView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            OnboardingModeStrip()
+            OnboardingModeStrip(
+                onDemo: startDemoMode,
+                onSandbox: { setupMode = .sandbox },
+                onProduction: { setupMode = .production }
+            )
 
             VStack(spacing: Spacing.sm) {
                 OnboardingChoiceButton(
@@ -74,7 +79,7 @@ struct SetupView: View {
                     icon: "play.circle",
                     color: SemanticColors.brandSecondary
                 ) {
-                    appState.startDemoMode()
+                    startDemoMode()
                 }
 
                 OnboardingChoiceButton(
@@ -179,6 +184,7 @@ struct SetupView: View {
                     await appState.refreshAccounts()
                     if appState.isSetupComplete {
                         await appState.syncTransactions()
+                        onComplete?()
                     }
                 }
             } label: {
@@ -192,14 +198,23 @@ struct SetupView: View {
             .buttonStyle(.borderless)
         }
     }
+
+    private func startDemoMode() {
+        appState.startDemoMode()
+        onComplete?()
+    }
 }
 
 private struct OnboardingModeStrip: View {
+    let onDemo: () -> Void
+    let onSandbox: () -> Void
+    let onProduction: () -> Void
+
     var body: some View {
         HStack(spacing: Spacing.sm) {
-            ModePill(title: "Demo", subtitle: "Local", icon: "play.circle.fill", tint: SemanticColors.brandSecondary)
-            ModePill(title: "Sandbox", subtitle: "Plaid test", icon: "testtube.2", tint: SemanticColors.brand)
-            ModePill(title: "Production", subtitle: "Real data", icon: "lock.shield.fill", tint: SemanticColors.positive)
+            ModePill(title: "Demo", subtitle: "Local", icon: "play.circle.fill", tint: SemanticColors.brandSecondary, action: onDemo)
+            ModePill(title: "Sandbox", subtitle: "Plaid test", icon: "testtube.2", tint: SemanticColors.brand, action: onSandbox)
+            ModePill(title: "Production", subtitle: "Real data", icon: "lock.shield.fill", tint: SemanticColors.positive, action: onProduction)
         }
         .frame(maxWidth: .infinity)
     }
@@ -210,24 +225,29 @@ private struct ModePill: View {
     let subtitle: String
     let icon: String
     let tint: Color
+    let action: () -> Void
 
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(tint)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title)
-                    .font(.caption.weight(.bold))
-                Text(subtitle)
-                    .microText()
-                    .foregroundStyle(.secondary)
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(tint)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title)
+                        .font(.caption.weight(.bold))
+                    Text(subtitle)
+                        .microText()
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .buttonStyle(.plain)
         .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
     }
 }

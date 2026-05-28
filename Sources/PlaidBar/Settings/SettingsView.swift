@@ -339,7 +339,9 @@ struct AccountSettingsView: View {
             .padding()
         }
         .sheet(isPresented: $isShowingAccountSetup) {
-            SetupView()
+            SetupView {
+                isShowingAccountSetup = false
+            }
                 .environment(appState)
         }
         .onChange(of: appState.isSetupComplete) { _, isComplete in
