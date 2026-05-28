@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 02:34 UTC] — Update
+
+Escape OAuth callback error messages
+
+`7f46936`
+
+---
+
+
 ## [2026-05-28 02:02 UTC] — Fix
 
 respect custom server port (#77)
