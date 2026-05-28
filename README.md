@@ -50,13 +50,40 @@ Personal finance data lives behind bank website logins. The closest thing to a m
   <img src="Assets/dashboard.png" width="420" alt="PlaidBar dashboard popover with net worth, sync status, 365-day spending activity, account rows, and drill-down controls"/>
 </p>
 
-> Generate the screenshot: `./Scripts/screenshots.sh` (requires macOS Screen Recording permission for Terminal)
+The main popover is designed to answer the common questions first: cash on hand,
+credit exposure, savings, debt, sync health, and the last year of spending
+activity. Account rows expand in place, so a quick balance check can turn into a
+targeted refresh, reconnect, or transaction review without opening another app.
+
+| Dashboard | Accounts |
+|-----------|----------|
+| <img src="Assets/dashboard.png" width="380" alt="Dashboard popover with net worth, sync state, spending activity, filters, and account rows"> | <img src="Assets/accounts.png" width="380" alt="Accounts screen showing cash, credit, savings, and debt accounts with balances and status indicators"> |
+| Net worth, cash, credit, savings, debt, sync state, and the 365-day activity heatmap in one menu bar surface. | Account groups make it easy to scan balances by type and spot stale, reconnecting, or error states. |
+
+| Transactions | Spending |
+|--------------|----------|
+| <img src="Assets/transactions.png" width="380" alt="Transactions screen showing grouped recent transactions with merchant names, dates, categories, and amounts"> | <img src="Assets/spending.png" width="380" alt="Spending screen showing heatmap, trend chart, and income versus expense breakdowns"> |
+| Recent activity is grouped for fast audit-style review, with clear inflow/outflow treatment and merchant/category context. | Spend and net modes show daily activity, trend direction, and income-versus-expense movement over time. |
+
+| Credit | Recurring |
+|--------|-----------|
+| <img src="Assets/credit.png" width="380" alt="Credit screen showing utilization gauges, card balances, limits, and warning thresholds"> | <img src="Assets/recurring.png" width="380" alt="Recurring screen showing detected subscriptions and recurring charges with monthly total"> |
+| Utilization gauges and warning thresholds surface cards that need attention before they become a credit-score problem. | Recurring detection turns transaction history into a subscription-style view with estimated monthly impact. |
+
+Generate a fresh dashboard screenshot with demo data:
+
+```bash
+./Scripts/screenshots.sh
+```
+
+The screenshot script launches PlaidBar in demo mode, captures the main
+popover, and requires macOS Screen Recording permission for Terminal.
 
 ## Quick Start
 
 ### Homebrew
 
-After the first tagged release, install PlaidBar from the repository tap:
+Install PlaidBar from the repository tap:
 
 ```bash
 brew tap ftchvs/plaidbar https://github.com/ftchvs/PlaidBar
@@ -68,6 +95,15 @@ Run local demo data without Plaid credentials:
 ```bash
 plaidbar --demo
 ```
+
+Available commands after installation:
+
+| Command | Purpose |
+|---------|---------|
+| `plaidbar --demo` | Launch the menu bar app with local fixture data |
+| `plaidbar-server --sandbox` | Start the local Plaid companion server in sandbox mode |
+| `plaidbar-run --sandbox` | Start the server and app together for sandbox testing |
+| `plaidbar-server --version` | Print the installed PlaidBar version |
 
 Run Plaid sandbox mode with the installed server and app:
 
