@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 21:59 UTC] — Update
+
+Merge pull request #124 from ftchvs/feature/v0.5-product-readiness
+
+`9810ebb`
+
+---
+
+
 ## [2026-05-28 21:17 UTC] — Update
 
 Merge pull request #123 from ftchvs/fix/setup-mode-pills-clickable
