@@ -216,6 +216,14 @@ struct PlaidBarServerTests {
         #expect(try Data(contentsOf: URL(fileURLWithPath: sandboxPath)) == Data("legacy".utf8))
     }
 
+    @Test func transactionSyncFailsOnlyWhenEveryAttemptedItemFails() {
+        #expect(!TransactionRoutes.shouldFailSync(attemptedItemCount: 0, successfulItemCount: 0))
+        #expect(TransactionRoutes.shouldFailSync(attemptedItemCount: 1, successfulItemCount: 0))
+        #expect(TransactionRoutes.shouldFailSync(attemptedItemCount: 3, successfulItemCount: 0))
+        #expect(!TransactionRoutes.shouldFailSync(attemptedItemCount: 3, successfulItemCount: 1))
+        #expect(!TransactionRoutes.shouldFailSync(attemptedItemCount: 3, successfulItemCount: 3))
+    }
+
     @Test func linkResponseCodable() throws {
         let response = LinkResponse(linkToken: "token_123", linkUrl: "https://example.com/link")
         let data = try JSONEncoder().encode(response)

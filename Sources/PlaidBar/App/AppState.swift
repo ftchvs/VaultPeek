@@ -512,6 +512,7 @@ final class AppState {
                 self.error = "Transaction cache failed to save: \(cachePersistenceError.localizedDescription)"
             }
         } catch {
+            itemStatuses = (try? await serverClient.getItems()) ?? itemStatuses
             self.error = error.localizedDescription
         }
     }

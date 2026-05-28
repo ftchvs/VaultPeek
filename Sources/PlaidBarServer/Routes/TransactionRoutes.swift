@@ -36,9 +36,12 @@ struct TransactionRoutes: Sendable {
         var allRemoved: [String] = []
         var hasMore = false
         var latestCursor: String?
+        var attemptedItemCount = 0
+        var successfulItemCount = 0
 
         for item in items {
             guard let itemId = item.id else { continue }
+            attemptedItemCount += 1
 
             let cursor = try await tokenStore.getSyncCursor(itemId: itemId)
             let response: PlaidTransactionsSyncResponse
@@ -48,6 +51,7 @@ struct TransactionRoutes: Sendable {
                     cursor: cursor
                 )
                 try await tokenStore.updateItemStatus(id: itemId, status: ItemConnectionStatus.connected.rawValue)
+                successfulItemCount += 1
             } catch {
                 try await tokenStore.updateItemStatus(id: itemId, status: itemStatus(for: error).rawValue)
                 continue
@@ -70,6 +74,10 @@ struct TransactionRoutes: Sendable {
             }
         }
 
+        if Self.shouldFailSync(attemptedItemCount: attemptedItemCount, successfulItemCount: successfulItemCount) {
+            throw HTTPError(.badGateway, message: "Plaid transaction sync failed for every linked item")
+        }
+
         let syncResponse = SyncResponse(
             added: allAdded,
             modified: allModified,
@@ -87,6 +95,10 @@ struct TransactionRoutes: Sendable {
     }
 
     // MARK: - Helpers
+
+    static func shouldFailSync(attemptedItemCount: Int, successfulItemCount: Int) -> Bool {
+        attemptedItemCount > 0 && successfulItemCount == 0
+    }
 
     private static func toDTO(_ plaidTx: PlaidTransaction) -> TransactionDTO {
         let category: SpendingCategory? = plaidTx.personalFinanceCategory.flatMap {
