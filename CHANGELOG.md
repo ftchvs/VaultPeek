@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 04:04 UTC] — Update
+
+Add local server client timeouts (#88)
+
+`3991c0d`
+
+---
+
+
 ## [2026-05-28 03:56 UTC] — Update
 
 Classify local server transport failures (#87)
