@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 23:22 UTC] — Update
+
+Merge pull request #129 from ftchvs/feature/v0-8-security-contract-hardening
+
+`68b96d2`
+
+---
+
+
 ## [2026-05-28 23:05 UTC] — Update
 
 Merge pull request #128 from ftchvs/feature/v0-7-status-readiness-panel
