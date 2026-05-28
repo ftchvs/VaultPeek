@@ -9,9 +9,9 @@
     <key>CFBundleIdentifier</key>
     <string>com.ftchvs.PlaidBar</string>
     <key>CFBundleVersion</key>
-    <string>4</string>
+    <string>5</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.3.3</string>
+    <string>0.3.4</string>
     <key>LSMinimumSystemVersion</key>
     <string>15.0</string>
     <key>LSUIElement</key>
