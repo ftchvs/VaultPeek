@@ -389,6 +389,24 @@ struct PlaidBarServerTests {
         #expect(!AccountRoutes.canDeleteLocalItemAfterPlaidRemoveError(transient))
     }
 
+    @Test func plaidClientRetriesOnlyTransientFailures() {
+        #expect(!PlaidClient.isRetryableHTTPStatus(400))
+        #expect(!PlaidClient.isRetryableHTTPStatus(401))
+        #expect(PlaidClient.isRetryableHTTPStatus(429))
+        #expect(PlaidClient.isRetryableHTTPStatus(500))
+        #expect(PlaidClient.isRetryableHTTPStatus(503))
+
+        #expect(PlaidClient.isRetryableTransportError(URLError(.timedOut)))
+        #expect(PlaidClient.isRetryableTransportError(URLError(.networkConnectionLost)))
+        #expect(!PlaidClient.isRetryableTransportError(URLError(.badURL)))
+    }
+
+    @Test func plaidClientRetryDelayBacksOffAndCaps() {
+        #expect(PlaidClient.retryDelayNanoseconds(baseDelayNanoseconds: 100, attempt: 1) == 100)
+        #expect(PlaidClient.retryDelayNanoseconds(baseDelayNanoseconds: 100, attempt: 2) == 200)
+        #expect(PlaidClient.retryDelayNanoseconds(baseDelayNanoseconds: 1_000_000_000, attempt: 10) == 8_000_000_000)
+    }
+
     @Test func accountRefreshFailsOnlyWhenEveryLinkedItemFails() {
         #expect(!AccountRoutes.shouldFailRefresh(attemptedItemCount: 0, successfulItemCount: 0))
         #expect(AccountRoutes.shouldFailRefresh(attemptedItemCount: 2, successfulItemCount: 0))
