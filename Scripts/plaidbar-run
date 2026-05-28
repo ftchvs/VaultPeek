@@ -61,6 +61,13 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+if ! [[ "$SERVER_PORT" =~ ^[0-9]+$ ]] || (( SERVER_PORT < 1 || SERVER_PORT > 65535 )); then
+    echo "Invalid port: $SERVER_PORT" >&2
+    exit 2
+fi
+
+export PLAIDBAR_SERVER_PORT="$SERVER_PORT"
+
 if [[ -z "${PLAID_CLIENT_ID:-}" || -z "${PLAID_SECRET:-}" ]]; then
     echo "Missing Plaid credentials."
     echo ""
