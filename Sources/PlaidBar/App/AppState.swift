@@ -455,7 +455,9 @@ final class AppState {
             serverSyncReady = status.syncReady
             lastSyncDate = status.lastSync
             isSetupComplete = status.itemCount > 0
-            itemStatuses = (try? await serverClient.getItems()) ?? []
+            if !(await refreshItemStatuses()) {
+                itemStatuses = []
+            }
         } catch {
             serverConnected = false
             serverEnvironment = nil
@@ -476,10 +478,10 @@ final class AppState {
             accounts = try await serverClient.getAccounts()
             serverItemCount = Set(accounts.map(\.itemId)).count
             serverSyncReady = (serverItemCount ?? 0) > 0
-            isSetupComplete = !accounts.isEmpty
-            itemStatuses = (try? await serverClient.getItems()) ?? itemStatuses
+            isSetupComplete = (serverItemCount ?? 0) > 0
+            await refreshItemStatuses()
         } catch {
-            itemStatuses = (try? await serverClient.getItems()) ?? itemStatuses
+            await refreshItemStatuses()
             self.error = error.localizedDescription
         }
         isLoading = false
@@ -492,8 +494,9 @@ final class AppState {
             accounts = try await serverClient.getBalances()
             lastSyncDate = Date()
             recordBalanceSnapshot()
+            await refreshItemStatuses()
         } catch {
-            itemStatuses = (try? await serverClient.getItems()) ?? itemStatuses
+            await refreshItemStatuses()
             self.error = error.localizedDescription
         }
         isLoading = false
@@ -518,9 +521,9 @@ final class AppState {
                 hasMore = response.hasMore
             }
             lastSyncDate = Date()
-            itemStatuses = (try? await serverClient.getItems()) ?? itemStatuses
+            await refreshItemStatuses()
         } catch {
-            itemStatuses = (try? await serverClient.getItems()) ?? itemStatuses
+            await refreshItemStatuses()
             self.error = error.localizedDescription
         }
     }
@@ -591,16 +594,13 @@ final class AppState {
             )
             accounts.removeAll { $0.itemId == removedItemId }
             let fallbackItemCount = Set(accounts.map(\.itemId)).count
-            if let refreshedItemStatuses = try? await serverClient.getItems() {
-                itemStatuses = refreshedItemStatuses
-                serverItemCount = refreshedItemStatuses.count
-            } else {
+            if !(await refreshItemStatuses()) {
                 itemStatuses.removeAll { $0.id == removedItemId }
                 serverItemCount = max(itemStatuses.count, fallbackItemCount)
+                serverSyncReady = (serverItemCount ?? 0) > 0
+                isSetupComplete = (serverItemCount ?? 0) > 0
             }
             let remainingItemCount = serverItemCount ?? 0
-            serverSyncReady = remainingItemCount > 0
-            isSetupComplete = remainingItemCount > 0
             if remainingItemCount == 0 {
                 lastSyncDate = nil
             }
@@ -739,6 +739,23 @@ final class AppState {
             environment: serverEnvironment,
             storagePath: serverStoragePath
         )
+    }
+
+    @discardableResult
+    private func refreshItemStatuses() async -> Bool {
+        do {
+            applyItemStatuses(try await serverClient.getItems())
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private func applyItemStatuses(_ statuses: [ItemStatus]) {
+        itemStatuses = statuses
+        serverItemCount = statuses.count
+        serverSyncReady = !statuses.isEmpty
+        isSetupComplete = !statuses.isEmpty
     }
 
     private func recordBalanceSnapshot() {
