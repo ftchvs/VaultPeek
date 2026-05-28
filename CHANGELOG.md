@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 16:49 UTC] — Update
+
+Propagate custom run port to app (#113)
+
+`9832f04`
+
+---
+
+
 ## [2026-05-28 16:39 UTC] — Update
 
 Log keychain cleanup failures (#112)
