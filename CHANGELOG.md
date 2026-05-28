@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 15:33 UTC] — Update
+
+Prepare v0.3.2 release metadata (#107)
+
+`e4d1741`
+
+---
+
+
 ## [2026-05-28 15:22 UTC] — Update
 
 Align server command release metadata (#106)
