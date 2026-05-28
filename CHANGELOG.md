@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 03:40 UTC] — Update
+
+store Plaid access tokens in Keychain (#85)
+
+`be4a4b4`
+
+---
+
+
 ## [2026-05-28 03:11 UTC] — Update
 
 Restrict on-demand Claude triggers
