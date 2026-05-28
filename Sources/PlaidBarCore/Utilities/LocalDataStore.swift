@@ -174,7 +174,7 @@ public enum LocalDataStore {
         let url = transactionCacheURL(in: directory, context: context)
         let cache = TransactionCache(context: context, transactions: transactions)
         let data = try JSONEncoder().encode(cache)
-        try data.write(to: url, options: [.atomic])
+        try writePrivateCacheFile(data, to: url, fileManager: fileManager)
         try setPrivateCacheFilePermissions(url, fileManager: fileManager)
     }
 
@@ -217,6 +217,60 @@ public enum LocalDataStore {
             [.posixPermissions: cacheFilePermissions],
             ofItemAtPath: url.path
         )
+    }
+
+    private static func writePrivateCacheFile(
+        _ data: Data,
+        to url: URL,
+        fileManager: FileManager
+    ) throws {
+        #if os(macOS)
+        let temporaryURL = url
+            .deletingLastPathComponent()
+            .appendingPathComponent(".\(url.lastPathComponent).\(UUID().uuidString).tmp")
+        let descriptor = open(
+            temporaryURL.path,
+            O_WRONLY | O_CREAT | O_EXCL,
+            S_IRUSR | S_IWUSR
+        )
+        guard descriptor >= 0 else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
+        var shouldRemoveTemporaryFile = true
+        defer {
+            close(descriptor)
+            if shouldRemoveTemporaryFile {
+                try? fileManager.removeItem(at: temporaryURL)
+            }
+        }
+
+        try data.withUnsafeBytes { buffer in
+            guard let baseAddress = buffer.baseAddress else { return }
+            var bytesWritten = 0
+            while bytesWritten < buffer.count {
+                let result = write(
+                    descriptor,
+                    baseAddress.advanced(by: bytesWritten),
+                    buffer.count - bytesWritten
+                )
+                if result < 0 {
+                    if errno == EINTR { continue }
+                    throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+                }
+                guard result > 0 else {
+                    throw POSIXError(.EIO)
+                }
+                bytesWritten += result
+            }
+        }
+
+        guard rename(temporaryURL.path, url.path) == 0 else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
+        shouldRemoveTemporaryFile = false
+        #else
+        try data.write(to: url, options: [.atomic])
+        #endif
     }
 
     private static func ensurePrivateAuthTokenPermissions(

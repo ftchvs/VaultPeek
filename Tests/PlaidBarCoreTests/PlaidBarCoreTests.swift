@@ -1055,6 +1055,30 @@ struct PlaidBarCoreTests {
         #expect(try posixPermissions(at: LocalDataStore.transactionCacheURL(in: directory, context: context)) == 0o600)
     }
 
+    @Test("Transaction cache overwrite repairs existing file permissions")
+    func transactionCacheOverwriteRepairsExistingPermissions() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let directory = root.appendingPathComponent(".plaidbar", isDirectory: true)
+        let context = TransactionCacheContext(environment: .sandbox, storagePath: "\(directory.path)/plaidbar.sqlite")
+        let cacheURL = LocalDataStore.transactionCacheURL(in: directory, context: context)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try Data("old-cache".utf8).write(to: cacheURL)
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: cacheURL.path)
+
+        try LocalDataStore.saveTransactions(
+            [TransactionDTO(id: "txn", accountId: "checking", amount: 12, date: "2026-01-01", name: "Coffee")],
+            to: directory,
+            context: context
+        )
+
+        #expect(try LocalDataStore.loadTransactions(from: directory, context: context).map(\.id) == ["txn"])
+        #expect(try posixPermissions(at: directory) == 0o700)
+        #expect(try posixPermissions(at: cacheURL) == 0o600)
+    }
+
     @Test("Transaction cache persists account removal cleanup")
     func transactionCachePersistsAccountRemovalCleanup() throws {
         let root = URL(fileURLWithPath: NSTemporaryDirectory())
