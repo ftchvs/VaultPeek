@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 19:10 UTC] — Update
+
+Refresh README screenshots for dashboard design (#120)
+
+`8f29cb2`
+
+---
+
+
 ## [2026-05-28 18:08 UTC] — Update
 
 Expand README screenshot tour (#119)
