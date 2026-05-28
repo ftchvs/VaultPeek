@@ -6,12 +6,13 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 ASSETS_DIR="$PROJECT_DIR/Assets"
+APP_LOG="$(mktemp -t plaidbar-screenshots.XXXXXX.log)"
 
 mkdir -p "$ASSETS_DIR"
 
 echo "Building PlaidBar in release mode..."
 cd "$PROJECT_DIR"
-swift build -c release --skip-update --disable-keychain
+swift build -c release --disable-keychain
 
 BINARY=".build/release/PlaidBar"
 APP_PID=""
@@ -21,11 +22,12 @@ cleanup() {
         kill "$APP_PID" 2>/dev/null || true
         wait "$APP_PID" 2>/dev/null || true
     fi
+    rm -f "$APP_LOG"
 }
 trap cleanup EXIT
 
 echo "Opening dashboard popover..."
-"$BINARY" --demo --show-popover >/tmp/plaidbar-screenshots.log 2>&1 &
+"$BINARY" --demo --show-popover >"$APP_LOG" 2>&1 &
 APP_PID=$!
 
 WINDOW_RECT=""
@@ -53,7 +55,7 @@ done
 if [ -z "$WINDOW_RECT" ] || [ "$WINDOW_RECT" = "missing value" ]; then
     echo "Error: Could not find the PlaidBar popover window."
     echo "App log:"
-    cat /tmp/plaidbar-screenshots.log 2>/dev/null || true
+    cat "$APP_LOG" 2>/dev/null || true
     exit 1
 fi
 

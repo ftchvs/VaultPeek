@@ -31,7 +31,7 @@ plaidbar-run --sandbox
 swift build -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
 swift build -c release -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
 PLAID_CLIENT_ID=ci_smoke_client PLAID_SECRET=ci_smoke_secret ./Scripts/smoke-sandbox.sh
-bash -n Scripts/plaidbar-run Scripts/release.sh
+bash -n Scripts/*.sh Scripts/plaidbar-run
 ruby -c Formula/plaidbar.rb
 ```
 

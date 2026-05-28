@@ -27,7 +27,7 @@ jobs:
 
       - name: Packaging checks
         run: |
-          bash -n Scripts/plaidbar-run Scripts/release.sh
+          bash -n Scripts/*.sh Scripts/plaidbar-run
           ruby -c Formula/plaidbar.rb
           brew style Formula/plaidbar.rb
 
