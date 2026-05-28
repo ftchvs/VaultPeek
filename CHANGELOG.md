@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 11:15 UTC] — Update
+
+Keep auth token private after reset (#90)
+
+`dace81b`
+
+---
+
+
 ## [2026-05-28 11:07 UTC] — Update
 
 Defer Plaid sync cursor commits (#89)
