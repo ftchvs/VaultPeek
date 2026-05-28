@@ -2,6 +2,9 @@ import Foundation
 import PlaidBarCore
 
 actor ServerClient {
+    private static let requestTimeout: TimeInterval = 10
+    private static let resourceTimeout: TimeInterval = 30
+
     private let baseURL: String
     private let session: URLSession
     private let decoder: JSONDecoder
@@ -12,7 +15,11 @@ actor ServerClient {
         authTokenURL: URL = LocalDataStore.authTokenURL()
     ) {
         self.baseURL = baseURL
-        self.session = URLSession.shared
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = Self.requestTimeout
+        configuration.timeoutIntervalForResource = Self.resourceTimeout
+        configuration.waitsForConnectivity = false
+        self.session = URLSession(configuration: configuration)
         self.authTokenURL = authTokenURL
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
