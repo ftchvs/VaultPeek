@@ -4,7 +4,30 @@ This file holds human-written release summaries before they are copied into a
 GitHub release. `CHANGELOG.md` may be generated from repository history, so keep
 curated release messaging here.
 
-## v0.7.0 - Unreleased
+## v0.9.0 - Unreleased
+
+### Added
+
+- Formula-only distribution candidate aligned around the current dashboard,
+  onboarding, status, local-data, and security hardening work.
+- Release preflight script support for release-prep PR validation from a
+  non-`main` branch while keeping publish locked to clean `main`.
+
+### Changed
+
+- Version metadata now targets `0.9.0` across `version.env`, `Info.plist`,
+  runtime constants, and the Homebrew formula tag.
+- Release docs define the 1.0 install path as source-built Homebrew formula
+  first, with notarized `.app` and cask distribution deferred until signing and
+  appcast infrastructure are actually ready.
+
+### Verification Targets
+
+- `./Scripts/release.sh --allow-current-branch`
+- `brew install --build-from-source plaidbar` from a tagged release
+- GitHub CI build/tests/smoke
+
+## v0.7-v0.8 - Unreleased
 
 ### Added
 
