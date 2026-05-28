@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # PlaidBar screenshot pipeline
-# Captures dashboard-first MenuBarExtra popover states in demo mode for README.md.
+# Captures onboarding and dashboard MenuBarExtra popover states for README.md.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -80,6 +80,78 @@ capture_dashboard() {
     APP_LOG=""
 }
 
+capture_sandbox_preflight() {
+    local output="$1"
+    local window_rect=""
+
+    APP_LOG="$(mktemp -t plaidbar-screenshots.XXXXXX.log)"
+    APP_PID=""
+
+    echo "Opening sandbox preflight popover..."
+    "$BINARY" --show-popover >"$APP_LOG" 2>&1 &
+    APP_PID=$!
+
+    for _ in {1..20}; do
+        window_rect=$(osascript -e '
+            tell application "System Events"
+                if exists process "PlaidBar" then
+                    tell process "PlaidBar"
+                        set frontmost to true
+                        if (count of windows) > 0 then
+                            set windowPosition to position of window 1
+                            set windowSize to size of window 1
+                            return (item 1 of windowPosition as text) & "," & (item 2 of windowPosition as text) & "," & (item 1 of windowSize as text) & "," & (item 2 of windowSize as text)
+                        end if
+                    end tell
+                end if
+            end tell
+        ' 2>/dev/null || true)
+
+        if [ -n "$window_rect" ] && [ "$window_rect" != "missing value" ]; then
+            break
+        fi
+        sleep 0.5
+    done
+
+    if [ -z "$window_rect" ] || [ "$window_rect" = "missing value" ]; then
+        echo "Error: Could not find the PlaidBar setup window."
+        echo "App log:"
+        cat "$APP_LOG" 2>/dev/null || true
+        exit 1
+    fi
+
+    osascript -e '
+        tell application "System Events"
+            tell process "PlaidBar"
+                set frontmost to true
+                click button 5 of group 1 of window 1
+            end tell
+        end tell
+    ' 2>/dev/null || true
+    sleep 1
+
+    window_rect=$(osascript -e '
+        tell application "System Events"
+            tell process "PlaidBar"
+                set windowPosition to position of window 1
+                set windowSize to size of window 1
+                return (item 1 of windowPosition as text) & "," & (item 2 of windowPosition as text) & "," & (item 1 of windowSize as text) & "," & (item 2 of windowSize as text)
+            end tell
+        end tell
+    ' 2>/dev/null || true)
+
+    echo "Capturing ${output}..."
+    screencapture -R"$window_rect" "$ASSETS_DIR/$output"
+    chmod 644 "$ASSETS_DIR/$output"
+
+    kill "$APP_PID" 2>/dev/null || true
+    wait "$APP_PID" 2>/dev/null || true
+    APP_PID=""
+    rm -f "$APP_LOG"
+    APP_LOG=""
+}
+
+capture_sandbox_preflight "setup-sandbox-preflight.png"
 capture_dashboard "All" "dashboard.png"
 capture_dashboard "Cash" "dashboard-cash.png" "demo_checking"
 capture_dashboard "Credit" "dashboard-credit.png" "demo_visa"

@@ -46,6 +46,19 @@ Personal finance data lives behind bank website logins. The closest thing to a m
 
 ## Screenshots
 
+### Setup Preflight
+
+<p align="center">
+  <img src="Assets/setup-sandbox-preflight.png" width="420" alt="PlaidBar sandbox setup preflight showing server, mode, credential, storage, and linked item readiness before Plaid Link opens"/>
+</p>
+
+Sandbox and production setup now show readiness before Plaid Link opens. The app
+checks the local server, expected Plaid environment, credential availability,
+storage path, and linked item count so setup failures are visible before the
+browser handoff.
+
+### Dashboard
+
 <p align="center">
   <img src="Assets/dashboard.png" width="420" alt="PlaidBar dashboard popover with net worth, sync status, 365-day spending activity, account rows, and drill-down controls"/>
 </p>
@@ -76,8 +89,9 @@ Generate fresh dashboard screenshots with demo data:
 ./Scripts/screenshots.sh
 ```
 
-The screenshot script launches PlaidBar in demo mode, captures each dashboard
-filter state, and requires macOS Screen Recording permission for Terminal.
+The screenshot script launches PlaidBar locally, captures the sandbox preflight
+screen plus each dashboard filter state, and requires macOS Screen Recording and
+Accessibility permission for Terminal.
 
 ## Quick Start
 
