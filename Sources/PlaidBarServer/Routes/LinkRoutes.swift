@@ -6,6 +6,7 @@ import PlaidBarCore
 struct LinkRoutes: Sendable {
     let plaidClient: PlaidClient
     let tokenStore: TokenStore
+    let pendingLinkSessions: PendingLinkSessionStore
     let config: ServerConfig
 
     func register(with group: RouterGroup<some RequestContext>) {
@@ -21,9 +22,16 @@ struct LinkRoutes: Sendable {
         context: some RequestContext
     ) async throws -> Response {
         let userId = "plaidbar-user-\(UUID().uuidString.prefix(8))"
-        let plaidResponse = try await plaidClient.createLinkToken(userId: userId)
+        let state = await pendingLinkSessions.issueState()
+        let plaidResponse = try await plaidClient.createLinkToken(
+            userId: userId,
+            completionRedirectUri: callbackURL(state: state)
+        )
 
-        let linkUrl = plaidResponse.hostedLinkUrl(redirectUri: config.redirectUri)
+        guard let linkUrl = plaidResponse.hostedLinkUrl else {
+            throw HTTPError(.internalServerError, message: "Plaid did not return a hosted Link URL")
+        }
+        await pendingLinkSessions.save(state: state, linkToken: plaidResponse.linkToken)
         let dto = LinkResponse(linkToken: plaidResponse.linkToken, linkUrl: linkUrl)
 
         let data = try JSONEncoder().encode(dto)
@@ -47,12 +55,21 @@ struct LinkRoutes: Sendable {
         }
 
         let userId = "plaidbar-user-\(UUID().uuidString.prefix(8))"
+        let state = await pendingLinkSessions.issueState()
         let plaidResponse = try await plaidClient.createUpdateLinkToken(
             userId: userId,
-            accessToken: item.accessToken
+            accessToken: item.accessToken,
+            completionRedirectUri: callbackURL(state: state)
         )
 
-        let linkUrl = plaidResponse.hostedLinkUrl(redirectUri: config.redirectUri)
+        guard let linkUrl = plaidResponse.hostedLinkUrl else {
+            throw HTTPError(.internalServerError, message: "Plaid did not return a hosted Link URL")
+        }
+        await pendingLinkSessions.save(
+            state: state,
+            linkToken: plaidResponse.linkToken,
+            updateItemId: itemId
+        )
         let dto = LinkResponse(linkToken: plaidResponse.linkToken, linkUrl: linkUrl)
 
         let data = try JSONEncoder().encode(dto)
@@ -62,6 +79,16 @@ struct LinkRoutes: Sendable {
             body: .init(byteBuffer: ByteBuffer(data: data))
         )
     }
+
+    private func callbackURL(state: String) -> String {
+        guard var components = URLComponents(string: config.redirectUri) else {
+            return config.redirectUri
+        }
+        var queryItems = components.queryItems ?? []
+        queryItems.append(URLQueryItem(name: "state", value: state))
+        components.queryItems = queryItems
+        return components.string ?? config.redirectUri
+    }
 }
 
 // MARK: - OAuth Callback (top-level route, not under /api)
@@ -69,6 +96,7 @@ struct LinkRoutes: Sendable {
 struct OAuthCallbackRoute: Sendable {
     let plaidClient: PlaidClient
     let tokenStore: TokenStore
+    let pendingLinkSessions: PendingLinkSessionStore
 
     func register(with router: Router<some RequestContext>) {
         router.get("oauth/callback", use: handleCallback)
@@ -79,40 +107,83 @@ struct OAuthCallbackRoute: Sendable {
         request: Request,
         context: some RequestContext
     ) async throws -> Response {
-        // Extract public_token from query params
-        guard let publicToken = request.uri.queryParameters.get("public_token") else {
+        guard let stateParam = request.uri.queryParameters.get("state"),
+              let pendingSession = await pendingLinkSessions.consume(state: String(stateParam))
+        else {
             return Response(
                 status: .badRequest,
                 headers: [.contentType: "text/html"],
                 body: .init(byteBuffer: ByteBuffer(
-                    string: Self.errorPage("Missing public_token parameter")
+                    string: Self.errorPage("Missing or expired link session state")
                 ))
             )
         }
 
-        // Exchange public token for access token
-        let exchangeResponse = try await plaidClient.exchangePublicToken(
-            String(publicToken)
-        )
+        do {
+            let publicTokens = try await publicTokens(from: request, pendingSession: pendingSession)
+            if publicTokens.isEmpty, let updateItemId = pendingSession.updateItemId {
+                try await tokenStore.updateItemStatus(id: updateItemId, status: ItemConnectionStatus.connected.rawValue)
+                return Response(
+                    status: .ok,
+                    headers: [.contentType: "text/html"],
+                    body: .init(byteBuffer: ByteBuffer(string: Self.successPage()))
+                )
+            }
 
-        // Get account info to determine institution
+            guard !publicTokens.isEmpty else {
+                return Response(
+                    status: .badRequest,
+                    headers: [.contentType: "text/html"],
+                    body: .init(byteBuffer: ByteBuffer(
+                        string: Self.errorPage("Plaid Link completed without a public token")
+                    ))
+                )
+            }
+
+            for publicToken in publicTokens {
+                try await exchangeAndStore(publicToken: publicToken)
+            }
+
+            return Response(
+                status: .ok,
+                headers: [.contentType: "text/html"],
+                body: .init(byteBuffer: ByteBuffer(string: Self.successPage()))
+            )
+        } catch {
+            return Response(
+                status: .internalServerError,
+                headers: [.contentType: "text/html"],
+                body: .init(byteBuffer: ByteBuffer(
+                    string: Self.errorPage(error.localizedDescription)
+                ))
+            )
+        }
+    }
+
+    private func publicTokens(
+        from request: Request,
+        pendingSession: PendingLinkSession
+    ) async throws -> [String] {
+        if let publicToken = request.uri.queryParameters.get("public_token") {
+            return [String(publicToken)]
+        }
+
+        let linkSession = try await plaidClient.getLinkToken(pendingSession.linkToken)
+        return linkSession.publicTokens
+    }
+
+    private func exchangeAndStore(publicToken: String) async throws {
+        let exchangeResponse = try await plaidClient.exchangePublicToken(publicToken)
         let accountsResponse = try await plaidClient.getAccounts(
             accessToken: exchangeResponse.accessToken
         )
         let institutionId = accountsResponse.item?.institutionId
 
-        // Store the item
         try await tokenStore.saveItem(
             id: exchangeResponse.itemId,
             accessToken: exchangeResponse.accessToken,
             institutionId: institutionId,
             institutionName: nil
-        )
-
-        return Response(
-            status: .ok,
-            headers: [.contentType: "text/html"],
-            body: .init(byteBuffer: ByteBuffer(string: Self.successPage()))
         )
     }
 

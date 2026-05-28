@@ -1,6 +1,7 @@
 import Testing
+import Foundation
 @testable import PlaidBarCore
-// Foundation symbols available via PlaidBarCore's transitive import
+@testable import PlaidBarServer
 
 @Suite("PlaidBarServer")
 struct PlaidBarServerTests {
@@ -46,5 +47,72 @@ struct PlaidBarServerTests {
     @Test func unknownAccountType() {
         let type = AccountType(rawValue: "brokerage") ?? .other
         #expect(type == .other)
+    }
+
+    @Test func pendingLinkSessionIsConsumedOnce() async {
+        let store = PendingLinkSessionStore()
+        let state = await store.issueState()
+        await store.save(state: state, linkToken: "link-token")
+
+        let first = await store.consume(state: state)
+        let replay = await store.consume(state: state)
+
+        #expect(first?.linkToken == "link-token")
+        #expect(replay == nil)
+    }
+
+    @Test func pendingLinkSessionExpires() async {
+        var currentDate = Date(timeIntervalSince1970: 1_000)
+        let store = PendingLinkSessionStore(ttl: 60) { currentDate }
+        let state = await store.issueState()
+        await store.save(state: state, linkToken: "link-token")
+
+        currentDate = currentDate.addingTimeInterval(61)
+
+        let expired = await store.consume(state: state)
+        #expect(expired == nil)
+    }
+
+    @Test func linkTokenGetResponseReadsHostedLinkSessionResults() throws {
+        let json = """
+        {
+          "link_token": "link-sandbox-token",
+          "link_sessions": [
+            {
+              "link_session_id": "session-one",
+              "results": {
+                "item_add_results": [
+                  { "public_token": "public-sandbox-one" },
+                  { "public_token": "public-sandbox-two" }
+                ]
+              }
+            }
+          ]
+        }
+        """.data(using: .utf8)!
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+        let response = try decoder.decode(PlaidLinkTokenGetResponse.self, from: json)
+
+        #expect(response.publicTokens == ["public-sandbox-one", "public-sandbox-two"])
+    }
+
+    @Test func linkTokenGetResponseAllowsUpdateModeWithoutPublicToken() throws {
+        let json = """
+        {
+          "link_token": "link-sandbox-token",
+          "on_success": {
+            "public_token": null,
+            "metadata": {}
+          }
+        }
+        """.data(using: .utf8)!
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+        let response = try decoder.decode(PlaidLinkTokenGetResponse.self, from: json)
+
+        #expect(response.publicTokens.isEmpty)
     }
 }
