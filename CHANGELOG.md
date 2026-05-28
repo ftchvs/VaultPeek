@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 02:02 UTC] — Fix
+
+respect custom server port (#77)
+
+`481af77`
+
+---
+
+
 ## [2026-05-28 01:50 UTC] — Fix
 
 preserve server error messages (#76)
