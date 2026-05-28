@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 14:17 UTC] — Update
+
+Keep pending Link sessions private (#101)
+
+`50d2c9e`
+
+---
+
+
 ## [2026-05-28 14:08 UTC] — Update
 
 Harden auth token file creation (#100)
