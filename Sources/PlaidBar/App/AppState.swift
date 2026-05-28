@@ -495,22 +495,16 @@ final class AppState {
     func syncTransactions() async {
         do {
             var hasMore = true
-            var cachePersistenceError: Error?
             while hasMore {
                 let response = try await serverClient.syncTransactions()
-                transactions = TransactionSyncReducer.applying(response, to: transactions)
-                do {
-                    try LocalDataStore.saveTransactions(transactions, context: transactionCacheContext)
-                } catch {
-                    cachePersistenceError = error
-                }
+                let updatedTransactions = TransactionSyncReducer.applying(response, to: transactions)
+                try LocalDataStore.saveTransactions(updatedTransactions, context: transactionCacheContext)
+                transactions = updatedTransactions
+                try await serverClient.commitSyncCursors(response.pendingCursors)
                 hasMore = response.hasMore
             }
             lastSyncDate = Date()
             itemStatuses = (try? await serverClient.getItems()) ?? itemStatuses
-            if let cachePersistenceError {
-                self.error = "Transaction cache failed to save: \(cachePersistenceError.localizedDescription)"
-            }
         } catch {
             itemStatuses = (try? await serverClient.getItems()) ?? itemStatuses
             self.error = error.localizedDescription
