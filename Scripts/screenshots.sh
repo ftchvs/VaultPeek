@@ -250,5 +250,6 @@ capture_dashboard "Status" "dashboard-status.png"
 capture_settings "general" "settings-local-data.png"
 capture_settings "accounts" "settings-accounts.png"
 capture_settings "notifications" "settings-notifications.png"
+capture_settings "about" "settings-about.png"
 
 echo "Done! Screenshots saved to $ASSETS_DIR"
