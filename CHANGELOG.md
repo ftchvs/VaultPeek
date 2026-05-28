@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 19:56 UTC] — Fix
+
+keep notification settings on canvas (#121)
+
+`c884b5c`
+
+---
+
+
 ## [2026-05-28 19:10 UTC] — Update
 
 Refresh README screenshots for dashboard design (#120)
