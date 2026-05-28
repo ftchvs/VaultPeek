@@ -1484,14 +1484,21 @@ private struct DashboardFooter: View {
                     object: settingsWindow,
                     queue: .main
                 ) { _ in
-                    NSApp.setActivationPolicy(.accessory)
-                    if let observer = settingsCloseObserver {
-                        NotificationCenter.default.removeObserver(observer)
+                    Task { @MainActor in
+                        restoreAccessoryActivationPolicy()
                     }
-                    settingsCloseObserver = nil
                 }
             }
         }
+    }
+
+    @MainActor
+    private func restoreAccessoryActivationPolicy() {
+        NSApp.setActivationPolicy(.accessory)
+        if let observer = settingsCloseObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        settingsCloseObserver = nil
     }
 }
 
