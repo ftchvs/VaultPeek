@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 17:41 UTC] — Update
+
+Keep app item status state in sync (#116)
+
+`f7335fc`
+
+---
+
+
 ## [2026-05-28 17:09 UTC] — Update
 
 Strengthen Homebrew formula tests (#115)
