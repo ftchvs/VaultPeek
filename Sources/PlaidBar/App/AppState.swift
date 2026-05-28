@@ -578,12 +578,28 @@ final class AppState {
         do {
             try await serverClient.removeItem(itemId: itemId)
             let removedItemId = itemId
-            let accountIdsForItem = Set(
+            let removedAccountIds = Set(
                 accounts.filter { $0.itemId == removedItemId }.map(\.id)
             )
             accounts.removeAll { $0.itemId == removedItemId }
-            transactions.removeAll { accountIdsForItem.contains($0.accountId) }
-            serverItemCount = Set(accounts.map(\.itemId)).count
+            let fallbackItemCount = Set(accounts.map(\.itemId)).count
+            if let refreshedItemStatuses = try? await serverClient.getItems() {
+                itemStatuses = refreshedItemStatuses
+                serverItemCount = refreshedItemStatuses.count
+            } else {
+                itemStatuses.removeAll { $0.id == removedItemId }
+                serverItemCount = max(itemStatuses.count, fallbackItemCount)
+            }
+            let remainingItemCount = serverItemCount ?? 0
+            serverSyncReady = remainingItemCount > 0
+            isSetupComplete = remainingItemCount > 0
+            if remainingItemCount == 0 {
+                lastSyncDate = nil
+            }
+            transactions.removeAll { transaction in
+                transaction.itemId == removedItemId ||
+                    (transaction.itemId == nil && removedAccountIds.contains(transaction.accountId))
+            }
             do {
                 try LocalDataStore.saveTransactions(transactions, context: transactionCacheContext)
             } catch {
@@ -701,7 +717,11 @@ final class AppState {
 
     private func clearCachedTransactions() {
         transactions = []
-        try? LocalDataStore.saveTransactions(transactions, context: transactionCacheContext)
+        do {
+            try LocalDataStore.saveTransactions(transactions, context: transactionCacheContext)
+        } catch {
+            self.error = "Transaction cache failed to clear: \(error.localizedDescription)"
+        }
     }
 
     private var transactionCacheContext: TransactionCacheContext? {

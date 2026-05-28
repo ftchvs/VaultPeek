@@ -84,6 +84,42 @@ struct PlaidBarCoreTests {
         #expect(tx.displayAmount == 0)
     }
 
+    @Test("TransactionDTO preserves item ID when encoded")
+    func transactionItemIdCodable() throws {
+        let tx = TransactionDTO(
+            id: "6",
+            itemId: "item_1",
+            accountId: "a",
+            amount: 42,
+            date: "2026-01-15",
+            name: "Coffee"
+        )
+
+        let data = try JSONEncoder().encode(tx)
+        let decoded = try JSONDecoder().decode(TransactionDTO.self, from: data)
+
+        #expect(decoded.itemId == "item_1")
+    }
+
+    @Test("TransactionDTO decodes legacy cache without item ID")
+    func transactionLegacyCacheDecodesWithoutItemId() throws {
+        let data = Data("""
+        {
+          "id": "legacy",
+          "accountId": "a",
+          "amount": 42,
+          "date": "2026-01-15",
+          "name": "Coffee",
+          "pending": false
+        }
+        """.utf8)
+
+        let decoded = try JSONDecoder().decode(TransactionDTO.self, from: data)
+
+        #expect(decoded.itemId == nil)
+        #expect(decoded.id == "legacy")
+    }
+
     @Test("Spending heatmap fills every day in range")
     func spendingHeatmapFillsDateRange() {
         let start = Formatters.parseTransactionDate("2026-01-01")!

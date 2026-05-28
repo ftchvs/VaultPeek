@@ -57,8 +57,8 @@ struct TransactionRoutes: Sendable {
                 continue
             }
 
-            allAdded.append(contentsOf: response.added.map { Self.toDTO($0) })
-            allModified.append(contentsOf: response.modified.map { Self.toDTO($0) })
+            allAdded.append(contentsOf: response.added.map { Self.toDTO($0, itemId: itemId) })
+            allModified.append(contentsOf: response.modified.map { Self.toDTO($0, itemId: itemId) })
             allRemoved.append(contentsOf: response.removed.map(\.transactionId))
 
             if !response.nextCursor.isEmpty {
@@ -100,13 +100,14 @@ struct TransactionRoutes: Sendable {
         attemptedItemCount > 0 && successfulItemCount == 0
     }
 
-    private static func toDTO(_ plaidTx: PlaidTransaction) -> TransactionDTO {
+    private static func toDTO(_ plaidTx: PlaidTransaction, itemId: String) -> TransactionDTO {
         let category: SpendingCategory? = plaidTx.personalFinanceCategory.flatMap {
             SpendingCategory(rawValue: $0.primary)
         }
 
         return TransactionDTO(
             id: plaidTx.transactionId,
+            itemId: itemId,
             accountId: plaidTx.accountId,
             amount: plaidTx.amount,
             date: plaidTx.date,

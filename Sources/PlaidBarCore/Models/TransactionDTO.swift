@@ -2,6 +2,7 @@ import Foundation
 
 public struct TransactionDTO: Codable, Sendable, Identifiable, Hashable {
     public let id: String           // Plaid transaction_id
+    public let itemId: String?      // Plaid item_id, available for newly synced transactions
     public let accountId: String
     public let amount: Double       // Positive = money out, Negative = money in (Plaid convention)
     public let date: String         // YYYY-MM-DD
@@ -13,6 +14,7 @@ public struct TransactionDTO: Codable, Sendable, Identifiable, Hashable {
 
     public init(
         id: String,
+        itemId: String? = nil,
         accountId: String,
         amount: Double,
         date: String,
@@ -23,6 +25,7 @@ public struct TransactionDTO: Codable, Sendable, Identifiable, Hashable {
         isoCurrencyCode: String? = nil
     ) {
         self.id = id
+        self.itemId = itemId
         self.accountId = accountId
         self.amount = amount
         self.date = date

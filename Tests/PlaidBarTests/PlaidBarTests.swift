@@ -253,10 +253,14 @@ struct PlaidBarTests {
 
         // Verify transaction cleanup would work
         var transactions = [
-            TransactionDTO(id: "tx1", accountId: "a1", amount: 10, date: "2026-01-15", name: "X"),
-            TransactionDTO(id: "tx2", accountId: "a3", amount: 20, date: "2026-01-15", name: "Y"),
+            TransactionDTO(id: "tx1", itemId: "item_1", accountId: "stale_a1", amount: 10, date: "2026-01-15", name: "X"),
+            TransactionDTO(id: "tx2", itemId: "item_2", accountId: "a3", amount: 20, date: "2026-01-15", name: "Y"),
+            TransactionDTO(id: "tx3", accountId: "a2", amount: 30, date: "2026-01-15", name: "Legacy")
         ]
-        transactions.removeAll { accountIdsForItem.contains($0.accountId) }
+        transactions.removeAll { transaction in
+            transaction.itemId == removedItemId ||
+                (transaction.itemId == nil && accountIdsForItem.contains(transaction.accountId))
+        }
         #expect(transactions.count == 1)
         #expect(transactions[0].accountId == "a3")
     }
