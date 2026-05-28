@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 16:57 UTC] — Update
+
+Prepare v0.3.3 release metadata (#114)
+
+`3147808`
+
+---
+
+
 ## [2026-05-28 16:49 UTC] — Update
 
 Propagate custom run port to app (#113)
