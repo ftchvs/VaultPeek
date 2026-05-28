@@ -35,7 +35,7 @@ if [[ -z "${PLAID_CLIENT_ID:-}" || -z "${PLAID_SECRET:-}" ]]; then
 fi
 
 echo "Building PlaidBarServer..."
-swift build --target PlaidBarServer --skip-update --disable-keychain
+swift build --target PlaidBarServer --disable-keychain
 
 if [[ -z "${PLAIDBAR_DATA_DIR:-}" ]]; then
     CREATED_DATA_DIR="$(mktemp -d -t plaidbar-smoke-data.XXXXXX)"
@@ -66,6 +66,13 @@ if ! curl -fsS "http://127.0.0.1:$PORT/health" >/dev/null; then
     exit 1
 fi
 AUTH_TOKEN_PATH="$PLAIDBAR_DATA_DIR/auth-token"
+if [[ ! -r "$AUTH_TOKEN_PATH" ]]; then
+    echo "Smoke check failed: auth token is not readable at $AUTH_TOKEN_PATH" >&2
+    echo "Server log: $SERVER_LOG" >&2
+    cat "$SERVER_LOG" >&2
+    exit 1
+fi
+
 AUTH_TOKEN="$(tr -d '\r\n' < "$AUTH_TOKEN_PATH")"
 
 if curl -fsS "http://127.0.0.1:$PORT/api/status" >/dev/null 2>&1; then
