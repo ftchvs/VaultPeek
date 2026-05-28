@@ -93,7 +93,7 @@ fi
 echo "Running release gates for $TAG..."
 swift build -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
 swift build -c release -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
-bash -n Scripts/plaidbar-run Scripts/release.sh
+bash -n Scripts/*.sh Scripts/plaidbar-run
 ruby -c Formula/plaidbar.rb
 
 if git rev-parse "$TAG" >/dev/null 2>&1; then
