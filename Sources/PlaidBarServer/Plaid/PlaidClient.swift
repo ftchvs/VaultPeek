@@ -8,10 +8,19 @@ actor PlaidClient {
     private let session: URLSession
     private let decoder: JSONDecoder
     private let encoder: JSONEncoder
+    private let maxAttempts: Int
+    private let retryBaseDelayNanoseconds: UInt64
 
-    init(config: ServerConfig) {
+    init(
+        config: ServerConfig,
+        session: URLSession = PlaidClient.makeDefaultSession(),
+        maxAttempts: Int = 3,
+        retryBaseDelayNanoseconds: UInt64 = 500_000_000
+    ) {
         self.config = config
-        self.session = URLSession.shared
+        self.session = session
+        self.maxAttempts = max(1, maxAttempts)
+        self.retryBaseDelayNanoseconds = retryBaseDelayNanoseconds
 
         let dec = JSONDecoder()
         dec.keyDecodingStrategy = .convertFromSnakeCase
@@ -144,28 +153,84 @@ actor PlaidClient {
             throw PlaidError.invalidResponse
         }
 
+        let requestBody = try encoder.encode(body)
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
+        request.timeoutInterval = 30
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try encoder.encode(body)
+        request.httpBody = requestBody
 
-        let (data, response) = try await session.data(for: request)
+        for attempt in 1...maxAttempts {
+            do {
+                let (data, response) = try await session.data(for: request)
 
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw PlaidError.invalidResponse
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    throw PlaidError.invalidResponse
+                }
+
+                guard (200...299).contains(httpResponse.statusCode) else {
+                    if Self.isRetryableHTTPStatus(httpResponse.statusCode), attempt < maxAttempts {
+                        try await sleepBeforeRetry(attempt: attempt)
+                        continue
+                    }
+
+                    let errorBody = try? decoder.decode(PlaidErrorResponse.self, from: data)
+                    throw PlaidError.apiError(
+                        statusCode: httpResponse.statusCode,
+                        errorType: errorBody?.errorType,
+                        errorCode: errorBody?.errorCode,
+                        errorMessage: errorBody?.errorMessage ?? "Unknown error"
+                    )
+                }
+
+                return try decoder.decode(R.self, from: data)
+            } catch let error as CancellationError {
+                throw error
+            } catch {
+                guard attempt < maxAttempts, Self.isRetryableTransportError(error) else {
+                    throw error
+                }
+                try await sleepBeforeRetry(attempt: attempt)
+            }
         }
 
-        guard (200...299).contains(httpResponse.statusCode) else {
-            let errorBody = try? decoder.decode(PlaidErrorResponse.self, from: data)
-            throw PlaidError.apiError(
-                statusCode: httpResponse.statusCode,
-                errorType: errorBody?.errorType,
-                errorCode: errorBody?.errorCode,
-                errorMessage: errorBody?.errorMessage ?? "Unknown error"
-            )
-        }
+        throw PlaidError.invalidResponse
+    }
 
-        return try decoder.decode(R.self, from: data)
+    private func sleepBeforeRetry(attempt: Int) async throws {
+        let delay = Self.retryDelayNanoseconds(
+            baseDelayNanoseconds: retryBaseDelayNanoseconds,
+            attempt: attempt
+        )
+        try await Task.sleep(nanoseconds: delay)
+    }
+
+    private static func makeDefaultSession() -> URLSession {
+        let configuration = URLSessionConfiguration.default
+        configuration.timeoutIntervalForRequest = 30
+        configuration.timeoutIntervalForResource = 60
+        configuration.waitsForConnectivity = false
+        return URLSession(configuration: configuration)
+    }
+
+    static func isRetryableHTTPStatus(_ statusCode: Int) -> Bool {
+        statusCode == 429 || (500...599).contains(statusCode)
+    }
+
+    static func isRetryableTransportError(_ error: Error) -> Bool {
+        guard let urlError = error as? URLError else { return false }
+        switch urlError.code {
+        case .timedOut, .cannotFindHost, .cannotConnectToHost, .networkConnectionLost, .dnsLookupFailed, .notConnectedToInternet:
+            return true
+        default:
+            return false
+        }
+    }
+
+    static func retryDelayNanoseconds(baseDelayNanoseconds: UInt64, attempt: Int) -> UInt64 {
+        let exponent = UInt64(max(0, attempt - 1))
+        let multiplier = UInt64(1) << min(exponent, 4)
+        return min(baseDelayNanoseconds * multiplier, 8_000_000_000)
     }
 }
 
