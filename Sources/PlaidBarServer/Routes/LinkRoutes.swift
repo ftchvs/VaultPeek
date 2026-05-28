@@ -204,17 +204,28 @@ struct OAuthCallbackRoute: Sendable {
         """
     }
 
-    private static func errorPage(_ message: String) -> String {
-        """
+    static func errorPage(_ message: String) -> String {
+        let escapedMessage = message.htmlEscaped
+        return """
         <!DOCTYPE html>
         <html>
         <head><title>PlaidBar -- Error</title></head>
         <body style="font-family: -apple-system, sans-serif; text-align: center; padding: 60px;">
             <h1>Connection Error</h1>
-            <p>\(message)</p>
+            <p>\(escapedMessage)</p>
             <p>Please try again from PlaidBar.</p>
         </body>
         </html>
         """
+    }
+}
+
+private extension String {
+    var htmlEscaped: String {
+        replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "'", with: "&#39;")
     }
 }
