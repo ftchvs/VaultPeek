@@ -4,11 +4,11 @@
 class Plaidbar < Formula
   desc "Private macOS menu bar dashboard for Plaid accounts"
   homepage "https://github.com/ftchvs/PlaidBar"
-  url "https://github.com/ftchvs/PlaidBar.git", tag: "v0.3.0"
+  url "https://github.com/ftchvs/PlaidBar.git", tag: "v0.3.1"
   license "MIT"
   head "https://github.com/ftchvs/PlaidBar.git", branch: "main"
 
-  depends_on xcode: ["16.0", :build]
+  depends_on "swift" => :build
   depends_on macos: :sequoia
 
   def install
@@ -31,6 +31,10 @@ class Plaidbar < Formula
       For sandbox or production data, set credentials before launching:
         export PLAID_CLIENT_ID=...
         export PLAID_SECRET=...
+
+      If you already have Xcode 16 or a Swift 6 toolchain installed, Homebrew
+      may still install its keg-only Swift build dependency for reproducible
+      source builds.
     EOS
   end
 
