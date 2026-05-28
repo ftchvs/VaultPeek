@@ -699,9 +699,9 @@ struct PlaidBarCoreTests {
         #expect(PlaidBarConstants.maxTransactionSyncPages < Int.max)
     }
 
-    @Test("Version bumped to 0.3.2")
+    @Test("Version bumped to 0.3.3")
     func versionBump() {
-        #expect(PlaidBarConstants.appVersion == "0.3.2")
+        #expect(PlaidBarConstants.appVersion == "0.3.3")
     }
 
     // MARK: - RecurringTransaction Model Tests
