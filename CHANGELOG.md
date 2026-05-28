@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 17:50 UTC] — Update
+
+Record notification dedup after scheduling (#117)
+
+`c20f8ea`
+
+---
+
+
 ## [2026-05-28 17:41 UTC] — Update
 
 Keep app item status state in sync (#116)
