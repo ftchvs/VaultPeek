@@ -4,7 +4,7 @@
 class Plaidbar < Formula
   desc "Private macOS menu bar dashboard for Plaid accounts"
   homepage "https://github.com/ftchvs/PlaidBar"
-  url "https://github.com/ftchvs/PlaidBar.git", tag: "v0.3.1"
+  url "https://github.com/ftchvs/PlaidBar.git", tag: "v0.3.2"
   license "MIT"
   head "https://github.com/ftchvs/PlaidBar.git", branch: "main"
 
