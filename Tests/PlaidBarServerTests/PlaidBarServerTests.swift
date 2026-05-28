@@ -115,4 +115,22 @@ struct PlaidBarServerTests {
 
         #expect(response.publicTokens.isEmpty)
     }
+
+    @Test func localDeleteAllowedForNonRetryablePlaidRemoveErrors() {
+        let invalidToken = PlaidError.apiError(
+            statusCode: 400,
+            errorType: "INVALID_INPUT",
+            errorCode: "INVALID_ACCESS_TOKEN",
+            errorMessage: "invalid access token"
+        )
+        let transient = PlaidError.apiError(
+            statusCode: 500,
+            errorType: "API_ERROR",
+            errorCode: "INTERNAL_SERVER_ERROR",
+            errorMessage: "temporary failure"
+        )
+
+        #expect(AccountRoutes.canDeleteLocalItemAfterPlaidRemoveError(invalidToken))
+        #expect(!AccountRoutes.canDeleteLocalItemAfterPlaidRemoveError(transient))
+    }
 }
