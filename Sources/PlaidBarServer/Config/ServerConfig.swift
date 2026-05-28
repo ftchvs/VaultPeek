@@ -1,5 +1,8 @@
 import Foundation
 import PlaidBarCore
+#if canImport(Security)
+import Security
+#endif
 
 struct ServerConfig: Sendable {
     static let legacyDatabaseFilename = "plaidbar.sqlite"
@@ -66,7 +69,7 @@ struct ServerConfig: Sendable {
             )
             authToken = existing
         } else {
-            let generated = UUID().uuidString
+            let generated = generateAuthToken()
             try generated.write(to: authTokenURL, atomically: true, encoding: .utf8)
             try FileManager.default.setAttributes(
                 [.posixPermissions: 0o600],
@@ -93,6 +96,26 @@ struct ServerConfig: Sendable {
             redirectUri: "http://localhost:\(resolvedPort)/oauth/callback",
             authToken: authToken
         )
+    }
+
+    static func authTokenString(randomBytes bytes: [UInt8]) -> String {
+        Data(bytes)
+            .base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+    }
+
+    private static func generateAuthToken() -> String {
+        var bytes = [UInt8](repeating: 0, count: 32)
+        #if canImport(Security)
+        if SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess {
+            return authTokenString(randomBytes: bytes)
+        }
+        #endif
+
+        return "\(UUID().uuidString)\(UUID().uuidString)"
+            .replacingOccurrences(of: "-", with: "")
     }
 
     static func dataDirectory() -> String {

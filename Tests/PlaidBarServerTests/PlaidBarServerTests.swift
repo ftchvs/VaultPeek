@@ -97,6 +97,16 @@ struct PlaidBarServerTests {
         #expect(config.databasePath.hasSuffix("/plaidbar-sandbox.sqlite"))
     }
 
+    @Test func serverAuthTokenUsesURLSafeRandomBytes() {
+        let token = ServerConfig.authTokenString(randomBytes: (0..<32).map(UInt8.init))
+
+        #expect(token.count == 43)
+        #expect(token.allSatisfy { character in
+            character.isLetter || character.isNumber || character == "-" || character == "_"
+        })
+        #expect(!token.contains("="))
+    }
+
     @Test func oauthCallbackErrorPageEscapesDynamicMessage() {
         let html = OAuthCallbackRoute.errorPage("<script>alert('x')</script> & retry \"soon\"")
 
