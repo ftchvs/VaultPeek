@@ -60,6 +60,10 @@ struct PlaidBarApp: App {
         } else if CommandLine.arguments.contains("--screenshot-filter") {
             UserDefaults.standard.removeObject(forKey: "dashboard.selectedAccountId")
         }
+
+        if let settingsTab = argumentValue(for: "--settings-tab") {
+            UserDefaults.standard.set(settingsTab.lowercased(), forKey: "settings.selectedTab")
+        }
     }
 
     private static func argumentValue(for flag: String) -> String? {

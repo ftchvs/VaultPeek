@@ -5,35 +5,47 @@ import AppKit
 
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
+    @AppStorage("settings.selectedTab") private var selectedTab = SettingsTab.general.rawValue
     let updater: SPUUpdater
 
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             GeneralSettingsView()
                 .environment(appState)
                 .tabItem {
                     Label("General", systemImage: "gear")
                 }
+                .tag(SettingsTab.general.rawValue)
 
             AccountSettingsView()
                 .environment(appState)
                 .tabItem {
                     Label("Accounts", systemImage: "building.columns")
                 }
+                .tag(SettingsTab.accounts.rawValue)
 
             NotificationSettingsView()
                 .environment(appState)
                 .tabItem {
                     Label("Notifications", systemImage: "bell")
                 }
+                .tag(SettingsTab.notifications.rawValue)
 
             AboutView(updater: updater)
                 .tabItem {
                     Label("About", systemImage: "info.circle")
                 }
+                .tag(SettingsTab.about.rawValue)
         }
         .frame(width: 620, height: 560)
     }
+}
+
+private enum SettingsTab: String {
+    case general
+    case accounts
+    case notifications
+    case about
 }
 
 struct GeneralSettingsView: View {
@@ -245,6 +257,7 @@ private func settingsRow<Content: View>(
 struct AccountSettingsView: View {
     @Environment(AppState.self) private var appState
     @State private var isShowingAccountSetup = false
+    @State private var pendingRemoval: PendingAccountRemoval?
 
     var body: some View {
         VStack(alignment: .leading) {
@@ -296,7 +309,11 @@ struct AccountSettingsView: View {
                                 }
 
                                 Button(role: .destructive) {
-                                    Task { await appState.removeAccount(itemId: group.id) }
+                                    pendingRemoval = PendingAccountRemoval(
+                                        itemId: group.id,
+                                        institutionName: group.institutionName,
+                                        accountCount: group.accounts.count
+                                    )
                                 } label: {
                                     Label("Remove", systemImage: "trash")
                                 }
@@ -348,6 +365,16 @@ struct AccountSettingsView: View {
             if isComplete {
                 isShowingAccountSetup = false
             }
+        }
+        .alert(item: $pendingRemoval) { removal in
+            Alert(
+                title: Text("Remove \(removal.institutionName)?"),
+                message: Text("This removes \(removal.accountCount) linked account\(removal.accountCount == 1 ? "" : "s") from PlaidBar and clears matching cached transactions from this Mac. It does not delete the institution from Plaid's dashboard."),
+                primaryButton: .destructive(Text("Remove")) {
+                    Task { await appState.removeAccount(itemId: removal.itemId) }
+                },
+                secondaryButton: .cancel()
+            )
         }
     }
 
@@ -451,6 +478,14 @@ private struct AccountItemGroup: Identifiable {
     let institutionName: String
     let status: ItemConnectionStatus
     let accounts: [AccountDTO]
+}
+
+private struct PendingAccountRemoval: Identifiable {
+    let itemId: String
+    let institutionName: String
+    let accountCount: Int
+
+    var id: String { itemId }
 }
 
 struct NotificationSettingsView: View {

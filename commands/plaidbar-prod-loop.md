@@ -50,8 +50,8 @@ Repeat these phases until the timebox ends or a blocker appears:
    - `git fetch origin main`
    - If on `main`, create a feature branch named
      `feature/<short-production-readiness-topic>`.
-   - Read `GOAL.md`, `README.md`, `DESIGN.md`, `ARCHITECTURE.md`, and recent
-     changed files before editing.
+   - Read `GOAL.md`, `README.md`, `DESIGN.md`, `docs/architecture.md`, and
+     recent changed files before editing.
 
 2. Pick the highest-leverage next slice:
    - Prefer the explicit focus area in `$ARGUMENTS`.
@@ -165,7 +165,7 @@ Run from the repository root:
 git diff --check
 swift build --target PlaidBar --skip-update --disable-keychain
 rg -n "(PLAID_SECRET|client_secret|access_token|sk-|ghp_|github_pat_|BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|api[_-]?key)" \
-  README.md GOAL.md CHANGELOG.md SECURITY.md ARCHITECTURE.md DESIGN.md PRD.md Sources Tests commands .codex
+  README.md GOAL.md CHANGELOG.md SECURITY.md DESIGN.md PRD.md docs Sources Tests commands .codex
 ```
 
 For core logic changes, also run focused tests where the local Swift toolchain
