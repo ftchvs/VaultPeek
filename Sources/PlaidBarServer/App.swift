@@ -8,6 +8,12 @@ import PlaidBarCore
 
 @main
 struct PlaidBarServer: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "plaidbar-server",
+        abstract: "Run the local PlaidBar companion server.",
+        version: PlaidBarConstants.appVersion
+    )
+
     @Option(name: .long, help: "Server port")
     var port: Int?
 
