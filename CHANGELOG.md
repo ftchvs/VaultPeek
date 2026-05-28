@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 23:37 UTC] — Update
+
+Merge pull request #130 from ftchvs/feature/v0-9-formula-distribution-candidate
+
+`b6ebbc3`
+
+---
+
+
 ## [2026-05-28 23:22 UTC] — Update
 
 Merge pull request #129 from ftchvs/feature/v0-8-security-contract-hardening
