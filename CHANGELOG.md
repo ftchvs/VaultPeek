@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 13:36 UTC] — Update
+
+Fail strict-concurrency warnings in CI (#99)
+
+`bc72828`
+
+---
+
+
 ## [2026-05-28 13:17 UTC] — Update
 
 Resolve settings close actor warnings (#98)
