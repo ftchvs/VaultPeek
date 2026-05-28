@@ -1,5 +1,8 @@
 import Foundation
 import PlaidBarCore
+#if canImport(Darwin)
+import Darwin
+#endif
 #if canImport(Security)
 import Security
 #endif
@@ -54,29 +57,10 @@ struct ServerConfig: Sendable {
             throw ServerConfigError.missingEnvironmentVariable("PLAID_SECRET")
         }
 
-        // Generate or load persistent auth token for app<->server auth
         let authTokenURL = LocalDataStore.authTokenURL(
             in: URL(fileURLWithPath: dataDir, isDirectory: true)
         )
-        let authToken: String
-        if let existing = try? String(contentsOf: authTokenURL, encoding: .utf8)
-            .trimmingCharacters(in: .whitespacesAndNewlines),
-            !existing.isEmpty
-        {
-            try FileManager.default.setAttributes(
-                [.posixPermissions: 0o600],
-                ofItemAtPath: authTokenURL.path
-            )
-            authToken = existing
-        } else {
-            let generated = generateAuthToken()
-            try generated.write(to: authTokenURL, atomically: true, encoding: .utf8)
-            try FileManager.default.setAttributes(
-                [.posixPermissions: 0o600],
-                ofItemAtPath: authTokenURL.path
-            )
-            authToken = generated
-        }
+        let authToken = try loadOrCreateAuthToken(at: authTokenURL)
 
         let resolvedPort = portOverride ?? PlaidBarConstants.serverPort(environment: environmentValues)
 
@@ -116,6 +100,80 @@ struct ServerConfig: Sendable {
 
         return "\(UUID().uuidString)\(UUID().uuidString)"
             .replacingOccurrences(of: "-", with: "")
+    }
+
+    private static func loadOrCreateAuthToken(at url: URL) throws -> String {
+        if let existing = try? String(contentsOf: url, encoding: .utf8)
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !existing.isEmpty
+        {
+            try FileManager.default.setAttributes(
+                [.posixPermissions: 0o600],
+                ofItemAtPath: url.path
+            )
+            return existing
+        }
+
+        let generated = generateAuthToken()
+        try writePrivateTextFile(generated, to: url)
+        return generated
+    }
+
+    private static func writePrivateTextFile(_ value: String, to url: URL) throws {
+        let data = Data(value.utf8)
+
+        #if canImport(Darwin)
+        let temporaryURL = url
+            .deletingLastPathComponent()
+            .appendingPathComponent(".\(url.lastPathComponent).\(UUID().uuidString).tmp")
+        let descriptor = open(
+            temporaryURL.path,
+            O_WRONLY | O_CREAT | O_EXCL,
+            S_IRUSR | S_IWUSR
+        )
+        guard descriptor >= 0 else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
+        var shouldRemoveTemporaryFile = true
+        defer {
+            close(descriptor)
+            if shouldRemoveTemporaryFile {
+                try? FileManager.default.removeItem(at: temporaryURL)
+            }
+        }
+
+        try data.withUnsafeBytes { buffer in
+            guard let baseAddress = buffer.baseAddress else { return }
+            var bytesWritten = 0
+            while bytesWritten < buffer.count {
+                let result = write(
+                    descriptor,
+                    baseAddress.advanced(by: bytesWritten),
+                    buffer.count - bytesWritten
+                )
+                if result < 0 {
+                    if errno == EINTR { continue }
+                    throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+                }
+                guard result > 0 else {
+                    throw POSIXError(.EIO)
+                }
+                bytesWritten += result
+            }
+        }
+
+        guard rename(temporaryURL.path, url.path) == 0 else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
+        shouldRemoveTemporaryFile = false
+        #else
+        try data.write(to: url, options: [.atomic])
+        #endif
+
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o600],
+            ofItemAtPath: url.path
+        )
     }
 
     static func dataDirectory() -> String {

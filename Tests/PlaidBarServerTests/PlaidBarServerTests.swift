@@ -97,6 +97,56 @@ struct PlaidBarServerTests {
         #expect(config.databasePath.hasSuffix("/plaidbar-sandbox.sqlite"))
     }
 
+    @Test func serverConfigCreatesPrivateAuthTokenFile() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-config-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let dataDirectory = directory.appendingPathComponent("data", isDirectory: true)
+        let configURL = directory.appendingPathComponent("plaidbar.conf")
+        try """
+        PLAID_CLIENT_ID=config-client
+        PLAID_SECRET=config-secret
+        PLAID_ENV=sandbox
+        PLAIDBAR_DATA_DIR=\(dataDirectory.path)
+        """.write(to: configURL, atomically: true, encoding: .utf8)
+
+        let config = try ServerConfig.load(from: configURL.path)
+        let authTokenURL = dataDirectory.appendingPathComponent(LocalDataStore.authTokenFilename)
+
+        #expect(try String(contentsOf: authTokenURL, encoding: .utf8) == config.authToken)
+        #expect(config.authToken.count >= 43)
+        #expect(try posixPermissions(at: authTokenURL) == 0o600)
+    }
+
+    @Test func serverConfigPreservesExistingAuthTokenAndTightensPermissions() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-config-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let dataDirectory = directory.appendingPathComponent("data", isDirectory: true)
+        try FileManager.default.createDirectory(at: dataDirectory, withIntermediateDirectories: true)
+        let authTokenURL = dataDirectory.appendingPathComponent(LocalDataStore.authTokenFilename)
+        try "existing-token\n".write(to: authTokenURL, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: authTokenURL.path)
+
+        let configURL = directory.appendingPathComponent("plaidbar.conf")
+        try """
+        PLAID_CLIENT_ID=config-client
+        PLAID_SECRET=config-secret
+        PLAID_ENV=sandbox
+        PLAIDBAR_DATA_DIR=\(dataDirectory.path)
+        """.write(to: configURL, atomically: true, encoding: .utf8)
+
+        let config = try ServerConfig.load(from: configURL.path)
+
+        #expect(config.authToken == "existing-token")
+        #expect(try String(contentsOf: authTokenURL, encoding: .utf8) == "existing-token\n")
+        #expect(try posixPermissions(at: authTokenURL) == 0o600)
+    }
+
     @Test func serverAuthTokenUsesURLSafeRandomBytes() {
         let token = ServerConfig.authTokenString(randomBytes: (0..<32).map(UInt8.init))
 
