@@ -115,15 +115,32 @@ struct AccountRoutes: Sendable {
             throw HTTPError(.badRequest, message: "Missing itemId parameter")
         }
 
-        // Remove from Plaid first
+        // Remove from Plaid first so a failed revocation keeps the local token
+        // available for retry instead of leaving an orphaned Plaid Item active.
         if let item = try await tokenStore.getItem(id: itemId) {
-            try? await plaidClient.removeItem(accessToken: item.accessToken)
+            do {
+                try await plaidClient.removeItem(accessToken: item.accessToken)
+            } catch {
+                guard Self.canDeleteLocalItemAfterPlaidRemoveError(error) else {
+                    try await tokenStore.updateItemStatus(id: itemId, status: ItemConnectionStatus.error.rawValue)
+                    throw HTTPError(.badGateway, message: "Plaid item removal failed; local item was kept for retry")
+                }
+            }
         }
 
         // Remove from local storage
         try await tokenStore.deleteItem(id: itemId)
 
         return Response(status: .noContent)
+    }
+
+    static func canDeleteLocalItemAfterPlaidRemoveError(_ error: Error) -> Bool {
+        if case PlaidError.apiError(_, _, let errorCode, _) = error {
+            return errorCode == "INVALID_ACCESS_TOKEN"
+                || errorCode == "ITEM_NOT_FOUND"
+                || errorCode == "ITEM_NOT_ACCESSIBLE"
+        }
+        return false
     }
 
     // MARK: - Helpers
