@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 00:43 UTC] — Fix
+
+fail all-item account refresh explicitly (#73)
+
+`50fc617`
+
+---
+
+
 ## [2026-05-28 00:29 UTC] — Fix
 
 preserve item when Plaid removal is retryable (#72)
