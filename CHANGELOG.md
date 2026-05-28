@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 02:55 UTC] — Update
+
+Preserve transaction cache after item removal
+
+`2bff4b8`
+
+---
+
+
 ## [2026-05-28 02:42 UTC] — Update
 
 Support PlaidBar server config files
