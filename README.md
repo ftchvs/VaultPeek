@@ -299,15 +299,17 @@ commit, push, review, and production-readiness work.
 The companion server exposes these localhost endpoints. `/health` and
 `/oauth/callback` are unauthenticated; `/api/*` requires the local bearer token
 stored under `~/.plaidbar/auth-token` or `PLAIDBAR_DATA_DIR/auth-token`.
+Plaid Link completion callbacks must also include the one-time `state` generated
+when the local app created the Hosted Link session.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/health` | Health check |
 | `GET` | `/api/status` | Server version, environment, item count |
 | `GET` | `/api/items` | List connected bank items |
-| `POST` | `/api/link/create` | Create Plaid Link token + URL |
-| `POST` | `/api/link/update/:itemId` | Create Plaid Link update-mode URL for reconnect |
-| `GET` | `/oauth/callback` | Plaid OAuth redirect handler |
+| `POST` | `/api/link/create` | Create one-time Plaid Hosted Link token + URL |
+| `POST` | `/api/link/update/:itemId` | Create one-time Plaid Hosted Link update-mode URL for reconnect |
+| `GET` | `/oauth/callback` | Plaid Hosted Link completion redirect handler |
 | `GET` | `/api/accounts` | List all accounts (cached) |
 | `GET` | `/api/accounts/balances` | Real-time balances |
 | `DELETE` | `/api/accounts/:itemId` | Remove a bank connection |

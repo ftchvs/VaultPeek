@@ -83,7 +83,7 @@ The companion server. Binds to `127.0.0.1:8484`.
 ```
 GET  /health                    → 200 OK
 POST /api/link/create           → { linkToken, linkUrl }
-GET  /oauth/callback?public_token=...  → HTML success/error page
+GET  /oauth/callback?state=...  → Hosted Link success/error page
 GET  /api/accounts              → [AccountDTO]
 GET  /api/accounts/balances     → [AccountDTO] (real-time)
 DELETE /api/accounts/:itemId    → 204 No Content
@@ -167,14 +167,15 @@ A `Task` runs every 15 minutes to refresh account balances (free cached endpoint
 ```
 1. User clicks "Add Account"
 2. App → POST /api/link/create → Server
-3. Server → POST /link/token/create → Plaid
+3. Server creates a one-time local state and POSTs /link/token/create → Plaid
 4. Server returns { linkToken, linkUrl }
 5. App opens linkUrl in Safari
 6. User completes Plaid Link in browser
-7. Plaid redirects to localhost:8484/oauth/callback?public_token=xxx
-8. Server exchanges public_token → access_token
-9. Server stores access_token in SQLite
-10. App refreshes → new accounts appear
+7. Plaid redirects to localhost:8484/oauth/callback?state=xxx
+8. Server consumes the one-time state and fetches the completed Link session
+9. Server exchanges public_token → access_token
+10. Server stores access_token in SQLite
+11. App refreshes → new accounts appear
 ```
 
 ### Transaction Sync (F3)

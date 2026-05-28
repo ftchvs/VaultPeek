@@ -24,7 +24,10 @@ actor PlaidClient {
 
     // MARK: - Link Token
 
-    func createLinkToken(userId: String) async throws -> PlaidLinkTokenResponse {
+    func createLinkToken(
+        userId: String,
+        completionRedirectUri: String
+    ) async throws -> PlaidLinkTokenResponse {
         let body = PlaidLinkTokenRequest(
             clientId: config.plaidClientId,
             secret: config.plaidSecret,
@@ -33,12 +36,20 @@ actor PlaidClient {
             products: ["transactions"],
             countryCodes: ["US"],
             language: "en",
-            redirectUri: config.redirectUri
+            redirectUri: config.redirectUri,
+            hostedLink: .init(
+                completionRedirectUri: completionRedirectUri,
+                urlLifetimeSeconds: 30 * 60
+            )
         )
         return try await post("/link/token/create", body: body)
     }
 
-    func createUpdateLinkToken(userId: String, accessToken: String) async throws -> PlaidLinkTokenResponse {
+    func createUpdateLinkToken(
+        userId: String,
+        accessToken: String,
+        completionRedirectUri: String
+    ) async throws -> PlaidLinkTokenResponse {
         let body = PlaidLinkTokenRequest(
             clientId: config.plaidClientId,
             secret: config.plaidSecret,
@@ -47,9 +58,22 @@ actor PlaidClient {
             countryCodes: ["US"],
             language: "en",
             redirectUri: config.redirectUri,
+            hostedLink: .init(
+                completionRedirectUri: completionRedirectUri,
+                urlLifetimeSeconds: 30 * 60
+            ),
             accessToken: accessToken
         )
         return try await post("/link/token/create", body: body)
+    }
+
+    func getLinkToken(_ linkToken: String) async throws -> PlaidLinkTokenGetResponse {
+        let body = PlaidLinkTokenGetRequest(
+            clientId: config.plaidClientId,
+            secret: config.plaidSecret,
+            linkToken: linkToken
+        )
+        return try await post("/link/token/get", body: body)
     }
 
     // MARK: - Token Exchange

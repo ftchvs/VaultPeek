@@ -36,6 +36,7 @@ struct PlaidBarServer: AsyncParsableCommand {
 
         let plaidClient = PlaidClient(config: serverConfig)
         let tokenStore = TokenStore(fluent: fluent)
+        let pendingLinkSessions = PendingLinkSessionStore()
 
         // Build router
         let router = Router()
@@ -48,7 +49,12 @@ struct PlaidBarServer: AsyncParsableCommand {
         // API routes
         let api = router.group("api")
         api.add(middleware: APITokenMiddleware(authToken: serverConfig.authToken))
-        LinkRoutes(plaidClient: plaidClient, tokenStore: tokenStore, config: serverConfig)
+        LinkRoutes(
+            plaidClient: plaidClient,
+            tokenStore: tokenStore,
+            pendingLinkSessions: pendingLinkSessions,
+            config: serverConfig
+        )
             .register(with: api)
         AccountRoutes(plaidClient: plaidClient, tokenStore: tokenStore)
             .register(with: api)
@@ -58,7 +64,11 @@ struct PlaidBarServer: AsyncParsableCommand {
             .register(with: api)
 
         // OAuth callback (top-level, not under /api)
-        OAuthCallbackRoute(plaidClient: plaidClient, tokenStore: tokenStore)
+        OAuthCallbackRoute(
+            plaidClient: plaidClient,
+            tokenStore: tokenStore,
+            pendingLinkSessions: pendingLinkSessions
+        )
             .register(with: router)
 
         // Build and run application

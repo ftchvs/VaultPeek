@@ -69,7 +69,7 @@ let package = Package(
         ),
         .testTarget(
             name: "PlaidBarServerTests",
-            dependencies: ["PlaidBarCore"],
+            dependencies: ["PlaidBarCore", "PlaidBarServer"],
             path: "Tests/PlaidBarServerTests",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),

@@ -11,6 +11,7 @@ struct PlaidLinkTokenRequest: Encodable, Sendable {
     let countryCodes: [String]
     let language: String
     let redirectUri: String
+    let hostedLink: PlaidHostedLink?
     let accessToken: String?
 
     init(
@@ -22,6 +23,7 @@ struct PlaidLinkTokenRequest: Encodable, Sendable {
         countryCodes: [String],
         language: String,
         redirectUri: String,
+        hostedLink: PlaidHostedLink? = nil,
         accessToken: String? = nil
     ) {
         self.clientId = clientId
@@ -32,12 +34,24 @@ struct PlaidLinkTokenRequest: Encodable, Sendable {
         self.countryCodes = countryCodes
         self.language = language
         self.redirectUri = redirectUri
+        self.hostedLink = hostedLink
         self.accessToken = accessToken
     }
 
     struct PlaidUser: Encodable, Sendable {
         let clientUserId: String
     }
+}
+
+struct PlaidHostedLink: Encodable, Sendable {
+    let completionRedirectUri: String
+    let urlLifetimeSeconds: Int
+}
+
+struct PlaidLinkTokenGetRequest: Encodable, Sendable {
+    let clientId: String
+    let secret: String
+    let linkToken: String
 }
 
 struct PlaidTokenExchangeRequest: Encodable, Sendable {
@@ -77,11 +91,58 @@ struct PlaidLinkTokenResponse: Decodable, Sendable {
     let linkToken: String
     let expiration: String?
     let requestId: String?
+    let hostedLinkUrl: String?
+}
 
-    /// Constructs the hosted Link URL for browser-based flow
-    func hostedLinkUrl(redirectUri: String) -> String {
-        "https://cdn.plaid.com/link/v2/stable/link.html?token=\(linkToken)&redirect_uri=\(redirectUri)"
+struct PlaidLinkTokenGetResponse: Decodable, Sendable {
+    let linkToken: String?
+    let linkSessions: [PlaidLinkSession]?
+    let onSuccess: PlaidLinkSuccess?
+    let results: PlaidLinkResults?
+
+    var publicTokens: [String] {
+        let sessionTokens = linkSessions?
+            .flatMap { $0.results?.itemAddResults ?? [] }
+            .map(\.publicToken) ?? []
+        if !sessionTokens.isEmpty {
+            return sessionTokens
+        }
+        if let itemAddResults = results?.itemAddResults, !itemAddResults.isEmpty {
+            return itemAddResults.map(\.publicToken)
+        }
+        if let publicToken = onSuccess?.publicToken {
+            return [publicToken]
+        }
+        return []
     }
+}
+
+struct PlaidLinkSession: Decodable, Sendable {
+    let linkSessionId: String?
+    let results: PlaidLinkResults?
+}
+
+struct PlaidLinkResults: Decodable, Sendable {
+    let itemAddResults: [PlaidLinkItemAddResult]?
+}
+
+struct PlaidLinkItemAddResult: Decodable, Sendable {
+    let publicToken: String
+    let institution: PlaidLinkInstitution?
+}
+
+struct PlaidLinkSuccess: Decodable, Sendable {
+    let publicToken: String?
+    let metadata: PlaidLinkSuccessMetadata?
+}
+
+struct PlaidLinkSuccessMetadata: Decodable, Sendable {
+    let institution: PlaidLinkInstitution?
+}
+
+struct PlaidLinkInstitution: Decodable, Sendable {
+    let name: String?
+    let institutionId: String?
 }
 
 struct PlaidTokenExchangeResponse: Decodable, Sendable {
