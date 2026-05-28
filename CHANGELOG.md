@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 01:50 UTC] — Fix
+
+preserve server error messages (#76)
+
+`c564566`
+
+---
+
+
 ## [2026-05-28 01:40 UTC] — Fix
 
 fail transaction sync when all items fail (#75)
