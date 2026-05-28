@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 01:40 UTC] — Fix
+
+fail transaction sync when all items fail (#75)
+
+`cd6aa6c`
+
+---
+
+
 ## [2026-05-28 01:31 UTC] — Fix
 
 scope Plaid storage by environment (#74)
