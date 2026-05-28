@@ -407,6 +407,27 @@ struct PlaidBarServerTests {
         #expect(PlaidClient.retryDelayNanoseconds(baseDelayNanoseconds: 1_000_000_000, attempt: 10) == 8_000_000_000)
     }
 
+    @Test func plaidTokenVaultReferencesAreDistinctFromLegacyPlaintext() throws {
+        let reference = PlaidTokenVault.reference(for: "item_123")
+
+        #expect(reference == "keychain:item_123")
+        #expect(PlaidTokenVault.isReference(reference))
+        #expect(!PlaidTokenVault.isReference("access-sandbox-token"))
+        #expect(try PlaidTokenVault.resolve(storedToken: "access-sandbox-token") == "access-sandbox-token")
+    }
+
+    @Test func plaidTokenVaultStoresAndResolvesKeychainTokens() throws {
+        let itemId = "test_item_\(UUID().uuidString)"
+        let storedToken = try PlaidTokenVault.store(
+            accessToken: "access-sandbox-token",
+            itemId: itemId
+        )
+        defer { try? PlaidTokenVault.delete(storedToken: storedToken, fallbackItemId: itemId) }
+
+        #expect(PlaidTokenVault.isReference(storedToken))
+        #expect(try PlaidTokenVault.resolve(storedToken: storedToken) == "access-sandbox-token")
+    }
+
     @Test func accountRefreshFailsOnlyWhenEveryLinkedItemFails() {
         #expect(!AccountRoutes.shouldFailRefresh(attemptedItemCount: 0, successfulItemCount: 0))
         #expect(AccountRoutes.shouldFailRefresh(attemptedItemCount: 2, successfulItemCount: 0))

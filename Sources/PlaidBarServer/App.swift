@@ -37,6 +37,7 @@ struct PlaidBarServer: AsyncParsableCommand {
 
         let plaidClient = PlaidClient(config: serverConfig)
         let tokenStore = TokenStore(fluent: fluent)
+        _ = try? await tokenStore.pruneOrphanedKeychainTokens()
         let pendingLinkSessions = PendingLinkSessionStore()
 
         // Build router
