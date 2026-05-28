@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 18:08 UTC] — Update
+
+Expand README screenshot tour (#119)
+
+`aa6ea49`
+
+---
+
+
 ## [2026-05-28 17:59 UTC] — Update
 
 Prepare v0.3.4 release metadata (#118)
