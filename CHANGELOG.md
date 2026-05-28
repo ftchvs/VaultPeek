@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 13:08 UTC] — Update
+
+Bound transaction sync pagination (#97)
+
+`f069dfd`
+
+---
+
+
 ## [2026-05-28 13:00 UTC] — Update
 
 Harden CI reliability gates (#96)
