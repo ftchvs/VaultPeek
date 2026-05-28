@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 11:35 UTC] — Update
+
+Restrict CI workflow permissions (#92)
+
+`dee17d1`
+
+---
+
+
 ## [2026-05-28 11:24 UTC] — Update
 
 Use random server auth tokens (#91)
