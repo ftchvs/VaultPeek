@@ -396,6 +396,15 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for code style, PR process, and architect
 
 See [GOAL.md](GOAL.md) for the RepoBar/CodexBar-style product direction, design principles, and implementation priorities.
 
+Additional project docs:
+
+- [Architecture](docs/architecture.md)
+- [Privacy](docs/privacy.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [1.0 Roadmap](docs/v1.0-roadmap.md)
+- [Release Notes Drafts](docs/release-notes.md)
+- [Changelog](CHANGELOG.md)
+
 ### Agentic Development Loop
 
 This repo includes a local slash-command style runbook for long-running
