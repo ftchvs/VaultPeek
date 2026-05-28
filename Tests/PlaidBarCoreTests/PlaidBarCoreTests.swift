@@ -713,6 +713,176 @@ struct PlaidBarCoreTests {
         #expect(!state.canRetry)
     }
 
+    // MARK: - Dashboard Status Readiness Tests
+
+    @Test("Dashboard status readiness blocks on offline server")
+    func dashboardStatusReadinessBlocksOnOfflineServer() {
+        let readiness = DashboardStatusReadiness.evaluate(
+            isDemoMode: false,
+            serverConnected: false,
+            credentialsConfigured: nil,
+            linkedItemCount: 0,
+            accountCount: 0,
+            syncedItemCount: 0,
+            needsLoginItemCount: 0,
+            erroredItemCount: 0,
+            isSyncStale: true,
+            lastSyncRelative: nil,
+            errorMessage: nil
+        )
+
+        #expect(readiness.level == .blocked)
+        #expect(readiness.primaryAction == .checkServer)
+        #expect(readiness.secondaryActions.contains(.openSettings))
+    }
+
+    @Test("Dashboard status readiness prompts add account with no items")
+    func dashboardStatusReadinessPromptsAddAccount() {
+        let readiness = DashboardStatusReadiness.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 0,
+            accountCount: 0,
+            syncedItemCount: 0,
+            needsLoginItemCount: 0,
+            erroredItemCount: 0,
+            isSyncStale: true,
+            lastSyncRelative: nil,
+            errorMessage: nil
+        )
+
+        #expect(readiness.level == .warning)
+        #expect(readiness.primaryAction == .addAccount)
+    }
+
+    @Test("Dashboard status readiness blocks on missing credentials")
+    func dashboardStatusReadinessBlocksOnMissingCredentials() {
+        let readiness = DashboardStatusReadiness.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: false,
+            linkedItemCount: 0,
+            accountCount: 0,
+            syncedItemCount: 0,
+            needsLoginItemCount: 0,
+            erroredItemCount: 0,
+            isSyncStale: true,
+            lastSyncRelative: nil,
+            errorMessage: nil
+        )
+
+        #expect(readiness.level == .blocked)
+        #expect(readiness.primaryAction == .openSettings)
+        #expect(readiness.title == "Plaid credentials missing")
+    }
+
+    @Test("Dashboard status readiness prioritizes item errors")
+    func dashboardStatusReadinessPrioritizesItemErrors() {
+        let readiness = DashboardStatusReadiness.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 2,
+            accountCount: 4,
+            syncedItemCount: 2,
+            needsLoginItemCount: 1,
+            erroredItemCount: 1,
+            isSyncStale: false,
+            lastSyncRelative: "2m ago",
+            errorMessage: nil
+        )
+
+        #expect(readiness.level == .blocked)
+        #expect(readiness.primaryAction == .reconnect)
+        #expect(readiness.title.contains("need attention"))
+        #expect(readiness.secondaryActions.contains(.openSettings))
+    }
+
+    @Test("Dashboard status readiness prioritizes item recovery")
+    func dashboardStatusReadinessPrioritizesItemRecovery() {
+        let readiness = DashboardStatusReadiness.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 2,
+            accountCount: 4,
+            syncedItemCount: 2,
+            needsLoginItemCount: 1,
+            erroredItemCount: 0,
+            isSyncStale: false,
+            lastSyncRelative: "2m ago",
+            errorMessage: nil
+        )
+
+        #expect(readiness.level == .warning)
+        #expect(readiness.primaryAction == .reconnect)
+        #expect(readiness.title.contains("need login"))
+    }
+
+    @Test("Dashboard status readiness detects incomplete first sync")
+    func dashboardStatusReadinessDetectsIncompleteFirstSync() {
+        let readiness = DashboardStatusReadiness.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 2,
+            accountCount: 4,
+            syncedItemCount: 1,
+            needsLoginItemCount: 0,
+            erroredItemCount: 0,
+            isSyncStale: false,
+            lastSyncRelative: "just now",
+            errorMessage: nil
+        )
+
+        #expect(readiness.level == .warning)
+        #expect(readiness.primaryAction == .refresh)
+        #expect(readiness.title == "First sync incomplete")
+    }
+
+    @Test("Dashboard status readiness detects stale sync")
+    func dashboardStatusReadinessDetectsStaleSync() {
+        let readiness = DashboardStatusReadiness.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 2,
+            accountCount: 4,
+            syncedItemCount: 2,
+            needsLoginItemCount: 0,
+            erroredItemCount: 0,
+            isSyncStale: true,
+            lastSyncRelative: "2h ago",
+            errorMessage: nil
+        )
+
+        #expect(readiness.level == .warning)
+        #expect(readiness.primaryAction == .refresh)
+        #expect(readiness.title == "Sync is stale")
+    }
+
+    @Test("Dashboard status readiness reports healthy sync")
+    func dashboardStatusReadinessReportsHealthySync() {
+        let readiness = DashboardStatusReadiness.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 2,
+            accountCount: 4,
+            syncedItemCount: 2,
+            needsLoginItemCount: 0,
+            erroredItemCount: 0,
+            isSyncStale: false,
+            lastSyncRelative: "2m ago",
+            errorMessage: nil
+        )
+
+        #expect(readiness.level == .healthy)
+        #expect(readiness.primaryAction == .refresh)
+        #expect(readiness.secondaryActions.contains(.addAccount))
+    }
+
     // MARK: - ItemStatus Tests
 
     @Test("ItemStatus Codable")

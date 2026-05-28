@@ -39,6 +39,11 @@ struct MainPopover: View {
                         DashboardStatusStrip()
                             .environment(appState)
 
+                        if selectedFilter == .status {
+                            DashboardStatusReadinessPanel(openSettings: { openSettings() })
+                                .environment(appState)
+                        }
+
                         DashboardSummaryCards()
                             .environment(appState)
 
@@ -791,6 +796,187 @@ private struct DashboardFilterBar: View {
         }
         .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
         .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct DashboardStatusReadinessPanel: View {
+    @Environment(AppState.self) private var appState
+    let openSettings: () -> Void
+
+    private var readiness: DashboardStatusReadiness {
+        appState.dashboardStatusReadiness
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: icon)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 34, height: 34)
+                    .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 8))
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(readiness.title)
+                        .font(.callout.weight(.semibold))
+                    Text(readiness.detail)
+                        .detailText()
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 12)
+            }
+
+            StatusMetricGrid()
+                .environment(appState)
+
+            HStack(spacing: 8) {
+                if let primaryAction = readiness.primaryAction {
+                    Button {
+                        perform(primaryAction)
+                    } label: {
+                        Label(primaryAction.label, systemImage: primaryAction.icon)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .tint(tint)
+                    .disabled(appState.isLoading)
+                }
+
+                ForEach(readiness.secondaryActions, id: \.rawValue) { action in
+                    Button {
+                        perform(action)
+                    } label: {
+                        Label(action.label, systemImage: action.icon)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(appState.isLoading)
+                }
+            }
+        }
+        .padding(16)
+        .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 8))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(tint.opacity(0.18), lineWidth: 1)
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private var icon: String {
+        switch readiness.level {
+        case .healthy: return "checkmark.circle.fill"
+        case .warning: return "exclamationmark.triangle.fill"
+        case .blocked: return "xmark.octagon.fill"
+        }
+    }
+
+    private var tint: Color {
+        switch readiness.level {
+        case .healthy: return SemanticColors.positive
+        case .warning: return SemanticColors.warning
+        case .blocked: return SemanticColors.negative
+        }
+    }
+
+    private func perform(_ action: DashboardStatusReadinessAction) {
+        switch action {
+        case .checkServer:
+            Task { await appState.checkServerConnection() }
+        case .addAccount:
+            Task { await appState.addAccount() }
+        case .refresh:
+            Task {
+                await appState.checkServerConnection()
+                if appState.serverConnected {
+                    await appState.refreshAccounts()
+                    await appState.syncTransactions()
+                }
+            }
+        case .reconnect:
+            guard let itemId = reconnectItemId else {
+                Task { await appState.refreshAccounts() }
+                return
+            }
+            Task { await appState.reconnectItem(itemId: itemId) }
+        case .openSettings:
+            openSettings()
+        }
+    }
+
+    private var reconnectItemId: String? {
+        appState.itemStatuses.first { $0.status == .loginRequired || $0.status == .error }?.id
+    }
+}
+
+private struct StatusMetricGrid: View {
+    @Environment(AppState.self) private var appState
+
+    var body: some View {
+        LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
+            StatusMetricPill(title: "Mode", value: appState.statusModeText)
+            StatusMetricPill(title: "Server", value: appState.statusServerText)
+            StatusMetricPill(title: "Items", value: "\(appState.statusItemCount) linked")
+            StatusMetricPill(title: "Synced", value: syncedItemsText)
+            StatusMetricPill(title: "Credentials", value: appState.serverCredentialsText)
+            StatusMetricPill(title: "Last Sync", value: appState.lastSyncRelative ?? "Never")
+        }
+    }
+
+    private var columns: [GridItem] {
+        [
+            GridItem(.flexible(minimum: 140), spacing: 8),
+            GridItem(.flexible(minimum: 140), spacing: 8),
+            GridItem(.flexible(minimum: 140), spacing: 8),
+        ]
+    }
+
+    private var syncedItemsText: String {
+        "\(appState.serverSyncedItemCount ?? 0) of \(appState.statusItemCount)"
+    }
+}
+
+private struct StatusMetricPill: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .microText()
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 7))
+    }
+}
+
+private extension DashboardStatusReadinessAction {
+    var label: String {
+        switch self {
+        case .checkServer: return "Check Server"
+        case .addAccount: return "Add Account"
+        case .refresh: return "Refresh"
+        case .reconnect: return "Reconnect"
+        case .openSettings: return "Settings"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .checkServer: return "server.rack"
+        case .addAccount: return "plus.circle"
+        case .refresh: return "arrow.clockwise"
+        case .reconnect: return "link.badge.plus"
+        case .openSettings: return "gearshape"
+        }
     }
 }
 
