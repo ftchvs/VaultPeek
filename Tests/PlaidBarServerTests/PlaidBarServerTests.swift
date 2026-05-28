@@ -37,6 +37,42 @@ struct PlaidBarServerTests {
         #expect(decoded.syncReady)
     }
 
+    @Test func serverStatusPayloadDoesNotExposeSecretsOrTokens() throws {
+        let status = ServerStatus(
+            version: "0.8.0",
+            environment: .production,
+            itemCount: 2,
+            lastSync: Date(timeIntervalSince1970: 1_800_000_000),
+            credentialsConfigured: true,
+            storagePath: "/Users/example/.plaidbar/plaidbar-production.sqlite",
+            syncReady: true,
+            syncedItemCount: 2
+        )
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+
+        let data = try encoder.encode(status)
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let keys = Set(object.keys)
+        let forbiddenFragments = ["client", "secret", "token", "access", "public"]
+
+        #expect(keys == [
+            "version",
+            "environment",
+            "itemCount",
+            "lastSync",
+            "credentialsConfigured",
+            "storagePath",
+            "syncReady",
+            "syncedItemCount",
+        ])
+        #expect(!String(data: data, encoding: .utf8)!.contains("config-secret"))
+        #expect(!String(data: data, encoding: .utf8)!.contains("access-sandbox"))
+        #expect(keys.allSatisfy { key in
+            forbiddenFragments.allSatisfy { !key.localizedCaseInsensitiveContains($0) }
+        })
+    }
+
     @Test func serverConfigLoadsExplicitConfigFile() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("plaidbar-config-\(UUID().uuidString)", isDirectory: true)
@@ -155,6 +191,13 @@ struct PlaidBarServerTests {
             character.isLetter || character.isNumber || character == "-" || character == "_"
         })
         #expect(!token.contains("="))
+    }
+
+    @Test func apiTokenComparisonAcceptsOnlyExactBearerToken() {
+        #expect(APITokenAuthorization.constantTimeEquals("Bearer token-123", "Bearer token-123"))
+        #expect(!APITokenAuthorization.constantTimeEquals("Bearer token-123", "Bearer token-124"))
+        #expect(!APITokenAuthorization.constantTimeEquals("Bearer token-123", "token-123"))
+        #expect(!APITokenAuthorization.constantTimeEquals("Bearer token-123", "Bearer token-123-extra"))
     }
 
     @Test func oauthCallbackErrorPageEscapesDynamicMessage() {

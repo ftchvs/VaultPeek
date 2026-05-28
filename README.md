@@ -176,7 +176,7 @@ First run now asks you to choose a data source:
 - **Connect Sandbox** opens Plaid Link only when the local server is running in sandbox mode with sandbox credentials.
 - **Use Production Credentials** opens the same connect flow only when the local server reports production mode. Production uses real account data and requires Plaid approval.
 
-Before Plaid Link opens, the app explains that Plaid access tokens and synced account data are stored locally under `~/.plaidbar/`, while Plaid credentials remain in the local server environment.
+Before Plaid Link opens, the app explains that Plaid item records and synced account data are stored locally under `~/.plaidbar/`, Plaid access-token bytes are kept in macOS Keychain when available, and Plaid credentials remain in the local server environment.
 
 ### 4. Use with real bank data (optional)
 
@@ -273,7 +273,7 @@ PlaidBar uses a **two-process architecture** — a SwiftUI menu bar app talks to
 
 **Why a companion server?** Plaid requires that `client_secret` and `access_token` never exist in the menu bar client. The server:
 1. Keeps Plaid credentials and access tokens out of the SwiftUI app process
-2. Stores item tokens in a local SQLite database under `~/.plaidbar/`
+2. Stores item records in local SQLite and Plaid access-token bytes in macOS Keychain when available
 3. Binds to `127.0.0.1` only — no LAN or cloud exposure
 4. Can be restarted independently of the UI
 5. Opens the door for future CLI tools or iOS companion
@@ -287,7 +287,7 @@ PlaidBar uses a **two-process architecture** — a SwiftUI menu bar app talks to
 | Design system | Semantic tokens + 8pt grid | Consistent, maintainable |
 | Local server | [Hummingbird 2](https://github.com/hummingbird-project/hummingbird) | Lightweight, SwiftNIO-based, same language as app |
 | Database | SQLite via [Fluent ORM](https://github.com/vapor/fluent-kit) | Migrations, queries, Hummingbird-native |
-| Secrets (app) | macOS Keychain | OS-level secure storage |
+| Plaid access-token vault | macOS Keychain + SQLite references | Keep token bytes out of the SwiftUI app and out of normal SQLite rows at runtime |
 | Auto-updates | [Sparkle 2](https://github.com/sparkle-project/Sparkle) | Standard for open-source macOS apps |
 | Launch at login | SMAppService | Native macOS Login Items API |
 
@@ -348,7 +348,8 @@ Rate limits are well within Plaid's allowances for personal use (~2-4 requests/h
 | Concern | How PlaidBar handles it |
 |---------|------------------------|
 | Plaid secrets | Read from environment variables at server startup, never embedded in the app binary |
-| Plaid access tokens | Stored in local SQLite under `~/.plaidbar/`; protect your Mac user account and disk |
+| Plaid access tokens | Stored in macOS Keychain at runtime when available; SQLite stores `keychain:<item_id>` references |
+| Local status endpoint | Authenticated `/api/status` exposes readiness metadata only, not tokens, account IDs, balances, or transactions |
 | Network exposure | Server binds to `127.0.0.1` only |
 | App ↔ Server auth | Shared token generated at first run |
 | Data at rest | macOS encrypted APFS volume |

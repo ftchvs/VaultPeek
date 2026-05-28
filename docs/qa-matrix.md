@@ -60,9 +60,12 @@ local storage, notifications, and distribution.
 |-------|-----------------|
 | Secret scan | No real secrets, tokens, or private keys in docs/source/tests |
 | Status endpoint | `/api/status` exposes readiness metadata, not secrets |
+| Status contract test | Encoded `ServerStatus` contains only release-approved keys |
 | Auth middleware | `/api/*` rejects missing/invalid bearer token |
+| Auth comparison | Bearer token comparison accepts only exact token strings |
 | Data directory | `~/.plaidbar/` uses private user permissions where supported |
 | Auth token | `auth-token` uses private file permissions where supported |
+| Plaid tokens | Runtime stores access-token bytes in Keychain when available; fallback builds are documented |
 | Sandbox/production | Stores and transaction cache are scoped by environment |
 | Reset copy | UI explains local reset does not guarantee Plaid/bank revocation |
 | Screenshots | Assets contain demo/sandbox/synthetic data only |

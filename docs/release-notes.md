@@ -10,6 +10,8 @@ curated release messaging here.
 
 - Dashboard Status readiness panel with mode, server state, linked item count,
   synced item count, credential readiness, last sync, and recovery actions.
+- Security contract tests for the status payload and local bearer-token
+  comparison.
 
 ### Changed
 
@@ -17,11 +19,15 @@ curated release messaging here.
   prioritizes server offline, missing credentials, no linked item, unloaded
   balances, item errors, login-required items, incomplete first sync, and stale
   sync.
+- Security/privacy docs now distinguish macOS Keychain runtime token storage
+  from fallback builds and define the authenticated `/api/status` no-secret
+  payload contract.
 
 ### Verification Targets
 
 - Select Status in demo mode and verify healthy local demo readiness.
 - Verify offline server and stale sync states expose a single primary action.
+- Confirm `/api/status` exposes readiness metadata only.
 - `swift build --target PlaidBar --skip-update --disable-keychain`
 
 ## v0.6.0 - Unreleased

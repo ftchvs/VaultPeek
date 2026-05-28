@@ -30,10 +30,20 @@ Use GitHub private vulnerability reporting if available, or contact the reposito
 - PlaidBar has no hosted backend, analytics, telemetry, or tracking.
 - The companion server should bind to `127.0.0.1` only.
 - Plaid secrets and access tokens must not be embedded in the app binary.
-- The local server stores Plaid item access tokens in environment-scoped SQLite files under `~/.plaidbar/`:
+- The local server keeps Plaid item records in environment-scoped SQLite files under `~/.plaidbar/`:
   `plaidbar-sandbox.sqlite` for sandbox and `plaidbar-production.sqlite` for production.
+- On macOS builds with Security framework support, Plaid access-token bytes are
+  stored in Keychain under the `PlaidBar.PlaidAccessToken` service and SQLite
+  stores only a `keychain:<item_id>` reference. Build/test environments without
+  Keychain support may fall back to local SQLite token storage, so release
+  claims must distinguish runtime Keychain behavior from fallback builds.
 - Existing legacy `plaidbar.sqlite` data, SQLite sidecar files, and matching transaction cache are copied into a scoped database only when the legacy environment is explicit (`PLAIDBAR_MIGRATE_LEGACY_DATABASE=sandbox|production`) or can be inferred from the existing transaction-cache context. Ambiguous legacy databases are left untouched to avoid sandbox/production token crossover. Explicit migration can replace an existing scoped store, backs up the previous scoped SQLite store and transaction cache before copying legacy data, and writes a migration marker so restarts do not reapply stale legacy data.
 - The app/server auth token is generated locally under `~/.plaidbar/auth-token`.
+- `/api/status` is authenticated and should expose only readiness metadata:
+  version, environment, credential availability, storage path, linked item
+  count, synced item count, sync readiness, and last sync time. It must not
+  include Plaid secrets, Plaid access tokens, public tokens, auth tokens,
+  account IDs, item IDs, balances, or transaction data.
 - Protect your macOS user account, disk encryption, backups, and shell history.
 - App-server communication should preserve local-only assumptions unless a future change explicitly documents otherwise.
 
