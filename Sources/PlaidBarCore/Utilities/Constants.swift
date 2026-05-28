@@ -29,6 +29,15 @@ public enum PlaidBarConstants {
     // Refresh intervals
     public static let backgroundRefreshInterval: TimeInterval = 15 * 60  // 15 minutes
     public static let transactionSyncInterval: TimeInterval = 30 * 60    // 30 minutes
+    public static let minimumBackgroundRefreshInterval: TimeInterval = 5 * 60
+
+    public static func normalizedBackgroundRefreshInterval(_ interval: TimeInterval) -> TimeInterval {
+        guard interval.isFinite,
+              interval >= minimumBackgroundRefreshInterval else {
+            return backgroundRefreshInterval
+        }
+        return interval
+    }
 
     // Display
     public static let creditUtilizationWarningThreshold: Double = 30.0

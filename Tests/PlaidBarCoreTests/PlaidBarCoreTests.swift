@@ -673,6 +673,7 @@ struct PlaidBarCoreTests {
     @Test("Constants have reasonable values")
     func constantsReasonable() {
         #expect(PlaidBarConstants.backgroundRefreshInterval > 0)
+        #expect(PlaidBarConstants.minimumBackgroundRefreshInterval > 0)
         #expect(PlaidBarConstants.transactionSyncInterval > 0)
         #expect(PlaidBarConstants.creditUtilizationWarningThreshold > 0)
         #expect(PlaidBarConstants.maxRecentTransactions > 0)
@@ -680,6 +681,16 @@ struct PlaidBarCoreTests {
         #expect(!PlaidBarConstants.keychainServiceName.isEmpty)
         #expect(!PlaidBarConstants.appVersion.isEmpty)
         #expect(!PlaidBarConstants.appName.isEmpty)
+    }
+
+    @Test("Background refresh interval rejects invalid persisted values")
+    func backgroundRefreshIntervalNormalization() {
+        #expect(PlaidBarConstants.normalizedBackgroundRefreshInterval(5 * 60) == 5 * 60)
+        #expect(PlaidBarConstants.normalizedBackgroundRefreshInterval(60 * 60) == 60 * 60)
+        #expect(PlaidBarConstants.normalizedBackgroundRefreshInterval(0) == PlaidBarConstants.backgroundRefreshInterval)
+        #expect(PlaidBarConstants.normalizedBackgroundRefreshInterval(-1) == PlaidBarConstants.backgroundRefreshInterval)
+        #expect(PlaidBarConstants.normalizedBackgroundRefreshInterval(.infinity) == PlaidBarConstants.backgroundRefreshInterval)
+        #expect(PlaidBarConstants.normalizedBackgroundRefreshInterval(.nan) == PlaidBarConstants.backgroundRefreshInterval)
     }
 
     @Test("Version bumped to 0.3.0")

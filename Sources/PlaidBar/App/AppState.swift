@@ -64,6 +64,11 @@ final class AppState {
     }
     var refreshInterval: TimeInterval = PlaidBarConstants.backgroundRefreshInterval {
         didSet {
+            let normalizedInterval = PlaidBarConstants.normalizedBackgroundRefreshInterval(refreshInterval)
+            guard normalizedInterval == refreshInterval else {
+                refreshInterval = normalizedInterval
+                return
+            }
             guard refreshInterval != oldValue else { return }
             UserDefaults.standard.set(refreshInterval, forKey: Keys.refreshInterval)
             // Restart background refresh with new interval
@@ -148,7 +153,9 @@ final class AppState {
             creditUtilizationThreshold = defaults.double(forKey: Keys.creditUtilizationThreshold)
         }
         if defaults.object(forKey: Keys.refreshInterval) != nil {
-            refreshInterval = defaults.double(forKey: Keys.refreshInterval)
+            refreshInterval = PlaidBarConstants.normalizedBackgroundRefreshInterval(
+                defaults.double(forKey: Keys.refreshInterval)
+            )
         }
         // Notification settings
         if defaults.object(forKey: Keys.notificationsEnabled) != nil {
