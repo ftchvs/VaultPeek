@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 13:00 UTC] — Update
+
+Harden CI reliability gates (#96)
+
+`2143650`
+
+---
+
+
 ## [2026-05-28 12:51 UTC] — Update
 
 Normalize persisted refresh intervals (#95)
