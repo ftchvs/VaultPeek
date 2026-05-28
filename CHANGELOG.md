@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 16:31 UTC] — Update
+
+Harden release script checks (#111)
+
+`ef7cf31`
+
+---
+
+
 ## [2026-05-28 16:10 UTC] — Update
 
 Clean up sandbox smoke diagnostics (#110)
