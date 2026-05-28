@@ -218,6 +218,7 @@ private struct SettingsCard<Content: View>: View {
             }
         }
         .padding(Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 8))
     }
 }
@@ -436,74 +437,81 @@ struct NotificationSettingsView: View {
     var body: some View {
         @Bindable var state = appState
 
-        Form {
-            Toggle("Enable notifications", isOn: $state.notificationsEnabled)
-                .onChange(of: appState.notificationsEnabled) { _, enabled in
-                    if enabled {
-                        Task {
-                            let granted = await appState.requestNotificationPermission()
-                            if !granted {
-                                permissionDenied = true
-                                appState.notificationsEnabled = false
+        ScrollView {
+            VStack(alignment: .leading, spacing: Spacing.lg) {
+                SettingsCard {
+                    Toggle("Enable notifications", isOn: $state.notificationsEnabled)
+                        .onChange(of: appState.notificationsEnabled) { _, enabled in
+                            if enabled {
+                                Task {
+                                    let granted = await appState.requestNotificationPermission()
+                                    if !granted {
+                                        permissionDenied = true
+                                        appState.notificationsEnabled = false
+                                    }
+                                }
                             }
+                        }
+
+                    if permissionDenied {
+                        HStack(alignment: .top, spacing: Spacing.sm) {
+                            Image(systemName: "exclamationmark.triangle")
+                                .foregroundStyle(SemanticColors.warning)
+                            Text("Notifications denied. Enable in System Settings > Notifications.")
+                                .detailText()
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                 }
 
-            if permissionDenied {
-                HStack {
-                    Image(systemName: "exclamationmark.triangle")
-                        .foregroundStyle(SemanticColors.warning)
-                    Text("Notifications denied. Enable in System Settings > Notifications.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                SettingsCard(title: "Transaction Alerts") {
+                    Toggle("Large transactions", isOn: $state.notifyLargeTransaction)
+                        .disabled(!appState.notificationsEnabled)
+
+                    settingsRow("Threshold") {
+                        HStack(spacing: Spacing.sm) {
+                            Text("$")
+                                .foregroundStyle(.secondary)
+                            TextField(
+                                "",
+                                value: $state.largeTransactionThreshold,
+                                format: .number.precision(.fractionLength(0))
+                            )
+                            .frame(width: 72)
+                            .textFieldStyle(.roundedBorder)
+                        }
+                    }
+                    .disabled(!appState.notificationsEnabled || !appState.notifyLargeTransaction)
+
+                    Toggle("Low balance warning", isOn: $state.notifyLowBalance)
+                        .disabled(!appState.notificationsEnabled)
+
+                    settingsRow("Threshold") {
+                        HStack(spacing: Spacing.sm) {
+                            Text("$")
+                                .foregroundStyle(.secondary)
+                            TextField(
+                                "",
+                                value: $state.lowBalanceThreshold,
+                                format: .number.precision(.fractionLength(0))
+                            )
+                            .frame(width: 72)
+                            .textFieldStyle(.roundedBorder)
+                        }
+                    }
+                    .disabled(!appState.notificationsEnabled || !appState.notifyLowBalance)
+                }
+
+                SettingsCard(title: "Credit Alerts") {
+                    Toggle("High utilization", isOn: $state.notifyHighUtilization)
+                        .disabled(!appState.notificationsEnabled)
+                    Text("Uses credit warning threshold (\(Formatters.percent(appState.creditUtilizationThreshold, decimals: 0)))")
+                        .detailText()
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-
-            Section("Transaction Alerts") {
-                Toggle("Large transactions", isOn: $state.notifyLargeTransaction)
-                    .disabled(!appState.notificationsEnabled)
-
-                HStack {
-                    Text("Threshold")
-                    Spacer()
-                    Text("$")
-                    TextField(
-                        "",
-                        value: $state.largeTransactionThreshold,
-                        format: .number.precision(.fractionLength(0))
-                    )
-                    .frame(width: 60)
-                    .textFieldStyle(.roundedBorder)
-                }
-                .disabled(!appState.notificationsEnabled || !appState.notifyLargeTransaction)
-
-                Toggle("Low balance warning", isOn: $state.notifyLowBalance)
-                    .disabled(!appState.notificationsEnabled)
-
-                HStack {
-                    Text("Threshold")
-                    Spacer()
-                    Text("$")
-                    TextField(
-                        "",
-                        value: $state.lowBalanceThreshold,
-                        format: .number.precision(.fractionLength(0))
-                    )
-                    .frame(width: 60)
-                    .textFieldStyle(.roundedBorder)
-                }
-                .disabled(!appState.notificationsEnabled || !appState.notifyLowBalance)
-            }
-
-            Section("Credit Alerts") {
-                Toggle("High utilization", isOn: $state.notifyHighUtilization)
-                    .disabled(!appState.notificationsEnabled)
-                Text("Uses credit warning threshold (\(Formatters.percent(appState.creditUtilizationThreshold, decimals: 0)))")
-                    .detailText()
-            }
+            .padding(Spacing.lg)
         }
-        .padding()
     }
 }
 
