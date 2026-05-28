@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 20:11 UTC] — Update
+
+Merge pull request #122 from ftchvs/fix/add-account-action
+
+`84ed1ac`
+
+---
+
+
 ## [2026-05-28 19:56 UTC] — Fix
 
 keep notification settings on canvas (#121)
