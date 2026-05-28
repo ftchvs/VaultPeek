@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 00:16 UTC] — Fix
+
+validate Plaid link callback state (#71)
+
+`a85d107`
+
+---
+
+
 ## [2026-05-27 23:53 UTC] — Fix
 
 enforce local API bearer auth (#70)
