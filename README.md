@@ -436,16 +436,30 @@ when the local app created the Hosted Link session.
 
 ## Roadmap
 
+The detailed 1.0 plan lives in [docs/v1.0-roadmap.md](docs/v1.0-roadmap.md).
+It maps the remaining path from v0.5 readiness work to a stable public release:
+product flows, design/frontend polish, local system architecture, security and
+privacy checks, distribution, docs, QA, and open-source readiness.
+
+Near-term release priorities:
+
+- [ ] Merge v0.5 readiness, recovery, screenshot, and metadata work
+- [ ] Complete first-run demo/sandbox/production setup QA
+- [ ] Add architecture, privacy, troubleshooting, and changelog docs
+- [ ] Finish security and local-data audit for 1.0
+- [ ] Decide 1.0 packaging shape: formula-only vs notarized app bundle
+- [ ] Verify Homebrew install path and release metadata from clean `main`
+
+Post-1.0 candidates:
+
 - [ ] Budget alerts per category
 - [ ] Multi-currency support
 - [ ] Investment account tracking (Plaid Investments)
 - [ ] CSV/JSON export for tax/accounting
 - [ ] Webhook support for real-time updates
-- [x] macOS notifications for large transactions
 - [ ] Homebrew cask distribution
 - [ ] Dark/light theme customization
-- [ ] [Teller](https://teller.io/) as alternative provider (free tier)
-- [x] Recurring transaction detection
+- [ ] [Teller](https://teller.io/) as alternative provider
 
 ## Inspiration
 

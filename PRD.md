@@ -129,6 +129,25 @@ The focus is readiness, recovery, and explicit local-data boundaries.
 | 5.7 | Current screenshots | **Given** the README screenshots are used for public review, **When** screenshots are regenerated, **Then** they show the current design system and include dashboard, onboarding, status, and settings surfaces |
 | 5.8 | Release metadata | **Given** v0.5 is ready to tag, **When** release metadata is prepared, **Then** `version.env`, `Info.plist`, runtime constants, formula tag, tests, changelog, and release docs agree on `0.5.0` |
 
+### v1.0 (planned)
+
+PlaidBar 1.0 is the first stable public release target. It should be installable,
+understandable, recoverable, and credible as an open-source local finance
+utility without maintainer hand-holding.
+
+See [docs/v1.0-roadmap.md](docs/v1.0-roadmap.md) for the detailed SDLC plan,
+product requirements, design/frontend improvements, system architecture,
+security/privacy checklist, open-source readiness criteria, and release blockers.
+
+| # | Requirement | Acceptance Criteria |
+|---|-------------|-------------------|
+| 1.0.1 | New-user success path | **Given** a clean machine, **When** the user follows README Quick Start, **Then** demo mode renders useful dashboard data without Plaid credentials and sandbox setup exposes all readiness blockers before Plaid Link |
+| 1.0.2 | Recovery completeness | **Given** common failure states occur, **When** the user sees server offline, wrong mode, missing credentials, expired item, empty history, denied notifications, or stale sync, **Then** each state has a clear explanation and next action |
+| 1.0.3 | Native design polish | **Given** any primary app surface is rendered, **When** it is inspected visually and with VoiceOver, **Then** layout is stable, controls are labeled, status is not color-only, and screenshots match the current design system |
+| 1.0.4 | Local-first security | **Given** the release candidate is audited, **When** storage, logging, endpoints, screenshots, and docs are checked, **Then** Plaid secrets/tokens and real financial data are not exposed and sandbox/production stores remain separated |
+| 1.0.5 | Open-source readiness | **Given** a contributor lands on GitHub, **When** they read the repo docs, **Then** they can understand the architecture, build/run/test the app, report issues securely, contribute safely, and verify release status |
+| 1.0.6 | Release distribution | **Given** v1.0.0 is tagged, **When** install instructions are followed, **Then** source/Homebrew installation works and release metadata, changelog, formula, screenshots, and support policy all match the tag |
+
 ### Future (not committed)
 
 - [ ] Budget alerts per category
