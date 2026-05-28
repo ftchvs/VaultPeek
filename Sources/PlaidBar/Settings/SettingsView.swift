@@ -244,6 +244,7 @@ private func settingsRow<Content: View>(
 
 struct AccountSettingsView: View {
     @Environment(AppState.self) private var appState
+    @State private var isShowingAccountSetup = false
 
     var body: some View {
         VStack(alignment: .leading) {
@@ -254,7 +255,7 @@ struct AccountSettingsView: View {
                     Text(emptyMessage)
                 } actions: {
                     Button {
-                        Task { await appState.addAccount() }
+                        handleAddAccount()
                     } label: {
                         Label("Add Account", systemImage: "plus.circle")
                     }
@@ -331,11 +332,31 @@ struct AccountSettingsView: View {
             HStack {
                 Spacer()
                 Button("Add Account") {
-                    Task { await appState.addAccount() }
+                    handleAddAccount()
                 }
                 .buttonStyle(.borderedProminent)
             }
             .padding()
+        }
+        .sheet(isPresented: $isShowingAccountSetup) {
+            SetupView()
+                .environment(appState)
+        }
+        .onChange(of: appState.isSetupComplete) { _, isComplete in
+            if isComplete {
+                isShowingAccountSetup = false
+            }
+        }
+    }
+
+    private func handleAddAccount() {
+        if appState.isDemoMode {
+            Task {
+                await appState.addAccount()
+                isShowingAccountSetup = true
+            }
+        } else {
+            Task { await appState.addAccount() }
         }
     }
 
