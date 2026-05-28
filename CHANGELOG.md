@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 14:44 UTC] — Update
+
+Add Homebrew release packaging (#103)
+
+`02b1775`
+
+---
+
+
 ## [2026-05-28 14:29 UTC] — Update
 
 Write transaction cache privately (#102)
