@@ -93,6 +93,7 @@ public enum LocalDataStore {
         }
 
         try ensurePrivateDirectory(directory, fileManager: fileManager)
+        try ensurePrivateAuthTokenPermissions(in: directory, fileManager: fileManager)
 
         if resetKeychainTokens {
             try (keychainTokenReset ?? resetPlaidAccessTokenKeychainItems)()
@@ -212,6 +213,18 @@ public enum LocalDataStore {
         _ url: URL,
         fileManager: FileManager
     ) throws {
+        try fileManager.setAttributes(
+            [.posixPermissions: cacheFilePermissions],
+            ofItemAtPath: url.path
+        )
+    }
+
+    private static func ensurePrivateAuthTokenPermissions(
+        in directory: URL,
+        fileManager: FileManager
+    ) throws {
+        let url = authTokenURL(in: directory)
+        guard fileManager.fileExists(atPath: url.path) else { return }
         try fileManager.setAttributes(
             [.posixPermissions: cacheFilePermissions],
             ofItemAtPath: url.path

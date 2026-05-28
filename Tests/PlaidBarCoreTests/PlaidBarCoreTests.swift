@@ -931,6 +931,7 @@ struct PlaidBarCoreTests {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try "db".write(to: database, atomically: true, encoding: .utf8)
         try "token".write(to: authToken, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: authToken.path)
         defer { try? FileManager.default.removeItem(at: root) }
 
         var didResetKeychainTokens = false
@@ -947,6 +948,7 @@ struct PlaidBarCoreTests {
         #expect(isDirectory.boolValue)
         #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path) == ["auth-token"])
         #expect(try String(contentsOf: authToken, encoding: .utf8) == "token")
+        #expect(try posixPermissions(at: authToken) == 0o600)
     }
 
     @Test("Local data reset keeps data directory private")
