@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 03:02 UTC] — Update
+
+Clear notification dedupe state on reset
+
+`7e7ce87`
+
+---
+
+
 ## [2026-05-28 02:55 UTC] — Update
 
 Preserve transaction cache after item removal
