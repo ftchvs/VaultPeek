@@ -74,7 +74,7 @@ actor ServerClient {
         }
         var request = try authorizedRequest(url: url)
         request.httpMethod = "DELETE"
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await data(for: request)
         try Self.validateHTTPResponse(response, data: data)
     }
 
@@ -82,7 +82,7 @@ actor ServerClient {
 
     private func get<T: Decodable & Sendable>(_ url: URL) async throws -> T {
         let request = try authorizedRequest(url: url)
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await data(for: request)
         try Self.validateHTTPResponse(response, data: data)
         return try decoder.decode(T.self, from: data)
     }
@@ -91,9 +91,31 @@ actor ServerClient {
         var request = try authorizedRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await data(for: request)
         try Self.validateHTTPResponse(response, data: data)
         return try decoder.decode(T.self, from: data)
+    }
+
+    private func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+        do {
+            return try await session.data(for: request)
+        } catch let error as URLError where Self.isLocalServerTransportFailure(error) {
+            throw ServerClientError.serverNotRunning
+        } catch {
+            throw error
+        }
+    }
+
+    private static func isLocalServerTransportFailure(_ error: URLError) -> Bool {
+        switch error.code {
+        case .cannotConnectToHost,
+             .networkConnectionLost,
+             .notConnectedToInternet,
+             .timedOut:
+            true
+        default:
+            false
+        }
     }
 
     private static func validateHTTPResponse(
