@@ -1,12 +1,15 @@
 import FluentKit
 import HummingbirdFluent
 import Foundation
+import Logging
 
 actor TokenStore {
     private let fluent: Fluent
+    private let logger: Logger
 
-    init(fluent: Fluent) {
+    init(fluent: Fluent, logger: Logger = Logger(label: "com.ftchvs.plaidbar-server.token-store")) {
         self.fluent = fluent
+        self.logger = logger
     }
 
     // MARK: - Items
@@ -44,7 +47,13 @@ actor TokenStore {
             try await cursor.delete(on: fluent.db())
         }
         try await item.delete(on: fluent.db())
-        _ = try? PlaidTokenVault.delete(storedToken: item.accessToken, fallbackItemId: id)
+        do {
+            try PlaidTokenVault.delete(storedToken: item.accessToken, fallbackItemId: id)
+        } catch {
+            logger.warning(
+                "Failed to delete Plaid access token from Keychain for item \(id): \(String(describing: error))"
+            )
+        }
     }
 
     func pruneOrphanedKeychainTokens() async throws {

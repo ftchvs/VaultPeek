@@ -43,8 +43,14 @@ struct PlaidBarServer: AsyncParsableCommand {
         try ServerConfig.enforcePrivateSQLiteStorePermissions(at: serverConfig.databasePath)
 
         let plaidClient = PlaidClient(config: serverConfig)
-        let tokenStore = TokenStore(fluent: fluent)
-        _ = try? await tokenStore.pruneOrphanedKeychainTokens()
+        let tokenStore = TokenStore(fluent: fluent, logger: logger)
+        do {
+            try await tokenStore.pruneOrphanedKeychainTokens()
+        } catch {
+            logger.warning(
+                "Failed to prune orphaned Plaid Keychain tokens: \(String(describing: error))"
+            )
+        }
         let pendingLinkSessions = PendingLinkSessionStore(
             storageURL: URL(fileURLWithPath: serverConfig.pendingLinkSessionsPath)
         )
