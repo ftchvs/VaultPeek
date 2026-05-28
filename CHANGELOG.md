@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 15:22 UTC] — Update
+
+Align server command release metadata (#106)
+
+`7b7ec79`
+
+---
+
+
 ## [2026-05-28 15:10 UTC] — Update
 
 Add packaging checks to CI (#105)
