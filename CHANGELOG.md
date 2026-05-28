@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 02:39 UTC] — Update
+
+Harden local cache file permissions
+
+`ce000b5`
+
+---
+
+
 ## [2026-05-28 02:34 UTC] — Update
 
 Escape OAuth callback error messages
