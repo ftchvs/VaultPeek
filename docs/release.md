@@ -1,11 +1,14 @@
 # Release Runbook
 
-PlaidBar's first public release should ship as a tagged GitHub release and a
-Homebrew tap formula.
+PlaidBar 1.0 ships as a source-built Homebrew formula first. A signed,
+notarized `.app` bundle, cask, Sparkle appcast, and DMG/ZIP archive are deferred
+until the signing and clean-machine Gatekeeper path is real.
 
-## Release Shape
+## Current Candidate
 
-- GitHub release tag: `v0.5.0`
+- Candidate version: `v0.9.0`
+- 1.0 distribution shape: formula-only SwiftPM executable install
+- GitHub release: tagged from clean `main`
 - Homebrew tap command:
 
 ```bash
@@ -13,7 +16,7 @@ brew tap ftchvs/plaidbar https://github.com/ftchvs/PlaidBar
 brew install plaidbar
 ```
 
-- Installed commands:
+Installed commands:
 
 ```bash
 plaidbar --demo
@@ -21,40 +24,67 @@ plaidbar-server --sandbox
 plaidbar-run --sandbox
 ```
 
-## Checklist
+## Release-Prep PR Checklist
 
-1. Confirm `version.env`, `Sources/PlaidBar/Resources/Info.plist`, and
-   `Formula/plaidbar.rb` all point to the same version.
-2. Run local gates:
+1. Confirm metadata alignment:
 
 ```bash
-swift build -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
-swift build -c release -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
-PLAID_CLIENT_ID=ci_smoke_client PLAID_SECRET=ci_smoke_secret ./Scripts/smoke-sandbox.sh
-bash -n Scripts/*.sh Scripts/plaidbar-run
-ruby -c Formula/plaidbar.rb
+cat version.env
+/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Sources/PlaidBar/Resources/Info.plist
+/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' Sources/PlaidBar/Resources/Info.plist
+sed -n 's/.*appVersion: String = "\([^"]*\)".*/\1/p' Sources/PlaidBarCore/Utilities/Constants.swift
+rg 'tag: "v' Formula/plaidbar.rb
 ```
 
-3. Merge the release-prep PR to `main`.
-4. From clean `main`, publish the tag and GitHub release:
+2. Commit the release-prep changes, then run local release gates from the clean
+   release-prep branch:
 
 ```bash
+./Scripts/release.sh --allow-current-branch
+PLAID_CLIENT_ID=ci_smoke_client PLAID_SECRET=ci_smoke_secret ./Scripts/smoke-sandbox.sh
+./Scripts/screenshots.sh
+```
+
+3. Open and merge the release-prep PR only after GitHub CI passes.
+
+## Publish Checklist
+
+From clean `main` after the release-prep PR is merged and CI is green:
+
+```bash
+git pull --ff-only origin main
 ./Scripts/release.sh --publish
 ```
 
-5. Verify Homebrew install from the repository tap:
+Then verify the published install path:
 
 ```bash
 brew tap ftchvs/plaidbar https://github.com/ftchvs/PlaidBar
+brew uninstall plaidbar || true
 brew install --build-from-source plaidbar
 plaidbar-server --help
+plaidbar-server --version
 plaidbar-run --help
 ```
 
-## Notes
+## Formula-Only Scope
 
-The initial formula builds from source because PlaidBar is currently a SwiftPM
-menu bar executable plus a local server executable, not a signed and notarized
-`.app` bundle. A future cask should ship a notarized app archive once the app
-bundle, code signing, notarization, Sparkle appcast, and DMG/ZIP packaging are
-ready.
+The formula installs the SwiftPM-built menu bar executable, local companion
+server, and launcher script:
+
+- `plaidbar`
+- `plaidbar-server`
+- `plaidbar-run`
+
+The formula path is acceptable for 1.0 because PlaidBar is local-first,
+open-source, and still targeted at technical early users who can run a
+source-built macOS utility.
+
+Do not claim notarized app distribution until all of these are complete:
+
+- Developer ID signing configured
+- app archive or DMG/ZIP packaging decided
+- notarization and ticket stapling automated
+- Gatekeeper verified on a clean machine
+- Sparkle appcast configured, signed, hosted, and tested
+- Homebrew cask tested separately from the formula

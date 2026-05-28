@@ -8,20 +8,27 @@ cd "$PROJECT_DIR"
 
 usage() {
     cat <<'EOF'
-Usage: ./Scripts/release.sh [--publish]
+Usage: ./Scripts/release.sh [--publish] [--allow-current-branch]
 
 Preflights the current PlaidBar release. With --publish, creates and pushes the
 version tag, then creates a GitHub release for ftchvs/PlaidBar.
 
 This script expects to run from a clean main branch after CI has passed.
+Use --allow-current-branch only for release-prep PR validation; publishing still
+requires clean main.
 EOF
 }
 
 PUBLISH=false
+ALLOW_CURRENT_BRANCH=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --publish)
             PUBLISH=true
+            shift
+            ;;
+        --allow-current-branch)
+            ALLOW_CURRENT_BRANCH=true
             shift
             ;;
         -h|--help)
@@ -52,8 +59,14 @@ fi
 TAG="v$VERSION"
 BRANCH="$(git branch --show-current)"
 
-if [[ "$BRANCH" != "main" ]]; then
+if [[ "$PUBLISH" == "true" && "$BRANCH" != "main" ]]; then
+    echo "Publishing must be run from main, currently on $BRANCH" >&2
+    exit 1
+fi
+
+if [[ "$ALLOW_CURRENT_BRANCH" != "true" && "$BRANCH" != "main" ]]; then
     echo "Release must be run from main, currently on $BRANCH" >&2
+    echo "For release-prep PR validation, rerun with --allow-current-branch." >&2
     exit 1
 fi
 

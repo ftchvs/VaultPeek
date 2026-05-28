@@ -39,7 +39,8 @@ Personal finance data lives behind bank website logins. The closest thing to a m
 - **Keyboard Shortcuts** — Cmd+R to refresh and Cmd+N to add an account
 - **Settings Persistence** — Preferences saved across launches
 - **Launch at Login** — Optional auto-start via macOS Login Items
-- **Auto-Updates** — Sparkle integration for seamless updates
+- **Update Check Surface** — About tab includes Sparkle-backed update plumbing;
+  signed appcast distribution is still planned
 - **Sandbox Mode** — Test the real Plaid sandbox flow before using production credentials
 - **Demo Mode** — Render screenshot/demo data without hitting Plaid
 - **Private** — Everything stored locally on your Mac, period
@@ -288,7 +289,7 @@ PlaidBar uses a **two-process architecture** — a SwiftUI menu bar app talks to
 | Local server | [Hummingbird 2](https://github.com/hummingbird-project/hummingbird) | Lightweight, SwiftNIO-based, same language as app |
 | Database | SQLite via [Fluent ORM](https://github.com/vapor/fluent-kit) | Migrations, queries, Hummingbird-native |
 | Plaid access-token vault | macOS Keychain + SQLite references | Keep token bytes out of the SwiftUI app and out of normal SQLite rows at runtime |
-| Auto-updates | [Sparkle 2](https://github.com/sparkle-project/Sparkle) | Standard for open-source macOS apps |
+| Update plumbing | [Sparkle 2](https://github.com/sparkle-project/Sparkle) | Standard updater framework; appcast distribution remains planned |
 | Launch at login | SMAppService | Native macOS Login Items API |
 
 ### Project Structure
@@ -353,7 +354,7 @@ Rate limits are well within Plaid's allowances for personal use (~2-4 requests/h
 | Network exposure | Server binds to `127.0.0.1` only |
 | App ↔ Server auth | Shared token generated at first run |
 | Data at rest | macOS encrypted APFS volume |
-| Distribution | Hardened runtime + notarized DMG (planned) |
+| Distribution | Formula-only source build for 1.0; notarized app/cask planned after signing is real |
 
 **PlaidBar has no cloud backend, no analytics, no telemetry, and no tracking.** Your financial data never leaves your machine.
 
@@ -454,17 +455,18 @@ when the local app created the Hosted Link session.
 ## Roadmap
 
 The detailed 1.0 plan lives in [docs/v1.0-roadmap.md](docs/v1.0-roadmap.md).
-It maps the remaining path from v0.5 readiness work to a stable public release:
+It maps the remaining path from the v0.9 formula-only candidate to a stable
+public release:
 product flows, design/frontend polish, local system architecture, security and
 privacy checks, distribution, docs, QA, and open-source readiness.
 
 Near-term release priorities:
 
-- [ ] Merge v0.5 readiness, recovery, screenshot, and metadata work
-- [ ] Complete first-run demo/sandbox/production setup QA
-- [ ] Add architecture, privacy, troubleshooting, and changelog docs
-- [ ] Finish security and local-data audit for 1.0
-- [ ] Decide 1.0 packaging shape: formula-only vs notarized app bundle
+- [x] Merge readiness, recovery, screenshot, and metadata work
+- [x] Complete first-run demo/sandbox/production setup QA
+- [x] Add architecture, privacy, troubleshooting, and changelog docs
+- [x] Finish security and local-data audit for 1.0
+- [x] Decide 1.0 packaging shape: formula-only first, notarized app bundle later
 - [ ] Verify Homebrew install path and release metadata from clean `main`
 
 Post-1.0 candidates:
