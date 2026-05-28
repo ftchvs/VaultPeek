@@ -37,6 +37,66 @@ struct PlaidBarServerTests {
         #expect(decoded.syncReady)
     }
 
+    @Test func serverConfigLoadsExplicitConfigFile() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-config-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let dataDirectory = directory.appendingPathComponent("data", isDirectory: true)
+        let configURL = directory.appendingPathComponent("plaidbar.conf")
+        let configContents = [
+            "# PlaidBar server config",
+            "PLAID_CLIENT_ID=config-client",
+            "export PLAID_SECRET=\"config-secret\"",
+            "PLAID_ENV=sandbox",
+            "PLAIDBAR_SERVER_PORT=9494",
+            "PLAIDBAR_DATA_DIR='\(dataDirectory.path)'",
+        ].joined(separator: "\r\n") + "\r\n"
+        try configContents.write(to: configURL, atomically: true, encoding: .utf8)
+
+        let config = try ServerConfig.load(from: configURL.path)
+
+        #expect(config.plaidClientId == "config-client")
+        #expect(config.plaidSecret == "config-secret")
+        #expect(config.plaidEnvironment == .sandbox)
+        #expect(config.port == 9494)
+        #expect(config.databasePath.hasSuffix("/plaidbar-sandbox.sqlite"))
+        #expect(config.databasePath.hasPrefix(dataDirectory.path))
+        #expect(config.redirectUri == "http://localhost:9494/oauth/callback")
+        #expect(FileManager.default.fileExists(
+            atPath: dataDirectory.appendingPathComponent(LocalDataStore.authTokenFilename).path
+        ))
+    }
+
+    @Test func serverConfigCliOverridesConfigFile() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-config-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let dataDirectory = directory.appendingPathComponent("data", isDirectory: true)
+        let configURL = directory.appendingPathComponent("plaidbar.conf")
+        try """
+        PLAID_CLIENT_ID=config-client
+        PLAID_SECRET=config-secret
+        PLAID_ENV=production
+        PLAIDBAR_SERVER_PORT=9494
+        PLAIDBAR_DATA_DIR=\(dataDirectory.path)
+        """.write(to: configURL, atomically: true, encoding: .utf8)
+
+        let config = try ServerConfig.load(
+            from: configURL.path,
+            portOverride: 9595,
+            sandboxOverride: true
+        )
+
+        #expect(config.plaidEnvironment == .sandbox)
+        #expect(config.port == 9595)
+        #expect(config.redirectUri == "http://localhost:9595/oauth/callback")
+        #expect(config.databasePath.hasSuffix("/plaidbar-sandbox.sqlite"))
+    }
+
     @Test func oauthCallbackErrorPageEscapesDynamicMessage() {
         let html = OAuthCallbackRoute.errorPage("<script>alert('x')</script> & retry \"soon\"")
 

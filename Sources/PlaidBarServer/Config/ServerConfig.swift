@@ -26,7 +26,8 @@ struct ServerConfig: Sendable {
         portOverride: Int? = nil,
         sandboxOverride: Bool? = nil
     ) throws -> ServerConfig {
-        let dataDir = dataDirectory()
+        let environmentValues = try resolvedEnvironment(from: configPath)
+        let dataDir = dataDirectory(environment: environmentValues)
         try FileManager.default.createDirectory(
             atPath: dataDir,
             withIntermediateDirectories: true
@@ -36,11 +37,11 @@ struct ServerConfig: Sendable {
             ofItemAtPath: dataDir
         )
 
-        let environment: PlaidEnvironment = (sandboxOverride == true)
-            ? .sandbox
-            : .production
+        let environment = try plaidEnvironment(
+            from: environmentValues,
+            sandboxOverride: sandboxOverride
+        )
 
-        let environmentValues = ProcessInfo.processInfo.environment
         guard let clientId = environmentValues["PLAID_CLIENT_ID"]?.trimmedNonEmpty else {
             throw ServerConfigError.missingEnvironmentVariable("PLAID_CLIENT_ID")
         }
@@ -72,7 +73,7 @@ struct ServerConfig: Sendable {
             authToken = generated
         }
 
-        let resolvedPort = portOverride ?? PlaidBarConstants.serverPort
+        let resolvedPort = portOverride ?? PlaidBarConstants.serverPort(environment: environmentValues)
 
         return ServerConfig(
             port: resolvedPort,
@@ -90,7 +91,11 @@ struct ServerConfig: Sendable {
     }
 
     static func dataDirectory() -> String {
-        LocalDataStore.storageDirectoryURL().path
+        dataDirectory(environment: ProcessInfo.processInfo.environment)
+    }
+
+    static func dataDirectory(environment: [String: String]) -> String {
+        LocalDataStore.storageDirectoryURL(environment: environment).path
     }
 
     static func databaseFilename(for environment: PlaidEnvironment) -> String {
@@ -168,6 +173,79 @@ struct ServerConfig: Sendable {
             )
         }
         return environment
+    }
+
+    private static func plaidEnvironment(
+        from environmentValues: [String: String],
+        sandboxOverride: Bool?
+    ) throws -> PlaidEnvironment {
+        if let sandboxOverride {
+            return sandboxOverride ? .sandbox : .production
+        }
+
+        guard let value = environmentValues["PLAID_ENV"]?.trimmedNonEmpty else {
+            return .production
+        }
+        guard let environment = PlaidEnvironment(rawValue: value) else {
+            throw ServerConfigError.invalidEnvironmentVariable("PLAID_ENV", value)
+        }
+        return environment
+    }
+
+    private static func resolvedEnvironment(from configPath: String?) throws -> [String: String] {
+        var environmentValues = ProcessInfo.processInfo.environment
+        guard let configPath = configPath?.trimmedNonEmpty else {
+            return environmentValues
+        }
+
+        let configValues = try loadConfigFile(at: configPath)
+        for (key, value) in configValues {
+            environmentValues[key] = value
+        }
+        return environmentValues
+    }
+
+    private static func loadConfigFile(at path: String) throws -> [String: String] {
+        let expandedPath = NSString(string: path).expandingTildeInPath
+        let contents = try String(
+            contentsOfFile: expandedPath,
+            encoding: .utf8
+        )
+        var values: [String: String] = [:]
+
+        for (offset, rawLine) in contents.components(separatedBy: .newlines).enumerated() {
+            var line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !line.isEmpty, !line.hasPrefix("#") else { continue }
+
+            if line.hasPrefix("export ") {
+                line.removeFirst("export ".count)
+                line = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+
+            guard let separator = line.firstIndex(of: "=") else {
+                throw ServerConfigError.invalidConfigLine(path: expandedPath, line: offset + 1)
+            }
+
+            let key = String(line[..<separator]).trimmingCharacters(in: .whitespacesAndNewlines)
+            let rawValue = String(line[line.index(after: separator)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !key.isEmpty else {
+                throw ServerConfigError.invalidConfigLine(path: expandedPath, line: offset + 1)
+            }
+            values[key] = unquote(rawValue)
+        }
+
+        return values
+    }
+
+    private static func unquote(_ value: String) -> String {
+        guard value.count >= 2,
+              let first = value.first,
+              let last = value.last,
+              (first == "\"" && last == "\"") || (first == "'" && last == "'")
+        else {
+            return value
+        }
+        return String(value.dropFirst().dropLast())
     }
 
     private static func shouldMigrateLegacyDatabase(
@@ -533,6 +611,7 @@ struct ServerConfig: Sendable {
 enum ServerConfigError: LocalizedError {
     case missingEnvironmentVariable(String)
     case invalidEnvironmentVariable(String, String)
+    case invalidConfigLine(path: String, line: Int)
 
     var errorDescription: String? {
         switch self {
@@ -540,6 +619,8 @@ enum ServerConfigError: LocalizedError {
             "Missing required environment variable: \(name)"
         case .invalidEnvironmentVariable(let name, let value):
             "Invalid value for \(name): \(value)"
+        case .invalidConfigLine(let path, let line):
+            "Invalid config line \(line) in \(path)"
         }
     }
 }

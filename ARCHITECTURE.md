@@ -214,9 +214,19 @@ No data races by construction.
 
 ### Server Config Resolution
 
-1. Environment variables: `PLAID_CLIENT_ID`, `PLAID_SECRET`
-2. CLI flags: `--port`, `--sandbox`, `--config`
-3. Defaults: port 8484 unless `PLAIDBAR_SERVER_PORT` / `--port` is set, sandbox mode if `--sandbox` flag
+1. Environment variables: `PLAID_CLIENT_ID`, `PLAID_SECRET`, `PLAID_ENV`, `PLAIDBAR_SERVER_PORT`, `PLAIDBAR_DATA_DIR`
+2. Optional config file from `--config`, using the same `KEY=value` names as the environment
+3. CLI overrides: `--port`, `--sandbox`
+4. Defaults: production mode and port 8484 unless overridden
+
+When a config file is provided, its values override the inherited process
+environment. Explicit CLI flags still win so one-off launches can safely
+override a checked local config.
+
+The menu bar app does not read the server config file directly. If server config
+changes `PLAIDBAR_SERVER_PORT` or `PLAIDBAR_DATA_DIR`, the same values must be in
+the app process environment so `ServerClient` reaches the correct server and
+auth-token path.
 
 ### Data Storage
 
@@ -239,13 +249,13 @@ data.
 
 ## Testing Strategy
 
-61 tests across 3 suites, all using Swift Testing framework:
+Unit tests span 3 suites, all using Swift Testing framework:
 
-| Suite | Tests | Coverage |
-|-------|-------|----------|
-| PlaidBarCoreTests | 36 | DTOs, formatters, constants, Codable roundtrips |
-| PlaidBarServerTests | 5 | Plaid response decoding, config, type conversion |
-| PlaidBarTests | 20 | Business logic: net balance, spending aggregation, filtering |
+| Suite | Coverage |
+|-------|----------|
+| PlaidBarCoreTests | DTOs, formatters, constants, Codable roundtrips |
+| PlaidBarServerTests | Plaid response decoding, config, type conversion |
+| PlaidBarTests | Business logic: net balance, spending aggregation, filtering |
 
 Server integration tests (starting Hummingbird, making HTTP calls) are planned for v0.2.
 

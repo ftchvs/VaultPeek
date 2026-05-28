@@ -9,7 +9,7 @@ import PlaidBarCore
 @main
 struct PlaidBarServer: AsyncParsableCommand {
     @Option(name: .long, help: "Server port")
-    var port: Int = PlaidBarConstants.serverPort
+    var port: Int?
 
     @Flag(name: .long, help: "Use Plaid sandbox environment")
     var sandbox: Bool = false
@@ -23,7 +23,7 @@ struct PlaidBarServer: AsyncParsableCommand {
         let serverConfig = try ServerConfig.load(
             from: config,
             portOverride: port,
-            sandboxOverride: sandbox
+            sandboxOverride: sandbox ? true : nil
         )
 
         // Set up Fluent with SQLite

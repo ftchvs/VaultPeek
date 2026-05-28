@@ -98,6 +98,29 @@ export PLAID_SECRET=your_secret
 
 Get credentials free at [dashboard.plaid.com](https://dashboard.plaid.com). Sandbox credentials can be used immediately; production requires Plaid approval.
 
+You can also keep server settings in a local key-value config file and pass it
+to the standalone server:
+
+```bash
+mkdir -p ~/.plaidbar
+cat > ~/.plaidbar/server.conf <<'EOF'
+PLAID_CLIENT_ID=your_client_id
+PLAID_SECRET=your_secret
+PLAID_ENV=sandbox
+PLAIDBAR_DATA_DIR=~/.plaidbar
+EOF
+
+swift run PlaidBarServer --config ~/.plaidbar/server.conf
+```
+
+The config file uses the same keys as the environment. Values in the config
+file override the process environment; explicit CLI flags like `--port` and
+`--sandbox` override both.
+
+If the config file sets `PLAIDBAR_SERVER_PORT` or `PLAIDBAR_DATA_DIR` to a
+non-default value, export the same values before launching PlaidBar so the app
+connects to the right port and reads the same local auth token.
+
 ## Data Modes
 
 | Mode | Command | Plaid network calls | Data source | Intended use |
@@ -254,11 +277,14 @@ swift build
 # Build release
 swift build -c release
 
-# Run tests (61 tests)
+# Run tests
 swift test
 
 # Run server standalone
 swift run PlaidBarServer --sandbox
+
+# Run server with a local config file
+swift run PlaidBarServer --config ~/.plaidbar/server.conf
 
 # Run server/app on a custom localhost port
 PLAIDBAR_SERVER_PORT=9494 ./Scripts/run.sh --sandbox
