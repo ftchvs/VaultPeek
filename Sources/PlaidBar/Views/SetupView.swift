@@ -100,6 +100,8 @@ struct SetupView: View {
                     setupMode = .production
                 }
             }
+
+            SetupSupportLinks()
         }
     }
 
@@ -172,6 +174,8 @@ struct SetupView: View {
                 setupMode = .choose
             }
             .buttonStyle(.borderless)
+
+            SetupSupportLinks()
         }
         .task {
             await appState.checkServerConnection()
@@ -240,6 +244,48 @@ struct SetupView: View {
         }
 
         return "Ready to open Plaid Link in your browser."
+    }
+}
+
+private struct SetupSupportLinks: View {
+    var body: some View {
+        HStack(spacing: Spacing.md) {
+            supportLink(
+                "Troubleshooting",
+                systemImage: "wrench.and.screwdriver",
+                url: "https://github.com/ftchvs/PlaidBar/blob/main/docs/troubleshooting.md"
+            )
+
+            supportLink(
+                "Privacy",
+                systemImage: "lock.shield",
+                url: "https://github.com/ftchvs/PlaidBar/blob/main/docs/privacy.md"
+            )
+
+            supportLink(
+                "Security",
+                systemImage: "exclamationmark.shield",
+                url: "https://github.com/ftchvs/PlaidBar/blob/main/SECURITY.md"
+            )
+        }
+        .font(.caption)
+        .frame(maxWidth: .infinity, alignment: .center)
+    }
+
+    @ViewBuilder
+    private func supportLink(
+        _ title: String,
+        systemImage: String,
+        url: String
+    ) -> some View {
+        if let destination = URL(string: url) {
+            Link(destination: destination) {
+                Label(title, systemImage: systemImage)
+                    .labelStyle(.titleAndIcon)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+        }
     }
 }
 
