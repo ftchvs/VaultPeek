@@ -46,6 +46,19 @@ Personal finance data lives behind bank website logins. The closest thing to a m
 
 ## Screenshots
 
+### Setup Preflight
+
+<p align="center">
+  <img src="Assets/setup-sandbox-preflight.png" width="420" alt="PlaidBar sandbox setup preflight showing server, mode, credential, storage, and linked item readiness before Plaid Link opens"/>
+</p>
+
+Sandbox and production setup now show readiness before Plaid Link opens. The app
+checks the local server, expected Plaid environment, credential availability,
+storage path, and linked item count so setup failures are visible before the
+browser handoff.
+
+### Dashboard
+
 <p align="center">
   <img src="Assets/dashboard.png" width="420" alt="PlaidBar dashboard popover with net worth, sync status, 365-day spending activity, account rows, and drill-down controls"/>
 </p>
@@ -76,8 +89,21 @@ Generate fresh dashboard screenshots with demo data:
 ./Scripts/screenshots.sh
 ```
 
-The screenshot script launches PlaidBar in demo mode, captures each dashboard
-filter state, and requires macOS Screen Recording permission for Terminal.
+The screenshot script launches PlaidBar locally, captures the sandbox preflight
+screen, each dashboard filter state, and current settings surfaces. It requires
+macOS Screen Recording and Accessibility permission for Terminal.
+
+### Settings
+
+| Local Data | Accounts |
+|------------|----------|
+| <img src="Assets/settings-local-data.png" width="380" alt="Settings General tab showing local data storage path, reveal, copy, and reset controls"> | <img src="Assets/settings-accounts.png" width="380" alt="Settings Accounts tab showing linked institutions, item health, reconnect, remove, and add account controls"> |
+| Local storage is explicit: users can inspect the resolved path, reveal/copy it, and reset local PlaidBar data with confirmation copy. | Linked institutions are grouped with account counts, balances, item health, reconnect, and destructive removal gates. |
+
+| Notifications |
+|---------------|
+| <img src="Assets/settings-notifications.png" width="380" alt="Settings Notifications tab showing notification permission, transaction alert, threshold, and credit utilization controls"> |
+| Notification controls keep permission state, transaction thresholds, low-balance alerts, and credit-utilization warnings in one place. |
 
 ## Quick Start
 
@@ -370,6 +396,17 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for code style, PR process, and architect
 
 See [GOAL.md](GOAL.md) for the RepoBar/CodexBar-style product direction, design principles, and implementation priorities.
 
+Additional project docs:
+
+- [Architecture](docs/architecture.md)
+- [Privacy](docs/privacy.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [Screenshots](docs/screenshots.md)
+- [QA Matrix](docs/qa-matrix.md)
+- [1.0 Roadmap](docs/v1.0-roadmap.md)
+- [Release Notes Drafts](docs/release-notes.md)
+- [Changelog](CHANGELOG.md)
+
 ### Agentic Development Loop
 
 This repo includes a local slash-command style runbook for long-running
@@ -410,16 +447,30 @@ when the local app created the Hosted Link session.
 
 ## Roadmap
 
+The detailed 1.0 plan lives in [docs/v1.0-roadmap.md](docs/v1.0-roadmap.md).
+It maps the remaining path from v0.5 readiness work to a stable public release:
+product flows, design/frontend polish, local system architecture, security and
+privacy checks, distribution, docs, QA, and open-source readiness.
+
+Near-term release priorities:
+
+- [ ] Merge v0.5 readiness, recovery, screenshot, and metadata work
+- [ ] Complete first-run demo/sandbox/production setup QA
+- [ ] Add architecture, privacy, troubleshooting, and changelog docs
+- [ ] Finish security and local-data audit for 1.0
+- [ ] Decide 1.0 packaging shape: formula-only vs notarized app bundle
+- [ ] Verify Homebrew install path and release metadata from clean `main`
+
+Post-1.0 candidates:
+
 - [ ] Budget alerts per category
 - [ ] Multi-currency support
 - [ ] Investment account tracking (Plaid Investments)
 - [ ] CSV/JSON export for tax/accounting
 - [ ] Webhook support for real-time updates
-- [x] macOS notifications for large transactions
 - [ ] Homebrew cask distribution
 - [ ] Dark/light theme customization
-- [ ] [Teller](https://teller.io/) as alternative provider (free tier)
-- [x] Recurring transaction detection
+- [ ] [Teller](https://teller.io/) as alternative provider
 
 ## Inspiration
 

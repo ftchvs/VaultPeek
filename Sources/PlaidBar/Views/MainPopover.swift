@@ -1437,6 +1437,7 @@ private struct DashboardFooter: View {
             }
             .buttonStyle(.borderless)
             .help("Add Account")
+            .accessibilityLabel("Add Account")
             .keyboardShortcut("n", modifiers: .command)
 
             Spacer()
@@ -1452,6 +1453,7 @@ private struct DashboardFooter: View {
             }
             .buttonStyle(.borderless)
             .help("Refresh")
+            .accessibilityLabel("Refresh")
             .keyboardShortcut("r", modifiers: .command)
 
             Button {
@@ -1462,6 +1464,7 @@ private struct DashboardFooter: View {
             }
             .buttonStyle(.borderless)
             .help("Settings")
+            .accessibilityLabel("Settings")
         }
         .padding(.horizontal, 22)
         .padding(.vertical, 12)

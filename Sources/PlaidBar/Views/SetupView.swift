@@ -144,6 +144,14 @@ struct SetupView: View {
             .background(.quaternary.opacity(0.5))
             .clipShape(RoundedRectangle(cornerRadius: 8))
 
+            OnboardingPreflightPanel(environment: environment)
+                .environment(appState)
+
+            Text(preflightHint(for: environment))
+                .detailText()
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+
             Button {
                 setupMode = .connecting(environment)
                 Task {
@@ -157,12 +165,16 @@ struct SetupView: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
-            .disabled(appState.isLoading)
+            .disabled(appState.isLoading || !isPreflightReady(for: environment))
+            .opacity(isPreflightReady(for: environment) ? 1 : 0.45)
 
             Button("Back") {
                 setupMode = .choose
             }
             .buttonStyle(.borderless)
+        }
+        .task {
+            await appState.checkServerConnection()
         }
     }
 
@@ -202,6 +214,32 @@ struct SetupView: View {
     private func startDemoMode() {
         appState.startDemoMode()
         onComplete?()
+    }
+
+    private func isPreflightReady(for environment: PlaidEnvironment) -> Bool {
+        appState.serverConnected &&
+            appState.serverEnvironment == environment &&
+            appState.serverCredentialsConfigured == true
+    }
+
+    private func preflightHint(for environment: PlaidEnvironment) -> String {
+        guard appState.serverConnected else {
+            return environment == .sandbox
+                ? "Start PlaidBarServer with --sandbox, then Check Again."
+                : "Start PlaidBarServer with production credentials, then Check Again."
+        }
+
+        guard appState.serverEnvironment == environment else {
+            return environment == .sandbox
+                ? "The running server is not in sandbox mode."
+                : "The running server is not in production mode."
+        }
+
+        guard appState.serverCredentialsConfigured == true else {
+            return "Add Plaid credentials to the local server environment before connecting."
+        }
+
+        return "Ready to open Plaid Link in your browser."
     }
 }
 
@@ -306,6 +344,130 @@ private struct StorageDisclosureRow: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+private struct OnboardingPreflightPanel: View {
+    @Environment(AppState.self) private var appState
+    let environment: PlaidEnvironment
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            HStack {
+                Text("PREFLIGHT")
+                    .sectionTitle()
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Button {
+                    Task { await appState.checkServerConnection() }
+                } label: {
+                    Label("Check Again", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.borderless)
+                .controlSize(.small)
+            }
+
+            VStack(spacing: Spacing.xs) {
+                preflightRow(
+                    title: "Server",
+                    value: appState.serverConnected ? "Connected" : "Offline",
+                    icon: "server.rack",
+                    state: appState.serverConnected ? .ready : .blocked
+                )
+
+                preflightRow(
+                    title: "Mode",
+                    value: modeValue,
+                    icon: environment == .production ? "lock.shield" : "testtube.2",
+                    state: modeState
+                )
+
+                preflightRow(
+                    title: "Credentials",
+                    value: appState.serverCredentialsText,
+                    icon: "key",
+                    state: credentialsState
+                )
+
+                preflightRow(
+                    title: "Storage",
+                    value: appState.serverStorageDisplayText,
+                    icon: "internaldrive",
+                    state: appState.serverConnected ? .ready : .unknown
+                )
+
+                preflightRow(
+                    title: "Linked items",
+                    value: "\(appState.statusItemCount)",
+                    icon: "link",
+                    state: .informational
+                )
+            }
+        }
+        .padding(Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var modeValue: String {
+        guard appState.serverConnected else { return "Unknown" }
+        return appState.statusModeText
+    }
+
+    private var modeState: PreflightState {
+        guard appState.serverConnected else { return .unknown }
+        return appState.serverEnvironment == environment ? .ready : .blocked
+    }
+
+    private var credentialsState: PreflightState {
+        guard appState.serverConnected else { return .unknown }
+        return appState.serverCredentialsConfigured == true ? .ready : .blocked
+    }
+
+    private func preflightRow(
+        title: String,
+        value: String,
+        icon: String,
+        state: PreflightState
+    ) -> some View {
+        HStack(spacing: Spacing.sm) {
+            Image(systemName: icon)
+                .foregroundStyle(state.color)
+                .frame(width: 18)
+
+            Text(title)
+                .foregroundStyle(.secondary)
+
+            Spacer(minLength: Spacing.sm)
+
+            Text(value)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(state.color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .font(.caption)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private enum PreflightState {
+    case ready
+    case blocked
+    case unknown
+    case informational
+
+    var color: Color {
+        switch self {
+        case .ready:
+            SemanticColors.positive
+        case .blocked:
+            SemanticColors.negative
+        case .unknown, .informational:
+            .secondary
         }
     }
 }
