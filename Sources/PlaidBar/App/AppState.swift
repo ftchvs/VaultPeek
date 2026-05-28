@@ -472,6 +472,7 @@ final class AppState {
             isSetupComplete = !accounts.isEmpty
             itemStatuses = (try? await serverClient.getItems()) ?? itemStatuses
         } catch {
+            itemStatuses = (try? await serverClient.getItems()) ?? itemStatuses
             self.error = error.localizedDescription
         }
         isLoading = false
@@ -485,6 +486,7 @@ final class AppState {
             lastSyncDate = Date()
             recordBalanceSnapshot()
         } catch {
+            itemStatuses = (try? await serverClient.getItems()) ?? itemStatuses
             self.error = error.localizedDescription
         }
         isLoading = false
