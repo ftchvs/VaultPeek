@@ -401,6 +401,8 @@ Additional project docs:
 - [Architecture](docs/architecture.md)
 - [Privacy](docs/privacy.md)
 - [Troubleshooting](docs/troubleshooting.md)
+- [Screenshots](docs/screenshots.md)
+- [QA Matrix](docs/qa-matrix.md)
 - [1.0 Roadmap](docs/v1.0-roadmap.md)
 - [Release Notes Drafts](docs/release-notes.md)
 - [Changelog](CHANGELOG.md)
