@@ -21,9 +21,12 @@ struct AccountRoutes: Sendable {
     ) async throws -> Response {
         let items = try await tokenStore.getAllItems()
         var allAccounts: [AccountDTO] = []
+        var attemptedItemCount = 0
+        var successfulItemCount = 0
 
         for item in items {
             guard let itemId = item.id else { continue }
+            attemptedItemCount += 1
 
             let response: PlaidAccountsResponse
             do {
@@ -31,6 +34,7 @@ struct AccountRoutes: Sendable {
                     accessToken: item.accessToken
                 )
                 try await tokenStore.updateItemStatus(id: itemId, status: ItemConnectionStatus.connected.rawValue)
+                successfulItemCount += 1
             } catch {
                 try await tokenStore.updateItemStatus(id: itemId, status: itemStatus(for: error).rawValue)
                 continue
@@ -57,6 +61,10 @@ struct AccountRoutes: Sendable {
             allAccounts.append(contentsOf: accounts)
         }
 
+        if Self.shouldFailRefresh(attemptedItemCount: attemptedItemCount, successfulItemCount: successfulItemCount) {
+            throw HTTPError(.badGateway, message: "Plaid account refresh failed for every linked item")
+        }
+
         return try Self.jsonResponse(allAccounts)
     }
 
@@ -67,9 +75,12 @@ struct AccountRoutes: Sendable {
     ) async throws -> Response {
         let items = try await tokenStore.getAllItems()
         var allAccounts: [AccountDTO] = []
+        var attemptedItemCount = 0
+        var successfulItemCount = 0
 
         for item in items {
             guard let itemId = item.id else { continue }
+            attemptedItemCount += 1
 
             let response: PlaidAccountsResponse
             do {
@@ -77,6 +88,7 @@ struct AccountRoutes: Sendable {
                     accessToken: item.accessToken
                 )
                 try await tokenStore.updateItemStatus(id: itemId, status: ItemConnectionStatus.connected.rawValue)
+                successfulItemCount += 1
             } catch {
                 try await tokenStore.updateItemStatus(id: itemId, status: itemStatus(for: error).rawValue)
                 continue
@@ -101,6 +113,10 @@ struct AccountRoutes: Sendable {
                 )
             }
             allAccounts.append(contentsOf: accounts)
+        }
+
+        if Self.shouldFailRefresh(attemptedItemCount: attemptedItemCount, successfulItemCount: successfulItemCount) {
+            throw HTTPError(.badGateway, message: "Plaid balance refresh failed for every linked item")
         }
 
         return try Self.jsonResponse(allAccounts)
@@ -141,6 +157,10 @@ struct AccountRoutes: Sendable {
                 || errorCode == "ITEM_NOT_ACCESSIBLE"
         }
         return false
+    }
+
+    static func shouldFailRefresh(attemptedItemCount: Int, successfulItemCount: Int) -> Bool {
+        attemptedItemCount > 0 && successfulItemCount == 0
     }
 
     // MARK: - Helpers
