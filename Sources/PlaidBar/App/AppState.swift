@@ -630,6 +630,7 @@ final class AppState {
 
         balanceHistory = []
         UserDefaults.standard.removeObject(forKey: Keys.balanceHistory)
+        notificationService.resetDeduplicationState()
 
         return result
     }
