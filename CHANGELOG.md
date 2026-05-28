@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 17:59 UTC] — Update
+
+Prepare v0.3.4 release metadata (#118)
+
+`543e7a6`
+
+---
+
+
 ## [2026-05-28 17:50 UTC] — Update
 
 Record notification dedup after scheduling (#117)
