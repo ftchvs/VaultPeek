@@ -328,6 +328,25 @@ struct PlaidBarServerTests {
         #expect(expired == nil)
     }
 
+    @Test func pendingLinkSessionSurvivesStoreRecreation() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-link-session-\(UUID().uuidString)", isDirectory: true)
+        let storageURL = directory.appendingPathComponent("pending-link-sessions.json")
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let firstStore = PendingLinkSessionStore(storageURL: storageURL)
+        let state = await firstStore.issueState()
+        await firstStore.save(state: state, linkToken: "link-token", updateItemId: "item-1")
+
+        let restartedStore = PendingLinkSessionStore(storageURL: storageURL)
+        let restored = await restartedStore.consume(state: state)
+        let replay = await restartedStore.consume(state: state)
+
+        #expect(restored?.linkToken == "link-token")
+        #expect(restored?.updateItemId == "item-1")
+        #expect(replay == nil)
+    }
+
     @Test func linkTokenGetResponseReadsHostedLinkSessionResults() throws {
         let json = """
         {

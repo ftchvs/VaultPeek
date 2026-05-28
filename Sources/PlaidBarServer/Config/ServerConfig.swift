@@ -4,6 +4,7 @@ import PlaidBarCore
 struct ServerConfig: Sendable {
     static let legacyDatabaseFilename = "plaidbar.sqlite"
     static let legacyMigrationEnvironmentVariable = "PLAIDBAR_MIGRATE_LEGACY_DATABASE"
+    static let pendingLinkSessionsFilename = "pending-link-sessions.json"
     private static let sqliteSidecarSuffixes = ["-wal", "-shm", "-journal"]
 
     let port: Int
@@ -11,6 +12,7 @@ struct ServerConfig: Sendable {
     let plaidClientId: String
     let plaidSecret: String
     let databasePath: String
+    let pendingLinkSessionsPath: String
     let redirectUri: String
     let authToken: String
 
@@ -85,6 +87,9 @@ struct ServerConfig: Sendable {
                 environment: environment,
                 legacyMigrationEnvironment: try legacyMigrationEnvironment(from: environmentValues)
             ),
+            pendingLinkSessionsPath: URL(fileURLWithPath: dataDir, isDirectory: true)
+                .appendingPathComponent(pendingLinkSessionsFilename)
+                .path,
             redirectUri: "http://localhost:\(resolvedPort)/oauth/callback",
             authToken: authToken
         )
