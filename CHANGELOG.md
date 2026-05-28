@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 02:42 UTC] — Update
+
+Support PlaidBar server config files
+
+`9c812e3`
+
+---
+
+
 ## [2026-05-28 02:39 UTC] — Update
 
 Harden local cache file permissions
