@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 00:29 UTC] — Fix
+
+preserve item when Plaid removal is retryable (#72)
+
+`d0c528b`
+
+---
+
+
 ## [2026-05-28 00:16 UTC] — Fix
 
 validate Plaid link callback state (#71)
