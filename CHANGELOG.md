@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 11:07 UTC] — Update
+
+Defer Plaid sync cursor commits (#89)
+
+`73c9fb6`
+
+---
+
+
 ## [2026-05-28 04:04 UTC] — Update
 
 Add local server client timeouts (#88)
