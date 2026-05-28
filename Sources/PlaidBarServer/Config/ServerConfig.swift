@@ -72,7 +72,7 @@ struct ServerConfig: Sendable {
             authToken = generated
         }
 
-        let resolvedPort = portOverride ?? PlaidBarConstants.defaultServerPort
+        let resolvedPort = portOverride ?? PlaidBarConstants.serverPort
 
         return ServerConfig(
             port: resolvedPort,

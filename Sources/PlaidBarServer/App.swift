@@ -4,11 +4,12 @@ import Hummingbird
 import HummingbirdFluent
 import FluentSQLiteDriver
 import Logging
+import PlaidBarCore
 
 @main
 struct PlaidBarServer: AsyncParsableCommand {
     @Option(name: .long, help: "Server port")
-    var port: Int = 8484
+    var port: Int = PlaidBarConstants.serverPort
 
     @Flag(name: .long, help: "Use Plaid sandbox environment")
     var sandbox: Bool = false

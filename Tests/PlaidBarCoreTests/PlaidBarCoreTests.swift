@@ -606,7 +606,13 @@ struct PlaidBarCoreTests {
 
     @Test("Server URL uses correct port and host")
     func serverURL() {
-        #expect(PlaidBarConstants.serverBaseURL == "http://127.0.0.1:8484")
+        #expect(PlaidBarConstants.serverBaseURL(environment: [:]) == "http://127.0.0.1:8484")
+        #expect(PlaidBarConstants.serverBaseURL(environment: [
+            PlaidBarConstants.serverPortEnvironmentVariable: "9494",
+        ]) == "http://127.0.0.1:9494")
+        #expect(PlaidBarConstants.serverBaseURL(environment: [
+            PlaidBarConstants.serverPortEnvironmentVariable: "not-a-port",
+        ]) == "http://127.0.0.1:8484")
         #expect(PlaidBarConstants.defaultServerPort == 8484)
         #expect(PlaidBarConstants.defaultServerHost == "127.0.0.1")
     }

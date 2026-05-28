@@ -3,9 +3,27 @@ import Foundation
 public enum PlaidBarConstants {
     public static let defaultServerPort: Int = 8484
     public static let defaultServerHost: String = "127.0.0.1"
+    public static let serverPortEnvironmentVariable: String = "PLAIDBAR_SERVER_PORT"
 
     public static var serverBaseURL: String {
-        "http://\(defaultServerHost):\(defaultServerPort)"
+        serverBaseURL(environment: ProcessInfo.processInfo.environment)
+    }
+
+    public static var serverPort: Int {
+        serverPort(environment: ProcessInfo.processInfo.environment)
+    }
+
+    public static func serverBaseURL(environment: [String: String]) -> String {
+        "http://\(defaultServerHost):\(serverPort(environment: environment))"
+    }
+
+    public static func serverPort(environment: [String: String]) -> Int {
+        guard let rawPort = environment[serverPortEnvironmentVariable]?.trimmedNonEmpty,
+              let port = Int(rawPort),
+              (1...65_535).contains(port) else {
+            return defaultServerPort
+        }
+        return port
     }
 
     // Refresh intervals
@@ -26,5 +44,14 @@ public enum PlaidBarConstants {
     public static let appName: String = "PlaidBar"
 
     // Plaid
-    public static let plaidSandboxRedirectUri: String = "http://localhost:8484/oauth/callback"
+    public static var plaidSandboxRedirectUri: String {
+        "http://localhost:\(serverPort)/oauth/callback"
+    }
+}
+
+private extension String {
+    var trimmedNonEmpty: String? {
+        let value = trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
+    }
 }

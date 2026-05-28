@@ -76,7 +76,8 @@ All types are `Codable`, `Sendable`, and `Hashable` where appropriate.
 
 ### PlaidBarServer (Hummingbird 2)
 
-The companion server. Binds to `127.0.0.1:8484`.
+The companion server. Binds to `127.0.0.1:8484` by default, or the
+`PLAIDBAR_SERVER_PORT` / `--port` override when configured.
 
 **Routes:**
 
@@ -215,7 +216,7 @@ No data races by construction.
 
 1. Environment variables: `PLAID_CLIENT_ID`, `PLAID_SECRET`
 2. CLI flags: `--port`, `--sandbox`, `--config`
-3. Defaults: port 8484, sandbox mode if `--sandbox` flag
+3. Defaults: port 8484 unless `PLAIDBAR_SERVER_PORT` / `--port` is set, sandbox mode if `--sandbox` flag
 
 ### Data Storage
 

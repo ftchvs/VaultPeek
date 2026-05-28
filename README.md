@@ -260,6 +260,9 @@ swift test
 # Run server standalone
 swift run PlaidBarServer --sandbox
 
+# Run server/app on a custom localhost port
+PLAIDBAR_SERVER_PORT=9494 ./Scripts/run.sh --sandbox
+
 # Run both (server + app)
 ./Scripts/run.sh --sandbox
 
