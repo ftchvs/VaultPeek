@@ -96,6 +96,10 @@ actor TokenStore {
             .updatedAt
     }
 
+    func syncedItemCount() async throws -> Int {
+        try await SyncCursorModel.query(on: fluent.db()).count()
+    }
+
     nonisolated func accessToken(for item: ItemModel) throws -> String {
         try PlaidTokenVault.resolve(storedToken: item.accessToken)
     }

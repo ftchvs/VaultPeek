@@ -183,7 +183,9 @@ struct SetupView: View {
     }
 
     private func connectingView(environment: PlaidEnvironment) -> some View {
-        VStack(spacing: Spacing.lg) {
+        let completion = appState.firstRunCompletionState
+
+        return VStack(spacing: Spacing.lg) {
             ProgressView()
                 .scaleEffect(1.5)
 
@@ -195,18 +197,19 @@ struct SetupView: View {
                 .foregroundStyle(.secondary)
                 .font(.callout)
 
+            FirstRunCompletionPanel(state: completion)
+
             Button {
                 Task {
-                    await appState.refreshAccounts()
-                    if appState.isSetupComplete {
-                        await appState.syncTransactions()
+                    if await appState.completeFirstRunCheck() {
                         onComplete?()
                     }
                 }
             } label: {
-                Label("Check Connection", systemImage: "arrow.clockwise")
+                Label(completion.isReady ? "Open Dashboard" : "Check Connection", systemImage: "arrow.clockwise")
             }
             .buttonStyle(.bordered)
+            .disabled(appState.isLoading || (!completion.canRetry && !completion.isReady))
 
             Button("Cancel") {
                 setupMode = environment == .production ? .production : .sandbox
@@ -244,6 +247,56 @@ struct SetupView: View {
         }
 
         return "Ready to open Plaid Link in your browser."
+    }
+}
+
+private struct FirstRunCompletionPanel: View {
+    let state: FirstRunCompletionState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            HStack(spacing: Spacing.sm) {
+                Image(systemName: icon)
+                    .foregroundStyle(color)
+                    .frame(width: 18)
+                Text(state.title)
+                    .font(.callout.weight(.semibold))
+                Spacer(minLength: Spacing.sm)
+            }
+
+            Text(state.detail)
+                .detailText()
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var icon: String {
+        switch state.step {
+        case .ready:
+            "checkmark.circle.fill"
+        case .blocked:
+            "exclamationmark.triangle.fill"
+        case .openPlaidLink:
+            "link.circle"
+        case .loadAccounts:
+            "building.columns"
+        case .syncTransactions:
+            "arrow.triangle.2.circlepath"
+        }
+    }
+
+    private var color: Color {
+        switch state.step {
+        case .ready:
+            SemanticColors.positive
+        case .blocked:
+            SemanticColors.negative
+        case .openPlaidLink, .loadAccounts, .syncTransactions:
+            SemanticColors.brand
+        }
     }
 }
 

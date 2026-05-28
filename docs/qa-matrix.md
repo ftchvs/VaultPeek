@@ -25,6 +25,9 @@ local storage, notifications, and distribution.
 | Demo | Launch with `--demo` | Dashboard renders fixture data without Plaid credentials |
 | First run | Click View Demo | Sheet dismisses and demo accounts appear |
 | Sandbox setup | Launch `./Scripts/run.sh --sandbox` with credentials | Preflight passes and Plaid Link opens |
+| Sandbox return | Complete Plaid Link, then click Check Connection | App verifies linked item, loads accounts, runs transaction sync, then opens dashboard |
+| Linked item pending accounts | Plaid item exists but accounts are empty | Setup stays in completion state and explains that accounts still need to load |
+| Accounts pending sync | Accounts exist but no sync has completed | Setup stays in completion state and asks for the first sync check |
 | Missing credentials | Launch sandbox without credentials | Preflight blocks Link and explains missing credentials |
 | Wrong mode | App expects sandbox but server is production, or reverse | Preflight shows environment mismatch |
 | Server offline | App opens without server in non-demo mode | Recovery state explains server offline |

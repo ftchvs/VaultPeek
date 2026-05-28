@@ -39,7 +39,8 @@ Plaid API
 The app talks to the server through `ServerClient`. The server exposes:
 
 - `GET /health`
-- `GET /api/status`
+- `GET /api/status` for version, environment, credential readiness, storage
+  path, linked item count, synced item count, and last sync time
 - `GET /api/items`
 - `POST /api/link/create`
 - `POST /api/link/update/:itemId`

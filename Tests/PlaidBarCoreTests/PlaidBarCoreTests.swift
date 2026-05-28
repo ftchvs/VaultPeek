@@ -586,6 +586,7 @@ struct PlaidBarCoreTests {
         #expect(decoded.credentialsConfigured)
         #expect(decoded.storagePath == LocalDataStore.displayPath)
         #expect(decoded.syncReady)
+        #expect(decoded.syncedItemCount == 0)
     }
 
     @Test("ServerStatus with lastSync")
@@ -600,6 +601,7 @@ struct PlaidBarCoreTests {
         let decoded = try decoder.decode(ServerStatus.self, from: data)
         #expect(decoded.environment == .production)
         #expect(decoded.lastSync != nil)
+        #expect(decoded.syncedItemCount == 1)
     }
 
     @Test("ServerStatus preflight fields")
@@ -610,7 +612,8 @@ struct PlaidBarCoreTests {
             itemCount: 0,
             credentialsConfigured: false,
             storagePath: "/tmp/plaidbar.sqlite",
-            syncReady: false
+            syncReady: false,
+            syncedItemCount: 0
         )
 
         let data = try JSONEncoder().encode(status)
@@ -619,6 +622,95 @@ struct PlaidBarCoreTests {
         #expect(decoded.credentialsConfigured == false)
         #expect(decoded.storagePath == "/tmp/plaidbar.sqlite")
         #expect(decoded.syncReady == false)
+        #expect(decoded.syncedItemCount == 0)
+    }
+
+    @Test("ServerStatus decodes legacy payload without synced item count")
+    func serverStatusLegacyPayload() throws {
+        let json = """
+        {
+          "version": "0.5.0",
+          "environment": "sandbox",
+          "itemCount": 2,
+          "credentialsConfigured": true,
+          "storagePath": "/tmp/plaidbar.sqlite",
+          "syncReady": true
+        }
+        """.data(using: .utf8)!
+
+        let decoded = try JSONDecoder().decode(ServerStatus.self, from: json)
+
+        #expect(decoded.itemCount == 2)
+        #expect(decoded.syncedItemCount == 0)
+    }
+
+    // MARK: - First-run Completion Tests
+
+    @Test("First-run completion waits for Plaid Link")
+    func firstRunCompletionWaitsForLink() {
+        let state = FirstRunCompletionState.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 0,
+            accountCount: 0,
+            transactionCount: 0,
+            syncedItemCount: 0,
+            errorMessage: nil
+        )
+
+        #expect(state.step == .openPlaidLink)
+        #expect(!state.isReady)
+        #expect(state.canRetry)
+    }
+
+    @Test("First-run completion requires accounts after item link")
+    func firstRunCompletionRequiresAccounts() {
+        let state = FirstRunCompletionState.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 1,
+            accountCount: 0,
+            transactionCount: 0,
+            syncedItemCount: 0,
+            errorMessage: nil
+        )
+
+        #expect(state.step == .loadAccounts)
+        #expect(!state.isReady)
+    }
+
+    @Test("First-run completion requires sync attempt after accounts load")
+    func firstRunCompletionRequiresSyncAttempt() {
+        let state = FirstRunCompletionState.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 1,
+            accountCount: 2,
+            transactionCount: 0,
+            syncedItemCount: 0,
+            errorMessage: nil
+        )
+
+        #expect(state.step == .syncTransactions)
+        #expect(!state.isReady)
+        #expect(state.canRetry)
+    }
+
+    @Test("First-run completion is ready after accounts and sync")
+    func firstRunCompletionReadyAfterSync() {
+        let state = FirstRunCompletionState.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 1,
+            accountCount: 2,
+            transactionCount: 0,
+            syncedItemCount: 1,
+            errorMessage: nil
+        )
+
+        #expect(state.step == .ready)
+        #expect(state.isReady)
+        #expect(!state.canRetry)
     }
 
     // MARK: - ItemStatus Tests
