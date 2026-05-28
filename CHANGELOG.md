@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 17:09 UTC] — Update
+
+Strengthen Homebrew formula tests (#115)
+
+`e7e3c48`
+
+---
+
+
 ## [2026-05-28 16:57 UTC] — Update
 
 Prepare v0.3.3 release metadata (#114)
