@@ -188,6 +188,18 @@ struct ServerConfig: Sendable {
         return scopedPath
     }
 
+    static func enforcePrivateSQLiteStorePermissions(
+        at path: String,
+        fileManager: FileManager = .default
+    ) throws {
+        for storePath in sqliteStorePaths(for: path, fileManager: fileManager) {
+            try fileManager.setAttributes(
+                [.posixPermissions: 0o600],
+                ofItemAtPath: storePath
+            )
+        }
+    }
+
     private static func legacyMigrationEnvironment(
         from environmentValues: [String: String]
     ) throws -> PlaidEnvironment? {
