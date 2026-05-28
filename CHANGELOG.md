@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 03:09 UTC] — Update
+
+Retry transient Plaid API failures
+
+`8804970`
+
+---
+
+
 ## [2026-05-28 03:02 UTC] — Update
 
 Clear notification dedupe state on reset
