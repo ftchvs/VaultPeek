@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-28 15:47 UTC] — Update
+
+Validate runtime version during release (#108)
+
+`68696ab`
+
+---
+
+
 ## [2026-05-28 15:33 UTC] — Update
 
 Prepare v0.3.2 release metadata (#107)
