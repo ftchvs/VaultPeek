@@ -88,7 +88,7 @@ capture_sandbox_preflight() {
     APP_PID=""
 
     echo "Opening sandbox preflight popover..."
-    "$BINARY" --show-popover >"$APP_LOG" 2>&1 &
+    PLAIDBAR_SERVER_PORT="${PLAIDBAR_SCREENSHOT_PREFLIGHT_PORT:-18999}" "$BINARY" --show-popover >"$APP_LOG" 2>&1 &
     APP_PID=$!
 
     for _ in {1..20}; do
