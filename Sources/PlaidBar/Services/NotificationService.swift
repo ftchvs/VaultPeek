@@ -101,13 +101,14 @@ final class NotificationService: NotificationServiceProtocol {
         }
 
         for tx in large {
-            notifiedTransactionIds.append(tx.id)
-            notifiedTransactionIdSet.insert(tx.id)
-            await sendNotification(
+            let didSchedule = await sendNotification(
                 title: "Large Transaction",
                 body: "\(tx.displayName): \(Formatters.currency(tx.displayAmount, format: .full))",
                 identifier: NotifKey.largeTx(tx.id)
             )
+            guard didSchedule else { continue }
+            notifiedTransactionIds.append(tx.id)
+            notifiedTransactionIdSet.insert(tx.id)
         }
 
         // LRU cap: drop oldest entries first
@@ -133,12 +134,14 @@ final class NotificationService: NotificationServiceProtocol {
         for account in lowAccounts {
             let key = NotifKey.dedupLow(account.id)
             guard !notifiedAccountIds.contains(key) else { continue }
-            notifiedAccountIds.insert(key)
-            await sendNotification(
+            let didSchedule = await sendNotification(
                 title: "Low Balance",
                 body: "\(account.name): \(Formatters.currency(account.balances.effectiveBalance, format: .full))",
                 identifier: NotifKey.lowBalance(account.id)
             )
+            if didSchedule {
+                notifiedAccountIds.insert(key)
+            }
         }
     }
 
@@ -156,13 +159,15 @@ final class NotificationService: NotificationServiceProtocol {
         for account in highUtil {
             let key = NotifKey.dedupUtil(account.id)
             guard !notifiedAccountIds.contains(key) else { continue }
-            notifiedAccountIds.insert(key)
             let util = account.balances.utilizationPercent ?? 0
-            await sendNotification(
+            let didSchedule = await sendNotification(
                 title: "High Credit Utilization",
                 body: "\(account.name): \(Formatters.percent(util)) used",
                 identifier: NotifKey.highUtil(account.id)
             )
+            if didSchedule {
+                notifiedAccountIds.insert(key)
+            }
         }
     }
 
@@ -173,14 +178,19 @@ final class NotificationService: NotificationServiceProtocol {
         }
     }
 
-    private func sendNotification(title: String, body: String, identifier: String) async {
+    private func sendNotification(title: String, body: String, identifier: String) async -> Bool {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
         content.sound = .default
 
         let request = UNNotificationRequest(identifier: identifier, content: content, trigger: nil)
-        try? await UNUserNotificationCenter.current().add(request)
+        do {
+            try await UNUserNotificationCenter.current().add(request)
+            return true
+        } catch {
+            return false
+        }
     }
 }
 
