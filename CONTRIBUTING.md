@@ -60,6 +60,7 @@ Configuration files: `.swiftformat` and `.swiftlint.yml` in the repo root.
 - Use the [bug report template](https://github.com/ftchvs/PlaidBar/issues/new?template=bug_report.yml) for bugs
 - Use the [feature request template](https://github.com/ftchvs/PlaidBar/issues/new?template=feature_request.yml) for ideas
 - Use the accessibility issue template for VoiceOver, keyboard, chart, contrast, or reduced-motion barriers
+- Read [SUPPORT.md](SUPPORT.md) before sharing logs, screenshots, or setup details
 
 ## Accessibility Expectations
 
