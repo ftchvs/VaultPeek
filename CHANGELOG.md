@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-29 01:53 UTC] — Update
+
+Fix account setup entry points (#136)
+
+`9a49a33`
+
+---
+
+
 ## [2026-05-29 01:14 UTC] — Update
 
 Merge pull request #135 from ftchvs/fix/demo-status-server-copy
