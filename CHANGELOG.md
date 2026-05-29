@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-29 00:10 UTC] — Update
+
+Merge pull request #132 from ftchvs/docs/v1-0-post-publish-verification
+
+`fb7f27d`
+
+---
+
+
 ## [2026-05-29 00:00 UTC] — Update
 
 Merge pull request #131 from ftchvs/feature/v1-0-formula-release-candidate
