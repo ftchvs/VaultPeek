@@ -4,7 +4,14 @@ PlaidBar is a local-first macOS menu bar app for sensitive financial data. Treat
 
 ## Supported Versions
 
-The `main` branch is the supported development line before stable releases are published.
+| Version | Supported |
+|---------|-----------|
+| `1.0.x` | Yes |
+| `main` | Active development |
+| `< 1.0` | No; upgrade recommended |
+
+Security fixes target `main` first and may be released as a `1.0.x` patch when
+they affect the stable release line.
 
 ## Reporting a Vulnerability
 
