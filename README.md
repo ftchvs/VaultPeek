@@ -410,6 +410,7 @@ Additional project docs:
 - [Troubleshooting](docs/troubleshooting.md)
 - [Screenshots](docs/screenshots.md)
 - [QA Matrix](docs/qa-matrix.md)
+- [Support Policy](SUPPORT.md)
 - [1.0 Roadmap](docs/v1.0-roadmap.md)
 - [Release Notes Drafts](docs/release-notes.md)
 - [Changelog](CHANGELOG.md)
