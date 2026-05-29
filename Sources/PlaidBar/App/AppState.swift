@@ -323,6 +323,10 @@ final class AppState {
         localStorageDirectoryURL.path
     }
 
+    var localStorageResolvedDisplayPathText: String {
+        localStorageResolvedPathText.replacingOccurrences(of: NSHomeDirectory(), with: "~")
+    }
+
     var serverStoragePathText: String {
         serverStoragePath ?? localStoragePathText
     }
