@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-29 02:03 UTC] — Update
+
+Improve notification permission recovery (#137)
+
+`9dabb44`
+
+---
+
+
 ## [2026-05-29 01:53 UTC] — Update
 
 Fix account setup entry points (#136)
