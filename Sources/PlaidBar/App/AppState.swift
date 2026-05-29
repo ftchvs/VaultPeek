@@ -1,6 +1,7 @@
 import SwiftUI
 import PlaidBarCore
 import Combine
+@preconcurrency import UserNotifications
 
 @Observable
 @MainActor
@@ -771,6 +772,10 @@ final class AppState {
 
     func requestNotificationPermission() async -> Bool {
         await notificationService.requestPermission()
+    }
+
+    func notificationPermissionStatus() async -> UNAuthorizationStatus {
+        await notificationService.checkPermissionStatus()
     }
 
     func stopBackgroundRefresh() {

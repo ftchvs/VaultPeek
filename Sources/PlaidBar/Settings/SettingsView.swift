@@ -2,6 +2,7 @@ import SwiftUI
 import PlaidBarCore
 import Sparkle
 import AppKit
+@preconcurrency import UserNotifications
 
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
@@ -483,7 +484,7 @@ private struct PendingAccountRemoval: Identifiable {
 
 struct NotificationSettingsView: View {
     @Environment(AppState.self) private var appState
-    @State private var permissionDenied = false
+    @State private var permissionStatus: UNAuthorizationStatus = .notDetermined
 
     var body: some View {
         @Bindable var state = appState
@@ -491,27 +492,31 @@ struct NotificationSettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.lg) {
                 SettingsCard {
+                    permissionStatusRow
+
                     Toggle("Enable notifications", isOn: $state.notificationsEnabled)
                         .onChange(of: appState.notificationsEnabled) { _, enabled in
                             if enabled {
                                 Task {
                                     let granted = await appState.requestNotificationPermission()
-                                    if !granted {
-                                        permissionDenied = true
+                                    await refreshPermissionStatus()
+                                    guard granted else {
                                         appState.notificationsEnabled = false
+                                        return
                                     }
                                 }
+                            } else {
+                                Task { await refreshPermissionStatus() }
                             }
                         }
+                        .disabled(permissionStatus == .denied)
 
-                    if permissionDenied {
-                        HStack(alignment: .top, spacing: Spacing.sm) {
-                            Image(systemName: "exclamationmark.triangle")
-                                .foregroundStyle(SemanticColors.warning)
-                            Text("Notifications denied. Enable in System Settings > Notifications.")
-                                .detailText()
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
+                    if permissionStatus == .denied {
+                        InlineSettingsNotice(
+                            text: "Notifications are denied in macOS. Enable PlaidBar in System Settings before turning alerts on.",
+                            icon: "exclamationmark.triangle",
+                            tint: SemanticColors.warning
+                        )
                     }
                 }
 
@@ -533,6 +538,16 @@ struct NotificationSettingsView: View {
                         }
                     }
                     .disabled(!appState.notificationsEnabled || !appState.notifyLargeTransaction)
+
+                    if appState.notificationsEnabled,
+                       appState.notifyLargeTransaction,
+                       appState.largeTransactionThreshold <= 0 {
+                        InlineSettingsNotice(
+                            text: "A $0 threshold sends an alert for every outgoing transaction.",
+                            icon: "bell.badge",
+                            tint: SemanticColors.warning
+                        )
+                    }
 
                     Toggle("Low balance warning", isOn: $state.notifyLowBalance)
                         .disabled(!appState.notificationsEnabled)
@@ -562,6 +577,134 @@ struct NotificationSettingsView: View {
                 }
             }
             .padding(Spacing.lg)
+        }
+        .task {
+            await refreshPermissionStatus()
+        }
+    }
+
+    private var permissionStatusRow: some View {
+        HStack(alignment: .top, spacing: Spacing.sm) {
+            Image(systemName: permissionIcon)
+                .foregroundStyle(permissionTint)
+                .frame(width: 18)
+
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                HStack {
+                    Text("macOS permission")
+                    Spacer()
+                    Text(permissionLabel)
+                        .foregroundStyle(permissionTint)
+                        .font(.callout.weight(.semibold))
+                }
+
+                Text(permissionDetail)
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if permissionStatus == .denied {
+                    Button {
+                        openNotificationSettings()
+                    } label: {
+                        Label("Open System Settings", systemImage: "gearshape")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .padding(.top, Spacing.xs)
+                }
+            }
+        }
+    }
+
+    private func refreshPermissionStatus() async {
+        let status = await appState.notificationPermissionStatus()
+        permissionStatus = status
+
+        if status == .denied, appState.notificationsEnabled {
+            appState.notificationsEnabled = false
+        }
+    }
+
+    private func openNotificationSettings() {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    private var permissionLabel: String {
+        switch permissionStatus {
+        case .authorized:
+            "Allowed"
+        case .denied:
+            "Denied"
+        case .notDetermined:
+            "Not requested"
+        case .provisional:
+            "Provisional"
+        case .ephemeral:
+            "Temporary"
+        @unknown default:
+            "Unknown"
+        }
+    }
+
+    private var permissionDetail: String {
+        switch permissionStatus {
+        case .authorized:
+            "PlaidBar can show local transaction, balance, and credit utilization alerts."
+        case .denied:
+            "macOS is blocking PlaidBar notifications. The app cannot override this setting."
+        case .notDetermined:
+            "Turn notifications on to request permission from macOS."
+        case .provisional:
+            "macOS may deliver alerts quietly until permission is fully allowed."
+        case .ephemeral:
+            "macOS granted a temporary notification permission."
+        @unknown default:
+            "PlaidBar could not classify the current notification permission."
+        }
+    }
+
+    private var permissionIcon: String {
+        switch permissionStatus {
+        case .authorized, .provisional, .ephemeral:
+            "checkmark.circle.fill"
+        case .denied:
+            "exclamationmark.triangle.fill"
+        case .notDetermined:
+            "questionmark.circle"
+        @unknown default:
+            "questionmark.circle"
+        }
+    }
+
+    private var permissionTint: Color {
+        switch permissionStatus {
+        case .authorized, .provisional, .ephemeral:
+            SemanticColors.positive
+        case .denied:
+            SemanticColors.warning
+        case .notDetermined:
+            .secondary
+        @unknown default:
+            .secondary
+        }
+    }
+}
+
+private struct InlineSettingsNotice: View {
+    let text: String
+    let icon: String
+    let tint: Color
+
+    var body: some View {
+        HStack(alignment: .top, spacing: Spacing.sm) {
+            Image(systemName: icon)
+                .foregroundStyle(tint)
+                .frame(width: 18)
+
+            Text(text)
+                .detailText()
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
