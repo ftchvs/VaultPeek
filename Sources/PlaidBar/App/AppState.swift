@@ -515,11 +515,12 @@ final class AppState {
         isLoading = true
         error = nil
         do {
-            accounts = try await serverClient.getAccounts()
+            let refreshedAccounts = try await serverClient.getAccounts()
+            await refreshItemStatuses()
+            accounts = accountsPreservingUnavailableItems(refreshedAccounts)
             serverItemCount = Set(accounts.map(\.itemId)).count
             serverSyncReady = (serverItemCount ?? 0) > 0
             updateSetupCompletion()
-            await refreshItemStatuses()
         } catch {
             await refreshItemStatuses()
             self.error = error.localizedDescription
@@ -531,10 +532,11 @@ final class AppState {
         isLoading = true
         error = nil
         do {
-            accounts = try await serverClient.getBalances()
+            let refreshedAccounts = try await serverClient.getBalances()
+            await refreshItemStatuses()
+            accounts = accountsPreservingUnavailableItems(refreshedAccounts)
             lastSyncDate = Date()
             recordBalanceSnapshot()
-            await refreshItemStatuses()
         } catch {
             await refreshItemStatuses()
             self.error = error.localizedDescription
@@ -858,6 +860,23 @@ final class AppState {
         serverItemCount = statuses.count
         serverSyncReady = !statuses.isEmpty
         updateSetupCompletion()
+    }
+
+    private func accountsPreservingUnavailableItems(_ refreshedAccounts: [AccountDTO]) -> [AccountDTO] {
+        guard !accounts.isEmpty, !itemStatuses.isEmpty else { return refreshedAccounts }
+
+        let refreshedAccountIds = Set(refreshedAccounts.map(\.id))
+        let refreshedItemIds = Set(refreshedAccounts.map(\.itemId))
+        let unavailableItemIds = Set(itemStatuses.compactMap { item -> String? in
+            guard item.status != .connected, !refreshedItemIds.contains(item.id) else { return nil }
+            return item.id
+        })
+        guard !unavailableItemIds.isEmpty else { return refreshedAccounts }
+
+        let preservedAccounts = accounts.filter { account in
+            unavailableItemIds.contains(account.itemId) && !refreshedAccountIds.contains(account.id)
+        }
+        return refreshedAccounts + preservedAccounts
     }
 
     private func updateSetupCompletion() {
