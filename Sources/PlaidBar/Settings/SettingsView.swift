@@ -379,14 +379,7 @@ struct AccountSettingsView: View {
     }
 
     private func handleAddAccount() {
-        if appState.isDemoMode {
-            Task {
-                await appState.addAccount()
-                isShowingAccountSetup = true
-            }
-        } else {
-            Task { await appState.addAccount() }
-        }
+        isShowingAccountSetup = true
     }
 
     private var accountGroups: [AccountItemGroup] {

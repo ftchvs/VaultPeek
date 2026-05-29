@@ -7,6 +7,7 @@ struct MainPopover: View {
     @AppStorage("dashboard.accountFilter") private var selectedFilterRawValue = DashboardAccountFilter.all.rawValue
     @AppStorage("dashboard.selectedAccountId") private var selectedAccountId = ""
     @State private var settingsCloseObserver: NSObjectProtocol?
+    @State private var isShowingAccountSetup = false
 
     private var selectedFilter: DashboardAccountFilter {
         DashboardAccountFilter(rawValue: selectedFilterRawValue) ?? .all
@@ -40,7 +41,10 @@ struct MainPopover: View {
                             .environment(appState)
 
                         if selectedFilter == .status {
-                            DashboardStatusReadinessPanel(openSettings: { openSettings() })
+                            DashboardStatusReadinessPanel(
+                                openSettings: { openSettings() },
+                                onAddAccount: openAccountSetup
+                            )
                                 .environment(appState)
                         }
 
@@ -58,7 +62,8 @@ struct MainPopover: View {
                             accounts: filteredAccounts,
                             filter: selectedFilter,
                             selectedAccountId: selectedAccount?.id,
-                            onSelect: { selectedAccountId = $0.id }
+                            onSelect: { selectedAccountId = $0.id },
+                            onAddAccount: openAccountSetup
                         )
                         .environment(appState)
                     }
@@ -68,13 +73,14 @@ struct MainPopover: View {
                 }
                 .scrollContentBackground(.hidden)
                 .frame(maxWidth: .infinity)
-                .frame(minHeight: 690, maxHeight: 820)
+                .frame(minHeight: 860, maxHeight: 1_000)
 
                 Divider()
 
                 DashboardFooter(
                     settingsCloseObserver: $settingsCloseObserver,
-                    openSettings: openSettings
+                    openSettings: openSettings,
+                    onAddAccount: openAccountSetup
                 )
                 .environment(appState)
             }
@@ -87,6 +93,12 @@ struct MainPopover: View {
         .frame(width: 600)
         .background(Color(nsColor: .windowBackgroundColor))
         .animation(.easeInOut(duration: 0.2), value: appState.error != nil)
+        .sheet(isPresented: $isShowingAccountSetup) {
+            SetupView {
+                isShowingAccountSetup = false
+            }
+            .environment(appState)
+        }
         .task {
             await appState.loadInitialData()
         }
@@ -104,6 +116,10 @@ struct MainPopover: View {
             get: { selectedFilter },
             set: { selectedFilterRawValue = $0.rawValue }
         )
+    }
+
+    private func openAccountSetup() {
+        isShowingAccountSetup = true
     }
 }
 
@@ -804,6 +820,7 @@ private struct DashboardFilterBar: View {
 private struct DashboardStatusReadinessPanel: View {
     @Environment(AppState.self) private var appState
     let openSettings: () -> Void
+    let onAddAccount: () -> Void
 
     private var readiness: DashboardStatusReadiness {
         appState.dashboardStatusReadiness
@@ -887,7 +904,7 @@ private struct DashboardStatusReadinessPanel: View {
         case .checkServer:
             Task { await appState.checkServerConnection() }
         case .addAccount:
-            Task { await appState.addAccount() }
+            onAddAccount()
         case .refresh:
             Task {
                 await appState.checkServerConnection()
@@ -990,6 +1007,7 @@ private struct AccountsSection: View {
     let filter: DashboardAccountFilter
     let selectedAccountId: String?
     let onSelect: (AccountDTO) -> Void
+    let onAddAccount: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -1006,7 +1024,7 @@ private struct AccountsSection: View {
             .padding(.bottom, 7)
 
             if accounts.isEmpty {
-                DashboardEmptyAccountState(filter: filter)
+                DashboardEmptyAccountState(filter: filter, onAddAccount: onAddAccount)
                     .environment(appState)
             } else {
                 VStack(spacing: 0) {
@@ -1051,6 +1069,7 @@ private struct AccountRowWithDrilldown: View {
 private struct DashboardEmptyAccountState: View {
     @Environment(AppState.self) private var appState
     let filter: DashboardAccountFilter
+    let onAddAccount: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -1072,9 +1091,7 @@ private struct DashboardEmptyAccountState: View {
 
             HStack(spacing: 8) {
                 if showsAddAccount {
-                    Button {
-                        Task { await appState.addAccount() }
-                    } label: {
+                    Button(action: onAddAccount) {
                         Label("Add Account", systemImage: "plus.circle")
                     }
                     .buttonStyle(.bordered)
@@ -1613,12 +1630,11 @@ private struct DashboardFooter: View {
     @Environment(AppState.self) private var appState
     @Binding var settingsCloseObserver: NSObjectProtocol?
     let openSettings: OpenSettingsAction
+    let onAddAccount: () -> Void
 
     var body: some View {
         HStack(spacing: 18) {
-            Button {
-                Task { await appState.addAccount() }
-            } label: {
+            Button(action: onAddAccount) {
                 Image(systemName: "plus.circle")
                     .font(.body)
                     .foregroundStyle(.secondary)
