@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-29 01:14 UTC] — Update
+
+Merge pull request #135 from ftchvs/fix/demo-status-server-copy
+
+`b501d8e`
+
+---
+
+
 ## [2026-05-29 00:50 UTC] — Update
 
 Merge pull request #134 from ftchvs/fix/homebrew-sparkle-framework-runtime
