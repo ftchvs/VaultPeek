@@ -17,6 +17,8 @@ class Plaidbar < Formula
     bin.install ".build/release/PlaidBar" => "plaidbar"
     bin.install ".build/release/PlaidBarServer" => "plaidbar-server"
     bin.install "Scripts/plaidbar-run"
+    lib.install ".build/release/Sparkle.framework"
+    MachO::Tools.add_rpath bin/"plaidbar", "@loader_path/../lib"
 
     doc.install "README.md", "SECURITY.md", "LICENSE"
   end
