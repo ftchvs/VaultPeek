@@ -4,9 +4,9 @@ PlaidBar 1.0 ships as a source-built Homebrew formula first. A signed,
 notarized `.app` bundle, cask, Sparkle appcast, and DMG/ZIP archive are deferred
 until the signing and clean-machine Gatekeeper path is real.
 
-## Current Candidate
+## Current Release
 
-- Candidate version: `v1.0.0`
+- Current version: `v1.0.0`
 - 1.0 distribution shape: formula-only SwiftPM executable install
 - GitHub release: tagged from clean `main`
 - Homebrew tap command:

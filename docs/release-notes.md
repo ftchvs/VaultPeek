@@ -4,7 +4,7 @@ This file holds human-written release summaries before they are copied into a
 GitHub release. `CHANGELOG.md` may be generated from repository history, so keep
 curated release messaging here.
 
-## v1.0.0 - Unreleased
+## v1.0.0 - Published
 
 ### Added
 
