@@ -455,8 +455,7 @@ when the local app created the Hosted Link session.
 ## Roadmap
 
 The detailed 1.0 plan lives in [docs/v1.0-roadmap.md](docs/v1.0-roadmap.md).
-It maps the remaining path from the v1.0 formula-only candidate to a stable
-public release:
+It maps the completed path to the v1.0 formula-only stable public release:
 product flows, design/frontend polish, local system architecture, security and
 privacy checks, distribution, docs, QA, and open-source readiness.
 
@@ -467,7 +466,7 @@ Near-term release priorities:
 - [x] Add architecture, privacy, troubleshooting, and changelog docs
 - [x] Finish security and local-data audit for 1.0
 - [x] Decide 1.0 packaging shape: formula-only first, notarized app bundle later
-- [ ] Verify Homebrew install path and release metadata from clean `main`
+- [x] Verify Homebrew install path and release metadata from clean `main`
 
 Post-1.0 candidates:
 
