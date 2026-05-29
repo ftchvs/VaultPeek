@@ -1,5 +1,5 @@
-import SwiftUI
 import PlaidBarCore
+import SwiftUI
 
 struct MainPopover: View {
     @Environment(AppState.self) private var appState
@@ -15,11 +15,8 @@ struct MainPopover: View {
 
     private var selectedAccount: AccountDTO? {
         let accounts = filteredAccounts
-        if !selectedAccountId.isEmpty,
-           let account = accounts.first(where: { $0.id == selectedAccountId }) {
-            return account
-        }
-        return accounts.first ?? appState.accounts.first
+        guard !selectedAccountId.isEmpty else { return nil }
+        return accounts.first { $0.id == selectedAccountId }
     }
 
     private var filteredAccounts: [AccountDTO] {
@@ -40,12 +37,14 @@ struct MainPopover: View {
                         DashboardStatusStrip()
                             .environment(appState)
 
-                        if selectedFilter == .status {
+                        BalanceActivityHeatmap(transactions: appState.transactions)
+
+                        if shouldShowStatusReadinessPanel {
                             DashboardStatusReadinessPanel(
                                 openSettings: { openSettings() },
                                 onAddAccount: openAccountSetup
                             )
-                                .environment(appState)
+                            .environment(appState)
                         }
 
                         DashboardSummaryCards()
@@ -54,8 +53,6 @@ struct MainPopover: View {
                         BalanceCompositionStrip()
                             .environment(appState)
 
-                        BalanceActivityHeatmap(transactions: appState.transactions)
-
                         DashboardFilterBar(selection: filterBinding)
 
                         AccountsSection(
@@ -63,6 +60,7 @@ struct MainPopover: View {
                             filter: selectedFilter,
                             selectedAccountId: selectedAccount?.id,
                             onSelect: { selectedAccountId = $0.id },
+                            onDeselect: { selectedAccountId = "" },
                             onAddAccount: openAccountSetup
                         )
                         .environment(appState)
@@ -73,7 +71,7 @@ struct MainPopover: View {
                 }
                 .scrollContentBackground(.hidden)
                 .frame(maxWidth: .infinity)
-                .frame(minHeight: 860, maxHeight: 1_000)
+                .frame(minHeight: 860, maxHeight: 1000)
 
                 Divider()
 
@@ -104,11 +102,15 @@ struct MainPopover: View {
         }
         .onChange(of: appState.accounts) { _, accounts in
             guard selectedAccountId.isEmpty || !accounts.contains(where: { $0.id == selectedAccountId }) else { return }
-            selectedAccountId = accounts.first?.id ?? ""
+            selectedAccountId = ""
         }
         .onChange(of: selectedFilterRawValue) { _, _ in
-            selectedAccountId = filteredAccounts.first?.id ?? ""
+            selectedAccountId = ""
         }
+    }
+
+    private var shouldShowStatusReadinessPanel: Bool {
+        selectedFilter == .status || appState.dashboardStatusReadiness.level != .healthy
     }
 
     private var filterBinding: Binding<DashboardAccountFilter> {
@@ -381,7 +383,7 @@ private struct BalanceCompositionStrip: View {
                 title: "Loans",
                 value: debt(for: .loan),
                 tint: SemanticColors.warning
-            )
+            ),
         ]
     }
 
@@ -410,7 +412,9 @@ private struct BalanceCompositionStrip: View {
                         RoundedRectangle(cornerRadius: 3)
                             .fill(segment.tint.gradient)
                             .frame(width: segmentWidth(segment, totalWidth: proxy.size.width))
-                            .accessibilityLabel("\(segment.title), \(Formatters.currency(segment.value, format: .compact))")
+                            .accessibilityLabel(
+                                "\(segment.title), \(Formatters.currency(segment.value, format: .compact))"
+                            )
                     }
                 }
             }
@@ -456,7 +460,9 @@ private struct BalanceCompositionSegment: Identifiable {
     let value: Double
     let tint: Color
 
-    var id: String { title }
+    var id: String {
+        title
+    }
 }
 
 private struct BalanceCompositionLegend: View {
@@ -516,7 +522,7 @@ private struct BalanceActivityHeatmap: View {
     }
 
     private var activeDayCount: Int {
-        days.filter { $0.transactionCount > 0 }.count
+        days.count(where: { $0.transactionCount > 0 })
     }
 
     private var totalValue: Double {
@@ -542,7 +548,8 @@ private struct BalanceActivityHeatmap: View {
 
     private var weekColumns: [[SpendingHeatmapDay?]] {
         guard let firstDay = days.first,
-              let firstDate = Formatters.parseTransactionDate(firstDay.date) else {
+              let firstDate = Formatters.parseTransactionDate(firstDay.date)
+        else {
             return []
         }
 
@@ -550,7 +557,7 @@ private struct BalanceActivityHeatmap: View {
         let leadingEmptyDays = (weekday - calendar.firstWeekday + 7) % 7
         let padded: [SpendingHeatmapDay?] = Array(repeating: nil, count: leadingEmptyDays) + days.map(Optional.some)
         return stride(from: 0, to: padded.count, by: 7).map { start in
-            let week = Array(padded[start..<min(start + 7, padded.count)])
+            let week = Array(padded[start ..< min(start + 7, padded.count)])
             return week + Array(repeating: nil, count: max(0, 7 - week.count))
         }
     }
@@ -561,7 +568,8 @@ private struct BalanceActivityHeatmap: View {
         return weekColumns.enumerated().compactMap { weekIndex, week in
             for day in week.compactMap(\.self) {
                 guard let date = Formatters.parseTransactionDate(day.date),
-                      calendar.component(.day, from: date) <= 7 else {
+                      calendar.component(.day, from: date) <= 7
+                else {
                     continue
                 }
 
@@ -717,6 +725,7 @@ private struct BalanceHeatmapCell: View {
             .fill(Self.fillColor(intensity: intensity, value: day.value, mode: mode))
             .frame(width: size, height: size)
             .help(helpText)
+            .accessibilityLabel(helpText)
     }
 
     private var intensity: Double {
@@ -738,11 +747,10 @@ private struct BalanceHeatmapCell: View {
     static func fillColor(intensity: Double, value: Double, mode: SpendingHeatmapMode) -> Color {
         guard intensity > 0 else { return Color.primary.opacity(0.08) }
 
-        let base: Color
-        if mode == .netCashflow && value < 0 {
-            base = SemanticColors.positive
+        let base: Color = if mode == .netCashflow, value < 0 {
+            SemanticColors.positive
         } else {
-            base = mode == .netCashflow ? SemanticColors.negative : SemanticColors.positive
+            mode == .netCashflow ? SemanticColors.negative : SemanticColors.positive
         }
         return base.opacity(0.18 + (0.72 * intensity))
     }
@@ -758,7 +766,9 @@ private enum DashboardAccountFilter: String, CaseIterable, Identifiable {
     case debt = "Debt"
     case status = "Status"
 
-    var id: String { rawValue }
+    var id: String {
+        rawValue
+    }
 
     @MainActor
     func includes(_ account: AccountDTO, appState: AppState) -> Bool {
@@ -885,17 +895,17 @@ private struct DashboardStatusReadinessPanel: View {
 
     private var icon: String {
         switch readiness.level {
-        case .healthy: return "checkmark.circle.fill"
-        case .warning: return "exclamationmark.triangle.fill"
-        case .blocked: return "xmark.octagon.fill"
+        case .healthy: "checkmark.circle.fill"
+        case .warning: "exclamationmark.triangle.fill"
+        case .blocked: "xmark.octagon.fill"
         }
     }
 
     private var tint: Color {
         switch readiness.level {
-        case .healthy: return SemanticColors.positive
-        case .warning: return SemanticColors.warning
-        case .blocked: return SemanticColors.negative
+        case .healthy: SemanticColors.positive
+        case .warning: SemanticColors.warning
+        case .blocked: SemanticColors.negative
         }
     }
 
@@ -980,21 +990,21 @@ private struct StatusMetricPill: View {
 private extension DashboardStatusReadinessAction {
     var label: String {
         switch self {
-        case .checkServer: return "Check Server"
-        case .addAccount: return "Add Account"
-        case .refresh: return "Refresh"
-        case .reconnect: return "Reconnect"
-        case .openSettings: return "Settings"
+        case .checkServer: "Check Server"
+        case .addAccount: "Add Account"
+        case .refresh: "Refresh"
+        case .reconnect: "Reconnect"
+        case .openSettings: "Settings"
         }
     }
 
     var icon: String {
         switch self {
-        case .checkServer: return "server.rack"
-        case .addAccount: return "plus.circle"
-        case .refresh: return "arrow.clockwise"
-        case .reconnect: return "link.badge.plus"
-        case .openSettings: return "gearshape"
+        case .checkServer: "server.rack"
+        case .addAccount: "plus.circle"
+        case .refresh: "arrow.clockwise"
+        case .reconnect: "link.badge.plus"
+        case .openSettings: "gearshape"
         }
     }
 }
@@ -1007,6 +1017,7 @@ private struct AccountsSection: View {
     let filter: DashboardAccountFilter
     let selectedAccountId: String?
     let onSelect: (AccountDTO) -> Void
+    let onDeselect: () -> Void
     let onAddAccount: () -> Void
 
     var body: some View {
@@ -1032,7 +1043,13 @@ private struct AccountsSection: View {
                         AccountRowWithDrilldown(
                             account: account,
                             isSelected: selectedAccountId == account.id,
-                            onSelect: { onSelect(account) }
+                            onSelect: {
+                                if selectedAccountId == account.id {
+                                    onDeselect()
+                                } else {
+                                    onSelect(account)
+                                }
+                            }
                         )
                         .environment(appState)
                     }
@@ -1124,7 +1141,7 @@ private struct DashboardEmptyAccountState: View {
     }
 
     private var title: String {
-        if !appState.isDemoMode && !appState.serverConnected { return "Server offline" }
+        if !appState.isDemoMode, !appState.serverConnected { return "Server offline" }
         if appState.statusItemCount == 0 { return "No bank linked" }
         if appState.accounts.isEmpty { return "No account data" }
         if filter == .status { return "No accounts need attention" }
@@ -1132,7 +1149,7 @@ private struct DashboardEmptyAccountState: View {
     }
 
     private var message: String {
-        if !appState.isDemoMode && !appState.serverConnected {
+        if !appState.isDemoMode, !appState.serverConnected {
             return "Start PlaidBarServer, then check the connection again."
         }
         if appState.statusItemCount == 0 {
@@ -1148,7 +1165,7 @@ private struct DashboardEmptyAccountState: View {
     }
 
     private var icon: String {
-        if !appState.isDemoMode && !appState.serverConnected { return "server.rack" }
+        if !appState.isDemoMode, !appState.serverConnected { return "server.rack" }
         if appState.statusItemCount == 0 { return "building.columns" }
         if appState.accounts.isEmpty { return "tray" }
         if filter == .status { return "checkmark.circle.fill" }
@@ -1156,7 +1173,7 @@ private struct DashboardEmptyAccountState: View {
     }
 
     private var tint: Color {
-        if !appState.isDemoMode && !appState.serverConnected { return .secondary }
+        if !appState.isDemoMode, !appState.serverConnected { return .secondary }
         if appState.statusItemCount == 0 { return SemanticColors.brand }
         if appState.accounts.isEmpty { return SemanticColors.warning }
         if filter == .status { return SemanticColors.positive }
@@ -1228,7 +1245,7 @@ private struct DashboardAccountRow: View {
                 }
             }
 
-            Image(systemName: "chevron.right")
+            Image(systemName: isSelected ? "chevron.down" : "chevron.right")
                 .font(.caption.weight(.bold))
                 .foregroundStyle(.tertiary)
         }
@@ -1255,13 +1272,13 @@ private struct DashboardAccountRow: View {
     private var accountTint: Color {
         switch account.type {
         case .credit, .loan:
-            return SemanticColors.creditDebt
+            SemanticColors.creditDebt
         case .investment:
-            return SemanticColors.sparkline
+            SemanticColors.sparkline
         case .depository:
-            return SemanticColors.available
+            SemanticColors.available
         case .other:
-            return .secondary
+            .secondary
         }
     }
 

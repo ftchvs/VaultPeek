@@ -1,17 +1,28 @@
-import Testing
 import Foundation
 @testable import PlaidBarCore
 @testable import PlaidBarServer
+import Testing
 
 @Suite("PlaidBarServer")
 struct PlaidBarServerTests {
-
     @Test func accountTypes() {
-        let checking = AccountDTO(id: "1", itemId: "i", name: "Checking", type: .depository, balances: BalanceDTO(current: 5000))
-        let credit = AccountDTO(id: "2", itemId: "i", name: "Amex", type: .credit, balances: BalanceDTO(current: -850, limit: 10000))
+        let checking = AccountDTO(
+            id: "1",
+            itemId: "i",
+            name: "Checking",
+            type: .depository,
+            balances: BalanceDTO(current: 5000)
+        )
+        let credit = AccountDTO(
+            id: "2",
+            itemId: "i",
+            name: "Amex",
+            type: .credit,
+            balances: BalanceDTO(current: -850, limit: 10000)
+        )
         #expect(checking.type == .depository)
         #expect(credit.type == .credit)
-        #expect(credit.balances.utilizationPercent! == 8.5)
+        #expect(credit.balances.utilizationPercent == 8.5)
     }
 
     @Test func environmentCodable() throws {
@@ -54,7 +65,18 @@ struct PlaidBarServerTests {
         let data = try encoder.encode(status)
         let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
         let keys = Set(object.keys)
-        let forbiddenFragments = ["client", "secret", "token", "access", "public"]
+        let forbiddenFragments = [
+            "account",
+            "access",
+            "balance",
+            "client",
+            "institution",
+            "itemId",
+            "public",
+            "secret",
+            "token",
+            "transaction",
+        ]
 
         #expect(keys == [
             "version",
@@ -66,8 +88,8 @@ struct PlaidBarServerTests {
             "syncReady",
             "syncedItemCount",
         ])
-        #expect(!String(data: data, encoding: .utf8)!.contains("config-secret"))
-        #expect(!String(data: data, encoding: .utf8)!.contains("access-sandbox"))
+        #expect(try !(#require(String(data: data, encoding: .utf8)?.contains("config-secret"))))
+        #expect(try !(#require(String(data: data, encoding: .utf8)?.contains("access-sandbox"))))
         #expect(keys.allSatisfy { key in
             forbiddenFragments.allSatisfy { !key.localizedCaseInsensitiveContains($0) }
         })
@@ -184,7 +206,7 @@ struct PlaidBarServerTests {
     }
 
     @Test func serverAuthTokenUsesURLSafeRandomBytes() {
-        let token = ServerConfig.authTokenString(randomBytes: (0..<32).map(UInt8.init))
+        let token = ServerConfig.authTokenString(randomBytes: (0 ..< 32).map(UInt8.init))
 
         #expect(token.count == 43)
         #expect(token.allSatisfy { character in
@@ -235,7 +257,7 @@ struct PlaidBarServerTests {
             storagePath: legacyURL.path
         )
         let cachedTransactions = [
-            TransactionDTO(id: "tx-old", accountId: "checking", amount: 12, date: "2026-01-01", name: "Coffee")
+            TransactionDTO(id: "tx-old", accountId: "checking", amount: 12, date: "2026-01-01", name: "Coffee"),
         ]
         try LocalDataStore.saveTransactions(
             cachedTransactions,
@@ -341,7 +363,8 @@ struct PlaidBarServerTests {
         #expect(migratedPath == productionPath)
         #expect(try Data(contentsOf: URL(fileURLWithPath: productionPath)) == Data("legacy".utf8))
         #expect(backupFiles.count == 1)
-        #expect(try Data(contentsOf: directory.appendingPathComponent(backupFiles[0])) == Data("empty-production-db".utf8))
+        #expect(try Data(contentsOf: directory.appendingPathComponent(backupFiles[0])) ==
+            Data("empty-production-db".utf8))
         #expect(try LocalDataStore.loadTransactions(
             from: directory,
             context: scopedCacheContext
@@ -445,7 +468,7 @@ struct PlaidBarServerTests {
     }
 
     @Test func pendingLinkSessionExpires() async {
-        var currentDate = Date(timeIntervalSince1970: 1_000)
+        var currentDate = Date(timeIntervalSince1970: 1000)
         let store = PendingLinkSessionStore(ttl: 60) { currentDate }
         let state = await store.issueState()
         await store.save(state: state, linkToken: "link-token")
@@ -494,7 +517,7 @@ struct PlaidBarServerTests {
                 linkToken: "link-token",
                 updateItemId: "item-1",
                 createdAt: Date()
-            )
+            ),
         ]
         try JSONEncoder().encode(sessions).write(to: storageURL)
         try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: storageURL.path)
@@ -586,6 +609,13 @@ struct PlaidBarServerTests {
         #expect(PlaidClient.retryDelayNanoseconds(baseDelayNanoseconds: 100, attempt: 1) == 100)
         #expect(PlaidClient.retryDelayNanoseconds(baseDelayNanoseconds: 100, attempt: 2) == 200)
         #expect(PlaidClient.retryDelayNanoseconds(baseDelayNanoseconds: 1_000_000_000, attempt: 10) == 8_000_000_000)
+    }
+
+    @Test func plaidClientUsesSingleAttemptForNonIdempotentOperations() {
+        #expect(PlaidClient.allowedAttempts(maxAttempts: 3, retryPolicy: .singleAttempt) == 1)
+        #expect(PlaidClient.allowedAttempts(maxAttempts: 0, retryPolicy: .singleAttempt) == 1)
+        #expect(PlaidClient.allowedAttempts(maxAttempts: 3, retryPolicy: .transient) == 3)
+        #expect(PlaidClient.allowedAttempts(maxAttempts: 0, retryPolicy: .transient) == 1)
     }
 
     @Test func plaidTokenVaultReferencesAreDistinctFromLegacyPlaintext() throws {
