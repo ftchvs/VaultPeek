@@ -715,6 +715,28 @@ struct PlaidBarCoreTests {
 
     // MARK: - Dashboard Status Readiness Tests
 
+    @Test("Dashboard status readiness treats demo mode as local data")
+    func dashboardStatusReadinessTreatsDemoModeAsLocalData() {
+        let readiness = DashboardStatusReadiness.evaluate(
+            isDemoMode: true,
+            serverConnected: false,
+            credentialsConfigured: nil,
+            linkedItemCount: 0,
+            accountCount: 0,
+            syncedItemCount: 0,
+            needsLoginItemCount: 0,
+            erroredItemCount: 0,
+            isSyncStale: true,
+            lastSyncRelative: nil,
+            errorMessage: "PlaidBar server is not running"
+        )
+
+        #expect(readiness.level == .healthy)
+        #expect(readiness.title == "Demo data ready")
+        #expect(readiness.detail.contains("Local demo accounts"))
+        #expect(readiness.primaryAction == .addAccount)
+    }
+
     @Test("Dashboard status readiness blocks on offline server")
     func dashboardStatusReadinessBlocksOnOfflineServer() {
         let readiness = DashboardStatusReadiness.evaluate(
