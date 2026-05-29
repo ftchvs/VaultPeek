@@ -191,12 +191,14 @@ private struct DashboardStatusStrip: View {
     }
 
     private var serverIcon: String {
+        if appState.isDemoMode { return "play.circle.fill" }
         if appState.isLoading { return "arrow.triangle.2.circlepath" }
         if appState.error != nil { return "xmark.octagon.fill" }
         return appState.serverConnected ? "checkmark.circle.fill" : "server.rack"
     }
 
     private var serverTint: Color {
+        if appState.isDemoMode { return SemanticColors.brandSecondary }
         if appState.isLoading { return SemanticColors.warning }
         if appState.error != nil { return SemanticColors.negative }
         return appState.serverConnected ? SemanticColors.positive : .secondary

@@ -289,6 +289,7 @@ final class AppState {
     }
 
     var statusServerText: String {
+        if isDemoMode { return "Local demo" }
         if isLoading { return "Syncing" }
         if error != nil { return "Error" }
         return serverConnected ? "Connected" : "Offline"
@@ -337,11 +338,13 @@ final class AppState {
     }
 
     var serverCredentialsText: String {
+        if isDemoMode { return "Not required" }
         guard serverConnected else { return "Unknown" }
         return serverCredentialsConfigured == true ? "Ready" : "Missing"
     }
 
     var serverSyncReadinessText: String {
+        if isDemoMode { return "Demo data" }
         guard serverConnected else { return "Unknown" }
         return serverSyncReady == true ? "Ready" : "No items"
     }

@@ -55,8 +55,8 @@ struct StatusView: View {
             DiagnosticTile(
                 title: "Server",
                 value: appState.statusServerText,
-                icon: "server.rack",
-                color: appState.serverConnected ? SemanticColors.positive : SemanticColors.negative
+                icon: serverDiagnosticIcon,
+                color: serverDiagnosticColor
             )
             DiagnosticTile(
                 title: "Sync",
@@ -224,6 +224,15 @@ struct StatusView: View {
         return SemanticColors.positive
     }
 
+    private var serverDiagnosticIcon: String {
+        appState.isDemoMode ? "play.circle.fill" : "server.rack"
+    }
+
+    private var serverDiagnosticColor: Color {
+        if appState.isDemoMode { return SemanticColors.brandSecondary }
+        return appState.serverConnected ? SemanticColors.positive : SemanticColors.negative
+    }
+
     private var itemHealthColor: Color {
         if appState.statusItemCount == 0 { return .secondary }
         if appState.connectedItemCount < appState.statusItemCount { return SemanticColors.warning }
@@ -232,11 +241,13 @@ struct StatusView: View {
     }
 
     private var credentialsColor: Color {
+        if appState.isDemoMode { return .secondary }
         guard appState.serverConnected else { return .secondary }
         return appState.serverCredentialsConfigured == true ? SemanticColors.positive : SemanticColors.negative
     }
 
     private var syncReadinessColor: Color {
+        if appState.isDemoMode { return SemanticColors.brandSecondary }
         guard appState.serverConnected else { return .secondary }
         return appState.serverSyncReady == true ? SemanticColors.positive : .secondary
     }
