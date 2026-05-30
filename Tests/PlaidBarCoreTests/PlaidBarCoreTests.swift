@@ -1,6 +1,6 @@
+import Foundation
 import Testing
 @testable import PlaidBarCore
-// Foundation symbols available via PlaidBarCore's transitive import
 
 @Suite("PlaidBarCore Tests")
 struct PlaidBarCoreTests {
@@ -778,6 +778,29 @@ struct PlaidBarCoreTests {
         #expect(readiness.primaryAction == .addAccount)
     }
 
+    @Test("Dashboard status readiness surfaces recent action failure before empty data")
+    func dashboardStatusReadinessSurfacesRecentActionFailureBeforeEmptyData() {
+        let readiness = DashboardStatusReadiness.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 0,
+            accountCount: 0,
+            syncedItemCount: 0,
+            needsLoginItemCount: 0,
+            erroredItemCount: 0,
+            isSyncStale: true,
+            lastSyncRelative: nil,
+            errorMessage: "Server is running in production, not sandbox."
+        )
+
+        #expect(readiness.level == .warning)
+        #expect(readiness.title == "Recent action failed")
+        #expect(readiness.detail.contains("production"))
+        #expect(readiness.primaryAction == .refresh)
+        #expect(readiness.secondaryActions.contains(.openSettings))
+    }
+
     @Test("Dashboard status readiness blocks on missing credentials")
     func dashboardStatusReadinessBlocksOnMissingCredentials() {
         let readiness = DashboardStatusReadiness.evaluate(
@@ -835,6 +858,27 @@ struct PlaidBarCoreTests {
             isSyncStale: false,
             lastSyncRelative: "2m ago",
             errorMessage: nil
+        )
+
+        #expect(readiness.level == .warning)
+        #expect(readiness.primaryAction == .reconnect)
+        #expect(readiness.title.contains("need login"))
+    }
+
+    @Test("Dashboard status readiness keeps item recovery ahead of recent action failure")
+    func dashboardStatusReadinessKeepsItemRecoveryAheadOfRecentActionFailure() {
+        let readiness = DashboardStatusReadiness.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 2,
+            accountCount: 4,
+            syncedItemCount: 2,
+            needsLoginItemCount: 1,
+            erroredItemCount: 0,
+            isSyncStale: false,
+            lastSyncRelative: "2m ago",
+            errorMessage: "Refresh failed"
         )
 
         #expect(readiness.level == .warning)

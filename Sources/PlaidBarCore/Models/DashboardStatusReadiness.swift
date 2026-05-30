@@ -77,26 +77,6 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
             )
         }
 
-        if linkedItemCount == 0 {
-            return DashboardStatusReadiness(
-                level: .warning,
-                title: "No institution linked",
-                detail: "Connect a Plaid institution before this dashboard can show balances and transactions.",
-                primaryAction: .addAccount,
-                secondaryActions: [.refresh]
-            )
-        }
-
-        if accountCount == 0 {
-            return DashboardStatusReadiness(
-                level: .warning,
-                title: "Balances not loaded",
-                detail: "The server has linked items, but account balances have not loaded into the dashboard yet.",
-                primaryAction: .refresh,
-                secondaryActions: [.addAccount]
-            )
-        }
-
         if erroredItemCount > 0 {
             return DashboardStatusReadiness(
                 level: .blocked,
@@ -117,6 +97,36 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
             )
         }
 
+        if let errorMessage, !errorMessage.isEmpty {
+            return DashboardStatusReadiness(
+                level: .warning,
+                title: "Recent action failed",
+                detail: errorMessage,
+                primaryAction: .refresh,
+                secondaryActions: [.openSettings]
+            )
+        }
+
+        if linkedItemCount == 0 {
+            return DashboardStatusReadiness(
+                level: .warning,
+                title: "No institution linked",
+                detail: "Connect a Plaid institution before this dashboard can show balances and transactions.",
+                primaryAction: .addAccount,
+                secondaryActions: [.refresh]
+            )
+        }
+
+        if accountCount == 0 {
+            return DashboardStatusReadiness(
+                level: .warning,
+                title: "Balances not loaded",
+                detail: "The server has linked items, but account balances have not loaded into the dashboard yet.",
+                primaryAction: .refresh,
+                secondaryActions: [.addAccount]
+            )
+        }
+
         if syncedItemCount < linkedItemCount {
             return DashboardStatusReadiness(
                 level: .warning,
@@ -132,16 +142,6 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
                 level: .warning,
                 title: "Sync is stale",
                 detail: "Last sync: \(lastSyncRelative ?? "never"). Refresh now to pull current balances and transactions.",
-                primaryAction: .refresh,
-                secondaryActions: [.openSettings]
-            )
-        }
-
-        if let errorMessage, !errorMessage.isEmpty {
-            return DashboardStatusReadiness(
-                level: .warning,
-                title: "Recent action failed",
-                detail: errorMessage,
                 primaryAction: .refresh,
                 secondaryActions: [.openSettings]
             )

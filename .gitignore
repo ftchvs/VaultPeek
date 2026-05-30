@@ -32,6 +32,7 @@ Package.resolved
 *.xcuserstate
 *.xcscmblueprint
 .idea/
+.clawpatch/
 *.swp
 *.swo
 *~
