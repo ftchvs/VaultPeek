@@ -1,6 +1,6 @@
+import Foundation
 import Testing
 @testable import PlaidBarCore
-// Foundation symbols available via PlaidBarCore's transitive import
 
 /// Tests for app-level logic: view model calculations, client-side data
 /// processing, and business rules used by the PlaidBar macOS app.

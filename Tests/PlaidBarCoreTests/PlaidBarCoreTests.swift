@@ -1032,6 +1032,23 @@ struct PlaidBarCoreTests {
         #expect(PlaidBarConstants.appVersion == "1.0.0")
     }
 
+    // MARK: - CommandLineOptions Tests
+
+    @Test("Command line options return explicit values")
+    func commandLineOptionsReturnExplicitValues() {
+        let arguments = ["PlaidBar", "--demo", "--screenshot-account", "acc_123"]
+
+        #expect(CommandLineOptions.value(for: "--screenshot-account", in: arguments) == "acc_123")
+    }
+
+    @Test("Command line options reject missing values and following flags")
+    func commandLineOptionsRejectMissingValuesAndFollowingFlags() {
+        let arguments = ["PlaidBar", "--demo", "--screenshot-account", "--settings-tab", "status"]
+
+        #expect(CommandLineOptions.value(for: "--screenshot-account", in: arguments) == nil)
+        #expect(CommandLineOptions.value(for: "--settings-tab", in: ["PlaidBar", "--settings-tab"]) == nil)
+    }
+
     // MARK: - RecurringTransaction Model Tests
 
     @Test("RecurringTransaction identity by merchantName")
