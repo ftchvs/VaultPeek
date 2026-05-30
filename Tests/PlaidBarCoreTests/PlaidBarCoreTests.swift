@@ -557,6 +557,59 @@ struct PlaidBarCoreTests {
         #expect(decoded.pendingCursors.isEmpty)
     }
 
+    // MARK: - Transaction Filter Tests
+
+    @Test("Transaction filter groups recent transactions by descending date")
+    func transactionFilterGroupsRecentTransactions() {
+        let transactions = [
+            TransactionDTO(id: "old", accountId: "checking", amount: 20, date: "2026-01-01", name: "Old"),
+            TransactionDTO(id: "new", accountId: "checking", amount: 30, date: "2026-01-03", name: "New"),
+            TransactionDTO(id: "middle", accountId: "checking", amount: 40, date: "2026-01-02", name: "Middle"),
+        ]
+
+        let grouped = TransactionFilter.groupedRecent(from: transactions, maxCount: 2)
+
+        #expect(grouped.map(\.0) == ["2026-01-03", "2026-01-02"])
+        #expect(grouped.flatMap(\.1).map(\.id) == ["new", "middle"])
+    }
+
+    @Test("Transaction filter applies search category account and date")
+    func transactionFilterAppliesCriteria() {
+        let transactions = [
+            TransactionDTO(id: "1", accountId: "checking", amount: 50, date: "2026-01-15", name: "Whole Foods", category: .foodAndDrink),
+            TransactionDTO(id: "2", accountId: "credit", amount: 30, date: "2026-01-15", name: "Whole Foods", category: .foodAndDrink),
+            TransactionDTO(id: "3", accountId: "checking", amount: 20, date: "2026-01-14", name: "Gas", category: .transportation),
+            TransactionDTO(id: "4", accountId: "checking", amount: 12, date: "2026-01-01", name: "Coffee", category: .foodAndDrink),
+        ]
+
+        let filtered = TransactionFilter.filtered(
+            transactions,
+            criteria: TransactionFilterCriteria(
+                searchText: "food",
+                category: .foodAndDrink,
+                accountId: "checking",
+                startDate: "2026-01-10"
+            )
+        )
+
+        #expect(filtered.map(\.id) == ["1"])
+    }
+
+    @Test("Transaction filter search matches category display name")
+    func transactionFilterSearchMatchesCategoryDisplayName() {
+        let transactions = [
+            TransactionDTO(id: "1", accountId: "checking", amount: 50, date: "2026-01-15", name: "Cafe", category: .foodAndDrink),
+            TransactionDTO(id: "2", accountId: "checking", amount: 30, date: "2026-01-15", name: "Gas", category: .transportation),
+        ]
+
+        let filtered = TransactionFilter.filtered(
+            transactions,
+            criteria: TransactionFilterCriteria(searchText: "transport")
+        )
+
+        #expect(filtered.map(\.id) == ["2"])
+    }
+
     // MARK: - LinkResponse Tests
 
     @Test("LinkResponse Codable")
