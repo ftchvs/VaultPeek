@@ -1303,6 +1303,7 @@ struct PlaidBarCoreTests {
 
         #expect(result.directoryPath == directory.path)
         #expect(result.removedEntries == ["plaidbar.sqlite"])
+        #expect(result.keychainTokensCleared)
         #expect(didResetKeychainTokens)
 
         var isDirectory: ObjCBool = false
@@ -1333,6 +1334,30 @@ struct PlaidBarCoreTests {
 
         #expect(try posixPermissions(at: directory) == 0o700)
         #expect(didResetKeychainTokens)
+    }
+
+    @Test("Local data reset can skip Keychain token cleanup")
+    func localDataResetCanSkipKeychainTokenCleanup() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let directory = root.appendingPathComponent(".plaidbar", isDirectory: true)
+        let database = directory.appendingPathComponent("plaidbar.sqlite")
+
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try "db".write(to: database, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        var didResetKeychainTokens = false
+        let result = try LocalDataStore.resetLocalData(
+            at: directory,
+            resetKeychainTokens: false
+        ) {
+            didResetKeychainTokens = true
+        }
+
+        #expect(result.removedEntries == ["plaidbar.sqlite"])
+        #expect(!result.keychainTokensCleared)
+        #expect(!didResetKeychainTokens)
     }
 
     @Test("Preparing storage directory keeps it private")
