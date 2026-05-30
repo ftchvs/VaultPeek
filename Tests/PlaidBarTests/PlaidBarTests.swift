@@ -34,17 +34,7 @@ struct PlaidBarTests {
             AccountDTO(id: "3", itemId: "i", name: "Amex", type: .credit, balances: BalanceDTO(current: -850.68)),
         ]
 
-        // Net = 8200 + 5100 - 850.68 = 12449.32 (mirrors AppState.netBalance)
-        let net = accounts.reduce(0.0) { total, account in
-            switch account.type {
-            case .depository, .investment:
-                return total + account.balances.effectiveBalance
-            case .credit, .loan:
-                return total - abs(account.balances.current ?? 0)
-            case .other:
-                return total + account.balances.effectiveBalance
-            }
-        }
+        let net = MenuBarSummary.netCash(from: accounts)
 
         #expect(abs(net - 12449.32) < 0.01)
     }
@@ -52,17 +42,8 @@ struct PlaidBarTests {
     @Test("Net balance empty accounts")
     func netBalanceEmpty() {
         let accounts: [AccountDTO] = []
-        let net = accounts.reduce(0.0) { total, account in
-            switch account.type {
-            case .depository, .investment:
-                return total + account.balances.effectiveBalance
-            case .credit, .loan:
-                return total - abs(account.balances.current ?? 0)
-            case .other:
-                return total + account.balances.effectiveBalance
-            }
-        }
-        #expect(net == 0.0)
+
+        #expect(MenuBarSummary.netCash(from: accounts) == 0.0)
     }
 
     @Test("Net balance with investment and loan")
@@ -72,16 +53,7 @@ struct PlaidBarTests {
             AccountDTO(id: "2", itemId: "i", name: "Auto Loan", type: .loan, balances: BalanceDTO(current: -12000)),
         ]
 
-        let net = accounts.reduce(0.0) { total, account in
-            switch account.type {
-            case .depository, .investment:
-                return total + account.balances.effectiveBalance
-            case .credit, .loan:
-                return total - abs(account.balances.current ?? 0)
-            case .other:
-                return total + account.balances.effectiveBalance
-            }
-        }
+        let net = MenuBarSummary.netCash(from: accounts)
 
         #expect(abs(net - 38000) < 0.01)
     }
