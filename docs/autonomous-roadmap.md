@@ -6,9 +6,11 @@ toward a trustworthy 1.0 release. It complements `GOAL.md`,
 
 ## Operating Contract
 
-- Work locally by default.
-- Do not push, open PRs, merge, publish releases, or post externally without
-  Felipe's explicit approval.
+- Work locally for implementation and verification.
+- Felipe granted scoped PlaidBar approval on 2026-05-30 to push branches, open
+  PRs, and merge to remote `main` after green local and GitHub checks.
+- Do not publish releases or post externally outside normal GitHub PR/merge
+  workflow without Felipe's explicit approval.
 - Keep each loop to one reviewable production-readiness slice.
 - Prefer fixes that make the 1.0 promise more true: local-first trust,
   reliable onboarding, clear recovery, and dense native finance UX.
