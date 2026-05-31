@@ -1466,17 +1466,19 @@ struct PlaidBarCoreTests {
         #expect(LocalDataStore.displayPath(for: URL(fileURLWithPath: "/var/tmp/plaidbar"), homeDirectory: home) == "/var/tmp/plaidbar")
     }
 
-    @Test("Local data reset removes data files and keeps server auth token")
-    func localDataResetRemovesDataFilesAndKeepsAuthToken() throws {
+    @Test("Local data reset removes data files and keeps local server configuration")
+    func localDataResetRemovesDataFilesAndKeepsLocalServerConfiguration() throws {
         let root = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         let directory = root.appendingPathComponent(".plaidbar", isDirectory: true)
         let database = directory.appendingPathComponent("plaidbar.sqlite")
         let authToken = directory.appendingPathComponent("auth-token")
+        let serverConfig = directory.appendingPathComponent("server.conf")
 
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try "db".write(to: database, atomically: true, encoding: .utf8)
         try "token".write(to: authToken, atomically: true, encoding: .utf8)
+        try "PLAID_ENV=sandbox".write(to: serverConfig, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: authToken.path)
         defer { try? FileManager.default.removeItem(at: root) }
 
@@ -1493,8 +1495,9 @@ struct PlaidBarCoreTests {
         var isDirectory: ObjCBool = false
         #expect(FileManager.default.fileExists(atPath: directory.path, isDirectory: &isDirectory))
         #expect(isDirectory.boolValue)
-        #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path) == ["auth-token"])
+        #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).sorted() == ["auth-token", "server.conf"])
         #expect(try String(contentsOf: authToken, encoding: .utf8) == "token")
+        #expect(try String(contentsOf: serverConfig, encoding: .utf8) == "PLAID_ENV=sandbox")
         #expect(try posixPermissions(at: authToken) == 0o600)
     }
 

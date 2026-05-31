@@ -40,6 +40,7 @@ public enum LocalDataStore {
     public static let displayPath = "~/.plaidbar/"
     public static let dataDirectoryEnvironmentVariable = "PLAIDBAR_DATA_DIR"
     public static let authTokenFilename = "auth-token"
+    public static let serverConfigFilename = "server.conf"
     public static let transactionCacheFilename = "transactions.json"
     public static let plaidAccessTokenKeychainService = "PlaidBar.PlaidAccessToken"
     private static let directoryPermissions = 0o700
@@ -122,7 +123,7 @@ public enum LocalDataStore {
                     at: directory,
                     includingPropertiesForKeys: nil
                 )
-                for entry in entries where entry.lastPathComponent != authTokenFilename {
+                for entry in entries where !resetPreservedFilenames.contains(entry.lastPathComponent) {
                     try fileManager.removeItem(at: entry)
                     removedEntries.append(entry.lastPathComponent)
                 }
@@ -148,6 +149,13 @@ public enum LocalDataStore {
             removedEntries: removedEntries,
             keychainTokensCleared: keychainTokensCleared
         )
+    }
+
+    private static var resetPreservedFilenames: Set<String> {
+        [
+            authTokenFilename,
+            serverConfigFilename,
+        ]
     }
 
     private static func resetPlaidAccessTokenKeychainItems() throws {
