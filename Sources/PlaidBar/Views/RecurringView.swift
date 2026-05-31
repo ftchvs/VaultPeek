@@ -10,12 +10,7 @@ struct RecurringView: View {
 
         VStack(alignment: .leading, spacing: 0) {
             if recurring.isEmpty {
-                ContentUnavailableView {
-                    Label("No Recurring Transactions", systemImage: "arrow.clockwise")
-                } description: {
-                    Text("Recurring charges will be detected automatically after syncing 2+ months of transactions.")
-                }
-                .padding()
+                emptyState
             } else {
                 // Estimated monthly total header (normalizes weekly/annual to monthly equivalent)
                 HStack {
@@ -38,6 +33,63 @@ struct RecurringView: View {
                     RecurringRow(item: item)
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var emptyState: some View {
+        if !appState.isDemoMode && !appState.serverConnected {
+            ContentUnavailableView {
+                Label("Server Offline", systemImage: "server.rack")
+            } description: {
+                Text("Start PlaidBarServer before detecting recurring charges.")
+            } actions: {
+                Button {
+                    Task { await appState.checkServerConnection() }
+                } label: {
+                    Label("Check Server", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            }
+            .padding()
+        } else if appState.statusItemCount == 0 {
+            ContentUnavailableView {
+                Label("No Bank Linked", systemImage: "building.columns")
+            } description: {
+                Text("Connect a Plaid institution before recurring charges can be detected.")
+            } actions: {
+                Button {
+                    Task { await appState.addAccount() }
+                } label: {
+                    Label("Add Account", systemImage: "plus.circle")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            }
+            .padding()
+        } else if appState.transactions.isEmpty {
+            ContentUnavailableView {
+                Label("No Synced Transactions", systemImage: "tray")
+            } description: {
+                Text("Sync transaction history so PlaidBar can look for repeated charges.")
+            } actions: {
+                Button {
+                    Task { await appState.syncTransactions() }
+                } label: {
+                    Label("Sync Transactions", systemImage: "arrow.triangle.2.circlepath")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            }
+            .padding()
+        } else {
+            ContentUnavailableView {
+                Label("No Recurring Charges Found", systemImage: "arrow.clockwise")
+            } description: {
+                Text("PlaidBar needs repeated merchant charges, usually 2+ months of history, before it marks a charge as recurring.")
+            }
+            .padding()
         }
     }
 }
