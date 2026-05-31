@@ -1,6 +1,6 @@
+import Foundation
 import Testing
 @testable import PlaidBarCore
-// Foundation symbols available via PlaidBarCore's transitive import
 
 @Suite("PlaidBarCore Tests")
 struct PlaidBarCoreTests {
@@ -557,6 +557,59 @@ struct PlaidBarCoreTests {
         #expect(decoded.pendingCursors.isEmpty)
     }
 
+    // MARK: - Transaction Filter Tests
+
+    @Test("Transaction filter groups recent transactions by descending date")
+    func transactionFilterGroupsRecentTransactions() {
+        let transactions = [
+            TransactionDTO(id: "old", accountId: "checking", amount: 20, date: "2026-01-01", name: "Old"),
+            TransactionDTO(id: "new", accountId: "checking", amount: 30, date: "2026-01-03", name: "New"),
+            TransactionDTO(id: "middle", accountId: "checking", amount: 40, date: "2026-01-02", name: "Middle"),
+        ]
+
+        let grouped = TransactionFilter.groupedRecent(from: transactions, maxCount: 2)
+
+        #expect(grouped.map(\.0) == ["2026-01-03", "2026-01-02"])
+        #expect(grouped.flatMap(\.1).map(\.id) == ["new", "middle"])
+    }
+
+    @Test("Transaction filter applies search category account and date")
+    func transactionFilterAppliesCriteria() {
+        let transactions = [
+            TransactionDTO(id: "1", accountId: "checking", amount: 50, date: "2026-01-15", name: "Whole Foods", category: .foodAndDrink),
+            TransactionDTO(id: "2", accountId: "credit", amount: 30, date: "2026-01-15", name: "Whole Foods", category: .foodAndDrink),
+            TransactionDTO(id: "3", accountId: "checking", amount: 20, date: "2026-01-14", name: "Gas", category: .transportation),
+            TransactionDTO(id: "4", accountId: "checking", amount: 12, date: "2026-01-01", name: "Coffee", category: .foodAndDrink),
+        ]
+
+        let filtered = TransactionFilter.filtered(
+            transactions,
+            criteria: TransactionFilterCriteria(
+                searchText: "food",
+                category: .foodAndDrink,
+                accountId: "checking",
+                startDate: "2026-01-10"
+            )
+        )
+
+        #expect(filtered.map(\.id) == ["1"])
+    }
+
+    @Test("Transaction filter search matches category display name")
+    func transactionFilterSearchMatchesCategoryDisplayName() {
+        let transactions = [
+            TransactionDTO(id: "1", accountId: "checking", amount: 50, date: "2026-01-15", name: "Cafe", category: .foodAndDrink),
+            TransactionDTO(id: "2", accountId: "checking", amount: 30, date: "2026-01-15", name: "Gas", category: .transportation),
+        ]
+
+        let filtered = TransactionFilter.filtered(
+            transactions,
+            criteria: TransactionFilterCriteria(searchText: "transport")
+        )
+
+        #expect(filtered.map(\.id) == ["2"])
+    }
+
     // MARK: - LinkResponse Tests
 
     @Test("LinkResponse Codable")
@@ -778,6 +831,29 @@ struct PlaidBarCoreTests {
         #expect(readiness.primaryAction == .addAccount)
     }
 
+    @Test("Dashboard status readiness surfaces recent action failure before empty data")
+    func dashboardStatusReadinessSurfacesRecentActionFailureBeforeEmptyData() {
+        let readiness = DashboardStatusReadiness.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 0,
+            accountCount: 0,
+            syncedItemCount: 0,
+            needsLoginItemCount: 0,
+            erroredItemCount: 0,
+            isSyncStale: true,
+            lastSyncRelative: nil,
+            errorMessage: "Server is running in production, not sandbox."
+        )
+
+        #expect(readiness.level == .warning)
+        #expect(readiness.title == "Recent action failed")
+        #expect(readiness.detail.contains("production"))
+        #expect(readiness.primaryAction == .refresh)
+        #expect(readiness.secondaryActions.contains(.openSettings))
+    }
+
     @Test("Dashboard status readiness blocks on missing credentials")
     func dashboardStatusReadinessBlocksOnMissingCredentials() {
         let readiness = DashboardStatusReadiness.evaluate(
@@ -835,6 +911,27 @@ struct PlaidBarCoreTests {
             isSyncStale: false,
             lastSyncRelative: "2m ago",
             errorMessage: nil
+        )
+
+        #expect(readiness.level == .warning)
+        #expect(readiness.primaryAction == .reconnect)
+        #expect(readiness.title.contains("need login"))
+    }
+
+    @Test("Dashboard status readiness keeps item recovery ahead of recent action failure")
+    func dashboardStatusReadinessKeepsItemRecoveryAheadOfRecentActionFailure() {
+        let readiness = DashboardStatusReadiness.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 2,
+            accountCount: 4,
+            syncedItemCount: 2,
+            needsLoginItemCount: 1,
+            erroredItemCount: 0,
+            isSyncStale: false,
+            lastSyncRelative: "2m ago",
+            errorMessage: "Refresh failed"
         )
 
         #expect(readiness.level == .warning)
@@ -986,6 +1083,23 @@ struct PlaidBarCoreTests {
     @Test("Version bumped to 1.0.0")
     func versionBump() {
         #expect(PlaidBarConstants.appVersion == "1.0.0")
+    }
+
+    // MARK: - CommandLineOptions Tests
+
+    @Test("Command line options return explicit values")
+    func commandLineOptionsReturnExplicitValues() {
+        let arguments = ["PlaidBar", "--demo", "--screenshot-account", "acc_123"]
+
+        #expect(CommandLineOptions.value(for: "--screenshot-account", in: arguments) == "acc_123")
+    }
+
+    @Test("Command line options reject missing values and following flags")
+    func commandLineOptionsRejectMissingValuesAndFollowingFlags() {
+        let arguments = ["PlaidBar", "--demo", "--screenshot-account", "--settings-tab", "status"]
+
+        #expect(CommandLineOptions.value(for: "--screenshot-account", in: arguments) == nil)
+        #expect(CommandLineOptions.value(for: "--settings-tab", in: ["PlaidBar", "--settings-tab"]) == nil)
     }
 
     // MARK: - RecurringTransaction Model Tests
@@ -1242,6 +1356,7 @@ struct PlaidBarCoreTests {
 
         #expect(result.directoryPath == directory.path)
         #expect(result.removedEntries == ["plaidbar.sqlite"])
+        #expect(result.keychainTokensCleared)
         #expect(didResetKeychainTokens)
 
         var isDirectory: ObjCBool = false
@@ -1272,6 +1387,30 @@ struct PlaidBarCoreTests {
 
         #expect(try posixPermissions(at: directory) == 0o700)
         #expect(didResetKeychainTokens)
+    }
+
+    @Test("Local data reset can skip Keychain token cleanup")
+    func localDataResetCanSkipKeychainTokenCleanup() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let directory = root.appendingPathComponent(".plaidbar", isDirectory: true)
+        let database = directory.appendingPathComponent("plaidbar.sqlite")
+
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try "db".write(to: database, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        var didResetKeychainTokens = false
+        let result = try LocalDataStore.resetLocalData(
+            at: directory,
+            resetKeychainTokens: false
+        ) {
+            didResetKeychainTokens = true
+        }
+
+        #expect(result.removedEntries == ["plaidbar.sqlite"])
+        #expect(!result.keychainTokensCleared)
+        #expect(!didResetKeychainTokens)
     }
 
     @Test("Preparing storage directory keeps it private")

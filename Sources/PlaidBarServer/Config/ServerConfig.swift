@@ -176,6 +176,31 @@ struct ServerConfig: Sendable {
         )
     }
 
+    private static func createPrivateEmptyFile(
+        at path: String,
+        fileManager: FileManager
+    ) throws {
+        #if canImport(Darwin)
+        let descriptor = open(path, O_WRONLY | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR)
+        if descriptor >= 0 {
+            close(descriptor)
+            return
+        }
+        if errno == EEXIST {
+            return
+        }
+        throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        #else
+        guard fileManager.createFile(atPath: path, contents: Data()) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        try fileManager.setAttributes(
+            [.posixPermissions: 0o600],
+            ofItemAtPath: path
+        )
+        #endif
+    }
+
     static func dataDirectory() -> String {
         dataDirectory(environment: ProcessInfo.processInfo.environment)
     }
@@ -256,6 +281,29 @@ struct ServerConfig: Sendable {
                 ofItemAtPath: storePath
             )
         }
+    }
+
+    static func preparePrivateSQLiteStoreForOpen(
+        at path: String,
+        fileManager: FileManager = .default
+    ) throws {
+        let directoryPath = URL(fileURLWithPath: path)
+            .deletingLastPathComponent()
+            .path
+        try fileManager.createDirectory(
+            atPath: directoryPath,
+            withIntermediateDirectories: true
+        )
+        try fileManager.setAttributes(
+            [.posixPermissions: 0o700],
+            ofItemAtPath: directoryPath
+        )
+
+        if !fileManager.fileExists(atPath: path) {
+            try createPrivateEmptyFile(at: path, fileManager: fileManager)
+        }
+
+        try enforcePrivateSQLiteStorePermissions(at: path, fileManager: fileManager)
     }
 
     private static func legacyMigrationEnvironment(

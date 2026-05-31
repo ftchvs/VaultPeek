@@ -9,6 +9,7 @@ import Darwin
 public struct LocalDataResetResult: Equatable, Sendable {
     public let directoryPath: String
     public let removedEntries: [String]
+    public let keychainTokensCleared: Bool
 
     public var removedEntryCount: Int {
         removedEntries.count
@@ -16,10 +17,12 @@ public struct LocalDataResetResult: Equatable, Sendable {
 
     public init(
         directoryPath: String,
-        removedEntries: [String]
+        removedEntries: [String],
+        keychainTokensCleared: Bool
     ) {
         self.directoryPath = directoryPath
         self.removedEntries = removedEntries
+        self.keychainTokensCleared = keychainTokensCleared
     }
 }
 
@@ -95,13 +98,16 @@ public enum LocalDataStore {
         try ensurePrivateDirectory(directory, fileManager: fileManager)
         try ensurePrivateAuthTokenPermissions(in: directory, fileManager: fileManager)
 
+        var keychainTokensCleared = false
         if resetKeychainTokens {
             try (keychainTokenReset ?? resetPlaidAccessTokenKeychainItems)()
+            keychainTokensCleared = true
         }
 
         return LocalDataResetResult(
             directoryPath: directory.path,
-            removedEntries: removedEntries
+            removedEntries: removedEntries,
+            keychainTokensCleared: keychainTokensCleared
         )
     }
 

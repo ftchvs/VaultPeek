@@ -80,6 +80,16 @@ if curl -fsS "http://127.0.0.1:$PORT/api/status" >/dev/null 2>&1; then
     exit 1
 fi
 
+if curl -fsS "http://127.0.0.1:$PORT/api/items" >/dev/null 2>&1; then
+    echo "Smoke check failed: unauthenticated API items request succeeded" >&2
+    exit 1
+fi
+
+if curl -fsS -H "Authorization: Bearer definitely-wrong-token" "http://127.0.0.1:$PORT/api/status" >/dev/null 2>&1; then
+    echo "Smoke check failed: bad bearer token API status request succeeded" >&2
+    exit 1
+fi
+
 STATUS_JSON="$(curl -fsS -H "Authorization: Bearer $AUTH_TOKEN" "http://127.0.0.1:$PORT/api/status")"
 ITEMS_JSON="$(curl -fsS -H "Authorization: Bearer $AUTH_TOKEN" "http://127.0.0.1:$PORT/api/items")"
 
@@ -92,6 +102,42 @@ status = json.loads(sys.argv[1])
 items = json.loads(sys.argv[2])
 data_dir = os.path.realpath(sys.argv[3])
 errors = []
+required_status_keys = {
+    "version",
+    "environment",
+    "itemCount",
+    "credentialsConfigured",
+    "storagePath",
+    "syncReady",
+    "syncedItemCount",
+}
+optional_status_keys = {"lastSync"}
+allowed_status_keys = required_status_keys | optional_status_keys
+forbidden_status_fragments = [
+    "account",
+    "access",
+    "balance",
+    "client",
+    "institution",
+    "itemId",
+    "public",
+    "secret",
+    "token",
+    "transaction",
+]
+
+status_keys = set(status)
+missing_status_keys = required_status_keys - status_keys
+unexpected_status_keys = status_keys - allowed_status_keys
+if missing_status_keys or unexpected_status_keys:
+    errors.append(
+        "status response keys changed: "
+        f"missing {sorted(missing_status_keys)}, unexpected {sorted(unexpected_status_keys)}"
+    )
+for key in status_keys:
+    lowered = key.lower()
+    if any(fragment.lower() in lowered for fragment in forbidden_status_fragments):
+        errors.append(f"status response exposes forbidden key-shaped field: {key}")
 
 if status.get("environment") != "sandbox":
     errors.append(f"expected sandbox environment, got {status.get('environment')!r}")
