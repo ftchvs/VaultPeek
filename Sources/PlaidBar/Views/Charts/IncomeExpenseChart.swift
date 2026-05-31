@@ -32,7 +32,7 @@ struct IncomeExpenseChart: View {
 
         return grouped.map { monthStart, txns in
             let income = txns.filter(\.isIncome).reduce(0.0) { $0 + $1.displayAmount }
-            let expenses = txns.filter { !$0.isIncome && $0.category != .transfer && $0.category != .transferOut }
+            let expenses = SpendingSummary.expenseTransactions(from: txns)
                 .reduce(0.0) { $0 + $1.displayAmount }
             return MonthlyData(
                 month: monthStart,
