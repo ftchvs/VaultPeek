@@ -47,11 +47,27 @@ new regression.
 
 ## Backlog
 
+### Progress Ledger
+
+Completed production-readiness slices:
+
+- 2026-05-30: moved notification trigger selection into `PlaidBarCore`.
+- 2026-05-30: moved transaction filtering into `PlaidBarCore`.
+- 2026-05-30: recorded scoped approval to push branches, open PRs, and merge
+  green PlaidBar PRs to remote `main`.
+- 2026-05-30: moved spending period summaries, category rollups, and recurring
+  monthly totals into `PlaidBarCore`.
+- 2026-05-30: clarified recurring empty states for server offline, no linked
+  bank, no synced transactions, and no recurring charges found.
+- 2026-05-30: reused the shared credit utilization summary in the credit tab.
+- 2026-05-30: routed spending trend and income/expense charts through the
+  shared expense filter.
+
 ### Reliability And Trust
 
-1. Finish moving duplicated test formulas into `PlaidBarCore` helpers:
-   notification trigger selection, spending deltas, transaction filtering, and
-   recurring totals.
+1. Continue moving duplicated UI/service formulas into `PlaidBarCore` helpers
+   where they still exist, especially chart totals, credit/debt presentation,
+   and account detail summary logic.
 2. Harden local storage and token handling:
    pre-open SQLite permissions, Keychain fallback copy, reset behavior, and
    private-file invariants.
