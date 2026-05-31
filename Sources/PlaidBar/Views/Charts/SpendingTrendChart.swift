@@ -6,9 +6,7 @@ struct SpendingTrendChart: View {
     let transactions: [TransactionDTO]
 
     private var dailySpending: [(Date, Double)] {
-        let expenses = transactions.filter {
-            !$0.isIncome && $0.category != .transfer && $0.category != .transferOut
-        }
+        let expenses = SpendingSummary.expenseTransactions(from: transactions)
 
         let grouped = Dictionary(grouping: expenses) { $0.date }
         let results: [(Date, Double)] = grouped.compactMap { dateString, txns in
