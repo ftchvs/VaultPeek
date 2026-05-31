@@ -440,13 +440,7 @@ final class AppState {
     }
 
     var spendingByCategory: [(SpendingCategory, Double)] {
-        let expenses = transactions.filter {
-            !$0.isIncome && $0.category != .transfer && $0.category != .transferOut
-        }
-        let grouped = Dictionary(grouping: expenses) { $0.category ?? .other }
-        return grouped.map { (category, txns) in
-            (category, txns.reduce(0) { $0 + $1.displayAmount })
-        }.sorted { $0.1 > $1.1 }
+        SpendingSummary.spendingByCategory(from: transactions)
     }
 
     var totalSpending: Double {
@@ -465,7 +459,7 @@ final class AppState {
 
     /// Monthly equivalent of all recurring charges (normalizes weekly/annual to monthly)
     var estimatedMonthlyRecurring: Double {
-        recurringTransactions.reduce(0) { $0 + $1.averageAmount * $1.frequency.monthlyMultiplier }
+        RecurringSummary.estimatedMonthlyTotal(from: recurringTransactions)
     }
 
     func transactionsForAccount(_ accountId: String) -> [TransactionDTO] {

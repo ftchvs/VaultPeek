@@ -1524,6 +1524,58 @@ struct PlaidBarCoreTests {
         #expect(reloaded.map(\.id) == ["keep"])
     }
 
+    @Test("Spending summary groups expenses and excludes income and transfers")
+    func spendingSummaryGroupsExpenses() {
+        let transactions = [
+            TransactionDTO(id: "1", accountId: "a", amount: 67, date: "2026-01-15", name: "Whole Foods", category: .foodAndDrink),
+            TransactionDTO(id: "2", accountId: "a", amount: 23, date: "2026-01-15", name: "Uber", category: .transportation),
+            TransactionDTO(id: "3", accountId: "a", amount: 45, date: "2026-01-14", name: "Restaurant", category: .foodAndDrink),
+            TransactionDTO(id: "4", accountId: "a", amount: -1200, date: "2026-01-14", name: "Stripe", category: .income),
+            TransactionDTO(id: "5", accountId: "a", amount: 500, date: "2026-01-14", name: "Transfer", category: .transfer),
+        ]
+
+        let spending = SpendingSummary.spendingByCategory(from: transactions)
+
+        #expect(spending.first { $0.0 == .foodAndDrink }?.1 == 112)
+        #expect(spending.first { $0.0 == .transportation }?.1 == 23)
+        #expect(spending.allSatisfy { $0.0 != .income && $0.0 != .transfer })
+    }
+
+    @Test("Spending summary calculates period delta")
+    func spendingSummaryPeriodDelta() {
+        let transactions = [
+            TransactionDTO(id: "1", accountId: "a", amount: 100, date: "2026-03-15", name: "A", category: .foodAndDrink),
+            TransactionDTO(id: "2", accountId: "a", amount: 200, date: "2026-03-10", name: "B", category: .shopping),
+            TransactionDTO(id: "3", accountId: "a", amount: 150, date: "2026-02-15", name: "C", category: .foodAndDrink),
+            TransactionDTO(id: "4", accountId: "a", amount: 100, date: "2026-02-10", name: "D", category: .shopping),
+            TransactionDTO(id: "5", accountId: "a", amount: -3000, date: "2026-03-01", name: "Salary", category: .income),
+        ]
+
+        let summary = SpendingSummary.periodSummary(
+            from: transactions,
+            currentStart: "2026-03-01",
+            previousStart: "2026-02-01"
+        )
+
+        #expect(summary.currentTotal == 300)
+        #expect(summary.previousTotal == 250)
+        #expect(summary.delta == 50)
+        #expect(abs(summary.deltaPercent - 20.0) < 0.01)
+    }
+
+    @Test("Recurring summary normalizes estimated monthly total")
+    func recurringSummaryMonthlyTotal() {
+        let recurring = [
+            RecurringTransaction(merchantName: "Netflix", frequency: .monthly, averageAmount: 15.99, lastDate: "2026-03-15", nextExpectedDate: "2026-04-15", category: .entertainment, transactionCount: 3, confidence: 0.95),
+            RecurringTransaction(merchantName: "Gym", frequency: .monthly, averageAmount: 75.00, lastDate: "2026-03-15", nextExpectedDate: "2026-04-15", category: .healthAndFitness, transactionCount: 3, confidence: 0.90),
+            RecurringTransaction(merchantName: "Weekly Sub", frequency: .weekly, averageAmount: 5.00, lastDate: "2026-03-15", nextExpectedDate: "2026-03-22", category: .entertainment, transactionCount: 5, confidence: 0.85),
+        ]
+
+        let estimated = RecurringSummary.estimatedMonthlyTotal(from: recurring)
+
+        #expect(abs(estimated - 112.66) < 0.01)
+    }
+
     private func posixPermissions(at url: URL) throws -> Int {
         let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
         return (attributes[.posixPermissions] as? NSNumber)?.intValue ?? -1

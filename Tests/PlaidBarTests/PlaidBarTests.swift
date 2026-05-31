@@ -69,9 +69,7 @@ struct PlaidBarTests {
             TransactionDTO(id: "4", accountId: "a", amount: -1200, date: "2026-01-14", name: "Stripe", category: .income),
         ]
 
-        let expenses = transactions.filter { !$0.isIncome }
-        let grouped = Dictionary(grouping: expenses) { $0.category ?? .other }
-        let spending = grouped.map { ($0.key, $0.value.reduce(0.0) { $0 + $1.displayAmount }) }
+        let spending = SpendingSummary.spendingByCategory(from: transactions)
 
         let foodTotal = spending.first { $0.0 == .foodAndDrink }?.1
         #expect(foodTotal == 112)
@@ -86,7 +84,7 @@ struct PlaidBarTests {
             TransactionDTO(id: "1", accountId: "a", amount: -5000, date: "2026-01-15", name: "Salary", category: .income),
             TransactionDTO(id: "2", accountId: "a", amount: -200, date: "2026-01-15", name: "Refund", category: .income),
         ]
-        let expenses = transactions.filter { !$0.isIncome }
+        let expenses = SpendingSummary.expenseTransactions(from: transactions)
         #expect(expenses.isEmpty)
     }
 
@@ -327,26 +325,16 @@ struct PlaidBarTests {
             TransactionDTO(id: "5", accountId: "a", amount: -3000, date: "2026-03-01", name: "Salary", category: .income),
         ]
 
-        let currentStart = "2026-03-01"
-        let prevStart = "2026-02-01"
+        let summary = SpendingSummary.periodSummary(
+            from: transactions,
+            currentStart: "2026-03-01",
+            previousStart: "2026-02-01"
+        )
 
-        let currentSpending = transactions.filter {
-            $0.date >= currentStart && !$0.isIncome && $0.category != .transfer && $0.category != .transferOut
-        }.reduce(0.0) { $0 + $1.displayAmount }
-
-        let prevSpending = transactions.filter {
-            $0.date >= prevStart && $0.date < currentStart &&
-            !$0.isIncome && $0.category != .transfer && $0.category != .transferOut
-        }.reduce(0.0) { $0 + $1.displayAmount }
-
-        #expect(currentSpending == 300)
-        #expect(prevSpending == 250)
-
-        let delta = currentSpending - prevSpending
-        #expect(delta == 50)
-
-        let percent = (delta / prevSpending) * 100
-        #expect(abs(percent - 20.0) < 0.01)
+        #expect(summary.currentTotal == 300)
+        #expect(summary.previousTotal == 250)
+        #expect(summary.delta == 50)
+        #expect(abs(summary.deltaPercent - 20.0) < 0.01)
     }
 
     // MARK: - Category Filter Logic (mirrors TransactionsView)
@@ -452,7 +440,7 @@ struct PlaidBarTests {
         // Monthly: 15.99 + 75.00 = 90.99
         // Weekly $5 * (52/12) = ~$21.67
         // Total ≈ $112.66
-        let estimated = recurring.reduce(0) { $0 + $1.averageAmount * $1.frequency.monthlyMultiplier }
+        let estimated = RecurringSummary.estimatedMonthlyTotal(from: recurring)
 
         #expect(abs(estimated - 112.66) < 0.01)
     }
