@@ -272,6 +272,92 @@ struct PlaidBarCoreTests {
         #expect(AccountPresentation.displayBalance(for: availableCredit) == 0)
     }
 
+    @Test("Account connection presentation covers demo, offline, and healthy sync")
+    func accountConnectionPresentationCoreStates() {
+        let demo = AccountConnectionPresentation.evaluate(
+            isDemoMode: true,
+            serverConnected: false,
+            isSyncStale: true,
+            statusSyncText: "Never synced",
+            itemStatus: nil
+        )
+
+        #expect(demo.level == .demo)
+        #expect(demo.rowLabel == "Demo")
+        #expect(demo.detailLabel == "Demo data")
+        #expect(demo.iconName == "play.circle.fill")
+        #expect(!demo.showsRecoveryActions)
+
+        let offline = AccountConnectionPresentation.evaluate(
+            isDemoMode: false,
+            serverConnected: false,
+            isSyncStale: true,
+            statusSyncText: "Never synced",
+            itemStatus: nil
+        )
+
+        #expect(offline.level == .offline)
+        #expect(offline.rowLabel == "Server offline")
+        #expect(offline.signalLabel == "Offline")
+        #expect(!offline.showsRecoveryActions)
+
+        let healthy = AccountConnectionPresentation.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            isSyncStale: false,
+            statusSyncText: "2m ago",
+            itemStatus: .connected
+        )
+
+        #expect(healthy.level == .healthy)
+        #expect(healthy.rowLabel == "2m ago")
+        #expect(healthy.signalLabel == "Fresh")
+        #expect(healthy.iconName == "checkmark.circle.fill")
+    }
+
+    @Test("Account connection presentation flags stale and reconnectable items")
+    func accountConnectionPresentationRecoveryStates() {
+        let stale = AccountConnectionPresentation.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            isSyncStale: true,
+            statusSyncText: "2h ago",
+            itemStatus: .connected
+        )
+
+        #expect(stale.level == .stale)
+        #expect(stale.signalLabel == "Stale")
+        #expect(stale.iconName == "clock.badge.exclamationmark.fill")
+        #expect(stale.showsRecoveryActions)
+
+        let loginRequired = AccountConnectionPresentation.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            isSyncStale: false,
+            statusSyncText: "2m ago",
+            itemStatus: .loginRequired
+        )
+
+        #expect(loginRequired.level == .loginRequired)
+        #expect(loginRequired.rowLabel == "Reconnect")
+        #expect(loginRequired.detailLabel == "Login required")
+        #expect(loginRequired.signalLabel == "Login")
+        #expect(loginRequired.showsRecoveryActions)
+
+        let errored = AccountConnectionPresentation.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            isSyncStale: false,
+            statusSyncText: "2m ago",
+            itemStatus: .error
+        )
+
+        #expect(errored.level == .error)
+        #expect(errored.rowLabel == "Item error")
+        #expect(errored.signalLabel == "Error")
+        #expect(errored.showsRecoveryActions)
+    }
+
     @Test("Menu bar summary estimates runway from recent monthly spend")
     func menuBarSummaryRunwayMonths() {
         let now = Formatters.parseTransactionDate("2026-01-30")!
