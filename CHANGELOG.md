@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-31 04:11 UTC] — Update
+
+share spending chart filters (#142)
+
+`ac8feec`
+
+---
+
+
 ## [2026-05-31 04:02 UTC] — Update
 
 reuse credit utilization summary (#141)
