@@ -5,14 +5,7 @@ struct CreditView: View {
     @Environment(AppState.self) private var appState
 
     private var totalUtilization: Double {
-        let totalBalance = appState.creditAccounts.reduce(0.0) {
-            $0 + abs($1.balances.current ?? 0)
-        }
-        let totalLimit = appState.creditAccounts.reduce(0.0) {
-            $0 + ($1.balances.limit ?? 0)
-        }
-        guard totalLimit > 0 else { return 0 }
-        return (totalBalance / totalLimit) * 100
+        appState.totalCreditUtilization ?? 0
     }
 
     var body: some View {
