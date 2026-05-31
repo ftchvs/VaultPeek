@@ -33,6 +33,7 @@ struct PlaidBarServer: AsyncParsableCommand {
         )
 
         // Set up Fluent with SQLite
+        try ServerConfig.preparePrivateSQLiteStoreForOpen(at: serverConfig.databasePath)
         let fluent = Fluent(logger: logger)
         fluent.databases.use(.sqlite(.file(serverConfig.databasePath)), as: .sqlite)
 

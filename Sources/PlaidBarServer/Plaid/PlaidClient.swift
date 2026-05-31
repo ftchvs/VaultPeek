@@ -1,6 +1,6 @@
 import Foundation
 #if canImport(FoundationNetworking)
-import FoundationNetworking
+    import FoundationNetworking
 #endif
 
 actor PlaidClient {
@@ -24,11 +24,11 @@ actor PlaidClient {
 
         let dec = JSONDecoder()
         dec.keyDecodingStrategy = .convertFromSnakeCase
-        self.decoder = dec
+        decoder = dec
 
         let enc = JSONEncoder()
         enc.keyEncodingStrategy = .convertToSnakeCase
-        self.encoder = enc
+        encoder = enc
     }
 
     // MARK: - Link Token
@@ -93,7 +93,7 @@ actor PlaidClient {
             secret: config.plaidSecret,
             publicToken: publicToken
         )
-        return try await post("/item/public_token/exchange", body: body)
+        return try await post("/item/public_token/exchange", body: body, retryPolicy: .singleAttempt)
     }
 
     // MARK: - Accounts
@@ -140,14 +140,15 @@ actor PlaidClient {
             secret: config.plaidSecret,
             accessToken: accessToken
         )
-        let _: PlaidBaseResponse = try await post("/item/remove", body: body)
+        let _: PlaidBaseResponse = try await post("/item/remove", body: body, retryPolicy: .singleAttempt)
     }
 
     // MARK: - Private
 
-    private func post<T: Encodable, R: Decodable>(
+    private func post<R: Decodable>(
         _ path: String,
-        body: T
+        body: some Encodable,
+        retryPolicy: PlaidRetryPolicy = .transient
     ) async throws -> R {
         guard let url = URL(string: "\(config.plaidBaseURL)\(path)") else {
             throw PlaidError.invalidResponse
@@ -160,7 +161,8 @@ actor PlaidClient {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = requestBody
 
-        for attempt in 1...maxAttempts {
+        let allowedAttempts = Self.allowedAttempts(maxAttempts: maxAttempts, retryPolicy: retryPolicy)
+        for attempt in 1 ... allowedAttempts {
             do {
                 let (data, response) = try await session.data(for: request)
 
@@ -168,8 +170,8 @@ actor PlaidClient {
                     throw PlaidError.invalidResponse
                 }
 
-                guard (200...299).contains(httpResponse.statusCode) else {
-                    if Self.isRetryableHTTPStatus(httpResponse.statusCode), attempt < maxAttempts {
+                guard (200 ... 299).contains(httpResponse.statusCode) else {
+                    if Self.isRetryableHTTPStatus(httpResponse.statusCode), attempt < allowedAttempts {
                         try await sleepBeforeRetry(attempt: attempt)
                         continue
                     }
@@ -187,7 +189,7 @@ actor PlaidClient {
             } catch let error as CancellationError {
                 throw error
             } catch {
-                guard attempt < maxAttempts, Self.isRetryableTransportError(error) else {
+                guard attempt < allowedAttempts, Self.isRetryableTransportError(error) else {
                     throw error
                 }
                 try await sleepBeforeRetry(attempt: attempt)
@@ -214,13 +216,14 @@ actor PlaidClient {
     }
 
     static func isRetryableHTTPStatus(_ statusCode: Int) -> Bool {
-        statusCode == 429 || (500...599).contains(statusCode)
+        statusCode == 429 || (500 ... 599).contains(statusCode)
     }
 
     static func isRetryableTransportError(_ error: Error) -> Bool {
         guard let urlError = error as? URLError else { return false }
         switch urlError.code {
-        case .timedOut, .cannotFindHost, .cannotConnectToHost, .networkConnectionLost, .dnsLookupFailed, .notConnectedToInternet:
+        case .timedOut, .cannotFindHost, .cannotConnectToHost, .networkConnectionLost, .dnsLookupFailed,
+             .notConnectedToInternet:
             return true
         default:
             return false
@@ -232,6 +235,20 @@ actor PlaidClient {
         let multiplier = UInt64(1) << min(exponent, 4)
         return min(baseDelayNanoseconds * multiplier, 8_000_000_000)
     }
+
+    static func allowedAttempts(maxAttempts: Int, retryPolicy: PlaidRetryPolicy) -> Int {
+        switch retryPolicy {
+        case .transient:
+            max(1, maxAttempts)
+        case .singleAttempt:
+            1
+        }
+    }
+}
+
+enum PlaidRetryPolicy: Sendable {
+    case transient
+    case singleAttempt
 }
 
 // MARK: - Errors
@@ -249,7 +266,7 @@ enum PlaidError: Error, LocalizedError, Sendable {
         switch self {
         case .invalidResponse:
             "Invalid response from Plaid API"
-        case .apiError(let statusCode, _, _, let message):
+        case let .apiError(statusCode, _, _, message):
             "Plaid API error (\(statusCode)): \(message)"
         }
     }

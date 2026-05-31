@@ -21,45 +21,15 @@ struct TransactionsView: View {
     }
 
     private var filteredTransactions: [(String, [TransactionDTO])] {
-        var base = appState.transactionsByDate
-
-        // Text search
-        if !searchText.isEmpty {
-            let query = searchText.lowercased()
-            base = base.compactMap { (date, txns) in
-                let filtered = txns.filter {
-                    $0.displayName.lowercased().contains(query) ||
-                    ($0.category?.displayName.lowercased().contains(query) ?? false)
-                }
-                return filtered.isEmpty ? nil : (date, filtered)
-            }
-        }
-
-        // Category filter
-        if let category = selectedCategory {
-            base = base.compactMap { (date, txns) in
-                let filtered = txns.filter { $0.category == category }
-                return filtered.isEmpty ? nil : (date, filtered)
-            }
-        }
-
-        // Account filter
-        if let accountId = selectedAccountId {
-            base = base.compactMap { (date, txns) in
-                let filtered = txns.filter { $0.accountId == accountId }
-                return filtered.isEmpty ? nil : (date, filtered)
-            }
-        }
-
-        // Date range filter
-        if let startDate = selectedDateRange.startDate() {
-            base = base.compactMap { (date, txns) in
-                let filtered = txns.filter { $0.date >= startDate }
-                return filtered.isEmpty ? nil : (date, filtered)
-            }
-        }
-
-        return base
+        TransactionFilter.groupedRecent(
+            from: appState.transactions,
+            criteria: TransactionFilterCriteria(
+                searchText: searchText,
+                category: selectedCategory,
+                accountId: selectedAccountId,
+                startDate: selectedDateRange.startDate()
+            )
+        )
     }
 
     private var hasActiveFilters: Bool {

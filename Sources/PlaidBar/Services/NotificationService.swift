@@ -96,9 +96,11 @@ final class NotificationService: NotificationServiceProtocol {
     }
 
     private func checkLargeTransactions(transactions: [TransactionDTO], threshold: Double) async {
-        let large = transactions.filter {
-            !$0.isIncome && $0.displayAmount >= threshold && !notifiedTransactionIdSet.contains($0.id)
-        }
+        let large = NotificationTriggerSelection.largeTransactions(
+            from: transactions,
+            threshold: threshold,
+            excluding: notifiedTransactionIdSet
+        )
 
         for tx in large {
             let didSchedule = await sendNotification(
@@ -121,9 +123,10 @@ final class NotificationService: NotificationServiceProtocol {
     }
 
     private func checkLowBalance(accounts: [AccountDTO], threshold: Double) async {
-        let lowAccounts = accounts.filter {
-            $0.type == .depository && $0.balances.effectiveBalance < threshold
-        }
+        let lowAccounts = NotificationTriggerSelection.lowBalanceAccounts(
+            from: accounts,
+            threshold: threshold
+        )
 
         clearResolvedDedup(
             activeIds: Set(lowAccounts.map(\.id)),
@@ -146,9 +149,10 @@ final class NotificationService: NotificationServiceProtocol {
     }
 
     private func checkHighUtilization(accounts: [AccountDTO], threshold: Double) async {
-        let highUtil = accounts.filter {
-            $0.type == .credit && ($0.balances.utilizationPercent ?? 0) > threshold
-        }
+        let highUtil = NotificationTriggerSelection.highUtilizationAccounts(
+            from: accounts,
+            threshold: threshold
+        )
 
         clearResolvedDedup(
             activeIds: Set(highUtil.map(\.id)),
@@ -192,13 +196,4 @@ final class NotificationService: NotificationServiceProtocol {
             return false
         }
     }
-}
-
-struct NotificationTriggers: Sendable {
-    var largeTransaction: Bool = true
-    var lowBalance: Bool = true
-    var highUtilization: Bool = true
-    var largeTransactionThreshold: Double = 500
-    var lowBalanceThreshold: Double = 100
-    var creditUtilizationThreshold: Double = 30
 }

@@ -1,5 +1,6 @@
 import SwiftUI
 import MenuBarExtraAccess
+import PlaidBarCore
 import Sparkle
 
 @main
@@ -45,7 +46,7 @@ struct PlaidBarApp: App {
     private static func applyScreenshotDefaults() {
         guard CommandLine.arguments.contains("--demo") else { return }
 
-        if let filter = argumentValue(for: "--screenshot-filter") {
+        if let filter = CommandLineOptions.value(for: "--screenshot-filter") {
             let normalizedFilter = ["all", "cash", "credit", "savings", "debt", "status"]
                 .first { $0 == filter.lowercased() }
                 .map { $0.prefix(1).uppercased() + $0.dropFirst() }
@@ -55,22 +56,14 @@ struct PlaidBarApp: App {
             }
         }
 
-        if let accountId = argumentValue(for: "--screenshot-account") {
+        if let accountId = CommandLineOptions.value(for: "--screenshot-account") {
             UserDefaults.standard.set(accountId, forKey: "dashboard.selectedAccountId")
         } else if CommandLine.arguments.contains("--screenshot-filter") {
             UserDefaults.standard.removeObject(forKey: "dashboard.selectedAccountId")
         }
 
-        if let settingsTab = argumentValue(for: "--settings-tab") {
+        if let settingsTab = CommandLineOptions.value(for: "--settings-tab") {
             UserDefaults.standard.set(settingsTab.lowercased(), forKey: "settings.selectedTab")
         }
-    }
-
-    private static func argumentValue(for flag: String) -> String? {
-        guard let index = CommandLine.arguments.firstIndex(of: flag),
-              index + 1 < CommandLine.arguments.count else {
-            return nil
-        }
-        return CommandLine.arguments[index + 1]
     }
 }

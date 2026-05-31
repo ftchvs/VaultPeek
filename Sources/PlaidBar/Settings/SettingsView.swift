@@ -199,13 +199,19 @@ struct GeneralSettingsView: View {
         do {
             let result = try appState.resetLocalData()
             if result.removedEntryCount == 0 {
-                resetResultMessage = "No existing files were found. \(appState.localStoragePathText) is ready for a fresh local server start."
+                resetResultMessage = "No existing files were found. \(appState.localStoragePathText) is ready for a fresh local server start. \(keychainResetText(for: result))"
             } else {
-                resetResultMessage = "Removed \(result.removedEntryCount) item\(result.removedEntryCount == 1 ? "" : "s") from \(appState.localStoragePathText). Restart PlaidBarServer before reconnecting accounts."
+                resetResultMessage = "Removed \(result.removedEntryCount) item\(result.removedEntryCount == 1 ? "" : "s") from \(appState.localStoragePathText). \(keychainResetText(for: result)) Restart PlaidBarServer before reconnecting accounts."
             }
         } catch {
             resetErrorMessage = error.localizedDescription
         }
+    }
+
+    private func keychainResetText(for result: LocalDataResetResult) -> String {
+        result.keychainTokensCleared
+            ? "Stored Plaid access-token entries were cleared from Keychain when present."
+            : "Stored Plaid access-token entries were not cleared from Keychain."
     }
 }
 
