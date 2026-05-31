@@ -67,6 +67,45 @@ public enum LocalDataStore {
         return homeDirectory.appendingPathComponent(".plaidbar", isDirectory: true)
     }
 
+    public static func storageDirectoryURL(
+        forServerStoragePath serverStoragePath: String?,
+        fallback: URL = storageDirectoryURL()
+    ) -> URL {
+        guard let storagePath = serverStoragePath?.trimmedNonEmpty else {
+            return fallback
+        }
+
+        if storagePath == displayPath {
+            return fallback
+        }
+
+        let expandedPath = NSString(string: storagePath).expandingTildeInPath
+        let storageURL = URL(fileURLWithPath: expandedPath)
+        if storageURL.pathExtension.lowercased() == "sqlite" {
+            return storageURL.deletingLastPathComponent()
+        }
+
+        return URL(fileURLWithPath: expandedPath, isDirectory: true)
+    }
+
+    public static func displayPath(
+        for url: URL,
+        homeDirectory: URL = accountHomeDirectoryURL()
+    ) -> String {
+        let homePath = homeDirectory.standardizedFileURL.path
+        let path = url.standardizedFileURL.path
+
+        if path == homePath {
+            return "~"
+        }
+
+        if path.hasPrefix(homePath + "/") {
+            return "~" + String(path.dropFirst(homePath.count))
+        }
+
+        return path
+    }
+
     @discardableResult
     public static func resetLocalData(
         at directory: URL = storageDirectoryURL(),

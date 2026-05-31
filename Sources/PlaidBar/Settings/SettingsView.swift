@@ -115,13 +115,13 @@ struct GeneralSettingsView: View {
                 SettingsCard(title: "Local Data") {
                     settingsRow("Storage path", alignment: .top) {
                         VStack(alignment: .trailing, spacing: Spacing.xs) {
-                            Text(appState.localStoragePathText)
+                            Text(appState.activeStorageDirectoryDisplayText)
                                 .font(.system(.body, design: .monospaced))
                                 .lineLimit(2)
                                 .multilineTextAlignment(.trailing)
                                 .textSelection(.enabled)
 
-                            Text(appState.localStorageResolvedDisplayPathText)
+                            Text(storageDetailText)
                                 .detailText()
                                 .lineLimit(2)
                                 .multilineTextAlignment(.trailing)
@@ -164,7 +164,7 @@ struct GeneralSettingsView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This deletes files under \(appState.localStoragePathText), including the SQLite database, stored Plaid access tokens, and sync cursors. It keeps the app/server auth token so the running local server stays reachable. It also clears currently loaded accounts, transactions, and balance history from this app. It does not revoke bank permissions, remove Plaid dashboard Items, delete Plaid credentials from your shell environment, or change app preferences. Stop and restart PlaidBarServer after resetting.")
+            Text("This deletes files under \(appState.activeStorageDirectoryDisplayText), including the SQLite database, stored Plaid access tokens, and sync cursors. It keeps the app/server auth token so the running local server stays reachable. It also clears currently loaded accounts, transactions, and balance history from this app. It does not revoke bank permissions, remove Plaid dashboard Items, delete Plaid credentials from your shell environment, or change app preferences. Stop and restart PlaidBarServer after resetting.")
         }
         .alert("Local Data Reset", isPresented: Binding(
             get: { resetResultMessage != nil },
@@ -185,27 +185,35 @@ struct GeneralSettingsView: View {
     }
 
     private func revealStorageDirectory() {
-        let url = appState.localStorageDirectoryURL
+        let url = appState.activeStorageDirectoryURL
         try? LocalDataStore.prepareStorageDirectory(at: url)
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
     private func copyStoragePath() {
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(appState.localStorageResolvedPathText, forType: .string)
+        NSPasteboard.general.setString(appState.activeStorageDirectoryURL.path, forType: .string)
     }
 
     private func resetLocalData() {
         do {
             let result = try appState.resetLocalData()
             if result.removedEntryCount == 0 {
-                resetResultMessage = "No existing files were found. \(appState.localStoragePathText) is ready for a fresh local server start. \(keychainResetText(for: result))"
+                resetResultMessage = "No existing files were found. \(LocalDataStore.displayPath(for: URL(fileURLWithPath: result.directoryPath, isDirectory: true))) is ready for a fresh local server start. \(keychainResetText(for: result))"
             } else {
-                resetResultMessage = "Removed \(result.removedEntryCount) item\(result.removedEntryCount == 1 ? "" : "s") from \(appState.localStoragePathText). \(keychainResetText(for: result)) Restart PlaidBarServer before reconnecting accounts."
+                resetResultMessage = "Removed \(result.removedEntryCount) item\(result.removedEntryCount == 1 ? "" : "s") from \(LocalDataStore.displayPath(for: URL(fileURLWithPath: result.directoryPath, isDirectory: true))). \(keychainResetText(for: result)) Restart PlaidBarServer before reconnecting accounts."
             }
         } catch {
             resetErrorMessage = error.localizedDescription
         }
+    }
+
+    private var storageDetailText: String {
+        if let serverStoragePath = appState.serverStoragePath {
+            return "Server database: \(LocalDataStore.displayPath(for: URL(fileURLWithPath: NSString(string: serverStoragePath).expandingTildeInPath)))"
+        }
+
+        return "Default: \(appState.localStorageResolvedDisplayPathText)"
     }
 
     private func keychainResetText(for result: LocalDataResetResult) -> String {

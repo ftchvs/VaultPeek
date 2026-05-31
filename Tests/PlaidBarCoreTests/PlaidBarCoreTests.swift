@@ -1342,6 +1342,44 @@ struct PlaidBarCoreTests {
         #expect(resolved == directory)
     }
 
+    @Test("Local data store resolves active directory from server database path")
+    func localDataStoreResolvesActiveDirectoryFromServerDatabasePath() {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let database = root
+            .appendingPathComponent("custom-plaidbar", isDirectory: true)
+            .appendingPathComponent("plaidbar-production.sqlite")
+
+        let directory = LocalDataStore.storageDirectoryURL(
+            forServerStoragePath: database.path
+        )
+
+        #expect(directory == database.deletingLastPathComponent())
+    }
+
+    @Test("Local data store falls back for demo display path")
+    func localDataStoreFallsBackForDemoDisplayPath() {
+        let fallback = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+
+        let directory = LocalDataStore.storageDirectoryURL(
+            forServerStoragePath: LocalDataStore.displayPath,
+            fallback: fallback
+        )
+
+        #expect(directory == fallback)
+    }
+
+    @Test("Local data store display path abbreviates home")
+    func localDataStoreDisplayPathAbbreviatesHome() {
+        let home = URL(fileURLWithPath: "/Users/example", isDirectory: true)
+        let directory = home.appendingPathComponent(".plaidbar", isDirectory: true)
+
+        #expect(LocalDataStore.displayPath(for: directory, homeDirectory: home) == "~/.plaidbar")
+        #expect(LocalDataStore.displayPath(for: home, homeDirectory: home) == "~")
+        #expect(LocalDataStore.displayPath(for: URL(fileURLWithPath: "/var/tmp/plaidbar"), homeDirectory: home) == "/var/tmp/plaidbar")
+    }
+
     @Test("Local data reset removes data files and keeps server auth token")
     func localDataResetRemovesDataFilesAndKeepsAuthToken() throws {
         let root = URL(fileURLWithPath: NSTemporaryDirectory())
