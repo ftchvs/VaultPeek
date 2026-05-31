@@ -20,6 +20,10 @@ public struct SpendingHeatmapDay: Identifiable, Sendable, Hashable {
 }
 
 public enum SpendingHeatmap {
+    public static func displayCashflowAmount(_ value: Double) -> Double {
+        -value
+    }
+
     public static func days(
         from transactions: [TransactionDTO],
         startDate: Date,

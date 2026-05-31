@@ -375,6 +375,13 @@ struct PlaidBarCoreTests {
         #expect(days.first?.transactionCount == 2)
     }
 
+    @Test("Net cashflow display flips Plaid signs for finance presentation")
+    func netCashflowDisplayFlipsPlaidSigns() {
+        #expect(SpendingHeatmap.displayCashflowAmount(-175) == 175)
+        #expect(SpendingHeatmap.displayCashflowAmount(75) == -75)
+        #expect(SpendingHeatmap.displayCashflowAmount(0) == 0)
+    }
+
     // MARK: - AccountDTO Tests
 
     @Test("AccountDTO Codable roundtrip")

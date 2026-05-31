@@ -537,13 +537,15 @@ private struct BalanceActivityHeatmap: View {
         guard mode == .netCashflow else {
             return Formatters.currency(totalValue, format: .compact)
         }
-        let prefix = totalValue > 0 ? "+" : totalValue < 0 ? "-" : ""
-        return "\(prefix)\(Formatters.currency(abs(totalValue), format: .compact))"
+        return cashflowText(for: totalValue)
     }
 
     private var totalTint: Color {
         guard mode == .netCashflow else { return .secondary }
-        return totalValue < 0 ? SemanticColors.positive : SemanticColors.negative
+        let displayAmount = SpendingHeatmap.displayCashflowAmount(totalValue)
+        if displayAmount > 0 { return SemanticColors.positive }
+        if displayAmount < 0 { return SemanticColors.negative }
+        return .secondary
     }
 
     private var weekColumns: [[SpendingHeatmapDay?]] {
@@ -690,6 +692,12 @@ private struct BalanceActivityHeatmap: View {
     private func monthLabel(for date: Date) -> String {
         calendar.shortMonthSymbols[calendar.component(.month, from: date) - 1]
     }
+
+    private func cashflowText(for value: Double) -> String {
+        let displayAmount = SpendingHeatmap.displayCashflowAmount(value)
+        let prefix = displayAmount > 0 ? "+" : displayAmount < 0 ? "-" : ""
+        return "\(prefix)\(Formatters.currency(abs(displayAmount), format: .compact))"
+    }
 }
 
 private struct NetLegendKey: View {
@@ -736,8 +744,9 @@ private struct BalanceHeatmapCell: View {
     private var helpText: String {
         let amount: String
         if mode == .netCashflow {
-            let prefix = day.value > 0 ? "+" : day.value < 0 ? "-" : ""
-            amount = "\(prefix)\(Formatters.currency(abs(day.value), format: .full))"
+            let displayAmount = SpendingHeatmap.displayCashflowAmount(day.value)
+            let prefix = displayAmount > 0 ? "+" : displayAmount < 0 ? "-" : ""
+            amount = "\(prefix)\(Formatters.currency(abs(displayAmount), format: .full))"
         } else {
             amount = Formatters.currency(day.value, format: .full)
         }
