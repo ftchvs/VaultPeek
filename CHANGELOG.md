@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-31 03:55 UTC] — Update
+
+clarify recurring empty states (#140)
+
+`e23704c`
+
+---
+
+
 ## [2026-05-31 03:47 UTC] — Update
 
 centralize spending summaries (#139)
