@@ -383,14 +383,26 @@ struct PlaidBarTests {
     func largeTransactionTrigger() {
         let transactions = [
             TransactionDTO(id: "1", accountId: "a", amount: 650, date: "2026-03-15", name: "Big Purchase"),
+            TransactionDTO(id: "4", accountId: "a", amount: 500, date: "2026-03-15", name: "Threshold Purchase"),
             TransactionDTO(id: "2", accountId: "a", amount: 50, date: "2026-03-15", name: "Small"),
             TransactionDTO(id: "3", accountId: "a", amount: -1000, date: "2026-03-15", name: "Income", category: .income),
         ]
 
         let threshold = 500.0
-        let large = transactions.filter { !$0.isIncome && $0.displayAmount >= threshold }
-        #expect(large.count == 1)
+        let large = NotificationTriggerSelection.largeTransactions(
+            from: transactions,
+            threshold: threshold
+        )
+        #expect(large.count == 2)
         #expect(large[0].id == "1")
+        #expect(large[1].id == "4")
+
+        let newLarge = NotificationTriggerSelection.largeTransactions(
+            from: transactions,
+            threshold: threshold,
+            excluding: ["1"]
+        )
+        #expect(newLarge.map(\.id) == ["4"])
     }
 
     @Test("Low balance detection")
@@ -402,7 +414,10 @@ struct PlaidBarTests {
         ]
 
         let threshold = 100.0
-        let lowBalance = accounts.filter { $0.type == .depository && $0.balances.effectiveBalance < threshold }
+        let lowBalance = NotificationTriggerSelection.lowBalanceAccounts(
+            from: accounts,
+            threshold: threshold
+        )
         #expect(lowBalance.count == 1)
         #expect(lowBalance[0].id == "1")
     }
@@ -412,12 +427,14 @@ struct PlaidBarTests {
         let accounts = [
             AccountDTO(id: "1", itemId: "i", name: "Amex", type: .credit, balances: BalanceDTO(current: -200, limit: 10000)),
             AccountDTO(id: "2", itemId: "i", name: "Visa", type: .credit, balances: BalanceDTO(current: -4500, limit: 5000)),
+            AccountDTO(id: "3", itemId: "i", name: "Store Card", type: .credit, balances: BalanceDTO(current: -300, limit: 1000)),
         ]
 
         let threshold = 30.0
-        let highUtil = accounts.filter {
-            $0.type == .credit && ($0.balances.utilizationPercent ?? 0) > threshold
-        }
+        let highUtil = NotificationTriggerSelection.highUtilizationAccounts(
+            from: accounts,
+            threshold: threshold
+        )
         #expect(highUtil.count == 1)
         #expect(highUtil[0].id == "2")
     }
