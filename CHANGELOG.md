@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-31 03:24 UTC] — Update
+
+harden PlaidBar production readiness (#138)
+
+`086af8a`
+
+---
+
+
 ## [2026-05-29 02:03 UTC] — Update
 
 Improve notification permission recovery (#137)
