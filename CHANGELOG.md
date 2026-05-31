@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-31 04:02 UTC] — Update
+
+reuse credit utilization summary (#141)
+
+`99dce33`
+
+---
+
+
 ## [2026-05-31 03:55 UTC] — Update
 
 clarify recurring empty states (#140)
