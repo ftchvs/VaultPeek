@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-05-31 03:47 UTC] — Update
+
+centralize spending summaries (#139)
+
+`8a10c4a`
+
+---
+
+
 ## [2026-05-31 03:24 UTC] — Update
 
 harden PlaidBar production readiness (#138)
