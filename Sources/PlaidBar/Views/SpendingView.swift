@@ -51,14 +51,7 @@ struct SpendingView: View {
     }
 
     private var filteredSpending: [(SpendingCategory, Double)] {
-        let filtered = filteredTransactions.filter {
-            !$0.isIncome && $0.category != .transfer && $0.category != .transferOut
-        }
-
-        let grouped = Dictionary(grouping: filtered) { $0.category ?? .other }
-        return grouped.map { (category, txns) in
-            (category, txns.reduce(0) { $0 + $1.displayAmount })
-        }.sorted { $0.1 > $1.1 }
+        spendingSummary.categories
     }
 
     /// Top 5 categories + "Other" rollup to prevent tiny chart slivers
@@ -70,27 +63,30 @@ struct SpendingView: View {
     }
 
     private var totalFiltered: Double {
-        filteredSpending.reduce(0) { $0 + $1.1 }
+        spendingSummary.currentTotal
     }
 
     // MARK: - Month-over-Month Comparison
 
     private var previousPeriodSpending: Double {
-        let interval = periodInterval
-        let filtered = appState.transactions.filter {
-            $0.date >= interval.previous && $0.date < interval.current &&
-            !$0.isIncome && $0.category != .transfer && $0.category != .transferOut
-        }
-        return filtered.reduce(0) { $0 + $1.displayAmount }
+        spendingSummary.previousTotal
     }
 
     private var spendingDelta: Double {
-        totalFiltered - previousPeriodSpending
+        spendingSummary.delta
     }
 
     private var spendingDeltaPercent: Double {
-        guard previousPeriodSpending > 0 else { return 0 }
-        return (spendingDelta / previousPeriodSpending) * 100
+        spendingSummary.deltaPercent
+    }
+
+    private var spendingSummary: SpendingPeriodSummary {
+        let interval = periodInterval
+        return SpendingSummary.periodSummary(
+            from: appState.transactions,
+            currentStart: interval.current,
+            previousStart: interval.previous
+        )
     }
 
     var body: some View {
