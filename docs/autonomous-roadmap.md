@@ -82,6 +82,8 @@ Completed production-readiness slices:
   status diagnostics, Plaid item status rows, and Settings account rows.
 - 2026-05-31: added VoiceOver labels for dashboard account filter chips,
   drill-down rows, selected account signal pills, and mini activity rows.
+- 2026-05-31: added VoiceOver summaries for spending trend, income/expense,
+  and standalone heatmap chart signals.
 
 ### Reliability And Trust
 
