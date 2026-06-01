@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-01 02:27 UTC] — Fix
+
+label error banner dismissal (#153)
+
+`f7b477d`
+
+---
+
+
 ## [2026-06-01 02:19 UTC] — Documentation
 
 update autonomous roadmap progress (#152)
