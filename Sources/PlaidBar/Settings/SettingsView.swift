@@ -636,10 +636,14 @@ struct NotificationSettingsView: View {
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
+                    .accessibilityHint("Opens macOS Notification settings for PlaidBar.")
                     .padding(.top, Spacing.xs)
                 }
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("macOS notification permission: \(permissionLabel)")
+        .accessibilityHint(permissionDetail)
     }
 
     private func refreshPermissionStatus() async {
