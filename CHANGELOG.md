@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-01 09:14 UTC] — Fix
+
+clarify first-run partial sync recovery (#163)
+
+`6032bc2`
+
+---
+
+
 ## [2026-06-01 03:42 UTC] — Fix
 
 label spending chart signals (#162)
