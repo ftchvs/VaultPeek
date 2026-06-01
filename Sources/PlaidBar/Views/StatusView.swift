@@ -173,7 +173,7 @@ struct StatusView: View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             HStack(spacing: Spacing.xs) {
                 Image(systemName: "lock.doc")
-                Text("Local data path: \(appState.activeStorageDirectoryDisplayText)")
+                Text("Local data directory: \(appState.activeStorageDirectoryDisplayText)")
             }
             .detailText()
 
