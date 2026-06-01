@@ -12,6 +12,35 @@ public enum AccountPresentation {
         return account.balances.effectiveBalance
     }
 
+    public static func availableBalance(for account: AccountDTO) -> Double {
+        if let available = account.balances.available {
+            return available
+        }
+
+        guard isDebt(account) else {
+            return account.balances.effectiveBalance
+        }
+
+        guard account.type == .credit,
+              let limit = account.balances.limit,
+              limit > 0
+        else {
+            return 0
+        }
+
+        return max(0, limit - displayBalance(for: account))
+    }
+
+    public static func displayName(for account: AccountDTO) -> String {
+        account.officialName ?? account.name
+    }
+
+    public static func subtitle(for account: AccountDTO) -> String {
+        let subtype = account.subtype?.capitalized ?? account.type.rawValue.capitalized
+        let mask = account.mask.map { " •••• \($0)" } ?? ""
+        return "\(account.type.rawValue.capitalized) • \(subtype)\(mask)"
+    }
+
     public static func iconName(for account: AccountDTO) -> String {
         switch account.type {
         case .credit:

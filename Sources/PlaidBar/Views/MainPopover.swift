@@ -1347,10 +1347,10 @@ private struct SelectedAccountPanel: View {
                     Text("Details")
                         .sectionTitle()
                         .foregroundStyle(.secondary)
-                    Text(account.officialName ?? account.name)
+                    Text(AccountPresentation.displayName(for: account))
                         .font(.headline.weight(.bold))
                         .lineLimit(1)
-                    Text(selectedSubtitle)
+                    Text(AccountPresentation.subtitle(for: account))
                         .detailText()
                         .lineLimit(1)
                 }
@@ -1456,14 +1456,8 @@ private struct SelectedAccountPanel: View {
         }
     }
 
-    private var selectedSubtitle: String {
-        let subtype = account.subtype?.capitalized ?? account.type.rawValue.capitalized
-        let mask = account.mask.map { " •••• \($0)" } ?? ""
-        return "\(account.type.rawValue.capitalized) • \(subtype)\(mask)"
-    }
-
     private var availableText: String {
-        Formatters.currency(account.balances.available ?? account.balances.effectiveBalance, format: .compact)
+        Formatters.currency(AccountPresentation.availableBalance(for: account), format: .compact)
     }
 
     private var currentText: String {
