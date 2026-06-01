@@ -92,6 +92,8 @@ Completed production-readiness slices:
   opening Plaid Link.
 - 2026-06-01: labeled credit utilization status in summary and account
   accessibility surfaces.
+- 2026-06-01: labeled dashboard credit utilization status in account rows and
+  selected details.
 
 ### Reliability And Trust
 
