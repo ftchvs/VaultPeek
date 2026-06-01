@@ -190,7 +190,7 @@ struct AccountRow: View {
         .padding(.vertical, Spacing.rowVertical)
         .hoverHighlight()
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(account.name), \(formattedAmount)\(AccountPresentation.isDebt(account) ? " owed" : "")")
+        .accessibilityLabel(accessibilityLabel)
     }
 
     private var formattedAmount: String {
@@ -199,5 +199,22 @@ struct AccountRow: View {
 
     private var amountColor: Color {
         AccountPresentation.isDebt(account) ? SemanticColors.creditDebt : .primary
+    }
+
+    private var accessibilityLabel: String {
+        var components = [String]()
+        components.append(account.name)
+        if let institutionName = account.institutionName {
+            components.append(institutionName)
+        }
+        components.append(account.type.rawValue.capitalized)
+        if let mask = account.mask {
+            components.append("Ending in \(mask)")
+        }
+        components.append("\(formattedAmount)\(AccountPresentation.isDebt(account) ? " owed" : "")")
+        if let utilization = account.balances.utilizationPercent {
+            components.append("\(Formatters.percent(utilization)) utilization")
+        }
+        return components.joined(separator: ", ")
     }
 }
