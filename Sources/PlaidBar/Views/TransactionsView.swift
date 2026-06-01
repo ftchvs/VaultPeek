@@ -46,6 +46,7 @@ struct TransactionsView: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
+            .accessibilityLabel("Transaction view")
             .padding(.horizontal, Spacing.lg)
             .padding(.top, Spacing.sm)
             .padding(.bottom, Spacing.sm)
@@ -81,6 +82,8 @@ struct TransactionsView: View {
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.borderless)
+                .help("Clear transaction search")
+                .accessibilityLabel("Clear transaction search")
             }
         }
         .padding(.horizontal, Spacing.md)
