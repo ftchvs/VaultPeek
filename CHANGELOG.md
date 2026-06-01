@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-01 01:19 UTC] — Feature
+
+show transaction source context (#147)
+
+`bfe493d`
+
+---
+
+
 ## [2026-06-01 01:11 UTC] — Update
 
 reuse credit presentation balances (#146)
