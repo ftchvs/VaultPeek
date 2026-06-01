@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-01 03:32 UTC] — Fix
+
+label dashboard account controls (#161)
+
+`1567364`
+
+---
+
+
 ## [2026-06-01 03:22 UTC] — Fix
 
 label transaction filter chips (#160)
