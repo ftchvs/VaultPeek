@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-01 03:42 UTC] — Fix
+
+label spending chart signals (#162)
+
+`a73f46a`
+
+---
+
+
 ## [2026-06-01 03:32 UTC] — Fix
 
 label dashboard account controls (#161)
