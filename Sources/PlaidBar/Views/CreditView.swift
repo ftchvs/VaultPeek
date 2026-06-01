@@ -129,7 +129,7 @@ struct CreditCardRow: View {
     let threshold: Double
 
     private var balance: Double {
-        abs(account.balances.current ?? 0)
+        AccountPresentation.displayBalance(for: account)
     }
 
     private var limit: Double {
@@ -137,12 +137,11 @@ struct CreditCardRow: View {
     }
 
     private var utilization: Double {
-        guard limit > 0 else { return 0 }
-        return (balance / limit) * 100
+        account.balances.utilizationPercent ?? 0
     }
 
     private var available: Double {
-        max(0, limit - balance)
+        AccountPresentation.availableBalance(for: account)
     }
 
     private var barColor: Color {
