@@ -162,6 +162,8 @@ struct StatusView: View {
                         }
                     }
                     .padding(.vertical, Spacing.xs)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(itemAccessibilityLabel(for: item))
                 }
             }
         }
@@ -285,6 +287,11 @@ struct StatusView: View {
         case .error:
             "The last Plaid request failed. Reconnect or try refreshing again."
         }
+    }
+
+    private func itemAccessibilityLabel(for item: ItemStatus) -> String {
+        let institutionName = item.institutionName ?? "Plaid item"
+        return "\(institutionName), \(label(for: item.status)), \(statusDetail(for: item))"
     }
 }
 
