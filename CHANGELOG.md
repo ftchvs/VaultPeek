@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-01 09:38 UTC] — Documentation
+
+update setup recovery ledger (#166)
+
+`e634794`
+
+---
+
+
 ## [2026-06-01 09:30 UTC] — Fix
 
 guard onboarding credentials (#165)
