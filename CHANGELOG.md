@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-01 12:26 UTC] — Update
+
+share balance composition totals (#176)
+
+`7393b29`
+
+---
+
+
 ## [2026-06-01 12:18 UTC] — Fix
 
 align account utilization threshold (#175)
