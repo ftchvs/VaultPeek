@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-01 02:36 UTC] — Fix
+
+label status diagnostic tiles (#154)
+
+`e742de7`
+
+---
+
+
 ## [2026-06-01 02:27 UTC] — Fix
 
 label error banner dismissal (#153)
