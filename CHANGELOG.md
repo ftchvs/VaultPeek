@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-01 12:11 UTC] — Documentation
+
+align status storage directory copy (#174)
+
+`f05d08f`
+
+---
+
+
 ## [2026-06-01 12:03 UTC] — Update
 
 cover server storage directory resolution (#173)
