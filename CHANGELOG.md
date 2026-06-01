@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-01 01:54 UTC] — Feature
+
+explain recurring charge confidence (#149)
+
+`504095e`
+
+---
+
+
 ## [2026-06-01 01:46 UTC] — Fix
 
 label transaction filter controls (#148)
