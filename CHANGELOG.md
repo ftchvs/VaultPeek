@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-01 10:00 UTC] — Fix
+
+label credit utilization status (#168)
+
+`ea7379a`
+
+---
+
+
 ## [2026-06-01 09:47 UTC] — Fix
 
 label notification permission status (#167)
