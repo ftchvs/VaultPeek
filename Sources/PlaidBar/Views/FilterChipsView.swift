@@ -39,6 +39,8 @@ struct FilterChipsView: View {
                     )
                 }
                 .menuStyle(.borderlessButton)
+                .accessibilityLabel("Category filter")
+                .accessibilityValue(selectedCategory?.displayName ?? "All categories")
 
                 // Account filter
                 Menu {
@@ -53,11 +55,13 @@ struct FilterChipsView: View {
                     }
                 } label: {
                     chipLabel(
-                        text: accounts.first(where: { $0.id == selectedAccountId })?.name ?? "Account",
+                        text: selectedAccountName ?? "Account",
                         isActive: selectedAccountId != nil
                     )
                 }
                 .menuStyle(.borderlessButton)
+                .accessibilityLabel("Account filter")
+                .accessibilityValue(selectedAccountName ?? "All accounts")
 
                 // Date range filter
                 Menu {
@@ -73,6 +77,8 @@ struct FilterChipsView: View {
                     )
                 }
                 .menuStyle(.borderlessButton)
+                .accessibilityLabel("Date range filter")
+                .accessibilityValue(selectedDateRange.displayName)
 
                 // Clear all
                 if activeFilterCount > 0 {
@@ -95,6 +101,10 @@ struct FilterChipsView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(activeFilterCount > 0 ? "\(activeFilterCount) filters active" : "Transaction filters")
+    }
+
+    private var selectedAccountName: String? {
+        accounts.first(where: { $0.id == selectedAccountId })?.name
     }
 
     @ViewBuilder
