@@ -354,9 +354,13 @@ struct AccountSettingsView: View {
                                         .foregroundStyle(balanceTint(for: account))
                                 }
                                 .padding(.leading, Spacing.md)
+                                .accessibilityElement(children: .combine)
+                                .accessibilityLabel(accountAccessibilityLabel(for: account))
                             }
                         }
                         .padding(.vertical, Spacing.xs)
+                        .accessibilityElement(children: .contain)
+                        .accessibilityLabel(groupAccessibilityLabel(for: group))
                     }
                 }
             }
@@ -470,6 +474,14 @@ struct AccountSettingsView: View {
 
     private func balanceTint(for account: AccountDTO) -> Color {
         AccountPresentation.isDebt(account) ? SemanticColors.creditDebt : .secondary
+    }
+
+    private func groupAccessibilityLabel(for group: AccountItemGroup) -> String {
+        "\(group.institutionName), \(label(for: group.status)), \(group.accounts.count) account\(group.accounts.count == 1 ? "" : "s")"
+    }
+
+    private func accountAccessibilityLabel(for account: AccountDTO) -> String {
+        "\(account.name), \(account.type.rawValue.capitalized), \(balanceText(for: account))"
     }
 
     private func label(for status: ItemConnectionStatus) -> String {
