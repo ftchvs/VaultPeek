@@ -1721,6 +1721,8 @@ private struct ErrorBanner: View {
                 Image(systemName: "xmark.circle.fill")
             }
             .buttonStyle(.borderless)
+            .help("Dismiss error")
+            .accessibilityLabel("Dismiss error")
         }
         .padding(.horizontal, 22)
         .padding(.vertical, 8)
