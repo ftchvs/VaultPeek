@@ -87,6 +87,7 @@ struct FilterChipsView: View {
                     }
                     .buttonStyle(.borderless)
                     .help("Clear all filters")
+                    .accessibilityLabel("Clear all transaction filters")
                 }
             }
             .padding(.horizontal, Spacing.lg)
