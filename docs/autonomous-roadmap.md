@@ -90,6 +90,8 @@ Completed production-readiness slices:
   rows.
 - 2026-06-01: made onboarding missing-credential failures explicit before
   opening Plaid Link.
+- 2026-06-01: labeled credit utilization status in summary and account
+  accessibility surfaces.
 
 ### Reliability And Trust
 

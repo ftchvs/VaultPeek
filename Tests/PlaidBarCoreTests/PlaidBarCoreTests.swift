@@ -307,6 +307,15 @@ struct PlaidBarCoreTests {
         #expect(AccountPresentation.subtitle(for: fallback) == "Credit • Credit")
     }
 
+    @Test("Account presentation labels credit utilization status")
+    func accountPresentationUtilizationStatusLabels() {
+        #expect(AccountPresentation.utilizationStatusLabel(for: 12) == "Good")
+        #expect(AccountPresentation.utilizationStatusLabel(for: 30) == "Warning")
+        #expect(AccountPresentation.utilizationStatusLabel(for: 50) == "High")
+        #expect(AccountPresentation.utilizationStatusLabel(for: 75) == "Very high")
+        #expect(AccountPresentation.utilizationStatusLabel(for: 25, threshold: 20) == "Warning")
+    }
+
     @Test("Account connection presentation covers demo, offline, and healthy sync")
     func accountConnectionPresentationCoreStates() {
         let demo = AccountConnectionPresentation.evaluate(
