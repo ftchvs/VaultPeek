@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-01 03:22 UTC] — Fix
+
+label transaction filter chips (#160)
+
+`9e7431b`
+
+---
+
+
 ## [2026-06-01 03:15 UTC] — Fix
 
 enrich account row labels (#159)
