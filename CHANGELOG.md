@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-01 02:12 UTC] — Fix
+
+surface reconnect link open failures (#151)
+
+`68b651a`
+
+---
+
+
 ## [2026-06-01 02:04 UTC] — Fix
 
 preserve private reset file permissions (#150)
