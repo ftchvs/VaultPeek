@@ -80,6 +80,8 @@ Completed production-readiness slices:
 - 2026-05-31: refreshed the roadmap progress ledger for the autonomous loop.
 - 2026-05-31: improved VoiceOver summaries for dashboard error dismissal,
   status diagnostics, Plaid item status rows, and Settings account rows.
+- 2026-05-31: added VoiceOver labels for dashboard account filter chips,
+  drill-down rows, selected account signal pills, and mini activity rows.
 
 ### Reliability And Trust
 

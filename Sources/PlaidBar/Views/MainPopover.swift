@@ -805,6 +805,7 @@ private enum DashboardAccountFilter: String, CaseIterable, Identifiable {
 }
 
 private struct DashboardFilterBar: View {
+    @Environment(AppState.self) private var appState
     @Binding var selection: DashboardAccountFilter
 
     var body: some View {
@@ -824,6 +825,9 @@ private struct DashboardFilterBar: View {
                 }
                 .buttonStyle(.plain)
                 .background(selection == filter ? SemanticColors.brand : Color.clear)
+                .accessibilityLabel("\(filter.rawValue) account filter")
+                .accessibilityValue(accessibilityValue(for: filter))
+                .accessibilityHint("Filters the dashboard account list.")
 
                 if filter != DashboardAccountFilter.allCases.last {
                     Divider()
@@ -833,6 +837,13 @@ private struct DashboardFilterBar: View {
         }
         .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
         .clipShape(RoundedRectangle(cornerRadius: 8))
+        .accessibilityElement(children: .contain)
+    }
+
+    private func accessibilityValue(for filter: DashboardAccountFilter) -> String {
+        let matchingCount = appState.accounts.count { filter.includes($0, appState: appState) }
+        let selectedText = selection == filter ? "selected" : "not selected"
+        return "\(selectedText), \(matchingCount) matching account\(matchingCount == 1 ? "" : "s")"
     }
 }
 
@@ -1081,6 +1092,9 @@ private struct AccountRowWithDrilldown: View {
                 DashboardAccountRow(account: account, isSelected: isSelected)
             }
             .buttonStyle(.plain)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(accountAccessibilityLabel)
+            .accessibilityHint(isSelected ? "Collapses account details." : "Shows account details.")
 
             if isSelected {
                 SelectedAccountPanel(account: account)
@@ -1089,6 +1103,38 @@ private struct AccountRowWithDrilldown: View {
                     .padding(.bottom, 12)
             }
         }
+    }
+
+    private var accountAccessibilityLabel: String {
+        let balance = Formatters.currency(AccountPresentation.displayBalance(for: account), format: .full)
+        let selectedText = isSelected ? "selected" : "collapsed"
+        let pendingText = pendingCount > 0 ? ", \(pendingCount) pending transaction\(pendingCount == 1 ? "" : "s")" : ""
+        let metricText = account.balances.utilizationPercent.map {
+            ", \(Formatters.percent($0, decimals: 0)) utilization"
+        } ?? ", \(connectionPresentation.rowLabel)"
+        return "\(account.name), \(accountSubtitle), \(balance)\(metricText)\(pendingText), \(selectedText)"
+    }
+
+    private var accountSubtitle: String {
+        AccountPresentation.subtitle(for: account)
+    }
+
+    private var pendingCount: Int {
+        appState.transactionsForAccount(account.id).count(where: \.pending)
+    }
+
+    private var itemStatus: ItemConnectionStatus? {
+        appState.itemStatuses.first { $0.id == account.itemId }?.status
+    }
+
+    private var connectionPresentation: AccountConnectionPresentation {
+        AccountConnectionPresentation.evaluate(
+            isDemoMode: appState.isDemoMode,
+            serverConnected: appState.serverConnected,
+            isSyncStale: appState.isSyncStale,
+            statusSyncText: appState.statusSyncText,
+            itemStatus: itemStatus
+        )
     }
 }
 
@@ -1564,6 +1610,8 @@ private struct AccountSignalPill: View {
         .padding(.vertical, 7)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 7))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(title): \(value)")
     }
 }
 
@@ -1610,11 +1658,18 @@ private struct TransactionMiniRow: View {
                 .monospacedDigit()
                 .foregroundStyle(transaction.isIncome ? SemanticColors.positive : .primary)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabel)
     }
 
     private var amountText: String {
         let prefix = transaction.isIncome ? "+" : ""
         return "\(prefix)\(Formatters.currency(transaction.displayAmount, format: .compact))"
+    }
+
+    private var accessibilityLabel: String {
+        let direction = transaction.isIncome ? "income" : "outflow"
+        return "\(transaction.displayName), \(direction), \(Formatters.currency(transaction.displayAmount, format: .full)), \(Formatters.displayTransactionDate(transaction.date))"
     }
 }
 
