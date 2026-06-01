@@ -131,7 +131,7 @@ struct SetupView: View {
             VStack(alignment: .leading, spacing: Spacing.sm) {
                 StorageDisclosureRow(
                     icon: "externaldrive",
-                    text: "PlaidBar stores access tokens and synced account data locally under \(appState.localStoragePathText)."
+                    text: "PlaidBar stores access tokens and synced account data locally under \(appState.activeStorageDirectoryDisplayText)."
                 )
                 StorageDisclosureRow(
                     icon: "server.rack",
@@ -493,7 +493,7 @@ private struct OnboardingPreflightPanel: View {
 
                 preflightRow(
                     title: "Storage",
-                    value: appState.serverStorageDisplayText,
+                    value: appState.activeStorageDirectoryDisplayText,
                     icon: "internaldrive",
                     state: appState.serverConnected ? .ready : .unknown
                 )

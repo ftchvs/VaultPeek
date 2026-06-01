@@ -326,7 +326,7 @@ final class AppState {
     }
 
     var localStorageResolvedDisplayPathText: String {
-        localStorageResolvedPathText.replacingOccurrences(of: NSHomeDirectory(), with: "~")
+        LocalDataStore.displayPath(for: localStorageDirectoryURL)
     }
 
     var serverStoragePathText: String {
@@ -335,7 +335,18 @@ final class AppState {
 
     var serverStorageDisplayText: String {
         guard let serverStoragePath else { return localStoragePathText }
-        return serverStoragePath.replacingOccurrences(of: NSHomeDirectory(), with: "~")
+        return LocalDataStore.displayPath(for: URL(fileURLWithPath: NSString(string: serverStoragePath).expandingTildeInPath))
+    }
+
+    var activeStorageDirectoryURL: URL {
+        LocalDataStore.storageDirectoryURL(
+            forServerStoragePath: serverStoragePath,
+            fallback: localStorageDirectoryURL
+        )
+    }
+
+    var activeStorageDirectoryDisplayText: String {
+        LocalDataStore.displayPath(for: activeStorageDirectoryURL)
     }
 
     var serverCredentialsText: String {
@@ -715,7 +726,7 @@ final class AppState {
     func resetLocalData() throws -> LocalDataResetResult {
         stopBackgroundRefresh()
 
-        let result = try LocalDataStore.resetLocalData(at: localStorageDirectoryURL)
+        let result = try LocalDataStore.resetLocalData(at: activeStorageDirectoryURL)
 
         accounts = []
         transactions = []
