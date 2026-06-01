@@ -315,5 +315,7 @@ private struct DiagnosticTile: View {
         .padding(Spacing.sm)
         .background(.quaternary.opacity(0.35))
         .clipShape(RoundedRectangle(cornerRadius: 8))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title): \(value)")
     }
 }
