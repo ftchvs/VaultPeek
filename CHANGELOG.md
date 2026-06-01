@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-01 09:21 UTC] — Fix
+
+label setup preflight rows (#164)
+
+`d2842f5`
+
+---
+
+
 ## [2026-06-01 09:14 UTC] — Fix
 
 clarify first-run partial sync recovery (#163)
