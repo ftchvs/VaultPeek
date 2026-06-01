@@ -1106,21 +1106,14 @@ private struct AccountRowWithDrilldown: View {
     }
 
     private var accountAccessibilityLabel: String {
-        let balance = Formatters.currency(AccountPresentation.displayBalance(for: account), format: .full)
-        let selectedText = isSelected ? "selected" : "collapsed"
-        let pendingText = pendingCount > 0 ? ", \(pendingCount) pending transaction\(pendingCount == 1 ? "" : "s")" : ""
-        let metricText = account.balances.utilizationPercent.map {
-            let status = AccountPresentation.utilizationStatusLabel(
-                for: $0,
-                threshold: appState.creditUtilizationThreshold
-            )
-            return ", \(Formatters.percent($0, decimals: 0)) utilization, \(status)"
-        } ?? ", \(connectionPresentation.rowLabel)"
-        return "\(account.name), \(accountSubtitle), \(balance)\(metricText)\(pendingText), \(selectedText)"
-    }
-
-    private var accountSubtitle: String {
-        AccountPresentation.subtitle(for: account)
+        AccountPresentation.rowAccessibilityLabel(
+            for: account,
+            amountText: AccountPresentation.rowAmountText(for: account),
+            connectionLabel: connectionPresentation.rowLabel,
+            pendingCount: pendingCount,
+            isSelected: isSelected,
+            utilizationThreshold: appState.creditUtilizationThreshold
+        )
     }
 
     private var pendingCount: Int {
@@ -1322,13 +1315,15 @@ private struct DashboardAccountRow: View {
     }
 
     private var subtitle: String {
-        let mask = account.mask.map { " •••• \($0)" } ?? ""
-        let pending = pendingCount > 0 ? " • \(pendingCount) pending" : ""
-        return "\(account.institutionName ?? account.type.rawValue.capitalized)\(mask) • \(statusText)\(pending)"
+        AccountPresentation.dashboardRowSubtitle(
+            for: account,
+            connectionLabel: statusText,
+            pendingCount: pendingCount
+        )
     }
 
     private var amountText: String {
-        Formatters.currency(AccountPresentation.displayBalance(for: account), format: .full)
+        AccountPresentation.rowAmountText(for: account)
     }
 
     private var accountTint: Color {

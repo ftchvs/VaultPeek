@@ -211,7 +211,7 @@ struct AccountRow: View {
     }
 
     private var formattedAmount: String {
-        Formatters.currency(AccountPresentation.displayBalance(for: account), format: .full)
+        AccountPresentation.rowAmountText(for: account)
     }
 
     private var amountColor: Color {
@@ -219,23 +219,10 @@ struct AccountRow: View {
     }
 
     private var accessibilityLabel: String {
-        var components = [String]()
-        components.append(account.name)
-        if let institutionName = account.institutionName {
-            components.append(institutionName)
-        }
-        components.append(account.type.rawValue.capitalized)
-        if let mask = account.mask {
-            components.append("Ending in \(mask)")
-        }
-        components.append("\(formattedAmount)\(AccountPresentation.isDebt(account) ? " owed" : "")")
-        if let utilization = account.balances.utilizationPercent {
-            components.append("\(Formatters.percent(utilization)) utilization")
-            components.append(AccountPresentation.utilizationStatusLabel(
-                for: utilization,
-                threshold: utilizationThreshold
-            ))
-        }
-        return components.joined(separator: ", ")
+        AccountPresentation.rowAccessibilityLabel(
+            for: account,
+            amountText: formattedAmount,
+            utilizationThreshold: utilizationThreshold
+        )
     }
 }
