@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-01 02:04 UTC] — Fix
+
+preserve private reset file permissions (#150)
+
+`23c1dcf`
+
+---
+
+
 ## [2026-06-01 01:54 UTC] — Feature
 
 explain recurring charge confidence (#149)
