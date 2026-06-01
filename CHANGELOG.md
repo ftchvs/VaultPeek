@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-01 02:52 UTC] — Fix
+
+label settings account rows (#156)
+
+`5daabd4`
+
+---
+
+
 ## [2026-06-01 02:44 UTC] — Fix
 
 label status item rows (#155)
