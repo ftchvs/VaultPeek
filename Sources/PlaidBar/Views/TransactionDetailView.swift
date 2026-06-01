@@ -46,6 +46,16 @@ struct TransactionDetailView: View {
                         }
                     }
 
+                    if let merchantName = transaction.merchantName {
+                        LabeledContent("Merchant") {
+                            Text(merchantName)
+                        }
+                    }
+
+                    LabeledContent("Raw Name") {
+                        Text(transaction.name)
+                    }
+
                     LabeledContent("Date") {
                         Text(Formatters.displayTransactionDate(transaction.date))
                     }
@@ -61,6 +71,10 @@ struct TransactionDetailView: View {
                                 .frame(width: 8, height: 8)
                             Text(transaction.pending ? "Pending" : "Posted")
                         }
+                    }
+
+                    LabeledContent("Source") {
+                        Text(sourceText)
                     }
                 }
             }
@@ -85,6 +99,13 @@ struct TransactionDetailView: View {
 
     private var amountColor: Color {
         transaction.isIncome ? SemanticColors.income : SemanticColors.expense
+    }
+
+    private var sourceText: String {
+        if transaction.category != nil {
+            return "Plaid category"
+        }
+        return "Uncategorized"
     }
 
 }
