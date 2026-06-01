@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-01 11:46 UTC] — Fix
+
+report storage directory in status preflight (#171)
+
+`8d1841c`
+
+---
+
+
 ## [2026-06-01 10:17 UTC] — Fix
 
 align utilization threshold signals (#170)
