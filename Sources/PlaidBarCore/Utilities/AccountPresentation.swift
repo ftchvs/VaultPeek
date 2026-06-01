@@ -31,6 +31,24 @@ public enum AccountPresentation {
         return max(0, limit - displayBalance(for: account))
     }
 
+    public static func positiveBalanceTotal(
+        from accounts: [AccountDTO],
+        type: AccountType
+    ) -> Double {
+        accounts
+            .filter { $0.type == type }
+            .reduce(0) { $0 + max($1.balances.effectiveBalance, 0) }
+    }
+
+    public static func debtBalanceTotal(
+        from accounts: [AccountDTO],
+        type: AccountType
+    ) -> Double {
+        accounts
+            .filter { $0.type == type }
+            .reduce(0) { $0 + displayBalance(for: $1) }
+    }
+
     public static func displayName(for account: AccountDTO) -> String {
         account.officialName ?? account.name
     }
