@@ -124,7 +124,10 @@ private struct RecurringRow: View {
                         .monospacedDigit()
                 }
 
-                Text("Last: \(Formatters.displayTransactionDate(item.lastDate))")
+                Text("Last: \(Formatters.displayTransactionDate(item.lastDate)) • Next: \(Formatters.displayTransactionDate(item.nextExpectedDate))")
+                    .detailText()
+
+                Text("\(item.transactionCount) matching charges • \(Formatters.percent(item.confidence * 100, decimals: 0)) confidence")
                     .detailText()
             }
 
@@ -134,6 +137,6 @@ private struct RecurringRow: View {
         .padding(.vertical, Spacing.sm)
         .hoverHighlight()
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(item.merchantName), \(item.frequency.displayName), \(Formatters.currency(item.averageAmount, format: .full))")
+        .accessibilityLabel("\(item.merchantName), \(item.frequency.displayName), \(Formatters.currency(item.averageAmount, format: .full)), \(item.transactionCount) matching charges, \(Formatters.percent(item.confidence * 100, decimals: 0)) confidence, next expected \(Formatters.displayTransactionDate(item.nextExpectedDate))")
     }
 }
