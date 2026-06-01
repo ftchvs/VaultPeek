@@ -84,6 +84,12 @@ Completed production-readiness slices:
   drill-down rows, selected account signal pills, and mini activity rows.
 - 2026-05-31: added VoiceOver summaries for spending trend, income/expense,
   and standalone heatmap chart signals.
+- 2026-06-01: clarified first-run partial-sync and uncommitted-sync recovery
+  states.
+- 2026-06-01: added VoiceOver labels and recovery hints for setup preflight
+  rows.
+- 2026-06-01: made onboarding missing-credential failures explicit before
+  opening Plaid Link.
 
 ### Reliability And Trust
 
