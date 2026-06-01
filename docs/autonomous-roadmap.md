@@ -62,6 +62,21 @@ Completed production-readiness slices:
 - 2026-05-30: reused the shared credit utilization summary in the credit tab.
 - 2026-05-30: routed spending trend and income/expense charts through the
   shared expense filter.
+- 2026-05-31: clarified dashboard status and recovery context, including
+  spending empty states and server config preservation during local reset.
+- 2026-05-31: moved account-detail title, subtitle, and available-balance
+  presentation rules into `PlaidBarCore`.
+- 2026-05-31: reused shared credit balance and utilization presentation in
+  credit rows.
+- 2026-05-31: expanded transaction detail source context with merchant, raw
+  name, and category/source rows.
+- 2026-05-31: improved transaction filter/search VoiceOver labels.
+- 2026-05-31: added recurring charge next-date, match-count, and confidence
+  context.
+- 2026-05-31: hardened local data reset so preserved config files keep private
+  permissions.
+- 2026-05-31: surfaced invalid URL and browser-open failures for item reconnect
+  flows.
 
 ### Reliability And Trust
 
