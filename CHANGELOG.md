@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-01 03:07 UTC] — Fix
+
+enrich transaction row labels (#158)
+
+`d068a6d`
+
+---
+
+
 ## [2026-06-01 03:00 UTC] — Documentation
 
 update accessibility progress ledger (#157)
