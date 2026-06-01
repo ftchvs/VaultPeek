@@ -323,6 +323,47 @@ struct PlaidBarCoreTests {
         #expect(AccountPresentation.subtitle(for: fallback) == "Credit • Credit")
     }
 
+    @Test("Account presentation derives dashboard row labels")
+    func accountPresentationDashboardRowLabels() {
+        let checking = AccountDTO(
+            id: "1",
+            itemId: "i",
+            name: "Everyday",
+            type: .depository,
+            mask: "1234",
+            balances: BalanceDTO(current: 500),
+            institutionName: "Chase"
+        )
+        let credit = AccountDTO(
+            id: "2",
+            itemId: "i",
+            name: "Rewards",
+            type: .credit,
+            mask: "0005",
+            balances: BalanceDTO(current: -450, limit: 1_000),
+            institutionName: "Amex"
+        )
+
+        #expect(AccountPresentation.rowAmountText(for: checking, format: .compact) == "$500")
+        #expect(AccountPresentation.dashboardRowSubtitle(
+            for: checking,
+            connectionLabel: "2m ago",
+            pendingCount: 2
+        ) == "Chase •••• 1234 • 2m ago • 2 pending")
+        #expect(AccountPresentation.rowAccessibilityLabel(
+            for: checking,
+            connectionLabel: "2m ago",
+            pendingCount: 1,
+            isSelected: false
+        ) == "Everyday, Chase, Depository, Ending in 1234, $500.00, 2m ago, 1 pending transaction, collapsed")
+        #expect(AccountPresentation.rowAccessibilityLabel(
+            for: credit,
+            amountText: "$450.00",
+            connectionLabel: "2m ago",
+            isSelected: true
+        ) == "Rewards, Amex, Credit, Ending in 0005, $450.00 owed, 45% utilization, Warning, selected")
+    }
+
     @Test("Account presentation labels credit utilization status")
     func accountPresentationUtilizationStatusLabels() {
         #expect(AccountPresentation.utilizationStatusLabel(for: 12) == "Good")
