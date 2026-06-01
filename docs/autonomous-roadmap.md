@@ -94,6 +94,8 @@ Completed production-readiness slices:
   accessibility surfaces.
 - 2026-06-01: labeled dashboard credit utilization status in account rows and
   selected details.
+- 2026-06-01: aligned credit utilization status icons and dashboard tinting
+  with the configured warning threshold.
 
 ### Reliability And Trust
 

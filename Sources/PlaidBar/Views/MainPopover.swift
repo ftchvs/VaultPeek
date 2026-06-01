@@ -1110,7 +1110,10 @@ private struct AccountRowWithDrilldown: View {
         let selectedText = isSelected ? "selected" : "collapsed"
         let pendingText = pendingCount > 0 ? ", \(pendingCount) pending transaction\(pendingCount == 1 ? "" : "s")" : ""
         let metricText = account.balances.utilizationPercent.map {
-            let status = AccountPresentation.utilizationStatusLabel(for: $0)
+            let status = AccountPresentation.utilizationStatusLabel(
+                for: $0,
+                threshold: appState.creditUtilizationThreshold
+            )
             return ", \(Formatters.percent($0, decimals: 0)) utilization, \(status)"
         } ?? ", \(connectionPresentation.rowLabel)"
         return "\(account.name), \(accountSubtitle), \(balance)\(metricText)\(pendingText), \(selectedText)"
@@ -1292,7 +1295,10 @@ private struct DashboardAccountRow: View {
                 if let utilization = account.balances.utilizationPercent {
                     Text(Formatters.percent(utilization, decimals: 0))
                         .font(.caption.weight(.bold))
-                        .foregroundStyle(SemanticColors.utilization(for: utilization))
+                        .foregroundStyle(SemanticColors.utilization(
+                            for: utilization,
+                            threshold: appState.creditUtilizationThreshold
+                        ))
                 } else {
                     Text(statusText)
                         .microText()
@@ -1419,7 +1425,10 @@ private struct SelectedAccountPanel: View {
                     DetailValue(
                         title: "Utilization",
                         value: utilizationDetailText(for: utilization),
-                        tint: SemanticColors.utilization(for: utilization)
+                        tint: SemanticColors.utilization(
+                            for: utilization,
+                            threshold: appState.creditUtilizationThreshold
+                        )
                     )
                 } else {
                     DetailValue(title: "Activity", value: activityText, tint: connectionTint)
@@ -1542,7 +1551,10 @@ private struct SelectedAccountPanel: View {
     }
 
     private func utilizationDetailText(for utilization: Double) -> String {
-        let status = AccountPresentation.utilizationStatusLabel(for: utilization)
+        let status = AccountPresentation.utilizationStatusLabel(
+            for: utilization,
+            threshold: appState.creditUtilizationThreshold
+        )
         return "\(Formatters.percent(utilization, decimals: 0)), \(status)"
     }
 
