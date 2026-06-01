@@ -537,13 +537,15 @@ private struct BalanceActivityHeatmap: View {
         guard mode == .netCashflow else {
             return Formatters.currency(totalValue, format: .compact)
         }
-        let prefix = totalValue > 0 ? "+" : totalValue < 0 ? "-" : ""
-        return "\(prefix)\(Formatters.currency(abs(totalValue), format: .compact))"
+        return cashflowText(for: totalValue)
     }
 
     private var totalTint: Color {
         guard mode == .netCashflow else { return .secondary }
-        return totalValue < 0 ? SemanticColors.positive : SemanticColors.negative
+        let displayAmount = SpendingHeatmap.displayCashflowAmount(totalValue)
+        if displayAmount > 0 { return SemanticColors.positive }
+        if displayAmount < 0 { return SemanticColors.negative }
+        return .secondary
     }
 
     private var weekColumns: [[SpendingHeatmapDay?]] {
@@ -690,6 +692,12 @@ private struct BalanceActivityHeatmap: View {
     private func monthLabel(for date: Date) -> String {
         calendar.shortMonthSymbols[calendar.component(.month, from: date) - 1]
     }
+
+    private func cashflowText(for value: Double) -> String {
+        let displayAmount = SpendingHeatmap.displayCashflowAmount(value)
+        let prefix = displayAmount > 0 ? "+" : displayAmount < 0 ? "-" : ""
+        return "\(prefix)\(Formatters.currency(abs(displayAmount), format: .compact))"
+    }
 }
 
 private struct NetLegendKey: View {
@@ -736,8 +744,9 @@ private struct BalanceHeatmapCell: View {
     private var helpText: String {
         let amount: String
         if mode == .netCashflow {
-            let prefix = day.value > 0 ? "+" : day.value < 0 ? "-" : ""
-            amount = "\(prefix)\(Formatters.currency(abs(day.value), format: .full))"
+            let displayAmount = SpendingHeatmap.displayCashflowAmount(day.value)
+            let prefix = displayAmount > 0 ? "+" : displayAmount < 0 ? "-" : ""
+            amount = "\(prefix)\(Formatters.currency(abs(displayAmount), format: .full))"
         } else {
             amount = Formatters.currency(day.value, format: .full)
         }
@@ -1290,36 +1299,22 @@ private struct DashboardAccountRow: View {
         appState.itemStatuses.first { $0.id == account.itemId }?.status
     }
 
-    private var statusText: String {
-        if appState.isDemoMode { return "Demo" }
-        if !appState.serverConnected { return "Server offline" }
+    private var connectionPresentation: AccountConnectionPresentation {
+        AccountConnectionPresentation.evaluate(
+            isDemoMode: appState.isDemoMode,
+            serverConnected: appState.serverConnected,
+            isSyncStale: appState.isSyncStale,
+            statusSyncText: appState.statusSyncText,
+            itemStatus: itemStatus
+        )
+    }
 
-        switch itemStatus {
-        case .connected:
-            return appState.statusSyncText
-        case .loginRequired:
-            return "Reconnect"
-        case .error:
-            return "Item error"
-        case nil:
-            return appState.statusSyncText
-        }
+    private var statusText: String {
+        connectionPresentation.rowLabel
     }
 
     private var statusTint: Color {
-        if appState.isDemoMode { return SemanticColors.brandSecondary }
-        if !appState.serverConnected { return .secondary }
-
-        switch itemStatus {
-        case .connected:
-            return appState.isSyncStale ? SemanticColors.warning : SemanticColors.positive
-        case .loginRequired:
-            return SemanticColors.warning
-        case .error:
-            return SemanticColors.negative
-        case nil:
-            return appState.isSyncStale ? SemanticColors.warning : .secondary
-        }
+        accountConnectionTint(for: connectionPresentation.level)
     }
 }
 
@@ -1479,52 +1474,26 @@ private struct SelectedAccountPanel: View {
         appState.itemStatuses.first { $0.id == account.itemId }?.status
     }
 
-    private var connectionLabel: String {
-        if appState.isDemoMode { return "Demo data" }
-        if !appState.serverConnected { return "Server offline" }
+    private var connectionPresentation: AccountConnectionPresentation {
+        AccountConnectionPresentation.evaluate(
+            isDemoMode: appState.isDemoMode,
+            serverConnected: appState.serverConnected,
+            isSyncStale: appState.isSyncStale,
+            statusSyncText: appState.statusSyncText,
+            itemStatus: itemStatus
+        )
+    }
 
-        switch itemStatus {
-        case .connected:
-            return appState.statusSyncText
-        case .loginRequired:
-            return "Login required"
-        case .error:
-            return "Item error"
-        case nil:
-            return appState.statusSyncText
-        }
+    private var connectionLabel: String {
+        connectionPresentation.detailLabel
     }
 
     private var connectionIcon: String {
-        if appState.isDemoMode { return "play.circle.fill" }
-        if !appState.serverConnected { return "server.rack" }
-
-        switch itemStatus {
-        case .connected:
-            return appState.isSyncStale ? "clock.badge.exclamationmark.fill" : "checkmark.circle.fill"
-        case .loginRequired:
-            return "person.crop.circle.badge.exclamationmark.fill"
-        case .error:
-            return "exclamationmark.triangle.fill"
-        case nil:
-            return appState.isSyncStale ? "clock.badge.exclamationmark.fill" : "link.circle.fill"
-        }
+        connectionPresentation.iconName
     }
 
     private var connectionTint: Color {
-        if appState.isDemoMode { return SemanticColors.brandSecondary }
-        if !appState.serverConnected { return .secondary }
-
-        switch itemStatus {
-        case .connected:
-            return appState.isSyncStale ? SemanticColors.warning : SemanticColors.positive
-        case .loginRequired:
-            return SemanticColors.warning
-        case .error:
-            return SemanticColors.negative
-        case nil:
-            return appState.isSyncStale ? SemanticColors.warning : .secondary
-        }
+        accountConnectionTint(for: connectionPresentation.level)
     }
 
     private var activityText: String {
@@ -1532,14 +1501,28 @@ private struct SelectedAccountPanel: View {
     }
 
     private var syncSignalText: String {
-        if itemStatus == .loginRequired { return "Login" }
-        if itemStatus == .error { return "Error" }
-        if appState.isSyncStale { return "Stale" }
-        return "Fresh"
+        connectionPresentation.signalLabel
     }
 
     private var shouldShowRecoveryActions: Bool {
-        !appState.isDemoMode && (appState.isSyncStale || itemStatus == .loginRequired || itemStatus == .error)
+        connectionPresentation.showsRecoveryActions
+    }
+}
+
+private func accountConnectionTint(for level: AccountConnectionLevel) -> Color {
+    switch level {
+    case .demo:
+        return SemanticColors.brandSecondary
+    case .offline:
+        return .secondary
+    case .healthy:
+        return SemanticColors.positive
+    case .stale, .loginRequired:
+        return SemanticColors.warning
+    case .error:
+        return SemanticColors.negative
+    case .unknown:
+        return .secondary
     }
 }
 

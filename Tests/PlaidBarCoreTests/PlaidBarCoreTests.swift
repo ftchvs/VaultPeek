@@ -272,6 +272,92 @@ struct PlaidBarCoreTests {
         #expect(AccountPresentation.displayBalance(for: availableCredit) == 0)
     }
 
+    @Test("Account connection presentation covers demo, offline, and healthy sync")
+    func accountConnectionPresentationCoreStates() {
+        let demo = AccountConnectionPresentation.evaluate(
+            isDemoMode: true,
+            serverConnected: false,
+            isSyncStale: true,
+            statusSyncText: "Never synced",
+            itemStatus: nil
+        )
+
+        #expect(demo.level == .demo)
+        #expect(demo.rowLabel == "Demo")
+        #expect(demo.detailLabel == "Demo data")
+        #expect(demo.iconName == "play.circle.fill")
+        #expect(!demo.showsRecoveryActions)
+
+        let offline = AccountConnectionPresentation.evaluate(
+            isDemoMode: false,
+            serverConnected: false,
+            isSyncStale: true,
+            statusSyncText: "Never synced",
+            itemStatus: nil
+        )
+
+        #expect(offline.level == .offline)
+        #expect(offline.rowLabel == "Server offline")
+        #expect(offline.signalLabel == "Offline")
+        #expect(!offline.showsRecoveryActions)
+
+        let healthy = AccountConnectionPresentation.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            isSyncStale: false,
+            statusSyncText: "2m ago",
+            itemStatus: .connected
+        )
+
+        #expect(healthy.level == .healthy)
+        #expect(healthy.rowLabel == "2m ago")
+        #expect(healthy.signalLabel == "Fresh")
+        #expect(healthy.iconName == "checkmark.circle.fill")
+    }
+
+    @Test("Account connection presentation flags stale and reconnectable items")
+    func accountConnectionPresentationRecoveryStates() {
+        let stale = AccountConnectionPresentation.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            isSyncStale: true,
+            statusSyncText: "2h ago",
+            itemStatus: .connected
+        )
+
+        #expect(stale.level == .stale)
+        #expect(stale.signalLabel == "Stale")
+        #expect(stale.iconName == "clock.badge.exclamationmark.fill")
+        #expect(stale.showsRecoveryActions)
+
+        let loginRequired = AccountConnectionPresentation.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            isSyncStale: false,
+            statusSyncText: "2m ago",
+            itemStatus: .loginRequired
+        )
+
+        #expect(loginRequired.level == .loginRequired)
+        #expect(loginRequired.rowLabel == "Reconnect")
+        #expect(loginRequired.detailLabel == "Login required")
+        #expect(loginRequired.signalLabel == "Login")
+        #expect(loginRequired.showsRecoveryActions)
+
+        let errored = AccountConnectionPresentation.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            isSyncStale: false,
+            statusSyncText: "2m ago",
+            itemStatus: .error
+        )
+
+        #expect(errored.level == .error)
+        #expect(errored.rowLabel == "Item error")
+        #expect(errored.signalLabel == "Error")
+        #expect(errored.showsRecoveryActions)
+    }
+
     @Test("Menu bar summary estimates runway from recent monthly spend")
     func menuBarSummaryRunwayMonths() {
         let now = Formatters.parseTransactionDate("2026-01-30")!
@@ -373,6 +459,13 @@ struct PlaidBarCoreTests {
 
         #expect(days.first?.value == -175)
         #expect(days.first?.transactionCount == 2)
+    }
+
+    @Test("Net cashflow display flips Plaid signs for finance presentation")
+    func netCashflowDisplayFlipsPlaidSigns() {
+        #expect(SpendingHeatmap.displayCashflowAmount(-175) == 175)
+        #expect(SpendingHeatmap.displayCashflowAmount(75) == -75)
+        #expect(SpendingHeatmap.displayCashflowAmount(0) == 0)
     }
 
     // MARK: - AccountDTO Tests
@@ -1335,17 +1428,57 @@ struct PlaidBarCoreTests {
         #expect(resolved == directory)
     }
 
-    @Test("Local data reset removes data files and keeps server auth token")
-    func localDataResetRemovesDataFilesAndKeepsAuthToken() throws {
+    @Test("Local data store resolves active directory from server database path")
+    func localDataStoreResolvesActiveDirectoryFromServerDatabasePath() {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let database = root
+            .appendingPathComponent("custom-plaidbar", isDirectory: true)
+            .appendingPathComponent("plaidbar-production.sqlite")
+
+        let directory = LocalDataStore.storageDirectoryURL(
+            forServerStoragePath: database.path
+        )
+
+        #expect(directory == database.deletingLastPathComponent())
+    }
+
+    @Test("Local data store falls back for demo display path")
+    func localDataStoreFallsBackForDemoDisplayPath() {
+        let fallback = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+
+        let directory = LocalDataStore.storageDirectoryURL(
+            forServerStoragePath: LocalDataStore.displayPath,
+            fallback: fallback
+        )
+
+        #expect(directory == fallback)
+    }
+
+    @Test("Local data store display path abbreviates home")
+    func localDataStoreDisplayPathAbbreviatesHome() {
+        let home = URL(fileURLWithPath: "/Users/example", isDirectory: true)
+        let directory = home.appendingPathComponent(".plaidbar", isDirectory: true)
+
+        #expect(LocalDataStore.displayPath(for: directory, homeDirectory: home) == "~/.plaidbar")
+        #expect(LocalDataStore.displayPath(for: home, homeDirectory: home) == "~")
+        #expect(LocalDataStore.displayPath(for: URL(fileURLWithPath: "/var/tmp/plaidbar"), homeDirectory: home) == "/var/tmp/plaidbar")
+    }
+
+    @Test("Local data reset removes data files and keeps local server configuration")
+    func localDataResetRemovesDataFilesAndKeepsLocalServerConfiguration() throws {
         let root = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         let directory = root.appendingPathComponent(".plaidbar", isDirectory: true)
         let database = directory.appendingPathComponent("plaidbar.sqlite")
         let authToken = directory.appendingPathComponent("auth-token")
+        let serverConfig = directory.appendingPathComponent("server.conf")
 
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try "db".write(to: database, atomically: true, encoding: .utf8)
         try "token".write(to: authToken, atomically: true, encoding: .utf8)
+        try "PLAID_ENV=sandbox".write(to: serverConfig, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: authToken.path)
         defer { try? FileManager.default.removeItem(at: root) }
 
@@ -1362,8 +1495,9 @@ struct PlaidBarCoreTests {
         var isDirectory: ObjCBool = false
         #expect(FileManager.default.fileExists(atPath: directory.path, isDirectory: &isDirectory))
         #expect(isDirectory.boolValue)
-        #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path) == ["auth-token"])
+        #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).sorted() == ["auth-token", "server.conf"])
         #expect(try String(contentsOf: authToken, encoding: .utf8) == "token")
+        #expect(try String(contentsOf: serverConfig, encoding: .utf8) == "PLAID_ENV=sandbox")
         #expect(try posixPermissions(at: authToken) == 0o600)
     }
 

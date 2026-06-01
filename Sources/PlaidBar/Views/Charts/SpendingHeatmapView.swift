@@ -39,8 +39,15 @@ struct SpendingHeatmapView: View {
         guard mode == .netCashflow else {
             return Formatters.currency(totalValue, format: .compact)
         }
-        let prefix = totalValue > 0 ? "+" : totalValue < 0 ? "-" : ""
-        return "\(prefix)\(Formatters.currency(abs(totalValue), format: .compact))"
+        return cashflowText(for: totalValue, format: .compact)
+    }
+
+    private var totalTint: Color {
+        guard mode == .netCashflow else { return .primary }
+        let displayAmount = SpendingHeatmap.displayCashflowAmount(totalValue)
+        if displayAmount > 0 { return SemanticColors.positive }
+        if displayAmount < 0 { return SemanticColors.negative }
+        return .primary
     }
 
     private var selectedDay: SpendingHeatmapDay? {
@@ -107,7 +114,7 @@ struct SpendingHeatmapView: View {
             Text(totalLabel)
                 .font(.callout.weight(.semibold))
                 .monospacedDigit()
-                .foregroundStyle(mode == .netCashflow && totalValue < 0 ? SemanticColors.positive : .primary)
+                .foregroundStyle(totalTint)
                 .lineLimit(1)
                 .layoutPriority(1)
         }
@@ -210,8 +217,13 @@ struct SpendingHeatmapView: View {
         guard mode == .netCashflow else {
             return Formatters.currency(day.value, format: .full)
         }
-        let prefix = day.value > 0 ? "+" : day.value < 0 ? "-" : ""
-        return "\(prefix)\(Formatters.currency(abs(day.value), format: .full))"
+        return cashflowText(for: day.value, format: .full)
+    }
+
+    private func cashflowText(for value: Double, format: CurrencyFormat) -> String {
+        let displayAmount = SpendingHeatmap.displayCashflowAmount(value)
+        let prefix = displayAmount > 0 ? "+" : displayAmount < 0 ? "-" : ""
+        return "\(prefix)\(Formatters.currency(abs(displayAmount), format: format))"
     }
 
     private var cellSpacing: CGFloat {
@@ -266,8 +278,9 @@ private struct HeatmapCell: View {
     private var helpText: String {
         let amount: String
         if mode == .netCashflow {
-            let prefix = day.value > 0 ? "+" : day.value < 0 ? "-" : ""
-            amount = "\(prefix)\(Formatters.currency(abs(day.value), format: .full))"
+            let displayAmount = SpendingHeatmap.displayCashflowAmount(day.value)
+            let prefix = displayAmount > 0 ? "+" : displayAmount < 0 ? "-" : ""
+            amount = "\(prefix)\(Formatters.currency(abs(displayAmount), format: .full))"
         } else {
             amount = Formatters.currency(day.value, format: .full)
         }

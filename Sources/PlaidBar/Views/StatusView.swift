@@ -107,7 +107,7 @@ struct StatusView: View {
                 color: .secondary
             )
             DiagnosticTile(
-                title: "Storage",
+                title: "Database",
                 value: appState.serverStorageDisplayText,
                 icon: "internaldrive",
                 color: .secondary
@@ -171,7 +171,7 @@ struct StatusView: View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             HStack(spacing: Spacing.xs) {
                 Image(systemName: "lock.doc")
-                Text("Local data path: \(appState.serverStorageDisplayText)")
+                Text("Local data path: \(appState.activeStorageDirectoryDisplayText)")
             }
             .detailText()
 
