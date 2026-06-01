@@ -22,6 +22,12 @@ struct ServerConfig: Sendable {
     let redirectUri: String
     let authToken: String
 
+    var dataDirectoryPath: String {
+        URL(fileURLWithPath: databasePath)
+            .deletingLastPathComponent()
+            .path
+    }
+
     var plaidBaseURL: String {
         switch plaidEnvironment {
         case .sandbox: "https://sandbox.plaid.com"

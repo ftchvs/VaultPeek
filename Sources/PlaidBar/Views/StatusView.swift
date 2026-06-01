@@ -107,7 +107,7 @@ struct StatusView: View {
                 color: .secondary
             )
             DiagnosticTile(
-                title: "Database",
+                title: "Storage",
                 value: appState.serverStorageDisplayText,
                 icon: "internaldrive",
                 color: .secondary

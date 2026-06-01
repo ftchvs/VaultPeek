@@ -154,8 +154,8 @@ if not status.get("storagePath"):
     errors.append("status response missing storagePath")
 else:
     storage_path = os.path.realpath(status["storagePath"])
-    if not storage_path.startswith(data_dir + os.sep):
-        errors.append(f"expected storage path under {data_dir}, got {storage_path}")
+    if storage_path != data_dir:
+        errors.append(f"expected storage path to be {data_dir}, got {storage_path}")
 if not isinstance(items, list):
     errors.append("items response is not a JSON array")
 
@@ -173,15 +173,15 @@ data_dir_mode = os.stat(data_dir).st_mode & 0o777
 if data_dir_mode != 0o700:
     errors.append(f"expected data directory permissions 0700, got {data_dir_mode:04o}")
 
-if storage_path:
-    if not os.path.exists(storage_path):
-        errors.append(f"SQLite store was not created at {storage_path}")
-    else:
-        for path in [storage_path, f"{storage_path}-wal", f"{storage_path}-shm"]:
-            if os.path.exists(path):
-                store_mode = os.stat(path).st_mode & 0o777
-                if store_mode != 0o600:
-                    errors.append(f"expected SQLite store permissions 0600 for {path}, got {store_mode:04o}")
+sqlite_path = os.path.join(data_dir, "plaidbar-sandbox.sqlite")
+if not os.path.exists(sqlite_path):
+    errors.append(f"SQLite store was not created at {sqlite_path}")
+else:
+    for path in [sqlite_path, f"{sqlite_path}-wal", f"{sqlite_path}-shm"]:
+        if os.path.exists(path):
+            store_mode = os.stat(path).st_mode & 0o777
+            if store_mode != 0o600:
+                errors.append(f"expected SQLite store permissions 0600 for {path}, got {store_mode:04o}")
 
 if errors:
     for error in errors:

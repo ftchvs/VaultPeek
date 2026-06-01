@@ -27,7 +27,7 @@ struct StatusRoutes: Sendable {
             itemCount: itemCount,
             lastSync: lastSync,
             credentialsConfigured: !config.plaidClientId.isEmpty && !config.plaidSecret.isEmpty,
-            storagePath: config.databasePath,
+            storagePath: config.dataDirectoryPath,
             syncReady: itemCount > 0,
             syncedItemCount: syncedItemCount
         )

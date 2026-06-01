@@ -801,7 +801,7 @@ struct PlaidBarCoreTests {
             environment: .sandbox,
             itemCount: 0,
             credentialsConfigured: false,
-            storagePath: "/tmp/plaidbar.sqlite",
+            storagePath: "/tmp/.plaidbar",
             syncReady: false,
             syncedItemCount: 0
         )
@@ -810,7 +810,7 @@ struct PlaidBarCoreTests {
         let decoded = try JSONDecoder().decode(ServerStatus.self, from: data)
 
         #expect(decoded.credentialsConfigured == false)
-        #expect(decoded.storagePath == "/tmp/plaidbar.sqlite")
+        #expect(decoded.storagePath == "/tmp/.plaidbar")
         #expect(decoded.syncReady == false)
         #expect(decoded.syncedItemCount == 0)
     }
@@ -823,7 +823,7 @@ struct PlaidBarCoreTests {
           "environment": "sandbox",
           "itemCount": 2,
           "credentialsConfigured": true,
-          "storagePath": "/tmp/plaidbar.sqlite",
+          "storagePath": "/tmp/.plaidbar",
           "syncReady": true
         }
         """.data(using: .utf8)!
