@@ -210,7 +210,7 @@ struct GeneralSettingsView: View {
 
     private var storageDetailText: String {
         if let serverStoragePath = appState.serverStoragePath {
-            return "Server database: \(LocalDataStore.displayPath(for: URL(fileURLWithPath: NSString(string: serverStoragePath).expandingTildeInPath)))"
+            return "Server storage directory: \(LocalDataStore.displayPath(for: URL(fileURLWithPath: NSString(string: serverStoragePath).expandingTildeInPath)))"
         }
 
         return "Default: \(appState.localStorageResolvedDisplayPathText)"
