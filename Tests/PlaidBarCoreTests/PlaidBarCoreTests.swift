@@ -272,6 +272,41 @@ struct PlaidBarCoreTests {
         #expect(AccountPresentation.displayBalance(for: availableCredit) == 0)
     }
 
+    @Test("Account presentation derives account detail balances")
+    func accountPresentationDetailBalances() {
+        let checking = AccountDTO(id: "1", itemId: "i", name: "Checking", type: .depository, balances: BalanceDTO(available: 450, current: 500))
+        let creditWithAvailable = AccountDTO(id: "2", itemId: "i", name: "Card", type: .credit, balances: BalanceDTO(available: 850, current: -150, limit: 1_000))
+        let creditWithoutAvailable = AccountDTO(id: "3", itemId: "i", name: "Backup Card", type: .credit, balances: BalanceDTO(current: -200, limit: 1_000))
+        let overLimitCredit = AccountDTO(id: "4", itemId: "i", name: "Over Limit", type: .credit, balances: BalanceDTO(current: -1_200, limit: 1_000))
+        let loan = AccountDTO(id: "5", itemId: "i", name: "Loan", type: .loan, balances: BalanceDTO(current: -5_000))
+
+        #expect(AccountPresentation.availableBalance(for: checking) == 450)
+        #expect(AccountPresentation.availableBalance(for: creditWithAvailable) == 850)
+        #expect(AccountPresentation.availableBalance(for: creditWithoutAvailable) == 800)
+        #expect(AccountPresentation.availableBalance(for: overLimitCredit) == 0)
+        #expect(AccountPresentation.availableBalance(for: loan) == 0)
+    }
+
+    @Test("Account presentation derives account detail labels")
+    func accountPresentationDetailLabels() {
+        let account = AccountDTO(
+            id: "1",
+            itemId: "i",
+            name: "Everyday",
+            officialName: "Everyday Checking",
+            type: .depository,
+            subtype: "checking",
+            mask: "1234",
+            balances: BalanceDTO(current: 500)
+        )
+        let fallback = AccountDTO(id: "2", itemId: "i", name: "Card", type: .credit, balances: BalanceDTO(current: -100))
+
+        #expect(AccountPresentation.displayName(for: account) == "Everyday Checking")
+        #expect(AccountPresentation.subtitle(for: account) == "Depository • Checking •••• 1234")
+        #expect(AccountPresentation.displayName(for: fallback) == "Card")
+        #expect(AccountPresentation.subtitle(for: fallback) == "Credit • Credit")
+    }
+
     @Test("Account connection presentation covers demo, offline, and healthy sync")
     func accountConnectionPresentationCoreStates() {
         let demo = AccountConnectionPresentation.evaluate(
