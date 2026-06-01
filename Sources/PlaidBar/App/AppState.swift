@@ -624,8 +624,13 @@ final class AppState {
     func reconnectItem(itemId: String) async {
         do {
             let linkResponse = try await serverClient.createUpdateLinkToken(itemId: itemId)
-            if let url = URL(string: linkResponse.linkUrl) {
-                NSWorkspace.shared.open(url)
+            guard let url = URL(string: linkResponse.linkUrl) else {
+                error = "PlaidBarServer returned an invalid Plaid update Link URL."
+                return
+            }
+
+            if !NSWorkspace.shared.open(url) {
+                error = "Could not open Plaid update Link in the browser."
             }
         } catch {
             self.error = error.localizedDescription
