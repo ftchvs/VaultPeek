@@ -55,7 +55,7 @@ struct PlaidBarServerTests {
             itemCount: 2,
             lastSync: Date(timeIntervalSince1970: 1_800_000_000),
             credentialsConfigured: true,
-            storagePath: "/Users/example/.plaidbar/plaidbar-production.sqlite",
+            storagePath: "/Users/example/.plaidbar",
             syncReady: true,
             syncedItemCount: 2
         )
@@ -118,6 +118,7 @@ struct PlaidBarServerTests {
         #expect(config.plaidClientId == "config-client")
         #expect(config.plaidSecret == "config-secret")
         #expect(config.plaidEnvironment == .sandbox)
+        #expect(config.dataDirectoryPath == dataDirectory.path)
         #expect(config.port == 9494)
         #expect(config.databasePath.hasSuffix("/plaidbar-sandbox.sqlite"))
         #expect(config.databasePath.hasPrefix(dataDirectory.path))

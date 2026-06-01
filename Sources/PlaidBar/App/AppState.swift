@@ -670,7 +670,7 @@ final class AppState {
         guard serverCredentialsConfigured == true else {
             switch expectedEnvironment {
             case .sandbox:
-                error = "Sandbox Plaid credentials are missing on PlaidBarServer. Add PLAID_CLIENT_ID and PLAID_SANDBOX_SECRET, then check again."
+                error = "Sandbox Plaid credentials are missing on PlaidBarServer. Add PLAID_CLIENT_ID and PLAID_SECRET, then check again."
             case .production:
                 error = "Production Plaid credentials are missing on PlaidBarServer. Add approved production credentials, then check again."
             }
