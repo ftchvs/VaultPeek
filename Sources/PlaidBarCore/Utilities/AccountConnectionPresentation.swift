@@ -99,9 +99,9 @@ public struct AccountConnectionPresentation: Sendable, Equatable {
 
         return AccountConnectionPresentation(
             level: unknownItem ? .unknown : .healthy,
-            rowLabel: statusSyncText,
-            detailLabel: statusSyncText,
-            signalLabel: "Fresh",
+            rowLabel: unknownItem ? "Item unknown" : statusSyncText,
+            detailLabel: unknownItem ? "Item status unavailable" : statusSyncText,
+            signalLabel: unknownItem ? "Unknown" : "Fresh",
             iconName: unknownItem ? "link.circle.fill" : "checkmark.circle.fill",
             showsRecoveryActions: false
         )

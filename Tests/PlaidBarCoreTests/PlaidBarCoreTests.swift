@@ -414,6 +414,21 @@ struct PlaidBarCoreTests {
         #expect(healthy.rowLabel == "2m ago")
         #expect(healthy.signalLabel == "Fresh")
         #expect(healthy.iconName == "checkmark.circle.fill")
+
+        let unknownItem = AccountConnectionPresentation.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            isSyncStale: false,
+            statusSyncText: "2m ago",
+            itemStatus: nil
+        )
+
+        #expect(unknownItem.level == .unknown)
+        #expect(unknownItem.rowLabel == "Item unknown")
+        #expect(unknownItem.detailLabel == "Item status unavailable")
+        #expect(unknownItem.signalLabel == "Unknown")
+        #expect(unknownItem.iconName == "link.circle.fill")
+        #expect(!unknownItem.showsRecoveryActions)
     }
 
     @Test("Account connection presentation flags stale and reconnectable items")
