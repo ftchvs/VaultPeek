@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-01 10:09 UTC] — Fix
+
+label dashboard utilization status (#169)
+
+`9368b61`
+
+---
+
+
 ## [2026-06-01 10:00 UTC] — Fix
 
 label credit utilization status (#168)
