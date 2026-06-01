@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-01 01:04 UTC] — Update
+
+share account detail presentation (#145)
+
+`c6353c0`
+
+---
+
+
 ## [2026-06-01 00:56 UTC] — Update
 
 Improve dashboard status and recovery context (#144)
