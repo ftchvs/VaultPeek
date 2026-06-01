@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-01 09:30 UTC] — Fix
+
+guard onboarding credentials (#165)
+
+`6f959f4`
+
+---
+
+
 ## [2026-06-01 09:21 UTC] — Fix
 
 label setup preflight rows (#164)
