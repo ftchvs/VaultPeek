@@ -246,7 +246,7 @@ struct TransactionRow: View {
         .contentShape(Rectangle())
         .hoverHighlight()
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(transaction.displayName), \(amountText)\(transaction.pending ? ", pending" : "")")
+        .accessibilityLabel(transactionAccessibilityLabel)
     }
 
     private var amountText: String {
@@ -258,5 +258,12 @@ struct TransactionRow: View {
 
     private var amountColor: Color {
         transaction.isIncome ? SemanticColors.income : SemanticColors.expense
+    }
+
+    private var transactionAccessibilityLabel: String {
+        let category = transaction.category?.displayName ?? "Uncategorized"
+        let status = transaction.pending ? "Pending" : "Posted"
+        let date = Formatters.displayTransactionDate(transaction.date)
+        return "\(transaction.displayName), \(category), \(amountText), \(status), \(date)"
     }
 }
