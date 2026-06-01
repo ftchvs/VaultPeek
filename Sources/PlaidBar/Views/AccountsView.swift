@@ -13,7 +13,10 @@ struct AccountsView: View {
                 if !appState.depositoryAccounts.isEmpty {
                     sectionHeader("Bank Accounts")
                     ForEach(appState.depositoryAccounts) { account in
-                        AccountRow(account: account)
+                        AccountRow(
+                            account: account,
+                            utilizationThreshold: appState.creditUtilizationThreshold
+                        )
                     }
                 }
 
@@ -21,14 +24,20 @@ struct AccountsView: View {
                 if !appState.creditAccounts.isEmpty {
                     sectionHeader("Credit Cards")
                     ForEach(appState.creditAccounts) { account in
-                        AccountRow(account: account)
+                        AccountRow(
+                            account: account,
+                            utilizationThreshold: appState.creditUtilizationThreshold
+                        )
                     }
                 }
 
                 if !appState.loanAccounts.isEmpty {
                     sectionHeader("Loans")
                     ForEach(appState.loanAccounts) { account in
-                        AccountRow(account: account)
+                        AccountRow(
+                            account: account,
+                            utilizationThreshold: appState.creditUtilizationThreshold
+                        )
                     }
                 }
 
@@ -39,7 +48,10 @@ struct AccountsView: View {
                 if !otherAccounts.isEmpty {
                     sectionHeader("Other")
                     ForEach(otherAccounts) { account in
-                        AccountRow(account: account)
+                        AccountRow(
+                            account: account,
+                            utilizationThreshold: appState.creditUtilizationThreshold
+                        )
                     }
                 }
 
@@ -152,6 +164,7 @@ private struct InstitutionAvatar: View {
 
 struct AccountRow: View {
     let account: AccountDTO
+    let utilizationThreshold: Double
 
     var body: some View {
         HStack(spacing: Spacing.md) {
@@ -182,7 +195,11 @@ struct AccountRow: View {
                 if let utilization = account.balances.utilizationPercent {
                     Text(Formatters.percent(utilization))
                         .microText()
-                        .foregroundStyle(utilization > PlaidBarConstants.creditUtilizationWarningThreshold ? SemanticColors.warning : .secondary)
+                        .foregroundStyle(
+                            utilization >= utilizationThreshold
+                                ? SemanticColors.utilization(for: utilization, threshold: utilizationThreshold)
+                                : .secondary
+                        )
                 }
             }
         }
@@ -214,7 +231,10 @@ struct AccountRow: View {
         components.append("\(formattedAmount)\(AccountPresentation.isDebt(account) ? " owed" : "")")
         if let utilization = account.balances.utilizationPercent {
             components.append("\(Formatters.percent(utilization)) utilization")
-            components.append(AccountPresentation.utilizationStatusLabel(for: utilization))
+            components.append(AccountPresentation.utilizationStatusLabel(
+                for: utilization,
+                threshold: utilizationThreshold
+            ))
         }
         return components.joined(separator: ", ")
     }
