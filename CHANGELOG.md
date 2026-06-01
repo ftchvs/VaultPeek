@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-01 02:44 UTC] — Fix
+
+label status item rows (#155)
+
+`e19b0a8`
+
+---
+
+
 ## [2026-06-01 02:36 UTC] — Fix
 
 label status diagnostic tiles (#154)
