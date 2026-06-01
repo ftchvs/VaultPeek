@@ -56,6 +56,22 @@ public enum AccountPresentation {
         }
     }
 
+    public static func utilizationStatusLabel(
+        for percent: Double,
+        threshold: Double = PlaidBarConstants.creditUtilizationWarningThreshold
+    ) -> String {
+        guard percent >= threshold else { return "Good" }
+
+        switch percent {
+        case ..<50:
+            return "Warning"
+        case 50..<75:
+            return "High"
+        default:
+            return "Very high"
+        }
+    }
+
     private static func depositoryIconName(forSubtype subtype: String?) -> String {
         let normalized = subtype?.lowercased() ?? ""
 

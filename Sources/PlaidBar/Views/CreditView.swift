@@ -45,6 +45,9 @@ struct CreditView: View {
                         Text(Formatters.percent(totalUtilization))
                             .fontWeight(.semibold)
                             .foregroundStyle(SemanticColors.utilization(for: totalUtilization, threshold: appState.creditUtilizationThreshold))
+                        Text(totalUtilizationStatus)
+                            .microText()
+                            .foregroundStyle(.secondary)
                     }
                     Spacer()
                     Image(systemName: SemanticColors.utilizationIcon(for: totalUtilization))
@@ -53,9 +56,16 @@ struct CreditView: View {
                 .padding(.horizontal, Spacing.lg)
                 .padding(.bottom, Spacing.sm)
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel("Total credit utilization \(Formatters.percent(totalUtilization))")
+                .accessibilityLabel("Total credit utilization \(Formatters.percent(totalUtilization)), \(totalUtilizationStatus)")
             }
         }
+    }
+
+    private var totalUtilizationStatus: String {
+        AccountPresentation.utilizationStatusLabel(
+            for: totalUtilization,
+            threshold: appState.creditUtilizationThreshold
+        )
     }
 
     @ViewBuilder
@@ -148,6 +158,10 @@ struct CreditCardRow: View {
         SemanticColors.utilization(for: utilization, threshold: threshold)
     }
 
+    private var utilizationStatus: String {
+        AccountPresentation.utilizationStatusLabel(for: utilization, threshold: threshold)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.rowVertical) {
             HStack {
@@ -198,6 +212,6 @@ struct CreditCardRow: View {
         .padding(.horizontal, Spacing.lg)
         .padding(.vertical, Spacing.rowVertical)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(account.name), \(Formatters.percent(utilization)) utilization, \(Formatters.currency(available, format: .compact)) available")
+        .accessibilityLabel("\(account.name), \(Formatters.percent(utilization)) utilization, \(utilizationStatus), \(Formatters.currency(available, format: .compact)) available")
     }
 }

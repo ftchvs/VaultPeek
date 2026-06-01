@@ -214,6 +214,7 @@ struct AccountRow: View {
         components.append("\(formattedAmount)\(AccountPresentation.isDebt(account) ? " owed" : "")")
         if let utilization = account.balances.utilizationPercent {
             components.append("\(Formatters.percent(utilization)) utilization")
+            components.append(AccountPresentation.utilizationStatusLabel(for: utilization))
         }
         return components.joined(separator: ", ")
     }
