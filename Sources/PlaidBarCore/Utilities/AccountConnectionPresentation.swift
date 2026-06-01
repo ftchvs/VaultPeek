@@ -86,6 +86,17 @@ public struct AccountConnectionPresentation: Sendable, Equatable {
         statusSyncText: String,
         unknownItem: Bool
     ) -> AccountConnectionPresentation {
+        if unknownItem {
+            return AccountConnectionPresentation(
+                level: .unknown,
+                rowLabel: "Item unknown",
+                detailLabel: "Item status unavailable",
+                signalLabel: "Unknown",
+                iconName: "link.circle.fill",
+                showsRecoveryActions: false
+            )
+        }
+
         if isSyncStale {
             return AccountConnectionPresentation(
                 level: .stale,
@@ -98,11 +109,11 @@ public struct AccountConnectionPresentation: Sendable, Equatable {
         }
 
         return AccountConnectionPresentation(
-            level: unknownItem ? .unknown : .healthy,
-            rowLabel: unknownItem ? "Item unknown" : statusSyncText,
-            detailLabel: unknownItem ? "Item status unavailable" : statusSyncText,
-            signalLabel: unknownItem ? "Unknown" : "Fresh",
-            iconName: unknownItem ? "link.circle.fill" : "checkmark.circle.fill",
+            level: .healthy,
+            rowLabel: statusSyncText,
+            detailLabel: statusSyncText,
+            signalLabel: "Fresh",
+            iconName: "checkmark.circle.fill",
             showsRecoveryActions: false
         )
     }

@@ -431,6 +431,24 @@ struct PlaidBarCoreTests {
         #expect(!unknownItem.showsRecoveryActions)
     }
 
+    @Test("Account connection presentation keeps unknown item ahead of stale sync")
+    func accountConnectionPresentationUnknownItemBeatsStaleSync() {
+        let unknownItem = AccountConnectionPresentation.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            isSyncStale: true,
+            statusSyncText: "2h ago",
+            itemStatus: nil
+        )
+
+        #expect(unknownItem.level == .unknown)
+        #expect(unknownItem.rowLabel == "Item unknown")
+        #expect(unknownItem.detailLabel == "Item status unavailable")
+        #expect(unknownItem.signalLabel == "Unknown")
+        #expect(unknownItem.iconName == "link.circle.fill")
+        #expect(!unknownItem.showsRecoveryActions)
+    }
+
     @Test("Account connection presentation flags stale and reconnectable items")
     func accountConnectionPresentationRecoveryStates() {
         let stale = AccountConnectionPresentation.evaluate(
