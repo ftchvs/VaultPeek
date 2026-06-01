@@ -85,6 +85,8 @@ struct SpendingHeatmapView: View {
                 .onChange(of: mode) { _, _ in
                     selectedDate = nil
                 }
+                .accessibilityLabel("Heatmap metric")
+                .accessibilityValue(mode == .spending ? "Spend" : "Net cashflow")
             }
 
             if days.allSatisfy({ $0.transactionCount == 0 }) {
@@ -176,6 +178,8 @@ struct SpendingHeatmapView: View {
                 .microText()
                 .foregroundStyle(.secondary)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(legendAccessibilityLabel)
     }
 
     @ViewBuilder
@@ -196,6 +200,8 @@ struct SpendingHeatmapView: View {
             }
             .padding(Spacing.sm)
             .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(selectedDayAccessibilityLabel(selectedDay))
         }
     }
 
@@ -210,7 +216,18 @@ struct SpendingHeatmapView: View {
 
     private var accessibilitySummary: String {
         let activeDays = days.filter { $0.transactionCount > 0 }.count
-        return "Spending heatmap with \(activeDays) active days. Peak day \(Formatters.currency(peakValue, format: .full))."
+        return "\(mode == .spending ? "Spending" : "Net cashflow") heatmap with \(activeDays) active days. Peak day \(Formatters.currency(peakValue, format: .full)). Total \(totalLabel)."
+    }
+
+    private var legendAccessibilityLabel: String {
+        if mode == .spending {
+            return "Spending heatmap legend, lighter cells mean less spending and darker cells mean more spending. \(activeDayCount) active days."
+        }
+        return "Net cashflow heatmap legend, green cells mean income and red cells mean outflow. \(activeDayCount) active days."
+    }
+
+    private func selectedDayAccessibilityLabel(_ day: SpendingHeatmapDay) -> String {
+        "\(Formatters.displayTransactionDate(day.date)), \(dayValueText(day)) across \(day.transactionCount) transaction\(day.transactionCount == 1 ? "" : "s")"
     }
 
     private func dayValueText(_ day: SpendingHeatmapDay) -> String {

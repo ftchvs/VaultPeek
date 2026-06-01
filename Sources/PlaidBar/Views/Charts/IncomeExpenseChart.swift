@@ -43,6 +43,18 @@ struct IncomeExpenseChart: View {
         }.sorted { $0.month < $1.month }
     }
 
+    private var chartAccessibilityLabel: String {
+        let data = monthlyData
+        guard let first = data.first, let last = data.last else {
+            return "Income and expense chart with no data."
+        }
+
+        let totalIncome = data.reduce(0.0) { $0 + $1.income }
+        let totalExpenses = data.reduce(0.0) { $0 + $1.expenses }
+        let peakExpense = data.max { $0.expenses < $1.expenses } ?? last
+        return "Income and expense chart from \(first.label) to \(last.label), total income \(Formatters.currency(totalIncome, format: .full)), total expenses \(Formatters.currency(totalExpenses, format: .full)), highest expense month \(peakExpense.label) at \(Formatters.currency(peakExpense.expenses, format: .full))."
+    }
+
     var body: some View {
         let data = monthlyData
         if data.isEmpty {
@@ -86,6 +98,8 @@ struct IncomeExpenseChart: View {
             }
             .frame(height: 170)
             .padding(.horizontal)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(chartAccessibilityLabel)
         }
     }
 }

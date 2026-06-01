@@ -5,6 +5,13 @@ import PlaidBarCore
 struct SpendingTrendChart: View {
     let transactions: [TransactionDTO]
 
+    private static let accessibilityDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter
+    }()
+
     private var dailySpending: [(Date, Double)] {
         let expenses = SpendingSummary.expenseTransactions(from: transactions)
 
@@ -15,6 +22,17 @@ struct SpendingTrendChart: View {
             return (date, total)
         }
         return results.sorted { $0.0 < $1.0 }
+    }
+
+    private var chartAccessibilityLabel: String {
+        let data = dailySpending
+        guard let first = data.first, let last = data.last else {
+            return "Spending trend chart with no spending data."
+        }
+
+        let total = data.reduce(0.0) { $0 + $1.1 }
+        let peak = data.max { $0.1 < $1.1 } ?? last
+        return "Spending trend chart from \(Self.accessibilityDateFormatter.string(from: first.0)) to \(Self.accessibilityDateFormatter.string(from: last.0)), total \(Formatters.currency(total, format: .full)), peak day \(Self.accessibilityDateFormatter.string(from: peak.0)) at \(Formatters.currency(peak.1, format: .full))."
     }
 
     var body: some View {
@@ -60,6 +78,8 @@ struct SpendingTrendChart: View {
             }
             .frame(height: 170)
             .padding(.horizontal)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(chartAccessibilityLabel)
         }
     }
 }
