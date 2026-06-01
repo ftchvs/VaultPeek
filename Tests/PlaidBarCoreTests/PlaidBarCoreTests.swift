@@ -877,6 +877,43 @@ struct PlaidBarCoreTests {
         #expect(state.canRetry)
     }
 
+    @Test("First-run completion reports partial item sync")
+    func firstRunCompletionReportsPartialItemSync() {
+        let state = FirstRunCompletionState.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 2,
+            accountCount: 4,
+            transactionCount: 12,
+            syncedItemCount: 1,
+            errorMessage: nil
+        )
+
+        #expect(state.step == .syncTransactions)
+        #expect(state.title == "First sync incomplete")
+        #expect(state.detail == "1 of 2 linked items synced. Run one more check to finish setup.")
+        #expect(!state.isReady)
+        #expect(state.canRetry)
+    }
+
+    @Test("First-run completion distinguishes uncommitted sync state")
+    func firstRunCompletionDistinguishesUncommittedSyncState() {
+        let state = FirstRunCompletionState.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 1,
+            accountCount: 2,
+            transactionCount: 8,
+            syncedItemCount: 0,
+            errorMessage: nil
+        )
+
+        #expect(state.step == .syncTransactions)
+        #expect(state.title == "Accounts loaded")
+        #expect(state.detail == "Transactions are present, but no linked item has completed its first sync. Check again to commit sync state.")
+        #expect(state.canRetry)
+    }
+
     @Test("First-run completion is ready after accounts and sync")
     func firstRunCompletionReadyAfterSync() {
         let state = FirstRunCompletionState.evaluate(
