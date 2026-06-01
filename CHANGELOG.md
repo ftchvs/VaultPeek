@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-01 09:47 UTC] — Fix
+
+label notification permission status (#167)
+
+`c61028c`
+
+---
+
+
 ## [2026-06-01 09:38 UTC] — Documentation
 
 update setup recovery ledger (#166)
