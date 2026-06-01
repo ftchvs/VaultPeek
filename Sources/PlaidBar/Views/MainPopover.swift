@@ -366,22 +366,34 @@ private struct BalanceCompositionStrip: View {
         [
             BalanceCompositionSegment(
                 title: "Cash",
-                value: sum(for: .depository),
+                value: AccountPresentation.positiveBalanceTotal(
+                    from: appState.accounts,
+                    type: .depository
+                ),
                 tint: SemanticColors.available
             ),
             BalanceCompositionSegment(
                 title: "Investments",
-                value: sum(for: .investment),
+                value: AccountPresentation.positiveBalanceTotal(
+                    from: appState.accounts,
+                    type: .investment
+                ),
                 tint: SemanticColors.brand
             ),
             BalanceCompositionSegment(
                 title: "Credit",
-                value: debt(for: .credit),
+                value: AccountPresentation.debtBalanceTotal(
+                    from: appState.accounts,
+                    type: .credit
+                ),
                 tint: SemanticColors.creditDebt
             ),
             BalanceCompositionSegment(
                 title: "Loans",
-                value: debt(for: .loan),
+                value: AccountPresentation.debtBalanceTotal(
+                    from: appState.accounts,
+                    type: .loan
+                ),
                 tint: SemanticColors.warning
             ),
         ]
@@ -440,18 +452,6 @@ private struct BalanceCompositionStrip: View {
         let gaps = CGFloat(max(activeSegments.count - 1, 0)) * 3
         let availableWidth = max(totalWidth - gaps, 0)
         return max(availableWidth * CGFloat(segment.value / total), 6)
-    }
-
-    private func sum(for type: AccountType) -> Double {
-        appState.accounts
-            .filter { $0.type == type }
-            .reduce(0) { $0 + max($1.balances.effectiveBalance, 0) }
-    }
-
-    private func debt(for type: AccountType) -> Double {
-        appState.accounts
-            .filter { $0.type == type }
-            .reduce(0) { $0 + AccountPresentation.displayBalance(for: $1) }
     }
 }
 

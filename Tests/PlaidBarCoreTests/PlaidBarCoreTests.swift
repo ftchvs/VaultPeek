@@ -287,6 +287,22 @@ struct PlaidBarCoreTests {
         #expect(AccountPresentation.availableBalance(for: loan) == 0)
     }
 
+    @Test("Account presentation aggregates positive and debt balances")
+    func accountPresentationBalanceTotals() {
+        let accounts = [
+            AccountDTO(id: "1", itemId: "i", name: "Checking", type: .depository, balances: BalanceDTO(current: 500)),
+            AccountDTO(id: "2", itemId: "i", name: "Overdrawn", type: .depository, balances: BalanceDTO(current: -20)),
+            AccountDTO(id: "3", itemId: "i", name: "Brokerage", type: .investment, balances: BalanceDTO(current: 1_200)),
+            AccountDTO(id: "4", itemId: "i", name: "Card", type: .credit, balances: BalanceDTO(current: -125)),
+            AccountDTO(id: "5", itemId: "i", name: "Loan", type: .loan, balances: BalanceDTO(current: -750)),
+        ]
+
+        #expect(AccountPresentation.positiveBalanceTotal(from: accounts, type: .depository) == 500)
+        #expect(AccountPresentation.positiveBalanceTotal(from: accounts, type: .investment) == 1_200)
+        #expect(AccountPresentation.debtBalanceTotal(from: accounts, type: .credit) == 125)
+        #expect(AccountPresentation.debtBalanceTotal(from: accounts, type: .loan) == 750)
+    }
+
     @Test("Account presentation derives account detail labels")
     func accountPresentationDetailLabels() {
         let account = AccountDTO(
