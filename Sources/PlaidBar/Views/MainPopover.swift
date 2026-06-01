@@ -1110,7 +1110,8 @@ private struct AccountRowWithDrilldown: View {
         let selectedText = isSelected ? "selected" : "collapsed"
         let pendingText = pendingCount > 0 ? ", \(pendingCount) pending transaction\(pendingCount == 1 ? "" : "s")" : ""
         let metricText = account.balances.utilizationPercent.map {
-            ", \(Formatters.percent($0, decimals: 0)) utilization"
+            let status = AccountPresentation.utilizationStatusLabel(for: $0)
+            return ", \(Formatters.percent($0, decimals: 0)) utilization, \(status)"
         } ?? ", \(connectionPresentation.rowLabel)"
         return "\(account.name), \(accountSubtitle), \(balance)\(metricText)\(pendingText), \(selectedText)"
     }
@@ -1417,7 +1418,7 @@ private struct SelectedAccountPanel: View {
                 if let utilization = account.balances.utilizationPercent {
                     DetailValue(
                         title: "Utilization",
-                        value: Formatters.percent(utilization, decimals: 0),
+                        value: utilizationDetailText(for: utilization),
                         tint: SemanticColors.utilization(for: utilization)
                     )
                 } else {
@@ -1538,6 +1539,11 @@ private struct SelectedAccountPanel: View {
 
     private var activityText: String {
         "\(accountTransactions.count) tx"
+    }
+
+    private func utilizationDetailText(for utilization: Double) -> String {
+        let status = AccountPresentation.utilizationStatusLabel(for: utilization)
+        return "\(Formatters.percent(utilization, decimals: 0)), \(status)"
     }
 
     private var syncSignalText: String {
