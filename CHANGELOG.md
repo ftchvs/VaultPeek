@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-01 01:11 UTC] — Update
+
+reuse credit presentation balances (#146)
+
+`0dd1981`
+
+---
+
+
 ## [2026-06-01 01:04 UTC] — Update
 
 share account detail presentation (#145)
