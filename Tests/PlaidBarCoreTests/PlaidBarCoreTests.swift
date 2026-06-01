@@ -1524,6 +1524,19 @@ struct PlaidBarCoreTests {
         #expect(directory == database.deletingLastPathComponent())
     }
 
+    @Test("Local data store resolves active directory from server storage directory")
+    func localDataStoreResolvesActiveDirectoryFromServerStorageDirectory() {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            .appendingPathComponent(".plaidbar", isDirectory: true)
+
+        let resolved = LocalDataStore.storageDirectoryURL(
+            forServerStoragePath: directory.path
+        )
+
+        #expect(resolved == directory)
+    }
+
     @Test("Local data store falls back for demo display path")
     func localDataStoreFallsBackForDemoDisplayPath() {
         let fallback = URL(fileURLWithPath: NSTemporaryDirectory())
