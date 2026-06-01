@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-01 11:54 UTC] — Documentation
+
+align storage directory copy (#172)
+
+`e10fb4a`
+
+---
+
+
 ## [2026-06-01 11:46 UTC] — Fix
 
 report storage directory in status preflight (#171)
