@@ -102,6 +102,9 @@ Completed production-readiness slices:
   directory contract.
 - 2026-06-01: covered server-reported storage directory path resolution in
   `PlaidBarCore`.
+- 2026-06-01: shared balance composition totals through `PlaidBarCore`.
+- 2026-06-01: moved account row amounts, subtitles, and accessibility summary
+  composition into `PlaidBarCore`.
 
 ### Reliability And Trust
 

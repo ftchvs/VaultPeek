@@ -59,6 +59,65 @@ public enum AccountPresentation {
         return "\(account.type.rawValue.capitalized) • \(subtype)\(mask)"
     }
 
+    public static func rowAmountText(
+        for account: AccountDTO,
+        format: CurrencyFormat = .full
+    ) -> String {
+        Formatters.currency(displayBalance(for: account), format: format)
+    }
+
+    public static func dashboardRowSubtitle(
+        for account: AccountDTO,
+        connectionLabel: String,
+        pendingCount: Int = 0
+    ) -> String {
+        let mask = account.mask.map { " •••• \($0)" } ?? ""
+        let pending = pendingCount > 0 ? " • \(pendingCount) pending" : ""
+        return "\(account.institutionName ?? account.type.rawValue.capitalized)\(mask) • \(connectionLabel)\(pending)"
+    }
+
+    public static func rowAccessibilityLabel(
+        for account: AccountDTO,
+        amountText: String? = nil,
+        connectionLabel: String? = nil,
+        pendingCount: Int = 0,
+        isSelected: Bool? = nil,
+        utilizationThreshold: Double = PlaidBarConstants.creditUtilizationWarningThreshold
+    ) -> String {
+        var components = [String]()
+        components.append(account.name)
+        if let institutionName = account.institutionName {
+            components.append(institutionName)
+        }
+        components.append(account.type.rawValue.capitalized)
+        if let mask = account.mask {
+            components.append("Ending in \(mask)")
+        }
+
+        let balance = amountText ?? rowAmountText(for: account)
+        components.append("\(balance)\(isDebt(account) ? " owed" : "")")
+
+        if let utilization = account.balances.utilizationPercent {
+            components.append("\(Formatters.percent(utilization, decimals: 0)) utilization")
+            components.append(utilizationStatusLabel(
+                for: utilization,
+                threshold: utilizationThreshold
+            ))
+        } else if let connectionLabel {
+            components.append(connectionLabel)
+        }
+
+        if pendingCount > 0 {
+            components.append("\(pendingCount) pending transaction\(pendingCount == 1 ? "" : "s")")
+        }
+
+        if let isSelected {
+            components.append(isSelected ? "selected" : "collapsed")
+        }
+
+        return components.joined(separator: ", ")
+    }
+
     public static func iconName(for account: AccountDTO) -> String {
         switch account.type {
         case .credit:
