@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-01 00:56 UTC] — Update
+
+Improve dashboard status and recovery context (#144)
+
+`72e497c`
+
+---
+
+
 ## [2026-05-31 04:18 UTC] — Documentation
 
 update autonomous roadmap progress (#143)
