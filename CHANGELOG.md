@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-01 01:46 UTC] — Fix
+
+label transaction filter controls (#148)
+
+`37b1e04`
+
+---
+
+
 ## [2026-06-01 01:19 UTC] — Feature
 
 show transaction source context (#147)
