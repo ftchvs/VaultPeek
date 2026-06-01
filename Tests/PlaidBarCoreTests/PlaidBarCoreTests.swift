@@ -1515,6 +1515,7 @@ struct PlaidBarCoreTests {
         try "token".write(to: authToken, atomically: true, encoding: .utf8)
         try "PLAID_ENV=sandbox".write(to: serverConfig, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: authToken.path)
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: serverConfig.path)
         defer { try? FileManager.default.removeItem(at: root) }
 
         var didResetKeychainTokens = false
@@ -1534,6 +1535,7 @@ struct PlaidBarCoreTests {
         #expect(try String(contentsOf: authToken, encoding: .utf8) == "token")
         #expect(try String(contentsOf: serverConfig, encoding: .utf8) == "PLAID_ENV=sandbox")
         #expect(try posixPermissions(at: authToken) == 0o600)
+        #expect(try posixPermissions(at: serverConfig) == 0o600)
     }
 
     @Test("Local data reset keeps data directory private")
