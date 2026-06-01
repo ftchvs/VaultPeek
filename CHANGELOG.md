@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-01 12:18 UTC] — Fix
+
+align account utilization threshold (#175)
+
+`99030fa`
+
+---
+
+
 ## [2026-06-01 12:11 UTC] — Documentation
 
 align status storage directory copy (#174)
