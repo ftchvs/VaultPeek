@@ -77,6 +77,9 @@ Completed production-readiness slices:
   permissions.
 - 2026-05-31: surfaced invalid URL and browser-open failures for item reconnect
   flows.
+- 2026-05-31: refreshed the roadmap progress ledger for the autonomous loop.
+- 2026-05-31: improved VoiceOver summaries for dashboard error dismissal,
+  status diagnostics, Plaid item status rows, and Settings account rows.
 
 ### Reliability And Trust
 
