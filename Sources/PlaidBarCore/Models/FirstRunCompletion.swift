@@ -91,10 +91,12 @@ public struct FirstRunCompletionState: Equatable, Sendable {
         guard syncedItemCount >= linkedItemCount else {
             return FirstRunCompletionState(
                 step: .syncTransactions,
-                title: "Accounts loaded",
-                detail: transactionCount > 0
-                    ? "\(syncedItemCount) of \(linkedItemCount) linked item\(linkedItemCount == 1 ? "" : "s") synced. Run one more check to finish setup."
-                    : "Run the first transaction sync check to finish setup.",
+                title: syncedItemCount > 0 ? "First sync incomplete" : "Accounts loaded",
+                detail: syncTransactionsDetail(
+                    linkedItemCount: linkedItemCount,
+                    syncedItemCount: syncedItemCount,
+                    transactionCount: transactionCount
+                ),
                 isReady: false,
                 canRetry: true
             )
@@ -109,5 +111,21 @@ public struct FirstRunCompletionState: Equatable, Sendable {
             isReady: true,
             canRetry: false
         )
+    }
+
+    private static func syncTransactionsDetail(
+        linkedItemCount: Int,
+        syncedItemCount: Int,
+        transactionCount: Int
+    ) -> String {
+        if syncedItemCount > 0 {
+            return "\(syncedItemCount) of \(linkedItemCount) linked item\(linkedItemCount == 1 ? "" : "s") synced. Run one more check to finish setup."
+        }
+
+        if transactionCount > 0 {
+            return "Transactions are present, but no linked item has completed its first sync. Check again to commit sync state."
+        }
+
+        return "Run the first transaction sync check to finish setup."
     }
 }
