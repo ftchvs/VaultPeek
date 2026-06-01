@@ -98,6 +98,10 @@ Completed production-readiness slices:
   with the configured warning threshold.
 - 2026-06-01: reported the local storage directory, not the SQLite file, in
   status preflight and sandbox smoke checks.
+- 2026-06-01: aligned Settings local-data copy with the server storage
+  directory contract.
+- 2026-06-01: covered server-reported storage directory path resolution in
+  `PlaidBarCore`.
 
 ### Reliability And Trust
 
