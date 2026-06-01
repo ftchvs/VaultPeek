@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-01 12:48 UTC] — Update
+
+share account row presentation
+
+`ad109e7`
+
+---
+
+
 ## [2026-06-01 12:26 UTC] — Update
 
 share balance composition totals (#176)
