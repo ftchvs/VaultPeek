@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-01 10:17 UTC] — Fix
+
+align utilization threshold signals (#170)
+
+`bd14c32`
+
+---
+
+
 ## [2026-06-01 10:09 UTC] — Fix
 
 label dashboard utilization status (#169)
