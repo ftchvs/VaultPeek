@@ -96,6 +96,8 @@ Completed production-readiness slices:
   selected details.
 - 2026-06-01: aligned credit utilization status icons and dashboard tinting
   with the configured warning threshold.
+- 2026-06-01: reported the local storage directory, not the SQLite file, in
+  status preflight and sandbox smoke checks.
 
 ### Reliability And Trust
 
