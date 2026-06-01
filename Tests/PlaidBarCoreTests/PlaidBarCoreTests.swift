@@ -1118,6 +1118,52 @@ struct PlaidBarCoreTests {
         #expect(readiness.secondaryActions.contains(.openSettings))
     }
 
+    @Test("Dashboard status readiness ignores blank recent action failures")
+    func dashboardStatusReadinessIgnoresBlankRecentActionFailures() {
+        let readiness = DashboardStatusReadiness.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 0,
+            accountCount: 0,
+            syncedItemCount: 0,
+            needsLoginItemCount: 0,
+            erroredItemCount: 0,
+            isSyncStale: true,
+            lastSyncRelative: nil,
+            errorMessage: " \n\t "
+        )
+
+        #expect(readiness.level == .warning)
+        #expect(readiness.title == "No institution linked")
+        #expect(readiness.primaryAction == .addAccount)
+    }
+
+    @Test("Dashboard status readiness normalizes and truncates recent action failures")
+    func dashboardStatusReadinessNormalizesAndTruncatesRecentActionFailures() {
+        let longMessage = "Server failed:\n" + String(repeating: "Plaid upstream payload ", count: 20)
+
+        let readiness = DashboardStatusReadiness.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 1,
+            accountCount: 1,
+            syncedItemCount: 0,
+            needsLoginItemCount: 0,
+            erroredItemCount: 0,
+            isSyncStale: true,
+            lastSyncRelative: nil,
+            errorMessage: longMessage
+        )
+
+        #expect(readiness.title == "Recent action failed")
+        #expect(!readiness.detail.contains("\n"))
+        #expect(readiness.detail.count == 243)
+        #expect(readiness.detail.hasSuffix("..."))
+        #expect(readiness.primaryAction == .refresh)
+    }
+
     @Test("Dashboard status readiness blocks on missing credentials")
     func dashboardStatusReadinessBlocksOnMissingCredentials() {
         let readiness = DashboardStatusReadiness.evaluate(

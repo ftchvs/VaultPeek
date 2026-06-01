@@ -15,6 +15,8 @@ public enum DashboardStatusReadinessAction: String, Codable, Sendable {
 }
 
 public struct DashboardStatusReadiness: Equatable, Sendable {
+    private static let maxRenderedErrorLength = 240
+
     public let level: DashboardStatusReadinessLevel
     public let title: String
     public let detail: String
@@ -97,7 +99,7 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
             )
         }
 
-        if let errorMessage, !errorMessage.isEmpty {
+        if let errorMessage = userFacingErrorDetail(from: errorMessage) {
             return DashboardStatusReadiness(
                 level: .warning,
                 title: "Recent action failed",
@@ -154,5 +156,18 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
             primaryAction: .refresh,
             secondaryActions: [.addAccount]
         )
+    }
+
+    private static func userFacingErrorDetail(from message: String?) -> String? {
+        guard let message else { return nil }
+
+        let normalized = message
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+
+        guard !normalized.isEmpty else { return nil }
+        guard normalized.count > maxRenderedErrorLength else { return normalized }
+
+        return "\(normalized.prefix(maxRenderedErrorLength))..."
     }
 }
