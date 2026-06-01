@@ -550,6 +550,34 @@ private struct OnboardingPreflightPanel: View {
         }
         .font(.caption)
         .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title): \(value)")
+        .accessibilityHint(accessibilityHint(for: title, state: state))
+    }
+
+    private func accessibilityHint(for title: String, state: PreflightState) -> String {
+        switch state {
+        case .ready:
+            return "\(title) is ready."
+        case .blocked:
+            return blockedAccessibilityHint(for: title)
+        case .unknown:
+            return "Start PlaidBarServer, then check again."
+        case .informational:
+            return "\(title) is informational."
+        }
+    }
+
+    private func blockedAccessibilityHint(for title: String) -> String {
+        switch title {
+        case "Server":
+            "Start PlaidBarServer, then check again."
+        case "Mode":
+            "Restart PlaidBarServer in \(environment.rawValue) mode."
+        case "Credentials":
+            "Add Plaid credentials to the local server environment."
+        default:
+            "\(title) needs attention before Plaid Link can open."
+        }
     }
 }
 
