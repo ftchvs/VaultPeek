@@ -50,7 +50,10 @@ struct CreditView: View {
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Image(systemName: SemanticColors.utilizationIcon(for: totalUtilization))
+                    Image(systemName: SemanticColors.utilizationIcon(
+                        for: totalUtilization,
+                        threshold: appState.creditUtilizationThreshold
+                    ))
                         .foregroundStyle(SemanticColors.utilization(for: totalUtilization, threshold: appState.creditUtilizationThreshold))
                 }
                 .padding(.horizontal, Spacing.lg)
@@ -169,7 +172,7 @@ struct CreditCardRow: View {
                     .font(.body)
                 Spacer()
                 // Issue #4: threshold-specific icons
-                Image(systemName: SemanticColors.utilizationIcon(for: utilization))
+                Image(systemName: SemanticColors.utilizationIcon(for: utilization, threshold: threshold))
                     .foregroundStyle(barColor)
                     .font(.caption)
             }

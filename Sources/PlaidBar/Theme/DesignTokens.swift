@@ -66,13 +66,11 @@ enum SemanticColors {
     }
 
     /// SF Symbol for utilization status
-    static func utilizationIcon(for percent: Double) -> String {
-        switch percent {
-        case ..<30: return "checkmark.circle"
-        case 30..<50: return "exclamationmark.triangle"
-        case 50..<75: return "exclamationmark.triangle.fill"
-        default: return "xmark.octagon"
-        }
+    static func utilizationIcon(for percent: Double, threshold: Double = 30) -> String {
+        if percent < threshold { return "checkmark.circle" }
+        if percent < 50 { return "exclamationmark.triangle" }
+        if percent < 75 { return "exclamationmark.triangle.fill" }
+        return "xmark.octagon"
     }
 }
 
