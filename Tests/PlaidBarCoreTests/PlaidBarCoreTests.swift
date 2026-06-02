@@ -1118,6 +1118,36 @@ struct PlaidBarCoreTests {
         #expect(readiness.secondaryActions.contains(.openSettings))
     }
 
+    @Test("Dashboard account filters include only matching account kinds")
+    func dashboardAccountFiltersMatchAccountKinds() {
+        let checking = AccountDTO(id: "checking", itemId: "item_cash", name: "Checking", type: .depository, subtype: "checking")
+        let savings = AccountDTO(id: "savings", itemId: "item_cash", name: "Savings", type: .depository, subtype: "savings")
+        let credit = AccountDTO(id: "credit", itemId: "item_card", name: "Card", type: .credit)
+        let loan = AccountDTO(id: "loan", itemId: "item_loan", name: "Loan", type: .loan)
+
+        #expect(DashboardAccountFilterKind.all.includes(checking))
+        #expect(DashboardAccountFilterKind.cash.includes(checking))
+        #expect(DashboardAccountFilterKind.cash.includes(savings))
+        #expect(!DashboardAccountFilterKind.cash.includes(credit))
+        #expect(DashboardAccountFilterKind.savings.includes(savings))
+        #expect(!DashboardAccountFilterKind.savings.includes(checking))
+        #expect(DashboardAccountFilterKind.credit.includes(credit))
+        #expect(DashboardAccountFilterKind.debt.includes(credit))
+        #expect(DashboardAccountFilterKind.debt.includes(loan))
+        #expect(!DashboardAccountFilterKind.debt.includes(checking))
+    }
+
+    @Test("Dashboard status filter only shows degraded item accounts")
+    func dashboardStatusFilterOnlyShowsDegradedItemAccounts() {
+        let healthy = AccountDTO(id: "checking", itemId: "item_cash", name: "Checking", type: .depository)
+        let degraded = AccountDTO(id: "card", itemId: "item_card", name: "Card", type: .credit)
+
+        #expect(!DashboardAccountFilterKind.status.includes(healthy))
+        #expect(!DashboardAccountFilterKind.status.includes(degraded))
+        #expect(!DashboardAccountFilterKind.status.includes(healthy, degradedItemIds: ["item_card"]))
+        #expect(DashboardAccountFilterKind.status.includes(degraded, degradedItemIds: ["item_card"]))
+    }
+
     @Test("Dashboard account empty state points status filter at degraded item recovery")
     func dashboardAccountEmptyStateStatusFilterWithDegradedItems() {
         let emptyState = DashboardAccountEmptyState.evaluate(

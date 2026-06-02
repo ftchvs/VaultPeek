@@ -7,6 +7,26 @@ public enum DashboardAccountFilterKind: String, CaseIterable, Sendable {
     case savings = "Savings"
     case debt = "Debt"
     case status = "Status"
+
+    public func includes(
+        _ account: AccountDTO,
+        degradedItemIds: Set<String> = []
+    ) -> Bool {
+        switch self {
+        case .all:
+            return true
+        case .cash:
+            return account.type == .depository
+        case .credit:
+            return account.type == .credit
+        case .savings:
+            return account.subtype?.localizedCaseInsensitiveContains("saving") == true
+        case .debt:
+            return AccountPresentation.isDebt(account)
+        case .status:
+            return degradedItemIds.contains(account.itemId)
+        }
+    }
 }
 
 public enum DashboardAccountEmptyStateTone: String, Sendable {

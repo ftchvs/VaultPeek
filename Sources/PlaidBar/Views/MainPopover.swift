@@ -798,26 +798,7 @@ private enum DashboardAccountFilter: String, CaseIterable, Identifiable {
 
     @MainActor
     func includes(_ account: AccountDTO, appState: AppState) -> Bool {
-        switch self {
-        case .all:
-            return true
-        case .cash:
-            return account.type == .depository
-        case .credit:
-            return account.type == .credit
-        case .savings:
-            return account.subtype?.localizedCaseInsensitiveContains("saving") == true
-        case .debt:
-            return AccountPresentation.isDebt(account)
-        case .status:
-            guard appState.needsLoginItemCount > 0 || appState.erroredItemCount > 0 else { return true }
-            let degradedItemIds = Set(
-                appState.itemStatuses
-                    .filter { $0.status == .loginRequired || $0.status == .error }
-                    .map(\.id)
-            )
-            return degradedItemIds.contains(account.itemId)
-        }
+        emptyStateKind.includes(account, degradedItemIds: appState.degradedItemIds)
     }
 }
 
