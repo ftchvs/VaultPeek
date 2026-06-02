@@ -1168,6 +1168,55 @@ struct PlaidBarCoreTests {
         #expect(emptyState.actionIconName == "server.rack")
     }
 
+    @Test("Dashboard account empty state uses status check copy before a bank is linked")
+    func dashboardAccountEmptyStateNoLinkedBankActionCopy() {
+        let emptyState = DashboardAccountEmptyState.evaluate(
+            filter: .all,
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 0,
+            accountCount: 0,
+            degradedItemCount: 0
+        )
+
+        #expect(emptyState.title == "No bank linked")
+        #expect(emptyState.showsAddAccount)
+        #expect(emptyState.actionTitle == "Check Status")
+        #expect(emptyState.actionIconName == "arrow.clockwise")
+    }
+
+    @Test("Dashboard account empty state uses sync copy when linked balances are missing")
+    func dashboardAccountEmptyStateNoBalanceDataActionCopy() {
+        let emptyState = DashboardAccountEmptyState.evaluate(
+            filter: .all,
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 1,
+            accountCount: 0,
+            degradedItemCount: 0
+        )
+
+        #expect(emptyState.title == "No account data")
+        #expect(emptyState.actionTitle == "Sync Balances")
+        #expect(emptyState.actionIconName == "arrow.clockwise")
+    }
+
+    @Test("Dashboard account empty state uses refresh data copy for empty filters")
+    func dashboardAccountEmptyStateFilteredEmptyActionCopy() {
+        let emptyState = DashboardAccountEmptyState.evaluate(
+            filter: .cash,
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 1,
+            accountCount: 2,
+            degradedItemCount: 0
+        )
+
+        #expect(emptyState.title == "No cash accounts")
+        #expect(emptyState.actionTitle == "Refresh Data")
+        #expect(emptyState.actionIconName == "arrow.clockwise")
+    }
+
     @Test("Dashboard status readiness ignores blank recent action failures")
     func dashboardStatusReadinessIgnoresBlankRecentActionFailures() {
         let readiness = DashboardStatusReadiness.evaluate(
