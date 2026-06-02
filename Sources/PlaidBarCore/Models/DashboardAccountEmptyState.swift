@@ -17,12 +17,19 @@ public enum DashboardAccountEmptyStateTone: String, Sendable {
     case warning
 }
 
+public enum DashboardAccountEmptyStateAction: String, Sendable {
+    case checkServer
+    case refresh
+    case sync
+}
+
 public struct DashboardAccountEmptyState: Equatable, Sendable {
     public let title: String
     public let detail: String
     public let iconName: String
     public let tone: DashboardAccountEmptyStateTone
     public let showsAddAccount: Bool
+    public let action: DashboardAccountEmptyStateAction
     public let actionTitle: String
     public let actionIconName: String
 
@@ -32,6 +39,7 @@ public struct DashboardAccountEmptyState: Equatable, Sendable {
         iconName: String,
         tone: DashboardAccountEmptyStateTone,
         showsAddAccount: Bool,
+        action: DashboardAccountEmptyStateAction,
         actionTitle: String,
         actionIconName: String
     ) {
@@ -40,6 +48,7 @@ public struct DashboardAccountEmptyState: Equatable, Sendable {
         self.iconName = iconName
         self.tone = tone
         self.showsAddAccount = showsAddAccount
+        self.action = action
         self.actionTitle = actionTitle
         self.actionIconName = actionIconName
     }
@@ -59,6 +68,7 @@ public struct DashboardAccountEmptyState: Equatable, Sendable {
                 iconName: "server.rack",
                 tone: .offline,
                 showsAddAccount: false,
+                action: .checkServer,
                 actionTitle: "Check Server",
                 actionIconName: "server.rack"
             )
@@ -71,6 +81,7 @@ public struct DashboardAccountEmptyState: Equatable, Sendable {
                 iconName: "building.columns",
                 tone: .brand,
                 showsAddAccount: serverConnected,
+                action: .refresh,
                 actionTitle: "Check Status",
                 actionIconName: "arrow.clockwise"
             )
@@ -83,6 +94,7 @@ public struct DashboardAccountEmptyState: Equatable, Sendable {
                 iconName: "exclamationmark.triangle.fill",
                 tone: .warning,
                 showsAddAccount: false,
+                action: .refresh,
                 actionTitle: "Refresh",
                 actionIconName: "arrow.clockwise"
             )
@@ -95,6 +107,7 @@ public struct DashboardAccountEmptyState: Equatable, Sendable {
                 iconName: "tray",
                 tone: .warning,
                 showsAddAccount: false,
+                action: .sync,
                 actionTitle: "Sync Balances",
                 actionIconName: "arrow.clockwise"
             )
@@ -107,6 +120,7 @@ public struct DashboardAccountEmptyState: Equatable, Sendable {
                 iconName: "checkmark.circle.fill",
                 tone: .healthy,
                 showsAddAccount: false,
+                action: .refresh,
                 actionTitle: "Refresh",
                 actionIconName: "arrow.clockwise"
             )
@@ -118,6 +132,7 @@ public struct DashboardAccountEmptyState: Equatable, Sendable {
             iconName: "line.3.horizontal.decrease.circle",
             tone: .secondary,
             showsAddAccount: false,
+            action: .refresh,
             actionTitle: "Refresh Data",
             actionIconName: "arrow.clockwise"
         )

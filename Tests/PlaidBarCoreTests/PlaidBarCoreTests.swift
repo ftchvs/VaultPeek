@@ -1134,6 +1134,7 @@ struct PlaidBarCoreTests {
         #expect(emptyState.iconName == "exclamationmark.triangle.fill")
         #expect(emptyState.tone == .warning)
         #expect(!emptyState.showsAddAccount)
+        #expect(emptyState.action == .refresh)
     }
 
     @Test("Dashboard account empty state keeps healthy status copy when no items are degraded")
@@ -1150,6 +1151,7 @@ struct PlaidBarCoreTests {
         #expect(emptyState.title == "No accounts need attention")
         #expect(emptyState.tone == .healthy)
         #expect(emptyState.iconName == "checkmark.circle.fill")
+        #expect(emptyState.action == .refresh)
     }
 
     @Test("Dashboard account empty state keeps server offline recovery first")
@@ -1164,6 +1166,7 @@ struct PlaidBarCoreTests {
         )
 
         #expect(emptyState.title == "Server offline")
+        #expect(emptyState.action == .checkServer)
         #expect(emptyState.actionTitle == "Check Server")
         #expect(emptyState.actionIconName == "server.rack")
     }
@@ -1181,6 +1184,7 @@ struct PlaidBarCoreTests {
 
         #expect(emptyState.title == "No bank linked")
         #expect(emptyState.showsAddAccount)
+        #expect(emptyState.action == .refresh)
         #expect(emptyState.actionTitle == "Check Status")
         #expect(emptyState.actionIconName == "arrow.clockwise")
     }
@@ -1197,6 +1201,7 @@ struct PlaidBarCoreTests {
         )
 
         #expect(emptyState.title == "No account data")
+        #expect(emptyState.action == .sync)
         #expect(emptyState.actionTitle == "Sync Balances")
         #expect(emptyState.actionIconName == "arrow.clockwise")
     }
@@ -1213,6 +1218,7 @@ struct PlaidBarCoreTests {
         )
 
         #expect(emptyState.title == "No cash accounts")
+        #expect(emptyState.action == .refresh)
         #expect(emptyState.actionTitle == "Refresh Data")
         #expect(emptyState.actionIconName == "arrow.clockwise")
     }

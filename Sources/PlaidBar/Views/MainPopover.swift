@@ -1196,14 +1196,7 @@ private struct DashboardEmptyAccountState: View {
                 }
 
                 Button {
-                    Task {
-                        if !appState.serverConnected {
-                            await appState.checkServerConnection()
-                        } else {
-                            await appState.refreshAccounts()
-                            await appState.syncTransactions()
-                        }
-                    }
+                    performRecoveryAction()
                 } label: {
                     Label(actionTitle, systemImage: actionIcon)
                 }
@@ -1255,6 +1248,26 @@ private struct DashboardEmptyAccountState: View {
 
     private var actionIcon: String {
         presentation.actionIconName
+    }
+
+    private func performRecoveryAction() {
+        switch presentation.action {
+        case .checkServer:
+            Task { await appState.checkServerConnection() }
+        case .refresh:
+            Task {
+                await appState.checkServerConnection()
+                if appState.serverConnected {
+                    await appState.refreshAccounts()
+                    await appState.syncTransactions()
+                }
+            }
+        case .sync:
+            Task {
+                await appState.refreshBalances()
+                await appState.syncTransactions()
+            }
+        }
     }
 }
 
