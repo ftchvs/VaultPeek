@@ -1118,6 +1118,56 @@ struct PlaidBarCoreTests {
         #expect(readiness.secondaryActions.contains(.openSettings))
     }
 
+    @Test("Dashboard account empty state points status filter at degraded item recovery")
+    func dashboardAccountEmptyStateStatusFilterWithDegradedItems() {
+        let emptyState = DashboardAccountEmptyState.evaluate(
+            filter: .status,
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 1,
+            accountCount: 3,
+            degradedItemCount: 1
+        )
+
+        #expect(emptyState.title == "1 item needs attention")
+        #expect(emptyState.detail.contains("needs recovery"))
+        #expect(emptyState.iconName == "exclamationmark.triangle.fill")
+        #expect(emptyState.tone == .warning)
+        #expect(!emptyState.showsAddAccount)
+    }
+
+    @Test("Dashboard account empty state keeps healthy status copy when no items are degraded")
+    func dashboardAccountEmptyStateStatusFilterHealthy() {
+        let emptyState = DashboardAccountEmptyState.evaluate(
+            filter: .status,
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 2,
+            accountCount: 4,
+            degradedItemCount: 0
+        )
+
+        #expect(emptyState.title == "No accounts need attention")
+        #expect(emptyState.tone == .healthy)
+        #expect(emptyState.iconName == "checkmark.circle.fill")
+    }
+
+    @Test("Dashboard account empty state keeps server offline recovery first")
+    func dashboardAccountEmptyStateServerOfflineFirst() {
+        let emptyState = DashboardAccountEmptyState.evaluate(
+            filter: .status,
+            isDemoMode: false,
+            serverConnected: false,
+            linkedItemCount: 1,
+            accountCount: 0,
+            degradedItemCount: 1
+        )
+
+        #expect(emptyState.title == "Server offline")
+        #expect(emptyState.actionTitle == "Check Server")
+        #expect(emptyState.actionIconName == "server.rack")
+    }
+
     @Test("Dashboard status readiness ignores blank recent action failures")
     func dashboardStatusReadinessIgnoresBlankRecentActionFailures() {
         let readiness = DashboardStatusReadiness.evaluate(
