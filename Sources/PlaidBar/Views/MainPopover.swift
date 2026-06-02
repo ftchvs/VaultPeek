@@ -968,6 +968,7 @@ private struct StatusMetricGrid: View {
             StatusMetricPill(title: "Synced", value: syncedItemsText)
             StatusMetricPill(title: "Credentials", value: appState.serverCredentialsText)
             StatusMetricPill(title: "Last Sync", value: appState.lastSyncRelative ?? "Never")
+            StatusMetricPill(title: "Data Path", value: appState.activeStorageDirectoryDisplayText)
         }
     }
 
