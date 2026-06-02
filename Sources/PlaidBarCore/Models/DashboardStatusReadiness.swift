@@ -137,11 +137,21 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
             )
         }
 
+        if syncedItemCount == 0 {
+            return DashboardStatusReadiness(
+                level: .warning,
+                title: "First sync needed",
+                detail: "Accounts are loaded, but no linked item has completed transaction sync yet. Refresh to run the first sync.",
+                primaryAction: .refresh,
+                secondaryActions: [.openSettings]
+            )
+        }
+
         if syncedItemCount < linkedItemCount {
             return DashboardStatusReadiness(
                 level: .warning,
                 title: "First sync incomplete",
-                detail: "\(syncedItemCount) of \(linkedItemCount) linked item\(linkedItemCount == 1 ? "" : "s") have completed transaction sync.",
+                detail: "\(syncedItemCount) of \(linkedItemCount) linked item\(linkedItemCount == 1 ? "" : "s") have completed transaction sync. Refresh to finish the remaining item\(linkedItemCount - syncedItemCount == 1 ? "" : "s").",
                 primaryAction: .refresh,
                 secondaryActions: [.openSettings]
             )

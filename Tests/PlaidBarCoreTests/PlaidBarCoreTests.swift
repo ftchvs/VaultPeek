@@ -1441,6 +1441,31 @@ struct PlaidBarCoreTests {
         #expect(readiness.level == .warning)
         #expect(readiness.primaryAction == .refresh)
         #expect(readiness.title == "First sync incomplete")
+        #expect(readiness.detail == "1 of 2 linked items have completed transaction sync. Refresh to finish the remaining item.")
+        #expect(readiness.secondaryActions.contains(.openSettings))
+    }
+
+    @Test("Dashboard status readiness distinguishes first sync not started")
+    func dashboardStatusReadinessDetectsFirstSyncNotStarted() {
+        let readiness = DashboardStatusReadiness.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 2,
+            accountCount: 4,
+            syncedItemCount: 0,
+            needsLoginItemCount: 0,
+            erroredItemCount: 0,
+            isSyncStale: false,
+            lastSyncRelative: nil,
+            errorMessage: nil
+        )
+
+        #expect(readiness.level == .warning)
+        #expect(readiness.primaryAction == .refresh)
+        #expect(readiness.title == "First sync needed")
+        #expect(readiness.detail == "Accounts are loaded, but no linked item has completed transaction sync yet. Refresh to run the first sync.")
+        #expect(readiness.secondaryActions.contains(.openSettings))
     }
 
     @Test("Dashboard status readiness detects stale sync")
