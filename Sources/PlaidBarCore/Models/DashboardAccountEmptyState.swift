@@ -71,7 +71,7 @@ public struct DashboardAccountEmptyState: Equatable, Sendable {
                 iconName: "building.columns",
                 tone: .brand,
                 showsAddAccount: serverConnected,
-                actionTitle: "Refresh",
+                actionTitle: "Check Status",
                 actionIconName: "arrow.clockwise"
             )
         }
@@ -95,7 +95,7 @@ public struct DashboardAccountEmptyState: Equatable, Sendable {
                 iconName: "tray",
                 tone: .warning,
                 showsAddAccount: false,
-                actionTitle: "Refresh",
+                actionTitle: "Sync Balances",
                 actionIconName: "arrow.clockwise"
             )
         }
@@ -118,7 +118,7 @@ public struct DashboardAccountEmptyState: Equatable, Sendable {
             iconName: "line.3.horizontal.decrease.circle",
             tone: .secondary,
             showsAddAccount: false,
-            actionTitle: "Refresh",
+            actionTitle: "Refresh Data",
             actionIconName: "arrow.clockwise"
         )
     }
