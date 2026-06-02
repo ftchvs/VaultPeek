@@ -1338,8 +1338,27 @@ struct PlaidBarCoreTests {
 
         #expect(readiness.level == .blocked)
         #expect(readiness.primaryAction == .reconnect)
-        #expect(readiness.title.contains("need attention"))
+        #expect(readiness.title == "1 item needs attention")
         #expect(readiness.secondaryActions.contains(.openSettings))
+    }
+
+    @Test("Dashboard status readiness pluralizes multiple item errors")
+    func dashboardStatusReadinessPluralizesMultipleItemErrors() {
+        let readiness = DashboardStatusReadiness.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 3,
+            accountCount: 5,
+            syncedItemCount: 3,
+            needsLoginItemCount: 0,
+            erroredItemCount: 2,
+            isSyncStale: false,
+            lastSyncRelative: "2m ago",
+            errorMessage: nil
+        )
+
+        #expect(readiness.title == "2 items need attention")
     }
 
     @Test("Dashboard status readiness prioritizes item recovery")
@@ -1360,7 +1379,26 @@ struct PlaidBarCoreTests {
 
         #expect(readiness.level == .warning)
         #expect(readiness.primaryAction == .reconnect)
-        #expect(readiness.title.contains("need login"))
+        #expect(readiness.title == "1 item needs login")
+    }
+
+    @Test("Dashboard status readiness pluralizes multiple login recovery items")
+    func dashboardStatusReadinessPluralizesMultipleLoginRecoveryItems() {
+        let readiness = DashboardStatusReadiness.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 3,
+            accountCount: 5,
+            syncedItemCount: 3,
+            needsLoginItemCount: 2,
+            erroredItemCount: 0,
+            isSyncStale: false,
+            lastSyncRelative: "2m ago",
+            errorMessage: nil
+        )
+
+        #expect(readiness.title == "2 items need login")
     }
 
     @Test("Dashboard status readiness keeps item recovery ahead of recent action failure")
@@ -1381,7 +1419,7 @@ struct PlaidBarCoreTests {
 
         #expect(readiness.level == .warning)
         #expect(readiness.primaryAction == .reconnect)
-        #expect(readiness.title.contains("need login"))
+        #expect(readiness.title == "1 item needs login")
     }
 
     @Test("Dashboard status readiness detects incomplete first sync")

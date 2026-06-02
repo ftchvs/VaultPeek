@@ -82,7 +82,11 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
         if erroredItemCount > 0 {
             return DashboardStatusReadiness(
                 level: .blocked,
-                title: "\(erroredItemCount) item\(erroredItemCount == 1 ? "" : "s") need attention",
+                title: itemRecoveryTitle(
+                    count: erroredItemCount,
+                    singularAction: "needs attention",
+                    pluralAction: "need attention"
+                ),
                 detail: "A linked institution reported an error. Reconnect it, then refresh the dashboard.",
                 primaryAction: .reconnect,
                 secondaryActions: [.refresh, .openSettings]
@@ -92,7 +96,11 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
         if needsLoginItemCount > 0 {
             return DashboardStatusReadiness(
                 level: .warning,
-                title: "\(needsLoginItemCount) item\(needsLoginItemCount == 1 ? "" : "s") need login",
+                title: itemRecoveryTitle(
+                    count: needsLoginItemCount,
+                    singularAction: "needs login",
+                    pluralAction: "need login"
+                ),
                 detail: "One or more institutions need an updated login before sync can stay healthy.",
                 primaryAction: .reconnect,
                 secondaryActions: [.refresh]
@@ -169,5 +177,13 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
         guard normalized.count > maxRenderedErrorLength else { return normalized }
 
         return "\(normalized.prefix(maxRenderedErrorLength))..."
+    }
+
+    private static func itemRecoveryTitle(
+        count: Int,
+        singularAction: String,
+        pluralAction: String
+    ) -> String {
+        "\(count) item\(count == 1 ? "" : "s") \(count == 1 ? singularAction : pluralAction)"
     }
 }
