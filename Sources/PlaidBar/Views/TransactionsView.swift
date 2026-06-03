@@ -177,11 +177,41 @@ struct TransactionsView: View {
                 .controlSize(.small)
             }
             .padding()
+        } else if appState.accounts.isEmpty {
+            ContentUnavailableView {
+                Label("No Account Data", systemImage: "tray")
+            } description: {
+                Text("Balances have not loaded yet. Refresh accounts before syncing transaction history.")
+            } actions: {
+                Button {
+                    Task { await appState.refreshAccounts() }
+                } label: {
+                    Label("Refresh Accounts", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            }
+            .padding()
+        } else if (appState.serverSyncedItemCount ?? 0) == 0 {
+            ContentUnavailableView {
+                Label("No Synced History", systemImage: "clock.arrow.circlepath")
+            } description: {
+                Text("Linked accounts are loaded, but transaction sync has not completed yet.")
+            } actions: {
+                Button {
+                    Task { await appState.syncTransactions() }
+                } label: {
+                    Label("Sync Transactions", systemImage: "arrow.triangle.2.circlepath")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            }
+            .padding()
         } else {
             ContentUnavailableView {
-                Label("No Synced Transactions", systemImage: "tray")
+                Label("No Transactions", systemImage: "list.bullet.rectangle")
             } description: {
-                Text("Run a transaction sync to load recent history for linked accounts.")
+                Text("No transaction history is available for the linked accounts yet.")
             } actions: {
                 Button {
                     Task { await appState.syncTransactions() }
