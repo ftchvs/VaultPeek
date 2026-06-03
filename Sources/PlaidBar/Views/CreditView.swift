@@ -8,6 +8,10 @@ struct CreditView: View {
         appState.totalCreditUtilization ?? 0
     }
 
+    private var hasCreditUtilizationData: Bool {
+        appState.creditAccounts.contains { $0.balances.utilizationPercent != nil }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
             if appState.creditAccounts.isEmpty {
@@ -29,37 +33,11 @@ struct CreditView: View {
                 Divider()
                     .padding(.horizontal, Spacing.lg)
 
-                // Total with gauge
-                HStack(spacing: Spacing.md) {
-                    Gauge(value: min(totalUtilization, 100), in: 0...100) {
-                        EmptyView()
-                    }
-                    .gaugeStyle(.accessoryCircular)
-                    .tint(SemanticColors.utilization(for: totalUtilization, threshold: appState.creditUtilizationThreshold))
-                    .scaleEffect(0.7)
-                    .frame(width: 36, height: 36)
-
-                    VStack(alignment: .leading, spacing: Spacing.xxs) {
-                        Text("Total Utilization")
-                            .fontWeight(.semibold)
-                        Text(Formatters.percent(totalUtilization))
-                            .fontWeight(.semibold)
-                            .foregroundStyle(SemanticColors.utilization(for: totalUtilization, threshold: appState.creditUtilizationThreshold))
-                        Text(totalUtilizationStatus)
-                            .microText()
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Image(systemName: SemanticColors.utilizationIcon(
-                        for: totalUtilization,
-                        threshold: appState.creditUtilizationThreshold
-                    ))
-                        .foregroundStyle(SemanticColors.utilization(for: totalUtilization, threshold: appState.creditUtilizationThreshold))
+                if hasCreditUtilizationData {
+                    totalUtilizationSummary
+                } else {
+                    creditDataUnavailableCallout
                 }
-                .padding(.horizontal, Spacing.lg)
-                .padding(.bottom, Spacing.sm)
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("Total credit utilization \(Formatters.percent(totalUtilization)), \(totalUtilizationStatus)")
             }
         }
     }
@@ -69,6 +47,67 @@ struct CreditView: View {
             for: totalUtilization,
             threshold: appState.creditUtilizationThreshold
         )
+    }
+
+    private var totalUtilizationSummary: some View {
+        HStack(spacing: Spacing.md) {
+            Gauge(value: min(totalUtilization, 100), in: 0...100) {
+                EmptyView()
+            }
+            .gaugeStyle(.accessoryCircular)
+            .tint(SemanticColors.utilization(for: totalUtilization, threshold: appState.creditUtilizationThreshold))
+            .scaleEffect(0.7)
+            .frame(width: 36, height: 36)
+
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                Text("Total Utilization")
+                    .fontWeight(.semibold)
+                Text(Formatters.percent(totalUtilization))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(SemanticColors.utilization(for: totalUtilization, threshold: appState.creditUtilizationThreshold))
+                Text(totalUtilizationStatus)
+                    .microText()
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Image(systemName: SemanticColors.utilizationIcon(
+                for: totalUtilization,
+                threshold: appState.creditUtilizationThreshold
+            ))
+                .foregroundStyle(SemanticColors.utilization(for: totalUtilization, threshold: appState.creditUtilizationThreshold))
+        }
+        .padding(.horizontal, Spacing.lg)
+        .padding(.bottom, Spacing.sm)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Total credit utilization \(Formatters.percent(totalUtilization)), \(totalUtilizationStatus)")
+    }
+
+    private var creditDataUnavailableCallout: some View {
+        HStack(alignment: .top, spacing: Spacing.md) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(SemanticColors.warning)
+                .frame(width: 24)
+
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                Text("Credit Limits Unavailable")
+                    .fontWeight(.semibold)
+                Text("Credit cards are linked, but Plaid has not returned limits needed to calculate utilization.")
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button {
+                    Task { await appState.refreshAccounts() }
+                } label: {
+                    Label("Refresh Accounts", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+        }
+        .padding(.horizontal, Spacing.lg)
+        .padding(.bottom, Spacing.sm)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Credit limits unavailable. Refresh accounts to check for updated credit data.")
     }
 
     @ViewBuilder
@@ -153,16 +192,21 @@ struct CreditCardRow: View {
         account.balances.utilizationPercent ?? 0
     }
 
+    private var hasUtilizationData: Bool {
+        account.balances.utilizationPercent != nil
+    }
+
     private var available: Double {
         AccountPresentation.availableBalance(for: account)
     }
 
     private var barColor: Color {
-        SemanticColors.utilization(for: utilization, threshold: threshold)
+        hasUtilizationData ? SemanticColors.utilization(for: utilization, threshold: threshold) : .secondary
     }
 
     private var utilizationStatus: String {
-        AccountPresentation.utilizationStatusLabel(for: utilization, threshold: threshold)
+        guard hasUtilizationData else { return "Limit unavailable" }
+        return AccountPresentation.utilizationStatusLabel(for: utilization, threshold: threshold)
     }
 
     var body: some View {
@@ -188,7 +232,7 @@ struct CreditCardRow: View {
                         .frame(
                             width: max(
                                 0,
-                                geometry.size.width * min(utilization / 100, 1.0)
+                                geometry.size.width * min(hasUtilizationData ? utilization / 100 : 0, 1.0)
                             )
                         )
                 }
@@ -196,25 +240,45 @@ struct CreditCardRow: View {
             .frame(height: 12)
 
             HStack {
-                Text("\(Formatters.currency(balance, format: .compact)) / \(Formatters.currency(limit, format: .compact))")
+                Text(balanceLimitText)
                     .detailText()
                 Spacer()
-                Text("Avail: \(Formatters.currency(available, format: .compact))")
-                    .font(.caption)
-                    .foregroundStyle(SemanticColors.available)
-                Text("\u{00B7}")
-                    .font(.caption)
-                    .foregroundStyle(.quaternary)
-                Text(Formatters.percent(utilization))
+                if hasUtilizationData {
+                    Text("Avail: \(Formatters.currency(available, format: .compact))")
+                        .font(.caption)
+                        .foregroundStyle(SemanticColors.available)
+                    Text("\u{00B7}")
+                        .font(.caption)
+                        .foregroundStyle(.quaternary)
+                }
+                Text(utilizationText)
                     .font(.caption)
                     // Issue #4: bold percentage at warning thresholds
-                    .fontWeight(utilization >= threshold ? .semibold : .medium)
+                    .fontWeight(hasUtilizationData && utilization >= threshold ? .semibold : .medium)
                     .foregroundStyle(barColor)
             }
         }
         .padding(.horizontal, Spacing.lg)
         .padding(.vertical, Spacing.rowVertical)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(account.name), \(Formatters.percent(utilization)) utilization, \(utilizationStatus), \(Formatters.currency(available, format: .compact)) available")
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var balanceLimitText: String {
+        guard hasUtilizationData else {
+            return "\(Formatters.currency(balance, format: .compact)) owed - limit unavailable"
+        }
+        return "\(Formatters.currency(balance, format: .compact)) / \(Formatters.currency(limit, format: .compact))"
+    }
+
+    private var utilizationText: String {
+        hasUtilizationData ? Formatters.percent(utilization) : "Utilization unavailable"
+    }
+
+    private var accessibilityLabel: String {
+        guard hasUtilizationData else {
+            return "\(account.name), \(Formatters.currency(balance, format: .compact)) owed, credit limit unavailable"
+        }
+        return "\(account.name), \(Formatters.percent(utilization)) utilization, \(utilizationStatus), \(Formatters.currency(available, format: .compact)) available"
     }
 }
