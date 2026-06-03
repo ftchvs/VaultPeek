@@ -1442,13 +1442,17 @@ private struct SelectedAccountPanel: View {
             }
 
             HStack(spacing: 10) {
-                DetailValue(title: "Available", value: availableText, tint: SemanticColors.available)
-                DetailValue(title: "Current", value: currentText, tint: .primary)
+                DetailValue(title: availableTitle, value: availableText, tint: SemanticColors.available)
+                DetailValue(title: currentTitle, value: currentText, tint: currentTint)
 
-                if let utilization = account.balances.utilizationPercent {
+                if let utilization = account.balances.utilizationPercent,
+                   let utilizationText = AccountPresentation.dashboardUtilizationDetailText(
+                       for: account,
+                       threshold: appState.creditUtilizationThreshold
+                   ) {
                     DetailValue(
                         title: "Utilization",
-                        value: utilizationDetailText(for: utilization),
+                        value: utilizationText,
                         tint: SemanticColors.utilization(
                             for: utilization,
                             threshold: appState.creditUtilizationThreshold
@@ -1540,8 +1544,20 @@ private struct SelectedAccountPanel: View {
         Formatters.currency(AccountPresentation.availableBalance(for: account), format: .compact)
     }
 
+    private var availableTitle: String {
+        AccountPresentation.dashboardAvailableTitle(for: account)
+    }
+
     private var currentText: String {
         Formatters.currency(AccountPresentation.displayBalance(for: account), format: .compact)
+    }
+
+    private var currentTitle: String {
+        AccountPresentation.dashboardCurrentTitle(for: account)
+    }
+
+    private var currentTint: Color {
+        AccountPresentation.isDebt(account) ? SemanticColors.creditDebt : .primary
     }
 
     private var itemStatus: ItemConnectionStatus? {
@@ -1572,14 +1588,6 @@ private struct SelectedAccountPanel: View {
 
     private var activityText: String {
         "\(accountTransactions.count) tx"
-    }
-
-    private func utilizationDetailText(for utilization: Double) -> String {
-        let status = AccountPresentation.utilizationStatusLabel(
-            for: utilization,
-            threshold: appState.creditUtilizationThreshold
-        )
-        return "\(Formatters.percent(utilization, decimals: 0)), \(status)"
     }
 
     private var syncSignalText: String {
