@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-03 22:50 UTC] — Fix
+
+clarify account row sync status
+
+`7ef90a3`
+
+---
+
+
 ## [2026-06-03 13:02 UTC] — Update
 
 prioritize error item status
