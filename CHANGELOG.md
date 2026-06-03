@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-03 13:02 UTC] — Update
+
+prioritize error item status
+
+`da96162`
+
+---
+
+
 ## [2026-06-03 13:00 UTC] — Update
 
 dashboard recovery action labels
