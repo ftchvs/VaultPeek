@@ -350,6 +350,14 @@ struct PlaidBarCoreTests {
             connectionLabel: "2m ago",
             pendingCount: 2
         ) == "Chase •••• 1234 • 2m ago • 2 pending")
+        #expect(AccountPresentation.dashboardTrailingDetailText(
+            for: checking,
+            connectionLabel: "2m ago"
+        ) == "2m ago")
+        #expect(AccountPresentation.dashboardTrailingDetailText(
+            for: credit,
+            connectionLabel: "2m ago"
+        ) == "45% • $550 avail")
         #expect(AccountPresentation.rowAccessibilityLabel(
             for: checking,
             connectionLabel: "2m ago",

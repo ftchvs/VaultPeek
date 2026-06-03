@@ -1305,17 +1305,20 @@ private struct DashboardAccountRow: View {
                     .lineLimit(1)
 
                 if let utilization = account.balances.utilizationPercent {
-                    Text(Formatters.percent(utilization, decimals: 0))
+                    Text(trailingDetailText)
                         .font(.caption.weight(.bold))
                         .foregroundStyle(SemanticColors.utilization(
                             for: utilization,
                             threshold: appState.creditUtilizationThreshold
                         ))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
                 } else {
-                    Text(statusText)
+                    Text(trailingDetailText)
                         .microText()
                         .foregroundStyle(statusTint)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.78)
                 }
             }
 
@@ -1378,6 +1381,13 @@ private struct DashboardAccountRow: View {
 
     private var statusText: String {
         connectionPresentation.rowLabel
+    }
+
+    private var trailingDetailText: String {
+        AccountPresentation.dashboardTrailingDetailText(
+            for: account,
+            connectionLabel: statusText
+        )
     }
 
     private var statusTint: Color {

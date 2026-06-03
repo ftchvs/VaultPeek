@@ -76,6 +76,24 @@ public enum AccountPresentation {
         return "\(account.institutionName ?? account.type.rawValue.capitalized)\(mask) • \(connectionLabel)\(pending)"
     }
 
+    public static func dashboardTrailingDetailText(
+        for account: AccountDTO,
+        connectionLabel: String,
+        format: CurrencyFormat = .compact
+    ) -> String {
+        guard account.type == .credit else {
+            return connectionLabel
+        }
+
+        let availableText = "\(Formatters.currency(availableBalance(for: account), format: format)) avail"
+
+        guard let utilization = account.balances.utilizationPercent else {
+            return availableText
+        }
+
+        return "\(Formatters.percent(utilization, decimals: 0)) • \(availableText)"
+    }
+
     public static func rowAccessibilityLabel(
         for account: AccountDTO,
         amountText: String? = nil,
