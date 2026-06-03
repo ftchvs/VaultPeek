@@ -882,7 +882,10 @@ private struct DashboardStatusReadinessPanel: View {
                     Button {
                         perform(primaryAction)
                     } label: {
-                        Label(primaryAction.label, systemImage: primaryAction.icon)
+                        Label(
+                            primaryActionLabel(for: primaryAction),
+                            systemImage: readiness.primaryActionIconName ?? primaryAction.icon
+                        )
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
@@ -952,8 +955,16 @@ private struct DashboardStatusReadinessPanel: View {
         }
     }
 
+    private func primaryActionLabel(for action: DashboardStatusReadinessAction) -> String {
+        if action == .reconnect,
+           let title = ItemRecoveryTarget.actionTitle(from: appState.itemStatuses) {
+            return title
+        }
+        return readiness.primaryActionTitle ?? action.label
+    }
+
     private var reconnectItemId: String? {
-        appState.itemStatuses.first { $0.status == .loginRequired || $0.status == .error }?.id
+        ItemRecoveryTarget.itemId(from: appState.itemStatuses)
     }
 }
 

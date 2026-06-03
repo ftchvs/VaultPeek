@@ -1052,6 +1052,8 @@ struct PlaidBarCoreTests {
         #expect(readiness.title == "Demo data ready")
         #expect(readiness.detail.contains("Local demo accounts"))
         #expect(readiness.primaryAction == .addAccount)
+        #expect(readiness.primaryActionTitle == "Connect Bank")
+        #expect(readiness.primaryActionIconName == "plus.circle")
     }
 
     @Test("Dashboard status readiness blocks on offline server")
@@ -1093,6 +1095,7 @@ struct PlaidBarCoreTests {
 
         #expect(readiness.level == .warning)
         #expect(readiness.primaryAction == .addAccount)
+        #expect(readiness.primaryActionTitle == "Connect Bank")
     }
 
     @Test("Dashboard status readiness surfaces recent action failure before empty data")
@@ -1442,6 +1445,8 @@ struct PlaidBarCoreTests {
         #expect(readiness.primaryAction == .refresh)
         #expect(readiness.title == "First sync incomplete")
         #expect(readiness.detail == "1 of 2 linked items have completed transaction sync. Refresh to finish the remaining item.")
+        #expect(readiness.primaryActionTitle == "Finish Sync")
+        #expect(readiness.primaryActionIconName == "arrow.clockwise")
         #expect(readiness.secondaryActions.contains(.openSettings))
     }
 
@@ -1465,6 +1470,7 @@ struct PlaidBarCoreTests {
         #expect(readiness.primaryAction == .refresh)
         #expect(readiness.title == "First sync needed")
         #expect(readiness.detail == "Accounts are loaded, but no linked item has completed transaction sync yet. Refresh to run the first sync.")
+        #expect(readiness.primaryActionTitle == "Run First Sync")
         #expect(readiness.secondaryActions.contains(.openSettings))
     }
 
@@ -1487,6 +1493,7 @@ struct PlaidBarCoreTests {
         #expect(readiness.level == .warning)
         #expect(readiness.primaryAction == .refresh)
         #expect(readiness.title == "Sync is stale")
+        #expect(readiness.primaryActionTitle == "Refresh Now")
     }
 
     @Test("Dashboard status readiness reports healthy sync")
@@ -1507,7 +1514,53 @@ struct PlaidBarCoreTests {
 
         #expect(readiness.level == .healthy)
         #expect(readiness.primaryAction == .refresh)
+        #expect(readiness.primaryActionTitle == "Refresh Data")
         #expect(readiness.secondaryActions.contains(.addAccount))
+    }
+
+    @Test("Item recovery target prioritizes errored items")
+    func itemRecoveryTargetPrioritizesErroredItems() {
+        let statuses = [
+            ItemStatus(id: "login", institutionName: "Chase", status: .loginRequired),
+            ItemStatus(id: "error", institutionName: "Amex", status: .error),
+            ItemStatus(id: "connected", status: .connected),
+        ]
+
+        #expect(ItemRecoveryTarget.item(from: statuses)?.institutionName == "Amex")
+        #expect(ItemRecoveryTarget.itemId(from: statuses) == "error")
+        #expect(ItemRecoveryTarget.actionTitle(from: statuses) == "Reconnect Amex")
+    }
+
+    @Test("Item recovery target falls back to login-required items")
+    func itemRecoveryTargetFallsBackToLoginRequiredItems() {
+        let statuses = [
+            ItemStatus(id: "connected", status: .connected),
+            ItemStatus(id: "login", institutionName: "Chase", status: .loginRequired),
+        ]
+
+        #expect(ItemRecoveryTarget.item(from: statuses)?.institutionName == "Chase")
+        #expect(ItemRecoveryTarget.itemId(from: statuses) == "login")
+        #expect(ItemRecoveryTarget.actionTitle(from: statuses) == "Reconnect Chase")
+    }
+
+    @Test("Item recovery target uses generic title without institution")
+    func itemRecoveryTargetUsesGenericTitleWithoutInstitution() {
+        let statuses = [
+            ItemStatus(id: "login", status: .loginRequired),
+        ]
+
+        #expect(ItemRecoveryTarget.actionTitle(from: statuses) == "Reconnect Item")
+    }
+
+    @Test("Item recovery target ignores healthy items")
+    func itemRecoveryTargetIgnoresHealthyItems() {
+        let statuses = [
+            ItemStatus(id: "connected", status: .connected),
+        ]
+
+        #expect(ItemRecoveryTarget.item(from: statuses)?.id == nil)
+        #expect(ItemRecoveryTarget.itemId(from: statuses) == nil)
+        #expect(ItemRecoveryTarget.actionTitle(from: statuses) == nil)
     }
 
     // MARK: - ItemStatus Tests
