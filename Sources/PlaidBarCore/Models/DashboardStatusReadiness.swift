@@ -15,6 +15,8 @@ public enum DashboardStatusReadinessAction: String, Codable, Sendable {
 }
 
 public struct DashboardStatusReadiness: Equatable, Sendable {
+    private static let maxRenderedErrorLength = 240
+
     public let level: DashboardStatusReadinessLevel
     public let title: String
     public let detail: String
@@ -80,7 +82,11 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
         if erroredItemCount > 0 {
             return DashboardStatusReadiness(
                 level: .blocked,
-                title: "\(erroredItemCount) item\(erroredItemCount == 1 ? "" : "s") need attention",
+                title: itemRecoveryTitle(
+                    count: erroredItemCount,
+                    singularAction: "needs attention",
+                    pluralAction: "need attention"
+                ),
                 detail: "A linked institution reported an error. Reconnect it, then refresh the dashboard.",
                 primaryAction: .reconnect,
                 secondaryActions: [.refresh, .openSettings]
@@ -90,14 +96,18 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
         if needsLoginItemCount > 0 {
             return DashboardStatusReadiness(
                 level: .warning,
-                title: "\(needsLoginItemCount) item\(needsLoginItemCount == 1 ? "" : "s") need login",
+                title: itemRecoveryTitle(
+                    count: needsLoginItemCount,
+                    singularAction: "needs login",
+                    pluralAction: "need login"
+                ),
                 detail: "One or more institutions need an updated login before sync can stay healthy.",
                 primaryAction: .reconnect,
                 secondaryActions: [.refresh]
             )
         }
 
-        if let errorMessage, !errorMessage.isEmpty {
+        if let errorMessage = userFacingErrorDetail(from: errorMessage) {
             return DashboardStatusReadiness(
                 level: .warning,
                 title: "Recent action failed",
@@ -127,11 +137,21 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
             )
         }
 
+        if syncedItemCount == 0 {
+            return DashboardStatusReadiness(
+                level: .warning,
+                title: "First sync needed",
+                detail: "Accounts are loaded, but no linked item has completed transaction sync yet. Refresh to run the first sync.",
+                primaryAction: .refresh,
+                secondaryActions: [.openSettings]
+            )
+        }
+
         if syncedItemCount < linkedItemCount {
             return DashboardStatusReadiness(
                 level: .warning,
                 title: "First sync incomplete",
-                detail: "\(syncedItemCount) of \(linkedItemCount) linked item\(linkedItemCount == 1 ? "" : "s") have completed transaction sync.",
+                detail: "\(syncedItemCount) of \(linkedItemCount) linked item\(linkedItemCount == 1 ? "" : "s") have completed transaction sync. Refresh to finish the remaining item\(linkedItemCount - syncedItemCount == 1 ? "" : "s").",
                 primaryAction: .refresh,
                 secondaryActions: [.openSettings]
             )
@@ -154,5 +174,26 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
             primaryAction: .refresh,
             secondaryActions: [.addAccount]
         )
+    }
+
+    private static func userFacingErrorDetail(from message: String?) -> String? {
+        guard let message else { return nil }
+
+        let normalized = message
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+
+        guard !normalized.isEmpty else { return nil }
+        guard normalized.count > maxRenderedErrorLength else { return normalized }
+
+        return "\(normalized.prefix(maxRenderedErrorLength))..."
+    }
+
+    private static func itemRecoveryTitle(
+        count: Int,
+        singularAction: String,
+        pluralAction: String
+    ) -> String {
+        "\(count) item\(count == 1 ? "" : "s") \(count == 1 ? singularAction : pluralAction)"
     }
 }
