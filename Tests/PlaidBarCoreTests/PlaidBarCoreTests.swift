@@ -374,7 +374,7 @@ struct PlaidBarCoreTests {
             amountText: "$450.00",
             connectionLabel: "2m ago",
             isSelected: true
-        ) == "Rewards, Amex, Credit, Ending in 0005, $450.00 owed, 45% utilization, Warning, selected")
+        ) == "Rewards, Amex, Credit, Ending in 0005, $450.00 owed, 45% utilization, Warning, 2m ago, selected")
     }
 
     @Test("Account presentation labels credit utilization status")
@@ -473,6 +473,8 @@ struct PlaidBarCoreTests {
         )
 
         #expect(stale.level == .stale)
+        #expect(stale.rowLabel == "Stale • 2h ago")
+        #expect(stale.detailLabel == "Last sync 2h ago")
         #expect(stale.signalLabel == "Stale")
         #expect(stale.iconName == "clock.badge.exclamationmark.fill")
         #expect(stale.showsRecoveryActions)

@@ -98,10 +98,11 @@ public struct AccountConnectionPresentation: Sendable, Equatable {
         }
 
         if isSyncStale {
+            let staleLabel = "Stale • \(statusSyncText)"
             return AccountConnectionPresentation(
                 level: .stale,
-                rowLabel: statusSyncText,
-                detailLabel: statusSyncText,
+                rowLabel: staleLabel,
+                detailLabel: "Last sync \(statusSyncText)",
                 signalLabel: "Stale",
                 iconName: "clock.badge.exclamationmark.fill",
                 showsRecoveryActions: true
