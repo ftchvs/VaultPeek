@@ -21,6 +21,8 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
     public let title: String
     public let detail: String
     public let primaryAction: DashboardStatusReadinessAction?
+    public let primaryActionTitle: String?
+    public let primaryActionIconName: String?
     public let secondaryActions: [DashboardStatusReadinessAction]
 
     public init(
@@ -28,12 +30,16 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
         title: String,
         detail: String,
         primaryAction: DashboardStatusReadinessAction? = nil,
+        primaryActionTitle: String? = nil,
+        primaryActionIconName: String? = nil,
         secondaryActions: [DashboardStatusReadinessAction] = []
     ) {
         self.level = level
         self.title = title
         self.detail = detail
         self.primaryAction = primaryAction
+        self.primaryActionTitle = primaryActionTitle ?? primaryAction?.defaultTitle
+        self.primaryActionIconName = primaryActionIconName ?? primaryAction?.defaultIconName
         self.secondaryActions = secondaryActions
     }
 
@@ -56,6 +62,7 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
                 title: "Demo data ready",
                 detail: "Local demo accounts are loaded. Connect a real institution when you are ready.",
                 primaryAction: .addAccount,
+                primaryActionTitle: "Connect Bank",
                 secondaryActions: [.openSettings]
             )
         }
@@ -123,6 +130,7 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
                 title: "No institution linked",
                 detail: "Connect a Plaid institution before this dashboard can show balances and transactions.",
                 primaryAction: .addAccount,
+                primaryActionTitle: "Connect Bank",
                 secondaryActions: [.refresh]
             )
         }
@@ -133,6 +141,7 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
                 title: "Balances not loaded",
                 detail: "The server has linked items, but account balances have not loaded into the dashboard yet.",
                 primaryAction: .refresh,
+                primaryActionTitle: "Load Balances",
                 secondaryActions: [.addAccount]
             )
         }
@@ -143,6 +152,7 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
                 title: "First sync needed",
                 detail: "Accounts are loaded, but no linked item has completed transaction sync yet. Refresh to run the first sync.",
                 primaryAction: .refresh,
+                primaryActionTitle: "Run First Sync",
                 secondaryActions: [.openSettings]
             )
         }
@@ -153,6 +163,7 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
                 title: "First sync incomplete",
                 detail: "\(syncedItemCount) of \(linkedItemCount) linked item\(linkedItemCount == 1 ? "" : "s") have completed transaction sync. Refresh to finish the remaining item\(linkedItemCount - syncedItemCount == 1 ? "" : "s").",
                 primaryAction: .refresh,
+                primaryActionTitle: "Finish Sync",
                 secondaryActions: [.openSettings]
             )
         }
@@ -163,6 +174,7 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
                 title: "Sync is stale",
                 detail: "Last sync: \(lastSyncRelative ?? "never"). Refresh now to pull current balances and transactions.",
                 primaryAction: .refresh,
+                primaryActionTitle: "Refresh Now",
                 secondaryActions: [.openSettings]
             )
         }
@@ -172,6 +184,7 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
             title: "Plaid sync healthy",
             detail: "\(linkedItemCount) linked item\(linkedItemCount == 1 ? "" : "s") connected. Last sync: \(lastSyncRelative ?? "just now").",
             primaryAction: .refresh,
+            primaryActionTitle: "Refresh Data",
             secondaryActions: [.addAccount]
         )
     }
@@ -195,5 +208,27 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
         pluralAction: String
     ) -> String {
         "\(count) item\(count == 1 ? "" : "s") \(count == 1 ? singularAction : pluralAction)"
+    }
+}
+
+private extension DashboardStatusReadinessAction {
+    var defaultTitle: String {
+        switch self {
+        case .checkServer: "Check Server"
+        case .addAccount: "Add Account"
+        case .refresh: "Refresh"
+        case .reconnect: "Reconnect"
+        case .openSettings: "Settings"
+        }
+    }
+
+    var defaultIconName: String {
+        switch self {
+        case .checkServer: "server.rack"
+        case .addAccount: "plus.circle"
+        case .refresh: "arrow.clockwise"
+        case .reconnect: "link.badge.plus"
+        case .openSettings: "gearshape"
+        }
     }
 }
