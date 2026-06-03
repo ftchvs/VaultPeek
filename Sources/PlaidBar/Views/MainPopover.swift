@@ -883,7 +883,7 @@ private struct DashboardStatusReadinessPanel: View {
                         perform(primaryAction)
                     } label: {
                         Label(
-                            readiness.primaryActionTitle ?? primaryAction.label,
+                            primaryActionLabel(for: primaryAction),
                             systemImage: readiness.primaryActionIconName ?? primaryAction.icon
                         )
                     }
@@ -953,6 +953,14 @@ private struct DashboardStatusReadinessPanel: View {
         case .openSettings:
             openSettings()
         }
+    }
+
+    private func primaryActionLabel(for action: DashboardStatusReadinessAction) -> String {
+        if action == .reconnect,
+           let title = ItemRecoveryTarget.actionTitle(from: appState.itemStatuses) {
+            return title
+        }
+        return readiness.primaryActionTitle ?? action.label
     }
 
     private var reconnectItemId: String? {

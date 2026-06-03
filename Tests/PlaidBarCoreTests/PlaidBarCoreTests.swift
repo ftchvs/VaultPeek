@@ -1521,22 +1521,35 @@ struct PlaidBarCoreTests {
     @Test("Item recovery target prioritizes errored items")
     func itemRecoveryTargetPrioritizesErroredItems() {
         let statuses = [
-            ItemStatus(id: "login", status: .loginRequired),
-            ItemStatus(id: "error", status: .error),
+            ItemStatus(id: "login", institutionName: "Chase", status: .loginRequired),
+            ItemStatus(id: "error", institutionName: "Amex", status: .error),
             ItemStatus(id: "connected", status: .connected),
         ]
 
+        #expect(ItemRecoveryTarget.item(from: statuses)?.institutionName == "Amex")
         #expect(ItemRecoveryTarget.itemId(from: statuses) == "error")
+        #expect(ItemRecoveryTarget.actionTitle(from: statuses) == "Reconnect Amex")
     }
 
     @Test("Item recovery target falls back to login-required items")
     func itemRecoveryTargetFallsBackToLoginRequiredItems() {
         let statuses = [
             ItemStatus(id: "connected", status: .connected),
+            ItemStatus(id: "login", institutionName: "Chase", status: .loginRequired),
+        ]
+
+        #expect(ItemRecoveryTarget.item(from: statuses)?.institutionName == "Chase")
+        #expect(ItemRecoveryTarget.itemId(from: statuses) == "login")
+        #expect(ItemRecoveryTarget.actionTitle(from: statuses) == "Reconnect Chase")
+    }
+
+    @Test("Item recovery target uses generic title without institution")
+    func itemRecoveryTargetUsesGenericTitleWithoutInstitution() {
+        let statuses = [
             ItemStatus(id: "login", status: .loginRequired),
         ]
 
-        #expect(ItemRecoveryTarget.itemId(from: statuses) == "login")
+        #expect(ItemRecoveryTarget.actionTitle(from: statuses) == "Reconnect Item")
     }
 
     @Test("Item recovery target ignores healthy items")
@@ -1545,7 +1558,9 @@ struct PlaidBarCoreTests {
             ItemStatus(id: "connected", status: .connected),
         ]
 
+        #expect(ItemRecoveryTarget.item(from: statuses)?.id == nil)
         #expect(ItemRecoveryTarget.itemId(from: statuses) == nil)
+        #expect(ItemRecoveryTarget.actionTitle(from: statuses) == nil)
     }
 
     // MARK: - ItemStatus Tests
