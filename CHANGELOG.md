@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-03 13:00 UTC] — Update
+
+dashboard recovery action labels
+
+`2b02827`
+
+---
+
+
 ## [2026-06-03 04:06 UTC] — Update
 
 dashboard polish static checks
