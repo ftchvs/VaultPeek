@@ -223,18 +223,18 @@ private struct DashboardStatusStrip: View {
     }
 
     private var itemsText: String {
-        if appState.needsLoginItemCount > 0 {
-            return "\(appState.needsLoginItemCount) login"
-        }
         if appState.erroredItemCount > 0 {
             return "\(appState.erroredItemCount) error"
+        }
+        if appState.needsLoginItemCount > 0 {
+            return "\(appState.needsLoginItemCount) login"
         }
         return "\(appState.statusItemCount) linked"
     }
 
     private var itemIcon: String {
-        if appState.needsLoginItemCount > 0 { return "person.crop.circle.badge.exclamationmark.fill" }
         if appState.erroredItemCount > 0 { return "exclamationmark.triangle.fill" }
+        if appState.needsLoginItemCount > 0 { return "person.crop.circle.badge.exclamationmark.fill" }
         return "link.circle.fill"
     }
 
