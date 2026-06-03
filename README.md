@@ -35,7 +35,7 @@ Personal finance data lives behind bank website logins. The closest thing to a m
 - **Credit Utilization** — Progress bars with configurable warning thresholds and gauge
 - **Smart Notifications** — Alerts for large transactions, low balances, and high credit utilization
 - **Balance History** — Sparkline showing net balance trend over time
-- **Diagnostics** — Popover status strip plus a dashboard readiness panel for server health, credential state, synced item count, item recovery, and settings handoff
+- **Diagnostics** — Popover status strip plus a dashboard readiness panel for server health, credential state, synced item count, active local data path, item recovery, and settings handoff
 - **Keyboard Shortcuts** — Cmd+R to refresh and Cmd+N to add an account
 - **Settings Persistence** — Preferences saved across launches
 - **Launch at Login** — Optional auto-start via macOS Login Items
@@ -82,7 +82,7 @@ while focusing the account list and drill-down controls.
 | Debt | Status |
 |------|--------|
 | <img src="Assets/dashboard-debt.png" width="380" alt="Dashboard debt filter showing debt-oriented accounts and selected credit account detail"> | <img src="Assets/dashboard-status.png" width="380" alt="Dashboard status filter showing linked item health, server sync state, synced item count, and recovery actions"> |
-| Debt view emphasizes owed balances and high-utilization cards so risk is visible at a glance. | Status view now acts as a compact recovery surface for server state, credentials, synced items, stale sync, item login, reconnect, refresh, and settings handoff. |
+| Debt view emphasizes owed balances and high-utilization cards so risk is visible at a glance. | Status view now acts as a compact recovery surface for server state, credentials, synced items, active local data path, stale sync, item login, reconnect, refresh, and settings handoff. |
 
 Generate fresh dashboard screenshots with demo data:
 

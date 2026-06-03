@@ -414,6 +414,39 @@ struct PlaidBarCoreTests {
         #expect(healthy.rowLabel == "2m ago")
         #expect(healthy.signalLabel == "Fresh")
         #expect(healthy.iconName == "checkmark.circle.fill")
+
+        let unknownItem = AccountConnectionPresentation.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            isSyncStale: false,
+            statusSyncText: "2m ago",
+            itemStatus: nil
+        )
+
+        #expect(unknownItem.level == .unknown)
+        #expect(unknownItem.rowLabel == "Item unknown")
+        #expect(unknownItem.detailLabel == "Item status unavailable")
+        #expect(unknownItem.signalLabel == "Unknown")
+        #expect(unknownItem.iconName == "link.circle.fill")
+        #expect(!unknownItem.showsRecoveryActions)
+    }
+
+    @Test("Account connection presentation keeps unknown item ahead of stale sync")
+    func accountConnectionPresentationUnknownItemBeatsStaleSync() {
+        let unknownItem = AccountConnectionPresentation.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            isSyncStale: true,
+            statusSyncText: "2h ago",
+            itemStatus: nil
+        )
+
+        #expect(unknownItem.level == .unknown)
+        #expect(unknownItem.rowLabel == "Item unknown")
+        #expect(unknownItem.detailLabel == "Item status unavailable")
+        #expect(unknownItem.signalLabel == "Unknown")
+        #expect(unknownItem.iconName == "link.circle.fill")
+        #expect(!unknownItem.showsRecoveryActions)
     }
 
     @Test("Account connection presentation flags stale and reconnectable items")
@@ -1085,6 +1118,187 @@ struct PlaidBarCoreTests {
         #expect(readiness.secondaryActions.contains(.openSettings))
     }
 
+    @Test("Dashboard account filters include only matching account kinds")
+    func dashboardAccountFiltersMatchAccountKinds() {
+        let checking = AccountDTO(id: "checking", itemId: "item_cash", name: "Checking", type: .depository, subtype: "checking")
+        let savings = AccountDTO(id: "savings", itemId: "item_cash", name: "Savings", type: .depository, subtype: "savings")
+        let credit = AccountDTO(id: "credit", itemId: "item_card", name: "Card", type: .credit)
+        let loan = AccountDTO(id: "loan", itemId: "item_loan", name: "Loan", type: .loan)
+
+        #expect(DashboardAccountFilterKind.all.includes(checking))
+        #expect(DashboardAccountFilterKind.cash.includes(checking))
+        #expect(DashboardAccountFilterKind.cash.includes(savings))
+        #expect(!DashboardAccountFilterKind.cash.includes(credit))
+        #expect(DashboardAccountFilterKind.savings.includes(savings))
+        #expect(!DashboardAccountFilterKind.savings.includes(checking))
+        #expect(DashboardAccountFilterKind.credit.includes(credit))
+        #expect(DashboardAccountFilterKind.debt.includes(credit))
+        #expect(DashboardAccountFilterKind.debt.includes(loan))
+        #expect(!DashboardAccountFilterKind.debt.includes(checking))
+    }
+
+    @Test("Dashboard status filter only shows degraded item accounts")
+    func dashboardStatusFilterOnlyShowsDegradedItemAccounts() {
+        let healthy = AccountDTO(id: "checking", itemId: "item_cash", name: "Checking", type: .depository)
+        let degraded = AccountDTO(id: "card", itemId: "item_card", name: "Card", type: .credit)
+
+        #expect(!DashboardAccountFilterKind.status.includes(healthy))
+        #expect(!DashboardAccountFilterKind.status.includes(degraded))
+        #expect(!DashboardAccountFilterKind.status.includes(healthy, degradedItemIds: ["item_card"]))
+        #expect(DashboardAccountFilterKind.status.includes(degraded, degradedItemIds: ["item_card"]))
+    }
+
+    @Test("Dashboard account empty state points status filter at degraded item recovery")
+    func dashboardAccountEmptyStateStatusFilterWithDegradedItems() {
+        let emptyState = DashboardAccountEmptyState.evaluate(
+            filter: .status,
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 1,
+            accountCount: 3,
+            degradedItemCount: 1
+        )
+
+        #expect(emptyState.title == "1 item needs attention")
+        #expect(emptyState.detail.contains("needs recovery"))
+        #expect(emptyState.iconName == "exclamationmark.triangle.fill")
+        #expect(emptyState.tone == .warning)
+        #expect(!emptyState.showsAddAccount)
+        #expect(emptyState.action == .refresh)
+    }
+
+    @Test("Dashboard account empty state keeps healthy status copy when no items are degraded")
+    func dashboardAccountEmptyStateStatusFilterHealthy() {
+        let emptyState = DashboardAccountEmptyState.evaluate(
+            filter: .status,
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 2,
+            accountCount: 4,
+            degradedItemCount: 0
+        )
+
+        #expect(emptyState.title == "No accounts need attention")
+        #expect(emptyState.tone == .healthy)
+        #expect(emptyState.iconName == "checkmark.circle.fill")
+        #expect(emptyState.action == .refresh)
+    }
+
+    @Test("Dashboard account empty state keeps server offline recovery first")
+    func dashboardAccountEmptyStateServerOfflineFirst() {
+        let emptyState = DashboardAccountEmptyState.evaluate(
+            filter: .status,
+            isDemoMode: false,
+            serverConnected: false,
+            linkedItemCount: 1,
+            accountCount: 0,
+            degradedItemCount: 1
+        )
+
+        #expect(emptyState.title == "Server offline")
+        #expect(emptyState.action == .checkServer)
+        #expect(emptyState.actionTitle == "Check Server")
+        #expect(emptyState.actionIconName == "server.rack")
+    }
+
+    @Test("Dashboard account empty state uses status check copy before a bank is linked")
+    func dashboardAccountEmptyStateNoLinkedBankActionCopy() {
+        let emptyState = DashboardAccountEmptyState.evaluate(
+            filter: .all,
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 0,
+            accountCount: 0,
+            degradedItemCount: 0
+        )
+
+        #expect(emptyState.title == "No bank linked")
+        #expect(emptyState.showsAddAccount)
+        #expect(emptyState.action == .refresh)
+        #expect(emptyState.actionTitle == "Check Status")
+        #expect(emptyState.actionIconName == "arrow.clockwise")
+    }
+
+    @Test("Dashboard account empty state uses sync copy when linked balances are missing")
+    func dashboardAccountEmptyStateNoBalanceDataActionCopy() {
+        let emptyState = DashboardAccountEmptyState.evaluate(
+            filter: .all,
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 1,
+            accountCount: 0,
+            degradedItemCount: 0
+        )
+
+        #expect(emptyState.title == "No account data")
+        #expect(emptyState.action == .sync)
+        #expect(emptyState.actionTitle == "Sync Balances")
+        #expect(emptyState.actionIconName == "arrow.clockwise")
+    }
+
+    @Test("Dashboard account empty state uses refresh data copy for empty filters")
+    func dashboardAccountEmptyStateFilteredEmptyActionCopy() {
+        let emptyState = DashboardAccountEmptyState.evaluate(
+            filter: .cash,
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 1,
+            accountCount: 2,
+            degradedItemCount: 0
+        )
+
+        #expect(emptyState.title == "No cash accounts")
+        #expect(emptyState.action == .refresh)
+        #expect(emptyState.actionTitle == "Refresh Data")
+        #expect(emptyState.actionIconName == "arrow.clockwise")
+    }
+
+    @Test("Dashboard status readiness ignores blank recent action failures")
+    func dashboardStatusReadinessIgnoresBlankRecentActionFailures() {
+        let readiness = DashboardStatusReadiness.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 0,
+            accountCount: 0,
+            syncedItemCount: 0,
+            needsLoginItemCount: 0,
+            erroredItemCount: 0,
+            isSyncStale: true,
+            lastSyncRelative: nil,
+            errorMessage: " \n\t "
+        )
+
+        #expect(readiness.level == .warning)
+        #expect(readiness.title == "No institution linked")
+        #expect(readiness.primaryAction == .addAccount)
+    }
+
+    @Test("Dashboard status readiness normalizes and truncates recent action failures")
+    func dashboardStatusReadinessNormalizesAndTruncatesRecentActionFailures() {
+        let longMessage = "Server failed:\n" + String(repeating: "Plaid upstream payload ", count: 20)
+
+        let readiness = DashboardStatusReadiness.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 1,
+            accountCount: 1,
+            syncedItemCount: 0,
+            needsLoginItemCount: 0,
+            erroredItemCount: 0,
+            isSyncStale: true,
+            lastSyncRelative: nil,
+            errorMessage: longMessage
+        )
+
+        #expect(readiness.title == "Recent action failed")
+        #expect(!readiness.detail.contains("\n"))
+        #expect(readiness.detail.count == 243)
+        #expect(readiness.detail.hasSuffix("..."))
+        #expect(readiness.primaryAction == .refresh)
+    }
+
     @Test("Dashboard status readiness blocks on missing credentials")
     func dashboardStatusReadinessBlocksOnMissingCredentials() {
         let readiness = DashboardStatusReadiness.evaluate(
@@ -1124,8 +1338,27 @@ struct PlaidBarCoreTests {
 
         #expect(readiness.level == .blocked)
         #expect(readiness.primaryAction == .reconnect)
-        #expect(readiness.title.contains("need attention"))
+        #expect(readiness.title == "1 item needs attention")
         #expect(readiness.secondaryActions.contains(.openSettings))
+    }
+
+    @Test("Dashboard status readiness pluralizes multiple item errors")
+    func dashboardStatusReadinessPluralizesMultipleItemErrors() {
+        let readiness = DashboardStatusReadiness.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 3,
+            accountCount: 5,
+            syncedItemCount: 3,
+            needsLoginItemCount: 0,
+            erroredItemCount: 2,
+            isSyncStale: false,
+            lastSyncRelative: "2m ago",
+            errorMessage: nil
+        )
+
+        #expect(readiness.title == "2 items need attention")
     }
 
     @Test("Dashboard status readiness prioritizes item recovery")
@@ -1146,7 +1379,26 @@ struct PlaidBarCoreTests {
 
         #expect(readiness.level == .warning)
         #expect(readiness.primaryAction == .reconnect)
-        #expect(readiness.title.contains("need login"))
+        #expect(readiness.title == "1 item needs login")
+    }
+
+    @Test("Dashboard status readiness pluralizes multiple login recovery items")
+    func dashboardStatusReadinessPluralizesMultipleLoginRecoveryItems() {
+        let readiness = DashboardStatusReadiness.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 3,
+            accountCount: 5,
+            syncedItemCount: 3,
+            needsLoginItemCount: 2,
+            erroredItemCount: 0,
+            isSyncStale: false,
+            lastSyncRelative: "2m ago",
+            errorMessage: nil
+        )
+
+        #expect(readiness.title == "2 items need login")
     }
 
     @Test("Dashboard status readiness keeps item recovery ahead of recent action failure")
@@ -1167,7 +1419,7 @@ struct PlaidBarCoreTests {
 
         #expect(readiness.level == .warning)
         #expect(readiness.primaryAction == .reconnect)
-        #expect(readiness.title.contains("need login"))
+        #expect(readiness.title == "1 item needs login")
     }
 
     @Test("Dashboard status readiness detects incomplete first sync")
@@ -1189,6 +1441,31 @@ struct PlaidBarCoreTests {
         #expect(readiness.level == .warning)
         #expect(readiness.primaryAction == .refresh)
         #expect(readiness.title == "First sync incomplete")
+        #expect(readiness.detail == "1 of 2 linked items have completed transaction sync. Refresh to finish the remaining item.")
+        #expect(readiness.secondaryActions.contains(.openSettings))
+    }
+
+    @Test("Dashboard status readiness distinguishes first sync not started")
+    func dashboardStatusReadinessDetectsFirstSyncNotStarted() {
+        let readiness = DashboardStatusReadiness.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 2,
+            accountCount: 4,
+            syncedItemCount: 0,
+            needsLoginItemCount: 0,
+            erroredItemCount: 0,
+            isSyncStale: false,
+            lastSyncRelative: nil,
+            errorMessage: nil
+        )
+
+        #expect(readiness.level == .warning)
+        #expect(readiness.primaryAction == .refresh)
+        #expect(readiness.title == "First sync needed")
+        #expect(readiness.detail == "Accounts are loaded, but no linked item has completed transaction sync yet. Refresh to run the first sync.")
+        #expect(readiness.secondaryActions.contains(.openSettings))
     }
 
     @Test("Dashboard status readiness detects stale sync")

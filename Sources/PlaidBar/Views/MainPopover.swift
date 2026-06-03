@@ -779,28 +779,26 @@ private enum DashboardAccountFilter: String, CaseIterable, Identifiable {
         rawValue
     }
 
-    @MainActor
-    func includes(_ account: AccountDTO, appState: AppState) -> Bool {
+    var emptyStateKind: DashboardAccountFilterKind {
         switch self {
         case .all:
-            return true
+            return .all
         case .cash:
-            return account.type == .depository
+            return .cash
         case .credit:
-            return account.type == .credit
+            return .credit
         case .savings:
-            return account.subtype?.localizedCaseInsensitiveContains("saving") == true
+            return .savings
         case .debt:
-            return AccountPresentation.isDebt(account)
+            return .debt
         case .status:
-            guard appState.needsLoginItemCount > 0 || appState.erroredItemCount > 0 else { return true }
-            let degradedItemIds = Set(
-                appState.itemStatuses
-                    .filter { $0.status == .loginRequired || $0.status == .error }
-                    .map(\.id)
-            )
-            return degradedItemIds.contains(account.itemId)
+            return .status
         }
+    }
+
+    @MainActor
+    func includes(_ account: AccountDTO, appState: AppState) -> Bool {
+        emptyStateKind.includes(account, degradedItemIds: appState.degradedItemIds)
     }
 }
 
@@ -970,6 +968,7 @@ private struct StatusMetricGrid: View {
             StatusMetricPill(title: "Synced", value: syncedItemsText)
             StatusMetricPill(title: "Credentials", value: appState.serverCredentialsText)
             StatusMetricPill(title: "Last Sync", value: appState.lastSyncRelative ?? "Never")
+            StatusMetricPill(title: "Data Path", value: appState.activeStorageDirectoryDisplayText)
         }
     }
 
@@ -1140,6 +1139,17 @@ private struct DashboardEmptyAccountState: View {
     let filter: DashboardAccountFilter
     let onAddAccount: () -> Void
 
+    private var presentation: DashboardAccountEmptyState {
+        DashboardAccountEmptyState.evaluate(
+            filter: filter.emptyStateKind,
+            isDemoMode: appState.isDemoMode,
+            serverConnected: appState.serverConnected,
+            linkedItemCount: appState.statusItemCount,
+            accountCount: appState.accounts.count,
+            degradedItemCount: appState.needsLoginItemCount + appState.erroredItemCount
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 11) {
@@ -1168,14 +1178,7 @@ private struct DashboardEmptyAccountState: View {
                 }
 
                 Button {
-                    Task {
-                        if !appState.serverConnected {
-                            await appState.checkServerConnection()
-                        } else {
-                            await appState.refreshAccounts()
-                            await appState.syncTransactions()
-                        }
-                    }
+                    performRecoveryAction()
                 } label: {
                     Label(actionTitle, systemImage: actionIcon)
                 }
@@ -1193,55 +1196,60 @@ private struct DashboardEmptyAccountState: View {
     }
 
     private var title: String {
-        if !appState.isDemoMode, !appState.serverConnected { return "Server offline" }
-        if appState.statusItemCount == 0 { return "No bank linked" }
-        if appState.accounts.isEmpty { return "No account data" }
-        if filter == .status { return "No accounts need attention" }
-        return "No \(filter.rawValue.lowercased()) accounts"
+        presentation.title
     }
 
     private var message: String {
-        if !appState.isDemoMode, !appState.serverConnected {
-            return "Start PlaidBarServer, then check the connection again."
-        }
-        if appState.statusItemCount == 0 {
-            return "Connect a Plaid institution to show balances in this menu bar dashboard."
-        }
-        if appState.accounts.isEmpty {
-            return "The server has linked items, but balances have not loaded yet."
-        }
-        if filter == .status {
-            return "Every linked item looks healthy. Switch filters to inspect balances."
-        }
-        return "This filter has no matching linked accounts. Switch filters or add another institution."
+        presentation.detail
     }
 
     private var icon: String {
-        if !appState.isDemoMode, !appState.serverConnected { return "server.rack" }
-        if appState.statusItemCount == 0 { return "building.columns" }
-        if appState.accounts.isEmpty { return "tray" }
-        if filter == .status { return "checkmark.circle.fill" }
-        return "line.3.horizontal.decrease.circle"
+        presentation.iconName
     }
 
     private var tint: Color {
-        if !appState.isDemoMode, !appState.serverConnected { return .secondary }
-        if appState.statusItemCount == 0 { return SemanticColors.brand }
-        if appState.accounts.isEmpty { return SemanticColors.warning }
-        if filter == .status { return SemanticColors.positive }
-        return .secondary
+        switch presentation.tone {
+        case .brand:
+            return SemanticColors.brand
+        case .healthy:
+            return SemanticColors.positive
+        case .offline, .secondary:
+            return .secondary
+        case .warning:
+            return SemanticColors.warning
+        }
     }
 
     private var showsAddAccount: Bool {
-        appState.serverConnected && appState.statusItemCount == 0
+        presentation.showsAddAccount
     }
 
     private var actionTitle: String {
-        !appState.serverConnected ? "Check Server" : "Refresh"
+        presentation.actionTitle
     }
 
     private var actionIcon: String {
-        "arrow.clockwise"
+        presentation.actionIconName
+    }
+
+    private func performRecoveryAction() {
+        switch presentation.action {
+        case .checkServer:
+            Task { await appState.checkServerConnection() }
+        case .refresh:
+            Task {
+                await appState.checkServerConnection()
+                if appState.serverConnected {
+                    await appState.refreshAccounts()
+                    await appState.syncTransactions()
+                }
+            }
+        case .sync:
+            Task {
+                await appState.refreshBalances()
+                await appState.syncTransactions()
+            }
+        }
     }
 }
 

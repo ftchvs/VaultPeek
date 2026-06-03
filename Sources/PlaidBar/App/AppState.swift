@@ -377,6 +377,14 @@ final class AppState {
         itemStatuses.filter { $0.status == .error }.count
     }
 
+    var degradedItemIds: Set<String> {
+        Set(
+            itemStatuses
+                .filter { $0.status == .loginRequired || $0.status == .error }
+                .map(\.id)
+        )
+    }
+
     var diagnosticsSummary: String {
         if isDemoMode { return "Demo data loaded" }
         if !serverConnected { return "Server offline" }
