@@ -146,7 +146,9 @@ public enum AccountPresentation {
                 for: utilization,
                 threshold: utilizationThreshold
             ))
-        } else if let connectionLabel {
+        }
+
+        if let connectionLabel {
             components.append(connectionLabel)
         }
 
