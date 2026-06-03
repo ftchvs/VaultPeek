@@ -956,7 +956,7 @@ private struct DashboardStatusReadinessPanel: View {
     }
 
     private var reconnectItemId: String? {
-        appState.itemStatuses.first { $0.status == .loginRequired || $0.status == .error }?.id
+        ItemRecoveryTarget.itemId(from: appState.itemStatuses)
     }
 }
 

@@ -1518,6 +1518,36 @@ struct PlaidBarCoreTests {
         #expect(readiness.secondaryActions.contains(.addAccount))
     }
 
+    @Test("Item recovery target prioritizes errored items")
+    func itemRecoveryTargetPrioritizesErroredItems() {
+        let statuses = [
+            ItemStatus(id: "login", status: .loginRequired),
+            ItemStatus(id: "error", status: .error),
+            ItemStatus(id: "connected", status: .connected),
+        ]
+
+        #expect(ItemRecoveryTarget.itemId(from: statuses) == "error")
+    }
+
+    @Test("Item recovery target falls back to login-required items")
+    func itemRecoveryTargetFallsBackToLoginRequiredItems() {
+        let statuses = [
+            ItemStatus(id: "connected", status: .connected),
+            ItemStatus(id: "login", status: .loginRequired),
+        ]
+
+        #expect(ItemRecoveryTarget.itemId(from: statuses) == "login")
+    }
+
+    @Test("Item recovery target ignores healthy items")
+    func itemRecoveryTargetIgnoresHealthyItems() {
+        let statuses = [
+            ItemStatus(id: "connected", status: .connected),
+        ]
+
+        #expect(ItemRecoveryTarget.itemId(from: statuses) == nil)
+    }
+
     // MARK: - ItemStatus Tests
 
     @Test("ItemStatus Codable")
