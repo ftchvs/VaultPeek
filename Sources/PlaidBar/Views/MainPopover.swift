@@ -882,7 +882,10 @@ private struct DashboardStatusReadinessPanel: View {
                     Button {
                         perform(primaryAction)
                     } label: {
-                        Label(primaryAction.label, systemImage: primaryAction.icon)
+                        Label(
+                            readiness.primaryActionTitle ?? primaryAction.label,
+                            systemImage: readiness.primaryActionIconName ?? primaryAction.icon
+                        )
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
