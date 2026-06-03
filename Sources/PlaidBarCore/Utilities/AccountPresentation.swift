@@ -94,6 +94,31 @@ public enum AccountPresentation {
         return "\(Formatters.percent(utilization, decimals: 0)) • \(availableText)"
     }
 
+    public static func dashboardAvailableTitle(for account: AccountDTO) -> String {
+        account.type == .credit ? "Avail Credit" : "Available"
+    }
+
+    public static func dashboardCurrentTitle(for account: AccountDTO) -> String {
+        isDebt(account) ? "Owed" : "Current"
+    }
+
+    public static func dashboardUtilizationDetailText(
+        for account: AccountDTO,
+        threshold: Double = PlaidBarConstants.creditUtilizationWarningThreshold,
+        format: CurrencyFormat = .compact
+    ) -> String? {
+        guard let utilization = account.balances.utilizationPercent else {
+            return nil
+        }
+
+        let status = utilizationStatusLabel(for: utilization, threshold: threshold)
+        guard let limit = account.balances.limit, limit > 0 else {
+            return "\(Formatters.percent(utilization, decimals: 0)), \(status)"
+        }
+
+        return "\(Formatters.percent(utilization, decimals: 0)) of \(Formatters.currency(limit, format: format)), \(status)"
+    }
+
     public static func rowAccessibilityLabel(
         for account: AccountDTO,
         amountText: String? = nil,

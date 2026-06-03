@@ -358,6 +358,11 @@ struct PlaidBarCoreTests {
             for: credit,
             connectionLabel: "2m ago"
         ) == "45% • $550 avail")
+        #expect(AccountPresentation.dashboardAvailableTitle(for: checking) == "Available")
+        #expect(AccountPresentation.dashboardAvailableTitle(for: credit) == "Avail Credit")
+        #expect(AccountPresentation.dashboardCurrentTitle(for: checking) == "Current")
+        #expect(AccountPresentation.dashboardCurrentTitle(for: credit) == "Owed")
+        #expect(AccountPresentation.dashboardUtilizationDetailText(for: credit) == "45% of $1K, Warning")
         #expect(AccountPresentation.rowAccessibilityLabel(
             for: checking,
             connectionLabel: "2m ago",
