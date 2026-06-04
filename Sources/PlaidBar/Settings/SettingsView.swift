@@ -129,7 +129,7 @@ struct GeneralSettingsView: View {
                         }
                     }
 
-                    Text("Server database, Plaid item tokens, and sync cursors. Preferences, server.conf, and app/server auth stay in place.")
+                    Text("Reset removes PlaidBar database files, transaction caches, pending Link sessions, and stored Plaid access-token entries. Preferences, server.conf, app/server auth, and unrelated files stay in place.")
                         .detailText()
                         .fixedSize(horizontal: false, vertical: true)
 
@@ -201,10 +201,11 @@ struct GeneralSettingsView: View {
     private func resetLocalData() {
         do {
             let result = try appState.resetLocalData()
+            let preservationText = preservedEntriesText(for: result)
             if result.removedEntryCount == 0 {
-                resetResultMessage = "No local data found. \(LocalDataStore.displayPath(for: URL(fileURLWithPath: result.directoryPath, isDirectory: true))) is ready. \(keychainResetText(for: result))"
+                resetResultMessage = "No local data found. \(LocalDataStore.displayPath(for: URL(fileURLWithPath: result.directoryPath, isDirectory: true))) is ready. \(keychainResetText(for: result))\(preservationText)"
             } else {
-                resetResultMessage = "Removed \(result.removedEntryCount) item\(result.removedEntryCount == 1 ? "" : "s") from \(LocalDataStore.displayPath(for: URL(fileURLWithPath: result.directoryPath, isDirectory: true))). \(keychainResetText(for: result)) Restart PlaidBarServer."
+                resetResultMessage = "Removed \(result.removedEntryCount) PlaidBar data item\(result.removedEntryCount == 1 ? "" : "s") from \(LocalDataStore.displayPath(for: URL(fileURLWithPath: result.directoryPath, isDirectory: true))). \(keychainResetText(for: result))\(preservationText) Restart PlaidBarServer."
             }
         } catch {
             resetErrorMessage = error.localizedDescription
@@ -223,6 +224,11 @@ struct GeneralSettingsView: View {
         result.keychainTokensCleared
             ? "Keychain token entries were cleared when present."
             : "Keychain token entries were not cleared."
+    }
+
+    private func preservedEntriesText(for result: LocalDataResetResult) -> String {
+        guard result.preservedEntryCount > 0 else { return "" }
+        return " Left \(result.preservedEntryCount) config or unrelated item\(result.preservedEntryCount == 1 ? "" : "s") untouched."
     }
 }
 

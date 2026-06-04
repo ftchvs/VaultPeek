@@ -92,10 +92,14 @@ public GitHub issue.
 
 ## Local Reset Boundary
 
-Resetting local data removes PlaidBar's local cache and local stored item data.
-It does not necessarily delete records from the Plaid Dashboard or revoke bank
-permissions outside PlaidBar. Users who need complete revocation should also
-review Plaid Dashboard and bank-side permission settings.
+Resetting local data removes PlaidBar-owned database files, transaction caches,
+pending Link sessions, and stored Plaid access-token entries when present. It
+leaves `server.conf`, app/server auth, preferences, and unrelated files in the
+storage directory untouched.
+
+Local reset does not necessarily delete records from the Plaid Dashboard or
+revoke bank permissions outside PlaidBar. Users who need complete revocation
+should also review Plaid Dashboard and bank-side permission settings.
 
 ## 1.0 Privacy Checklist
 
