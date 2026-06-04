@@ -129,42 +129,45 @@ struct GeneralSettingsView: View {
                         }
                     }
 
-                    HStack(spacing: Spacing.sm) {
+                    Text("Server database, Plaid item tokens, and sync cursors. Preferences, server.conf, and app/server auth stay in place.")
+                        .detailText()
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(alignment: .center, spacing: Spacing.sm) {
                         Button {
                             revealStorageDirectory()
                         } label: {
-                            Label("Reveal", systemImage: "folder")
+                            Label("Open Folder", systemImage: "folder")
                         }
+                        .controlSize(.small)
 
                         Button {
                             copyStoragePath()
                         } label: {
                             Label("Copy Path", systemImage: "doc.on.doc")
                         }
+                        .controlSize(.small)
 
-                        Spacer()
-
-                        Button(role: .destructive) {
+                        Button {
                             isShowingResetConfirmation = true
                         } label: {
-                            Label("Reset", systemImage: "trash")
+                            Label("Reset Local Data", systemImage: "trash")
                         }
+                        .buttonStyle(.borderless)
+                        .controlSize(.small)
+                        .foregroundStyle(.secondary)
                     }
-
-                    Text("Stores the local server database, Plaid item tokens, and sync cursors. App preferences, server.conf, and the app/server auth token stay in place.")
-                        .detailText()
-                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .padding(Spacing.lg)
         }
-        .alert("Reset Local PlaidBar Data?", isPresented: $isShowingResetConfirmation) {
+        .alert("Reset Local Data?", isPresented: $isShowingResetConfirmation) {
             Button("Reset Local Data", role: .destructive) {
                 resetLocalData()
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This deletes files under \(appState.activeStorageDirectoryDisplayText), including the SQLite database, stored Plaid access tokens, and sync cursors. It keeps server.conf and the app/server auth token so local configuration and the running local server stay reachable. It also clears currently loaded accounts, transactions, and balance history from this app. It does not revoke bank permissions, remove Plaid dashboard Items, delete Plaid credentials from your shell environment, or change app preferences. Stop and restart PlaidBarServer after resetting.")
+            Text("Deletes the SQLite database, stored Plaid access tokens, sync cursors, and loaded account data under \(appState.activeStorageDirectoryDisplayText). Keeps server.conf, app/server auth, Plaid dashboard Items, shell credentials, and app preferences. Restart PlaidBarServer after resetting.")
         }
         .alert("Local Data Reset", isPresented: Binding(
             get: { resetResultMessage != nil },
@@ -199,9 +202,9 @@ struct GeneralSettingsView: View {
         do {
             let result = try appState.resetLocalData()
             if result.removedEntryCount == 0 {
-                resetResultMessage = "No existing files were found. \(LocalDataStore.displayPath(for: URL(fileURLWithPath: result.directoryPath, isDirectory: true))) is ready for a fresh local server start. \(keychainResetText(for: result))"
+                resetResultMessage = "No local data found. \(LocalDataStore.displayPath(for: URL(fileURLWithPath: result.directoryPath, isDirectory: true))) is ready. \(keychainResetText(for: result))"
             } else {
-                resetResultMessage = "Removed \(result.removedEntryCount) item\(result.removedEntryCount == 1 ? "" : "s") from \(LocalDataStore.displayPath(for: URL(fileURLWithPath: result.directoryPath, isDirectory: true))). \(keychainResetText(for: result)) Restart PlaidBarServer before reconnecting accounts."
+                resetResultMessage = "Removed \(result.removedEntryCount) item\(result.removedEntryCount == 1 ? "" : "s") from \(LocalDataStore.displayPath(for: URL(fileURLWithPath: result.directoryPath, isDirectory: true))). \(keychainResetText(for: result)) Restart PlaidBarServer."
             }
         } catch {
             resetErrorMessage = error.localizedDescription
@@ -210,7 +213,7 @@ struct GeneralSettingsView: View {
 
     private var storageDetailText: String {
         if let serverStoragePath = appState.serverStoragePath {
-            return "Server storage directory: \(LocalDataStore.displayPath(for: URL(fileURLWithPath: NSString(string: serverStoragePath).expandingTildeInPath)))"
+            return "Server: \(LocalDataStore.displayPath(for: URL(fileURLWithPath: NSString(string: serverStoragePath).expandingTildeInPath)))"
         }
 
         return "Default: \(appState.localStorageResolvedDisplayPathText)"
@@ -218,8 +221,8 @@ struct GeneralSettingsView: View {
 
     private func keychainResetText(for result: LocalDataResetResult) -> String {
         result.keychainTokensCleared
-            ? "Stored Plaid access-token entries were cleared from Keychain when present."
-            : "Stored Plaid access-token entries were not cleared from Keychain."
+            ? "Keychain token entries were cleared when present."
+            : "Keychain token entries were not cleared."
     }
 }
 
