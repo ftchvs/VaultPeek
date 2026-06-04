@@ -504,6 +504,7 @@ final class AppState {
         do {
             let status = try await serverClient.getStatus()
             serverConnected = true
+            error = nil
             serverEnvironment = status.environment
             serverVersion = status.version
             serverItemCount = status.itemCount
@@ -527,6 +528,11 @@ final class AppState {
             serverSyncReady = nil
             serverSyncedItemCount = nil
             itemStatuses = []
+            if case ServerClientError.serverNotRunning = error {
+                self.error = nil
+            } else {
+                self.error = error.localizedDescription
+            }
             updateSetupCompletion()
         }
     }
