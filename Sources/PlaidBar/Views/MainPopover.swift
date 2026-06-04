@@ -1145,6 +1145,7 @@ private struct AccountsSection: View {
                     ForEach(accounts) { account in
                         AccountRowWithDrilldown(
                             account: account,
+                            isStatusFilter: filter == .status,
                             isSelected: selectedAccountId == account.id,
                             onSelect: {
                                 if selectedAccountId == account.id {
@@ -1166,13 +1167,14 @@ private struct AccountsSection: View {
 private struct AccountRowWithDrilldown: View {
     @Environment(AppState.self) private var appState
     let account: AccountDTO
+    let isStatusFilter: Bool
     let isSelected: Bool
     let onSelect: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
             Button(action: onSelect) {
-                DashboardAccountRow(account: account, isSelected: isSelected)
+                DashboardAccountRow(account: account, isStatusFilter: isStatusFilter, isSelected: isSelected)
             }
             .buttonStyle(.plain)
             .accessibilityElement(children: .ignore)
@@ -1180,7 +1182,7 @@ private struct AccountRowWithDrilldown: View {
             .accessibilityHint(isSelected ? "Collapses account details." : "Shows account details.")
 
             if isSelected {
-                SelectedAccountPanel(account: account)
+                SelectedAccountPanel(account: account, isStatusFilter: isStatusFilter)
                     .environment(appState)
                     .padding(.top, 10)
                     .padding(.bottom, 12)
@@ -1218,7 +1220,8 @@ private struct AccountRowWithDrilldown: View {
             isSyncStale: appState.isSyncStale,
             statusSyncText: appState.statusSyncText,
             itemStatus: itemStatus,
-            institutionName: itemConnectionStatus?.institutionName
+            institutionName: itemConnectionStatus?.institutionName,
+            itemLastSyncRelative: itemConnectionStatus?.lastSync.map(Formatters.relativeDate)
         )
     }
 }
@@ -1343,6 +1346,7 @@ private struct DashboardEmptyAccountState: View {
 private struct DashboardAccountRow: View {
     @Environment(AppState.self) private var appState
     let account: AccountDTO
+    let isStatusFilter: Bool
     let isSelected: Bool
 
     var body: some View {
@@ -1415,7 +1419,7 @@ private struct DashboardAccountRow: View {
     private var subtitle: String {
         AccountPresentation.dashboardRowSubtitle(
             for: account,
-            connectionLabel: statusText,
+            connectionLabel: isStatusFilter ? connectionPresentation.statusFilterSubtitle : statusText,
             pendingCount: pendingCount
         )
     }
@@ -1456,7 +1460,8 @@ private struct DashboardAccountRow: View {
             isSyncStale: appState.isSyncStale,
             statusSyncText: appState.statusSyncText,
             itemStatus: itemStatus,
-            institutionName: itemConnectionStatus?.institutionName
+            institutionName: itemConnectionStatus?.institutionName,
+            itemLastSyncRelative: itemConnectionStatus?.lastSync.map(Formatters.relativeDate)
         )
     }
 
@@ -1481,6 +1486,7 @@ private struct DashboardAccountRow: View {
 private struct SelectedAccountPanel: View {
     @Environment(AppState.self) private var appState
     let account: AccountDTO
+    let isStatusFilter: Bool
 
     private var transactions: [TransactionDTO] {
         Array(accountTransactions.prefix(5))
@@ -1572,6 +1578,22 @@ private struct SelectedAccountPanel: View {
                 )
             }
 
+            if isStatusFilter, let recoveryDetailLabel = connectionPresentation.recoveryDetailLabel {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: connectionIcon)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(connectionTint)
+                        .frame(width: 16)
+                    Text(recoveryDetailLabel)
+                        .detailText()
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(connectionTint.opacity(0.08), in: RoundedRectangle(cornerRadius: 7))
+                .accessibilityElement(children: .combine)
+            }
+
             if shouldShowRecoveryActions {
                 HStack(spacing: 8) {
                     if itemStatus == .loginRequired || itemStatus == .error {
@@ -1653,7 +1675,8 @@ private struct SelectedAccountPanel: View {
             isSyncStale: appState.isSyncStale,
             statusSyncText: appState.statusSyncText,
             itemStatus: itemStatus,
-            institutionName: itemConnectionStatus?.institutionName
+            institutionName: itemConnectionStatus?.institutionName,
+            itemLastSyncRelative: itemConnectionStatus?.lastSync.map(Formatters.relativeDate)
         )
     }
 
@@ -1674,7 +1697,10 @@ private struct SelectedAccountPanel: View {
     }
 
     private var syncSignalText: String {
-        connectionPresentation.signalLabel
+        if isStatusFilter, let itemSyncLabel = connectionPresentation.itemSyncLabel {
+            return itemSyncLabel
+        }
+        return connectionPresentation.signalLabel
     }
 
     private var shouldShowRecoveryActions: Bool {

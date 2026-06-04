@@ -492,6 +492,9 @@ struct PlaidBarCoreTests {
         #expect(loginRequired.detailLabel == "Login required")
         #expect(loginRequired.signalLabel == "Login")
         #expect(loginRequired.recoveryActionTitle == "Reconnect Item")
+        #expect(loginRequired.itemSyncLabel == "No sync recorded")
+        #expect(loginRequired.statusFilterSubtitle == "Login required • No sync recorded")
+        #expect(loginRequired.recoveryDetailLabel == "Plaid requires a fresh bank login. Reconnect this item, then refresh.")
         #expect(loginRequired.showsRecoveryActions)
 
         let errored = AccountConnectionPresentation.evaluate(
@@ -506,7 +509,40 @@ struct PlaidBarCoreTests {
         #expect(errored.rowLabel == "Item error")
         #expect(errored.signalLabel == "Error")
         #expect(errored.recoveryActionTitle == "Reconnect Item")
+        #expect(errored.statusFilterSubtitle == "Item error • No sync recorded")
+        #expect(errored.recoveryDetailLabel == "Plaid reported an item error. Reconnect this item, then refresh.")
         #expect(errored.showsRecoveryActions)
+    }
+
+    @Test("Account connection presentation surfaces item sync for status recovery")
+    func accountConnectionPresentationSurfacesItemSyncForStatusRecovery() {
+        let loginRequired = AccountConnectionPresentation.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            isSyncStale: false,
+            statusSyncText: "2m ago",
+            itemStatus: .loginRequired,
+            institutionName: "Chase",
+            itemLastSyncRelative: "3h ago"
+        )
+
+        #expect(loginRequired.itemSyncLabel == "Last sync 3h ago")
+        #expect(loginRequired.statusFilterSubtitle == "Login required • Last sync 3h ago")
+        #expect(loginRequired.recoveryDetailLabel == "Plaid requires a fresh Chase login. Reconnect this item, then refresh.")
+
+        let errored = AccountConnectionPresentation.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            isSyncStale: false,
+            statusSyncText: "2m ago",
+            itemStatus: .error,
+            institutionName: "Amex",
+            itemLastSyncRelative: "yesterday"
+        )
+
+        #expect(errored.itemSyncLabel == "Last sync yesterday")
+        #expect(errored.statusFilterSubtitle == "Item error • Last sync yesterday")
+        #expect(errored.recoveryDetailLabel == "Plaid reported an item error for Amex. Reconnect this item, then refresh.")
     }
 
     @Test("Account connection presentation names degraded institutions")
