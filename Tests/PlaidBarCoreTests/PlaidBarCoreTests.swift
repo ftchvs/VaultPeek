@@ -362,7 +362,7 @@ struct PlaidBarCoreTests {
         #expect(AccountPresentation.dashboardAvailableTitle(for: credit) == "Avail Credit")
         #expect(AccountPresentation.dashboardCurrentTitle(for: checking) == "Current")
         #expect(AccountPresentation.dashboardCurrentTitle(for: credit) == "Owed")
-        #expect(AccountPresentation.dashboardUtilizationDetailText(for: credit) == "45% of $1K, Warning")
+        #expect(AccountPresentation.dashboardUtilizationDetailText(for: credit) == "45% of $1,000, Warning")
         #expect(AccountPresentation.rowAccessibilityLabel(
             for: checking,
             connectionLabel: "2m ago",
@@ -488,7 +488,7 @@ struct PlaidBarCoreTests {
         )
 
         #expect(loginRequired.level == .loginRequired)
-        #expect(loginRequired.rowLabel == "Reconnect")
+        #expect(loginRequired.rowLabel == "Reconnect Item")
         #expect(loginRequired.detailLabel == "Login required")
         #expect(loginRequired.signalLabel == "Login")
         #expect(loginRequired.recoveryActionTitle == "Reconnect Item")
