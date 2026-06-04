@@ -45,6 +45,25 @@ PLAID_CLIENT_ID=ci_smoke_client PLAID_SECRET=ci_smoke_secret ./Scripts/smoke-san
 ./Scripts/screenshots.sh
 ```
 
+The `ci_smoke_client` and `ci_smoke_secret` values are CI-safe dummy values for
+the server startup smoke only. The smoke script does not open Plaid Link or sync
+Plaid data, but it must still report sandbox credentials as configured.
+
+For non-publishing Homebrew verification from a development checkout, avoid
+uninstalling or reinstalling user packages. Use read-only or dry-run checks:
+
+```bash
+ruby -c Formula/plaidbar.rb
+HOMEBREW_NO_AUTO_UPDATE=1 brew audit --strict --formula plaidbar
+HOMEBREW_NO_AUTO_UPDATE=1 brew style plaidbar
+HOMEBREW_NO_AUTO_UPDATE=1 brew install --dry-run --build-from-source plaidbar
+HOMEBREW_NO_AUTO_UPDATE=1 brew test plaidbar
+```
+
+If Homebrew reports that `plaidbar` is already installed and up to date during
+the dry run, that is enough for local branch verification. Do a destructive
+reinstall only on a clean release machine or disposable Homebrew environment.
+
 3. Open and merge the release-prep PR only after GitHub CI passes.
 
 ## Publish Checklist
@@ -60,12 +79,14 @@ Then verify the published install path:
 
 ```bash
 brew tap ftchvs/plaidbar https://github.com/ftchvs/PlaidBar
-brew uninstall plaidbar || true
-brew install --build-from-source plaidbar
+brew reinstall --build-from-source plaidbar
 plaidbar-server --help
 plaidbar-server --version
 plaidbar-run --help
 ```
+
+Run the published install check only on a clean release machine or disposable
+Homebrew environment so it does not disturb a user's existing local install.
 
 ## Formula-Only Scope
 

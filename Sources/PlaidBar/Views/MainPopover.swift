@@ -8,6 +8,7 @@ struct MainPopover: View {
     @AppStorage("dashboard.selectedAccountId") private var selectedAccountId = ""
     @State private var settingsCloseObserver: NSObjectProtocol?
     @State private var isShowingAccountSetup = false
+    @State private var shouldShowSetupRecoveryDashboard = false
 
     private var selectedFilter: DashboardAccountFilter {
         DashboardAccountFilter(rawValue: selectedFilterRawValue) ?? .all
@@ -25,7 +26,7 @@ struct MainPopover: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if !appState.isSetupComplete {
+            if shouldShowSetupScreen {
                 SetupView()
                     .frame(width: 600)
             } else {
@@ -91,8 +92,16 @@ struct MainPopover: View {
         .frame(width: 600)
         .background(Color(nsColor: .windowBackgroundColor))
         .animation(.easeInOut(duration: 0.2), value: appState.error != nil)
-        .sheet(isPresented: $isShowingAccountSetup) {
+        .sheet(
+            isPresented: $isShowingAccountSetup,
+            onDismiss: {
+                if !appState.isSetupComplete {
+                    shouldShowSetupRecoveryDashboard = true
+                }
+            }
+        ) {
             SetupView {
+                shouldShowSetupRecoveryDashboard = false
                 isShowingAccountSetup = false
             }
             .environment(appState)
@@ -107,10 +116,19 @@ struct MainPopover: View {
         .onChange(of: selectedFilterRawValue) { _, _ in
             selectedAccountId = ""
         }
+        .onChange(of: appState.isSetupComplete) { _, isComplete in
+            if isComplete {
+                shouldShowSetupRecoveryDashboard = false
+            }
+        }
+    }
+
+    private var shouldShowSetupScreen: Bool {
+        !appState.isSetupComplete && !shouldShowSetupRecoveryDashboard
     }
 
     private var shouldShowStatusReadinessPanel: Bool {
-        selectedFilter == .status || appState.dashboardStatusReadiness.level != .healthy
+        selectedFilter == .status || !appState.isSetupComplete || appState.dashboardStatusReadiness.level != .healthy
     }
 
     private var filterBinding: Binding<DashboardAccountFilter> {
@@ -874,6 +892,10 @@ private struct DashboardStatusReadinessPanel: View {
                 Spacer(minLength: 12)
             }
 
+            if !appState.isSetupComplete {
+                SetupRecoverySummary(state: appState.firstRunCompletionState)
+            }
+
             StatusMetricGrid()
                 .environment(appState)
 
@@ -937,13 +959,7 @@ private struct DashboardStatusReadinessPanel: View {
         case .addAccount:
             onAddAccount()
         case .refresh:
-            Task {
-                await appState.checkServerConnection()
-                if appState.serverConnected {
-                    await appState.refreshAccounts()
-                    await appState.syncTransactions()
-                }
-            }
+            Task { await appState.refreshDashboard() }
         case .reconnect:
             guard let itemId = reconnectItemId else {
                 Task { await appState.refreshAccounts() }
@@ -965,6 +981,63 @@ private struct DashboardStatusReadinessPanel: View {
 
     private var reconnectItemId: String? {
         ItemRecoveryTarget.itemId(from: appState.itemStatuses)
+    }
+}
+
+private struct SetupRecoverySummary: View {
+    let state: FirstRunCompletionState
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: icon)
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(color)
+                .frame(width: 22, height: 22)
+                .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Setup recovery")
+                    .microText()
+                    .foregroundStyle(.secondary)
+                Text(state.title)
+                    .font(.caption.weight(.semibold))
+                Text(state.detail)
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 8)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 9)
+        .background(color.opacity(0.06), in: RoundedRectangle(cornerRadius: 7))
+        .accessibilityElement(children: .combine)
+    }
+
+    private var icon: String {
+        switch state.step {
+        case .ready:
+            "checkmark.circle.fill"
+        case .blocked:
+            "exclamationmark.triangle.fill"
+        case .openPlaidLink:
+            "link.circle"
+        case .loadAccounts:
+            "building.columns"
+        case .syncTransactions:
+            "arrow.triangle.2.circlepath"
+        }
+    }
+
+    private var color: Color {
+        switch state.step {
+        case .ready:
+            SemanticColors.positive
+        case .blocked:
+            SemanticColors.negative
+        case .openPlaidLink, .loadAccounts, .syncTransactions:
+            SemanticColors.brand
+        }
     }
 }
 
@@ -1072,6 +1145,7 @@ private struct AccountsSection: View {
                     ForEach(accounts) { account in
                         AccountRowWithDrilldown(
                             account: account,
+                            isStatusFilter: filter == .status,
                             isSelected: selectedAccountId == account.id,
                             onSelect: {
                                 if selectedAccountId == account.id {
@@ -1093,13 +1167,14 @@ private struct AccountsSection: View {
 private struct AccountRowWithDrilldown: View {
     @Environment(AppState.self) private var appState
     let account: AccountDTO
+    let isStatusFilter: Bool
     let isSelected: Bool
     let onSelect: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
             Button(action: onSelect) {
-                DashboardAccountRow(account: account, isSelected: isSelected)
+                DashboardAccountRow(account: account, isStatusFilter: isStatusFilter, isSelected: isSelected)
             }
             .buttonStyle(.plain)
             .accessibilityElement(children: .ignore)
@@ -1107,7 +1182,7 @@ private struct AccountRowWithDrilldown: View {
             .accessibilityHint(isSelected ? "Collapses account details." : "Shows account details.")
 
             if isSelected {
-                SelectedAccountPanel(account: account)
+                SelectedAccountPanel(account: account, isStatusFilter: isStatusFilter)
                     .environment(appState)
                     .padding(.top, 10)
                     .padding(.bottom, 12)
@@ -1131,7 +1206,11 @@ private struct AccountRowWithDrilldown: View {
     }
 
     private var itemStatus: ItemConnectionStatus? {
-        appState.itemStatuses.first { $0.id == account.itemId }?.status
+        itemConnectionStatus?.status
+    }
+
+    private var itemConnectionStatus: ItemStatus? {
+        appState.itemStatuses.first { $0.id == account.itemId }
     }
 
     private var connectionPresentation: AccountConnectionPresentation {
@@ -1140,7 +1219,9 @@ private struct AccountRowWithDrilldown: View {
             serverConnected: appState.serverConnected,
             isSyncStale: appState.isSyncStale,
             statusSyncText: appState.statusSyncText,
-            itemStatus: itemStatus
+            itemStatus: itemStatus,
+            institutionName: itemConnectionStatus?.institutionName,
+            itemLastSyncRelative: itemConnectionStatus?.lastSync.map(Formatters.relativeDate)
         )
     }
 }
@@ -1157,7 +1238,8 @@ private struct DashboardEmptyAccountState: View {
             serverConnected: appState.serverConnected,
             linkedItemCount: appState.statusItemCount,
             accountCount: appState.accounts.count,
-            degradedItemCount: appState.needsLoginItemCount + appState.erroredItemCount
+            degradedItemCount: appState.needsLoginItemCount + appState.erroredItemCount,
+            degradedItemRecoveryTitle: ItemRecoveryTarget.actionTitle(from: appState.itemStatuses)
         )
     }
 
@@ -1248,18 +1330,15 @@ private struct DashboardEmptyAccountState: View {
         case .checkServer:
             Task { await appState.checkServerConnection() }
         case .refresh:
-            Task {
-                await appState.checkServerConnection()
-                if appState.serverConnected {
-                    await appState.refreshAccounts()
-                    await appState.syncTransactions()
-                }
+            Task { await appState.refreshDashboard() }
+        case .reconnect:
+            guard let itemId = ItemRecoveryTarget.itemId(from: appState.itemStatuses) else {
+                Task { await appState.refreshDashboard() }
+                return
             }
+            Task { await appState.reconnectItem(itemId: itemId) }
         case .sync:
-            Task {
-                await appState.refreshBalances()
-                await appState.syncTransactions()
-            }
+            Task { await appState.refreshDashboard() }
         }
     }
 }
@@ -1267,6 +1346,7 @@ private struct DashboardEmptyAccountState: View {
 private struct DashboardAccountRow: View {
     @Environment(AppState.self) private var appState
     let account: AccountDTO
+    let isStatusFilter: Bool
     let isSelected: Bool
 
     var body: some View {
@@ -1339,7 +1419,7 @@ private struct DashboardAccountRow: View {
     private var subtitle: String {
         AccountPresentation.dashboardRowSubtitle(
             for: account,
-            connectionLabel: statusText,
+            connectionLabel: isStatusFilter ? connectionPresentation.statusFilterSubtitle : statusText,
             pendingCount: pendingCount
         )
     }
@@ -1366,16 +1446,22 @@ private struct DashboardAccountRow: View {
     }
 
     private var itemStatus: ItemConnectionStatus? {
-        appState.itemStatuses.first { $0.id == account.itemId }?.status
+        itemConnectionStatus?.status
+    }
+
+    private var itemConnectionStatus: ItemStatus? {
+        appState.itemStatuses.first { $0.id == account.itemId }
     }
 
     private var connectionPresentation: AccountConnectionPresentation {
         AccountConnectionPresentation.evaluate(
-            isDemoMode: appState.isDemoMode,
+            isDemoMode: appState.isDemoMode && !appState.isDemoStatusRecoveryScenario,
             serverConnected: appState.serverConnected,
             isSyncStale: appState.isSyncStale,
             statusSyncText: appState.statusSyncText,
-            itemStatus: itemStatus
+            itemStatus: itemStatus,
+            institutionName: itemConnectionStatus?.institutionName,
+            itemLastSyncRelative: itemConnectionStatus?.lastSync.map(Formatters.relativeDate)
         )
     }
 
@@ -1400,6 +1486,7 @@ private struct DashboardAccountRow: View {
 private struct SelectedAccountPanel: View {
     @Environment(AppState.self) private var appState
     let account: AccountDTO
+    let isStatusFilter: Bool
 
     private var transactions: [TransactionDTO] {
         Array(accountTransactions.prefix(5))
@@ -1491,23 +1578,36 @@ private struct SelectedAccountPanel: View {
                 )
             }
 
+            if isStatusFilter, let recoveryDetailLabel = connectionPresentation.recoveryDetailLabel {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: connectionIcon)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(connectionTint)
+                        .frame(width: 16)
+                    Text(recoveryDetailLabel)
+                        .detailText()
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(connectionTint.opacity(0.08), in: RoundedRectangle(cornerRadius: 7))
+                .accessibilityElement(children: .combine)
+            }
+
             if shouldShowRecoveryActions {
                 HStack(spacing: 8) {
                     if itemStatus == .loginRequired || itemStatus == .error {
                         Button {
                             Task { await appState.reconnectItem(itemId: account.itemId) }
                         } label: {
-                            Label("Reconnect", systemImage: "link.badge.plus")
+                            Label(recoveryActionTitle, systemImage: "link.badge.plus")
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
                     }
 
                     Button {
-                        Task {
-                            await appState.refreshBalances()
-                            await appState.syncTransactions()
-                        }
+                        Task { await appState.refreshDashboard() }
                     } label: {
                         Label("Refresh", systemImage: "arrow.clockwise")
                     }
@@ -1561,7 +1661,11 @@ private struct SelectedAccountPanel: View {
     }
 
     private var itemStatus: ItemConnectionStatus? {
-        appState.itemStatuses.first { $0.id == account.itemId }?.status
+        itemConnectionStatus?.status
+    }
+
+    private var itemConnectionStatus: ItemStatus? {
+        appState.itemStatuses.first { $0.id == account.itemId }
     }
 
     private var connectionPresentation: AccountConnectionPresentation {
@@ -1570,7 +1674,9 @@ private struct SelectedAccountPanel: View {
             serverConnected: appState.serverConnected,
             isSyncStale: appState.isSyncStale,
             statusSyncText: appState.statusSyncText,
-            itemStatus: itemStatus
+            itemStatus: itemStatus,
+            institutionName: itemConnectionStatus?.institutionName,
+            itemLastSyncRelative: itemConnectionStatus?.lastSync.map(Formatters.relativeDate)
         )
     }
 
@@ -1591,11 +1697,18 @@ private struct SelectedAccountPanel: View {
     }
 
     private var syncSignalText: String {
-        connectionPresentation.signalLabel
+        if isStatusFilter, let itemSyncLabel = connectionPresentation.itemSyncLabel {
+            return itemSyncLabel
+        }
+        return connectionPresentation.signalLabel
     }
 
     private var shouldShowRecoveryActions: Bool {
         connectionPresentation.showsRecoveryActions
+    }
+
+    private var recoveryActionTitle: String {
+        connectionPresentation.recoveryActionTitle ?? "Reconnect"
     }
 }
 
@@ -1746,10 +1859,7 @@ private struct DashboardFooter: View {
             Spacer()
 
             Button {
-                Task {
-                    await appState.refreshBalances()
-                    await appState.syncTransactions()
-                }
+                Task { await appState.refreshDashboard() }
             } label: {
                 RefreshIcon(isLoading: appState.isLoading)
                     .foregroundStyle(.secondary)

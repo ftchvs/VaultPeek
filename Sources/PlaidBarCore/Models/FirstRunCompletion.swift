@@ -71,8 +71,8 @@ public struct FirstRunCompletionState: Equatable, Sendable {
         guard linkedItemCount > 0 else {
             return FirstRunCompletionState(
                 step: .openPlaidLink,
-                title: "Waiting for Plaid Link",
-                detail: "Complete the bank connection in your browser, then check again.",
+                title: "No linked item returned",
+                detail: "PlaidBar cannot see a linked item yet. Finish Plaid Link in the browser, then check again.",
                 isReady: false,
                 canRetry: true
             )

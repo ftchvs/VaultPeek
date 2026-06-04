@@ -4,6 +4,14 @@ import PlaidBarCore
 struct AccountsView: View {
     @Environment(AppState.self) private var appState
 
+    private var emptyPresentation: SecondaryContentUnavailableState {
+        SecondaryContentUnavailableState.accounts(
+            isDemoMode: appState.isDemoMode,
+            serverConnected: appState.serverConnected,
+            linkedItemCount: appState.statusItemCount
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if appState.accounts.isEmpty {
@@ -76,51 +84,25 @@ struct AccountsView: View {
 
     @ViewBuilder
     private var emptyState: some View {
-        if !appState.isDemoMode && !appState.serverConnected {
-            ContentUnavailableView {
-                Label("Server Offline", systemImage: "server.rack")
-            } description: {
-                Text("Start PlaidBarServer, then check the connection again.")
-            } actions: {
-                Button {
-                    Task { await appState.checkServerConnection() }
-                } label: {
-                    Label("Check Server", systemImage: "arrow.clockwise")
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-            }
-            .padding()
-        } else if appState.statusItemCount == 0 {
-            ContentUnavailableView {
-                Label("No Bank Linked", systemImage: "building.columns")
-            } description: {
-                Text("Connect a Plaid institution before balances can appear here.")
-            } actions: {
-                Button {
-                    Task { await appState.addAccount() }
-                } label: {
-                    Label("Add Account", systemImage: "plus.circle")
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-            }
-            .padding()
-        } else {
-            ContentUnavailableView {
-                Label("No Account Data", systemImage: "tray")
-            } description: {
-                Text("The server has a linked item, but no balances are loaded in the app yet.")
-            } actions: {
-                Button {
-                    Task { await appState.refreshAccounts() }
-                } label: {
-                    Label("Refresh Accounts", systemImage: "arrow.clockwise")
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-            }
-            .padding()
+        SecondaryUnavailableView(presentation: emptyPresentation) {
+            performEmptyAction(emptyPresentation.action)
+        }
+    }
+
+    private func performEmptyAction(_ action: SecondaryContentUnavailableAction) {
+        switch action {
+        case .checkServer:
+            Task { await appState.checkServerConnection() }
+        case .addAccount:
+            Task { await appState.addAccount() }
+        case .refreshAccounts:
+            Task { await appState.refreshAccounts() }
+        case .syncTransactions:
+            Task { await appState.syncTransactions() }
+        case .refresh:
+            Task { await appState.refreshDashboard() }
+        case .clearFilters, .showWiderPeriod:
+            break
         }
     }
 
