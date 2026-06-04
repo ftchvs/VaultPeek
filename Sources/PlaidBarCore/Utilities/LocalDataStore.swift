@@ -174,7 +174,7 @@ public enum LocalDataStore {
         }
 
         if isTransactionCacheFilename(filename) ||
-            filename == pendingLinkSessionsFilename {
+            isPendingLinkSessionsFilename(filename) {
             return true
         }
 
@@ -209,6 +209,11 @@ public enum LocalDataStore {
                 filename.hasPrefix("transactions-") &&
                     (filename.hasSuffix(".json") || filename.contains(".json.backup-"))
             )
+    }
+
+    private static func isPendingLinkSessionsFilename(_ filename: String) -> Bool {
+        filename == pendingLinkSessionsFilename ||
+            filename.hasPrefix(pendingLinkSessionsFilename + ".backup-")
     }
 
     private static func resetPlaidAccessTokenKeychainItems() throws {

@@ -2295,6 +2295,7 @@ struct PlaidBarCoreTests {
         let databaseWAL = directory.appendingPathComponent("plaidbar.sqlite-wal")
         let transactionCache = directory.appendingPathComponent("transactions-sandbox-abc123.json")
         let pendingLinkSessions = directory.appendingPathComponent("pending-link-sessions.json")
+        let pendingLinkSessionsBackup = directory.appendingPathComponent("pending-link-sessions.json.backup-20260604")
         let authToken = directory.appendingPathComponent("auth-token")
         let serverConfig = directory.appendingPathComponent("server.conf")
         let unrelatedFile = directory.appendingPathComponent("notes.txt")
@@ -2306,6 +2307,7 @@ struct PlaidBarCoreTests {
         try "wal".write(to: databaseWAL, atomically: true, encoding: .utf8)
         try "cache".write(to: transactionCache, atomically: true, encoding: .utf8)
         try "sessions".write(to: pendingLinkSessions, atomically: true, encoding: .utf8)
+        try "old sessions".write(to: pendingLinkSessionsBackup, atomically: true, encoding: .utf8)
         try "token".write(to: authToken, atomically: true, encoding: .utf8)
         try "PLAID_ENV=sandbox".write(to: serverConfig, atomically: true, encoding: .utf8)
         try "keep me".write(to: unrelatedFile, atomically: true, encoding: .utf8)
@@ -2322,6 +2324,7 @@ struct PlaidBarCoreTests {
         #expect(result.directoryPath == directory.path)
         #expect(result.removedEntries == [
             "pending-link-sessions.json",
+            "pending-link-sessions.json.backup-20260604",
             "plaidbar-sandbox.sqlite",
             "plaidbar.sqlite",
             "plaidbar.sqlite-wal",
