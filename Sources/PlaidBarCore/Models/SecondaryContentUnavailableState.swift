@@ -27,6 +27,7 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
     public let action: SecondaryContentUnavailableAction
     public let actionTitle: String
     public let actionIconName: String
+    public let actionAccessibilityHint: String?
 
     public init(
         title: String,
@@ -34,7 +35,8 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
         iconName: String,
         action: SecondaryContentUnavailableAction,
         actionTitle: String,
-        actionIconName: String
+        actionIconName: String,
+        actionAccessibilityHint: String? = nil
     ) {
         self.title = title
         self.detail = detail
@@ -42,6 +44,7 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
         self.action = action
         self.actionTitle = actionTitle
         self.actionIconName = actionIconName
+        self.actionAccessibilityHint = actionAccessibilityHint
     }
 
     public static func accounts(
@@ -58,12 +61,13 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
         }
 
         return SecondaryContentUnavailableState(
-            title: "No account data",
-            detail: "The server has linked items, but balances have not loaded yet. Refresh accounts to check for updated data.",
+            title: "Accounts not loaded",
+            detail: "PlaidBar found a linked bank, but no balances are available yet. Refresh accounts to load the latest balances.",
             iconName: "tray",
             action: .refreshAccounts,
             actionTitle: "Refresh Accounts",
-            actionIconName: "arrow.clockwise"
+            actionIconName: "arrow.clockwise",
+            actionAccessibilityHint: "Checks the server for account balances."
         )
     }
 
@@ -80,32 +84,35 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
         if linkedItemCount == 0 {
             return SecondaryContentUnavailableState(
                 title: "No bank linked",
-                detail: "Connect a Plaid institution with a credit card to track utilization.",
+                detail: "Link a bank that includes a credit card before utilization can appear here.",
                 iconName: "creditcard",
                 action: .addAccount,
-                actionTitle: "Add Account",
-                actionIconName: "plus.circle"
+                actionTitle: "Link Bank",
+                actionIconName: "plus.circle",
+                actionAccessibilityHint: "Starts Plaid Link so you can connect a bank."
             )
         }
 
         if accountCount == 0 {
             return SecondaryContentUnavailableState(
-                title: "No account data",
-                detail: "The linked item has not loaded account balances yet. Refresh accounts before checking credit utilization.",
+                title: "Accounts not loaded",
+                detail: "A bank is linked, but balances have not loaded yet. Refresh accounts before checking credit utilization.",
                 iconName: "tray",
                 action: .refreshAccounts,
                 actionTitle: "Refresh Accounts",
-                actionIconName: "arrow.clockwise"
+                actionIconName: "arrow.clockwise",
+                actionAccessibilityHint: "Checks the server for account balances."
             )
         }
 
         return SecondaryContentUnavailableState(
-            title: "No credit accounts",
-            detail: "Your linked accounts do not include a credit card with utilization data.",
+            title: "No credit card linked",
+            detail: "Linked accounts do not include a credit card with utilization data. Link a credit card, or refresh if one was just added.",
             iconName: "creditcard",
             action: .addAccount,
-            actionTitle: "Add Credit Card",
-            actionIconName: "plus.circle"
+            actionTitle: "Link Credit Card",
+            actionIconName: "plus.circle",
+            actionAccessibilityHint: "Starts Plaid Link so you can connect a credit card."
         )
     }
 
@@ -123,11 +130,12 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
         if hasSearchText || hasActiveFilters {
             return SecondaryContentUnavailableState(
                 title: "No matching transactions",
-                detail: "Synced history is loaded, but this search or filter set has no matches.",
+                detail: "Synced history is loaded, but nothing matches the current search or filters. Clear them to return to recent transactions.",
                 iconName: "magnifyingglass",
                 action: .clearFilters,
                 actionTitle: "Clear Filters",
-                actionIconName: "xmark.circle"
+                actionIconName: "xmark.circle",
+                actionAccessibilityHint: "Removes the current search text and filters."
             )
         }
 
@@ -145,33 +153,36 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
 
         if accountCount == 0 {
             return SecondaryContentUnavailableState(
-                title: "No account data",
-                detail: "The server has linked items, but balances have not loaded yet. Refresh accounts before syncing transaction history.",
+                title: "Accounts not loaded",
+                detail: "A bank is linked, but balances have not loaded yet. Refresh accounts before syncing transaction history.",
                 iconName: "tray",
                 action: .refreshAccounts,
                 actionTitle: "Refresh Accounts",
-                actionIconName: "arrow.clockwise"
+                actionIconName: "arrow.clockwise",
+                actionAccessibilityHint: "Checks the server for account balances."
             )
         }
 
         if syncedItemCount == 0 {
             return SecondaryContentUnavailableState(
                 title: "First sync needed",
-                detail: "Accounts are loaded, but no linked item has completed transaction sync yet.",
+                detail: "Accounts are loaded, but transaction history has not synced yet. Sync now to load recent activity.",
                 iconName: "clock.arrow.circlepath",
                 action: .syncTransactions,
                 actionTitle: "Sync Transactions",
-                actionIconName: "arrow.triangle.2.circlepath"
+                actionIconName: "arrow.triangle.2.circlepath",
+                actionAccessibilityHint: "Asks the server to sync transaction history."
             )
         }
 
         return SecondaryContentUnavailableState(
             title: transactionCount == 0 ? "No transaction history" : "No transactions",
-            detail: "No transaction rows are available for the linked accounts yet. Sync again to check for recent history.",
+            detail: "No transaction rows are available for the linked accounts. Sync again to check for new or recent history.",
             iconName: "list.bullet.rectangle",
             action: .syncTransactions,
             actionTitle: "Sync Transactions",
-            actionIconName: "arrow.triangle.2.circlepath"
+            actionIconName: "arrow.triangle.2.circlepath",
+            actionAccessibilityHint: "Asks the server to sync transaction history."
         )
     }
 
@@ -198,22 +209,24 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
 
         if accountCount == 0 {
             return SecondaryContentUnavailableState(
-                title: "No account data",
-                detail: "Balances have not loaded yet. Refresh accounts before syncing spending activity.",
+                title: "Accounts not loaded",
+                detail: "A bank is linked, but balances have not loaded yet. Refresh accounts before syncing spending activity.",
                 iconName: "tray",
                 action: .refreshAccounts,
                 actionTitle: "Refresh Accounts",
-                actionIconName: "arrow.clockwise"
+                actionIconName: "arrow.clockwise",
+                actionAccessibilityHint: "Checks the server for account balances."
             )
         }
 
         return SecondaryContentUnavailableState(
             title: syncedItemCount == 0 || transactionCount == 0 ? "No synced activity" : "No spending activity",
-            detail: "Sync transactions to build the spending heatmap, trend, and cashflow views.",
+            detail: "Spending views need synced transactions. Sync transaction history to build the heatmap, trend, and cashflow views.",
             iconName: "chart.bar.xaxis",
             action: .syncTransactions,
             actionTitle: "Sync Transactions",
-            actionIconName: "arrow.triangle.2.circlepath"
+            actionIconName: "arrow.triangle.2.circlepath",
+            actionAccessibilityHint: "Asks the server to sync transaction history."
         )
     }
 
@@ -224,12 +237,15 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
         SecondaryContentUnavailableState(
             title: "No activity in \(periodLabel)",
             detail: canShowWiderPeriod
-                ? "No synced transactions fall inside this period. Choose a wider window to inspect older history."
-                : "No synced transactions fall inside this period. Refresh to check for the latest history.",
+                ? "No synced transactions fall inside this period. Show a wider window to inspect older history."
+                : "No synced transactions fall inside this period. Refresh to check for newly synced history.",
             iconName: "calendar.badge.clock",
             action: canShowWiderPeriod ? .showWiderPeriod : .refresh,
-            actionTitle: canShowWiderPeriod ? "Show 90D" : "Refresh",
-            actionIconName: canShowWiderPeriod ? "calendar" : "arrow.clockwise"
+            actionTitle: canShowWiderPeriod ? "Show 90 Days" : "Refresh",
+            actionIconName: canShowWiderPeriod ? "calendar" : "arrow.clockwise",
+            actionAccessibilityHint: canShowWiderPeriod
+                ? "Changes the spending period to 90 days."
+                : "Reloads the dashboard data."
         )
     }
 
@@ -256,33 +272,36 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
 
         if accountCount == 0 {
             return SecondaryContentUnavailableState(
-                title: "No account data",
-                detail: "Balances have not loaded yet. Refresh accounts before detecting recurring charges.",
+                title: "Accounts not loaded",
+                detail: "A bank is linked, but balances have not loaded yet. Refresh accounts before detecting recurring charges.",
                 iconName: "tray",
                 action: .refreshAccounts,
                 actionTitle: "Refresh Accounts",
-                actionIconName: "arrow.clockwise"
+                actionIconName: "arrow.clockwise",
+                actionAccessibilityHint: "Checks the server for account balances."
             )
         }
 
         if syncedItemCount == 0 || transactionCount == 0 {
             return SecondaryContentUnavailableState(
                 title: "No synced transactions",
-                detail: "Sync transaction history so PlaidBar can look for repeated charges.",
+                detail: "Recurring detection needs transaction history. Sync transactions so PlaidBar can look for repeated charges.",
                 iconName: "tray",
                 action: .syncTransactions,
                 actionTitle: "Sync Transactions",
-                actionIconName: "arrow.triangle.2.circlepath"
+                actionIconName: "arrow.triangle.2.circlepath",
+                actionAccessibilityHint: "Asks the server to sync transaction history."
             )
         }
 
         return SecondaryContentUnavailableState(
             title: "No recurring charges found",
-            detail: "PlaidBar needs repeated merchant charges, usually 2+ months of history, before it marks a charge as recurring.",
+            detail: "No repeated merchant charges were detected. PlaidBar usually needs at least 2 months of history before marking a charge as recurring.",
             iconName: "arrow.clockwise",
             action: .syncTransactions,
-            actionTitle: "Sync Latest",
-            actionIconName: "arrow.triangle.2.circlepath"
+            actionTitle: "Sync Latest Transactions",
+            actionIconName: "arrow.triangle.2.circlepath",
+            actionAccessibilityHint: "Checks for newer transactions that may complete a recurring pattern."
         )
     }
 
@@ -292,8 +311,9 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
             detail: detail,
             iconName: "server.rack",
             action: .checkServer,
-            actionTitle: "Check Server",
-            actionIconName: "server.rack"
+            actionTitle: "Check Connection",
+            actionIconName: "server.rack",
+            actionAccessibilityHint: "Checks whether PlaidBarServer is reachable."
         )
     }
 
@@ -303,8 +323,9 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
             detail: detail,
             iconName: "building.columns",
             action: .addAccount,
-            actionTitle: "Add Account",
-            actionIconName: "plus.circle"
+            actionTitle: "Link Bank",
+            actionIconName: "plus.circle",
+            actionAccessibilityHint: "Starts Plaid Link so you can connect a bank."
         )
     }
 
@@ -315,8 +336,9 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
             detail: detail,
             iconName: "exclamationmark.triangle.fill",
             action: .refresh,
-            actionTitle: "Refresh",
-            actionIconName: "arrow.clockwise"
+            actionTitle: "Try Again",
+            actionIconName: "arrow.clockwise",
+            actionAccessibilityHint: "Reloads the dashboard data."
         )
     }
 
