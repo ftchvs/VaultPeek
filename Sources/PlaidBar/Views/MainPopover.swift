@@ -1587,6 +1587,16 @@ private struct SelectedAccountPanel: View {
         AccountActivitySummary.recent(from: accountTransactions)
     }
 
+    private var emptyState: AccountActivityEmptyState? {
+        AccountActivityEmptyState.evaluate(
+            transactionCount: accountTransactions.count,
+            isDemoMode: appState.isDemoMode && !appState.isDemoStatusRecoveryScenario,
+            serverConnected: appState.serverConnected,
+            connectionLevel: connectionPresentation.level,
+            accountDisplayName: AccountPresentation.displayName(for: account)
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top) {
@@ -1705,9 +1715,9 @@ private struct SelectedAccountPanel: View {
                     .foregroundStyle(.secondary)
 
                 if transactions.isEmpty {
-                    Text("No recent activity for this account.")
-                        .detailText()
-                        .padding(.vertical, 10)
+                    if let emptyState {
+                        AccountActivityEmptyStateView(presentation: emptyState)
+                    }
                 } else {
                     ForEach(transactions) { transaction in
                         TransactionMiniRow(transaction: transaction)
@@ -1933,6 +1943,47 @@ private struct TransactionMiniRow: View {
     private var accessibilityLabel: String {
         let direction = transaction.isIncome ? "income" : "outflow"
         return "\(transaction.displayName), \(direction), \(Formatters.currency(transaction.displayAmount, format: .full)), \(Formatters.displayTransactionDate(transaction.date))"
+    }
+}
+
+private struct AccountActivityEmptyStateView: View {
+    let presentation: AccountActivityEmptyState
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: presentation.iconName)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(tint)
+                .frame(width: 18, height: 18)
+                .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 5))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(presentation.title)
+                    .font(.caption.weight(.semibold))
+                Text(presentation.detail)
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 8)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 8)
+        .background(tint.opacity(0.06), in: RoundedRectangle(cornerRadius: 7))
+        .accessibilityElement(children: .combine)
+    }
+
+    private var tint: Color {
+        switch presentation.tone {
+        case .brand:
+            SemanticColors.brand
+        case .healthy:
+            .secondary
+        case .offline, .secondary:
+            .secondary
+        case .warning:
+            SemanticColors.warning
+        }
     }
 }
 
