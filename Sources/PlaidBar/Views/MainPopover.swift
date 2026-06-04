@@ -937,13 +937,7 @@ private struct DashboardStatusReadinessPanel: View {
         case .addAccount:
             onAddAccount()
         case .refresh:
-            Task {
-                await appState.checkServerConnection()
-                if appState.serverConnected {
-                    await appState.refreshAccounts()
-                    await appState.syncTransactions()
-                }
-            }
+            Task { await appState.refreshDashboard() }
         case .reconnect:
             guard let itemId = reconnectItemId else {
                 Task { await appState.refreshAccounts() }
@@ -1248,18 +1242,9 @@ private struct DashboardEmptyAccountState: View {
         case .checkServer:
             Task { await appState.checkServerConnection() }
         case .refresh:
-            Task {
-                await appState.checkServerConnection()
-                if appState.serverConnected {
-                    await appState.refreshAccounts()
-                    await appState.syncTransactions()
-                }
-            }
+            Task { await appState.refreshDashboard() }
         case .sync:
-            Task {
-                await appState.refreshBalances()
-                await appState.syncTransactions()
-            }
+            Task { await appState.refreshDashboard() }
         }
     }
 }
@@ -1504,10 +1489,7 @@ private struct SelectedAccountPanel: View {
                     }
 
                     Button {
-                        Task {
-                            await appState.refreshBalances()
-                            await appState.syncTransactions()
-                        }
+                        Task { await appState.refreshDashboard() }
                     } label: {
                         Label("Refresh", systemImage: "arrow.clockwise")
                     }
@@ -1746,10 +1728,7 @@ private struct DashboardFooter: View {
             Spacer()
 
             Button {
-                Task {
-                    await appState.refreshBalances()
-                    await appState.syncTransactions()
-                }
+                Task { await appState.refreshDashboard() }
             } label: {
                 RefreshIcon(isLoading: appState.isLoading)
                     .foregroundStyle(.secondary)
