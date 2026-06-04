@@ -23,16 +23,16 @@ struct SetupView: View {
                     environment: .sandbox,
                     icon: "testtube.2",
                     title: "Connect Sandbox",
-                    summary: "Uses Plaid's sandbox API with Plaid-hosted test institutions. This still requires your sandbox client ID and secret on the local server.",
-                    primaryTitle: "Open Sandbox Link"
+                    summary: "Test institutions with Plaid sandbox credentials on PlaidBarServer.",
+                    primaryTitle: "Open Link"
                 )
             case .production:
                 linkPrepView(
                     environment: .production,
                     icon: "lock.shield",
-                    title: "Use Production Credentials",
-                    summary: "Uses real Plaid production access. Production requires Plaid approval and will connect accounts with real financial data.",
-                    primaryTitle: "Open Production Link"
+                    title: "Connect Production",
+                    summary: "Real accounts with approved Plaid production credentials.",
+                    primaryTitle: "Open Link"
                 )
             case .connecting(let environment):
                 connectingView(environment: environment)
@@ -57,7 +57,7 @@ struct SetupView: View {
                         .font(.title2.weight(.bold))
                     Text("Menu bar finance, one click away.")
                         .font(.callout.weight(.medium))
-                    Text("Choose a data source before anything connects. Demo mode is local; sandbox and production require your local PlaidBarServer.")
+                    Text("Choose demo data or connect through your local PlaidBarServer.")
                         .detailText()
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -75,7 +75,7 @@ struct SetupView: View {
             VStack(spacing: Spacing.sm) {
                 OnboardingChoiceButton(
                     title: "View Demo",
-                    subtitle: "Local fixture data. No Plaid credentials or network calls.",
+                    subtitle: "Local sample data. No Plaid credentials.",
                     icon: "play.circle",
                     color: SemanticColors.brandSecondary
                 ) {
@@ -84,7 +84,7 @@ struct SetupView: View {
 
                 OnboardingChoiceButton(
                     title: "Connect Sandbox",
-                    subtitle: "Requires sandbox credentials on PlaidBarServer.",
+                    subtitle: "Plaid test institutions.",
                     icon: "testtube.2",
                     color: SemanticColors.brand
                 ) {
@@ -92,8 +92,8 @@ struct SetupView: View {
                 }
 
                 OnboardingChoiceButton(
-                    title: "Use Production Credentials",
-                    subtitle: "Requires Plaid approval. Connects real accounts.",
+                    title: "Connect Production",
+                    subtitle: "Approved Plaid access for real accounts.",
                     icon: "lock.shield",
                     color: SemanticColors.positive
                 ) {
@@ -131,15 +131,15 @@ struct SetupView: View {
             VStack(alignment: .leading, spacing: Spacing.sm) {
                 StorageDisclosureRow(
                     icon: "externaldrive",
-                    text: "PlaidBar stores access tokens and synced account data locally under \(appState.activeStorageDirectoryDisplayText)."
+                    text: "Tokens and synced data stay local: \(appState.activeStorageDirectoryDisplayText)."
                 )
                 StorageDisclosureRow(
                     icon: "server.rack",
-                    text: "Plaid credentials stay in the local server environment, not in the menu bar app."
+                    text: "Plaid credentials stay in the local server environment."
                 )
                 StorageDisclosureRow(
                     icon: "eye.slash",
-                    text: "There is no PlaidBar cloud backend, analytics, or telemetry."
+                    text: "No PlaidBar cloud backend, analytics, or telemetry."
                 )
             }
             .padding(Spacing.md)
@@ -151,7 +151,7 @@ struct SetupView: View {
 
             if let error = appState.error {
                 SetupRecoveryCallout(
-                    title: "Setup needs attention",
+                    title: "Check setup",
                     detail: error,
                     icon: "exclamationmark.triangle.fill",
                     color: SemanticColors.negative
@@ -228,7 +228,7 @@ struct SetupView: View {
                         _ = await appState.connectForOnboarding(expectedEnvironment: environment)
                     }
                 } label: {
-                    Label("Open Link Again", systemImage: "link")
+                    Label("Open Link", systemImage: "link")
                 }
                 .buttonStyle(.bordered)
                 .disabled(appState.isLoading)
@@ -277,13 +277,13 @@ struct SetupView: View {
         case .openPlaidLink:
             "Waiting for Plaid Link"
         case .loadAccounts:
-            "Linked item found"
+            "Item linked"
         case .syncTransactions:
-            "Finish first sync"
+            "First sync"
         case .ready:
             "Dashboard ready"
         case .blocked:
-            "Connection needs attention"
+            "Check setup"
         }
     }
 
@@ -293,22 +293,22 @@ struct SetupView: View {
     ) -> String {
         switch completion.step {
         case .openPlaidLink:
-            "Complete the \(environment.rawValue) login in your browser, then check for the linked item."
+            "Finish Plaid Link in your browser, then check again."
         case .loadAccounts:
-            "PlaidBar found the linked institution. Load balances before opening the dashboard."
+            "Load balances before opening the dashboard."
         case .syncTransactions:
-            "Balances are loaded. Run the first transaction sync to complete onboarding."
+            "Run the first transaction sync to complete setup."
         case .ready:
-            "Setup checks passed. The dashboard can open now."
+            "Setup is complete."
         case .blocked:
-            "Resolve the issue below, then retry the setup check."
+            "Resolve the issue below, then check again."
         }
     }
 
     private func primaryCompletionActionTitle(for completion: FirstRunCompletionState) -> String {
         switch completion.step {
         case .openPlaidLink:
-            "Check for Linked Item"
+            "Check Again"
         case .loadAccounts:
             "Load Accounts"
         case .syncTransactions:
@@ -316,7 +316,7 @@ struct SetupView: View {
         case .ready:
             "Open Dashboard"
         case .blocked:
-            "Retry Setup Check"
+            "Check Again"
         }
     }
 
