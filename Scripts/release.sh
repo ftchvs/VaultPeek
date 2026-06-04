@@ -104,8 +104,8 @@ if ! grep -Fq "tag: \"$TAG\"" Formula/plaidbar.rb; then
 fi
 
 echo "Running release gates for $TAG..."
-swift build -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
-swift build -c release -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
+swift build -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors --disable-keychain
+swift build -c release -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors --disable-keychain
 bash -n Scripts/*.sh Scripts/plaidbar-run
 ruby -c Formula/plaidbar.rb
 
