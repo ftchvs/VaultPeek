@@ -10,6 +10,17 @@ struct MainPopover: View {
     @State private var isShowingAccountSetup = false
     @State private var shouldShowSetupRecoveryDashboard = false
 
+    private enum Layout {
+        static let dashboardWidth: CGFloat = 480
+        static let setupWidth: CGFloat = 560
+        static let dashboardMinHeight: CGFloat = 500
+        static let dashboardMaxHeight: CGFloat = 680
+        static let contentHorizontalPadding: CGFloat = 14
+        static let contentTopPadding: CGFloat = 14
+        static let contentBottomPadding: CGFloat = 12
+        static let sectionSpacing: CGFloat = 12
+    }
+
     private var selectedFilter: DashboardAccountFilter {
         DashboardAccountFilter(rawValue: selectedFilterRawValue) ?? .all
     }
@@ -28,19 +39,14 @@ struct MainPopover: View {
         VStack(spacing: 0) {
             if shouldShowSetupScreen {
                 SetupView()
-                    .frame(width: 600)
+                    .frame(width: Layout.setupWidth)
             } else {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
+                    VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
                         DashboardHeader()
                             .environment(appState)
 
-                        DashboardStatusStrip()
-                            .environment(appState)
-
-                        BalanceActivityHeatmap(transactions: appState.transactions)
-
-                        if shouldShowStatusReadinessPanel {
+                        if shouldElevateStatusReadinessPanel {
                             DashboardStatusReadinessPanel(
                                 openSettings: { openSettings() },
                                 onAddAccount: openAccountSetup
@@ -65,14 +71,27 @@ struct MainPopover: View {
                             onAddAccount: openAccountSetup
                         )
                         .environment(appState)
+
+                        DashboardStatusStrip()
+                            .environment(appState)
+
+                        BalanceActivityHeatmap(transactions: appState.transactions)
+
+                        if shouldShowLowerStatusReadinessPanel {
+                            DashboardStatusReadinessPanel(
+                                openSettings: { openSettings() },
+                                onAddAccount: openAccountSetup
+                            )
+                            .environment(appState)
+                        }
                     }
-                    .padding(.horizontal, 22)
-                    .padding(.top, 22)
-                    .padding(.bottom, 18)
+                    .padding(.horizontal, Layout.contentHorizontalPadding)
+                    .padding(.top, Layout.contentTopPadding)
+                    .padding(.bottom, Layout.contentBottomPadding)
                 }
                 .scrollContentBackground(.hidden)
                 .frame(maxWidth: .infinity)
-                .frame(minHeight: 860, maxHeight: 1000)
+                .frame(minHeight: Layout.dashboardMinHeight, maxHeight: Layout.dashboardMaxHeight)
 
                 Divider()
 
@@ -89,7 +108,7 @@ struct MainPopover: View {
                     .environment(appState)
             }
         }
-        .frame(width: 600)
+        .frame(width: shouldShowSetupScreen ? Layout.setupWidth : Layout.dashboardWidth)
         .background(Color(nsColor: .windowBackgroundColor))
         .animation(.easeInOut(duration: 0.2), value: appState.error != nil)
         .sheet(
@@ -131,6 +150,14 @@ struct MainPopover: View {
         selectedFilter == .status || !appState.isSetupComplete || appState.dashboardStatusReadiness.level != .healthy
     }
 
+    private var shouldElevateStatusReadinessPanel: Bool {
+        !appState.isSetupComplete || appState.dashboardStatusReadiness.level != .healthy
+    }
+
+    private var shouldShowLowerStatusReadinessPanel: Bool {
+        shouldShowStatusReadinessPanel && !shouldElevateStatusReadinessPanel
+    }
+
     private var filterBinding: Binding<DashboardAccountFilter> {
         Binding(
             get: { selectedFilter },
@@ -150,22 +177,22 @@ private struct DashboardHeader: View {
 
     var body: some View {
         HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text("Net Worth")
                     .sectionTitle()
                     .foregroundStyle(.secondary)
 
                 Text(Formatters.currency(appState.netBalance, format: .full))
-                    .font(.system(size: 42, weight: .bold, design: .rounded))
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .contentTransition(.numericText())
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
             }
 
-            Spacer(minLength: 24)
+            Spacer(minLength: 16)
 
-            VStack(alignment: .trailing, spacing: 4) {
+            VStack(alignment: .trailing, spacing: 3) {
                 Text("PlaidBar")
                     .font(.headline.weight(.bold))
                 Text(appState.statusSyncText)
@@ -186,7 +213,7 @@ private struct DashboardStatusStrip: View {
                 title: "Mode",
                 value: appState.statusModeText,
                 icon: appState.isDemoMode ? "play.circle.fill" : "server.rack",
-                tint: appState.isDemoMode ? SemanticColors.brandSecondary : SemanticColors.brand
+                tint: .secondary
             )
 
             StatusDivider()
@@ -204,7 +231,7 @@ private struct DashboardStatusStrip: View {
                 title: "Sync",
                 value: appState.statusSyncText,
                 icon: appState.isSyncStale ? "clock.badge.exclamationmark.fill" : "checkmark.circle.fill",
-                tint: appState.isSyncStale ? SemanticColors.warning : SemanticColors.positive
+                tint: appState.isSyncStale ? SemanticColors.warning : .secondary
             )
 
             StatusDivider()
@@ -216,8 +243,8 @@ private struct DashboardStatusStrip: View {
                 tint: itemTint
             )
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 8)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
         .overlay {
             RoundedRectangle(cornerRadius: 8)
@@ -234,10 +261,10 @@ private struct DashboardStatusStrip: View {
     }
 
     private var serverTint: Color {
-        if appState.isDemoMode { return SemanticColors.brandSecondary }
+        if appState.isDemoMode { return .secondary }
         if appState.isLoading { return SemanticColors.warning }
         if appState.error != nil { return SemanticColors.negative }
-        return appState.serverConnected ? SemanticColors.positive : .secondary
+        return .secondary
     }
 
     private var itemsText: String {
@@ -259,7 +286,7 @@ private struct DashboardStatusStrip: View {
     private var itemTint: Color {
         if appState.erroredItemCount > 0 { return SemanticColors.negative }
         if appState.needsLoginItemCount > 0 { return SemanticColors.warning }
-        return appState.statusItemCount > 0 ? SemanticColors.positive : .secondary
+        return .secondary
     }
 }
 
@@ -270,11 +297,11 @@ private struct StatusStripItem: View {
     let tint: Color
 
     var body: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: 5) {
             Image(systemName: icon)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(tint)
-                .frame(width: 15)
+                .frame(width: 13)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -294,7 +321,7 @@ private struct StatusDivider: View {
     var body: some View {
         Divider()
             .padding(.vertical, 3)
-            .padding(.horizontal, 10)
+            .padding(.horizontal, 6)
     }
 }
 
@@ -302,26 +329,28 @@ private struct DashboardSummaryCards: View {
     @Environment(AppState.self) private var appState
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
             MetricCard(
                 title: "Cash",
                 value: Formatters.currency(appState.totalCash, format: .compact),
                 detail: "\(appState.depositoryAccounts.count) cash account\(appState.depositoryAccounts.count == 1 ? "" : "s")",
-                tint: SemanticColors.available
+                tint: .secondary
             )
 
             MetricCard(
                 title: "Debt",
                 value: Formatters.currency(appState.totalDebt, format: .compact),
                 detail: debtDetail,
-                tint: SemanticColors.creditDebt
+                tint: SemanticColors.creditDebt,
+                emphasizesTint: appState.totalDebt > 0
             )
 
             MetricCard(
                 title: "Runway",
                 value: appState.runwayText,
                 detail: appState.runwayBasisText,
-                tint: runwayTint
+                tint: runwayTint,
+                emphasizesTint: shouldEmphasizeRunway
             )
         }
     }
@@ -340,7 +369,12 @@ private struct DashboardSummaryCards: View {
         guard let months = appState.runwayMonths else { return .secondary }
         if months < 1 { return SemanticColors.negative }
         if months < 3 { return SemanticColors.warning }
-        return SemanticColors.available
+        return .secondary
+    }
+
+    private var shouldEmphasizeRunway: Bool {
+        guard let months = appState.runwayMonths else { return false }
+        return months < 3
     }
 }
 
@@ -349,14 +383,16 @@ private struct MetricCard: View {
     let value: String
     let detail: String
     let tint: Color
+    var emphasizesTint = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 4) {
             Text(title)
                 .font(.callout.weight(.semibold))
                 .foregroundStyle(.secondary)
             Text(value)
                 .font(.headline.weight(.bold))
+                .foregroundStyle(emphasizesTint ? tint : .primary)
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
@@ -367,13 +403,29 @@ private struct MetricCard: View {
                 .minimumScaleFactor(0.75)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 13)
-        .padding(.vertical, 13)
-        .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 8))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 10)
+        .background(cardFill, in: RoundedRectangle(cornerRadius: 8))
         .overlay {
             RoundedRectangle(cornerRadius: 8)
-                .stroke(tint.opacity(0.16), lineWidth: 1)
+                .stroke(cardStroke, lineWidth: 1)
         }
+        .overlay(alignment: .leading) {
+            if emphasizesTint {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(tint)
+                    .frame(width: 3)
+                    .padding(.vertical, 8)
+            }
+        }
+    }
+
+    private var cardFill: Color {
+        emphasizesTint ? tint.opacity(0.09) : Color.primary.opacity(0.025)
+    }
+
+    private var cardStroke: Color {
+        emphasizesTint ? tint.opacity(0.18) : Color.primary.opacity(0.07)
     }
 }
 
@@ -388,7 +440,7 @@ private struct BalanceCompositionStrip: View {
                     from: appState.accounts,
                     type: .depository
                 ),
-                tint: SemanticColors.available
+                tint: Color.secondary.opacity(0.6)
             ),
             BalanceCompositionSegment(
                 title: "Investments",
@@ -396,7 +448,7 @@ private struct BalanceCompositionStrip: View {
                     from: appState.accounts,
                     type: .investment
                 ),
-                tint: SemanticColors.brand
+                tint: Color.primary.opacity(0.36)
             ),
             BalanceCompositionSegment(
                 title: "Credit",
@@ -426,7 +478,7 @@ private struct BalanceCompositionStrip: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
+        VStack(alignment: .leading, spacing: 7) {
             HStack {
                 Text("Balance Mix")
                     .font(.caption.weight(.semibold))
@@ -450,15 +502,15 @@ private struct BalanceCompositionStrip: View {
             }
             .frame(height: 8)
 
-            HStack(spacing: 12) {
+            HStack(spacing: 8) {
                 ForEach(segments) { segment in
                     BalanceCompositionLegend(segment: segment)
                 }
             }
         }
-        .padding(.horizontal, 13)
-        .padding(.vertical, 12)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 9)
+        .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 8))
         .overlay {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(Color.primary.opacity(0.07), lineWidth: 1)
@@ -515,9 +567,9 @@ private struct BalanceActivityHeatmap: View {
     @AppStorage("dashboard.heatmapMode") private var modeRawValue = SpendingHeatmapMode.spending.rawValue
 
     private let calendar = Calendar.current
-    private let spacing: CGFloat = 3
-    private let monthLabelHeight: CGFloat = 12
-    private let monthLabelWidth: CGFloat = 26
+    private let spacing: CGFloat = 2
+    private let monthLabelHeight: CGFloat = 10
+    private let monthLabelWidth: CGFloat = 22
 
     private var mode: SpendingHeatmapMode {
         SpendingHeatmapMode(rawValue: modeRawValue) ?? .spending
@@ -608,7 +660,7 @@ private struct BalanceActivityHeatmap: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 11) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 Text(title)
                     .sectionTitle()
@@ -634,7 +686,7 @@ private struct BalanceActivityHeatmap: View {
 
             GeometryReader { proxy in
                 let weeks = max(weekColumns.count, 1)
-                let cell = max(6, min(9, floor((proxy.size.width - (CGFloat(weeks - 1) * spacing)) / CGFloat(weeks))))
+                let cell = max(5, min(8, floor((proxy.size.width - (CGFloat(weeks - 1) * spacing)) / CGFloat(weeks))))
 
                 ZStack(alignment: .topLeading) {
                     ForEach(monthMarkers) { marker in
@@ -661,11 +713,11 @@ private struct BalanceActivityHeatmap: View {
                             }
                         }
                     }
-                    .offset(y: monthLabelHeight + 4)
+                    .offset(y: monthLabelHeight + 3)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            .frame(height: monthLabelHeight + 4 + 7 * 9 + 6 * spacing)
+            .frame(height: monthLabelHeight + 3 + 7 * 8 + 6 * spacing)
 
             HStack(spacing: 5) {
                 if mode == .spending {
@@ -676,7 +728,7 @@ private struct BalanceActivityHeatmap: View {
                     ForEach([0.0, 0.25, 0.5, 0.75, 1.0], id: \.self) { intensity in
                         RoundedRectangle(cornerRadius: 2)
                             .fill(BalanceHeatmapCell.fillColor(intensity: intensity, value: intensity, mode: mode))
-                            .frame(width: 9, height: 9)
+                            .frame(width: 8, height: 8)
                     }
 
                     Text("More")
@@ -694,7 +746,7 @@ private struct BalanceActivityHeatmap: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(18)
+        .padding(12)
         .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 8))
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(title) heatmap for the last 365 days with \(activeDayCount) active days.")
@@ -726,7 +778,7 @@ private struct NetLegendKey: View {
         HStack(spacing: 4) {
             RoundedRectangle(cornerRadius: 2)
                 .fill(tint.opacity(0.72))
-                .frame(width: 9, height: 9)
+                .frame(width: 8, height: 8)
             Text(label)
                 .microText()
                 .foregroundStyle(.secondary)
@@ -835,7 +887,7 @@ private struct DashboardFilterBar: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
+                        .padding(.vertical, 6)
                         .foregroundStyle(selection == filter ? .white : .primary)
                         .contentShape(Rectangle())
                 }
@@ -847,7 +899,7 @@ private struct DashboardFilterBar: View {
 
                 if filter != DashboardAccountFilter.allCases.last {
                     Divider()
-                        .padding(.vertical, 8)
+                        .padding(.vertical, 6)
                 }
             }
         }
@@ -873,15 +925,15 @@ private struct DashboardStatusReadinessPanel: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 9) {
                 Image(systemName: icon)
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(tint)
-                    .frame(width: 34, height: 34)
+                    .frame(width: 28, height: 28)
                     .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 8))
 
-                VStack(alignment: .leading, spacing: 5) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(readiness.title)
                         .font(.callout.weight(.semibold))
                     Text(readiness.detail)
@@ -889,7 +941,7 @@ private struct DashboardStatusReadinessPanel: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                Spacer(minLength: 12)
+                Spacer(minLength: 8)
             }
 
             if !appState.isSetupComplete {
@@ -901,18 +953,32 @@ private struct DashboardStatusReadinessPanel: View {
 
             HStack(spacing: 8) {
                 if let primaryAction = readiness.primaryAction {
-                    Button {
-                        perform(primaryAction)
-                    } label: {
-                        Label(
-                            primaryActionLabel(for: primaryAction),
-                            systemImage: readiness.primaryActionIconName ?? primaryAction.icon
-                        )
+                    if readinessNeedsAttention {
+                        Button {
+                            perform(primaryAction)
+                        } label: {
+                            Label(
+                                primaryActionLabel(for: primaryAction),
+                                systemImage: readiness.primaryActionIconName ?? primaryAction.icon
+                            )
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                        .tint(tint)
+                        .disabled(appState.isLoading)
+                    } else {
+                        Button {
+                            perform(primaryAction)
+                        } label: {
+                            Label(
+                                primaryActionLabel(for: primaryAction),
+                                systemImage: readiness.primaryActionIconName ?? primaryAction.icon
+                            )
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .disabled(appState.isLoading)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                    .tint(tint)
-                    .disabled(appState.isLoading)
                 }
 
                 ForEach(readiness.secondaryActions, id: \.rawValue) { action in
@@ -927,11 +993,11 @@ private struct DashboardStatusReadinessPanel: View {
                 }
             }
         }
-        .padding(16)
+        .padding(12)
         .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 8))
         .overlay {
             RoundedRectangle(cornerRadius: 8)
-                .stroke(tint.opacity(0.18), lineWidth: 1)
+                .stroke(panelStroke, lineWidth: 1)
         }
         .accessibilityElement(children: .contain)
     }
@@ -946,10 +1012,18 @@ private struct DashboardStatusReadinessPanel: View {
 
     private var tint: Color {
         switch readiness.level {
-        case .healthy: SemanticColors.positive
+        case .healthy: .secondary
         case .warning: SemanticColors.warning
         case .blocked: SemanticColors.negative
         }
+    }
+
+    private var readinessNeedsAttention: Bool {
+        readiness.level != .healthy
+    }
+
+    private var panelStroke: Color {
+        readinessNeedsAttention ? tint.opacity(0.18) : Color.primary.opacity(0.07)
     }
 
     private func perform(_ action: DashboardStatusReadinessAction) {
@@ -988,14 +1062,14 @@ private struct SetupRecoverySummary: View {
     let state: FirstRunCompletionState
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: 8) {
             Image(systemName: icon)
                 .font(.callout.weight(.semibold))
                 .foregroundStyle(color)
-                .frame(width: 22, height: 22)
+                .frame(width: 20, height: 20)
                 .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text("Setup recovery")
                     .microText()
                     .foregroundStyle(.secondary)
@@ -1008,8 +1082,8 @@ private struct SetupRecoverySummary: View {
 
             Spacer(minLength: 8)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 9)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 7)
         .background(color.opacity(0.06), in: RoundedRectangle(cornerRadius: 7))
         .accessibilityElement(children: .combine)
     }
@@ -1032,7 +1106,7 @@ private struct SetupRecoverySummary: View {
     private var color: Color {
         switch state.step {
         case .ready:
-            SemanticColors.positive
+            .secondary
         case .blocked:
             SemanticColors.negative
         case .openPlaidLink, .loadAccounts, .syncTransactions:
@@ -1045,7 +1119,7 @@ private struct StatusMetricGrid: View {
     @Environment(AppState.self) private var appState
 
     var body: some View {
-        LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
+        LazyVGrid(columns: columns, alignment: .leading, spacing: 6) {
             StatusMetricPill(title: "Mode", value: appState.statusModeText)
             StatusMetricPill(title: "Server", value: appState.statusServerText)
             StatusMetricPill(title: "Items", value: "\(appState.statusItemCount) linked")
@@ -1058,9 +1132,9 @@ private struct StatusMetricGrid: View {
 
     private var columns: [GridItem] {
         [
-            GridItem(.flexible(minimum: 140), spacing: 8),
-            GridItem(.flexible(minimum: 140), spacing: 8),
-            GridItem(.flexible(minimum: 140), spacing: 8),
+            GridItem(.flexible(minimum: 112), spacing: 6),
+            GridItem(.flexible(minimum: 112), spacing: 6),
+            GridItem(.flexible(minimum: 112), spacing: 6),
         ]
     }
 
@@ -1074,7 +1148,7 @@ private struct StatusMetricPill: View {
     let value: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 2) {
             Text(title)
                 .microText()
                 .foregroundStyle(.secondary)
@@ -1084,8 +1158,8 @@ private struct StatusMetricPill: View {
                 .minimumScaleFactor(0.78)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
         .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 7))
     }
 }
@@ -1135,7 +1209,7 @@ private struct AccountsSection: View {
                     .foregroundStyle(.secondary)
             }
             .padding(.horizontal, 2)
-            .padding(.bottom, 7)
+            .padding(.bottom, 5)
 
             if accounts.isEmpty {
                 DashboardEmptyAccountState(filter: filter, onAddAccount: onAddAccount)
@@ -1184,8 +1258,8 @@ private struct AccountRowWithDrilldown: View {
             if isSelected {
                 SelectedAccountPanel(account: account, isStatusFilter: isStatusFilter)
                     .environment(appState)
-                    .padding(.top, 10)
-                    .padding(.bottom, 12)
+                    .padding(.top, 8)
+                    .padding(.bottom, 9)
             }
         }
     }
@@ -1244,12 +1318,12 @@ private struct DashboardEmptyAccountState: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 11) {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 9) {
                 Image(systemName: icon)
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(tint)
-                    .frame(width: 34, height: 34)
+                    .frame(width: 28, height: 28)
                     .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 8))
 
                 VStack(alignment: .leading, spacing: 3) {
@@ -1279,12 +1353,12 @@ private struct DashboardEmptyAccountState: View {
                 .controlSize(.small)
             }
         }
-        .padding(16)
+        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 8))
         .overlay {
             RoundedRectangle(cornerRadius: 8)
-                .stroke(tint.opacity(0.18), lineWidth: 1)
+                .stroke(panelStroke, lineWidth: 1)
         }
     }
 
@@ -1305,11 +1379,20 @@ private struct DashboardEmptyAccountState: View {
         case .brand:
             return SemanticColors.brand
         case .healthy:
-            return SemanticColors.positive
+            return .secondary
         case .offline, .secondary:
             return .secondary
         case .warning:
             return SemanticColors.warning
+        }
+    }
+
+    private var panelStroke: Color {
+        switch presentation.tone {
+        case .brand, .warning:
+            return tint.opacity(0.18)
+        case .healthy, .offline, .secondary:
+            return Color.primary.opacity(0.07)
         }
     }
 
@@ -1350,16 +1433,16 @@ private struct DashboardAccountRow: View {
     let isSelected: Bool
 
     var body: some View {
-        HStack(spacing: 11) {
+        HStack(spacing: 9) {
             Image(systemName: AccountPresentation.iconName(for: account))
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(accountTint)
-                .frame(width: 34, height: 34)
+                .frame(width: 28, height: 28)
                 .background(accountTint.opacity(0.16), in: RoundedRectangle(cornerRadius: 8))
                 .overlay(alignment: .bottomTrailing) {
                     Circle()
                         .fill(statusTint)
-                        .frame(width: 9, height: 9)
+                        .frame(width: 8, height: 8)
                         .overlay {
                             Circle()
                                 .stroke(Color(nsColor: .windowBackgroundColor), lineWidth: 1.5)
@@ -1375,7 +1458,7 @@ private struct DashboardAccountRow: View {
                     .lineLimit(1)
             }
 
-            Spacer(minLength: 12)
+            Spacer(minLength: 8)
 
             VStack(alignment: .trailing, spacing: 4) {
                 Text(amountText)
@@ -1406,9 +1489,9 @@ private struct DashboardAccountRow: View {
                 .font(.caption.weight(.bold))
                 .foregroundStyle(.tertiary)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .background(isSelected ? SemanticColors.brand.opacity(0.14) : Color.primary.opacity(0.018))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(isSelected ? Color.primary.opacity(0.055) : Color.primary.opacity(0.018))
         .overlay(alignment: .bottom) {
             Divider()
                 .opacity(0.55)
@@ -1433,9 +1516,9 @@ private struct DashboardAccountRow: View {
         case .credit, .loan:
             SemanticColors.creditDebt
         case .investment:
-            SemanticColors.sparkline
+            .secondary
         case .depository:
-            SemanticColors.available
+            .secondary
         case .other:
             .secondary
         }
@@ -1505,9 +1588,9 @@ private struct SelectedAccountPanel: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text("Details")
                         .sectionTitle()
                         .foregroundStyle(.secondary)
@@ -1528,8 +1611,8 @@ private struct SelectedAccountPanel: View {
                 )
             }
 
-            HStack(spacing: 10) {
-                DetailValue(title: availableTitle, value: availableText, tint: SemanticColors.available)
+            HStack(spacing: 8) {
+                DetailValue(title: availableTitle, value: availableText, tint: .primary)
                 DetailValue(title: currentTitle, value: currentText, tint: currentTint)
 
                 if let utilization = account.balances.utilizationPercent,
@@ -1551,7 +1634,7 @@ private struct SelectedAccountPanel: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            HStack(spacing: 10) {
+            HStack(spacing: 7) {
                 AccountSignalPill(
                     title: "Pending",
                     value: "\(pendingTransactions.count)",
@@ -1562,13 +1645,13 @@ private struct SelectedAccountPanel: View {
                     title: "30D Out",
                     value: Formatters.currency(activitySummary.outflowTotal, format: .compact),
                     icon: "arrow.up.right.circle.fill",
-                    tint: activitySummary.outflowTotal > 0 ? SemanticColors.negative : .secondary
+                    tint: .secondary
                 )
                 AccountSignalPill(
                     title: "30D In",
                     value: Formatters.currency(activitySummary.inflowTotal, format: .compact),
                     icon: "arrow.down.left.circle.fill",
-                    tint: activitySummary.inflowTotal > 0 ? SemanticColors.positive : .secondary
+                    tint: .secondary
                 )
                 AccountSignalPill(
                     title: "Sync",
@@ -1588,9 +1671,9 @@ private struct SelectedAccountPanel: View {
                         .detailText()
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .background(connectionTint.opacity(0.08), in: RoundedRectangle(cornerRadius: 7))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(recoveryFill, in: RoundedRectangle(cornerRadius: 7))
                 .accessibilityElement(children: .combine)
             }
 
@@ -1616,7 +1699,7 @@ private struct SelectedAccountPanel: View {
                 }
             }
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text("Recent Activity")
                     .sectionTitle()
                     .foregroundStyle(.secondary)
@@ -1632,11 +1715,11 @@ private struct SelectedAccountPanel: View {
                 }
             }
         }
-        .padding(18)
+        .padding(12)
         .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 8))
         .overlay {
             RoundedRectangle(cornerRadius: 8)
-                .stroke(connectionTint.opacity(0.18), lineWidth: 1)
+                .stroke(panelStroke, lineWidth: 1)
         }
     }
 
@@ -1710,16 +1793,33 @@ private struct SelectedAccountPanel: View {
     private var recoveryActionTitle: String {
         connectionPresentation.recoveryActionTitle ?? "Reconnect"
     }
+
+    private var panelStroke: Color {
+        shouldEmphasizeConnection ? connectionTint.opacity(0.18) : Color.primary.opacity(0.07)
+    }
+
+    private var recoveryFill: Color {
+        shouldEmphasizeConnection ? connectionTint.opacity(0.08) : Color.primary.opacity(0.035)
+    }
+
+    private var shouldEmphasizeConnection: Bool {
+        switch connectionPresentation.level {
+        case .stale, .loginRequired, .error:
+            return true
+        case .demo, .offline, .healthy, .unknown:
+            return false
+        }
+    }
 }
 
 private func accountConnectionTint(for level: AccountConnectionLevel) -> Color {
     switch level {
     case .demo:
-        return SemanticColors.brandSecondary
+        return .secondary
     case .offline:
         return .secondary
     case .healthy:
-        return SemanticColors.positive
+        return .secondary
     case .stale, .loginRequired:
         return SemanticColors.warning
     case .error:
@@ -1739,8 +1839,8 @@ private struct AccountConnectionBadge: View {
             .font(.caption.weight(.semibold))
             .lineLimit(1)
             .foregroundStyle(tint)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 5)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
             .background(tint.opacity(0.12), in: Capsule())
     }
 }
@@ -1752,11 +1852,11 @@ private struct AccountSignalPill: View {
     let tint: Color
 
     var body: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: 5) {
             Image(systemName: icon)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(tint)
-                .frame(width: 14)
+                .frame(width: 12)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)
@@ -1769,8 +1869,8 @@ private struct AccountSignalPill: View {
                     .minimumScaleFactor(0.82)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 7))
         .accessibilityElement(children: .ignore)
@@ -1800,7 +1900,7 @@ private struct TransactionMiniRow: View {
     let transaction: TransactionDTO
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             Circle()
                 .fill(transaction.isIncome ? SemanticColors.positive : Color.secondary.opacity(0.55))
                 .frame(width: 8, height: 8)
@@ -1845,7 +1945,7 @@ private struct DashboardFooter: View {
     let onAddAccount: () -> Void
 
     var body: some View {
-        HStack(spacing: 18) {
+        HStack(spacing: 14) {
             Button(action: onAddAccount) {
                 Image(systemName: "plus.circle")
                     .font(.body)
@@ -1879,8 +1979,8 @@ private struct DashboardFooter: View {
             .help("Settings")
             .accessibilityLabel("Settings")
         }
-        .padding(.horizontal, 22)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
     }
 
     private func openSettingsWindow() {
@@ -1939,8 +2039,8 @@ private struct ErrorBanner: View {
             .help("Dismiss error")
             .accessibilityLabel("Dismiss error")
         }
-        .padding(.horizontal, 22)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 7)
         .background(.red.opacity(0.1))
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
