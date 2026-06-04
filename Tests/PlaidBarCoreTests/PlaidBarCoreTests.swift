@@ -1264,6 +1264,52 @@ struct PlaidBarCoreTests {
         #expect(readiness.secondaryActions.contains(.openSettings))
     }
 
+    @Test("Dashboard status readiness blocks on missing local server auth")
+    func dashboardStatusReadinessBlocksOnMissingLocalServerAuth() {
+        let readiness = DashboardStatusReadiness.evaluate(
+            isDemoMode: false,
+            serverConnected: false,
+            credentialsConfigured: nil,
+            linkedItemCount: 0,
+            accountCount: 0,
+            syncedItemCount: 0,
+            needsLoginItemCount: 0,
+            erroredItemCount: 0,
+            isSyncStale: true,
+            lastSyncRelative: nil,
+            errorMessage: "PlaidBar server auth token is unavailable"
+        )
+
+        #expect(readiness.level == .blocked)
+        #expect(readiness.title == "Local server auth missing")
+        #expect(readiness.detail.contains("auth token"))
+        #expect(readiness.primaryAction == .openSettings)
+        #expect(readiness.secondaryActions.contains(.checkServer))
+    }
+
+    @Test("Dashboard status readiness blocks on rejected local server auth")
+    func dashboardStatusReadinessBlocksOnRejectedLocalServerAuth() {
+        let readiness = DashboardStatusReadiness.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: nil,
+            linkedItemCount: 0,
+            accountCount: 0,
+            syncedItemCount: 0,
+            needsLoginItemCount: 0,
+            erroredItemCount: 0,
+            isSyncStale: true,
+            lastSyncRelative: nil,
+            errorMessage: "PlaidBar server returned 401: unauthorized"
+        )
+
+        #expect(readiness.level == .blocked)
+        #expect(readiness.title == "Local server auth rejected")
+        #expect(readiness.detail.contains("rejected"))
+        #expect(readiness.primaryAction == .openSettings)
+        #expect(readiness.secondaryActions.contains(.checkServer))
+    }
+
     @Test("Dashboard status readiness prompts add account with no items")
     func dashboardStatusReadinessPromptsAddAccount() {
         let readiness = DashboardStatusReadiness.evaluate(
