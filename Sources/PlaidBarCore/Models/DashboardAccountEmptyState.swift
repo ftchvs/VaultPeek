@@ -40,6 +40,7 @@ public enum DashboardAccountEmptyStateTone: String, Sendable {
 public enum DashboardAccountEmptyStateAction: String, Sendable {
     case checkServer
     case refresh
+    case reconnect
     case sync
 }
 
@@ -79,7 +80,8 @@ public struct DashboardAccountEmptyState: Equatable, Sendable {
         serverConnected: Bool,
         linkedItemCount: Int,
         accountCount: Int,
-        degradedItemCount: Int
+        degradedItemCount: Int,
+        degradedItemRecoveryTitle: String? = nil
     ) -> DashboardAccountEmptyState {
         if !isDemoMode, !serverConnected {
             return DashboardAccountEmptyState(
@@ -110,13 +112,13 @@ public struct DashboardAccountEmptyState: Equatable, Sendable {
         if filter == .status, degradedItemCount > 0 {
             return DashboardAccountEmptyState(
                 title: "\(degradedItemCount) item\(degradedItemCount == 1 ? "" : "s") \(degradedItemCount == 1 ? "needs" : "need") attention",
-                detail: "A linked institution needs recovery, but no matching account rows are loaded. Reconnect or refresh from the status panel above.",
+                detail: "A linked institution needs recovery, but no matching account rows are loaded. Reconnect the item from here, then refresh balances.",
                 iconName: "exclamationmark.triangle.fill",
                 tone: .warning,
                 showsAddAccount: false,
-                action: .refresh,
-                actionTitle: "Refresh",
-                actionIconName: "arrow.clockwise"
+                action: .reconnect,
+                actionTitle: degradedItemRecoveryTitle ?? "Reconnect Item",
+                actionIconName: "link.badge.plus"
             )
         }
 

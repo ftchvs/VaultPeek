@@ -1204,7 +1204,11 @@ private struct AccountRowWithDrilldown: View {
     }
 
     private var itemStatus: ItemConnectionStatus? {
-        appState.itemStatuses.first { $0.id == account.itemId }?.status
+        itemConnectionStatus?.status
+    }
+
+    private var itemConnectionStatus: ItemStatus? {
+        appState.itemStatuses.first { $0.id == account.itemId }
     }
 
     private var connectionPresentation: AccountConnectionPresentation {
@@ -1213,7 +1217,8 @@ private struct AccountRowWithDrilldown: View {
             serverConnected: appState.serverConnected,
             isSyncStale: appState.isSyncStale,
             statusSyncText: appState.statusSyncText,
-            itemStatus: itemStatus
+            itemStatus: itemStatus,
+            institutionName: itemConnectionStatus?.institutionName
         )
     }
 }
@@ -1230,7 +1235,8 @@ private struct DashboardEmptyAccountState: View {
             serverConnected: appState.serverConnected,
             linkedItemCount: appState.statusItemCount,
             accountCount: appState.accounts.count,
-            degradedItemCount: appState.needsLoginItemCount + appState.erroredItemCount
+            degradedItemCount: appState.needsLoginItemCount + appState.erroredItemCount,
+            degradedItemRecoveryTitle: ItemRecoveryTarget.actionTitle(from: appState.itemStatuses)
         )
     }
 
@@ -1322,6 +1328,12 @@ private struct DashboardEmptyAccountState: View {
             Task { await appState.checkServerConnection() }
         case .refresh:
             Task { await appState.refreshDashboard() }
+        case .reconnect:
+            guard let itemId = ItemRecoveryTarget.itemId(from: appState.itemStatuses) else {
+                Task { await appState.refreshDashboard() }
+                return
+            }
+            Task { await appState.reconnectItem(itemId: itemId) }
         case .sync:
             Task { await appState.refreshDashboard() }
         }
@@ -1430,7 +1442,11 @@ private struct DashboardAccountRow: View {
     }
 
     private var itemStatus: ItemConnectionStatus? {
-        appState.itemStatuses.first { $0.id == account.itemId }?.status
+        itemConnectionStatus?.status
+    }
+
+    private var itemConnectionStatus: ItemStatus? {
+        appState.itemStatuses.first { $0.id == account.itemId }
     }
 
     private var connectionPresentation: AccountConnectionPresentation {
@@ -1439,7 +1455,8 @@ private struct DashboardAccountRow: View {
             serverConnected: appState.serverConnected,
             isSyncStale: appState.isSyncStale,
             statusSyncText: appState.statusSyncText,
-            itemStatus: itemStatus
+            itemStatus: itemStatus,
+            institutionName: itemConnectionStatus?.institutionName
         )
     }
 
@@ -1561,7 +1578,7 @@ private struct SelectedAccountPanel: View {
                         Button {
                             Task { await appState.reconnectItem(itemId: account.itemId) }
                         } label: {
-                            Label("Reconnect", systemImage: "link.badge.plus")
+                            Label(recoveryActionTitle, systemImage: "link.badge.plus")
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
@@ -1622,7 +1639,11 @@ private struct SelectedAccountPanel: View {
     }
 
     private var itemStatus: ItemConnectionStatus? {
-        appState.itemStatuses.first { $0.id == account.itemId }?.status
+        itemConnectionStatus?.status
+    }
+
+    private var itemConnectionStatus: ItemStatus? {
+        appState.itemStatuses.first { $0.id == account.itemId }
     }
 
     private var connectionPresentation: AccountConnectionPresentation {
@@ -1631,7 +1652,8 @@ private struct SelectedAccountPanel: View {
             serverConnected: appState.serverConnected,
             isSyncStale: appState.isSyncStale,
             statusSyncText: appState.statusSyncText,
-            itemStatus: itemStatus
+            itemStatus: itemStatus,
+            institutionName: itemConnectionStatus?.institutionName
         )
     }
 
@@ -1657,6 +1679,10 @@ private struct SelectedAccountPanel: View {
 
     private var shouldShowRecoveryActions: Bool {
         connectionPresentation.showsRecoveryActions
+    }
+
+    private var recoveryActionTitle: String {
+        connectionPresentation.recoveryActionTitle ?? "Reconnect"
     }
 }
 
