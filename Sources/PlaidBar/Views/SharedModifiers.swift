@@ -63,13 +63,28 @@ struct SecondaryUnavailableView: View {
             Label(presentation.title, systemImage: presentation.iconName)
         } description: {
             Text(presentation.detail)
+                .multilineTextAlignment(.center)
         } actions: {
-            Button(action: action) {
-                Label(presentation.actionTitle, systemImage: presentation.actionIconName)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.small)
+            actionButton
         }
         .padding()
+        .frame(maxWidth: .infinity, minHeight: 180)
+        .accessibilityElement(children: .contain)
+    }
+
+    @ViewBuilder
+    private var actionButton: some View {
+        let button = Button(action: action) {
+            Label(presentation.actionTitle, systemImage: presentation.actionIconName)
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.small)
+        .help(presentation.actionTitle)
+
+        if let hint = presentation.actionAccessibilityHint {
+            button.accessibilityHint(Text(hint))
+        } else {
+            button
+        }
     }
 }
