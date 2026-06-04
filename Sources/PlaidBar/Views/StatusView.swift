@@ -131,8 +131,10 @@ struct StatusView: View {
                 ForEach(appState.itemStatuses) { item in
                     HStack(spacing: Spacing.sm) {
                         Image(systemName: icon(for: item.status))
+                            .font(.callout.weight(.semibold))
                             .foregroundStyle(color(for: item.status))
-                            .frame(width: 18)
+                            .frame(width: 26, height: 26)
+                            .background(color(for: item.status).opacity(0.12), in: RoundedRectangle(cornerRadius: 7))
 
                         VStack(alignment: .leading, spacing: Spacing.xxs) {
                             Text(item.institutionName ?? "Plaid item")
@@ -148,7 +150,10 @@ struct StatusView: View {
                         VStack(alignment: .trailing, spacing: Spacing.xs) {
                             Text(label(for: item.status))
                                 .microText()
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 4)
                                 .foregroundStyle(color(for: item.status))
+                                .background(color(for: item.status).opacity(0.12), in: Capsule())
 
                             if item.status != .connected {
                                 Button {
@@ -161,7 +166,8 @@ struct StatusView: View {
                             }
                         }
                     }
-                    .padding(.vertical, Spacing.xs)
+                    .padding(Spacing.sm)
+                    .background(itemBackground(for: item.status), in: RoundedRectangle(cornerRadius: 8))
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel(itemAccessibilityLabel(for: item))
                 }
@@ -213,6 +219,9 @@ struct StatusView: View {
     }
 
     private var statusIcon: String {
+        if appState.isDemoStatusRecoveryScenario, appState.erroredItemCount > 0 || appState.needsLoginItemCount > 0 {
+            return "exclamationmark.triangle.fill"
+        }
         if appState.isDemoMode { return "play.circle.fill" }
         if !appState.serverConnected { return "xmark.octagon.fill" }
         if appState.erroredItemCount > 0 || appState.needsLoginItemCount > 0 { return "exclamationmark.triangle.fill" }
@@ -220,6 +229,9 @@ struct StatusView: View {
     }
 
     private var statusColor: Color {
+        if appState.isDemoStatusRecoveryScenario, appState.erroredItemCount > 0 || appState.needsLoginItemCount > 0 {
+            return SemanticColors.warning
+        }
         if appState.isDemoMode { return SemanticColors.brandSecondary }
         if !appState.serverConnected { return SemanticColors.negative }
         if appState.erroredItemCount > 0 || appState.needsLoginItemCount > 0 { return SemanticColors.warning }
@@ -270,10 +282,21 @@ struct StatusView: View {
         }
     }
 
+    private func itemBackground(for status: ItemConnectionStatus) -> Color {
+        switch status {
+        case .connected:
+            return SemanticColors.positive.opacity(0.045)
+        case .loginRequired:
+            return SemanticColors.warning.opacity(0.08)
+        case .error:
+            return SemanticColors.negative.opacity(0.08)
+        }
+    }
+
     private func label(for status: ItemConnectionStatus) -> String {
         switch status {
-        case .connected: "Connected"
-        case .loginRequired: "Login"
+        case .connected: appState.isDemoStatusRecoveryScenario ? "Recovered" : "Synced"
+        case .loginRequired: "Needs login"
         case .error: "Error"
         }
     }
@@ -281,7 +304,11 @@ struct StatusView: View {
     private func statusDetail(for item: ItemStatus) -> String {
         switch item.status {
         case .connected:
-            item.lastSync.map { "Updated \(Formatters.relativeDate($0))" } ?? "No sync recorded"
+            if appState.isDemoStatusRecoveryScenario {
+                item.lastSync.map { "Recovered and synced \(Formatters.relativeDate($0))" } ?? "Connected; no sync recorded"
+            } else {
+                item.lastSync.map { "Updated \(Formatters.relativeDate($0))" } ?? "No sync recorded"
+            }
         case .loginRequired:
             "Plaid requires a fresh bank login. Reconnect this item."
         case .error:

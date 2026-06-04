@@ -37,6 +37,10 @@ The script launches PlaidBar locally and captures:
 - Settings > Notifications
 - Settings > About
 
+The Status capture uses demo data with `--screenshot-status-recovery`. That
+fixture keeps the regular demo dashboard healthy, while the Status filter shows
+one recovered institution and one institution that needs login/reconnect.
+
 ## macOS Permissions
 
 The screenshot script uses macOS UI automation. Terminal needs:
@@ -69,6 +73,7 @@ app running the script.
 - Text is readable at README display sizes.
 - No real personal finance data appears.
 - Empty/degraded states are represented where relevant.
+- `dashboard-status.png` shows the recovery fixture, not a real Plaid error.
 - Button labels and status copy match the current app.
 - Settings screenshots show useful controls, not blank tabs.
 - Screenshots do not include unrelated desktop windows or notifications.

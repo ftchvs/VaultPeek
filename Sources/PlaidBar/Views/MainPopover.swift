@@ -1455,7 +1455,7 @@ private struct DashboardAccountRow: View {
 
     private var connectionPresentation: AccountConnectionPresentation {
         AccountConnectionPresentation.evaluate(
-            isDemoMode: appState.isDemoMode,
+            isDemoMode: appState.isDemoMode && !appState.isDemoStatusRecoveryScenario,
             serverConnected: appState.serverConnected,
             isSyncStale: appState.isSyncStale,
             statusSyncText: appState.statusSyncText,

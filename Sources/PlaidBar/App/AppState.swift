@@ -42,6 +42,7 @@ final class AppState {
     var serverSyncedItemCount: Int?
     var itemStatuses: [ItemStatus] = []
     var isDemoMode = false
+    var isDemoStatusRecoveryScenario = false
     var lastSyncDate: Date?
     var balanceHistory: [BalanceSnapshot] = []
 
@@ -386,6 +387,10 @@ final class AppState {
     }
 
     var diagnosticsSummary: String {
+        if isDemoStatusRecoveryScenario {
+            if erroredItemCount > 0 { return "\(erroredItemCount) demo item\(erroredItemCount == 1 ? "" : "s") need attention" }
+            if needsLoginItemCount > 0 { return "\(needsLoginItemCount) demo item\(needsLoginItemCount == 1 ? "" : "s") need login" }
+        }
         if isDemoMode { return "Demo data loaded" }
         if !serverConnected { return "Server offline" }
         if statusItemCount == 0 { return "No Plaid items connected" }
@@ -408,7 +413,7 @@ final class AppState {
 
     var dashboardStatusReadiness: DashboardStatusReadiness {
         DashboardStatusReadiness.evaluate(
-            isDemoMode: isDemoMode,
+            isDemoMode: isDemoMode && !isDemoStatusRecoveryScenario,
             serverConnected: serverConnected,
             credentialsConfigured: serverCredentialsConfigured,
             linkedItemCount: statusItemCount,
@@ -783,6 +788,7 @@ final class AppState {
         lastSyncDate = nil
         isSetupComplete = false
         isDemoMode = false
+        isDemoStatusRecoveryScenario = false
         error = nil
 
         balanceHistory = []
@@ -955,6 +961,8 @@ final class AppState {
     // MARK: - Demo Data
 
     func loadDemoData() {
+        isDemoStatusRecoveryScenario = CommandLine.arguments.contains("--screenshot-status-recovery")
+
         let today = Self.dateString(daysAgo: 0)
         let yesterday = Self.dateString(daysAgo: 1)
         let twoDaysAgo = Self.dateString(daysAgo: 2)
@@ -1067,12 +1075,17 @@ final class AppState {
         serverCredentialsConfigured = true
         serverStoragePath = LocalDataStore.displayPath
         serverSyncReady = true
-        serverSyncedItemCount = serverItemCount
-        itemStatuses = [
+        serverSyncedItemCount = isDemoStatusRecoveryScenario ? 1 : serverItemCount
+        let recoveredSync = Calendar.current.date(byAdding: .minute, value: -18, to: Date()) ?? Date()
+        let needsLoginSync = Calendar.current.date(byAdding: .day, value: -3, to: Date()) ?? Date()
+        itemStatuses = isDemoStatusRecoveryScenario ? [
+            ItemStatus(id: "demo_chase", institutionName: "Chase", status: .connected, lastSync: recoveredSync),
+            ItemStatus(id: "demo_amex_item", institutionName: "American Express", status: .loginRequired, lastSync: needsLoginSync),
+        ] : [
             ItemStatus(id: "demo_chase", institutionName: "Chase", status: .connected, lastSync: Date()),
             ItemStatus(id: "demo_amex_item", institutionName: "American Express", status: .connected, lastSync: Date()),
         ]
-        lastSyncDate = Date()
+        lastSyncDate = isDemoStatusRecoveryScenario ? recoveredSync : Date()
     }
 
     private static func dateString(daysAgo: Int) -> String {
