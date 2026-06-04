@@ -129,6 +129,64 @@ struct PlaidBarCoreTests {
         #expect(feed.map(\.id) == ["pending", "old"])
     }
 
+    @Test("Account activity empty state is nil when transactions exist")
+    func accountActivityEmptyStateNilWithTransactions() {
+        let presentation = AccountActivityEmptyState.evaluate(
+            transactionCount: 1,
+            isDemoMode: false,
+            serverConnected: true,
+            connectionLevel: .healthy,
+            accountDisplayName: "Chase Checking"
+        )
+
+        #expect(presentation == nil)
+    }
+
+    @Test("Account activity empty state explains offline server")
+    func accountActivityEmptyStateOfflineServer() {
+        let presentation = AccountActivityEmptyState.evaluate(
+            transactionCount: 0,
+            isDemoMode: false,
+            serverConnected: false,
+            connectionLevel: .offline,
+            accountDisplayName: "Chase Checking"
+        )
+
+        #expect(presentation?.title == "Server offline")
+        #expect(presentation?.tone == .offline)
+        #expect(presentation?.detail.contains("Start PlaidBarServer") == true)
+    }
+
+    @Test("Account activity empty state explains login recovery")
+    func accountActivityEmptyStateLoginRecovery() {
+        let presentation = AccountActivityEmptyState.evaluate(
+            transactionCount: 0,
+            isDemoMode: false,
+            serverConnected: true,
+            connectionLevel: .loginRequired,
+            accountDisplayName: "Amex Gold"
+        )
+
+        #expect(presentation?.title == "Reconnect to sync activity")
+        #expect(presentation?.tone == .warning)
+        #expect(presentation?.detail.contains("fresh bank login") == true)
+    }
+
+    @Test("Account activity empty state explains healthy no history")
+    func accountActivityEmptyStateHealthyNoHistory() {
+        let presentation = AccountActivityEmptyState.evaluate(
+            transactionCount: 0,
+            isDemoMode: false,
+            serverConnected: true,
+            connectionLevel: .healthy,
+            accountDisplayName: "Savings"
+        )
+
+        #expect(presentation?.title == "No recent activity")
+        #expect(presentation?.tone == .healthy)
+        #expect(presentation?.detail.contains("linked") == true)
+    }
+
     @Test("TransactionDTO preserves item ID when encoded")
     func transactionItemIdCodable() throws {
         let tx = TransactionDTO(
