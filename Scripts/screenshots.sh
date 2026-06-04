@@ -24,6 +24,35 @@ cleanup() {
 }
 trap cleanup EXIT
 
+run_osascript() {
+    local script="$1"
+    local timeout_seconds="${PLAIDBAR_SCREENSHOT_OSASCRIPT_TIMEOUT:-5}"
+    local output_file=""
+    local pid=""
+    local elapsed=0
+    local status=0
+
+    output_file="$(mktemp -t plaidbar-osascript.XXXXXX.out)"
+    osascript -e "$script" >"$output_file" 2>/dev/null &
+    pid=$!
+
+    while kill -0 "$pid" 2>/dev/null; do
+        if [ "$elapsed" -ge "$timeout_seconds" ]; then
+            kill "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+            rm -f "$output_file"
+            return 124
+        fi
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+
+    wait "$pid" || status=$?
+    cat "$output_file"
+    rm -f "$output_file"
+    return "$status"
+}
+
 capture_dashboard() {
     local filter="$1"
     local output="$2"
@@ -43,7 +72,7 @@ capture_dashboard() {
     APP_PID=$!
 
     for _ in {1..20}; do
-        window_rect=$(osascript -e '
+        window_rect=$(run_osascript '
             tell application "System Events"
                 if exists process "PlaidBar" then
                     tell process "PlaidBar"
@@ -55,7 +84,7 @@ capture_dashboard() {
                     end tell
                 end if
             end tell
-        ' 2>/dev/null || true)
+        ' || true)
 
         if [ -n "$window_rect" ] && [ "$window_rect" != "missing value" ]; then
             break
@@ -93,7 +122,7 @@ capture_sandbox_preflight() {
     APP_PID=$!
 
     for _ in {1..20}; do
-        window_rect=$(osascript -e '
+        window_rect=$(run_osascript '
             tell application "System Events"
                 if exists process "PlaidBar" then
                     tell process "PlaidBar"
@@ -106,7 +135,7 @@ capture_sandbox_preflight() {
                     end tell
                 end if
             end tell
-        ' 2>/dev/null || true)
+        ' || true)
 
         if [ -n "$window_rect" ] && [ "$window_rect" != "missing value" ]; then
             break
@@ -121,17 +150,17 @@ capture_sandbox_preflight() {
         exit 1
     fi
 
-    osascript -e '
+    run_osascript '
         tell application "System Events"
             tell process "PlaidBar"
                 set frontmost to true
                 click button 5 of group 1 of window 1
             end tell
         end tell
-    ' 2>/dev/null || true
+    ' >/dev/null || true
     sleep 1
 
-    window_rect=$(osascript -e '
+    window_rect=$(run_osascript '
         tell application "System Events"
             tell process "PlaidBar"
                 set windowPosition to position of window 1
@@ -139,7 +168,7 @@ capture_sandbox_preflight() {
                 return (item 1 of windowPosition as text) & "," & (item 2 of windowPosition as text) & "," & (item 1 of windowSize as text) & "," & (item 2 of windowSize as text)
             end tell
         end tell
-    ' 2>/dev/null || true)
+    ' || true)
 
     echo "Capturing ${output}..."
     screencapture -R"$window_rect" "$ASSETS_DIR/$output"
@@ -166,7 +195,7 @@ capture_settings() {
 
     sleep 1
     for _ in {1..40}; do
-        window_rect=$(osascript -e '
+        window_rect=$(run_osascript '
             tell application "System Events"
                 if exists process "PlaidBar" then
                     tell process "PlaidBar"
@@ -175,7 +204,7 @@ capture_settings() {
                     end tell
                 end if
             end tell
-        ' 2>/dev/null || true)
+        ' || true)
 
         if [ "$window_rect" = "ready" ]; then
             break
@@ -190,17 +219,17 @@ capture_settings() {
         exit 1
     fi
 
-    osascript -e '
+    run_osascript '
         tell application "System Events"
             tell process "PlaidBar"
                 set frontmost to true
                 click button 3 of group 1 of window 1
             end tell
         end tell
-    ' 2>/dev/null || true
+    ' >/dev/null || true
 
     for _ in {1..24}; do
-        window_rect=$(osascript -e '
+        window_rect=$(run_osascript '
             tell application "System Events"
                 if exists process "PlaidBar" then
                     tell process "PlaidBar"
@@ -215,7 +244,7 @@ capture_settings() {
                     end tell
                 end if
             end tell
-        ' 2>/dev/null || true)
+        ' || true)
 
         if [ -n "$window_rect" ] && [ "$window_rect" != "missing value" ] && [ "$window_rect" != "ready" ]; then
             break
