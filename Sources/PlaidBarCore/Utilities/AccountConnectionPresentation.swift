@@ -18,6 +18,33 @@ public struct AccountConnectionPresentation: Sendable, Equatable {
     public let iconName: String
     public let showsRecoveryActions: Bool
     public let recoveryActionTitle: String?
+    public let itemSyncLabel: String?
+    public let statusFilterSubtitle: String
+    public let recoveryDetailLabel: String?
+
+    public init(
+        level: AccountConnectionLevel,
+        rowLabel: String,
+        detailLabel: String,
+        signalLabel: String,
+        iconName: String,
+        showsRecoveryActions: Bool,
+        recoveryActionTitle: String?,
+        itemSyncLabel: String? = nil,
+        statusFilterSubtitle: String? = nil,
+        recoveryDetailLabel: String? = nil
+    ) {
+        self.level = level
+        self.rowLabel = rowLabel
+        self.detailLabel = detailLabel
+        self.signalLabel = signalLabel
+        self.iconName = iconName
+        self.showsRecoveryActions = showsRecoveryActions
+        self.recoveryActionTitle = recoveryActionTitle
+        self.itemSyncLabel = itemSyncLabel
+        self.statusFilterSubtitle = statusFilterSubtitle ?? detailLabel
+        self.recoveryDetailLabel = recoveryDetailLabel
+    }
 
     public static func evaluate(
         isDemoMode: Bool,
@@ -25,7 +52,8 @@ public struct AccountConnectionPresentation: Sendable, Equatable {
         isSyncStale: Bool,
         statusSyncText: String,
         itemStatus: ItemConnectionStatus?,
-        institutionName: String? = nil
+        institutionName: String? = nil,
+        itemLastSyncRelative: String? = nil
     ) -> AccountConnectionPresentation {
         if isDemoMode {
             return AccountConnectionPresentation(
@@ -56,9 +84,11 @@ public struct AccountConnectionPresentation: Sendable, Equatable {
             return AccountConnectionPresentation.synced(
                 isSyncStale: isSyncStale,
                 statusSyncText: statusSyncText,
+                itemLastSyncRelative: itemLastSyncRelative,
                 unknownItem: false
             )
         case .loginRequired:
+            let itemSyncLabel = itemSyncLabel(itemLastSyncRelative)
             return AccountConnectionPresentation(
                 level: .loginRequired,
                 rowLabel: reconnectActionTitle(institutionName: institutionName),
@@ -70,9 +100,13 @@ public struct AccountConnectionPresentation: Sendable, Equatable {
                 signalLabel: "Login",
                 iconName: "person.crop.circle.badge.exclamationmark.fill",
                 showsRecoveryActions: true,
-                recoveryActionTitle: reconnectActionTitle(institutionName: institutionName)
+                recoveryActionTitle: reconnectActionTitle(institutionName: institutionName),
+                itemSyncLabel: itemSyncLabel,
+                statusFilterSubtitle: "Login required • \(itemSyncLabel)",
+                recoveryDetailLabel: loginRecoveryDetailLabel(institutionName: institutionName)
             )
         case .error:
+            let itemSyncLabel = itemSyncLabel(itemLastSyncRelative)
             return AccountConnectionPresentation(
                 level: .error,
                 rowLabel: itemDetailLabel(
@@ -88,12 +122,16 @@ public struct AccountConnectionPresentation: Sendable, Equatable {
                 signalLabel: "Error",
                 iconName: "exclamationmark.triangle.fill",
                 showsRecoveryActions: true,
-                recoveryActionTitle: reconnectActionTitle(institutionName: institutionName)
+                recoveryActionTitle: reconnectActionTitle(institutionName: institutionName),
+                itemSyncLabel: itemSyncLabel,
+                statusFilterSubtitle: "Item error • \(itemSyncLabel)",
+                recoveryDetailLabel: errorRecoveryDetailLabel(institutionName: institutionName)
             )
         case nil:
             return AccountConnectionPresentation.synced(
                 isSyncStale: isSyncStale,
                 statusSyncText: statusSyncText,
+                itemLastSyncRelative: itemLastSyncRelative,
                 unknownItem: true
             )
         }
@@ -102,8 +140,11 @@ public struct AccountConnectionPresentation: Sendable, Equatable {
     private static func synced(
         isSyncStale: Bool,
         statusSyncText: String,
+        itemLastSyncRelative: String?,
         unknownItem: Bool
     ) -> AccountConnectionPresentation {
+        let itemSyncLabel = itemSyncLabel(itemLastSyncRelative)
+
         if unknownItem {
             return AccountConnectionPresentation(
                 level: .unknown,
@@ -112,7 +153,8 @@ public struct AccountConnectionPresentation: Sendable, Equatable {
                 signalLabel: "Unknown",
                 iconName: "link.circle.fill",
                 showsRecoveryActions: false,
-                recoveryActionTitle: nil
+                recoveryActionTitle: nil,
+                itemSyncLabel: itemSyncLabel
             )
         }
 
@@ -125,7 +167,10 @@ public struct AccountConnectionPresentation: Sendable, Equatable {
                 signalLabel: "Stale",
                 iconName: "clock.badge.exclamationmark.fill",
                 showsRecoveryActions: true,
-                recoveryActionTitle: "Refresh"
+                recoveryActionTitle: "Refresh",
+                itemSyncLabel: itemSyncLabel,
+                statusFilterSubtitle: "Stale sync • \(itemSyncLabel)",
+                recoveryDetailLabel: "This item has stale Plaid data. Refresh to pull current balances and transactions."
             )
         }
 
@@ -136,7 +181,9 @@ public struct AccountConnectionPresentation: Sendable, Equatable {
             signalLabel: "Fresh",
             iconName: "checkmark.circle.fill",
             showsRecoveryActions: false,
-            recoveryActionTitle: nil
+            recoveryActionTitle: nil,
+            itemSyncLabel: itemSyncLabel,
+            statusFilterSubtitle: "Healthy • \(itemSyncLabel)"
         )
     }
 
@@ -156,6 +203,27 @@ public struct AccountConnectionPresentation: Sendable, Equatable {
             return fallback
         }
         return "\(institutionName) \(suffix)"
+    }
+
+    private static func loginRecoveryDetailLabel(institutionName: String?) -> String {
+        guard let institutionName = normalizedInstitutionName(institutionName) else {
+            return "Plaid requires a fresh bank login. Reconnect this item, then refresh."
+        }
+        return "Plaid requires a fresh \(institutionName) login. Reconnect this item, then refresh."
+    }
+
+    private static func errorRecoveryDetailLabel(institutionName: String?) -> String {
+        guard let institutionName = normalizedInstitutionName(institutionName) else {
+            return "Plaid reported an item error. Reconnect this item, then refresh."
+        }
+        return "Plaid reported an item error for \(institutionName). Reconnect this item, then refresh."
+    }
+
+    private static func itemSyncLabel(_ itemLastSyncRelative: String?) -> String {
+        guard let itemLastSyncRelative, !itemLastSyncRelative.isEmpty else {
+            return "No sync recorded"
+        }
+        return "Last sync \(itemLastSyncRelative)"
     }
 
     private static func normalizedInstitutionName(_ institutionName: String?) -> String? {
