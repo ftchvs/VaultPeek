@@ -42,6 +42,7 @@ final class AppState {
     var serverSyncedItemCount: Int?
     var itemStatuses: [ItemStatus] = []
     var isDemoMode = false
+    var isDemoStatusRecoveryScenario = false
     var lastSyncDate: Date?
     var balanceHistory: [BalanceSnapshot] = []
 
@@ -386,6 +387,10 @@ final class AppState {
     }
 
     var diagnosticsSummary: String {
+        if isDemoStatusRecoveryScenario {
+            if erroredItemCount > 0 { return "\(erroredItemCount) demo item\(erroredItemCount == 1 ? "" : "s") need attention" }
+            if needsLoginItemCount > 0 { return "\(needsLoginItemCount) demo item\(needsLoginItemCount == 1 ? "" : "s") need login" }
+        }
         if isDemoMode { return "Demo data loaded" }
         if !serverConnected { return "Server offline" }
         if statusItemCount == 0 { return "No Plaid items connected" }
@@ -408,7 +413,7 @@ final class AppState {
 
     var dashboardStatusReadiness: DashboardStatusReadiness {
         DashboardStatusReadiness.evaluate(
-            isDemoMode: isDemoMode,
+            isDemoMode: isDemoMode && !isDemoStatusRecoveryScenario,
             serverConnected: serverConnected,
             credentialsConfigured: serverCredentialsConfigured,
             linkedItemCount: statusItemCount,
@@ -525,6 +530,8 @@ final class AppState {
     }
 
     func refreshAccounts() async {
+        if refreshDemoDataIfNeeded() { return }
+
         isLoading = true
         error = nil
         do {
@@ -542,6 +549,8 @@ final class AppState {
     }
 
     func refreshBalances() async {
+        if refreshDemoDataIfNeeded() { return }
+
         isLoading = true
         error = nil
         do {
@@ -558,6 +567,8 @@ final class AppState {
     }
 
     func syncTransactions() async {
+        if refreshDemoDataIfNeeded() { return }
+
         do {
             var hasMore = true
             var pageCount = 0
@@ -630,6 +641,11 @@ final class AppState {
     }
 
     func reconnectItem(itemId: String) async {
+        guard !isDemoMode else {
+            error = "Demo data is local. Connect a bank before reconnecting an institution."
+            return
+        }
+
         do {
             let linkResponse = try await serverClient.createUpdateLinkToken(itemId: itemId)
             guard let url = URL(string: linkResponse.linkUrl) else {
@@ -648,6 +664,16 @@ final class AppState {
     func startDemoMode() {
         isDemoMode = true
         loadDemoData()
+    }
+
+    func refreshDashboard() async {
+        if refreshDemoDataIfNeeded() { return }
+
+        await checkServerConnection()
+        if serverConnected {
+            await refreshAccounts()
+            await syncTransactions()
+        }
     }
 
     func connectForOnboarding(expectedEnvironment: PlaidEnvironment) async -> Bool {
@@ -762,6 +788,7 @@ final class AppState {
         lastSyncDate = nil
         isSetupComplete = false
         isDemoMode = false
+        isDemoStatusRecoveryScenario = false
         error = nil
 
         balanceHistory = []
@@ -775,8 +802,7 @@ final class AppState {
         refreshTask?.cancel()
         refreshTask = Task {
             while !Task.isCancelled {
-                await refreshAccounts()
-                await syncTransactions()
+                await refreshDashboard()
                 await evaluateNotifications()
                 try? await Task.sleep(for: .seconds(refreshInterval))
             }
@@ -911,6 +937,15 @@ final class AppState {
         isSetupComplete = firstRunCompletionState.isReady
     }
 
+    @discardableResult
+    private func refreshDemoDataIfNeeded() -> Bool {
+        guard isDemoMode else { return false }
+        error = nil
+        isLoading = false
+        loadDemoData()
+        return true
+    }
+
     private func recordBalanceSnapshot() {
         let snapshot = BalanceSnapshot(date: Date(), balance: netBalance)
         balanceHistory.append(snapshot)
@@ -926,6 +961,8 @@ final class AppState {
     // MARK: - Demo Data
 
     func loadDemoData() {
+        isDemoStatusRecoveryScenario = CommandLine.arguments.contains("--screenshot-status-recovery")
+
         let today = Self.dateString(daysAgo: 0)
         let yesterday = Self.dateString(daysAgo: 1)
         let twoDaysAgo = Self.dateString(daysAgo: 2)
@@ -1038,12 +1075,17 @@ final class AppState {
         serverCredentialsConfigured = true
         serverStoragePath = LocalDataStore.displayPath
         serverSyncReady = true
-        serverSyncedItemCount = serverItemCount
-        itemStatuses = [
+        serverSyncedItemCount = isDemoStatusRecoveryScenario ? 1 : serverItemCount
+        let recoveredSync = Calendar.current.date(byAdding: .minute, value: -18, to: Date()) ?? Date()
+        let needsLoginSync = Calendar.current.date(byAdding: .day, value: -3, to: Date()) ?? Date()
+        itemStatuses = isDemoStatusRecoveryScenario ? [
+            ItemStatus(id: "demo_chase", institutionName: "Chase", status: .connected, lastSync: recoveredSync),
+            ItemStatus(id: "demo_amex_item", institutionName: "American Express", status: .loginRequired, lastSync: needsLoginSync),
+        ] : [
             ItemStatus(id: "demo_chase", institutionName: "Chase", status: .connected, lastSync: Date()),
             ItemStatus(id: "demo_amex_item", institutionName: "American Express", status: .connected, lastSync: Date()),
         ]
-        lastSyncDate = Date()
+        lastSyncDate = isDemoStatusRecoveryScenario ? recoveredSync : Date()
     }
 
     private static func dateString(daysAgo: Int) -> String {

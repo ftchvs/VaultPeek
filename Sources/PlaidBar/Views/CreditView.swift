@@ -12,6 +12,15 @@ struct CreditView: View {
         appState.creditAccounts.contains { $0.balances.utilizationPercent != nil }
     }
 
+    private var emptyPresentation: SecondaryContentUnavailableState {
+        SecondaryContentUnavailableState.credit(
+            isDemoMode: appState.isDemoMode,
+            serverConnected: appState.serverConnected,
+            linkedItemCount: appState.statusItemCount,
+            accountCount: appState.accounts.count
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
             if appState.creditAccounts.isEmpty {
@@ -112,66 +121,25 @@ struct CreditView: View {
 
     @ViewBuilder
     private var emptyState: some View {
-        if !appState.isDemoMode && !appState.serverConnected {
-            ContentUnavailableView {
-                Label("Server Offline", systemImage: "server.rack")
-            } description: {
-                Text("Start PlaidBarServer before checking credit utilization.")
-            } actions: {
-                Button {
-                    Task { await appState.checkServerConnection() }
-                } label: {
-                    Label("Check Server", systemImage: "arrow.clockwise")
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-            }
-            .padding()
-        } else if appState.statusItemCount == 0 {
-            ContentUnavailableView {
-                Label("No Bank Linked", systemImage: "creditcard")
-            } description: {
-                Text("Connect a Plaid institution with a credit card to track utilization.")
-            } actions: {
-                Button {
-                    Task { await appState.addAccount() }
-                } label: {
-                    Label("Add Account", systemImage: "plus.circle")
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-            }
-            .padding()
-        } else if appState.accounts.isEmpty {
-            ContentUnavailableView {
-                Label("No Account Data", systemImage: "tray")
-            } description: {
-                Text("The linked item has not loaded account balances yet.")
-            } actions: {
-                Button {
-                    Task { await appState.refreshAccounts() }
-                } label: {
-                    Label("Refresh Accounts", systemImage: "arrow.clockwise")
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-            }
-            .padding()
-        } else {
-            ContentUnavailableView {
-                Label("No Credit Accounts", systemImage: "creditcard")
-            } description: {
-                Text("Your linked accounts do not include a credit card with utilization data.")
-            } actions: {
-                Button {
-                    Task { await appState.addAccount() }
-                } label: {
-                    Label("Add Credit Card", systemImage: "plus.circle")
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-            }
-            .padding()
+        SecondaryUnavailableView(presentation: emptyPresentation) {
+            performEmptyAction(emptyPresentation.action)
+        }
+    }
+
+    private func performEmptyAction(_ action: SecondaryContentUnavailableAction) {
+        switch action {
+        case .checkServer:
+            Task { await appState.checkServerConnection() }
+        case .addAccount:
+            Task { await appState.addAccount() }
+        case .refreshAccounts:
+            Task { await appState.refreshAccounts() }
+        case .syncTransactions:
+            Task { await appState.syncTransactions() }
+        case .refresh:
+            Task { await appState.refreshDashboard() }
+        case .clearFilters, .showWiderPeriod:
+            break
         }
     }
 }

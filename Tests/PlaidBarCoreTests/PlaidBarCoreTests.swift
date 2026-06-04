@@ -362,7 +362,7 @@ struct PlaidBarCoreTests {
         #expect(AccountPresentation.dashboardAvailableTitle(for: credit) == "Avail Credit")
         #expect(AccountPresentation.dashboardCurrentTitle(for: checking) == "Current")
         #expect(AccountPresentation.dashboardCurrentTitle(for: credit) == "Owed")
-        #expect(AccountPresentation.dashboardUtilizationDetailText(for: credit) == "45% of $1K, Warning")
+        #expect(AccountPresentation.dashboardUtilizationDetailText(for: credit) == "45% of $1,000, Warning")
         #expect(AccountPresentation.rowAccessibilityLabel(
             for: checking,
             connectionLabel: "2m ago",
@@ -488,9 +488,13 @@ struct PlaidBarCoreTests {
         )
 
         #expect(loginRequired.level == .loginRequired)
-        #expect(loginRequired.rowLabel == "Reconnect")
+        #expect(loginRequired.rowLabel == "Reconnect Item")
         #expect(loginRequired.detailLabel == "Login required")
         #expect(loginRequired.signalLabel == "Login")
+        #expect(loginRequired.recoveryActionTitle == "Reconnect Item")
+        #expect(loginRequired.itemSyncLabel == "No sync recorded")
+        #expect(loginRequired.statusFilterSubtitle == "Login required • No sync recorded")
+        #expect(loginRequired.recoveryDetailLabel == "Plaid requires a fresh bank login. Reconnect this item, then refresh.")
         #expect(loginRequired.showsRecoveryActions)
 
         let errored = AccountConnectionPresentation.evaluate(
@@ -504,7 +508,70 @@ struct PlaidBarCoreTests {
         #expect(errored.level == .error)
         #expect(errored.rowLabel == "Item error")
         #expect(errored.signalLabel == "Error")
+        #expect(errored.recoveryActionTitle == "Reconnect Item")
+        #expect(errored.statusFilterSubtitle == "Item error • No sync recorded")
+        #expect(errored.recoveryDetailLabel == "Plaid reported an item error. Reconnect this item, then refresh.")
         #expect(errored.showsRecoveryActions)
+    }
+
+    @Test("Account connection presentation surfaces item sync for status recovery")
+    func accountConnectionPresentationSurfacesItemSyncForStatusRecovery() {
+        let loginRequired = AccountConnectionPresentation.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            isSyncStale: false,
+            statusSyncText: "2m ago",
+            itemStatus: .loginRequired,
+            institutionName: "Chase",
+            itemLastSyncRelative: "3h ago"
+        )
+
+        #expect(loginRequired.itemSyncLabel == "Last sync 3h ago")
+        #expect(loginRequired.statusFilterSubtitle == "Login required • Last sync 3h ago")
+        #expect(loginRequired.recoveryDetailLabel == "Plaid requires a fresh Chase login. Reconnect this item, then refresh.")
+
+        let errored = AccountConnectionPresentation.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            isSyncStale: false,
+            statusSyncText: "2m ago",
+            itemStatus: .error,
+            institutionName: "Amex",
+            itemLastSyncRelative: "yesterday"
+        )
+
+        #expect(errored.itemSyncLabel == "Last sync yesterday")
+        #expect(errored.statusFilterSubtitle == "Item error • Last sync yesterday")
+        #expect(errored.recoveryDetailLabel == "Plaid reported an item error for Amex. Reconnect this item, then refresh.")
+    }
+
+    @Test("Account connection presentation names degraded institutions")
+    func accountConnectionPresentationNamesDegradedInstitutions() {
+        let loginRequired = AccountConnectionPresentation.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            isSyncStale: false,
+            statusSyncText: "2m ago",
+            itemStatus: .loginRequired,
+            institutionName: "Chase"
+        )
+
+        #expect(loginRequired.rowLabel == "Reconnect Chase")
+        #expect(loginRequired.detailLabel == "Chase login required")
+        #expect(loginRequired.recoveryActionTitle == "Reconnect Chase")
+
+        let errored = AccountConnectionPresentation.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            isSyncStale: false,
+            statusSyncText: "2m ago",
+            itemStatus: .error,
+            institutionName: " American Express "
+        )
+
+        #expect(errored.rowLabel == "American Express item error")
+        #expect(errored.detailLabel == "American Express item error")
+        #expect(errored.recoveryActionTitle == "Reconnect American Express")
     }
 
     @Test("Menu bar summary estimates runway from recent monthly spend")
@@ -954,6 +1021,8 @@ struct PlaidBarCoreTests {
         )
 
         #expect(state.step == .openPlaidLink)
+        #expect(state.title == "No linked item returned")
+        #expect(state.detail == "PlaidBar cannot see a linked item yet. Finish Plaid Link in the browser, then check again.")
         #expect(!state.isReady)
         #expect(state.canRetry)
     }
@@ -1138,10 +1207,10 @@ struct PlaidBarCoreTests {
 
     @Test("Dashboard account filters include only matching account kinds")
     func dashboardAccountFiltersMatchAccountKinds() {
-        let checking = AccountDTO(id: "checking", itemId: "item_cash", name: "Checking", type: .depository, subtype: "checking")
-        let savings = AccountDTO(id: "savings", itemId: "item_cash", name: "Savings", type: .depository, subtype: "savings")
-        let credit = AccountDTO(id: "credit", itemId: "item_card", name: "Card", type: .credit)
-        let loan = AccountDTO(id: "loan", itemId: "item_loan", name: "Loan", type: .loan)
+        let checking = AccountDTO(id: "checking", itemId: "item_cash", name: "Checking", type: .depository, subtype: "checking", balances: BalanceDTO())
+        let savings = AccountDTO(id: "savings", itemId: "item_cash", name: "Savings", type: .depository, subtype: "savings", balances: BalanceDTO())
+        let credit = AccountDTO(id: "credit", itemId: "item_card", name: "Card", type: .credit, balances: BalanceDTO())
+        let loan = AccountDTO(id: "loan", itemId: "item_loan", name: "Loan", type: .loan, balances: BalanceDTO())
 
         #expect(DashboardAccountFilterKind.all.includes(checking))
         #expect(DashboardAccountFilterKind.cash.includes(checking))
@@ -1157,8 +1226,8 @@ struct PlaidBarCoreTests {
 
     @Test("Dashboard status filter only shows degraded item accounts")
     func dashboardStatusFilterOnlyShowsDegradedItemAccounts() {
-        let healthy = AccountDTO(id: "checking", itemId: "item_cash", name: "Checking", type: .depository)
-        let degraded = AccountDTO(id: "card", itemId: "item_card", name: "Card", type: .credit)
+        let healthy = AccountDTO(id: "checking", itemId: "item_cash", name: "Checking", type: .depository, balances: BalanceDTO())
+        let degraded = AccountDTO(id: "card", itemId: "item_card", name: "Card", type: .credit, balances: BalanceDTO())
 
         #expect(!DashboardAccountFilterKind.status.includes(healthy))
         #expect(!DashboardAccountFilterKind.status.includes(degraded))
@@ -1174,7 +1243,8 @@ struct PlaidBarCoreTests {
             serverConnected: true,
             linkedItemCount: 1,
             accountCount: 3,
-            degradedItemCount: 1
+            degradedItemCount: 1,
+            degradedItemRecoveryTitle: "Reconnect Chase"
         )
 
         #expect(emptyState.title == "1 item needs attention")
@@ -1182,7 +1252,9 @@ struct PlaidBarCoreTests {
         #expect(emptyState.iconName == "exclamationmark.triangle.fill")
         #expect(emptyState.tone == .warning)
         #expect(!emptyState.showsAddAccount)
-        #expect(emptyState.action == .refresh)
+        #expect(emptyState.action == .reconnect)
+        #expect(emptyState.actionTitle == "Reconnect Chase")
+        #expect(emptyState.actionIconName == "link.badge.plus")
     }
 
     @Test("Dashboard account empty state keeps healthy status copy when no items are degraded")
@@ -1269,6 +1341,154 @@ struct PlaidBarCoreTests {
         #expect(emptyState.action == .refresh)
         #expect(emptyState.actionTitle == "Refresh Data")
         #expect(emptyState.actionIconName == "arrow.clockwise")
+    }
+
+    @Test("Secondary transaction empty state clears filters before recovery errors")
+    func secondaryTransactionEmptyStateClearsFiltersFirst() {
+        let state = SecondaryContentUnavailableState.transactions(
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 1,
+            accountCount: 2,
+            syncedItemCount: 1,
+            transactionCount: 12,
+            hasSearchText: true,
+            hasActiveFilters: false,
+            errorMessage: "Refresh failed"
+        )
+
+        #expect(state.title == "No matching transactions")
+        #expect(state.action == .clearFilters)
+        #expect(state.actionTitle == "Clear Filters")
+    }
+
+    @Test("Secondary accounts empty state distinguishes offline linked and unloaded data")
+    func secondaryAccountsEmptyStateDistinguishesRecovery() {
+        let offline = SecondaryContentUnavailableState.accounts(
+            isDemoMode: false,
+            serverConnected: false,
+            linkedItemCount: 1
+        )
+        let unlinked = SecondaryContentUnavailableState.accounts(
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 0
+        )
+        let unloaded = SecondaryContentUnavailableState.accounts(
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 1
+        )
+
+        #expect(offline.title == "Server offline")
+        #expect(offline.action == .checkServer)
+        #expect(unlinked.title == "No bank linked")
+        #expect(unlinked.action == .addAccount)
+        #expect(unloaded.title == "No account data")
+        #expect(unloaded.action == .refreshAccounts)
+    }
+
+    @Test("Secondary credit empty state points credit gaps at card setup")
+    func secondaryCreditEmptyStateDistinguishesCreditGap() {
+        let noAccounts = SecondaryContentUnavailableState.credit(
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 1,
+            accountCount: 0
+        )
+        let noCredit = SecondaryContentUnavailableState.credit(
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 1,
+            accountCount: 2
+        )
+
+        #expect(noAccounts.title == "No account data")
+        #expect(noAccounts.action == .refreshAccounts)
+        #expect(noCredit.title == "No credit accounts")
+        #expect(noCredit.action == .addAccount)
+        #expect(noCredit.actionTitle == "Add Credit Card")
+    }
+
+    @Test("Secondary transaction empty state keeps recent error ahead of missing history")
+    func secondaryTransactionEmptyStateRecentErrorPriority() {
+        let state = SecondaryContentUnavailableState.transactions(
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 1,
+            accountCount: 2,
+            syncedItemCount: 0,
+            transactionCount: 0,
+            hasSearchText: false,
+            hasActiveFilters: false,
+            errorMessage: "Plaid sync failed"
+        )
+
+        #expect(state.title == "Recent action failed")
+        #expect(state.detail == "Plaid sync failed")
+        #expect(state.action == .refresh)
+    }
+
+    @Test("Secondary spending empty state points offline users at server check")
+    func secondarySpendingEmptyStateServerOffline() {
+        let state = SecondaryContentUnavailableState.spendingActivity(
+            isDemoMode: false,
+            serverConnected: false,
+            linkedItemCount: 1,
+            accountCount: 2,
+            syncedItemCount: 1,
+            transactionCount: 0,
+            errorMessage: nil
+        )
+
+        #expect(state.title == "Server offline")
+        #expect(state.action == .checkServer)
+        #expect(state.actionTitle == "Check Server")
+    }
+
+    @Test("Secondary spending period empty state widens before refresh")
+    func secondarySpendingPeriodEmptyStateWidening() {
+        let week = SecondaryContentUnavailableState.spendingPeriod(
+            periodLabel: "Week",
+            canShowWiderPeriod: true
+        )
+        let widest = SecondaryContentUnavailableState.spendingPeriod(
+            periodLabel: "90D",
+            canShowWiderPeriod: false
+        )
+
+        #expect(week.action == .showWiderPeriod)
+        #expect(week.actionTitle == "Show 90D")
+        #expect(widest.action == .refresh)
+        #expect(widest.actionTitle == "Refresh")
+    }
+
+    @Test("Secondary recurring empty state explains minimum synced history")
+    func secondaryRecurringEmptyStateNeedsHistory() {
+        let noTransactions = SecondaryContentUnavailableState.recurring(
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 1,
+            accountCount: 2,
+            syncedItemCount: 1,
+            transactionCount: 0,
+            errorMessage: nil
+        )
+        let noPattern = SecondaryContentUnavailableState.recurring(
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 1,
+            accountCount: 2,
+            syncedItemCount: 1,
+            transactionCount: 20,
+            errorMessage: nil
+        )
+
+        #expect(noTransactions.title == "No synced transactions")
+        #expect(noTransactions.action == .syncTransactions)
+        #expect(noPattern.title == "No recurring charges found")
+        #expect(noPattern.detail.contains("2+ months"))
+        #expect(noPattern.actionTitle == "Sync Latest")
     }
 
     @Test("Dashboard status readiness ignores blank recent action failures")

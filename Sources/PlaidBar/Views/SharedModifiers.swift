@@ -1,4 +1,5 @@
 import SwiftUI
+import PlaidBarCore
 
 // MARK: - Hover Highlight
 
@@ -48,5 +49,27 @@ struct RefreshIcon: View {
                     }
                 }
             }
+    }
+}
+
+// MARK: - Secondary Empty State
+
+struct SecondaryUnavailableView: View {
+    let presentation: SecondaryContentUnavailableState
+    let action: () -> Void
+
+    var body: some View {
+        ContentUnavailableView {
+            Label(presentation.title, systemImage: presentation.iconName)
+        } description: {
+            Text(presentation.detail)
+        } actions: {
+            Button(action: action) {
+                Label(presentation.actionTitle, systemImage: presentation.actionIconName)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+        }
+        .padding()
     }
 }

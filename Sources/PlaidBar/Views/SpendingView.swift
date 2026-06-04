@@ -89,6 +89,25 @@ struct SpendingView: View {
         )
     }
 
+    private var emptyActivityPresentation: SecondaryContentUnavailableState {
+        SecondaryContentUnavailableState.spendingActivity(
+            isDemoMode: appState.isDemoMode,
+            serverConnected: appState.serverConnected,
+            linkedItemCount: appState.statusItemCount,
+            accountCount: appState.accounts.count,
+            syncedItemCount: appState.serverSyncedItemCount ?? 0,
+            transactionCount: appState.transactions.count,
+            errorMessage: appState.error
+        )
+    }
+
+    private var emptyPeriodPresentation: SecondaryContentUnavailableState {
+        SecondaryContentUnavailableState.spendingPeriod(
+            periodLabel: selectedPeriod.rawValue,
+            canShowWiderPeriod: selectedPeriod != .last90Days
+        )
+    }
+
     var body: some View {
         let categories = chartCategories
         let total = totalFiltered
@@ -179,81 +198,34 @@ struct SpendingView: View {
 
     @ViewBuilder
     private var emptyTransactionState: some View {
-        if !appState.isDemoMode && !appState.serverConnected {
-            ContentUnavailableView {
-                Label("Server Offline", systemImage: "server.rack")
-            } description: {
-                Text("Start PlaidBarServer before spending activity can sync.")
-            } actions: {
-                Button {
-                    Task { await appState.checkServerConnection() }
-                } label: {
-                    Label("Check Server", systemImage: "arrow.clockwise")
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-            }
-            .padding()
-        } else if appState.statusItemCount == 0 {
-            ContentUnavailableView {
-                Label("No Bank Linked", systemImage: "building.columns")
-            } description: {
-                Text("Connect a Plaid institution before spending and cashflow charts can populate.")
-            } actions: {
-                Button {
-                    Task { await appState.addAccount() }
-                } label: {
-                    Label("Add Account", systemImage: "plus.circle")
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-            }
-            .padding()
-        } else {
-            ContentUnavailableView {
-                Label("No Synced Activity", systemImage: "chart.bar.xaxis")
-            } description: {
-                Text("Sync transactions to build the spending heatmap, trend, and cashflow views.")
-            } actions: {
-                Button {
-                    Task { await appState.syncTransactions() }
-                } label: {
-                    Label("Sync Transactions", systemImage: "arrow.triangle.2.circlepath")
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-            }
-            .padding()
+        SecondaryUnavailableView(presentation: emptyActivityPresentation) {
+            performEmptyAction(emptyActivityPresentation.action)
         }
     }
 
     private var emptyPeriodState: some View {
-        ContentUnavailableView {
-            Label("No Activity in \(selectedPeriod.rawValue)", systemImage: "calendar.badge.clock")
-        } description: {
-            Text("No synced transactions fall inside this period. Choose a wider window or refresh the latest history.")
-        } actions: {
-            HStack {
-                if selectedPeriod != .last90Days {
-                    Button {
-                        selectedPeriod = .last90Days
-                    } label: {
-                        Label("Show 90D", systemImage: "calendar")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                }
-
-                Button {
-                    Task { await appState.syncTransactions() }
-                } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-            }
+        SecondaryUnavailableView(presentation: emptyPeriodPresentation) {
+            performEmptyAction(emptyPeriodPresentation.action)
         }
-        .padding()
+    }
+
+    private func performEmptyAction(_ action: SecondaryContentUnavailableAction) {
+        switch action {
+        case .checkServer:
+            Task { await appState.checkServerConnection() }
+        case .addAccount:
+            Task { await appState.addAccount() }
+        case .refreshAccounts:
+            Task { await appState.refreshAccounts() }
+        case .syncTransactions:
+            Task { await appState.syncTransactions() }
+        case .refresh:
+            Task { await appState.refreshDashboard() }
+        case .clearFilters:
+            break
+        case .showWiderPeriod:
+            selectedPeriod = .last90Days
+        }
     }
 
     @ViewBuilder
