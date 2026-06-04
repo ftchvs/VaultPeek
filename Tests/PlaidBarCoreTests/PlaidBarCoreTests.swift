@@ -1290,6 +1290,54 @@ struct PlaidBarCoreTests {
         #expect(state.actionTitle == "Clear Filters")
     }
 
+    @Test("Secondary accounts empty state distinguishes offline linked and unloaded data")
+    func secondaryAccountsEmptyStateDistinguishesRecovery() {
+        let offline = SecondaryContentUnavailableState.accounts(
+            isDemoMode: false,
+            serverConnected: false,
+            linkedItemCount: 1
+        )
+        let unlinked = SecondaryContentUnavailableState.accounts(
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 0
+        )
+        let unloaded = SecondaryContentUnavailableState.accounts(
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 1
+        )
+
+        #expect(offline.title == "Server offline")
+        #expect(offline.action == .checkServer)
+        #expect(unlinked.title == "No bank linked")
+        #expect(unlinked.action == .addAccount)
+        #expect(unloaded.title == "No account data")
+        #expect(unloaded.action == .refreshAccounts)
+    }
+
+    @Test("Secondary credit empty state points credit gaps at card setup")
+    func secondaryCreditEmptyStateDistinguishesCreditGap() {
+        let noAccounts = SecondaryContentUnavailableState.credit(
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 1,
+            accountCount: 0
+        )
+        let noCredit = SecondaryContentUnavailableState.credit(
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 1,
+            accountCount: 2
+        )
+
+        #expect(noAccounts.title == "No account data")
+        #expect(noAccounts.action == .refreshAccounts)
+        #expect(noCredit.title == "No credit accounts")
+        #expect(noCredit.action == .addAccount)
+        #expect(noCredit.actionTitle == "Add Credit Card")
+    }
+
     @Test("Secondary transaction empty state keeps recent error ahead of missing history")
     func secondaryTransactionEmptyStateRecentErrorPriority() {
         let state = SecondaryContentUnavailableState.transactions(

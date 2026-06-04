@@ -1,6 +1,8 @@
 import Foundation
 
 public enum SecondaryContentSurface: String, Sendable {
+    case accounts
+    case credit
     case transactions
     case spending
     case recurring
@@ -40,6 +42,71 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
         self.action = action
         self.actionTitle = actionTitle
         self.actionIconName = actionIconName
+    }
+
+    public static func accounts(
+        isDemoMode: Bool,
+        serverConnected: Bool,
+        linkedItemCount: Int
+    ) -> SecondaryContentUnavailableState {
+        if !isDemoMode, !serverConnected {
+            return serverOfflineState(detail: "Start PlaidBarServer, then check the connection before account balances can load.")
+        }
+
+        if linkedItemCount == 0 {
+            return noBankLinkedState(detail: "Connect a Plaid institution before balances can appear here.")
+        }
+
+        return SecondaryContentUnavailableState(
+            title: "No account data",
+            detail: "The server has linked items, but balances have not loaded yet. Refresh accounts to check for updated data.",
+            iconName: "tray",
+            action: .refreshAccounts,
+            actionTitle: "Refresh Accounts",
+            actionIconName: "arrow.clockwise"
+        )
+    }
+
+    public static func credit(
+        isDemoMode: Bool,
+        serverConnected: Bool,
+        linkedItemCount: Int,
+        accountCount: Int
+    ) -> SecondaryContentUnavailableState {
+        if !isDemoMode, !serverConnected {
+            return serverOfflineState(detail: "Start PlaidBarServer, then check the connection before credit utilization can load.")
+        }
+
+        if linkedItemCount == 0 {
+            return SecondaryContentUnavailableState(
+                title: "No bank linked",
+                detail: "Connect a Plaid institution with a credit card to track utilization.",
+                iconName: "creditcard",
+                action: .addAccount,
+                actionTitle: "Add Account",
+                actionIconName: "plus.circle"
+            )
+        }
+
+        if accountCount == 0 {
+            return SecondaryContentUnavailableState(
+                title: "No account data",
+                detail: "The linked item has not loaded account balances yet. Refresh accounts before checking credit utilization.",
+                iconName: "tray",
+                action: .refreshAccounts,
+                actionTitle: "Refresh Accounts",
+                actionIconName: "arrow.clockwise"
+            )
+        }
+
+        return SecondaryContentUnavailableState(
+            title: "No credit accounts",
+            detail: "Your linked accounts do not include a credit card with utilization data.",
+            iconName: "creditcard",
+            action: .addAccount,
+            actionTitle: "Add Credit Card",
+            actionIconName: "plus.circle"
+        )
     }
 
     public static func transactions(
