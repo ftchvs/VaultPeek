@@ -954,6 +954,8 @@ struct PlaidBarCoreTests {
         )
 
         #expect(state.step == .openPlaidLink)
+        #expect(state.title == "No linked item returned")
+        #expect(state.detail == "PlaidBar cannot see a linked item yet. Finish Plaid Link in the browser, then check again.")
         #expect(!state.isReady)
         #expect(state.canRetry)
     }

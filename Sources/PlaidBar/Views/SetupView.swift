@@ -149,6 +149,15 @@ struct SetupView: View {
             OnboardingPreflightPanel(environment: environment)
                 .environment(appState)
 
+            if let error = appState.error {
+                SetupRecoveryCallout(
+                    title: "Setup needs attention",
+                    detail: error,
+                    icon: "exclamationmark.triangle.fill",
+                    color: SemanticColors.negative
+                )
+            }
+
             Text(preflightHint(for: environment))
                 .detailText()
                 .multilineTextAlignment(.center)
@@ -186,13 +195,15 @@ struct SetupView: View {
         let completion = appState.firstRunCompletionState
 
         return VStack(spacing: Spacing.lg) {
-            ProgressView()
-                .scaleEffect(1.5)
+            if completion.step != .ready && completion.step != .blocked {
+                ProgressView()
+                    .scaleEffect(1.5)
+            }
 
-            Text("Opening Plaid Link...")
+            Text(connectingTitle(for: completion))
                 .font(.title3)
 
-            Text("Complete the \(environment.rawValue) login in your browser, then return here.")
+            Text(connectingDetail(for: completion, environment: environment))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
                 .font(.callout)
@@ -206,10 +217,22 @@ struct SetupView: View {
                     }
                 }
             } label: {
-                Label(completion.isReady ? "Open Dashboard" : "Check Connection", systemImage: "arrow.clockwise")
+                Label(primaryCompletionActionTitle(for: completion), systemImage: primaryCompletionActionIcon(for: completion))
             }
             .buttonStyle(.bordered)
             .disabled(appState.isLoading || (!completion.canRetry && !completion.isReady))
+
+            if completion.step == .openPlaidLink {
+                Button {
+                    Task {
+                        _ = await appState.connectForOnboarding(expectedEnvironment: environment)
+                    }
+                } label: {
+                    Label("Open Link Again", systemImage: "link")
+                }
+                .buttonStyle(.bordered)
+                .disabled(appState.isLoading)
+            }
 
             Button("Cancel") {
                 setupMode = environment == .production ? .production : .sandbox
@@ -247,6 +270,67 @@ struct SetupView: View {
         }
 
         return "Ready to open Plaid Link in your browser."
+    }
+
+    private func connectingTitle(for completion: FirstRunCompletionState) -> String {
+        switch completion.step {
+        case .openPlaidLink:
+            "Waiting for Plaid Link"
+        case .loadAccounts:
+            "Linked item found"
+        case .syncTransactions:
+            "Finish first sync"
+        case .ready:
+            "Dashboard ready"
+        case .blocked:
+            "Connection needs attention"
+        }
+    }
+
+    private func connectingDetail(
+        for completion: FirstRunCompletionState,
+        environment: PlaidEnvironment
+    ) -> String {
+        switch completion.step {
+        case .openPlaidLink:
+            "Complete the \(environment.rawValue) login in your browser, then check for the linked item."
+        case .loadAccounts:
+            "PlaidBar found the linked institution. Load balances before opening the dashboard."
+        case .syncTransactions:
+            "Balances are loaded. Run the first transaction sync to complete onboarding."
+        case .ready:
+            "Setup checks passed. The dashboard can open now."
+        case .blocked:
+            "Resolve the issue below, then retry the setup check."
+        }
+    }
+
+    private func primaryCompletionActionTitle(for completion: FirstRunCompletionState) -> String {
+        switch completion.step {
+        case .openPlaidLink:
+            "Check for Linked Item"
+        case .loadAccounts:
+            "Load Accounts"
+        case .syncTransactions:
+            "Run First Sync"
+        case .ready:
+            "Open Dashboard"
+        case .blocked:
+            "Retry Setup Check"
+        }
+    }
+
+    private func primaryCompletionActionIcon(for completion: FirstRunCompletionState) -> String {
+        switch completion.step {
+        case .openPlaidLink, .blocked:
+            "arrow.clockwise"
+        case .loadAccounts:
+            "building.columns"
+        case .syncTransactions:
+            "arrow.triangle.2.circlepath"
+        case .ready:
+            "checkmark.circle"
+        }
     }
 }
 
@@ -297,6 +381,37 @@ private struct FirstRunCompletionPanel: View {
         case .openPlaidLink, .loadAccounts, .syncTransactions:
             SemanticColors.brand
         }
+    }
+}
+
+private struct SetupRecoveryCallout: View {
+    let title: String
+    let detail: String
+    let icon: String
+    let color: Color
+
+    var body: some View {
+        HStack(alignment: .top, spacing: Spacing.sm) {
+            Image(systemName: icon)
+                .foregroundStyle(color)
+                .frame(width: 18)
+
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.primary)
+
+                Text(detail)
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(color.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+        .accessibilityElement(children: .combine)
     }
 }
 
