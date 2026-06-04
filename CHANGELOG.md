@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-04 05:04 UTC] — Update
+
+Merge pull request #180 from ftchvs/feature/prod-dashboard-polish
+
+`7ccc8ac`
+
+---
+
+
 ## [2026-06-03 22:50 UTC] — Fix
 
 clarify account row sync status
