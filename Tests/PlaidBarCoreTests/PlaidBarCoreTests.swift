@@ -1271,6 +1271,106 @@ struct PlaidBarCoreTests {
         #expect(emptyState.actionIconName == "arrow.clockwise")
     }
 
+    @Test("Secondary transaction empty state clears filters before recovery errors")
+    func secondaryTransactionEmptyStateClearsFiltersFirst() {
+        let state = SecondaryContentUnavailableState.transactions(
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 1,
+            accountCount: 2,
+            syncedItemCount: 1,
+            transactionCount: 12,
+            hasSearchText: true,
+            hasActiveFilters: false,
+            errorMessage: "Refresh failed"
+        )
+
+        #expect(state.title == "No matching transactions")
+        #expect(state.action == .clearFilters)
+        #expect(state.actionTitle == "Clear Filters")
+    }
+
+    @Test("Secondary transaction empty state keeps recent error ahead of missing history")
+    func secondaryTransactionEmptyStateRecentErrorPriority() {
+        let state = SecondaryContentUnavailableState.transactions(
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 1,
+            accountCount: 2,
+            syncedItemCount: 0,
+            transactionCount: 0,
+            hasSearchText: false,
+            hasActiveFilters: false,
+            errorMessage: "Plaid sync failed"
+        )
+
+        #expect(state.title == "Recent action failed")
+        #expect(state.detail == "Plaid sync failed")
+        #expect(state.action == .refresh)
+    }
+
+    @Test("Secondary spending empty state points offline users at server check")
+    func secondarySpendingEmptyStateServerOffline() {
+        let state = SecondaryContentUnavailableState.spendingActivity(
+            isDemoMode: false,
+            serverConnected: false,
+            linkedItemCount: 1,
+            accountCount: 2,
+            syncedItemCount: 1,
+            transactionCount: 0,
+            errorMessage: nil
+        )
+
+        #expect(state.title == "Server offline")
+        #expect(state.action == .checkServer)
+        #expect(state.actionTitle == "Check Server")
+    }
+
+    @Test("Secondary spending period empty state widens before refresh")
+    func secondarySpendingPeriodEmptyStateWidening() {
+        let week = SecondaryContentUnavailableState.spendingPeriod(
+            periodLabel: "Week",
+            canShowWiderPeriod: true
+        )
+        let widest = SecondaryContentUnavailableState.spendingPeriod(
+            periodLabel: "90D",
+            canShowWiderPeriod: false
+        )
+
+        #expect(week.action == .showWiderPeriod)
+        #expect(week.actionTitle == "Show 90D")
+        #expect(widest.action == .refresh)
+        #expect(widest.actionTitle == "Refresh")
+    }
+
+    @Test("Secondary recurring empty state explains minimum synced history")
+    func secondaryRecurringEmptyStateNeedsHistory() {
+        let noTransactions = SecondaryContentUnavailableState.recurring(
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 1,
+            accountCount: 2,
+            syncedItemCount: 1,
+            transactionCount: 0,
+            errorMessage: nil
+        )
+        let noPattern = SecondaryContentUnavailableState.recurring(
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 1,
+            accountCount: 2,
+            syncedItemCount: 1,
+            transactionCount: 20,
+            errorMessage: nil
+        )
+
+        #expect(noTransactions.title == "No synced transactions")
+        #expect(noTransactions.action == .syncTransactions)
+        #expect(noPattern.title == "No recurring charges found")
+        #expect(noPattern.detail.contains("2+ months"))
+        #expect(noPattern.actionTitle == "Sync Latest")
+    }
+
     @Test("Dashboard status readiness ignores blank recent action failures")
     func dashboardStatusReadinessIgnoresBlankRecentActionFailures() {
         let readiness = DashboardStatusReadiness.evaluate(
