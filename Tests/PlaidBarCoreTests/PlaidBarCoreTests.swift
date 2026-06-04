@@ -1207,10 +1207,10 @@ struct PlaidBarCoreTests {
 
     @Test("Dashboard account filters include only matching account kinds")
     func dashboardAccountFiltersMatchAccountKinds() {
-        let checking = AccountDTO(id: "checking", itemId: "item_cash", name: "Checking", type: .depository, subtype: "checking")
-        let savings = AccountDTO(id: "savings", itemId: "item_cash", name: "Savings", type: .depository, subtype: "savings")
-        let credit = AccountDTO(id: "credit", itemId: "item_card", name: "Card", type: .credit)
-        let loan = AccountDTO(id: "loan", itemId: "item_loan", name: "Loan", type: .loan)
+        let checking = AccountDTO(id: "checking", itemId: "item_cash", name: "Checking", type: .depository, subtype: "checking", balances: BalanceDTO())
+        let savings = AccountDTO(id: "savings", itemId: "item_cash", name: "Savings", type: .depository, subtype: "savings", balances: BalanceDTO())
+        let credit = AccountDTO(id: "credit", itemId: "item_card", name: "Card", type: .credit, balances: BalanceDTO())
+        let loan = AccountDTO(id: "loan", itemId: "item_loan", name: "Loan", type: .loan, balances: BalanceDTO())
 
         #expect(DashboardAccountFilterKind.all.includes(checking))
         #expect(DashboardAccountFilterKind.cash.includes(checking))
@@ -1226,8 +1226,8 @@ struct PlaidBarCoreTests {
 
     @Test("Dashboard status filter only shows degraded item accounts")
     func dashboardStatusFilterOnlyShowsDegradedItemAccounts() {
-        let healthy = AccountDTO(id: "checking", itemId: "item_cash", name: "Checking", type: .depository)
-        let degraded = AccountDTO(id: "card", itemId: "item_card", name: "Card", type: .credit)
+        let healthy = AccountDTO(id: "checking", itemId: "item_cash", name: "Checking", type: .depository, balances: BalanceDTO())
+        let degraded = AccountDTO(id: "card", itemId: "item_card", name: "Card", type: .credit, balances: BalanceDTO())
 
         #expect(!DashboardAccountFilterKind.status.includes(healthy))
         #expect(!DashboardAccountFilterKind.status.includes(degraded))
