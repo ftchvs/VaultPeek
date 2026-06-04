@@ -17,13 +17,15 @@ public struct AccountConnectionPresentation: Sendable, Equatable {
     public let signalLabel: String
     public let iconName: String
     public let showsRecoveryActions: Bool
+    public let recoveryActionTitle: String?
 
     public static func evaluate(
         isDemoMode: Bool,
         serverConnected: Bool,
         isSyncStale: Bool,
         statusSyncText: String,
-        itemStatus: ItemConnectionStatus?
+        itemStatus: ItemConnectionStatus?,
+        institutionName: String? = nil
     ) -> AccountConnectionPresentation {
         if isDemoMode {
             return AccountConnectionPresentation(
@@ -32,7 +34,8 @@ public struct AccountConnectionPresentation: Sendable, Equatable {
                 detailLabel: "Demo data",
                 signalLabel: "Demo",
                 iconName: "play.circle.fill",
-                showsRecoveryActions: false
+                showsRecoveryActions: false,
+                recoveryActionTitle: nil
             )
         }
 
@@ -43,7 +46,8 @@ public struct AccountConnectionPresentation: Sendable, Equatable {
                 detailLabel: "Server offline",
                 signalLabel: "Offline",
                 iconName: "server.rack",
-                showsRecoveryActions: false
+                showsRecoveryActions: false,
+                recoveryActionTitle: nil
             )
         }
 
@@ -57,20 +61,34 @@ public struct AccountConnectionPresentation: Sendable, Equatable {
         case .loginRequired:
             return AccountConnectionPresentation(
                 level: .loginRequired,
-                rowLabel: "Reconnect",
-                detailLabel: "Login required",
+                rowLabel: reconnectActionTitle(institutionName: institutionName),
+                detailLabel: itemDetailLabel(
+                    institutionName: institutionName,
+                    fallback: "Login required",
+                    suffix: "login required"
+                ),
                 signalLabel: "Login",
                 iconName: "person.crop.circle.badge.exclamationmark.fill",
-                showsRecoveryActions: true
+                showsRecoveryActions: true,
+                recoveryActionTitle: reconnectActionTitle(institutionName: institutionName)
             )
         case .error:
             return AccountConnectionPresentation(
                 level: .error,
-                rowLabel: "Item error",
-                detailLabel: "Item error",
+                rowLabel: itemDetailLabel(
+                    institutionName: institutionName,
+                    fallback: "Item error",
+                    suffix: "item error"
+                ),
+                detailLabel: itemDetailLabel(
+                    institutionName: institutionName,
+                    fallback: "Item error",
+                    suffix: "item error"
+                ),
                 signalLabel: "Error",
                 iconName: "exclamationmark.triangle.fill",
-                showsRecoveryActions: true
+                showsRecoveryActions: true,
+                recoveryActionTitle: reconnectActionTitle(institutionName: institutionName)
             )
         case nil:
             return AccountConnectionPresentation.synced(
@@ -93,7 +111,8 @@ public struct AccountConnectionPresentation: Sendable, Equatable {
                 detailLabel: "Item status unavailable",
                 signalLabel: "Unknown",
                 iconName: "link.circle.fill",
-                showsRecoveryActions: false
+                showsRecoveryActions: false,
+                recoveryActionTitle: nil
             )
         }
 
@@ -105,7 +124,8 @@ public struct AccountConnectionPresentation: Sendable, Equatable {
                 detailLabel: "Last sync \(statusSyncText)",
                 signalLabel: "Stale",
                 iconName: "clock.badge.exclamationmark.fill",
-                showsRecoveryActions: true
+                showsRecoveryActions: true,
+                recoveryActionTitle: "Refresh"
             )
         }
 
@@ -115,7 +135,32 @@ public struct AccountConnectionPresentation: Sendable, Equatable {
             detailLabel: statusSyncText,
             signalLabel: "Fresh",
             iconName: "checkmark.circle.fill",
-            showsRecoveryActions: false
+            showsRecoveryActions: false,
+            recoveryActionTitle: nil
         )
+    }
+
+    private static func reconnectActionTitle(institutionName: String?) -> String {
+        guard let institutionName = normalizedInstitutionName(institutionName) else {
+            return "Reconnect Item"
+        }
+        return "Reconnect \(institutionName)"
+    }
+
+    private static func itemDetailLabel(
+        institutionName: String?,
+        fallback: String,
+        suffix: String
+    ) -> String {
+        guard let institutionName = normalizedInstitutionName(institutionName) else {
+            return fallback
+        }
+        return "\(institutionName) \(suffix)"
+    }
+
+    private static func normalizedInstitutionName(_ institutionName: String?) -> String? {
+        guard let institutionName else { return nil }
+        let trimmed = institutionName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }

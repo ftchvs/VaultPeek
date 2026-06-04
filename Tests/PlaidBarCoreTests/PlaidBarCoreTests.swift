@@ -491,6 +491,7 @@ struct PlaidBarCoreTests {
         #expect(loginRequired.rowLabel == "Reconnect")
         #expect(loginRequired.detailLabel == "Login required")
         #expect(loginRequired.signalLabel == "Login")
+        #expect(loginRequired.recoveryActionTitle == "Reconnect Item")
         #expect(loginRequired.showsRecoveryActions)
 
         let errored = AccountConnectionPresentation.evaluate(
@@ -504,7 +505,37 @@ struct PlaidBarCoreTests {
         #expect(errored.level == .error)
         #expect(errored.rowLabel == "Item error")
         #expect(errored.signalLabel == "Error")
+        #expect(errored.recoveryActionTitle == "Reconnect Item")
         #expect(errored.showsRecoveryActions)
+    }
+
+    @Test("Account connection presentation names degraded institutions")
+    func accountConnectionPresentationNamesDegradedInstitutions() {
+        let loginRequired = AccountConnectionPresentation.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            isSyncStale: false,
+            statusSyncText: "2m ago",
+            itemStatus: .loginRequired,
+            institutionName: "Chase"
+        )
+
+        #expect(loginRequired.rowLabel == "Reconnect Chase")
+        #expect(loginRequired.detailLabel == "Chase login required")
+        #expect(loginRequired.recoveryActionTitle == "Reconnect Chase")
+
+        let errored = AccountConnectionPresentation.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            isSyncStale: false,
+            statusSyncText: "2m ago",
+            itemStatus: .error,
+            institutionName: " American Express "
+        )
+
+        #expect(errored.rowLabel == "American Express item error")
+        #expect(errored.detailLabel == "American Express item error")
+        #expect(errored.recoveryActionTitle == "Reconnect American Express")
     }
 
     @Test("Menu bar summary estimates runway from recent monthly spend")
@@ -1176,7 +1207,8 @@ struct PlaidBarCoreTests {
             serverConnected: true,
             linkedItemCount: 1,
             accountCount: 3,
-            degradedItemCount: 1
+            degradedItemCount: 1,
+            degradedItemRecoveryTitle: "Reconnect Chase"
         )
 
         #expect(emptyState.title == "1 item needs attention")
@@ -1184,7 +1216,9 @@ struct PlaidBarCoreTests {
         #expect(emptyState.iconName == "exclamationmark.triangle.fill")
         #expect(emptyState.tone == .warning)
         #expect(!emptyState.showsAddAccount)
-        #expect(emptyState.action == .refresh)
+        #expect(emptyState.action == .reconnect)
+        #expect(emptyState.actionTitle == "Reconnect Chase")
+        #expect(emptyState.actionIconName == "link.badge.plus")
     }
 
     @Test("Dashboard account empty state keeps healthy status copy when no items are degraded")
