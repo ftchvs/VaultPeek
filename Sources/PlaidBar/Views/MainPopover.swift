@@ -46,12 +46,7 @@ struct MainPopover: View {
                         DashboardHeader()
                             .environment(appState)
 
-                        DashboardStatusStrip()
-                            .environment(appState)
-
-                        BalanceActivityHeatmap(transactions: appState.transactions)
-
-                        if shouldShowStatusReadinessPanel {
+                        if shouldElevateStatusReadinessPanel {
                             DashboardStatusReadinessPanel(
                                 openSettings: { openSettings() },
                                 onAddAccount: openAccountSetup
@@ -76,6 +71,19 @@ struct MainPopover: View {
                             onAddAccount: openAccountSetup
                         )
                         .environment(appState)
+
+                        DashboardStatusStrip()
+                            .environment(appState)
+
+                        BalanceActivityHeatmap(transactions: appState.transactions)
+
+                        if shouldShowLowerStatusReadinessPanel {
+                            DashboardStatusReadinessPanel(
+                                openSettings: { openSettings() },
+                                onAddAccount: openAccountSetup
+                            )
+                            .environment(appState)
+                        }
                     }
                     .padding(.horizontal, Layout.contentHorizontalPadding)
                     .padding(.top, Layout.contentTopPadding)
@@ -140,6 +148,14 @@ struct MainPopover: View {
 
     private var shouldShowStatusReadinessPanel: Bool {
         selectedFilter == .status || !appState.isSetupComplete || appState.dashboardStatusReadiness.level != .healthy
+    }
+
+    private var shouldElevateStatusReadinessPanel: Bool {
+        !appState.isSetupComplete || appState.dashboardStatusReadiness.level != .healthy
+    }
+
+    private var shouldShowLowerStatusReadinessPanel: Bool {
+        shouldShowStatusReadinessPanel && !shouldElevateStatusReadinessPanel
     }
 
     private var filterBinding: Binding<DashboardAccountFilter> {
