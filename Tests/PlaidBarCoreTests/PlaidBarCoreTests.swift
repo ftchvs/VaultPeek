@@ -1384,7 +1384,7 @@ struct PlaidBarCoreTests {
         #expect(offline.action == .checkServer)
         #expect(unlinked.title == "No bank linked")
         #expect(unlinked.action == .addAccount)
-        #expect(unloaded.title == "No account data")
+        #expect(unloaded.title == "Accounts not loaded")
         #expect(unloaded.action == .refreshAccounts)
     }
 
@@ -1403,11 +1403,11 @@ struct PlaidBarCoreTests {
             accountCount: 2
         )
 
-        #expect(noAccounts.title == "No account data")
+        #expect(noAccounts.title == "Accounts not loaded")
         #expect(noAccounts.action == .refreshAccounts)
-        #expect(noCredit.title == "No credit accounts")
+        #expect(noCredit.title == "No credit card linked")
         #expect(noCredit.action == .addAccount)
-        #expect(noCredit.actionTitle == "Add Credit Card")
+        #expect(noCredit.actionTitle == "Link Credit Card")
     }
 
     @Test("Secondary transaction empty state keeps recent error ahead of missing history")
@@ -1443,7 +1443,7 @@ struct PlaidBarCoreTests {
 
         #expect(state.title == "Server offline")
         #expect(state.action == .checkServer)
-        #expect(state.actionTitle == "Check Server")
+        #expect(state.actionTitle == "Check Connection")
     }
 
     @Test("Secondary spending period empty state widens before refresh")
@@ -1458,7 +1458,7 @@ struct PlaidBarCoreTests {
         )
 
         #expect(week.action == .showWiderPeriod)
-        #expect(week.actionTitle == "Show 90D")
+        #expect(week.actionTitle == "Show 90 Days")
         #expect(widest.action == .refresh)
         #expect(widest.actionTitle == "Refresh")
     }
@@ -1487,8 +1487,8 @@ struct PlaidBarCoreTests {
         #expect(noTransactions.title == "No synced transactions")
         #expect(noTransactions.action == .syncTransactions)
         #expect(noPattern.title == "No recurring charges found")
-        #expect(noPattern.detail.contains("2+ months"))
-        #expect(noPattern.actionTitle == "Sync Latest")
+        #expect(noPattern.detail.contains("2 months"))
+        #expect(noPattern.actionTitle == "Sync Latest Transactions")
     }
 
     @Test("Dashboard status readiness ignores blank recent action failures")
