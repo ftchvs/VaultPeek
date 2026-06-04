@@ -487,13 +487,15 @@ final class AppState {
     }
 
     func transactionsForAccount(_ accountId: String) -> [TransactionDTO] {
-        transactions.filter { $0.accountId == accountId }
-            .sorted { $0.date > $1.date }
+        AccountTransactionFeed.transactions(forAccountId: accountId, in: transactions)
     }
 
     func transactionsForMerchant(_ merchantName: String, excluding transactionId: String) -> [TransactionDTO] {
-        transactions.filter { $0.merchantName == merchantName && $0.id != transactionId }
-            .sorted { $0.date > $1.date }
+        AccountTransactionFeed.relatedMerchantTransactions(
+            merchantName: merchantName,
+            excluding: transactionId,
+            in: transactions
+        )
     }
 
     // MARK: - Actions

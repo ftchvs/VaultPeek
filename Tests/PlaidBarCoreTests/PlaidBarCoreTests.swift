@@ -84,6 +84,51 @@ struct PlaidBarCoreTests {
         #expect(tx.displayAmount == 0)
     }
 
+    @Test("Account transaction feed sorts latest first with pending tie-breaker")
+    func accountTransactionFeedSortsLatestFirstWithPendingTieBreaker() {
+        let transactions = [
+            TransactionDTO(id: "old", accountId: "checking", amount: 10, date: "2026-01-13", name: "Old"),
+            TransactionDTO(id: "other", accountId: "credit", amount: 999, date: "2026-01-16", name: "Other"),
+            TransactionDTO(id: "posted-small", accountId: "checking", amount: 20, date: "2026-01-15", name: "Posted Small"),
+            TransactionDTO(id: "pending", accountId: "checking", amount: 30, date: "2026-01-15", name: "Pending", pending: true),
+            TransactionDTO(id: "posted-large", accountId: "checking", amount: 50, date: "2026-01-15", name: "Posted Large"),
+        ]
+
+        let feed = AccountTransactionFeed.transactions(forAccountId: "checking", in: transactions)
+
+        #expect(feed.map(\.id) == ["pending", "posted-large", "posted-small", "old"])
+    }
+
+    @Test("Account transaction feed keeps invalid dates behind dated transactions")
+    func accountTransactionFeedKeepsInvalidDatesBehindDatedTransactions() {
+        let transactions = [
+            TransactionDTO(id: "invalid", accountId: "checking", amount: 10, date: "not-a-date", name: "Invalid"),
+            TransactionDTO(id: "dated", accountId: "checking", amount: 20, date: "2026-01-15", name: "Dated"),
+        ]
+
+        let feed = AccountTransactionFeed.transactions(forAccountId: "checking", in: transactions)
+
+        #expect(feed.map(\.id) == ["dated", "invalid"])
+    }
+
+    @Test("Account transaction feed sorts related merchant transactions")
+    func accountTransactionFeedSortsRelatedMerchantTransactions() {
+        let transactions = [
+            TransactionDTO(id: "current", accountId: "a", amount: 20, date: "2026-01-15", name: "Current", merchantName: "Netflix"),
+            TransactionDTO(id: "old", accountId: "a", amount: 20, date: "2026-01-13", name: "Old", merchantName: "Netflix"),
+            TransactionDTO(id: "pending", accountId: "a", amount: 20, date: "2026-01-14", name: "Pending", merchantName: "Netflix", pending: true),
+            TransactionDTO(id: "other", accountId: "a", amount: 20, date: "2026-01-16", name: "Other", merchantName: "Spotify"),
+        ]
+
+        let feed = AccountTransactionFeed.relatedMerchantTransactions(
+            merchantName: "Netflix",
+            excluding: "current",
+            in: transactions
+        )
+
+        #expect(feed.map(\.id) == ["pending", "old"])
+    }
+
     @Test("TransactionDTO preserves item ID when encoded")
     func transactionItemIdCodable() throws {
         let tx = TransactionDTO(
