@@ -2291,13 +2291,25 @@ struct PlaidBarCoreTests {
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         let directory = root.appendingPathComponent(".plaidbar", isDirectory: true)
         let database = directory.appendingPathComponent("plaidbar.sqlite")
+        let sandboxDatabase = directory.appendingPathComponent("plaidbar-sandbox.sqlite")
+        let databaseWAL = directory.appendingPathComponent("plaidbar.sqlite-wal")
+        let transactionCache = directory.appendingPathComponent("transactions-sandbox-abc123.json")
+        let pendingLinkSessions = directory.appendingPathComponent("pending-link-sessions.json")
         let authToken = directory.appendingPathComponent("auth-token")
         let serverConfig = directory.appendingPathComponent("server.conf")
+        let unrelatedFile = directory.appendingPathComponent("notes.txt")
+        let unrelatedDirectory = directory.appendingPathComponent("exports", isDirectory: true)
 
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try "db".write(to: database, atomically: true, encoding: .utf8)
+        try "sandbox".write(to: sandboxDatabase, atomically: true, encoding: .utf8)
+        try "wal".write(to: databaseWAL, atomically: true, encoding: .utf8)
+        try "cache".write(to: transactionCache, atomically: true, encoding: .utf8)
+        try "sessions".write(to: pendingLinkSessions, atomically: true, encoding: .utf8)
         try "token".write(to: authToken, atomically: true, encoding: .utf8)
         try "PLAID_ENV=sandbox".write(to: serverConfig, atomically: true, encoding: .utf8)
+        try "keep me".write(to: unrelatedFile, atomically: true, encoding: .utf8)
+        try FileManager.default.createDirectory(at: unrelatedDirectory, withIntermediateDirectories: true)
         try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: authToken.path)
         try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: serverConfig.path)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -2308,16 +2320,26 @@ struct PlaidBarCoreTests {
         }
 
         #expect(result.directoryPath == directory.path)
-        #expect(result.removedEntries == ["plaidbar.sqlite"])
+        #expect(result.removedEntries == [
+            "pending-link-sessions.json",
+            "plaidbar-sandbox.sqlite",
+            "plaidbar.sqlite",
+            "plaidbar.sqlite-wal",
+            "transactions-sandbox-abc123.json",
+        ])
+        #expect(result.preservedEntries == ["auth-token", "exports", "notes.txt", "server.conf"])
         #expect(result.keychainTokensCleared)
         #expect(didResetKeychainTokens)
 
         var isDirectory: ObjCBool = false
         #expect(FileManager.default.fileExists(atPath: directory.path, isDirectory: &isDirectory))
         #expect(isDirectory.boolValue)
-        #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).sorted() == ["auth-token", "server.conf"])
+        #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).sorted() == ["auth-token", "exports", "notes.txt", "server.conf"])
         #expect(try String(contentsOf: authToken, encoding: .utf8) == "token")
         #expect(try String(contentsOf: serverConfig, encoding: .utf8) == "PLAID_ENV=sandbox")
+        #expect(try String(contentsOf: unrelatedFile, encoding: .utf8) == "keep me")
+        #expect(FileManager.default.fileExists(atPath: unrelatedDirectory.path, isDirectory: &isDirectory))
+        #expect(isDirectory.boolValue)
         #expect(try posixPermissions(at: authToken) == 0o600)
         #expect(try posixPermissions(at: serverConfig) == 0o600)
     }
@@ -2364,6 +2386,7 @@ struct PlaidBarCoreTests {
         }
 
         #expect(result.removedEntries == ["plaidbar.sqlite"])
+        #expect(result.preservedEntries == [])
         #expect(!result.keychainTokensCleared)
         #expect(!didResetKeychainTokens)
     }

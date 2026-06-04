@@ -9,19 +9,26 @@ import Darwin
 public struct LocalDataResetResult: Equatable, Sendable {
     public let directoryPath: String
     public let removedEntries: [String]
+    public let preservedEntries: [String]
     public let keychainTokensCleared: Bool
 
     public var removedEntryCount: Int {
         removedEntries.count
     }
 
+    public var preservedEntryCount: Int {
+        preservedEntries.count
+    }
+
     public init(
         directoryPath: String,
         removedEntries: [String],
+        preservedEntries: [String] = [],
         keychainTokensCleared: Bool
     ) {
         self.directoryPath = directoryPath
         self.removedEntries = removedEntries
+        self.preservedEntries = preservedEntries
         self.keychainTokensCleared = keychainTokensCleared
     }
 }
@@ -42,6 +49,7 @@ public enum LocalDataStore {
     public static let authTokenFilename = "auth-token"
     public static let serverConfigFilename = "server.conf"
     public static let transactionCacheFilename = "transactions.json"
+    public static let pendingLinkSessionsFilename = "pending-link-sessions.json"
     public static let plaidAccessTokenKeychainService = "PlaidBar.PlaidAccessToken"
     private static let directoryPermissions = 0o700
     private static let cacheFilePermissions = 0o600
@@ -115,6 +123,7 @@ public enum LocalDataStore {
         keychainTokenReset: (() throws -> Void)? = nil
     ) throws -> LocalDataResetResult {
         var removedEntries: [String] = []
+        var preservedEntries: [String] = []
         var isDirectory: ObjCBool = false
 
         if fileManager.fileExists(atPath: directory.path, isDirectory: &isDirectory) {
@@ -123,11 +132,18 @@ public enum LocalDataStore {
                     at: directory,
                     includingPropertiesForKeys: nil
                 )
-                for entry in entries where !resetPreservedFilenames.contains(entry.lastPathComponent) {
-                    try fileManager.removeItem(at: entry)
-                    removedEntries.append(entry.lastPathComponent)
+                for entry in entries {
+                    let filename = entry.lastPathComponent
+                    if shouldRemoveDuringReset(filename) {
+                        try fileManager.removeItem(at: entry)
+                        removedEntries.append(filename)
+                    } else {
+                        preservedEntries.append(filename)
+                    }
                 }
                 removedEntries = removedEntries
+                    .sorted()
+                preservedEntries = preservedEntries
                     .sorted()
             } else {
                 removedEntries = [directory.lastPathComponent]
@@ -147,15 +163,52 @@ public enum LocalDataStore {
         return LocalDataResetResult(
             directoryPath: directory.path,
             removedEntries: removedEntries,
+            preservedEntries: preservedEntries,
             keychainTokensCleared: keychainTokensCleared
         )
     }
 
+    private static func shouldRemoveDuringReset(_ filename: String) -> Bool {
+        if resetPreservedFilenames.contains(filename) {
+            return false
+        }
+
+        if isTransactionCacheFilename(filename) ||
+            filename == pendingLinkSessionsFilename {
+            return true
+        }
+
+        return plaidBarDatabaseFilenames.contains { databaseFilename in
+            filename == databaseFilename ||
+                sqliteSidecarSuffixes.contains { filename == databaseFilename + $0 } ||
+                filename.hasPrefix(databaseFilename + ".backup-") ||
+                filename.hasPrefix(databaseFilename + ".migration-") ||
+                filename == databaseFilename + ".migrated-from-legacy"
+        }
+    }
+
     private static var resetPreservedFilenames: Set<String> {
+        [authTokenFilename, serverConfigFilename]
+    }
+
+    private static var plaidBarDatabaseFilenames: [String] {
         [
-            authTokenFilename,
-            serverConfigFilename,
+            "plaidbar.sqlite",
+            "plaidbar-sandbox.sqlite",
+            "plaidbar-production.sqlite",
         ]
+    }
+
+    private static var sqliteSidecarSuffixes: [String] {
+        ["-wal", "-shm", "-journal"]
+    }
+
+    private static func isTransactionCacheFilename(_ filename: String) -> Bool {
+        filename == transactionCacheFilename ||
+            (
+                filename.hasPrefix("transactions-") &&
+                    (filename.hasSuffix(".json") || filename.contains(".json.backup-"))
+            )
     }
 
     private static func resetPlaidAccessTokenKeychainItems() throws {
