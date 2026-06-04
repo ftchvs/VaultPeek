@@ -16,8 +16,7 @@ final class RefreshService {
         let state = appState
         refreshTask = Task {
             while !Task.isCancelled {
-                await state.refreshAccounts()
-                await state.syncTransactions()
+                await state.refreshDashboard()
                 try? await Task.sleep(for: .seconds(state.refreshInterval))
             }
         }

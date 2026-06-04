@@ -525,6 +525,8 @@ final class AppState {
     }
 
     func refreshAccounts() async {
+        if refreshDemoDataIfNeeded() { return }
+
         isLoading = true
         error = nil
         do {
@@ -542,6 +544,8 @@ final class AppState {
     }
 
     func refreshBalances() async {
+        if refreshDemoDataIfNeeded() { return }
+
         isLoading = true
         error = nil
         do {
@@ -558,6 +562,8 @@ final class AppState {
     }
 
     func syncTransactions() async {
+        if refreshDemoDataIfNeeded() { return }
+
         do {
             var hasMore = true
             var pageCount = 0
@@ -630,6 +636,11 @@ final class AppState {
     }
 
     func reconnectItem(itemId: String) async {
+        guard !isDemoMode else {
+            error = "Demo data is local. Connect a bank before reconnecting an institution."
+            return
+        }
+
         do {
             let linkResponse = try await serverClient.createUpdateLinkToken(itemId: itemId)
             guard let url = URL(string: linkResponse.linkUrl) else {
@@ -648,6 +659,16 @@ final class AppState {
     func startDemoMode() {
         isDemoMode = true
         loadDemoData()
+    }
+
+    func refreshDashboard() async {
+        if refreshDemoDataIfNeeded() { return }
+
+        await checkServerConnection()
+        if serverConnected {
+            await refreshAccounts()
+            await syncTransactions()
+        }
     }
 
     func connectForOnboarding(expectedEnvironment: PlaidEnvironment) async -> Bool {
@@ -775,8 +796,7 @@ final class AppState {
         refreshTask?.cancel()
         refreshTask = Task {
             while !Task.isCancelled {
-                await refreshAccounts()
-                await syncTransactions()
+                await refreshDashboard()
                 await evaluateNotifications()
                 try? await Task.sleep(for: .seconds(refreshInterval))
             }
@@ -909,6 +929,15 @@ final class AppState {
 
     private func updateSetupCompletion() {
         isSetupComplete = firstRunCompletionState.isReady
+    }
+
+    @discardableResult
+    private func refreshDemoDataIfNeeded() -> Bool {
+        guard isDemoMode else { return false }
+        error = nil
+        isLoading = false
+        loadDemoData()
+        return true
     }
 
     private func recordBalanceSnapshot() {
