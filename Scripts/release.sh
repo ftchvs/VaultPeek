@@ -16,6 +16,9 @@ version tag, then creates a GitHub release for ftchvs/PlaidBar.
 This script expects to run from a clean main branch after CI has passed.
 Use --allow-current-branch only for release-prep PR validation; publishing still
 requires clean main.
+
+Set PLAIDBAR_RELEASE_SKIP_TESTS=1 only for the documented local Swift Testing
+toolchain mismatch; CI must still pass tests before publishing.
 EOF
 }
 
@@ -106,6 +109,12 @@ fi
 echo "Running release gates for $TAG..."
 swift build -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors --disable-keychain
 swift build -c release -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors --disable-keychain
+if [[ "${PLAIDBAR_RELEASE_SKIP_TESTS:-0}" == "1" ]]; then
+    echo "Skipping swift test because PLAIDBAR_RELEASE_SKIP_TESTS=1."
+    echo "Only use this for the documented local Swift Testing toolchain mismatch; CI must pass tests before publishing."
+else
+    swift test --skip-update --disable-keychain
+fi
 bash -n Scripts/*.sh Scripts/plaidbar-run
 ruby -c Formula/plaidbar.rb
 
