@@ -213,7 +213,7 @@ private struct DashboardStatusStrip: View {
                 title: "Mode",
                 value: appState.statusModeText,
                 icon: appState.isDemoMode ? "play.circle.fill" : "server.rack",
-                tint: appState.isDemoMode ? SemanticColors.brandSecondary : SemanticColors.brand
+                tint: .secondary
             )
 
             StatusDivider()
@@ -231,7 +231,7 @@ private struct DashboardStatusStrip: View {
                 title: "Sync",
                 value: appState.statusSyncText,
                 icon: appState.isSyncStale ? "clock.badge.exclamationmark.fill" : "checkmark.circle.fill",
-                tint: appState.isSyncStale ? SemanticColors.warning : SemanticColors.positive
+                tint: appState.isSyncStale ? SemanticColors.warning : .secondary
             )
 
             StatusDivider()
@@ -261,10 +261,10 @@ private struct DashboardStatusStrip: View {
     }
 
     private var serverTint: Color {
-        if appState.isDemoMode { return SemanticColors.brandSecondary }
+        if appState.isDemoMode { return .secondary }
         if appState.isLoading { return SemanticColors.warning }
         if appState.error != nil { return SemanticColors.negative }
-        return appState.serverConnected ? SemanticColors.positive : .secondary
+        return .secondary
     }
 
     private var itemsText: String {
@@ -286,7 +286,7 @@ private struct DashboardStatusStrip: View {
     private var itemTint: Color {
         if appState.erroredItemCount > 0 { return SemanticColors.negative }
         if appState.needsLoginItemCount > 0 { return SemanticColors.warning }
-        return appState.statusItemCount > 0 ? SemanticColors.positive : .secondary
+        return .secondary
     }
 }
 
@@ -334,21 +334,23 @@ private struct DashboardSummaryCards: View {
                 title: "Cash",
                 value: Formatters.currency(appState.totalCash, format: .compact),
                 detail: "\(appState.depositoryAccounts.count) cash account\(appState.depositoryAccounts.count == 1 ? "" : "s")",
-                tint: SemanticColors.available
+                tint: .secondary
             )
 
             MetricCard(
                 title: "Debt",
                 value: Formatters.currency(appState.totalDebt, format: .compact),
                 detail: debtDetail,
-                tint: SemanticColors.creditDebt
+                tint: SemanticColors.creditDebt,
+                emphasizesTint: appState.totalDebt > 0
             )
 
             MetricCard(
                 title: "Runway",
                 value: appState.runwayText,
                 detail: appState.runwayBasisText,
-                tint: runwayTint
+                tint: runwayTint,
+                emphasizesTint: shouldEmphasizeRunway
             )
         }
     }
@@ -367,7 +369,12 @@ private struct DashboardSummaryCards: View {
         guard let months = appState.runwayMonths else { return .secondary }
         if months < 1 { return SemanticColors.negative }
         if months < 3 { return SemanticColors.warning }
-        return SemanticColors.available
+        return .secondary
+    }
+
+    private var shouldEmphasizeRunway: Bool {
+        guard let months = appState.runwayMonths else { return false }
+        return months < 3
     }
 }
 
@@ -376,6 +383,7 @@ private struct MetricCard: View {
     let value: String
     let detail: String
     let tint: Color
+    var emphasizesTint = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -384,6 +392,7 @@ private struct MetricCard: View {
                 .foregroundStyle(.secondary)
             Text(value)
                 .font(.headline.weight(.bold))
+                .foregroundStyle(emphasizesTint ? tint : .primary)
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
@@ -396,11 +405,27 @@ private struct MetricCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 10)
         .padding(.vertical, 10)
-        .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 8))
+        .background(cardFill, in: RoundedRectangle(cornerRadius: 8))
         .overlay {
             RoundedRectangle(cornerRadius: 8)
-                .stroke(tint.opacity(0.16), lineWidth: 1)
+                .stroke(cardStroke, lineWidth: 1)
         }
+        .overlay(alignment: .leading) {
+            if emphasizesTint {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(tint)
+                    .frame(width: 3)
+                    .padding(.vertical, 8)
+            }
+        }
+    }
+
+    private var cardFill: Color {
+        emphasizesTint ? tint.opacity(0.09) : Color.primary.opacity(0.025)
+    }
+
+    private var cardStroke: Color {
+        emphasizesTint ? tint.opacity(0.18) : Color.primary.opacity(0.07)
     }
 }
 
@@ -415,7 +440,7 @@ private struct BalanceCompositionStrip: View {
                     from: appState.accounts,
                     type: .depository
                 ),
-                tint: SemanticColors.available
+                tint: Color.secondary.opacity(0.6)
             ),
             BalanceCompositionSegment(
                 title: "Investments",
@@ -423,7 +448,7 @@ private struct BalanceCompositionStrip: View {
                     from: appState.accounts,
                     type: .investment
                 ),
-                tint: SemanticColors.brand
+                tint: Color.primary.opacity(0.36)
             ),
             BalanceCompositionSegment(
                 title: "Credit",
@@ -485,7 +510,7 @@ private struct BalanceCompositionStrip: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 9)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 8))
         .overlay {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(Color.primary.opacity(0.07), lineWidth: 1)
@@ -928,18 +953,32 @@ private struct DashboardStatusReadinessPanel: View {
 
             HStack(spacing: 8) {
                 if let primaryAction = readiness.primaryAction {
-                    Button {
-                        perform(primaryAction)
-                    } label: {
-                        Label(
-                            primaryActionLabel(for: primaryAction),
-                            systemImage: readiness.primaryActionIconName ?? primaryAction.icon
-                        )
+                    if readinessNeedsAttention {
+                        Button {
+                            perform(primaryAction)
+                        } label: {
+                            Label(
+                                primaryActionLabel(for: primaryAction),
+                                systemImage: readiness.primaryActionIconName ?? primaryAction.icon
+                            )
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                        .tint(tint)
+                        .disabled(appState.isLoading)
+                    } else {
+                        Button {
+                            perform(primaryAction)
+                        } label: {
+                            Label(
+                                primaryActionLabel(for: primaryAction),
+                                systemImage: readiness.primaryActionIconName ?? primaryAction.icon
+                            )
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .disabled(appState.isLoading)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                    .tint(tint)
-                    .disabled(appState.isLoading)
                 }
 
                 ForEach(readiness.secondaryActions, id: \.rawValue) { action in
@@ -958,7 +997,7 @@ private struct DashboardStatusReadinessPanel: View {
         .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 8))
         .overlay {
             RoundedRectangle(cornerRadius: 8)
-                .stroke(tint.opacity(0.18), lineWidth: 1)
+                .stroke(panelStroke, lineWidth: 1)
         }
         .accessibilityElement(children: .contain)
     }
@@ -973,10 +1012,18 @@ private struct DashboardStatusReadinessPanel: View {
 
     private var tint: Color {
         switch readiness.level {
-        case .healthy: SemanticColors.positive
+        case .healthy: .secondary
         case .warning: SemanticColors.warning
         case .blocked: SemanticColors.negative
         }
+    }
+
+    private var readinessNeedsAttention: Bool {
+        readiness.level != .healthy
+    }
+
+    private var panelStroke: Color {
+        readinessNeedsAttention ? tint.opacity(0.18) : Color.primary.opacity(0.07)
     }
 
     private func perform(_ action: DashboardStatusReadinessAction) {
@@ -1059,7 +1106,7 @@ private struct SetupRecoverySummary: View {
     private var color: Color {
         switch state.step {
         case .ready:
-            SemanticColors.positive
+            .secondary
         case .blocked:
             SemanticColors.negative
         case .openPlaidLink, .loadAccounts, .syncTransactions:
@@ -1311,7 +1358,7 @@ private struct DashboardEmptyAccountState: View {
         .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 8))
         .overlay {
             RoundedRectangle(cornerRadius: 8)
-                .stroke(tint.opacity(0.18), lineWidth: 1)
+                .stroke(panelStroke, lineWidth: 1)
         }
     }
 
@@ -1332,11 +1379,20 @@ private struct DashboardEmptyAccountState: View {
         case .brand:
             return SemanticColors.brand
         case .healthy:
-            return SemanticColors.positive
+            return .secondary
         case .offline, .secondary:
             return .secondary
         case .warning:
             return SemanticColors.warning
+        }
+    }
+
+    private var panelStroke: Color {
+        switch presentation.tone {
+        case .brand, .warning:
+            return tint.opacity(0.18)
+        case .healthy, .offline, .secondary:
+            return Color.primary.opacity(0.07)
         }
     }
 
@@ -1435,7 +1491,7 @@ private struct DashboardAccountRow: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(isSelected ? SemanticColors.brand.opacity(0.14) : Color.primary.opacity(0.018))
+        .background(isSelected ? Color.primary.opacity(0.055) : Color.primary.opacity(0.018))
         .overlay(alignment: .bottom) {
             Divider()
                 .opacity(0.55)
@@ -1460,9 +1516,9 @@ private struct DashboardAccountRow: View {
         case .credit, .loan:
             SemanticColors.creditDebt
         case .investment:
-            SemanticColors.sparkline
+            .secondary
         case .depository:
-            SemanticColors.available
+            .secondary
         case .other:
             .secondary
         }
@@ -1556,7 +1612,7 @@ private struct SelectedAccountPanel: View {
             }
 
             HStack(spacing: 8) {
-                DetailValue(title: availableTitle, value: availableText, tint: SemanticColors.available)
+                DetailValue(title: availableTitle, value: availableText, tint: .primary)
                 DetailValue(title: currentTitle, value: currentText, tint: currentTint)
 
                 if let utilization = account.balances.utilizationPercent,
@@ -1589,13 +1645,13 @@ private struct SelectedAccountPanel: View {
                     title: "30D Out",
                     value: Formatters.currency(activitySummary.outflowTotal, format: .compact),
                     icon: "arrow.up.right.circle.fill",
-                    tint: activitySummary.outflowTotal > 0 ? SemanticColors.negative : .secondary
+                    tint: .secondary
                 )
                 AccountSignalPill(
                     title: "30D In",
                     value: Formatters.currency(activitySummary.inflowTotal, format: .compact),
                     icon: "arrow.down.left.circle.fill",
-                    tint: activitySummary.inflowTotal > 0 ? SemanticColors.positive : .secondary
+                    tint: .secondary
                 )
                 AccountSignalPill(
                     title: "Sync",
@@ -1617,7 +1673,7 @@ private struct SelectedAccountPanel: View {
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 6)
-                .background(connectionTint.opacity(0.08), in: RoundedRectangle(cornerRadius: 7))
+                .background(recoveryFill, in: RoundedRectangle(cornerRadius: 7))
                 .accessibilityElement(children: .combine)
             }
 
@@ -1663,7 +1719,7 @@ private struct SelectedAccountPanel: View {
         .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 8))
         .overlay {
             RoundedRectangle(cornerRadius: 8)
-                .stroke(connectionTint.opacity(0.18), lineWidth: 1)
+                .stroke(panelStroke, lineWidth: 1)
         }
     }
 
@@ -1737,16 +1793,33 @@ private struct SelectedAccountPanel: View {
     private var recoveryActionTitle: String {
         connectionPresentation.recoveryActionTitle ?? "Reconnect"
     }
+
+    private var panelStroke: Color {
+        shouldEmphasizeConnection ? connectionTint.opacity(0.18) : Color.primary.opacity(0.07)
+    }
+
+    private var recoveryFill: Color {
+        shouldEmphasizeConnection ? connectionTint.opacity(0.08) : Color.primary.opacity(0.035)
+    }
+
+    private var shouldEmphasizeConnection: Bool {
+        switch connectionPresentation.level {
+        case .stale, .loginRequired, .error:
+            return true
+        case .demo, .offline, .healthy, .unknown:
+            return false
+        }
+    }
 }
 
 private func accountConnectionTint(for level: AccountConnectionLevel) -> Color {
     switch level {
     case .demo:
-        return SemanticColors.brandSecondary
+        return .secondary
     case .offline:
         return .secondary
     case .healthy:
-        return SemanticColors.positive
+        return .secondary
     case .stale, .loginRequired:
         return SemanticColors.warning
     case .error:
