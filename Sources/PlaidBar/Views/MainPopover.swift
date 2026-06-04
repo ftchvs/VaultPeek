@@ -8,6 +8,7 @@ struct MainPopover: View {
     @AppStorage("dashboard.selectedAccountId") private var selectedAccountId = ""
     @State private var settingsCloseObserver: NSObjectProtocol?
     @State private var isShowingAccountSetup = false
+    @State private var shouldShowSetupRecoveryDashboard = false
 
     private var selectedFilter: DashboardAccountFilter {
         DashboardAccountFilter(rawValue: selectedFilterRawValue) ?? .all
@@ -25,7 +26,7 @@ struct MainPopover: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if !appState.isSetupComplete {
+            if shouldShowSetupScreen {
                 SetupView()
                     .frame(width: 600)
             } else {
@@ -91,8 +92,16 @@ struct MainPopover: View {
         .frame(width: 600)
         .background(Color(nsColor: .windowBackgroundColor))
         .animation(.easeInOut(duration: 0.2), value: appState.error != nil)
-        .sheet(isPresented: $isShowingAccountSetup) {
+        .sheet(
+            isPresented: $isShowingAccountSetup,
+            onDismiss: {
+                if !appState.isSetupComplete {
+                    shouldShowSetupRecoveryDashboard = true
+                }
+            }
+        ) {
             SetupView {
+                shouldShowSetupRecoveryDashboard = false
                 isShowingAccountSetup = false
             }
             .environment(appState)
@@ -107,10 +116,19 @@ struct MainPopover: View {
         .onChange(of: selectedFilterRawValue) { _, _ in
             selectedAccountId = ""
         }
+        .onChange(of: appState.isSetupComplete) { _, isComplete in
+            if isComplete {
+                shouldShowSetupRecoveryDashboard = false
+            }
+        }
+    }
+
+    private var shouldShowSetupScreen: Bool {
+        !appState.isSetupComplete && !shouldShowSetupRecoveryDashboard
     }
 
     private var shouldShowStatusReadinessPanel: Bool {
-        selectedFilter == .status || appState.dashboardStatusReadiness.level != .healthy
+        selectedFilter == .status || !appState.isSetupComplete || appState.dashboardStatusReadiness.level != .healthy
     }
 
     private var filterBinding: Binding<DashboardAccountFilter> {
@@ -874,6 +892,10 @@ private struct DashboardStatusReadinessPanel: View {
                 Spacer(minLength: 12)
             }
 
+            if !appState.isSetupComplete {
+                SetupRecoverySummary(state: appState.firstRunCompletionState)
+            }
+
             StatusMetricGrid()
                 .environment(appState)
 
@@ -959,6 +981,63 @@ private struct DashboardStatusReadinessPanel: View {
 
     private var reconnectItemId: String? {
         ItemRecoveryTarget.itemId(from: appState.itemStatuses)
+    }
+}
+
+private struct SetupRecoverySummary: View {
+    let state: FirstRunCompletionState
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: icon)
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(color)
+                .frame(width: 22, height: 22)
+                .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Setup recovery")
+                    .microText()
+                    .foregroundStyle(.secondary)
+                Text(state.title)
+                    .font(.caption.weight(.semibold))
+                Text(state.detail)
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 8)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 9)
+        .background(color.opacity(0.06), in: RoundedRectangle(cornerRadius: 7))
+        .accessibilityElement(children: .combine)
+    }
+
+    private var icon: String {
+        switch state.step {
+        case .ready:
+            "checkmark.circle.fill"
+        case .blocked:
+            "exclamationmark.triangle.fill"
+        case .openPlaidLink:
+            "link.circle"
+        case .loadAccounts:
+            "building.columns"
+        case .syncTransactions:
+            "arrow.triangle.2.circlepath"
+        }
+    }
+
+    private var color: Color {
+        switch state.step {
+        case .ready:
+            SemanticColors.positive
+        case .blocked:
+            SemanticColors.negative
+        case .openPlaidLink, .loadAccounts, .syncTransactions:
+            SemanticColors.brand
+        }
     }
 }
 
