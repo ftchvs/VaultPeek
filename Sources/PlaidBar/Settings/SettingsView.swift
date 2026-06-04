@@ -274,22 +274,20 @@ struct AccountSettingsView: View {
     @State private var isShowingAccountSetup = false
     @State private var pendingRemoval: PendingAccountRemoval?
 
+    private var emptyPresentation: SecondaryContentUnavailableState {
+        SecondaryContentUnavailableState.accounts(
+            isDemoMode: appState.isDemoMode,
+            serverConnected: appState.serverConnected,
+            linkedItemCount: appState.statusItemCount
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading) {
             if appState.accounts.isEmpty {
-                ContentUnavailableView {
-                    Label(emptyTitle, systemImage: emptyIcon)
-                } description: {
-                    Text(emptyMessage)
-                } actions: {
-                    Button {
-                        handleAddAccount()
-                    } label: {
-                        Label("Add Account", systemImage: "plus.circle")
-                    }
-                    .buttonStyle(.borderedProminent)
+                SecondaryUnavailableView(presentation: emptyPresentation) {
+                    performEmptyAction(emptyPresentation.action)
                 }
-                .padding()
             } else {
                 List {
                     ForEach(accountGroups) { group in
@@ -401,6 +399,23 @@ struct AccountSettingsView: View {
         isShowingAccountSetup = true
     }
 
+    private func performEmptyAction(_ action: SecondaryContentUnavailableAction) {
+        switch action {
+        case .checkServer:
+            Task { await appState.checkServerConnection() }
+        case .addAccount:
+            handleAddAccount()
+        case .refreshAccounts:
+            Task { await appState.refreshAccounts() }
+        case .syncTransactions:
+            Task { await appState.syncTransactions() }
+        case .refresh:
+            Task { await appState.refreshDashboard() }
+        case .clearFilters, .showWiderPeriod:
+            break
+        }
+    }
+
     private var accountGroups: [AccountItemGroup] {
         Dictionary(grouping: appState.accounts, by: \.itemId)
             .map { itemId, accounts in
@@ -416,27 +431,6 @@ struct AccountSettingsView: View {
                 )
             }
             .sorted { $0.institutionName < $1.institutionName }
-    }
-
-    private var emptyTitle: String {
-        if !appState.isDemoMode && !appState.serverConnected { return "Server Offline" }
-        if appState.statusItemCount == 0 { return "No Bank Linked" }
-        return "No Account Data"
-    }
-
-    private var emptyIcon: String {
-        if !appState.isDemoMode && !appState.serverConnected { return "server.rack" }
-        return "building.columns"
-    }
-
-    private var emptyMessage: String {
-        if !appState.isDemoMode && !appState.serverConnected {
-            return "Start PlaidBarServer before managing linked accounts."
-        }
-        if appState.statusItemCount == 0 {
-            return "Connect a Plaid institution to manage linked accounts here."
-        }
-        return "The server has a linked item, but account details are not loaded yet."
     }
 
     private func icon(for status: ItemConnectionStatus) -> String {
