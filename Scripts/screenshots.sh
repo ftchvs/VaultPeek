@@ -28,6 +28,7 @@ capture_dashboard() {
     local filter="$1"
     local output="$2"
     local account="${3:-}"
+    local extra_args="${4:-}"
     local window_rect=""
 
     APP_LOG="$(mktemp -t plaidbar-screenshots.XXXXXX.log)"
@@ -35,9 +36,9 @@ capture_dashboard() {
 
     echo "Opening dashboard popover (${filter})..."
     if [ -n "$account" ]; then
-        "$BINARY" --demo --show-popover --screenshot-filter "$filter" --screenshot-account "$account" >"$APP_LOG" 2>&1 &
+        "$BINARY" --demo --show-popover --screenshot-filter "$filter" --screenshot-account "$account" $extra_args >"$APP_LOG" 2>&1 &
     else
-        "$BINARY" --demo --show-popover --screenshot-filter "$filter" >"$APP_LOG" 2>&1 &
+        "$BINARY" --demo --show-popover --screenshot-filter "$filter" $extra_args >"$APP_LOG" 2>&1 &
     fi
     APP_PID=$!
 
@@ -246,7 +247,7 @@ capture_dashboard "Cash" "dashboard-cash.png" "demo_checking"
 capture_dashboard "Credit" "dashboard-credit.png" "demo_visa"
 capture_dashboard "Savings" "dashboard-savings.png" "demo_savings"
 capture_dashboard "Debt" "dashboard-debt.png" "demo_visa"
-capture_dashboard "Status" "dashboard-status.png"
+capture_dashboard "Status" "dashboard-status.png" "" "--screenshot-status-recovery"
 capture_settings "general" "settings-local-data.png"
 capture_settings "accounts" "settings-accounts.png"
 capture_settings "notifications" "settings-notifications.png"
