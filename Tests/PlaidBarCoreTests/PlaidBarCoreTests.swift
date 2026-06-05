@@ -1561,6 +1561,25 @@ struct PlaidBarCoreTests {
         #expect(state.actionTitle == "Clear Filters")
     }
 
+    @Test("Secondary transaction empty state does not blame filters before history exists")
+    func secondaryTransactionEmptyStateNeedsHistoryBeforeFilteredZero() {
+        let state = SecondaryContentUnavailableState.transactions(
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 1,
+            accountCount: 2,
+            syncedItemCount: 0,
+            transactionCount: 0,
+            hasSearchText: true,
+            hasActiveFilters: true,
+            errorMessage: nil
+        )
+
+        #expect(state.title == "First sync needed")
+        #expect(state.action == .syncTransactions)
+        #expect(state.actionTitle == "Sync Transactions")
+    }
+
     @Test("Secondary accounts empty state distinguishes offline linked and unloaded data")
     func secondaryAccountsEmptyStateDistinguishesRecovery() {
         let offline = SecondaryContentUnavailableState.accounts(
