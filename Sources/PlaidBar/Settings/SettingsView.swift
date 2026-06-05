@@ -307,25 +307,39 @@ struct AccountSettingsView: View {
                                         .font(.headline)
 
                                     HStack(spacing: Spacing.xs) {
-                                        Image(systemName: icon(for: group.status))
-                                            .foregroundStyle(color(for: group.status))
-                                        Text(label(for: group.status))
-                                            .foregroundStyle(color(for: group.status))
+                                        Image(systemName: group.connection.iconName)
+                                            .foregroundStyle(color(for: group.connection.level))
+                                        Text(group.connection.signalLabel)
+                                            .foregroundStyle(color(for: group.connection.level))
                                         Text("\u{00B7}")
                                             .foregroundStyle(.tertiary)
                                         Text("\(group.accounts.count) account\(group.accounts.count == 1 ? "" : "s")")
                                             .foregroundStyle(.secondary)
+                                        if let itemSyncLabel = group.connection.itemSyncLabel {
+                                            Text("\u{00B7}")
+                                                .foregroundStyle(.tertiary)
+                                            Text(itemSyncLabel)
+                                                .foregroundStyle(.secondary)
+                                        }
                                     }
                                     .detailText()
+
+                                    if let recoveryDetailLabel = group.connection.recoveryDetailLabel {
+                                        Text(recoveryDetailLabel)
+                                            .detailText()
+                                            .foregroundStyle(.secondary)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
                                 }
 
                                 Spacer()
 
-                                if group.status != .connected {
+                                if group.connection.showsRecoveryActions,
+                                   let recoveryActionTitle = group.connection.recoveryActionTitle {
                                     Button {
-                                        Task { await appState.reconnectItem(itemId: group.id) }
+                                        performRecoveryAction(for: group)
                                     } label: {
-                                        Label("Reconnect", systemImage: "link.badge.plus")
+                                        Label(recoveryActionTitle, systemImage: group.connection.level == .stale ? "arrow.clockwise" : "link.badge.plus")
                                     }
                                     .buttonStyle(.bordered)
                                 }
@@ -435,26 +449,40 @@ struct AccountSettingsView: View {
                 return AccountItemGroup(
                     id: itemId,
                     institutionName: institutionName,
-                    status: status?.status ?? .connected,
+                    connection: AccountConnectionPresentation.evaluate(
+                        isDemoMode: appState.usesDemoConnectionPresentation,
+                        serverConnected: appState.serverConnected,
+                        isSyncStale: appState.isSyncStale,
+                        statusSyncText: appState.statusSyncText,
+                        itemStatus: status?.status ?? .connected,
+                        institutionName: institutionName,
+                        itemLastSyncRelative: status?.lastSync.map(Formatters.relativeDate)
+                    ),
                     accounts: accounts.sorted { $0.name < $1.name }
                 )
             }
             .sorted { $0.institutionName < $1.institutionName }
     }
 
-    private func icon(for status: ItemConnectionStatus) -> String {
-        switch status {
-        case .connected: "checkmark.circle.fill"
-        case .loginRequired: "person.crop.circle.badge.exclamationmark"
-        case .error: "xmark.octagon.fill"
+    private func performRecoveryAction(for group: AccountItemGroup) {
+        switch group.connection.level {
+        case .stale:
+            Task { await appState.refreshDashboard() }
+        case .loginRequired, .error:
+            Task { await appState.reconnectItem(itemId: group.id) }
+        case .demo, .offline, .healthy, .unknown:
+            break
         }
     }
 
-    private func color(for status: ItemConnectionStatus) -> Color {
-        switch status {
-        case .connected: SemanticColors.positive
-        case .loginRequired: SemanticColors.warning
-        case .error: SemanticColors.negative
+    private func color(for level: AccountConnectionLevel) -> Color {
+        switch level {
+        case .healthy, .demo:
+            SemanticColors.positive
+        case .stale, .loginRequired, .unknown:
+            SemanticColors.warning
+        case .error, .offline:
+            SemanticColors.negative
         }
     }
 
@@ -480,26 +508,30 @@ struct AccountSettingsView: View {
     }
 
     private func groupAccessibilityLabel(for group: AccountItemGroup) -> String {
-        "\(group.institutionName), \(label(for: group.status)), \(group.accounts.count) account\(group.accounts.count == 1 ? "" : "s")"
+        var parts = [
+            group.institutionName,
+            group.connection.signalLabel,
+            "\(group.accounts.count) account\(group.accounts.count == 1 ? "" : "s")",
+        ]
+        if let itemSyncLabel = group.connection.itemSyncLabel {
+            parts.append(itemSyncLabel)
+        }
+        if let recoveryDetailLabel = group.connection.recoveryDetailLabel {
+            parts.append(recoveryDetailLabel)
+        }
+        return parts.joined(separator: ", ")
     }
 
     private func accountAccessibilityLabel(for account: AccountDTO) -> String {
         "\(account.name), \(account.type.rawValue.capitalized), \(balanceText(for: account))"
     }
 
-    private func label(for status: ItemConnectionStatus) -> String {
-        switch status {
-        case .connected: "Connected"
-        case .loginRequired: "Login required"
-        case .error: "Error"
-        }
-    }
 }
 
 private struct AccountItemGroup: Identifiable {
     let id: String
     let institutionName: String
-    let status: ItemConnectionStatus
+    let connection: AccountConnectionPresentation
     let accounts: [AccountDTO]
 }
 
