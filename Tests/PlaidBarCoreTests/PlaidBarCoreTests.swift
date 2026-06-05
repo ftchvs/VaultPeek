@@ -344,6 +344,36 @@ struct PlaidBarCoreTests {
         #expect(summary.days == 30)
     }
 
+    @Test("Account activity summary defaults to latest transaction date")
+    func accountActivitySummaryDefaultsToLatestTransactionDate() {
+        let transactions = [
+            TransactionDTO(id: "recent", accountId: "a", amount: 100, date: "2026-01-30", name: "Groceries"),
+            TransactionDTO(id: "included", accountId: "a", amount: -2_000, date: "2026-01-10", name: "Payroll", category: .income),
+            TransactionDTO(id: "old", accountId: "a", amount: 75, date: "2025-12-01", name: "Old"),
+            TransactionDTO(id: "invalid", accountId: "a", amount: 25, date: "not-a-date", name: "Invalid")
+        ]
+
+        let summary = AccountActivitySummary.recent(from: transactions)
+
+        #expect(summary.transactionCount == 2)
+        #expect(summary.outflowTotal == 100)
+        #expect(summary.inflowTotal == 2_000)
+    }
+
+    @Test("Account activity summary explicit now excludes future transactions")
+    func accountActivitySummaryExplicitNowExcludesFutureTransactions() {
+        let now = Formatters.parseTransactionDate("2026-01-15")!
+        let transactions = [
+            TransactionDTO(id: "current", accountId: "a", amount: 25, date: "2026-01-15", name: "Coffee"),
+            TransactionDTO(id: "future", accountId: "a", amount: 100, date: "2026-01-30", name: "Future")
+        ]
+
+        let summary = AccountActivitySummary.recent(from: transactions, now: now)
+
+        #expect(summary.transactionCount == 1)
+        #expect(summary.outflowTotal == 25)
+    }
+
     @Test("Account presentation picks subtype-aware icons")
     func accountPresentationIcons() {
         let checking = AccountDTO(id: "1", itemId: "i", name: "Checking", type: .depository, subtype: "checking", balances: BalanceDTO(available: 100))
