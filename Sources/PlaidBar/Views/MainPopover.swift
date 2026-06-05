@@ -1313,7 +1313,8 @@ private struct DashboardEmptyAccountState: View {
             linkedItemCount: appState.statusItemCount,
             accountCount: appState.accounts.count,
             degradedItemCount: appState.needsLoginItemCount + appState.erroredItemCount,
-            degradedItemRecoveryTitle: ItemRecoveryTarget.actionTitle(from: appState.itemStatuses)
+            degradedItemRecoveryTitle: ItemRecoveryTarget.actionTitle(from: appState.itemStatuses),
+            degradedItemRecoveryDetail: ItemRecoveryTarget.recoveryDetail(from: appState.itemStatuses)
         )
     }
 
