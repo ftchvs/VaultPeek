@@ -677,6 +677,30 @@ struct PlaidBarCoreTests {
         #expect(errored.recoveryActionTitle == "Reconnect American Express")
     }
 
+    @Test("Item recovery target prioritizes item errors")
+    func itemRecoveryTargetPrioritizesItemErrors() {
+        let statuses = [
+            ItemStatus(id: "login", institutionName: "Chase", status: .loginRequired),
+            ItemStatus(id: "error", institutionName: "Amex", status: .error),
+        ]
+
+        #expect(ItemRecoveryTarget.itemId(from: statuses) == "error")
+        #expect(ItemRecoveryTarget.actionTitle(from: statuses) == "Reconnect Amex")
+        #expect(ItemRecoveryTarget.recoveryDetail(from: statuses) == "Plaid reported an item error for Amex. Reconnect it, then refresh balances.")
+    }
+
+    @Test("Item recovery target explains login required recovery")
+    func itemRecoveryTargetExplainsLoginRequiredRecovery() {
+        let statuses = [
+            ItemStatus(id: "connected", institutionName: "Bank", status: .connected),
+            ItemStatus(id: "login", institutionName: " Chase ", status: .loginRequired),
+        ]
+
+        #expect(ItemRecoveryTarget.itemId(from: statuses) == "login")
+        #expect(ItemRecoveryTarget.actionTitle(from: statuses) == "Reconnect Chase")
+        #expect(ItemRecoveryTarget.recoveryDetail(from: statuses) == "Plaid requires a fresh Chase login before account rows can be recovered.")
+    }
+
     @Test("Menu bar summary estimates runway from recent monthly spend")
     func menuBarSummaryRunwayMonths() {
         let now = Formatters.parseTransactionDate("2026-01-30")!
@@ -1443,11 +1467,12 @@ struct PlaidBarCoreTests {
             linkedItemCount: 1,
             accountCount: 3,
             degradedItemCount: 1,
-            degradedItemRecoveryTitle: "Reconnect Chase"
+            degradedItemRecoveryTitle: "Reconnect Chase",
+            degradedItemRecoveryDetail: "Plaid requires a fresh Chase login before account rows can be recovered."
         )
 
         #expect(emptyState.title == "1 item needs attention")
-        #expect(emptyState.detail.contains("needs recovery"))
+        #expect(emptyState.detail == "Plaid requires a fresh Chase login before account rows can be recovered.")
         #expect(emptyState.iconName == "exclamationmark.triangle.fill")
         #expect(emptyState.tone == .warning)
         #expect(!emptyState.showsAddAccount)
