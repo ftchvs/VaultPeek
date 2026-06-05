@@ -441,6 +441,10 @@ final class AppState {
         )
     }
 
+    var usesDemoConnectionPresentation: Bool {
+        isDemoMode && !isDemoStatusRecoveryScenario
+    }
+
     var isSyncStale: Bool {
         guard let lastSyncDate else { return true }
         let staleAfter = max(refreshInterval * 2, PlaidBarConstants.transactionSyncInterval * 2)

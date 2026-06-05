@@ -1289,7 +1289,7 @@ private struct AccountRowWithDrilldown: View {
 
     private var connectionPresentation: AccountConnectionPresentation {
         AccountConnectionPresentation.evaluate(
-            isDemoMode: appState.isDemoMode,
+            isDemoMode: appState.usesDemoConnectionPresentation,
             serverConnected: appState.serverConnected,
             isSyncStale: appState.isSyncStale,
             statusSyncText: appState.statusSyncText,
@@ -1308,7 +1308,7 @@ private struct DashboardEmptyAccountState: View {
     private var presentation: DashboardAccountEmptyState {
         DashboardAccountEmptyState.evaluate(
             filter: filter.emptyStateKind,
-            isDemoMode: appState.isDemoMode,
+            isDemoMode: appState.usesDemoConnectionPresentation,
             serverConnected: appState.serverConnected,
             linkedItemCount: appState.statusItemCount,
             accountCount: appState.accounts.count,
@@ -1538,7 +1538,7 @@ private struct DashboardAccountRow: View {
 
     private var connectionPresentation: AccountConnectionPresentation {
         AccountConnectionPresentation.evaluate(
-            isDemoMode: appState.isDemoMode && !appState.isDemoStatusRecoveryScenario,
+            isDemoMode: appState.usesDemoConnectionPresentation,
             serverConnected: appState.serverConnected,
             isSyncStale: appState.isSyncStale,
             statusSyncText: appState.statusSyncText,
@@ -1590,7 +1590,7 @@ private struct SelectedAccountPanel: View {
     private var emptyState: AccountActivityEmptyState? {
         AccountActivityEmptyState.evaluate(
             transactionCount: accountTransactions.count,
-            isDemoMode: appState.isDemoMode && !appState.isDemoStatusRecoveryScenario,
+            isDemoMode: appState.usesDemoConnectionPresentation,
             serverConnected: appState.serverConnected,
             connectionLevel: connectionPresentation.level,
             accountDisplayName: AccountPresentation.displayName(for: account)
@@ -1763,7 +1763,7 @@ private struct SelectedAccountPanel: View {
 
     private var connectionPresentation: AccountConnectionPresentation {
         AccountConnectionPresentation.evaluate(
-            isDemoMode: appState.isDemoMode,
+            isDemoMode: appState.usesDemoConnectionPresentation,
             serverConnected: appState.serverConnected,
             isSyncStale: appState.isSyncStale,
             statusSyncText: appState.statusSyncText,
