@@ -237,8 +237,9 @@ final class AppState {
 
     var menuBarAttentionText: String? {
         if isDemoMode { return nil }
+        if serverConnectionPresentation.attentionText == "Auth" { return "Auth" }
         if error != nil || erroredItemCount > 0 { return "Error" }
-        if !serverConnected { return "Offline" }
+        if let attentionText = serverConnectionPresentation.attentionText { return attentionText }
         if needsLoginItemCount > 0 { return "Login" }
         if isSyncStale { return lastSyncDate == nil ? "Never" : "Stale" }
         return nil
@@ -291,10 +292,7 @@ final class AppState {
     }
 
     var statusServerText: String {
-        if isDemoMode { return "Local demo" }
-        if isLoading { return "Syncing" }
-        if error != nil { return "Error" }
-        return serverConnected ? "Connected" : "Offline"
+        serverConnectionPresentation.statusText
     }
 
     var statusItemCount: Int {
@@ -391,12 +389,28 @@ final class AppState {
             if erroredItemCount > 0 { return "\(erroredItemCount) demo item\(erroredItemCount == 1 ? "" : "s") need attention" }
             if needsLoginItemCount > 0 { return "\(needsLoginItemCount) demo item\(needsLoginItemCount == 1 ? "" : "s") need login" }
         }
-        if isDemoMode { return "Demo data loaded" }
-        if !serverConnected { return "Server offline" }
+        let serverPresentation = serverConnectionPresentation
+        if isDemoMode { return serverPresentation.diagnosticsSummary }
+        switch serverPresentation.issue {
+        case .offline, .localAuthMissing, .localAuthRejected:
+            return serverPresentation.diagnosticsSummary
+        case .demo, .syncing, .connected, .error:
+            break
+        }
         if statusItemCount == 0 { return "No Plaid items connected" }
         if erroredItemCount > 0 { return "\(erroredItemCount) item\(erroredItemCount == 1 ? "" : "s") need attention" }
         if needsLoginItemCount > 0 { return "\(needsLoginItemCount) item\(needsLoginItemCount == 1 ? "" : "s") need login" }
+        if serverPresentation.issue == .error { return serverPresentation.diagnosticsSummary }
         return "Plaid connection healthy"
+    }
+
+    private var serverConnectionPresentation: ServerConnectionPresentation {
+        ServerConnectionPresentation.evaluate(
+            isDemoMode: isDemoMode,
+            isLoading: isLoading,
+            serverConnected: serverConnected,
+            errorMessage: error
+        )
     }
 
     var firstRunCompletionState: FirstRunCompletionState {

@@ -1331,6 +1331,56 @@ struct PlaidBarCoreTests {
         #expect(readiness.primaryActionTitle == "Connect Bank")
     }
 
+    @Test("Server connection presentation labels local auth failures")
+    func serverConnectionPresentationLabelsLocalAuthFailures() {
+        let missing = ServerConnectionPresentation.evaluate(
+            isDemoMode: false,
+            isLoading: false,
+            serverConnected: false,
+            errorMessage: "PlaidBar server auth token is unavailable"
+        )
+        let rejected = ServerConnectionPresentation.evaluate(
+            isDemoMode: false,
+            isLoading: false,
+            serverConnected: true,
+            errorMessage: "PlaidBar server returned 403: forbidden"
+        )
+
+        #expect(missing.issue == .localAuthMissing)
+        #expect(missing.statusText == "Auth missing")
+        #expect(missing.diagnosticsSummary == "Local server auth missing")
+        #expect(missing.attentionText == "Auth")
+        #expect(rejected.issue == .localAuthRejected)
+        #expect(rejected.statusText == "Auth rejected")
+        #expect(rejected.diagnosticsSummary == "Local server auth rejected")
+        #expect(rejected.attentionText == "Auth")
+    }
+
+    @Test("Server connection presentation distinguishes offline and generic errors")
+    func serverConnectionPresentationDistinguishesOfflineAndGenericErrors() {
+        let offline = ServerConnectionPresentation.evaluate(
+            isDemoMode: false,
+            isLoading: false,
+            serverConnected: false,
+            errorMessage: nil
+        )
+        let genericError = ServerConnectionPresentation.evaluate(
+            isDemoMode: false,
+            isLoading: false,
+            serverConnected: true,
+            errorMessage: "PlaidBar server returned 500: internal server error"
+        )
+
+        #expect(offline.issue == .offline)
+        #expect(offline.statusText == "Offline")
+        #expect(offline.diagnosticsSummary == "Server offline")
+        #expect(offline.attentionText == "Offline")
+        #expect(genericError.issue == .error)
+        #expect(genericError.statusText == "Error")
+        #expect(genericError.diagnosticsSummary == "Recent action failed")
+        #expect(genericError.attentionText == "Error")
+    }
+
     @Test("Dashboard status readiness surfaces recent action failure before empty data")
     func dashboardStatusReadinessSurfacesRecentActionFailureBeforeEmptyData() {
         let readiness = DashboardStatusReadiness.evaluate(
