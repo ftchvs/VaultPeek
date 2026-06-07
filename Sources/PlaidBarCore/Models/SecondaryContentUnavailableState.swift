@@ -127,7 +127,7 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
         hasActiveFilters: Bool,
         errorMessage: String?
     ) -> SecondaryContentUnavailableState {
-        if hasSearchText || hasActiveFilters {
+        if transactionCount > 0, hasSearchText || hasActiveFilters {
             return SecondaryContentUnavailableState(
                 title: "No matching transactions",
                 detail: "Synced history is loaded, but nothing matches the current search or filters. Clear them to return to recent transactions.",

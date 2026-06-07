@@ -23,17 +23,18 @@ public struct AccountActivitySummary: Sendable, Equatable {
 
     public static func recent(
         from transactions: [TransactionDTO],
-        now: Date = Date(),
+        now: Date? = nil,
         calendar: Calendar = .current,
         days: Int = 30
     ) -> AccountActivitySummary {
+        let referenceDate = now ?? latestTransactionDate(in: transactions) ?? Date()
         let startDate = calendar.startOfDay(
-            for: calendar.date(byAdding: .day, value: -(days - 1), to: now) ?? now
+            for: calendar.date(byAdding: .day, value: -(days - 1), to: referenceDate) ?? referenceDate
         )
 
         let recentTransactions = transactions.filter { transaction in
             guard let date = Formatters.parseTransactionDate(transaction.date) else { return false }
-            return date >= startDate && date <= now
+            return date >= startDate && date <= referenceDate
         }
 
         var inflowTotal = 0.0
@@ -54,6 +55,12 @@ public struct AccountActivitySummary: Sendable, Equatable {
             outflowTotal: outflowTotal,
             days: days
         )
+    }
+
+    private static func latestTransactionDate(in transactions: [TransactionDTO]) -> Date? {
+        transactions
+            .compactMap { Formatters.parseTransactionDate($0.date) }
+            .max()
     }
 }
 

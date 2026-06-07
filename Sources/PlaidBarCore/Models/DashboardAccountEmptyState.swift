@@ -81,7 +81,8 @@ public struct DashboardAccountEmptyState: Equatable, Sendable {
         linkedItemCount: Int,
         accountCount: Int,
         degradedItemCount: Int,
-        degradedItemRecoveryTitle: String? = nil
+        degradedItemRecoveryTitle: String? = nil,
+        degradedItemRecoveryDetail: String? = nil
     ) -> DashboardAccountEmptyState {
         if !isDemoMode, !serverConnected {
             return DashboardAccountEmptyState(
@@ -112,7 +113,7 @@ public struct DashboardAccountEmptyState: Equatable, Sendable {
         if filter == .status, degradedItemCount > 0 {
             return DashboardAccountEmptyState(
                 title: "\(degradedItemCount) item\(degradedItemCount == 1 ? "" : "s") \(degradedItemCount == 1 ? "needs" : "need") attention",
-                detail: "A linked institution needs recovery, but no matching account rows are loaded. Reconnect the item from here, then refresh balances.",
+                detail: degradedItemRecoveryDetail ?? "A linked institution needs recovery, but no matching account rows are loaded. Reconnect the item from here, then refresh balances.",
                 iconName: "exclamationmark.triangle.fill",
                 tone: .warning,
                 showsAddAccount: false,
