@@ -16,10 +16,16 @@ menu-bar instrument over new feature breadth.
 
 ## Rules
 
-- Work locally unless Felipe explicitly approves push or PR creation.
-- Never merge from this skill.
-- Do not add hosted backend, telemetry, cloud sync, multi-user support, or
-  budgeting workflows.
+- Work locally by default. Use the scoped PlaidBar approval recorded in
+  `docs/autonomous-roadmap.md` for push, PR creation, and merge only when the
+  current task is clearly inside that scope.
+- Merge only after local gates pass, GitHub checks are green, review feedback is
+  addressed, and a final safety read finds no secrets, real financial data,
+  generated artifacts, or local-first boundary violations.
+- Do not add hosted backend, telemetry, cloud sync, multi-user support,
+  budgeting workflows, or cloud AI over private transaction data.
+- Keep optional AI local-only, off by default, explainable, reversible, and
+  non-blocking when no local model runtime is configured.
 - Do not overclaim security. If tokens are stored in SQLite, say that plainly.
 - Keep changes small, reviewable, and backed by verification evidence.
 
@@ -27,13 +33,8 @@ menu-bar instrument over new feature breadth.
 
 1. Inspect `git status --short --branch`, `GOAL.md`, `README.md`,
    `DESIGN.md`, and the files likely to change.
-2. Choose one production-readiness slice:
-   - RepoBar-style finance dashboard,
-   - local data controls,
-   - empty/error states,
-   - server/config preflight,
-   - reconnect and degraded item handling,
-   - demo/screenshot polish.
+2. Choose one unfinished task from `docs/autonomous-loop-backlog.md`, combining
+   adjacent tasks only when the PR remains easy to review.
 3. Implement using existing SwiftUI, `AppState`, `ServerClient`, settings,
    status, and `PlaidBarCore` patterns.
 4. Run:
@@ -42,8 +43,11 @@ menu-bar instrument over new feature breadth.
    - focused Swift tests when logic changed and the local toolchain supports it
    - a secret scan over docs, sources, tests, `commands`, and `.codex`
 5. Commit only one coherent slice at a time.
-6. Report progress with branch, changed files, validation, warnings, and next
-   slice.
+6. When scoped approval applies, push the branch, open or update the PR, request
+   review, wait for green checks, address feedback, and merge only after the
+   safety gate passes.
+7. Report progress with branch, task IDs, changed files, validation, warnings,
+   PR/check/merge status, and next slice.
 
 ## Preferred Next Slice
 

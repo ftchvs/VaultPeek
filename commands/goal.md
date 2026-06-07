@@ -1,17 +1,18 @@
 ---
-description: Continue PlaidBar production-readiness work for multiple hours.
+description: Continue PlaidBar production-readiness work through the autonomous backlog.
 argument-hint: "[focus area] [--hours=2-4] [--no-commit]"
 ---
 
 # /goal
 
-Run the PlaidBar production-readiness loop for a multi-hour work session.
+Run the PlaidBar production-readiness loop for a multi-hour work session or
+one reviewable autonomous backlog task.
 
 Default goal:
 
-> Make PlaidBar feel like RepoBar for personal finance: a native macOS menu-bar
-> instrument with a GitHub-style heatmap header, dense account/card rows,
-> financial scope filters, and drill-in details for each account.
+> Advance the next safe PlaidBar production-readiness task while preserving the
+> local-first privacy contract, minimalist modern macOS design, and honest
+> security boundaries.
 
 ## How To Use
 
@@ -26,24 +27,28 @@ This command intentionally delegates the detailed operating loop to:
 
 ```text
 commands/plaidbar-prod-loop.md
+docs/autonomous-loop-backlog.md
+docs/autonomous-roadmap.md
 ```
 
-Read that file first, then execute the same loop with the `/goal` arguments as
-the requested focus/timebox.
+Read those files first, then execute the same loop with the `/goal` arguments
+as the requested focus/timebox. Treat one backlog task as the default iteration;
+combine adjacent tasks only when the resulting PR remains easy to review.
 
 ## Priority Order
 
-1. RepoBar-style finance dashboard:
-   - heatmap header at the top of the popover,
-   - segmented filters for All, Cash, Credit, Savings, Debt, and Status,
-   - compact rows for accounts/cards with balance, utilization/status, and last update,
-   - row selection or drill-in details for a specific credit card/account.
-2. Trust-first local data controls in Settings.
-3. Sharper empty and error states across Accounts, Transactions, and Credit.
-4. Server/config preflight for environment and credential readiness.
-5. Reconnect/degraded-item handling.
-6. Demo and screenshot polish.
-7. Distribution readiness only after the real Plaid flow is reliable.
+1. Minimalist modern dashboard polish: heatmap first, dense rows, semantic
+   color, compact native controls, no marketing chrome.
+2. Security and safety: token/storage invariants, status redaction, auth
+   behavior, logs, screenshots, and destructive-action confirmations.
+3. Local-first privacy: no PlaidBar backend, telemetry, cloud sync, multi-user
+   state, or cloud AI over transaction data.
+4. Plaid setup reliability: demo, sandbox, production preflight, reconnect,
+   degraded item handling, and status diagnostics.
+5. Optional local AI: local-only, off by default, explainable, reversible, and
+   non-blocking when no local model runtime is configured.
+6. Production readiness: QA matrix, release notes, troubleshooting, packaging
+   checks, and honest distribution assumptions.
 
 ## RepoBar Design Reference
 
@@ -68,8 +73,13 @@ Translate the pattern to finance instead of copying GitHub concepts literally:
 Stop and report when:
 
 - the requested timebox ends,
-- a coherent slice is committed and ready for push/PR approval,
+- a coherent task or PR slice is committed and ready for the PR/check/review
+  loop,
 - verification fails on a real regression,
 - a product/security decision needs Felipe.
 
-Never push, open PRs, or merge from `/goal` without explicit approval.
+Interactive `/goal` defaults to local work. Push, open PRs, or merge only when
+the current run is explicitly operating under the scoped PlaidBar approval
+documented in `docs/autonomous-roadmap.md`, all local and GitHub checks are
+green, and the safe PR loop says the diff is mergeable. If approval scope or
+safety is unclear, stop with a handoff instead of merging.

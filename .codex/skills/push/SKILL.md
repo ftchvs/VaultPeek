@@ -1,11 +1,13 @@
 ---
 name: push
-description: Publish a PlaidBar branch and open a PR after approval.
+description: Publish a PlaidBar branch, open/update a PR, and merge only through the safe gate.
 ---
 
 # Push
 
-Use only after Felipe explicitly approves pushing/opening a PR.
+Use only after Felipe explicitly approves pushing/opening a PR, or when the run
+is clearly covered by the scoped PlaidBar approval recorded in
+`docs/autonomous-roadmap.md`.
 
 1. Confirm the branch and latest validation.
 2. Push the branch with tracking.
@@ -15,4 +17,10 @@ Use only after Felipe explicitly approves pushing/opening a PR.
    - product impact,
    - validation commands and results,
    - known warnings or blockers.
-5. Do not merge from this skill.
+5. Request review when appropriate, including `@codex review` when using Codex
+   as the reviewer.
+6. Wait for GitHub checks and address review feedback.
+7. Merge only when local gates passed, GitHub checks are green, review feedback
+   is addressed, and the final diff is safe: no secrets, no real financial data,
+   no generated artifacts, no unsafe destructive behavior, and no local-first
+   boundary violations.
