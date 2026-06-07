@@ -130,6 +130,22 @@ Completed production-readiness slices:
 3. Refresh demo fixtures and screenshots when UI behavior changes.
 4. Improve accessibility labels for icon-only controls and chart/status signals.
 
+### Local AI Insights
+
+1. Add an on-device AI summary layer for financial activity, with no cloud model
+   calls and no transaction data leaving the Mac.
+2. Summarize spending, income, recurring charges, credit utilization, balance
+   changes, and notable anomalies over the last 7 days, last month, and
+   year-over-year windows.
+3. Use local AI to improve categorization of expenses and income while keeping
+   Plaid categories as the auditable source-of-record fallback.
+4. Make AI output explainable and reversible: show the source transactions or
+   category evidence behind each summary, allow user correction, and never
+   mutate raw Plaid transaction data.
+5. Treat local-model availability as optional. If no model runtime is
+   configured, hide or disable insight surfaces with a clear setup/recovery
+   action instead of blocking the core dashboard.
+
 ### Distribution And Open Source
 
 1. Keep README, troubleshooting, privacy, security, release notes, and QA matrix
