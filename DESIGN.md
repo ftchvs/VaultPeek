@@ -103,6 +103,27 @@ Category colors from `SpendingCategory.colorHex` — fixed hex values for chart 
 | `xl` | 24pt | Hero spacing, modal padding |
 | `rowVertical` | 6pt | Row vertical padding (RecurringRow, TransactionRow) |
 
+## Native Surface System
+
+PlaidBar is a macOS menu bar instrument, so surfaces should feel native,
+translucent, and compact rather than like stacked web cards. Shared surface
+tokens live in `SurfaceTokens` and shared modifiers live in
+`SharedModifiers.swift`.
+
+| Token/Modifier | Purpose |
+|----------------|---------|
+| `SurfaceTokens.panelFillOpacity` | Default quiet panel fill for dashboard, detail, and recovery surfaces |
+| `SurfaceTokens.insetFillOpacity` | Compact inset controls such as segmented filters and metric pills |
+| `SurfaceTokens.selectedFillOpacity` | Selected account row highlight, backed by a visible accent rail |
+| `SurfaceTokens.panelStrokeOpacity` | Hairline separators around native surfaces |
+| `.nativePanelSurface(...)` | Shared rounded panel treatment with material/fill fallback and optional Liquid Glass enhancement |
+| `.nativeInsetSurface(...)` | Smaller, non-glass inset treatment for controls and dense metric pills |
+
+Liquid Glass is a progressive enhancement only. Apple SwiftUI's `Glass.regular`
+and `glassEffect` APIs are macOS 26+, while PlaidBar currently supports
+macOS 15+. Do not raise the minimum OS for visual polish; use availability-gated
+Liquid Glass and keep a SwiftUI material/fill fallback.
+
 ## Component Catalog
 
 ### RepoBar-Style Finance Overview
@@ -111,9 +132,10 @@ Category colors from `SpendingCategory.colorHex` — fixed hex values for chart 
 filter bar, dense rows, selected row highlight, and chevron-based drill-in. Use
 the RepoBar visual language as inspiration, not as literal GitHub UI.
 
-**Target anatomy:** VStack | Financial heatmap header (`last 365 days`, Spend
-or Net mode) | segmented filter bar (`All`, `Cash`, `Credit`, `Savings`,
-`Debt`, `Status`) | list of account/card rows | inline selected account/card
+**Target anatomy:** VStack | compact net-worth header | status strip |
+Financial heatmap header (`last 365 days`, Spend or Net mode) | segmented
+filter bar (`All`, `Cash`, `Credit`, `Savings`, `Debt`, `Status`) | summary and
+balance context | list of account/card rows | inline selected account/card
 detail surface.
 
 | Element | PlaidBar Meaning |

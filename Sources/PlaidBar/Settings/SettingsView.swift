@@ -545,7 +545,7 @@ private struct PendingAccountRemoval: Identifiable {
 
 struct NotificationSettingsView: View {
     @Environment(AppState.self) private var appState
-    @State private var permissionStatus: UNAuthorizationStatus = .notDetermined
+    @State private var permissionState: NotificationPermissionState = .status(.notDetermined)
 
     var body: some View {
         @Bindable var state = appState
@@ -570,9 +570,15 @@ struct NotificationSettingsView: View {
                                 Task { await refreshPermissionStatus() }
                             }
                         }
-                        .disabled(permissionStatus == .denied)
+                        .disabled(permissionState.authorizationStatus == .denied || permissionState.authorizationStatus == nil)
 
-                    if permissionStatus == .denied {
+                    if permissionState.authorizationStatus == nil {
+                        InlineSettingsNotice(
+                            text: "Notifications are unavailable for this launch mode because macOS cannot register PlaidBar as a notification source.",
+                            icon: "bell.slash",
+                            tint: .secondary
+                        )
+                    } else if permissionState.authorizationStatus == .denied {
                         InlineSettingsNotice(
                             text: "Notifications are denied in macOS. Enable PlaidBar in System Settings before turning alerts on.",
                             icon: "exclamationmark.triangle",
@@ -663,7 +669,7 @@ struct NotificationSettingsView: View {
                     .detailText()
                     .fixedSize(horizontal: false, vertical: true)
 
-                if permissionStatus == .denied {
+                if permissionState.authorizationStatus == .denied {
                     Button {
                         openNotificationSettings()
                     } label: {
@@ -682,10 +688,10 @@ struct NotificationSettingsView: View {
     }
 
     private func refreshPermissionStatus() async {
-        let status = await appState.notificationPermissionStatus()
-        permissionStatus = status
+        let state = await appState.notificationPermissionStatus()
+        permissionState = state
 
-        if status == .denied, appState.notificationsEnabled {
+        if state.shouldDisableNotifications, appState.notificationsEnabled {
             appState.notificationsEnabled = false
         }
     }
@@ -696,7 +702,16 @@ struct NotificationSettingsView: View {
     }
 
     private var permissionLabel: String {
-        switch permissionStatus {
+        switch permissionState {
+        case .unsupported:
+            "Unavailable"
+        case .status(let status):
+            permissionLabel(for: status)
+        }
+    }
+
+    private func permissionLabel(for status: UNAuthorizationStatus) -> String {
+        switch status {
         case .authorized:
             "Allowed"
         case .denied:
@@ -713,7 +728,16 @@ struct NotificationSettingsView: View {
     }
 
     private var permissionDetail: String {
-        switch permissionStatus {
+        switch permissionState {
+        case .unsupported:
+            "This PlaidBar launch does not have a macOS notification identity, so no System Settings entry is available."
+        case .status(let status):
+            permissionDetail(for: status)
+        }
+    }
+
+    private func permissionDetail(for status: UNAuthorizationStatus) -> String {
+        switch status {
         case .authorized:
             "PlaidBar can show local transaction, balance, and credit utilization alerts."
         case .denied:
@@ -730,7 +754,16 @@ struct NotificationSettingsView: View {
     }
 
     private var permissionIcon: String {
-        switch permissionStatus {
+        switch permissionState {
+        case .unsupported:
+            "bell.slash.fill"
+        case .status(let status):
+            permissionIcon(for: status)
+        }
+    }
+
+    private func permissionIcon(for status: UNAuthorizationStatus) -> String {
+        switch status {
         case .authorized, .provisional, .ephemeral:
             "checkmark.circle.fill"
         case .denied:
@@ -743,7 +776,16 @@ struct NotificationSettingsView: View {
     }
 
     private var permissionTint: Color {
-        switch permissionStatus {
+        switch permissionState {
+        case .unsupported:
+            .secondary
+        case .status(let status):
+            permissionTint(for: status)
+        }
+    }
+
+    private func permissionTint(for status: UNAuthorizationStatus) -> Color {
+        switch status {
         case .authorized, .provisional, .ephemeral:
             SemanticColors.positive
         case .denied:

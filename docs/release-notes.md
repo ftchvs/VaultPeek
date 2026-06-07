@@ -4,6 +4,28 @@ This file holds human-written release summaries before they are copied into a
 GitHub release. `CHANGELOG.md` may be generated from repository history, so keep
 curated release messaging here.
 
+## Post-1.0 Design and Trust Roadmap - Active
+
+### Focus
+
+- Keep PlaidBar's public story aligned with the shipped `v1.0.0` formula-only
+  release.
+- Move the dashboard toward a RepoBar-style finance instrument: native material,
+  compact rows, a prominent 365-day heatmap, and status-rich selected-account
+  details.
+- Treat Liquid Glass as a macOS 26+ progressive enhancement while preserving the
+  macOS 15 material fallback.
+- Continue recovery convergence across dashboard, setup, settings, Plaid item
+  health, local server state, notification permissions, and empty data states.
+
+### Verification Targets
+
+- `git diff --check`
+- `swift build --target PlaidBar --skip-update --disable-keychain`
+- `./Scripts/screenshots.sh` after visual changes
+- Manual VoiceOver and keyboard checks for dashboard filters, footer actions,
+  recovery buttons, and selected account detail surfaces
+
 ## v1.0.0 - Published
 
 ### Added

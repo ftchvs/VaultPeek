@@ -13,12 +13,12 @@ struct MainPopover: View {
     private enum Layout {
         static let dashboardWidth: CGFloat = 480
         static let setupWidth: CGFloat = 560
-        static let dashboardMinHeight: CGFloat = 500
-        static let dashboardMaxHeight: CGFloat = 680
-        static let contentHorizontalPadding: CGFloat = 14
-        static let contentTopPadding: CGFloat = 14
-        static let contentBottomPadding: CGFloat = 12
-        static let sectionSpacing: CGFloat = 12
+        static let dashboardMinHeight: CGFloat = 480
+        static let dashboardMaxHeight: CGFloat = 660
+        static let contentHorizontalPadding: CGFloat = 12
+        static let contentTopPadding: CGFloat = 10
+        static let contentBottomPadding: CGFloat = 10
+        static let sectionSpacing: CGFloat = 9
     }
 
     private var selectedFilter: DashboardAccountFilter {
@@ -46,6 +46,9 @@ struct MainPopover: View {
                         DashboardHeader()
                             .environment(appState)
 
+                        DashboardStatusStrip()
+                            .environment(appState)
+
                         if shouldElevateStatusReadinessPanel {
                             DashboardStatusReadinessPanel(
                                 openSettings: { openSettings() },
@@ -54,11 +57,7 @@ struct MainPopover: View {
                             .environment(appState)
                         }
 
-                        DashboardSummaryCards()
-                            .environment(appState)
-
-                        BalanceCompositionStrip()
-                            .environment(appState)
+                        BalanceActivityHeatmap(transactions: appState.transactions)
 
                         DashboardFilterBar(selection: filterBinding)
 
@@ -72,10 +71,11 @@ struct MainPopover: View {
                         )
                         .environment(appState)
 
-                        DashboardStatusStrip()
+                        DashboardSummaryCards()
                             .environment(appState)
 
-                        BalanceActivityHeatmap(transactions: appState.transactions)
+                        BalanceCompositionStrip()
+                            .environment(appState)
 
                         if shouldShowLowerStatusReadinessPanel {
                             DashboardStatusReadinessPanel(
@@ -109,7 +109,7 @@ struct MainPopover: View {
             }
         }
         .frame(width: shouldShowSetupScreen ? Layout.setupWidth : Layout.dashboardWidth)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(.regularMaterial)
         .animation(.easeInOut(duration: 0.2), value: appState.error != nil)
         .sheet(
             isPresented: $isShowingAccountSetup,
@@ -183,7 +183,7 @@ private struct DashboardHeader: View {
                     .foregroundStyle(.secondary)
 
                 Text(Formatters.currency(appState.netBalance, format: .full))
-                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .contentTransition(.numericText())
                     .lineLimit(1)
@@ -244,12 +244,11 @@ private struct DashboardStatusStrip: View {
             )
         }
         .padding(.horizontal, 9)
-        .padding(.vertical, 8)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-        }
+        .padding(.vertical, 7)
+        .nativePanelSurface(
+            fill: AnyShapeStyle(.regularMaterial),
+            stroke: Color.primary.opacity(0.085)
+        )
         .accessibilityElement(children: .contain)
     }
 
@@ -388,7 +387,7 @@ private struct MetricCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
-                .font(.callout.weight(.semibold))
+                .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
             Text(value)
                 .font(.headline.weight(.bold))
@@ -404,12 +403,11 @@ private struct MetricCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 10)
-        .padding(.vertical, 10)
-        .background(cardFill, in: RoundedRectangle(cornerRadius: 8))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(cardStroke, lineWidth: 1)
-        }
+        .padding(.vertical, 8)
+        .nativePanelSurface(
+            fill: AnyShapeStyle(cardFill),
+            stroke: cardStroke
+        )
         .overlay(alignment: .leading) {
             if emphasizesTint {
                 RoundedRectangle(cornerRadius: 2)
@@ -421,11 +419,11 @@ private struct MetricCard: View {
     }
 
     private var cardFill: Color {
-        emphasizesTint ? tint.opacity(0.09) : Color.primary.opacity(0.025)
+        SurfaceTokens.panelFill(emphasisTint: emphasizesTint ? tint : nil)
     }
 
     private var cardStroke: Color {
-        emphasizesTint ? tint.opacity(0.18) : Color.primary.opacity(0.07)
+        SurfaceTokens.panelStroke(emphasisTint: emphasizesTint ? tint : nil)
     }
 }
 
@@ -510,11 +508,7 @@ private struct BalanceCompositionStrip: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 9)
-        .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 8))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.primary.opacity(0.07), lineWidth: 1)
-        }
+        .nativePanelSurface()
         .accessibilityElement(children: .contain)
     }
 
@@ -746,8 +740,11 @@ private struct BalanceActivityHeatmap: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(12)
-        .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 8))
+        .padding(10)
+        .nativePanelSurface(
+            fill: AnyShapeStyle(Color.primary.opacity(SurfaceTokens.panelFillOpacity)),
+            stroke: Color.primary.opacity(0.065)
+        )
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(title) heatmap for the last 365 days with \(activeDayCount) active days.")
     }
@@ -903,8 +900,8 @@ private struct DashboardFilterBar: View {
                 }
             }
         }
-        .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .nativeInsetSurface(cornerRadius: SurfaceTokens.panelCornerRadius)
+        .clipShape(RoundedRectangle(cornerRadius: SurfaceTokens.panelCornerRadius))
         .accessibilityElement(children: .contain)
     }
 
@@ -994,11 +991,10 @@ private struct DashboardStatusReadinessPanel: View {
             }
         }
         .padding(12)
-        .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 8))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(panelStroke, lineWidth: 1)
-        }
+        .nativePanelSurface(
+            fill: AnyShapeStyle(SurfaceTokens.panelFill(emphasisTint: readinessNeedsAttention ? tint : nil)),
+            stroke: panelStroke
+        )
         .accessibilityElement(children: .contain)
     }
 
@@ -1160,7 +1156,7 @@ private struct StatusMetricPill: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 7))
+        .nativeInsetSurface(cornerRadius: SurfaceTokens.panelCornerRadius)
     }
 }
 
@@ -1258,8 +1254,8 @@ private struct AccountRowWithDrilldown: View {
             if isSelected {
                 SelectedAccountPanel(account: account, isStatusFilter: isStatusFilter)
                     .environment(appState)
-                    .padding(.top, 8)
-                    .padding(.bottom, 9)
+                    .padding(.top, 6)
+                    .padding(.bottom, 8)
             }
         }
     }
@@ -1356,11 +1352,10 @@ private struct DashboardEmptyAccountState: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 8))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(panelStroke, lineWidth: 1)
-        }
+        .nativePanelSurface(
+            fill: AnyShapeStyle(SurfaceTokens.panelFill(emphasisTint: emphasizedTint)),
+            stroke: panelStroke
+        )
     }
 
     private var title: String {
@@ -1394,6 +1389,15 @@ private struct DashboardEmptyAccountState: View {
             return tint.opacity(0.18)
         case .healthy, .offline, .secondary:
             return Color.primary.opacity(0.07)
+        }
+    }
+
+    private var emphasizedTint: Color? {
+        switch presentation.tone {
+        case .brand, .warning:
+            return tint
+        case .healthy, .offline, .secondary:
+            return nil
         }
     }
 
@@ -1492,7 +1496,14 @@ private struct DashboardAccountRow: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(isSelected ? Color.primary.opacity(0.055) : Color.primary.opacity(0.018))
+        .background(isSelected ? SemanticColors.brand.opacity(SurfaceTokens.selectedFillOpacity) : Color.primary.opacity(0.012))
+        .overlay(alignment: .leading) {
+            if isSelected {
+                Rectangle()
+                    .fill(SemanticColors.brand)
+                    .frame(width: 3)
+            }
+        }
         .overlay(alignment: .bottom) {
             Divider()
                 .opacity(0.55)
@@ -1684,7 +1695,12 @@ private struct SelectedAccountPanel: View {
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 6)
-                .background(recoveryFill, in: RoundedRectangle(cornerRadius: 7))
+                .nativePanelSurface(
+                    cornerRadius: SurfaceTokens.panelCornerRadius,
+                    fill: AnyShapeStyle(recoveryFill),
+                    stroke: connectionTint.opacity(shouldEmphasizeConnection ? 0.14 : 0.06),
+                    useLiquidGlass: false
+                )
                 .accessibilityElement(children: .combine)
             }
 
@@ -1727,11 +1743,10 @@ private struct SelectedAccountPanel: View {
             }
         }
         .padding(12)
-        .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 8))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(panelStroke, lineWidth: 1)
-        }
+        .nativePanelSurface(
+            fill: AnyShapeStyle(SurfaceTokens.panelFill(emphasisTint: shouldEmphasizeConnection ? connectionTint : nil)),
+            stroke: panelStroke
+        )
     }
 
     private var availableText: String {
@@ -1883,7 +1898,7 @@ private struct AccountSignalPill: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 7))
+        .nativeInsetSurface(cornerRadius: SurfaceTokens.panelCornerRadius)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(title): \(value)")
     }
@@ -1970,7 +1985,12 @@ private struct AccountActivityEmptyStateView: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 8)
-        .background(tint.opacity(0.06), in: RoundedRectangle(cornerRadius: 7))
+        .nativePanelSurface(
+            cornerRadius: SurfaceTokens.panelCornerRadius,
+            fill: AnyShapeStyle(tint.opacity(0.055)),
+            stroke: tint.opacity(0.11),
+            useLiquidGlass: false
+        )
         .accessibilityElement(children: .combine)
     }
 

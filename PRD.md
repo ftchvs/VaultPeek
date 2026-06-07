@@ -113,7 +113,7 @@ A menu bar app that makes personal finance data glanceable. One click to see all
 | 4.8 | #15 | SpendingView periodInterval may recompute on every access | Performance |
 | 4.9 | #17 | Activation policy switch may leave dock icon visible | Fix |
 
-### v0.5 (in progress)
+### v0.5 (shipped)
 
 v0.5 turns the app from a polished demo into a more trustworthy local utility.
 The focus is readiness, recovery, and explicit local-data boundaries.
@@ -129,15 +129,15 @@ The focus is readiness, recovery, and explicit local-data boundaries.
 | 5.7 | Current screenshots | **Given** the README screenshots are used for public review, **When** screenshots are regenerated, **Then** they show the current design system and include dashboard, onboarding, status, and settings surfaces |
 | 5.8 | Release metadata | **Given** a release candidate is ready to tag, **When** release metadata is prepared, **Then** `version.env`, `Info.plist`, runtime constants, formula tag, tests, changelog, and release docs agree on the candidate version |
 
-### v1.0 (planned)
+### v1.0 (shipped)
 
-PlaidBar 1.0 is the first stable public release target. It should be installable,
+PlaidBar 1.0 is the first stable public release. It is installable,
 understandable, recoverable, and credible as an open-source local finance
 utility without maintainer hand-holding.
 
-See [docs/v1.0-roadmap.md](docs/v1.0-roadmap.md) for the detailed SDLC plan,
-product requirements, design/frontend improvements, system architecture,
-security/privacy checklist, open-source readiness criteria, and release blockers.
+See [docs/v1.0-roadmap.md](docs/v1.0-roadmap.md) for the long-term product
+vision, design principles, product boundaries, architecture guardrails, and
+Hermes agent starting context.
 
 | # | Requirement | Acceptance Criteria |
 |---|-------------|-------------------|
@@ -147,6 +147,19 @@ security/privacy checklist, open-source readiness criteria, and release blockers
 | 1.0.4 | Local-first security | **Given** the release candidate is audited, **When** storage, logging, endpoints, screenshots, and docs are checked, **Then** Plaid secrets/tokens and real financial data are not exposed and sandbox/production stores remain separated |
 | 1.0.5 | Open-source readiness | **Given** a contributor lands on GitHub, **When** they read the repo docs, **Then** they can understand the architecture, build/run/test the app, report issues securely, contribute safely, and verify release status |
 | 1.0.6 | Release distribution | **Given** v1.0.0 is tagged, **When** install instructions are followed, **Then** source/Homebrew installation works and release metadata, changelog, formula, screenshots, and support policy all match the tag |
+
+### Post-1.0 (active)
+
+Post-1.0 work is design-first and trust-first. PlaidBar should become a more
+native RepoBar-style finance instrument before expanding finance scope.
+
+| # | Requirement | Acceptance Criteria |
+|---|-------------|-------------------|
+| P1.1 | Roadmap truth cleanup | **Given** a contributor reads README, PRD, release notes, release docs, and roadmap, **When** they compare release status, **Then** the docs agree that v1.0.0 has shipped and that notarized app/cask/Sparkle appcast distribution remains post-1.0 |
+| P1.2 | Native material surface system | **Given** the dashboard renders on macOS 15+, **When** panels, filters, selected rows, and recovery states are visible, **Then** they use shared material/fill/stroke tokens instead of one-off saturated card fills |
+| P1.3 | Liquid Glass readiness | **Given** PlaidBar is built with a macOS 26+ SDK, **When** SwiftUI Liquid Glass APIs are available, **Then** native panel surfaces may opt into `glassEffect` while preserving the macOS 15 material fallback |
+| P1.4 | RepoBar-style dashboard density | **Given** the menu bar popover opens, **When** dashboard content is scanned, **Then** the status strip and 365-day heatmap appear before account rows, with compact filters and selected account detail actions in the same surface |
+| P1.5 | Recovery convergence | **Given** common failures occur, **When** the user views dashboard or settings, **Then** server offline, wrong mode, missing credentials, stale sync, login-required item, empty account data, filtered-zero transactions, and denied notifications each expose one clear recovery action |
 
 ### Future (not committed)
 
