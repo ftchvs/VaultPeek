@@ -72,8 +72,7 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
                 level: .blocked,
                 title: authError.title,
                 detail: authError.detail,
-                primaryAction: .openSettings,
-                secondaryActions: [.checkServer]
+                primaryAction: .openSettings
             )
         }
 
@@ -82,8 +81,7 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
                 level: .blocked,
                 title: "Server offline",
                 detail: "Start PlaidBarServer, then check the connection from this dashboard.",
-                primaryAction: .checkServer,
-                secondaryActions: [.openSettings]
+                primaryAction: .checkServer
             )
         }
 
@@ -105,8 +103,7 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
                     pluralAction: "need attention"
                 ),
                 detail: "A linked institution reported an error. Reconnect it, then refresh the dashboard.",
-                primaryAction: .reconnect,
-                secondaryActions: [.refresh, .openSettings]
+                primaryAction: .reconnect
             )
         }
 
@@ -119,8 +116,16 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
                     pluralAction: "need login"
                 ),
                 detail: "One or more institutions need an updated login before sync can stay healthy.",
-                primaryAction: .reconnect,
-                secondaryActions: [.refresh]
+                primaryAction: .reconnect
+            )
+        }
+
+        if let modeMismatch = serverModeMismatchError(from: errorMessage) {
+            return DashboardStatusReadiness(
+                level: .blocked,
+                title: modeMismatch.title,
+                detail: modeMismatch.detail,
+                primaryAction: .checkServer
             )
         }
 
@@ -129,8 +134,7 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
                 level: .warning,
                 title: "Recent action failed",
                 detail: errorMessage,
-                primaryAction: .refresh,
-                secondaryActions: [.openSettings]
+                primaryAction: .refresh
             )
         }
 
@@ -140,8 +144,7 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
                 title: "No institution linked",
                 detail: "Connect a Plaid institution before this dashboard can show balances and transactions.",
                 primaryAction: .addAccount,
-                primaryActionTitle: "Connect Bank",
-                secondaryActions: [.refresh]
+                primaryActionTitle: "Connect Bank"
             )
         }
 
@@ -151,8 +154,7 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
                 title: "Balances not loaded",
                 detail: "The server has linked items, but account balances have not loaded into the dashboard yet.",
                 primaryAction: .refresh,
-                primaryActionTitle: "Load Balances",
-                secondaryActions: [.addAccount]
+                primaryActionTitle: "Load Balances"
             )
         }
 
@@ -162,8 +164,7 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
                 title: "First sync needed",
                 detail: "Accounts are loaded, but no linked item has completed transaction sync yet. Refresh to run the first sync.",
                 primaryAction: .refresh,
-                primaryActionTitle: "Run First Sync",
-                secondaryActions: [.openSettings]
+                primaryActionTitle: "Run First Sync"
             )
         }
 
@@ -173,8 +174,7 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
                 title: "First sync incomplete",
                 detail: "\(syncedItemCount) of \(linkedItemCount) linked item\(linkedItemCount == 1 ? "" : "s") have completed transaction sync. Refresh to finish the remaining item\(linkedItemCount - syncedItemCount == 1 ? "" : "s").",
                 primaryAction: .refresh,
-                primaryActionTitle: "Finish Sync",
-                secondaryActions: [.openSettings]
+                primaryActionTitle: "Finish Sync"
             )
         }
 
@@ -184,8 +184,7 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
                 title: "Sync is stale",
                 detail: "Last sync: \(lastSyncRelative ?? "never"). Refresh now to pull current balances and transactions.",
                 primaryAction: .refresh,
-                primaryActionTitle: "Refresh Now",
-                secondaryActions: [.openSettings]
+                primaryActionTitle: "Refresh Now"
             )
         }
 
@@ -237,6 +236,27 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
         return "\(normalized.prefix(maxRenderedErrorLength))..."
     }
 
+    private static func serverModeMismatchError(from message: String?) -> (title: String, detail: String)? {
+        guard let message else { return nil }
+        let normalized = message
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+        let lowercased = normalized.lowercased()
+
+        guard lowercased.contains("server is running in"),
+              lowercased.contains("not sandbox") || lowercased.contains("not production")
+        else {
+            return nil
+        }
+
+        return (
+            "Server mode mismatch",
+            normalized.count > maxRenderedErrorLength
+                ? "\(normalized.prefix(maxRenderedErrorLength))..."
+                : normalized
+        )
+    }
+
     private static func itemRecoveryTitle(
         count: Int,
         singularAction: String,
@@ -246,7 +266,7 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
     }
 }
 
-private extension DashboardStatusReadinessAction {
+public extension DashboardStatusReadinessAction {
     var defaultTitle: String {
         switch self {
         case .checkServer: "Check Server"

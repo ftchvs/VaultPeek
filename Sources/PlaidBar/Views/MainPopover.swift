@@ -948,15 +948,15 @@ private struct DashboardStatusReadinessPanel: View {
             StatusMetricGrid()
                 .environment(appState)
 
-            HStack(spacing: 8) {
-                if let primaryAction = readiness.primaryAction {
+            if let primaryAction = readiness.primaryAction {
+                HStack(spacing: 8) {
                     if readinessNeedsAttention {
                         Button {
                             perform(primaryAction)
                         } label: {
                             Label(
                                 primaryActionLabel(for: primaryAction),
-                                systemImage: readiness.primaryActionIconName ?? primaryAction.icon
+                                systemImage: readiness.primaryActionIconName ?? primaryAction.defaultIconName
                             )
                         }
                         .buttonStyle(.borderedProminent)
@@ -969,24 +969,13 @@ private struct DashboardStatusReadinessPanel: View {
                         } label: {
                             Label(
                                 primaryActionLabel(for: primaryAction),
-                                systemImage: readiness.primaryActionIconName ?? primaryAction.icon
+                                systemImage: readiness.primaryActionIconName ?? primaryAction.defaultIconName
                             )
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
                         .disabled(appState.isLoading)
                     }
-                }
-
-                ForEach(readiness.secondaryActions, id: \.rawValue) { action in
-                    Button {
-                        perform(action)
-                    } label: {
-                        Label(action.label, systemImage: action.icon)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .disabled(appState.isLoading)
                 }
             }
         }
@@ -1046,7 +1035,7 @@ private struct DashboardStatusReadinessPanel: View {
            let title = ItemRecoveryTarget.actionTitle(from: appState.itemStatuses) {
             return title
         }
-        return readiness.primaryActionTitle ?? action.label
+        return readiness.primaryActionTitle ?? action.defaultTitle
     }
 
     private var reconnectItemId: String? {
@@ -1157,28 +1146,6 @@ private struct StatusMetricPill: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .nativeInsetSurface(cornerRadius: SurfaceTokens.panelCornerRadius)
-    }
-}
-
-private extension DashboardStatusReadinessAction {
-    var label: String {
-        switch self {
-        case .checkServer: "Check Server"
-        case .addAccount: "Add Account"
-        case .refresh: "Refresh"
-        case .reconnect: "Reconnect"
-        case .openSettings: "Settings"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .checkServer: "server.rack"
-        case .addAccount: "plus.circle"
-        case .refresh: "arrow.clockwise"
-        case .reconnect: "link.badge.plus"
-        case .openSettings: "gearshape"
-        }
     }
 }
 
@@ -1706,20 +1673,10 @@ private struct SelectedAccountPanel: View {
 
             if shouldShowRecoveryActions {
                 HStack(spacing: 8) {
-                    if itemStatus == .loginRequired || itemStatus == .error {
-                        Button {
-                            Task { await appState.reconnectItem(itemId: account.itemId) }
-                        } label: {
-                            Label(recoveryActionTitle, systemImage: "link.badge.plus")
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                    }
-
                     Button {
-                        Task { await appState.refreshDashboard() }
+                        performConnectionRecoveryAction()
                     } label: {
-                        Label("Refresh", systemImage: "arrow.clockwise")
+                        Label(connectionRecoveryActionTitle, systemImage: connectionRecoveryActionIcon)
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
@@ -1818,6 +1775,39 @@ private struct SelectedAccountPanel: View {
 
     private var recoveryActionTitle: String {
         connectionPresentation.recoveryActionTitle ?? "Reconnect"
+    }
+
+    private var connectionRecoveryActionTitle: String {
+        switch connectionPresentation.level {
+        case .loginRequired, .error:
+            return recoveryActionTitle
+        case .stale:
+            return "Refresh"
+        case .demo, .offline, .healthy, .unknown:
+            return "Refresh"
+        }
+    }
+
+    private var connectionRecoveryActionIcon: String {
+        switch connectionPresentation.level {
+        case .loginRequired, .error:
+            return "link.badge.plus"
+        case .stale:
+            return "arrow.clockwise"
+        case .demo, .offline, .healthy, .unknown:
+            return "arrow.clockwise"
+        }
+    }
+
+    private func performConnectionRecoveryAction() {
+        switch connectionPresentation.level {
+        case .loginRequired, .error:
+            Task { await appState.reconnectItem(itemId: account.itemId) }
+        case .stale:
+            Task { await appState.refreshDashboard() }
+        case .demo, .offline, .healthy, .unknown:
+            break
+        }
     }
 
     private var panelStroke: Color {

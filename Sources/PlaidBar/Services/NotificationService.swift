@@ -18,20 +18,32 @@ enum NotificationPermissionState {
     case unsupported
     case status(UNAuthorizationStatus)
 
-    var authorizationStatus: UNAuthorizationStatus? {
-        guard case let .status(status) = self else { return nil }
-        return status
+    static let notDetermined: NotificationPermissionState = .status(.notDetermined)
+
+    var presentationKind: NotificationPermissionKind {
+        switch self {
+        case .unsupported:
+            return .unsupported
+        case .status(let status):
+            switch status {
+            case .authorized:
+                return .authorized
+            case .denied:
+                return .denied
+            case .notDetermined:
+                return .notDetermined
+            case .provisional:
+                return .provisional
+            case .ephemeral:
+                return .ephemeral
+            @unknown default:
+                return .unknown
+            }
+        }
     }
 
     var shouldDisableNotifications: Bool {
-        switch self {
-        case .unsupported:
-            true
-        case .status(.denied), .status(.notDetermined):
-            true
-        case .status:
-            false
-        }
+        NotificationPermissionPresentation.evaluate(kind: presentationKind).shouldDisableNotifications
     }
 }
 
