@@ -5,7 +5,7 @@ import PlaidBarCore
 @MainActor
 protocol NotificationServiceProtocol {
     func requestPermission() async -> Bool
-    func checkPermissionStatus() async -> UNAuthorizationStatus
+    func checkPermissionStatus() async -> NotificationPermissionState
     func resetDeduplicationState()
     func evaluateTriggers(
         transactions: [TransactionDTO],
@@ -14,14 +14,41 @@ protocol NotificationServiceProtocol {
     ) async
 }
 
+enum NotificationPermissionState {
+    case unsupported
+    case status(UNAuthorizationStatus)
+
+    var authorizationStatus: UNAuthorizationStatus? {
+        guard case let .status(status) = self else { return nil }
+        return status
+    }
+
+    var shouldDisableNotifications: Bool {
+        switch self {
+        case .unsupported:
+            true
+        case .status(.denied), .status(.notDetermined):
+            true
+        case .status:
+            false
+        }
+    }
+}
+
 @MainActor
 final class NotificationService: NotificationServiceProtocol {
     static let shared = NotificationService()
 
     private static let notifiedTxKey = "notifiedTransactionIds"
     private static let notifiedAccountKey = "notifiedAccountIds"
-    private static var canUseUserNotificationCenter: Bool {
-        Bundle.main.bundleURL.pathExtension == "app"
+    private static var hasNotificationIdentity: Bool {
+        guard let identifier = Bundle.main.bundleIdentifier ??
+            (Bundle.main.object(forInfoDictionaryKey: "CFBundleIdentifier") as? String)
+        else {
+            return false
+        }
+
+        return !identifier.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     /// Ordered array for LRU cap (most recent at end)
@@ -66,7 +93,7 @@ final class NotificationService: NotificationServiceProtocol {
     // MARK: - Permissions
 
     func requestPermission() async -> Bool {
-        guard Self.canUseUserNotificationCenter else { return false }
+        guard Self.hasNotificationIdentity else { return false }
 
         do {
             return try await UNUserNotificationCenter.current()
@@ -76,11 +103,11 @@ final class NotificationService: NotificationServiceProtocol {
         }
     }
 
-    func checkPermissionStatus() async -> UNAuthorizationStatus {
-        guard Self.canUseUserNotificationCenter else { return .denied }
+    func checkPermissionStatus() async -> NotificationPermissionState {
+        guard Self.hasNotificationIdentity else { return .unsupported }
 
         let settings = await UNUserNotificationCenter.current().notificationSettings()
-        return settings.authorizationStatus
+        return .status(settings.authorizationStatus)
     }
 
     // MARK: - Triggers
@@ -190,7 +217,7 @@ final class NotificationService: NotificationServiceProtocol {
     }
 
     private func sendNotification(title: String, body: String, identifier: String) async -> Bool {
-        guard Self.canUseUserNotificationCenter else { return false }
+        guard Self.hasNotificationIdentity else { return false }
 
         let content = UNMutableNotificationContent()
         content.title = title

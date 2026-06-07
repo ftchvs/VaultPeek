@@ -14,7 +14,7 @@ struct NativePanelSurface: ViewModifier {
         let shape = RoundedRectangle(cornerRadius: cornerRadius)
 
         if useLiquidGlass {
-            #if compiler(>=6.3)
+            #if compiler(>=6.3) && canImport(SwiftUI, _version: 7.0)
             if #available(macOS 26.0, *) {
                 content
                     .background(fill, in: shape)
