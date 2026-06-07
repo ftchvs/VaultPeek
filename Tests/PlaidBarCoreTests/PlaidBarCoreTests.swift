@@ -1315,7 +1315,7 @@ struct PlaidBarCoreTests {
 
         #expect(readiness.level == .blocked)
         #expect(readiness.primaryAction == .checkServer)
-        #expect(readiness.secondaryActions.contains(.openSettings))
+        #expect(readiness.secondaryActions.isEmpty)
     }
 
     @Test("Dashboard status readiness blocks on missing local server auth")
@@ -1338,7 +1338,7 @@ struct PlaidBarCoreTests {
         #expect(readiness.title == "Local server auth missing")
         #expect(readiness.detail.contains("auth token"))
         #expect(readiness.primaryAction == .openSettings)
-        #expect(readiness.secondaryActions.contains(.checkServer))
+        #expect(readiness.secondaryActions.isEmpty)
     }
 
     @Test("Dashboard status readiness blocks on rejected local server auth")
@@ -1361,7 +1361,7 @@ struct PlaidBarCoreTests {
         #expect(readiness.title == "Local server auth rejected")
         #expect(readiness.detail.contains("rejected"))
         #expect(readiness.primaryAction == .openSettings)
-        #expect(readiness.secondaryActions.contains(.checkServer))
+        #expect(readiness.secondaryActions.isEmpty)
     }
 
     @Test("Dashboard status readiness prompts add account with no items")
@@ -1448,14 +1448,73 @@ struct PlaidBarCoreTests {
             erroredItemCount: 0,
             isSyncStale: true,
             lastSyncRelative: nil,
-            errorMessage: "Server is running in production, not sandbox."
+            errorMessage: "Plaid sync failed."
         )
 
         #expect(readiness.level == .warning)
         #expect(readiness.title == "Recent action failed")
-        #expect(readiness.detail.contains("production"))
+        #expect(readiness.detail.contains("Plaid sync failed"))
         #expect(readiness.primaryAction == .refresh)
-        #expect(readiness.secondaryActions.contains(.openSettings))
+        #expect(readiness.secondaryActions.isEmpty)
+    }
+
+    @Test("Dashboard status readiness identifies server mode mismatch")
+    func dashboardStatusReadinessIdentifiesServerModeMismatch() {
+        let readiness = DashboardStatusReadiness.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 0,
+            accountCount: 0,
+            syncedItemCount: 0,
+            needsLoginItemCount: 0,
+            erroredItemCount: 0,
+            isSyncStale: true,
+            lastSyncRelative: nil,
+            errorMessage: "Server is running in production, not sandbox. Restart with ./Scripts/run.sh --sandbox."
+        )
+
+        #expect(readiness.level == .blocked)
+        #expect(readiness.title == "Server mode mismatch")
+        #expect(readiness.primaryAction == .checkServer)
+        #expect(readiness.primaryActionTitle == "Check Server")
+        #expect(readiness.secondaryActions.isEmpty)
+    }
+
+    @Test("Notification permission presentation gives denied state one settings action")
+    func notificationPermissionPresentationDeniedAction() {
+        let presentation = NotificationPermissionPresentation.evaluate(kind: .denied)
+
+        #expect(presentation.label == "Denied")
+        #expect(presentation.recoveryAction == .openSystemSettings)
+        #expect(presentation.recoveryActionTitle == "Open System Settings")
+        #expect(presentation.recoveryActionIconName == "gearshape")
+        #expect(presentation.isRecoveryActionInteractive)
+        #expect(presentation.isNotificationToggleDisabled)
+        #expect(presentation.shouldDisableNotifications)
+    }
+
+    @Test("Notification permission presentation requests permission before first use")
+    func notificationPermissionPresentationNotDeterminedAction() {
+        let presentation = NotificationPermissionPresentation.evaluate(kind: .notDetermined)
+
+        #expect(presentation.label == "Not requested")
+        #expect(presentation.recoveryAction == .requestPermission)
+        #expect(presentation.recoveryActionTitle == "Request Permission")
+        #expect(!presentation.isNotificationToggleDisabled)
+        #expect(presentation.shouldDisableNotifications)
+    }
+
+    @Test("Notification permission presentation handles unsupported launches")
+    func notificationPermissionPresentationUnsupportedAction() {
+        let presentation = NotificationPermissionPresentation.evaluate(kind: .unsupported)
+
+        #expect(presentation.label == "Unavailable")
+        #expect(presentation.recoveryAction == .runBundledApp)
+        #expect(presentation.recoveryActionTitle == "Run App Bundle")
+        #expect(!presentation.isRecoveryActionInteractive)
+        #expect(presentation.isNotificationToggleDisabled)
+        #expect(presentation.shouldDisableNotifications)
     }
 
     @Test("Dashboard account filters include only matching account kinds")
@@ -1850,7 +1909,7 @@ struct PlaidBarCoreTests {
         #expect(readiness.level == .blocked)
         #expect(readiness.primaryAction == .reconnect)
         #expect(readiness.title == "1 item needs attention")
-        #expect(readiness.secondaryActions.contains(.openSettings))
+        #expect(readiness.secondaryActions.isEmpty)
     }
 
     @Test("Dashboard status readiness pluralizes multiple item errors")
@@ -1955,7 +2014,7 @@ struct PlaidBarCoreTests {
         #expect(readiness.detail == "1 of 2 linked items have completed transaction sync. Refresh to finish the remaining item.")
         #expect(readiness.primaryActionTitle == "Finish Sync")
         #expect(readiness.primaryActionIconName == "arrow.clockwise")
-        #expect(readiness.secondaryActions.contains(.openSettings))
+        #expect(readiness.secondaryActions.isEmpty)
     }
 
     @Test("Dashboard status readiness distinguishes first sync not started")
@@ -1979,7 +2038,7 @@ struct PlaidBarCoreTests {
         #expect(readiness.title == "First sync needed")
         #expect(readiness.detail == "Accounts are loaded, but no linked item has completed transaction sync yet. Refresh to run the first sync.")
         #expect(readiness.primaryActionTitle == "Run First Sync")
-        #expect(readiness.secondaryActions.contains(.openSettings))
+        #expect(readiness.secondaryActions.isEmpty)
     }
 
     @Test("Dashboard status readiness detects stale sync")

@@ -176,7 +176,9 @@ struct StatusView: View {
     }
 
     private var recoveryActions: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
+        let readiness = appState.dashboardStatusReadiness
+
+        return VStack(alignment: .leading, spacing: Spacing.sm) {
             HStack(spacing: Spacing.xs) {
                 Image(systemName: "lock.doc")
                 Text("Local data directory: \(appState.activeStorageDirectoryDisplayText)")
@@ -187,33 +189,31 @@ struct StatusView: View {
                 .sectionTitle()
                 .foregroundStyle(.secondary)
 
-            HStack(spacing: Spacing.sm) {
-                Button {
-                    Task {
-                        await appState.checkServerConnection()
-                        if appState.serverConnected {
-                            await appState.refreshAccounts()
-                            await appState.syncTransactions()
-                        }
+            if let primaryAction = readiness.primaryAction {
+                if readiness.level == .healthy {
+                    Button {
+                        perform(readinessAction: primaryAction)
+                    } label: {
+                        Label(
+                            primaryActionLabel(for: primaryAction, readiness: readiness),
+                            systemImage: readiness.primaryActionIconName ?? primaryAction.defaultIconName
+                        )
                     }
-                } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
+                    .buttonStyle(.bordered)
+                    .disabled(appState.isLoading)
+                } else {
+                    Button {
+                        perform(readinessAction: primaryAction)
+                    } label: {
+                        Label(
+                            primaryActionLabel(for: primaryAction, readiness: readiness),
+                            systemImage: readiness.primaryActionIconName ?? primaryAction.defaultIconName
+                        )
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(readinessTint(for: readiness.level))
+                    .disabled(appState.isLoading)
                 }
-                .buttonStyle(.bordered)
-
-                Button {
-                    Task { await appState.addAccount() }
-                } label: {
-                    Label("Connect", systemImage: "plus.circle")
-                }
-                .buttonStyle(.bordered)
-
-                Button {
-                    openSettings()
-                } label: {
-                    Label("Settings", systemImage: "gear")
-                }
-                .buttonStyle(.bordered)
             }
         }
     }
@@ -319,6 +319,47 @@ struct StatusView: View {
     private func itemAccessibilityLabel(for item: ItemStatus) -> String {
         let institutionName = item.institutionName ?? "Plaid item"
         return "\(institutionName), \(label(for: item.status)), \(statusDetail(for: item))"
+    }
+
+    private func perform(readinessAction action: DashboardStatusReadinessAction) {
+        switch action {
+        case .checkServer:
+            Task { await appState.checkServerConnection() }
+        case .addAccount:
+            Task { await appState.addAccount() }
+        case .refresh:
+            Task { await appState.refreshDashboard() }
+        case .reconnect:
+            guard let itemId = ItemRecoveryTarget.itemId(from: appState.itemStatuses) else {
+                Task { await appState.refreshDashboard() }
+                return
+            }
+            Task { await appState.reconnectItem(itemId: itemId) }
+        case .openSettings:
+            openSettings()
+        }
+    }
+
+    private func primaryActionLabel(
+        for action: DashboardStatusReadinessAction,
+        readiness: DashboardStatusReadiness
+    ) -> String {
+        if action == .reconnect,
+           let title = ItemRecoveryTarget.actionTitle(from: appState.itemStatuses) {
+            return title
+        }
+        return readiness.primaryActionTitle ?? action.defaultTitle
+    }
+
+    private func readinessTint(for level: DashboardStatusReadinessLevel) -> Color {
+        switch level {
+        case .healthy:
+            .accentColor
+        case .warning:
+            SemanticColors.warning
+        case .blocked:
+            SemanticColors.negative
+        }
     }
 }
 
