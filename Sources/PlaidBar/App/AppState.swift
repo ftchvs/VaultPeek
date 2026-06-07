@@ -129,6 +129,7 @@ final class AppState {
 
     // MARK: - Services
     private let serverClient = ServerClient()
+    private let localAIInsightsService = LocalAIInsightsService()
     private let notificationService: any NotificationServiceProtocol
     private var refreshTask: Task<Void, Never>?
 
@@ -502,6 +503,18 @@ final class AppState {
     /// Monthly equivalent of all recurring charges (normalizes weekly/annual to monthly)
     var estimatedMonthlyRecurring: Double {
         RecurringSummary.estimatedMonthlyTotal(from: recurringTransactions)
+    }
+
+    var localAIAvailability: LocalAIAvailability {
+        localAIInsightsService.availability
+    }
+
+    var localAIActivitySummaries: [LocalAIActivitySummary] {
+        localAIInsightsService.activitySummaries(
+            accounts: accounts,
+            transactions: transactions,
+            recurringTransactions: recurringTransactions
+        )
     }
 
     func transactionsForAccount(_ accountId: String) -> [TransactionDTO] {

@@ -59,6 +59,9 @@ struct MainPopover: View {
 
                         BalanceActivityHeatmap(transactions: appState.transactions)
 
+                        LocalInsightsCard()
+                            .environment(appState)
+
                         DashboardFilterBar(selection: filterBinding)
 
                         AccountsSection(
@@ -829,6 +832,164 @@ private struct BalanceHeatmapCell: View {
             mode == .netCashflow ? SemanticColors.negative : SemanticColors.positive
         }
         return base.opacity(0.18 + (0.72 * intensity))
+    }
+}
+
+// MARK: - Local Insights
+
+private struct LocalInsightsCard: View {
+    @Environment(AppState.self) private var appState
+
+    private var summaries: [LocalAIActivitySummary] {
+        appState.localAIActivitySummaries
+    }
+
+    private var availability: LocalAIAvailability {
+        appState.localAIAvailability
+    }
+
+    private var primarySummary: LocalAIActivitySummary? {
+        summaries.first { $0.window == .lastMonth } ?? summaries.first
+    }
+
+    private var bullets: [String] {
+        Array(primarySummary?.generatedBullets.prefix(3) ?? [])
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 8) {
+                Text("Local Insights")
+                    .sectionTitle()
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                LocalAIStatusPill(availability: availability)
+            }
+
+            Text(primarySummary?.generatedSummary ?? "Local summaries are ready when transaction history is available.")
+                .font(.caption.weight(.semibold))
+                .lineLimit(2)
+                .minimumScaleFactor(0.86)
+
+            HStack(spacing: 6) {
+                ForEach(summaries) { summary in
+                    LocalInsightWindowMetric(summary: summary)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 5) {
+                ForEach(Array(bullets.enumerated()), id: \.offset) { _, bullet in
+                    HStack(alignment: .top, spacing: 6) {
+                        Circle()
+                            .fill(Color.secondary.opacity(0.58))
+                            .frame(width: 4, height: 4)
+                            .padding(.top, 6)
+                        Text(bullet)
+                            .microText()
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+
+            HStack(spacing: 5) {
+                Image(systemName: "lock.shield.fill")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Text("Local-only. No cloud model calls. Plaid categories remain the auditable fallback.")
+                    .microText()
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(10)
+        .nativePanelSurface(
+            fill: AnyShapeStyle(Color.primary.opacity(SurfaceTokens.panelFillOpacity)),
+            stroke: Color.primary.opacity(0.065)
+        )
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Local insights. \(availability.state.displayName). \(availability.detail)")
+    }
+}
+
+private struct LocalAIStatusPill: View {
+    let availability: LocalAIAvailability
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: iconName)
+                .font(.caption2.weight(.bold))
+            Text("Local - \(availability.state.displayName)")
+                .font(.caption2.weight(.semibold))
+                .lineLimit(1)
+        }
+        .foregroundStyle(tint)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 4)
+        .nativeInsetSurface(cornerRadius: 7)
+        .help(availability.detail)
+    }
+
+    private var iconName: String {
+        switch availability.state {
+        case .available: "cpu.fill"
+        case .disabled: "pause.circle.fill"
+        case .unavailable: "exclamationmark.triangle.fill"
+        }
+    }
+
+    private var tint: Color {
+        switch availability.state {
+        case .available: SemanticColors.positive
+        case .disabled: .secondary
+        case .unavailable: SemanticColors.warning
+        }
+    }
+}
+
+private struct LocalInsightWindowMetric: View {
+    let summary: LocalAIActivitySummary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(summary.window.displayName)
+                .microText()
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+
+            Text(Formatters.currency(summary.input.current.expenseTotal, format: .compact))
+                .font(.caption.weight(.bold))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.76)
+
+            Text(netText)
+                .microText()
+                .foregroundStyle(netTint)
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.76)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .nativeInsetSurface(cornerRadius: 7)
+        .help("\(summary.window.displayName): \(summary.input.current.transactionCount) transaction source rows.")
+    }
+
+    private var netText: String {
+        let amount = summary.input.current.netCashflow
+        let prefix = amount > 0 ? "+" : amount < 0 ? "-" : ""
+        return "\(prefix)\(Formatters.currency(abs(amount), format: .compact)) net"
+    }
+
+    private var netTint: Color {
+        let amount = summary.input.current.netCashflow
+        if amount > 0 { return SemanticColors.positive }
+        if amount < 0 { return SemanticColors.negative }
+        return .secondary
     }
 }
 

@@ -33,7 +33,7 @@ public struct RecurringTransaction: Sendable, Identifiable, Hashable {
     }
 }
 
-public enum RecurringFrequency: String, Sendable, CaseIterable, Hashable {
+public enum RecurringFrequency: String, Codable, Sendable, CaseIterable, Hashable {
     case weekly
     case biweekly
     case monthly
