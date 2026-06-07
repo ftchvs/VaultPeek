@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-07 18:14 UTC] — Feature
+
+add local AI insights surface (#186)
+
+`cb03f67`
+
+---
+
+
 ## [2026-06-07 09:10 UTC] — Documentation
 
 add local ai roadmap priorities (#185)
