@@ -3,6 +3,17 @@ import Foundation
 @testable import PlaidBarServer
 import Testing
 
+private let plaidTokenVaultKeychainAvailable: Bool = {
+    let itemId = "test_keychain_probe_\(UUID().uuidString)"
+    do {
+        let storedToken = try PlaidTokenVault.store(accessToken: "probe-token", itemId: itemId)
+        try PlaidTokenVault.delete(storedToken: storedToken, fallbackItemId: itemId)
+        return true
+    } catch {
+        return false
+    }
+}()
+
 @Suite("PlaidBarServer")
 struct PlaidBarServerTests {
     @Test func accountTypes() {
@@ -670,7 +681,8 @@ struct PlaidBarServerTests {
         #expect(try PlaidTokenVault.resolve(storedToken: "access-sandbox-token") == "access-sandbox-token")
     }
 
-    @Test func plaidTokenVaultStoresAndResolvesKeychainTokens() throws {
+    @Test(.enabled(if: plaidTokenVaultKeychainAvailable, "macOS Keychain accepts test writes"))
+    func plaidTokenVaultStoresAndResolvesKeychainTokens() throws {
         let itemId = "test_item_\(UUID().uuidString)"
         let storedToken = try PlaidTokenVault.store(
             accessToken: "access-sandbox-token",
@@ -682,7 +694,8 @@ struct PlaidBarServerTests {
         #expect(try PlaidTokenVault.resolve(storedToken: storedToken) == "access-sandbox-token")
     }
 
-    @Test func plaidTokenVaultUpdatesExistingKeychainToken() throws {
+    @Test(.enabled(if: plaidTokenVaultKeychainAvailable, "macOS Keychain accepts test writes"))
+    func plaidTokenVaultUpdatesExistingKeychainToken() throws {
         let itemId = "test_item_\(UUID().uuidString)"
         let firstReference = try PlaidTokenVault.store(
             accessToken: "access-sandbox-token-old",

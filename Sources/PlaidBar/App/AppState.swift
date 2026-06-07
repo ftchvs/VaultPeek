@@ -23,9 +23,14 @@ final class AppState {
     }
 
     // MARK: - State
-    var accounts: [AccountDTO] = []
+    var accounts: [AccountDTO] = [] {
+        didSet { _cachedLocalAIActivitySummaries = nil }
+    }
     var transactions: [TransactionDTO] = [] {
-        didSet { _cachedRecurringTransactions = nil }
+        didSet {
+            _cachedRecurringTransactions = nil
+            _cachedLocalAIActivitySummaries = nil
+        }
     }
     var isLoading = false
     var error: String?
@@ -129,6 +134,7 @@ final class AppState {
 
     // MARK: - Services
     private let serverClient = ServerClient()
+    private let localAIInsightsService = LocalAIInsightsService()
     private let notificationService: any NotificationServiceProtocol
     private var refreshTask: Task<Void, Never>?
 
@@ -502,6 +508,24 @@ final class AppState {
     /// Monthly equivalent of all recurring charges (normalizes weekly/annual to monthly)
     var estimatedMonthlyRecurring: Double {
         RecurringSummary.estimatedMonthlyTotal(from: recurringTransactions)
+    }
+
+    var localAIAvailability: LocalAIAvailability {
+        localAIInsightsService.availability
+    }
+
+    /// Cached local summaries — invalidated via accounts.didSet and transactions.didSet.
+    private var _cachedLocalAIActivitySummaries: [LocalAIActivitySummary]?
+
+    var localAIActivitySummaries: [LocalAIActivitySummary] {
+        if let cached = _cachedLocalAIActivitySummaries { return cached }
+        let result = localAIInsightsService.activitySummaries(
+            accounts: accounts,
+            transactions: transactions,
+            recurringTransactions: recurringTransactions
+        )
+        _cachedLocalAIActivitySummaries = result
+        return result
     }
 
     func transactionsForAccount(_ accountId: String) -> [TransactionDTO] {
