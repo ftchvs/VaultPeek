@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-07 09:10 UTC] — Documentation
+
+add local ai roadmap priorities (#185)
+
+`1e5573b`
+
+---
+
+
 ## [2026-06-07 08:50 UTC] — Feature
 
 converge recovery actions (#184)
