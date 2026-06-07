@@ -354,7 +354,7 @@ Rate limits are well within Plaid's allowances for personal use (~2-4 requests/h
 | Network exposure | Server binds to `127.0.0.1` only |
 | App ↔ Server auth | Shared token generated at first run |
 | Data at rest | macOS encrypted APFS volume |
-| Distribution | Formula-only source build for 1.0; notarized app/cask planned after signing is real |
+| Distribution | Formula-only source build for v1.0.0; notarized app/cask remains post-1.0 until signing is real |
 
 **PlaidBar has no cloud backend, no analytics, no telemetry, and no tracking.** Your financial data never leaves your machine.
 
@@ -411,7 +411,7 @@ Additional project docs:
 - [Screenshots](docs/screenshots.md)
 - [QA Matrix](docs/qa-matrix.md)
 - [Support Policy](SUPPORT.md)
-- [1.0 Roadmap](docs/v1.0-roadmap.md)
+- [Long-Term Product Vision](docs/v1.0-roadmap.md)
 - [Release Notes Drafts](docs/release-notes.md)
 - [Changelog](CHANGELOG.md)
 
@@ -455,10 +455,10 @@ when the local app created the Hosted Link session.
 
 ## Roadmap
 
-The detailed 1.0 plan lives in [docs/v1.0-roadmap.md](docs/v1.0-roadmap.md).
-It maps the completed path to the v1.0 formula-only stable public release:
-product flows, design/frontend polish, local system architecture, security and
-privacy checks, distribution, docs, QA, and open-source readiness.
+The long-term product vision lives in
+[docs/v1.0-roadmap.md](docs/v1.0-roadmap.md). It frames PlaidBar as a
+local-first macOS menu bar finance instrument and gives Hermes-style agents a
+stable starting point for deriving small, defensible implementation slices.
 
 Near-term release priorities:
 
@@ -469,7 +469,17 @@ Near-term release priorities:
 - [x] Decide 1.0 packaging shape: formula-only first, notarized app bundle later
 - [x] Verify Homebrew install path and release metadata from clean `main`
 
-Post-1.0 candidates:
+Post-1.0 priorities:
+
+- [ ] Tighten the dashboard into a more compact RepoBar-style finance
+      instrument
+- [ ] Keep Liquid Glass as a macOS 26+ progressive enhancement with macOS 15
+      material fallback
+- [ ] Converge dashboard/settings recovery actions for server, Plaid item,
+      empty-data, stale-sync, and notification-permission states
+- [ ] Refresh screenshots and QA evidence after visual changes
+
+Deferred product candidates:
 
 - [ ] Budget alerts per category
 - [ ] Multi-currency support
@@ -482,7 +492,7 @@ Post-1.0 candidates:
 
 ## Inspiration
 
-- [RepoBar](https://github.com/nicklama/RepoBar) — GitHub stats in the macOS menu bar
+- [RepoBar](https://github.com/steipete/RepoBar) — GitHub repo status in the macOS menu bar
 - [Balance](https://balancemy.money/) — Commercial macOS finance app (defunct)
 - [Cashculator](https://cashculator.app/) — Personal finance for Mac
 

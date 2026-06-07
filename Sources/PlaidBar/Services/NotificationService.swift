@@ -20,6 +20,9 @@ final class NotificationService: NotificationServiceProtocol {
 
     private static let notifiedTxKey = "notifiedTransactionIds"
     private static let notifiedAccountKey = "notifiedAccountIds"
+    private static var canUseUserNotificationCenter: Bool {
+        Bundle.main.bundleURL.pathExtension == "app"
+    }
 
     /// Ordered array for LRU cap (most recent at end)
     private var notifiedTransactionIds: [String]
@@ -63,6 +66,8 @@ final class NotificationService: NotificationServiceProtocol {
     // MARK: - Permissions
 
     func requestPermission() async -> Bool {
+        guard Self.canUseUserNotificationCenter else { return false }
+
         do {
             return try await UNUserNotificationCenter.current()
                 .requestAuthorization(options: [.alert, .sound])
@@ -72,6 +77,8 @@ final class NotificationService: NotificationServiceProtocol {
     }
 
     func checkPermissionStatus() async -> UNAuthorizationStatus {
+        guard Self.canUseUserNotificationCenter else { return .denied }
+
         let settings = await UNUserNotificationCenter.current().notificationSettings()
         return settings.authorizationStatus
     }
@@ -183,6 +190,8 @@ final class NotificationService: NotificationServiceProtocol {
     }
 
     private func sendNotification(title: String, body: String, identifier: String) async -> Bool {
+        guard Self.canUseUserNotificationCenter else { return false }
+
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body

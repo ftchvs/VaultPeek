@@ -1,6 +1,77 @@
 import SwiftUI
 import PlaidBarCore
 
+// MARK: - Native Panel Surface
+
+struct NativePanelSurface: ViewModifier {
+    let cornerRadius: CGFloat
+    let fill: AnyShapeStyle
+    let stroke: Color
+    let useLiquidGlass: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius)
+
+        if useLiquidGlass {
+            #if compiler(>=6.3)
+            if #available(macOS 26.0, *) {
+                content
+                    .background(fill, in: shape)
+                    .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
+                    .overlay {
+                        shape.stroke(stroke, lineWidth: 1)
+                    }
+            } else {
+                fallback(content: content, shape: shape)
+            }
+            #else
+            fallback(content: content, shape: shape)
+            #endif
+        } else {
+            fallback(content: content, shape: shape)
+        }
+    }
+
+    private func fallback(content: Content, shape: RoundedRectangle) -> some View {
+        content
+            .background(fill, in: shape)
+            .overlay {
+                shape.stroke(stroke, lineWidth: 1)
+            }
+    }
+}
+
+extension View {
+    func nativePanelSurface(
+        cornerRadius: CGFloat = SurfaceTokens.panelCornerRadius,
+        fill: AnyShapeStyle = AnyShapeStyle(SurfaceTokens.panelFill()),
+        stroke: Color = SurfaceTokens.panelStroke(),
+        useLiquidGlass: Bool = true
+    ) -> some View {
+        modifier(
+            NativePanelSurface(
+                cornerRadius: cornerRadius,
+                fill: fill,
+                stroke: stroke,
+                useLiquidGlass: useLiquidGlass
+            )
+        )
+    }
+
+    func nativeInsetSurface(
+        cornerRadius: CGFloat = SurfaceTokens.compactCornerRadius,
+        stroke: Color = Color.primary.opacity(0.055)
+    ) -> some View {
+        nativePanelSurface(
+            cornerRadius: cornerRadius,
+            fill: AnyShapeStyle(Color.primary.opacity(SurfaceTokens.insetFillOpacity)),
+            stroke: stroke,
+            useLiquidGlass: false
+        )
+    }
+}
+
 // MARK: - Hover Highlight
 
 struct HoverHighlight: ViewModifier {

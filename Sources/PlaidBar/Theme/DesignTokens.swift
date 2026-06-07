@@ -85,3 +85,37 @@ enum Spacing {
     static let xl: CGFloat = 24
     static let rowVertical: CGFloat = 6
 }
+
+// MARK: - Native Surfaces
+
+enum SurfaceTokens {
+    static let popoverCornerRadius: CGFloat = 12
+    static let panelCornerRadius: CGFloat = 7
+    static let compactCornerRadius: CGFloat = 6
+
+    static let panelFillOpacity = 0.022
+    static let insetFillOpacity = 0.045
+    static let controlFillOpacity = 0.07
+    static let selectedFillOpacity = 0.13
+
+    static let panelStrokeOpacity = 0.075
+    static let emphasizedStrokeOpacity = 0.16
+
+    /// Liquid Glass is a progressive enhancement on macOS 26+.
+    /// macOS 15 users keep the same layout with SwiftUI material/fill fallback.
+    static let liquidGlassAvailability = "macOS 26+ progressive enhancement; macOS 15 uses material fallback"
+
+    static func panelFill(emphasisTint: Color? = nil) -> Color {
+        if let emphasisTint {
+            return emphasisTint.opacity(0.055)
+        }
+        return Color.primary.opacity(panelFillOpacity)
+    }
+
+    static func panelStroke(emphasisTint: Color? = nil) -> Color {
+        if let emphasisTint {
+            return emphasisTint.opacity(emphasizedStrokeOpacity)
+        }
+        return Color.primary.opacity(panelStrokeOpacity)
+    }
+}

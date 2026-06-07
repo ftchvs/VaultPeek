@@ -101,7 +101,7 @@ Local reset does not necessarily delete records from the Plaid Dashboard or
 revoke bank permissions outside PlaidBar. Users who need complete revocation
 should also review Plaid Dashboard and bank-side permission settings.
 
-## 1.0 Privacy Checklist
+## Stable Release Privacy Checklist
 
 - README privacy claims match implementation.
 - Setup copy explains local storage before Plaid Link opens.
