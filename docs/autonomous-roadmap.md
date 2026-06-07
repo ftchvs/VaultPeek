@@ -2,19 +2,25 @@
 
 This roadmap guides the recurring local agent loop that keeps PlaidBar aligned
 with its local-first menu bar finance vision. It complements `GOAL.md`,
-`commands/goal.md`, and the long-term product brief in
+`commands/goal.md`, `commands/plaidbar-prod-loop.md`, the concrete backlog in
+`docs/autonomous-loop-backlog.md`, and the long-term product brief in
 `docs/v1.0-roadmap.md`.
 
 ## Operating Contract
 
 - Work locally for implementation and verification.
 - Felipe granted scoped PlaidBar approval on 2026-05-30 to push branches, open
-  PRs, and merge to remote `main` after green local and GitHub checks.
+  PRs, and merge to remote `main` after green local and GitHub checks. Use that
+  approval only for focused PlaidBar work with a safe final diff review.
 - Do not publish releases or post externally outside normal GitHub PR/merge
   workflow without Felipe's explicit approval.
 - Keep each loop to one reviewable production-readiness slice.
 - Prefer fixes that make the 1.0 promise more true: local-first trust,
   reliable onboarding, clear recovery, and dense native finance UX.
+- Preserve the privacy boundary: no PlaidBar-hosted backend, telemetry, cloud
+  sync, multi-user accounts, or cloud AI over private transaction data.
+- Keep optional local AI local-only, off by default, explainable, reversible,
+  and non-blocking when no local model runtime is configured.
 - Commit only when local verification passes or baseline limitations are
   documented.
 - Leave the branch reviewable after every run.
@@ -25,13 +31,49 @@ The OpenClaw cron job `d6eb6833-969a-4436-af06-0fd0f1bd94e2` runs an isolated
 PlaidBar production-readiness loop every four hours. Each run should:
 
 1. Inspect `git status --short --branch` and recent commits.
-2. Read `GOAL.md`, `docs/v1.0-roadmap.md`, this file, and the touched area.
-3. Pick the highest-leverage unfinished slice from the backlog below.
-4. Implement the smallest coherent change.
-5. Run the relevant gates.
-6. Use Clawpatch or manual review for changed surfaces.
+2. Read `GOAL.md`, `commands/plaidbar-prod-loop.md`,
+   `docs/autonomous-loop-backlog.md`, this file, and the touched area.
+3. Pick the highest-leverage unfinished task ID from the backlog.
+4. Implement the smallest coherent change; combine adjacent task IDs only when
+   the PR remains easy to review.
+5. Run the relevant local gates.
+6. Use Clawpatch, manual review, or read-only parallel agents for changed
+   surfaces.
 7. Commit locally with a focused conventional commit when safe.
-8. Report branch, commits, checks, known limitations, and next slice.
+8. If scoped approval applies, run the PR/check/review/merge loop below.
+9. Report branch, commits, checks, known limitations, completed task IDs, and
+   next task ID.
+
+## Codex CLI And Parallel Agents
+
+- `commands/plaidbar-prod-loop.md` is the canonical Codex CLI prompt.
+- Use one primary editor agent for all writes, commits, PR updates, and merge
+  decisions.
+- Use optional read-only parallel agents for design, security/privacy, QA, or
+  docs review. They should return findings and suggested tests, not edit the
+  same files in parallel.
+- Prefer focused search and file reads over speculative repo-wide rewrites.
+- Do not run parallel push or merge attempts.
+
+## PR, Check, Review, And Merge Loop
+
+Use this loop only when the current run is inside the 2026-05-30 scoped
+PlaidBar approval. If approval scope, product safety, or security impact is
+unclear, stop and ask Felipe.
+
+1. Push only the focused branch for the completed task or PR slice.
+2. Open or update a PR with task ID(s), changed files, local verification,
+   secret-scan result, privacy/security impact, screenshots when relevant, and
+   known limitations.
+3. Wait for required GitHub checks. Do not merge with failing, pending,
+   skipped, cancelled, missing, or ambiguous required checks.
+4. Read the final diff before merge. Block merge for secrets, real financial
+   data, raw Plaid identifiers, scope creep, generated artifacts, unsafe
+   destructive behavior, or local-first boundary violations.
+5. Merge only when local gates passed, GitHub checks are green, the diff is
+   safe under the scoped approval, and no user decision is needed.
+6. After merge, verify remote `main` moved as expected and record completed
+   task ID(s) in the progress ledger.
 
 ## Always-Run Gates
 
@@ -46,9 +88,7 @@ supports the `Testing` module. On this machine, the current baseline is
 `no such module 'Testing'`; record that limitation instead of treating it as a
 new regression.
 
-## Backlog
-
-### Progress Ledger
+## Progress Ledger
 
 Completed production-readiness slices:
 
@@ -107,52 +147,24 @@ Completed production-readiness slices:
 - 2026-06-01: moved account row amounts, subtitles, and accessibility summary
   composition into `PlaidBarCore`.
 
-### Reliability And Trust
+## Backlog Source
 
-1. Continue moving duplicated UI/service formulas into `PlaidBarCore` helpers
-   where they still exist, especially chart totals, credit/debt presentation,
-   and account detail summary logic.
-2. Harden local storage and token handling:
-   pre-open SQLite permissions, Keychain fallback copy, reset behavior, and
-   private-file invariants.
-3. Make sandbox and production setup failures explicit:
-   wrong mode, missing credentials, browser-open failure, and first-sync
-   partial completion.
-4. Keep status/reconnect paths available from dashboard, settings, and account
-   detail surfaces.
+Use `docs/autonomous-loop-backlog.md` for new work. It currently defines 120
+reviewable tasks across 24 PR slices:
 
-### Product Polish
+- loop governance, PR hygiene, checks, review, and merge safety
+- minimalist modern design, heatmap overview, dense rows, and drill-in surfaces
+- empty states, setup preflight, reconnect, status diagnostics, and local data
+  controls
+- token/storage safety, API auth, status redaction, logs, fixtures, and
+  screenshot safety
+- demo, sandbox, production setup, accessibility, performance, QA, and release
+  readiness
+- optional local AI boundaries, local-only insights, and reversible
+  categorization suggestions
 
-1. Improve empty and filtered-zero states for transactions, recurring charges,
-   credit, and account drill-down.
-2. Keep the dashboard compact and RepoBar-like:
-   heatmap first, dense rows, status-rich selected detail, no marketing chrome.
-3. Refresh demo fixtures and screenshots when UI behavior changes.
-4. Improve accessibility labels for icon-only controls and chart/status signals.
-
-### Local AI Insights
-
-1. Add an on-device AI summary layer for financial activity, with no cloud model
-   calls and no transaction data leaving the Mac.
-2. Summarize spending, income, recurring charges, credit utilization, balance
-   changes, and notable anomalies over the last 7 days, last month, and
-   year-over-year windows.
-3. Use local AI to improve categorization of expenses and income while keeping
-   Plaid categories as the auditable source-of-record fallback.
-4. Make AI output explainable and reversible: show the source transactions or
-   category evidence behind each summary, allow user correction, and never
-   mutate raw Plaid transaction data.
-5. Treat local-model availability as optional. If no model runtime is
-   configured, hide or disable insight surfaces with a clear setup/recovery
-   action instead of blocking the core dashboard.
-
-### Distribution And Open Source
-
-1. Keep README, troubleshooting, privacy, security, release notes, and QA matrix
-   aligned with actual behavior.
-2. Verify Homebrew formula syntax and source-build path after packaging changes.
-3. Maintain a release checklist that is honest about notarization, Plaid
-   production approval, and local data boundaries.
+When a task is completed or found already satisfied, add one dated ledger entry
+with the task ID, evidence, and PR or commit reference when available.
 
 ## Stop Conditions
 
@@ -162,5 +174,7 @@ Stop the current loop and report when:
 - A required decision would change product/security scope.
 - A clean local commit is made and the next slice is independent.
 - The branch contains user changes that conflict with the planned edit.
+- GitHub checks are not green or the final diff is not safe to merge under the
+  existing scoped approval.
 
 Do not stop merely because more roadmap work remains.

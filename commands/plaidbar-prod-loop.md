@@ -1,12 +1,13 @@
 ---
-description: Run a multi-hour PlaidBar production-readiness loop with focused implementation, verification, and handoff.
+description: Run the PlaidBar autonomous production-readiness loop with focused implementation, verification, PR review, and safe handoff.
 argument-hint: "[focus area] [--hours=2-4] [--no-commit]"
 ---
 
 # /plaidbar-prod-loop
 
 Use this command to keep improving PlaidBar toward a production-ready,
-local-first macOS finance utility.
+local-first macOS finance utility through the 100+ task backlog in
+`docs/autonomous-loop-backlog.md`.
 
 The default goal is:
 
@@ -30,11 +31,31 @@ codex exec --cd /Users/otto/.openclaw/workspace/repos/PlaidBar \
   "$(cat commands/plaidbar-prod-loop.md)"
 ```
 
+For a focused autonomous iteration:
+
+```bash
+codex exec --cd /Users/otto/.openclaw/workspace/repos/PlaidBar \
+  "Read commands/plaidbar-prod-loop.md and complete the next unfinished task from docs/autonomous-loop-backlog.md for: <focus>"
+```
+
+For parallel review support, keep one primary editor agent and use optional
+read-only parallel agents for design, security/privacy, and QA. Parallel agents
+may inspect files and propose findings; the primary agent owns edits, commits,
+PR creation, and merge-safety decisions.
+
 ## Operating Boundaries
 
-- Work locally unless Felipe explicitly approves pushing or opening a PR.
-- Do not merge PRs from this command.
-- Do not add telemetry, cloud sync, hosted backend, or multi-user features.
+- Work locally by default. Use the scoped PlaidBar approval in
+  `docs/autonomous-roadmap.md` for push, PR, and merge only when the current
+  run is clearly inside that scope and the safe PR loop below passes.
+- When using repo-local `.codex/skills/`, follow their safe PR/check/review
+  gate; do not merge if any approval scope or safety condition is unclear.
+- Do not add telemetry, cloud sync, hosted backend, multi-user features, or
+  cloud AI over private transaction data.
+- Preserve local-first boundaries: app, localhost server, Plaid API, local
+  storage, and no PlaidBar-owned cloud service.
+- Optional AI must be local-only, off by default, explainable, reversible, and
+  non-blocking when no local model runtime is configured.
 - Do not claim token encryption, notarization, or production security properties
   unless the implementation actually provides them.
 - Do not commit screenshots, logs, build products, local databases, or secrets.
@@ -53,19 +74,24 @@ Repeat these phases until the timebox ends or a blocker appears:
    - Read `GOAL.md`, `README.md`, `DESIGN.md`, `docs/architecture.md`, and
      recent changed files before editing.
 
-2. Pick the highest-leverage next slice:
+2. Pick the highest-leverage next task:
    - Prefer the explicit focus area in `$ARGUMENTS`.
-   - Otherwise use the production-readiness backlog below.
-   - Keep the slice small enough to finish with verification evidence.
+   - Otherwise use `docs/autonomous-loop-backlog.md`.
+   - Treat one backlog task as one autonomous iteration.
+   - Combine adjacent tasks from the same PR slice only when the diff remains
+     small enough to finish with verification evidence.
    - If the focus mentions RepoBar, heatmap-first design, account rows, or the
      attached screenshot, use the RepoBar-style finance dashboard slice first.
 
 3. Implement:
    - Follow the app's existing SwiftUI, theme, and local-server patterns.
    - Put finance calculations in `PlaidBarCore` when they are testable logic.
-   - Keep UI dense, native, status-rich, and non-marketing.
+   - Keep UI minimalist, dense, native, status-rich, and non-marketing.
    - For the main popover, prefer a single overview surface with drill-in
      details over adding another tab.
+   - Keep risky actions explicit and confirmation-gated.
+   - Keep local AI optional and local-only; never send private financial data to
+     cloud AI services.
    - Update docs only when behavior or setup changes.
 
 4. Verify:
@@ -82,69 +108,42 @@ Repeat these phases until the timebox ends or a blocker appears:
    - If verification fails from a pre-existing baseline issue, document it and
      keep the branch reviewable.
 
-6. Report progress:
+6. Run the PR/check/review/merge loop when scoped approval applies:
+   - Push only the focused branch for the completed task or PR slice.
+   - Open or update a PR with task ID(s), changed files, local checks,
+     secret-scan result, privacy/security impact, and known limitations.
+   - Wait for GitHub checks; do not merge with failing, pending, skipped, or
+     ambiguous required checks.
+   - Review the final diff before merge for secrets, real financial data,
+     scope creep, generated artifacts, destructive behavior, and local-first
+     boundary violations.
+   - Merge only when local gates passed, GitHub checks are green, the diff is
+     safe under the existing scoped approval, and no user decision is needed.
+   - After merge, verify remote `main` moved as expected, then record the
+     completed task ID in the roadmap ledger.
+
+7. Report progress:
    - Every 30-45 minutes, summarize changed files, validation, and next slice.
    - End with branch name, commit SHA(s), checks, and whether it is ready for
-     Felipe to approve push/PR.
+     push, PR, review, or merge.
 
 ## Production-Readiness Backlog
 
-Work in this order unless Felipe gives a better focus:
+Use `docs/autonomous-loop-backlog.md` as the concrete backlog. It contains 120
+reviewable tasks grouped into PR slices covering:
 
-1. **RepoBar-style finance dashboard**
-   - Study RepoBar's live app/site and source before editing:
-     - `https://repobar.app`
-     - `https://github.com/steipete/RepoBar`
-     - local clone if available: `/Users/otto/.openclaw/workspace/repos/RepoBar`
-   - Target the attached reference screenshot:
-     - translucent macOS popover,
-     - heatmap header,
-     - segmented filter bar,
-     - dense rows with selected/highlighted state,
-     - chevron/drill-in affordance.
-   - Translate RepoBar concepts into finance:
-     - contribution heatmap -> daily spend/cashflow heatmap,
-     - repo rows -> checking, savings, credit card, loan, and other account rows,
-     - repo stats -> balance, available credit, utilization, pending count, sync freshness,
-     - repo submenu -> account/card detail view or sheet,
-     - All/Pinned/Local/Work -> All/Cash/Credit/Savings/Debt/Status.
-   - Build the first slice as an overview UI, not a full budgeting product:
-     - top heatmap from existing transaction/demo data,
-     - filterable account/card rows,
-     - one selected row detail surface for a specific credit card/account,
-     - preserve Status/Settings recovery actions.
+- minimalist modern design and RepoBar-style dashboard polish,
+- account rows, heatmaps, drill-in surfaces, empty states, and reconnect flows,
+- local data controls, token/storage safety, auth, status redaction, logs,
+  screenshots, and fixture safety,
+- demo, sandbox, production setup, accessibility, performance, and QA gates,
+- optional local AI boundaries, local-only insights, and reversible
+  categorization suggestions,
+- PR, review, check, and merge hygiene.
 
-2. **Trust-first local data controls**
-   - Show the local storage path (`~/.plaidbar/`) in Settings.
-   - Add copy/reveal actions for the storage directory when practical.
-   - Add confirmation-gated reset/delete local data flow.
-   - Keep language explicit about what is removed and what remains in Plaid.
-
-3. **Sharper empty and error states**
-   - Accounts: no server, no linked institution, no synced account data.
-   - Transactions: no synced history vs filters returning zero results.
-   - Credit: no linked credit accounts vs data unavailable.
-   - Include one clear recovery action per state.
-
-4. **Server/config preflight**
-   - Add a server endpoint or client helper that reports environment,
-     credential readiness, storage path, item count, and sync readiness.
-   - Use it before Plaid Link and in the Status tab.
-   - Avoid exposing secrets or raw tokens.
-
-5. **Reconnect and degraded-item handling**
-   - Surface item errors and token-expired states in the Status tab.
-   - Provide a clear reconnect/add-account path.
-
-6. **Demo and screenshot polish**
-   - Keep demo data realistic but synthetic.
-   - Ensure screenshots show the current product story:
-     menu summary, status, spending heatmap, onboarding, and settings.
-
-7. **Distribution readiness, later**
-   - Only after sandbox and production setup are reliable.
-   - Focus on packaging docs, signing assumptions, and release checklist.
-   - Do not implement notarization prematurely.
+If a task appears stale, first inspect the current implementation. Complete it
+only if there is still a real gap; otherwise mark the task as already satisfied
+in the roadmap ledger with evidence.
 
 ## Design Standard
 
@@ -187,4 +186,4 @@ Final report must include:
 - validation commands and results
 - known warnings or blockers
 - recommended next slice
-- whether push/PR approval is needed
+- push/PR/review/merge status
