@@ -84,6 +84,109 @@ struct PlaidBarCoreTests {
         #expect(tx.displayAmount == 0)
     }
 
+    @Test("Account transaction feed sorts latest first with pending tie-breaker")
+    func accountTransactionFeedSortsLatestFirstWithPendingTieBreaker() {
+        let transactions = [
+            TransactionDTO(id: "old", accountId: "checking", amount: 10, date: "2026-01-13", name: "Old"),
+            TransactionDTO(id: "other", accountId: "credit", amount: 999, date: "2026-01-16", name: "Other"),
+            TransactionDTO(id: "posted-small", accountId: "checking", amount: 20, date: "2026-01-15", name: "Posted Small"),
+            TransactionDTO(id: "pending", accountId: "checking", amount: 30, date: "2026-01-15", name: "Pending", pending: true),
+            TransactionDTO(id: "posted-large", accountId: "checking", amount: 50, date: "2026-01-15", name: "Posted Large"),
+        ]
+
+        let feed = AccountTransactionFeed.transactions(forAccountId: "checking", in: transactions)
+
+        #expect(feed.map(\.id) == ["pending", "posted-large", "posted-small", "old"])
+    }
+
+    @Test("Account transaction feed keeps invalid dates behind dated transactions")
+    func accountTransactionFeedKeepsInvalidDatesBehindDatedTransactions() {
+        let transactions = [
+            TransactionDTO(id: "invalid", accountId: "checking", amount: 10, date: "not-a-date", name: "Invalid"),
+            TransactionDTO(id: "dated", accountId: "checking", amount: 20, date: "2026-01-15", name: "Dated"),
+        ]
+
+        let feed = AccountTransactionFeed.transactions(forAccountId: "checking", in: transactions)
+
+        #expect(feed.map(\.id) == ["dated", "invalid"])
+    }
+
+    @Test("Account transaction feed sorts related merchant transactions")
+    func accountTransactionFeedSortsRelatedMerchantTransactions() {
+        let transactions = [
+            TransactionDTO(id: "current", accountId: "a", amount: 20, date: "2026-01-15", name: "Current", merchantName: "Netflix"),
+            TransactionDTO(id: "old", accountId: "a", amount: 20, date: "2026-01-13", name: "Old", merchantName: "Netflix"),
+            TransactionDTO(id: "pending", accountId: "a", amount: 20, date: "2026-01-14", name: "Pending", merchantName: "Netflix", pending: true),
+            TransactionDTO(id: "other", accountId: "a", amount: 20, date: "2026-01-16", name: "Other", merchantName: "Spotify"),
+        ]
+
+        let feed = AccountTransactionFeed.relatedMerchantTransactions(
+            merchantName: "Netflix",
+            excluding: "current",
+            in: transactions
+        )
+
+        #expect(feed.map(\.id) == ["pending", "old"])
+    }
+
+    @Test("Account activity empty state is nil when transactions exist")
+    func accountActivityEmptyStateNilWithTransactions() {
+        let presentation = AccountActivityEmptyState.evaluate(
+            transactionCount: 1,
+            isDemoMode: false,
+            serverConnected: true,
+            connectionLevel: .healthy,
+            accountDisplayName: "Chase Checking"
+        )
+
+        #expect(presentation == nil)
+    }
+
+    @Test("Account activity empty state explains offline server")
+    func accountActivityEmptyStateOfflineServer() {
+        let presentation = AccountActivityEmptyState.evaluate(
+            transactionCount: 0,
+            isDemoMode: false,
+            serverConnected: false,
+            connectionLevel: .offline,
+            accountDisplayName: "Chase Checking"
+        )
+
+        #expect(presentation?.title == "Server offline")
+        #expect(presentation?.tone == .offline)
+        #expect(presentation?.detail.contains("Start PlaidBarServer") == true)
+    }
+
+    @Test("Account activity empty state explains login recovery")
+    func accountActivityEmptyStateLoginRecovery() {
+        let presentation = AccountActivityEmptyState.evaluate(
+            transactionCount: 0,
+            isDemoMode: false,
+            serverConnected: true,
+            connectionLevel: .loginRequired,
+            accountDisplayName: "Amex Gold"
+        )
+
+        #expect(presentation?.title == "Reconnect to sync activity")
+        #expect(presentation?.tone == .warning)
+        #expect(presentation?.detail.contains("fresh bank login") == true)
+    }
+
+    @Test("Account activity empty state explains healthy no history")
+    func accountActivityEmptyStateHealthyNoHistory() {
+        let presentation = AccountActivityEmptyState.evaluate(
+            transactionCount: 0,
+            isDemoMode: false,
+            serverConnected: true,
+            connectionLevel: .healthy,
+            accountDisplayName: "Savings"
+        )
+
+        #expect(presentation?.title == "No recent activity")
+        #expect(presentation?.tone == .healthy)
+        #expect(presentation?.detail.contains("linked") == true)
+    }
+
     @Test("TransactionDTO preserves item ID when encoded")
     func transactionItemIdCodable() throws {
         let tx = TransactionDTO(
@@ -239,6 +342,36 @@ struct PlaidBarCoreTests {
         #expect(summary.outflowTotal == 140)
         #expect(summary.inflowTotal == 2_000)
         #expect(summary.days == 30)
+    }
+
+    @Test("Account activity summary defaults to latest transaction date")
+    func accountActivitySummaryDefaultsToLatestTransactionDate() {
+        let transactions = [
+            TransactionDTO(id: "recent", accountId: "a", amount: 100, date: "2026-01-30", name: "Groceries"),
+            TransactionDTO(id: "included", accountId: "a", amount: -2_000, date: "2026-01-10", name: "Payroll", category: .income),
+            TransactionDTO(id: "old", accountId: "a", amount: 75, date: "2025-12-01", name: "Old"),
+            TransactionDTO(id: "invalid", accountId: "a", amount: 25, date: "not-a-date", name: "Invalid")
+        ]
+
+        let summary = AccountActivitySummary.recent(from: transactions)
+
+        #expect(summary.transactionCount == 2)
+        #expect(summary.outflowTotal == 100)
+        #expect(summary.inflowTotal == 2_000)
+    }
+
+    @Test("Account activity summary explicit now excludes future transactions")
+    func accountActivitySummaryExplicitNowExcludesFutureTransactions() {
+        let now = Formatters.parseTransactionDate("2026-01-15")!
+        let transactions = [
+            TransactionDTO(id: "current", accountId: "a", amount: 25, date: "2026-01-15", name: "Coffee"),
+            TransactionDTO(id: "future", accountId: "a", amount: 100, date: "2026-01-30", name: "Future")
+        ]
+
+        let summary = AccountActivitySummary.recent(from: transactions, now: now)
+
+        #expect(summary.transactionCount == 1)
+        #expect(summary.outflowTotal == 25)
     }
 
     @Test("Account presentation picks subtype-aware icons")
@@ -572,6 +705,30 @@ struct PlaidBarCoreTests {
         #expect(errored.rowLabel == "American Express item error")
         #expect(errored.detailLabel == "American Express item error")
         #expect(errored.recoveryActionTitle == "Reconnect American Express")
+    }
+
+    @Test("Item recovery target prioritizes item errors")
+    func itemRecoveryTargetPrioritizesItemErrors() {
+        let statuses = [
+            ItemStatus(id: "login", institutionName: "Chase", status: .loginRequired),
+            ItemStatus(id: "error", institutionName: "Amex", status: .error),
+        ]
+
+        #expect(ItemRecoveryTarget.itemId(from: statuses) == "error")
+        #expect(ItemRecoveryTarget.actionTitle(from: statuses) == "Reconnect Amex")
+        #expect(ItemRecoveryTarget.recoveryDetail(from: statuses) == "Plaid reported an item error for Amex. Reconnect it, then refresh balances.")
+    }
+
+    @Test("Item recovery target explains login required recovery")
+    func itemRecoveryTargetExplainsLoginRequiredRecovery() {
+        let statuses = [
+            ItemStatus(id: "connected", institutionName: "Bank", status: .connected),
+            ItemStatus(id: "login", institutionName: " Chase ", status: .loginRequired),
+        ]
+
+        #expect(ItemRecoveryTarget.itemId(from: statuses) == "login")
+        #expect(ItemRecoveryTarget.actionTitle(from: statuses) == "Reconnect Chase")
+        #expect(ItemRecoveryTarget.recoveryDetail(from: statuses) == "Plaid requires a fresh Chase login before account rows can be recovered.")
     }
 
     @Test("Menu bar summary estimates runway from recent monthly spend")
@@ -1161,6 +1318,52 @@ struct PlaidBarCoreTests {
         #expect(readiness.secondaryActions.contains(.openSettings))
     }
 
+    @Test("Dashboard status readiness blocks on missing local server auth")
+    func dashboardStatusReadinessBlocksOnMissingLocalServerAuth() {
+        let readiness = DashboardStatusReadiness.evaluate(
+            isDemoMode: false,
+            serverConnected: false,
+            credentialsConfigured: nil,
+            linkedItemCount: 0,
+            accountCount: 0,
+            syncedItemCount: 0,
+            needsLoginItemCount: 0,
+            erroredItemCount: 0,
+            isSyncStale: true,
+            lastSyncRelative: nil,
+            errorMessage: "PlaidBar server auth token is unavailable"
+        )
+
+        #expect(readiness.level == .blocked)
+        #expect(readiness.title == "Local server auth missing")
+        #expect(readiness.detail.contains("auth token"))
+        #expect(readiness.primaryAction == .openSettings)
+        #expect(readiness.secondaryActions.contains(.checkServer))
+    }
+
+    @Test("Dashboard status readiness blocks on rejected local server auth")
+    func dashboardStatusReadinessBlocksOnRejectedLocalServerAuth() {
+        let readiness = DashboardStatusReadiness.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: nil,
+            linkedItemCount: 0,
+            accountCount: 0,
+            syncedItemCount: 0,
+            needsLoginItemCount: 0,
+            erroredItemCount: 0,
+            isSyncStale: true,
+            lastSyncRelative: nil,
+            errorMessage: "PlaidBar server returned 401: unauthorized"
+        )
+
+        #expect(readiness.level == .blocked)
+        #expect(readiness.title == "Local server auth rejected")
+        #expect(readiness.detail.contains("rejected"))
+        #expect(readiness.primaryAction == .openSettings)
+        #expect(readiness.secondaryActions.contains(.checkServer))
+    }
+
     @Test("Dashboard status readiness prompts add account with no items")
     func dashboardStatusReadinessPromptsAddAccount() {
         let readiness = DashboardStatusReadiness.evaluate(
@@ -1180,6 +1383,56 @@ struct PlaidBarCoreTests {
         #expect(readiness.level == .warning)
         #expect(readiness.primaryAction == .addAccount)
         #expect(readiness.primaryActionTitle == "Connect Bank")
+    }
+
+    @Test("Server connection presentation labels local auth failures")
+    func serverConnectionPresentationLabelsLocalAuthFailures() {
+        let missing = ServerConnectionPresentation.evaluate(
+            isDemoMode: false,
+            isLoading: false,
+            serverConnected: false,
+            errorMessage: "PlaidBar server auth token is unavailable"
+        )
+        let rejected = ServerConnectionPresentation.evaluate(
+            isDemoMode: false,
+            isLoading: false,
+            serverConnected: true,
+            errorMessage: "PlaidBar server returned 403: forbidden"
+        )
+
+        #expect(missing.issue == .localAuthMissing)
+        #expect(missing.statusText == "Auth missing")
+        #expect(missing.diagnosticsSummary == "Local server auth missing")
+        #expect(missing.attentionText == "Auth")
+        #expect(rejected.issue == .localAuthRejected)
+        #expect(rejected.statusText == "Auth rejected")
+        #expect(rejected.diagnosticsSummary == "Local server auth rejected")
+        #expect(rejected.attentionText == "Auth")
+    }
+
+    @Test("Server connection presentation distinguishes offline and generic errors")
+    func serverConnectionPresentationDistinguishesOfflineAndGenericErrors() {
+        let offline = ServerConnectionPresentation.evaluate(
+            isDemoMode: false,
+            isLoading: false,
+            serverConnected: false,
+            errorMessage: nil
+        )
+        let genericError = ServerConnectionPresentation.evaluate(
+            isDemoMode: false,
+            isLoading: false,
+            serverConnected: true,
+            errorMessage: "PlaidBar server returned 500: internal server error"
+        )
+
+        #expect(offline.issue == .offline)
+        #expect(offline.statusText == "Offline")
+        #expect(offline.diagnosticsSummary == "Server offline")
+        #expect(offline.attentionText == "Offline")
+        #expect(genericError.issue == .error)
+        #expect(genericError.statusText == "Error")
+        #expect(genericError.diagnosticsSummary == "Recent action failed")
+        #expect(genericError.attentionText == "Error")
     }
 
     @Test("Dashboard status readiness surfaces recent action failure before empty data")
@@ -1244,11 +1497,12 @@ struct PlaidBarCoreTests {
             linkedItemCount: 1,
             accountCount: 3,
             degradedItemCount: 1,
-            degradedItemRecoveryTitle: "Reconnect Chase"
+            degradedItemRecoveryTitle: "Reconnect Chase",
+            degradedItemRecoveryDetail: "Plaid requires a fresh Chase login before account rows can be recovered."
         )
 
         #expect(emptyState.title == "1 item needs attention")
-        #expect(emptyState.detail.contains("needs recovery"))
+        #expect(emptyState.detail == "Plaid requires a fresh Chase login before account rows can be recovered.")
         #expect(emptyState.iconName == "exclamationmark.triangle.fill")
         #expect(emptyState.tone == .warning)
         #expect(!emptyState.showsAddAccount)
@@ -1360,6 +1614,25 @@ struct PlaidBarCoreTests {
         #expect(state.title == "No matching transactions")
         #expect(state.action == .clearFilters)
         #expect(state.actionTitle == "Clear Filters")
+    }
+
+    @Test("Secondary transaction empty state does not blame filters before history exists")
+    func secondaryTransactionEmptyStateNeedsHistoryBeforeFilteredZero() {
+        let state = SecondaryContentUnavailableState.transactions(
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 1,
+            accountCount: 2,
+            syncedItemCount: 0,
+            transactionCount: 0,
+            hasSearchText: true,
+            hasActiveFilters: true,
+            errorMessage: nil
+        )
+
+        #expect(state.title == "First sync needed")
+        #expect(state.action == .syncTransactions)
+        #expect(state.actionTitle == "Sync Transactions")
     }
 
     @Test("Secondary accounts empty state distinguishes offline linked and unloaded data")
@@ -2188,13 +2461,27 @@ struct PlaidBarCoreTests {
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         let directory = root.appendingPathComponent(".plaidbar", isDirectory: true)
         let database = directory.appendingPathComponent("plaidbar.sqlite")
+        let sandboxDatabase = directory.appendingPathComponent("plaidbar-sandbox.sqlite")
+        let databaseWAL = directory.appendingPathComponent("plaidbar.sqlite-wal")
+        let transactionCache = directory.appendingPathComponent("transactions-sandbox-abc123.json")
+        let pendingLinkSessions = directory.appendingPathComponent("pending-link-sessions.json")
+        let pendingLinkSessionsBackup = directory.appendingPathComponent("pending-link-sessions.json.backup-20260604")
         let authToken = directory.appendingPathComponent("auth-token")
         let serverConfig = directory.appendingPathComponent("server.conf")
+        let unrelatedFile = directory.appendingPathComponent("notes.txt")
+        let unrelatedDirectory = directory.appendingPathComponent("exports", isDirectory: true)
 
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try "db".write(to: database, atomically: true, encoding: .utf8)
+        try "sandbox".write(to: sandboxDatabase, atomically: true, encoding: .utf8)
+        try "wal".write(to: databaseWAL, atomically: true, encoding: .utf8)
+        try "cache".write(to: transactionCache, atomically: true, encoding: .utf8)
+        try "sessions".write(to: pendingLinkSessions, atomically: true, encoding: .utf8)
+        try "old sessions".write(to: pendingLinkSessionsBackup, atomically: true, encoding: .utf8)
         try "token".write(to: authToken, atomically: true, encoding: .utf8)
         try "PLAID_ENV=sandbox".write(to: serverConfig, atomically: true, encoding: .utf8)
+        try "keep me".write(to: unrelatedFile, atomically: true, encoding: .utf8)
+        try FileManager.default.createDirectory(at: unrelatedDirectory, withIntermediateDirectories: true)
         try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: authToken.path)
         try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: serverConfig.path)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -2205,16 +2492,27 @@ struct PlaidBarCoreTests {
         }
 
         #expect(result.directoryPath == directory.path)
-        #expect(result.removedEntries == ["plaidbar.sqlite"])
+        #expect(result.removedEntries == [
+            "pending-link-sessions.json",
+            "pending-link-sessions.json.backup-20260604",
+            "plaidbar-sandbox.sqlite",
+            "plaidbar.sqlite",
+            "plaidbar.sqlite-wal",
+            "transactions-sandbox-abc123.json",
+        ])
+        #expect(result.preservedEntries == ["auth-token", "exports", "notes.txt", "server.conf"])
         #expect(result.keychainTokensCleared)
         #expect(didResetKeychainTokens)
 
         var isDirectory: ObjCBool = false
         #expect(FileManager.default.fileExists(atPath: directory.path, isDirectory: &isDirectory))
         #expect(isDirectory.boolValue)
-        #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).sorted() == ["auth-token", "server.conf"])
+        #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).sorted() == ["auth-token", "exports", "notes.txt", "server.conf"])
         #expect(try String(contentsOf: authToken, encoding: .utf8) == "token")
         #expect(try String(contentsOf: serverConfig, encoding: .utf8) == "PLAID_ENV=sandbox")
+        #expect(try String(contentsOf: unrelatedFile, encoding: .utf8) == "keep me")
+        #expect(FileManager.default.fileExists(atPath: unrelatedDirectory.path, isDirectory: &isDirectory))
+        #expect(isDirectory.boolValue)
         #expect(try posixPermissions(at: authToken) == 0o600)
         #expect(try posixPermissions(at: serverConfig) == 0o600)
     }
@@ -2261,6 +2559,7 @@ struct PlaidBarCoreTests {
         }
 
         #expect(result.removedEntries == ["plaidbar.sqlite"])
+        #expect(result.preservedEntries == [])
         #expect(!result.keychainTokensCleared)
         #expect(!didResetKeychainTokens)
     }

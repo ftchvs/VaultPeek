@@ -67,6 +67,16 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
             )
         }
 
+        if let authError = localServerAuthError(from: errorMessage) {
+            return DashboardStatusReadiness(
+                level: .blocked,
+                title: authError.title,
+                detail: authError.detail,
+                primaryAction: .openSettings,
+                secondaryActions: [.checkServer]
+            )
+        }
+
         if !serverConnected {
             return DashboardStatusReadiness(
                 level: .blocked,
@@ -187,6 +197,31 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
             primaryActionTitle: "Refresh Data",
             secondaryActions: [.addAccount]
         )
+    }
+
+    private static func localServerAuthError(from message: String?) -> (title: String, detail: String)? {
+        guard let message else { return nil }
+        let normalized = message
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+            .lowercased()
+
+        if normalized.contains("auth token is unavailable") {
+            return (
+                "Local server auth missing",
+                "PlaidBar cannot read the local app-server auth token. Restart PlaidBarServer, then check the connection again."
+            )
+        }
+
+        if normalized.contains("plaidbar server returned 401") ||
+            normalized.contains("plaidbar server returned 403") {
+            return (
+                "Local server auth rejected",
+                "PlaidBar reached the local server, but the app-server auth token was rejected. Restart PlaidBarServer so the local token is regenerated."
+            )
+        }
+
+        return nil
     }
 
     private static func userFacingErrorDetail(from message: String?) -> String? {

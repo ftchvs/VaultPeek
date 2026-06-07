@@ -1289,7 +1289,7 @@ private struct AccountRowWithDrilldown: View {
 
     private var connectionPresentation: AccountConnectionPresentation {
         AccountConnectionPresentation.evaluate(
-            isDemoMode: appState.isDemoMode,
+            isDemoMode: appState.usesDemoConnectionPresentation,
             serverConnected: appState.serverConnected,
             isSyncStale: appState.isSyncStale,
             statusSyncText: appState.statusSyncText,
@@ -1308,12 +1308,13 @@ private struct DashboardEmptyAccountState: View {
     private var presentation: DashboardAccountEmptyState {
         DashboardAccountEmptyState.evaluate(
             filter: filter.emptyStateKind,
-            isDemoMode: appState.isDemoMode,
+            isDemoMode: appState.usesDemoConnectionPresentation,
             serverConnected: appState.serverConnected,
             linkedItemCount: appState.statusItemCount,
             accountCount: appState.accounts.count,
             degradedItemCount: appState.needsLoginItemCount + appState.erroredItemCount,
-            degradedItemRecoveryTitle: ItemRecoveryTarget.actionTitle(from: appState.itemStatuses)
+            degradedItemRecoveryTitle: ItemRecoveryTarget.actionTitle(from: appState.itemStatuses),
+            degradedItemRecoveryDetail: ItemRecoveryTarget.recoveryDetail(from: appState.itemStatuses)
         )
     }
 
@@ -1538,7 +1539,7 @@ private struct DashboardAccountRow: View {
 
     private var connectionPresentation: AccountConnectionPresentation {
         AccountConnectionPresentation.evaluate(
-            isDemoMode: appState.isDemoMode && !appState.isDemoStatusRecoveryScenario,
+            isDemoMode: appState.usesDemoConnectionPresentation,
             serverConnected: appState.serverConnected,
             isSyncStale: appState.isSyncStale,
             statusSyncText: appState.statusSyncText,
@@ -1585,6 +1586,16 @@ private struct SelectedAccountPanel: View {
 
     private var activitySummary: AccountActivitySummary {
         AccountActivitySummary.recent(from: accountTransactions)
+    }
+
+    private var emptyState: AccountActivityEmptyState? {
+        AccountActivityEmptyState.evaluate(
+            transactionCount: accountTransactions.count,
+            isDemoMode: appState.usesDemoConnectionPresentation,
+            serverConnected: appState.serverConnected,
+            connectionLevel: connectionPresentation.level,
+            accountDisplayName: AccountPresentation.displayName(for: account)
+        )
     }
 
     var body: some View {
@@ -1705,9 +1716,9 @@ private struct SelectedAccountPanel: View {
                     .foregroundStyle(.secondary)
 
                 if transactions.isEmpty {
-                    Text("No recent activity for this account.")
-                        .detailText()
-                        .padding(.vertical, 10)
+                    if let emptyState {
+                        AccountActivityEmptyStateView(presentation: emptyState)
+                    }
                 } else {
                     ForEach(transactions) { transaction in
                         TransactionMiniRow(transaction: transaction)
@@ -1753,7 +1764,7 @@ private struct SelectedAccountPanel: View {
 
     private var connectionPresentation: AccountConnectionPresentation {
         AccountConnectionPresentation.evaluate(
-            isDemoMode: appState.isDemoMode,
+            isDemoMode: appState.usesDemoConnectionPresentation,
             serverConnected: appState.serverConnected,
             isSyncStale: appState.isSyncStale,
             statusSyncText: appState.statusSyncText,
@@ -1933,6 +1944,47 @@ private struct TransactionMiniRow: View {
     private var accessibilityLabel: String {
         let direction = transaction.isIncome ? "income" : "outflow"
         return "\(transaction.displayName), \(direction), \(Formatters.currency(transaction.displayAmount, format: .full)), \(Formatters.displayTransactionDate(transaction.date))"
+    }
+}
+
+private struct AccountActivityEmptyStateView: View {
+    let presentation: AccountActivityEmptyState
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: presentation.iconName)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(tint)
+                .frame(width: 18, height: 18)
+                .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 5))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(presentation.title)
+                    .font(.caption.weight(.semibold))
+                Text(presentation.detail)
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 8)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 8)
+        .background(tint.opacity(0.06), in: RoundedRectangle(cornerRadius: 7))
+        .accessibilityElement(children: .combine)
+    }
+
+    private var tint: Color {
+        switch presentation.tone {
+        case .brand:
+            SemanticColors.brand
+        case .healthy:
+            .secondary
+        case .offline, .secondary:
+            .secondary
+        case .warning:
+            SemanticColors.warning
+        }
     }
 }
 
