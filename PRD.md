@@ -160,6 +160,8 @@ native RepoBar-style finance instrument before expanding finance scope.
 | P1.3 | Liquid Glass readiness | **Given** PlaidBar is built with a macOS 26+ SDK, **When** SwiftUI Liquid Glass APIs are available, **Then** native panel surfaces may opt into `glassEffect` while preserving the macOS 15 material fallback |
 | P1.4 | RepoBar-style dashboard density | **Given** the menu bar popover opens, **When** dashboard content is scanned, **Then** the status strip and 365-day heatmap appear before account rows, with compact filters and selected account detail actions in the same surface |
 | P1.5 | Recovery convergence | **Given** common failures occur, **When** the user views dashboard or settings, **Then** server offline, wrong mode, missing credentials, stale sync, login-required item, empty account data, filtered-zero transactions, and denied notifications each expose one clear recovery action |
+| P1.6 | Local AI activity summaries | **Given** a local AI runtime is configured, **When** the user opens the dashboard or an insights surface, **Then** PlaidBar summarizes financial activity for the last 7 days, last month, and year-over-year windows, including spending, income, balance changes, recurring charges, credit utilization, and notable anomalies without sending data to cloud models |
+| P1.7 | Local AI categorization | **Given** synced transactions include Plaid categories, merchant names, raw names, amounts, dates, and account context, **When** local AI categorization is enabled, **Then** PlaidBar suggests smarter expense and income categories with confidence and evidence while preserving raw Plaid data and allowing user correction or fallback to Plaid categories |
 
 ### Future (not committed)
 
@@ -216,7 +218,9 @@ native RepoBar-style finance instrument before expanding finance scope.
 - **No cloud sync** — All data stays local. Period.
 - **No multi-user** — Single-user, single-machine
 - **No transaction editing** — Read-only view of bank data
-- **No AI/ML features** — Simple categorization from Plaid, no smart insights
+- **No cloud AI over financial data** — Post-1.0 local AI may summarize and
+  categorize activity only when it runs on-device, keeps data local, preserves
+  raw Plaid data, and exposes user-correctable suggestions
 
 ## Success Metrics
 

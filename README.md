@@ -477,6 +477,11 @@ Post-1.0 priorities:
       material fallback
 - [ ] Converge dashboard/settings recovery actions for server, Plaid item,
       empty-data, stale-sync, and notification-permission states
+- [ ] Add local AI summaries for financial activity over the last 7 days, last
+      month, and year-over-year windows without sending transaction data to
+      cloud models
+- [ ] Use local AI to suggest smarter expense and income categories while
+      preserving Plaid categories as the auditable fallback
 - [ ] Refresh screenshots and QA evidence after visual changes
 
 Deferred product candidates:
