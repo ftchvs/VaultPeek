@@ -2992,7 +2992,9 @@ struct PlaidBarCoreTests {
     @Test("Local AI category overlays do not mutate raw TransactionDTO category")
     func localAICategoryOverlayPreservesRawTransactionRoundtrip() throws {
         let transaction = TransactionDTO(id: "raw", accountId: "checking", amount: 42, date: "2026-03-15", name: "RAW MERCHANT", category: .foodAndDrink)
-        let originalData = try JSONEncoder().encode(transaction)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let originalData = try encoder.encode(transaction)
         let suggestion = LocalAICategorySuggestion(
             transactionId: "raw",
             suggestedCategory: .shopping,
@@ -3021,7 +3023,7 @@ struct PlaidBarCoreTests {
         #expect(transaction.category == .foodAndDrink)
         #expect(decoded.category == .foodAndDrink)
         #expect(input.current.categoryTotals.first?.category == .shopping)
-        #expect(try JSONEncoder().encode(transaction) == originalData)
+        #expect(try encoder.encode(transaction) == originalData)
     }
 
     private func posixPermissions(at url: URL) throws -> Int {

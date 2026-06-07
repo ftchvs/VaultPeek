@@ -23,9 +23,14 @@ final class AppState {
     }
 
     // MARK: - State
-    var accounts: [AccountDTO] = []
+    var accounts: [AccountDTO] = [] {
+        didSet { _cachedLocalAIActivitySummaries = nil }
+    }
     var transactions: [TransactionDTO] = [] {
-        didSet { _cachedRecurringTransactions = nil }
+        didSet {
+            _cachedRecurringTransactions = nil
+            _cachedLocalAIActivitySummaries = nil
+        }
     }
     var isLoading = false
     var error: String?
@@ -509,12 +514,18 @@ final class AppState {
         localAIInsightsService.availability
     }
 
+    /// Cached local summaries — invalidated via accounts.didSet and transactions.didSet.
+    private var _cachedLocalAIActivitySummaries: [LocalAIActivitySummary]?
+
     var localAIActivitySummaries: [LocalAIActivitySummary] {
-        localAIInsightsService.activitySummaries(
+        if let cached = _cachedLocalAIActivitySummaries { return cached }
+        let result = localAIInsightsService.activitySummaries(
             accounts: accounts,
             transactions: transactions,
             recurringTransactions: recurringTransactions
         )
+        _cachedLocalAIActivitySummaries = result
+        return result
     }
 
     func transactionsForAccount(_ accountId: String) -> [TransactionDTO] {

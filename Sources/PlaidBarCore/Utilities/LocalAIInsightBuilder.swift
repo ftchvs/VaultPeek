@@ -277,6 +277,7 @@ public enum LocalAIInsightInputBuilder {
         transaction: TransactionDTO,
         resolution: LocalAICategoryResolution
     ) -> Bool {
+        if resolution.effectiveCategory.isTransfer { return false }
         if resolution.effectiveCategory == .income { return true }
         if resolution.source == .localAISuggestion { return false }
         return transaction.isIncome
@@ -295,8 +296,8 @@ public enum LocalAIInsightInputBuilder {
 
         return grouped.map { category, transactions in
             let sortedTransactions = transactions.sorted { lhs, rhs in
-                if lhs.date != rhs.date { return lhs.date > rhs.date }
-                return lhs.displayAmount > rhs.displayAmount
+                if lhs.displayAmount != rhs.displayAmount { return lhs.displayAmount > rhs.displayAmount }
+                return lhs.date > rhs.date
             }
             let transactionIds = sortedTransactions.map(\.id)
             return LocalAICategoryTotal(
