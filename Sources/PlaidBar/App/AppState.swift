@@ -856,7 +856,7 @@ final class AppState {
         await notificationService.requestPermission()
     }
 
-    func notificationPermissionStatus() async -> UNAuthorizationStatus {
+    func notificationPermissionStatus() async -> NotificationPermissionState {
         await notificationService.checkPermissionStatus()
     }
 
@@ -868,8 +868,8 @@ final class AppState {
     func loadInitialData() async {
         // Recheck notification permission at startup (user may have revoked in System Settings)
         if notificationsEnabled {
-            let status = await notificationService.checkPermissionStatus()
-            if status == .denied || status == .notDetermined {
+            let permissionState = await notificationService.checkPermissionStatus()
+            if permissionState.shouldDisableNotifications {
                 notificationsEnabled = false
             }
         }

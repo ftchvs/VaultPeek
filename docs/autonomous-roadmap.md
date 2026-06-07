@@ -1,8 +1,9 @@
 # PlaidBar Autonomous Roadmap
 
-This roadmap guides the recurring local agent loop that keeps PlaidBar moving
-toward a trustworthy 1.0 release. It complements `GOAL.md`,
-`commands/goal.md`, and `docs/v1.0-roadmap.md`.
+This roadmap guides the recurring local agent loop that keeps PlaidBar aligned
+with its local-first menu bar finance vision. It complements `GOAL.md`,
+`commands/goal.md`, and the long-term product brief in
+`docs/v1.0-roadmap.md`.
 
 ## Operating Contract
 

@@ -130,6 +130,12 @@ Checks:
 If macOS permission was revoked, re-enable notifications in System Settings and
 restart PlaidBar.
 
+Formula/source-built executable runs may report notification permission as
+unavailable or denied if macOS cannot register the process as an app bundle.
+PlaidBar avoids calling the notification center in that state so Settings does
+not crash. Signed/notarized app-bundle notification behavior remains part of the
+post-1.0 distribution work.
+
 ## Local Data Reset Did Not Revoke Bank Access
 
 That is expected. Local reset clears PlaidBar's local data. It does not
