@@ -2786,6 +2786,246 @@ struct PlaidBarCoreTests {
         #expect(abs(estimated - 112.66) < 0.01)
     }
 
+    @Test("Local AI insight windows use deterministic current and prior ranges")
+    func localAIInsightWindowsUseDeterministicRanges() throws {
+        let anchor = try #require(Formatters.parseTransactionDate("2026-03-15"))
+
+        let last7 = LocalAIInsightInputBuilder.dateRanges(for: .last7days, anchorDate: anchor)
+        #expect(last7.current.startDate == "2026-03-09")
+        #expect(last7.current.endDate == "2026-03-15")
+        #expect(last7.prior?.startDate == "2026-03-02")
+        #expect(last7.prior?.endDate == "2026-03-08")
+
+        let lastMonth = LocalAIInsightInputBuilder.dateRanges(for: .lastMonth, anchorDate: anchor)
+        #expect(lastMonth.current.startDate == "2026-02-14")
+        #expect(lastMonth.current.endDate == "2026-03-15")
+        #expect(lastMonth.prior?.startDate == "2026-01-15")
+        #expect(lastMonth.prior?.endDate == "2026-02-13")
+    }
+
+    @Test("Local AI YoY window uses prior-year comparison range")
+    func localAIYearOverYearRange() throws {
+        let anchor = try #require(Formatters.parseTransactionDate("2026-03-15"))
+
+        let ranges = LocalAIInsightInputBuilder.dateRanges(for: .yearOverYear, anchorDate: anchor)
+
+        #expect(ranges.current.startDate == "2025-03-16")
+        #expect(ranges.current.endDate == "2026-03-15")
+        #expect(ranges.prior?.startDate == "2024-03-16")
+        #expect(ranges.prior?.endDate == "2025-03-15")
+    }
+
+    @Test("Local AI summary input splits income, expenses, and transfers")
+    func localAISummarySplitsIncomeExpensesAndTransfers() throws {
+        let anchor = try #require(Formatters.parseTransactionDate("2026-03-15"))
+        let transactions = [
+            TransactionDTO(id: "expense", accountId: "checking", amount: 100, date: "2026-03-15", name: "Groceries", category: .foodAndDrink),
+            TransactionDTO(id: "income", accountId: "checking", amount: -1000, date: "2026-03-14", name: "Payroll", category: .income),
+            TransactionDTO(id: "transfer-out", accountId: "checking", amount: 250, date: "2026-03-14", name: "Savings Transfer", category: .transferOut),
+            TransactionDTO(id: "transfer-in", accountId: "checking", amount: -250, date: "2026-03-14", name: "Savings Transfer", category: .transfer),
+            TransactionDTO(id: "old", accountId: "checking", amount: 75, date: "2026-03-01", name: "Old", category: .shopping),
+        ]
+
+        let input = LocalAIInsightInputBuilder.buildInput(
+            window: .last7days,
+            accounts: [],
+            transactions: transactions,
+            recurringTransactions: [],
+            anchorDate: anchor
+        )
+
+        #expect(input.current.transactionCount == 4)
+        #expect(input.current.incomeTotal == 1000)
+        #expect(input.current.expenseTotal == 100)
+        #expect(input.current.netCashflow == 900)
+        #expect(input.current.incomeTransactionIds == ["income"])
+        #expect(input.current.expenseTransactionIds == ["expense"])
+        #expect(Set(input.current.transferTransactionIds) == Set(["transfer-out", "transfer-in"]))
+    }
+
+    @Test("Local AI transfer suggestions move rows out of expense totals")
+    func localAITransferSuggestionsMoveRowsOutOfExpenseTotals() throws {
+        let anchor = try #require(Formatters.parseTransactionDate("2026-03-15"))
+        let transaction = TransactionDTO(
+            id: "suggested-transfer",
+            accountId: "checking",
+            amount: 250,
+            date: "2026-03-15",
+            name: "Move to savings",
+            category: .shopping
+        )
+        let suggestion = LocalAICategorySuggestion(
+            transactionId: "suggested-transfer",
+            suggestedCategory: .transferOut,
+            confidence: 0.92,
+            evidence: [
+                LocalAIInsightEvidence(
+                    kind: .transaction,
+                    sourceId: "suggested-transfer",
+                    label: "Move to savings",
+                    transactionIds: ["suggested-transfer"]
+                ),
+            ]
+        )
+
+        let input = LocalAIInsightInputBuilder.buildInput(
+            window: .last7days,
+            accounts: [],
+            transactions: [transaction],
+            recurringTransactions: [],
+            categorySuggestions: [suggestion],
+            anchorDate: anchor
+        )
+
+        #expect(input.current.expenseTotal == 0)
+        #expect(input.current.expenseTransactionIds == [])
+        #expect(input.current.transferTransactionIds == ["suggested-transfer"])
+        #expect(input.current.categoryTotals == [])
+    }
+
+    @Test("Local AI income suggestions move rows out of expense totals")
+    func localAIIncomeSuggestionsMoveRowsOutOfExpenseTotals() throws {
+        let anchor = try #require(Formatters.parseTransactionDate("2026-03-15"))
+        let transaction = TransactionDTO(
+            id: "suggested-income",
+            accountId: "checking",
+            amount: 125,
+            date: "2026-03-15",
+            name: "Refund credit",
+            category: .shopping
+        )
+        let suggestion = LocalAICategorySuggestion(
+            transactionId: "suggested-income",
+            suggestedCategory: .income,
+            confidence: 0.9,
+            evidence: [
+                LocalAIInsightEvidence(
+                    kind: .transaction,
+                    sourceId: "suggested-income",
+                    label: "Refund credit",
+                    transactionIds: ["suggested-income"]
+                ),
+            ]
+        )
+
+        let input = LocalAIInsightInputBuilder.buildInput(
+            window: .last7days,
+            accounts: [],
+            transactions: [transaction],
+            recurringTransactions: [],
+            categorySuggestions: [suggestion],
+            anchorDate: anchor
+        )
+
+        #expect(input.current.incomeTotal == 125)
+        #expect(input.current.expenseTotal == 0)
+        #expect(input.current.incomeTransactionIds == ["suggested-income"])
+        #expect(input.current.expenseTransactionIds == [])
+        #expect(input.current.categoryTotals == [])
+    }
+
+    @Test("Local AI builder preserves source transaction evidence")
+    func localAIBuilderPreservesEvidence() throws {
+        let anchor = try #require(Formatters.parseTransactionDate("2026-03-15"))
+        let transactions = [
+            TransactionDTO(id: "coffee", accountId: "checking", amount: 12, date: "2026-03-15", name: "CAFE", merchantName: "Cafe", category: .foodAndDrink),
+            TransactionDTO(id: "market", accountId: "checking", amount: 88, date: "2026-03-14", name: "MARKET", merchantName: "Market", category: .foodAndDrink),
+        ]
+
+        let input = LocalAIInsightInputBuilder.buildInput(
+            window: .last7days,
+            accounts: [
+                AccountDTO(id: "checking", itemId: "item", name: "Checking", type: .depository, balances: BalanceDTO(available: 1000)),
+            ],
+            transactions: transactions,
+            recurringTransactions: [],
+            anchorDate: anchor
+        )
+
+        let categoryTotal = try #require(input.current.categoryTotals.first)
+        #expect(categoryTotal.category == .foodAndDrink)
+        #expect(categoryTotal.transactionIds == ["market", "coffee"])
+        #expect(categoryTotal.evidence.first?.transactionIds == ["market", "coffee"])
+        #expect(input.current.topExpenses.map(\.transactionId) == ["market", "coffee"])
+        #expect(input.current.topExpenses.first?.evidence.first?.sourceId == "market")
+        #expect(input.evidence.contains { $0.transactionIds.contains("coffee") })
+        #expect(input.accountSnapshot.accountIds == ["checking"])
+    }
+
+    @Test("Local AI category resolver overrides and falls back deterministically")
+    func localAICategoryResolverOverridesAndFallsBack() {
+        let plaidCategorized = TransactionDTO(id: "tx", accountId: "a", amount: 20, date: "2026-03-15", name: "Merchant", category: .foodAndDrink)
+        let uncategorized = TransactionDTO(id: "uncat", accountId: "a", amount: 20, date: "2026-03-15", name: "Unknown")
+        let evidence = [
+            LocalAIInsightEvidence(kind: .transaction, sourceId: "tx", label: "Merchant", transactionIds: ["tx"]),
+        ]
+
+        let highConfidence = LocalAICategorySuggestion(
+            transactionId: "tx",
+            suggestedCategory: .shopping,
+            confidence: 0.91,
+            evidence: evidence
+        )
+        let lowConfidence = LocalAICategorySuggestion(
+            transactionId: "tx",
+            suggestedCategory: .shopping,
+            confidence: 0.5,
+            evidence: evidence
+        )
+        let accepted = LocalAICategorySuggestion(
+            transactionId: "tx",
+            suggestedCategory: .transportation,
+            confidence: 0.4,
+            status: .accepted,
+            evidence: evidence
+        )
+
+        #expect(LocalAICategorizationResolver.resolve(transaction: plaidCategorized, suggestion: highConfidence).effectiveCategory == .shopping)
+        #expect(LocalAICategorizationResolver.resolve(transaction: plaidCategorized, suggestion: highConfidence).source == .localAISuggestion)
+        #expect(LocalAICategorizationResolver.resolve(transaction: plaidCategorized, suggestion: lowConfidence).effectiveCategory == .foodAndDrink)
+        #expect(LocalAICategorizationResolver.resolve(transaction: plaidCategorized, suggestion: lowConfidence).source == .plaidCategory)
+        #expect(LocalAICategorizationResolver.resolve(transaction: plaidCategorized, suggestion: accepted).effectiveCategory == .transportation)
+        #expect(LocalAICategorizationResolver.resolve(transaction: uncategorized, suggestion: nil).effectiveCategory == .other)
+        #expect(LocalAICategorizationResolver.resolve(transaction: uncategorized, suggestion: nil).source == .fallbackOther)
+    }
+
+    @Test("Local AI category overlays do not mutate raw TransactionDTO category")
+    func localAICategoryOverlayPreservesRawTransactionRoundtrip() throws {
+        let transaction = TransactionDTO(id: "raw", accountId: "checking", amount: 42, date: "2026-03-15", name: "RAW MERCHANT", category: .foodAndDrink)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let originalData = try encoder.encode(transaction)
+        let suggestion = LocalAICategorySuggestion(
+            transactionId: "raw",
+            suggestedCategory: .shopping,
+            confidence: 0.99,
+            status: .accepted,
+            evidence: [
+                LocalAIInsightEvidence(kind: .transaction, sourceId: "raw", label: "RAW MERCHANT", transactionIds: ["raw"]),
+            ]
+        )
+
+        let resolution = LocalAICategorizationResolver.resolve(
+            transaction: transaction,
+            suggestion: suggestion
+        )
+        let input = LocalAIInsightInputBuilder.buildInput(
+            window: .last7days,
+            accounts: [],
+            transactions: [transaction],
+            recurringTransactions: [],
+            categorySuggestions: [suggestion],
+            anchorDate: try #require(Formatters.parseTransactionDate("2026-03-15"))
+        )
+        let decoded = try JSONDecoder().decode(TransactionDTO.self, from: originalData)
+
+        #expect(resolution.effectiveCategory == .shopping)
+        #expect(transaction.category == .foodAndDrink)
+        #expect(decoded.category == .foodAndDrink)
+        #expect(input.current.categoryTotals.first?.category == .shopping)
+        #expect(try encoder.encode(transaction) == originalData)
+    }
+
     private func posixPermissions(at url: URL) throws -> Int {
         let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
         return (attributes[.posixPermissions] as? NSNumber)?.intValue ?? -1

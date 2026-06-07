@@ -111,6 +111,32 @@ struct GeneralSettingsView: View {
                         .padding(.top, Spacing.xs)
                 }
 
+                SettingsCard(title: "Local AI") {
+                    settingsRow("Availability") {
+                        HStack(spacing: Spacing.xs) {
+                            Image(systemName: localAIAvailabilityIcon)
+                                .foregroundStyle(localAIAvailabilityTint)
+                            Text(appState.localAIAvailability.state.displayName)
+                                .font(.body.weight(.medium))
+                        }
+                    }
+
+                    settingsRow("Runtime") {
+                        Text(appState.localAIAvailability.runtimeName ?? "None configured")
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+
+                    Text(appState.localAIAvailability.detail)
+                        .detailText()
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text("PlaidBar does not send transaction data to cloud AI services. Local insight summaries are derived from local accounts, transactions, and recurring detections; raw Plaid transaction categories remain unchanged.")
+                        .detailText()
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
                 SettingsCard(title: "Local Data") {
                     settingsRow("Storage path", alignment: .top) {
                         VStack(alignment: .trailing, spacing: Spacing.xs) {
@@ -217,6 +243,22 @@ struct GeneralSettingsView: View {
         }
 
         return "Default: \(appState.localStorageResolvedDisplayPathText)"
+    }
+
+    private var localAIAvailabilityIcon: String {
+        switch appState.localAIAvailability.state {
+        case .available: "cpu.fill"
+        case .disabled: "pause.circle.fill"
+        case .unavailable: "exclamationmark.triangle.fill"
+        }
+    }
+
+    private var localAIAvailabilityTint: Color {
+        switch appState.localAIAvailability.state {
+        case .available: SemanticColors.positive
+        case .disabled: .secondary
+        case .unavailable: SemanticColors.warning
+        }
     }
 
     private func keychainResetText(for result: LocalDataResetResult) -> String {

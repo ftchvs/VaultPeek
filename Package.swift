@@ -1,6 +1,26 @@
 // swift-tools-version: 6.0
 
+import Foundation
 import PackageDescription
+
+let selectedDeveloperLibraryPath = ProcessInfo.processInfo.environment["DEVELOPER_DIR"].map {
+    "\($0)/Library/Developer/usr/lib"
+}
+let swiftTestingInteropLibraryPaths = ([
+    selectedDeveloperLibraryPath,
+    "/Library/Developer/CommandLineTools/Library/Developer/usr/lib",
+    "/Applications/Xcode.app/Contents/Developer/Library/Developer/usr/lib",
+    "/Applications/Xcode_16.app/Contents/Developer/Library/Developer/usr/lib",
+] as [String?])
+    .compactMap { $0 }
+    .filter { FileManager.default.fileExists(atPath: "\($0)/lib_TestingInterop.dylib") }
+
+let swiftTestingLinkerFlags = swiftTestingInteropLibraryPaths.flatMap { path in
+    ["-L", path, "-Xlinker", "-rpath", "-Xlinker", path]
+}
+
+let swiftTestingTestDependency: Target.Dependency = .product(name: "Testing", package: "swift-testing")
+let swiftTestingLinkerSettings: [LinkerSetting] = [.unsafeFlags(swiftTestingLinkerFlags)]
 
 let package = Package(
     name: "PlaidBar",
@@ -20,6 +40,9 @@ let package = Package(
         .package(url: "https://github.com/hummingbird-project/hummingbird-fluent", from: "2.0.0"),
         .package(url: "https://github.com/vapor/fluent-sqlite-driver", from: "4.0.0"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0"),
+        // Keep `swift test` working on command-line toolchains that ship the
+        // Swift Testing macro plugin but not the importable `Testing` module.
+        .package(url: "https://github.com/swiftlang/swift-testing", exact: "6.1.3"),
     ],
     targets: [
         // MARK: - PlaidBar (macOS App)
@@ -63,21 +86,24 @@ let package = Package(
         // MARK: - Tests
         .testTarget(
             name: "PlaidBarTests",
-            dependencies: ["PlaidBarCore"],
+            dependencies: ["PlaidBarCore", swiftTestingTestDependency],
             path: "Tests/PlaidBarTests",
-            swiftSettings: [.swiftLanguageMode(.v5)]
+            swiftSettings: [.swiftLanguageMode(.v5)],
+            linkerSettings: swiftTestingLinkerSettings
         ),
         .testTarget(
             name: "PlaidBarServerTests",
-            dependencies: ["PlaidBarCore", "PlaidBarServer"],
+            dependencies: ["PlaidBarCore", "PlaidBarServer", swiftTestingTestDependency],
             path: "Tests/PlaidBarServerTests",
-            swiftSettings: [.swiftLanguageMode(.v5)]
+            swiftSettings: [.swiftLanguageMode(.v5)],
+            linkerSettings: swiftTestingLinkerSettings
         ),
         .testTarget(
             name: "PlaidBarCoreTests",
-            dependencies: ["PlaidBarCore"],
+            dependencies: ["PlaidBarCore", swiftTestingTestDependency],
             path: "Tests/PlaidBarCoreTests",
-            swiftSettings: [.swiftLanguageMode(.v5)]
+            swiftSettings: [.swiftLanguageMode(.v5)],
+            linkerSettings: swiftTestingLinkerSettings
         ),
     ]
 )
