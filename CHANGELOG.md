@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-07 23:30 UTC] — Documentation
+
+add autonomous PlaidBar loop backlog
+
+`8b22d7a`
+
+---
+
+
 ## [2026-06-07 18:14 UTC] — Feature
 
 add local AI insights surface (#186)
