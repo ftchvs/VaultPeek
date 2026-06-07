@@ -2,7 +2,6 @@ import SwiftUI
 import PlaidBarCore
 import Sparkle
 import AppKit
-@preconcurrency import UserNotifications
 
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
@@ -386,14 +385,16 @@ struct AccountSettingsView: View {
                 }
             }
 
-            HStack {
-                Spacer()
-                Button("Add Account") {
-                    handleAddAccount()
+            if !appState.accounts.isEmpty {
+                HStack {
+                    Spacer()
+                    Button("Add Account") {
+                        handleAddAccount()
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
-                .buttonStyle(.borderedProminent)
+                .padding()
             }
-            .padding()
         }
         .sheet(isPresented: $isShowingAccountSetup) {
             SetupView {
@@ -545,7 +546,11 @@ private struct PendingAccountRemoval: Identifiable {
 
 struct NotificationSettingsView: View {
     @Environment(AppState.self) private var appState
-    @State private var permissionState: NotificationPermissionState = .status(.notDetermined)
+    @State private var permissionState: NotificationPermissionState = .notDetermined
+
+    private var permissionPresentation: NotificationPermissionPresentation {
+        NotificationPermissionPresentation.evaluate(kind: permissionState.presentationKind)
+    }
 
     var body: some View {
         @Bindable var state = appState
@@ -570,21 +575,7 @@ struct NotificationSettingsView: View {
                                 Task { await refreshPermissionStatus() }
                             }
                         }
-                        .disabled(permissionState.authorizationStatus == .denied || permissionState.authorizationStatus == nil)
-
-                    if permissionState.authorizationStatus == nil {
-                        InlineSettingsNotice(
-                            text: "Notifications are unavailable for this launch mode because macOS cannot register PlaidBar as a notification source.",
-                            icon: "bell.slash",
-                            tint: .secondary
-                        )
-                    } else if permissionState.authorizationStatus == .denied {
-                        InlineSettingsNotice(
-                            text: "Notifications are denied in macOS. Enable PlaidBar in System Settings before turning alerts on.",
-                            icon: "exclamationmark.triangle",
-                            tint: SemanticColors.warning
-                        )
-                    }
+                        .disabled(permissionPresentation.isNotificationToggleDisabled)
                 }
 
                 SettingsCard(title: "Transaction Alerts") {
@@ -669,16 +660,9 @@ struct NotificationSettingsView: View {
                     .detailText()
                     .fixedSize(horizontal: false, vertical: true)
 
-                if permissionState.authorizationStatus == .denied {
-                    Button {
-                        openNotificationSettings()
-                    } label: {
-                        Label("Open System Settings", systemImage: "gearshape")
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .accessibilityHint("Opens macOS Notification settings for PlaidBar.")
-                    .padding(.top, Spacing.xs)
+                if let action = permissionPresentation.recoveryAction {
+                    permissionRecoveryAction(action)
+                        .padding(.top, Spacing.xs)
                 }
             }
         }
@@ -702,98 +686,81 @@ struct NotificationSettingsView: View {
     }
 
     private var permissionLabel: String {
-        switch permissionState {
-        case .unsupported:
-            "Unavailable"
-        case .status(let status):
-            permissionLabel(for: status)
-        }
-    }
-
-    private func permissionLabel(for status: UNAuthorizationStatus) -> String {
-        switch status {
-        case .authorized:
-            "Allowed"
-        case .denied:
-            "Denied"
-        case .notDetermined:
-            "Not requested"
-        case .provisional:
-            "Provisional"
-        case .ephemeral:
-            "Temporary"
-        @unknown default:
-            "Unknown"
-        }
+        permissionPresentation.label
     }
 
     private var permissionDetail: String {
-        switch permissionState {
-        case .unsupported:
-            "This PlaidBar launch does not have a macOS notification identity, so no System Settings entry is available."
-        case .status(let status):
-            permissionDetail(for: status)
-        }
-    }
-
-    private func permissionDetail(for status: UNAuthorizationStatus) -> String {
-        switch status {
-        case .authorized:
-            "PlaidBar can show local transaction, balance, and credit utilization alerts."
-        case .denied:
-            "macOS is blocking PlaidBar notifications. The app cannot override this setting."
-        case .notDetermined:
-            "Turn notifications on to request permission from macOS."
-        case .provisional:
-            "macOS may deliver alerts quietly until permission is fully allowed."
-        case .ephemeral:
-            "macOS granted a temporary notification permission."
-        @unknown default:
-            "PlaidBar could not classify the current notification permission."
-        }
+        permissionPresentation.detail
     }
 
     private var permissionIcon: String {
-        switch permissionState {
-        case .unsupported:
-            "bell.slash.fill"
-        case .status(let status):
-            permissionIcon(for: status)
-        }
-    }
-
-    private func permissionIcon(for status: UNAuthorizationStatus) -> String {
-        switch status {
-        case .authorized, .provisional, .ephemeral:
-            "checkmark.circle.fill"
-        case .denied:
-            "exclamationmark.triangle.fill"
-        case .notDetermined:
-            "questionmark.circle"
-        @unknown default:
-            "questionmark.circle"
-        }
+        permissionPresentation.iconName
     }
 
     private var permissionTint: Color {
-        switch permissionState {
-        case .unsupported:
+        switch permissionPresentation.tone {
+        case .positive:
+            SemanticColors.positive
+        case .warning:
+            SemanticColors.warning
+        case .secondary:
             .secondary
-        case .status(let status):
-            permissionTint(for: status)
         }
     }
 
-    private func permissionTint(for status: UNAuthorizationStatus) -> Color {
-        switch status {
-        case .authorized, .provisional, .ephemeral:
-            SemanticColors.positive
-        case .denied:
-            SemanticColors.warning
-        case .notDetermined:
-            .secondary
-        @unknown default:
-            .secondary
+    @ViewBuilder
+    private func permissionRecoveryAction(_ action: NotificationPermissionRecoveryAction) -> some View {
+        if permissionPresentation.isRecoveryActionInteractive {
+            Button {
+                performPermissionRecoveryAction(action)
+            } label: {
+                Label(
+                    permissionPresentation.recoveryActionTitle ?? "Recover Notifications",
+                    systemImage: permissionPresentation.recoveryActionIconName ?? "bell.badge"
+                )
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .accessibilityHint(permissionActionAccessibilityHint(for: action))
+        } else {
+            Label(
+                permissionPresentation.recoveryActionTitle ?? "Recover Notifications",
+                systemImage: permissionPresentation.recoveryActionIconName ?? "bell.badge"
+            )
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(permissionTint)
+            .accessibilityLabel(permissionPresentation.recoveryActionTitle ?? "Recover Notifications")
+            .accessibilityHint(permissionPresentation.detail)
+        }
+    }
+
+    private func performPermissionRecoveryAction(_ action: NotificationPermissionRecoveryAction) {
+        switch action {
+        case .requestPermission:
+            Task {
+                let granted = await appState.requestNotificationPermission()
+                appState.notificationsEnabled = granted
+                await refreshPermissionStatus()
+            }
+        case .openSystemSettings:
+            openNotificationSettings()
+        case .checkAgain:
+            Task { await refreshPermissionStatus() }
+        case .runBundledApp:
+            break
+        }
+    }
+
+    private func permissionActionAccessibilityHint(for action: NotificationPermissionRecoveryAction) -> Text {
+        switch action {
+        case .requestPermission:
+            Text("Requests macOS notification permission for PlaidBar.")
+        case .openSystemSettings:
+            Text("Opens macOS Notification settings for PlaidBar.")
+        case .checkAgain:
+            Text("Checks the current macOS notification permission again.")
+        case .runBundledApp:
+            Text(permissionPresentation.detail)
         }
     }
 }
