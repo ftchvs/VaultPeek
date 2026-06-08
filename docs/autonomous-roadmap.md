@@ -92,6 +92,10 @@ new regression.
 
 Completed production-readiness slices:
 
+Use `[T###]` after the date for completed backlog task IDs, for example
+`2026-06-07 [T001]: ...`. Legacy entries without a mapped backlog task ID may
+remain unmarked.
+
 - 2026-05-30: moved notification trigger selection into `PlaidBarCore`.
 - 2026-05-30: moved transaction filtering into `PlaidBarCore`.
 - 2026-05-30: recorded scoped approval to push branches, open PRs, and merge
@@ -146,6 +150,8 @@ Completed production-readiness slices:
 - 2026-06-01: shared balance composition totals through `PlaidBarCore`.
 - 2026-06-01: moved account row amounts, subtitles, and accessibility summary
   composition into `PlaidBarCore`.
+- 2026-06-07 [T001]: documented the completed-task marker convention for
+  autonomous roadmap ledger entries; evidence: docs-only roadmap update.
 
 ## Backlog Source
 
