@@ -2150,9 +2150,9 @@ private struct SelectedAccountPanel: View {
     }
 
     private var drillInActions: [DashboardDrillInAction] {
-        DashboardDrillInAction.accountDrillInActions.filter { action in
-            action != .remove || !appState.usesDemoConnectionPresentation
-        }
+        DashboardDrillInAction.accountDrillInActions(
+            isDemoMode: appState.usesDemoConnectionPresentation
+        )
     }
 
     private var connectionPresentation: AccountConnectionPresentation {

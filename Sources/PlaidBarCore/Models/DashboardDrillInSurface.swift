@@ -105,4 +105,10 @@ public enum DashboardDrillInAction: String, CaseIterable, Sendable, Equatable {
     public static var accountDrillInActions: [DashboardDrillInAction] {
         [.reconnect, .remove, .settings]
     }
+
+    public static func accountDrillInActions(isDemoMode: Bool) -> [DashboardDrillInAction] {
+        accountDrillInActions.filter { action in
+            !isDemoMode || action == .settings
+        }
+    }
 }
