@@ -9,6 +9,10 @@ Use this command to keep improving PlaidBar toward a production-ready,
 local-first macOS finance utility through the 100+ task backlog in
 `docs/autonomous-loop-backlog.md`.
 
+When another local agent is active, also follow
+`docs/agent-collaboration.md` for worktree ownership, PR handoff, and
+autonomous merge gates.
+
 The default goal is:
 
 > Make PlaidBar feel like RepoBar for personal finance: a native macOS menu-bar
