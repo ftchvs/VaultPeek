@@ -851,6 +851,58 @@ struct PlaidBarCoreTests {
         #expect(SpendingHeatmapMode.netCashflow.semanticDescription.contains("Income minus outflows"))
     }
 
+    @Test("Heatmap strongest signals identify largest spend days")
+    func heatmapStrongestSignalsIdentifyLargestSpendDays() {
+        let signals = SpendingHeatmap.strongestSignals(
+            from: [
+                SpendingHeatmapDay(date: "2026-01-01", value: 20, transactionCount: 1),
+                SpendingHeatmapDay(date: "2026-01-02", value: 150, transactionCount: 3),
+                SpendingHeatmapDay(date: "2026-01-03", value: 90, transactionCount: 2),
+                SpendingHeatmapDay(date: "2026-01-04", value: 0, transactionCount: 0),
+            ],
+            mode: .spending
+        )
+
+        #expect(signals.map { $0.day.date } == ["2026-01-02", "2026-01-03"])
+        #expect(signals.first?.label == "Highest spend")
+        #expect(signals.first?.accessibilitySummary.contains("Highest spend was") == true)
+        #expect(signals.first?.accessibilitySummary.contains("3 transactions") == true)
+    }
+
+    @Test("Net cashflow strongest signals rank income and outflows by magnitude")
+    func netCashflowStrongestSignalsRankIncomeAndOutflowsByMagnitude() {
+        let signals = SpendingHeatmap.strongestSignals(
+            from: [
+                SpendingHeatmapDay(date: "2026-01-01", value: 120, transactionCount: 1),
+                SpendingHeatmapDay(date: "2026-01-02", value: -300, transactionCount: 2),
+                SpendingHeatmapDay(date: "2026-01-03", value: 250, transactionCount: 4),
+            ],
+            mode: .netCashflow
+        )
+
+        #expect(signals.map { $0.day.date } == ["2026-01-02", "2026-01-03"])
+        #expect(signals.first?.label == "Strongest income")
+        #expect(signals.last?.label == "Next strongest outflow")
+        #expect(signals.first?.accessibilitySummary.contains("income") == true)
+        #expect(signals.last?.accessibilitySummary.contains("outflow") == true)
+    }
+
+    @Test("Net cashflow strongest signals preserve both directions when available")
+    func netCashflowStrongestSignalsPreserveBothDirectionsWhenAvailable() {
+        let signals = SpendingHeatmap.strongestSignals(
+            from: [
+                SpendingHeatmapDay(date: "2026-01-01", value: -500, transactionCount: 1),
+                SpendingHeatmapDay(date: "2026-01-02", value: -400, transactionCount: 1),
+                SpendingHeatmapDay(date: "2026-01-03", value: 75, transactionCount: 2),
+            ],
+            mode: .netCashflow
+        )
+
+        #expect(signals.map { $0.day.date } == ["2026-01-01", "2026-01-03"])
+        #expect(signals.first?.label == "Strongest income")
+        #expect(signals.last?.label == "Next strongest outflow")
+    }
+
     // MARK: - AccountDTO Tests
 
     @Test("AccountDTO Codable roundtrip")

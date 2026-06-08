@@ -46,6 +46,24 @@ public struct SpendingHeatmapDay: Identifiable, Sendable, Hashable {
     }
 }
 
+public struct SpendingHeatmapSignal: Identifiable, Sendable, Hashable {
+    public let day: SpendingHeatmapDay
+    public let rank: Int
+    public let label: String
+    public let amountText: String
+    public let accessibilitySummary: String
+
+    public var id: String { "\(rank)-\(day.date)" }
+
+    public init(day: SpendingHeatmapDay, rank: Int, label: String, amountText: String, accessibilitySummary: String) {
+        self.day = day
+        self.rank = rank
+        self.label = label
+        self.amountText = amountText
+        self.accessibilitySummary = accessibilitySummary
+    }
+}
+
 public enum SpendingHeatmap {
     public static func displayCashflowAmount(_ value: Double) -> Double {
         -value
@@ -92,7 +110,75 @@ public enum SpendingHeatmap {
         }
     }
 
+    public static func strongestSignals(
+        from days: [SpendingHeatmapDay],
+        mode: SpendingHeatmapMode,
+        limit: Int = 2
+    ) -> [SpendingHeatmapSignal] {
+        guard limit > 0 else { return [] }
+
+        let candidates = days
+            .filter { $0.transactionCount > 0 && abs($0.value) > 0 }
+
+        let rankedDays: [SpendingHeatmapDay]
+        switch mode {
+        case .spending:
+            rankedDays = ranked(candidates)
+        case .netCashflow:
+            let strongestIncome = ranked(candidates.filter { displayCashflowAmount($0.value) >= 0 }).first
+            let strongestOutflow = ranked(candidates.filter { displayCashflowAmount($0.value) < 0 }).first
+            rankedDays = ranked([strongestIncome, strongestOutflow].compactMap(\.self))
+        }
+
+        return rankedDays
+            .prefix(limit)
+            .enumerated()
+            .map { offset, day in
+                signal(for: day, mode: mode, rank: offset + 1)
+            }
+    }
+
+    private static func ranked(_ days: [SpendingHeatmapDay]) -> [SpendingHeatmapDay] {
+        days
+            .sorted { lhs, rhs in
+                let lhsMagnitude = abs(lhs.value)
+                let rhsMagnitude = abs(rhs.value)
+                if lhsMagnitude == rhsMagnitude {
+                    return lhs.date > rhs.date
+                }
+                return lhsMagnitude > rhsMagnitude
+            }
+    }
+
     private static func isTransfer(_ transaction: TransactionDTO) -> Bool {
         transaction.category == .transfer || transaction.category == .transferOut
+    }
+
+    private static func signal(for day: SpendingHeatmapDay, mode: SpendingHeatmapMode, rank: Int) -> SpendingHeatmapSignal {
+        let dateText = Formatters.displayTransactionDate(day.date)
+        let transactionText = "\(day.transactionCount) transaction\(day.transactionCount == 1 ? "" : "s")"
+
+        switch mode {
+        case .spending:
+            let amountText = Formatters.currency(day.value, format: .full)
+            return SpendingHeatmapSignal(
+                day: day,
+                rank: rank,
+                label: rank == 1 ? "Highest spend" : "Next highest spend",
+                amountText: amountText,
+                accessibilitySummary: "\(rank == 1 ? "Highest" : "Next highest") spend was \(amountText) on \(dateText) across \(transactionText)."
+            )
+        case .netCashflow:
+            let displayAmount = displayCashflowAmount(day.value)
+            let direction = displayAmount >= 0 ? "income" : "outflow"
+            let amountText = Formatters.currency(abs(displayAmount), format: .full)
+            return SpendingHeatmapSignal(
+                day: day,
+                rank: rank,
+                label: rank == 1 ? "Strongest \(direction)" : "Next strongest \(direction)",
+                amountText: amountText,
+                accessibilitySummary: "\(rank == 1 ? "Strongest" : "Next strongest") \(direction) was \(amountText) on \(dateText) across \(transactionText)."
+            )
+        }
     }
 }
