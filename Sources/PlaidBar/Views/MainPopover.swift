@@ -1932,6 +1932,7 @@ private struct SelectedAccountPanel: View {
     let account: AccountDTO
     let isStatusFilter: Bool
     @State private var isConfirmingAccountRemoval = false
+    @State private var settingsCloseObserver: NSObjectProtocol?
 
     private var transactions: [TransactionDTO] {
         Array(accountTransactions.prefix(5))
@@ -2151,7 +2152,7 @@ private struct SelectedAccountPanel: View {
 
     private var drillInActions: [DashboardDrillInAction] {
         DashboardDrillInAction.accountDrillInActions(
-            isDemoMode: appState.usesDemoConnectionPresentation
+            isDemoMode: appState.isDemoMode
         )
     }
 
@@ -2238,8 +2239,42 @@ private struct SelectedAccountPanel: View {
         case .remove:
             isConfirmingAccountRemoval = true
         case .settings:
-            openSettings()
+            openSettingsWindow()
         }
+    }
+
+    private func openSettingsWindow() {
+        openSettings()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            NSApp.setActivationPolicy(.regular)
+            NSApp.activate(ignoringOtherApps: true)
+            if let settingsWindow = NSApp.keyWindow ?? NSApp.windows.first(where: {
+                $0.canBecomeKey && $0.isVisible && $0.level == .normal
+            }) {
+                settingsWindow.orderFrontRegardless()
+                if let existing = settingsCloseObserver {
+                    NotificationCenter.default.removeObserver(existing)
+                }
+                settingsCloseObserver = NotificationCenter.default.addObserver(
+                    forName: NSWindow.willCloseNotification,
+                    object: settingsWindow,
+                    queue: .main
+                ) { _ in
+                    Task { @MainActor in
+                        restoreAccessoryActivationPolicy()
+                    }
+                }
+            }
+        }
+    }
+
+    @MainActor
+    private func restoreAccessoryActivationPolicy() {
+        NSApp.setActivationPolicy(.accessory)
+        if let observer = settingsCloseObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        settingsCloseObserver = nil
     }
 
     private var panelStroke: Color {
