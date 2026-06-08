@@ -58,6 +58,18 @@ struct PlaidBarTests {
         #expect(abs(net - 38000) < 0.01)
     }
 
+    @Test("Credit summary debt excludes loans when card is labeled credit")
+    func creditSummaryDebtExcludesLoans() {
+        let accounts = [
+            AccountDTO(id: "1", itemId: "i", name: "Auto Loan", type: .loan, balances: BalanceDTO(current: -12000)),
+            AccountDTO(id: "2", itemId: "i", name: "Credit", type: .credit, balances: BalanceDTO(current: -450, limit: nil)),
+        ]
+
+        let creditOnlyDebt = MenuBarSummary.totalDebt(from: accounts.filter { $0.type == .credit })
+
+        #expect(abs(creditOnlyDebt - 450) < 0.01)
+    }
+
     // MARK: - Spending Aggregation
 
     @Test("Spending aggregation by category")
