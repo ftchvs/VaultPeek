@@ -89,7 +89,7 @@ and `docs/autonomous-roadmap.md`.
   and status signal.
 - [x] T023: Make credit utilization, available credit, and due metadata readable
   without opening a budgeting workflow.
-- [ ] T024: Add a selected/highlighted row state that remains subtle in dark and
+- [x] T024: Add a selected/highlighted row state that remains subtle in dark and
   light appearances.
 - [ ] T025: Add focused tests for one shared row-presentation helper.
 

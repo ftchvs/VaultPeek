@@ -234,6 +234,9 @@ remain unmarked.
   include utilization, available credit, and an explicit due-metadata state
   without adding a budgeting workflow; evidence:
   `Sources/PlaidBarCore/Utilities/AccountPresentation.swift` and core tests.
+- 2026-06-08 [T024]: added a subtle account-row selected state with a low-opacity
+  accent fill, narrow leading rail, border, and selected accessibility state;
+  evidence: `Sources/PlaidBar/Views/AccountsView.swift`.
 
 ## Backlog Source
 
