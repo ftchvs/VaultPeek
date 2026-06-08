@@ -50,6 +50,7 @@ final class AppState {
     var isDemoStatusRecoveryScenario = false
     var lastSyncDate: Date?
     var balanceHistory: [BalanceSnapshot] = []
+    var notificationPermissionState: NotificationPermissionState = .notDetermined
 
     // MARK: - Settings (persisted to UserDefaults)
     var menuBarSummaryMode: MenuBarSummaryMode = .netCash {
@@ -443,8 +444,14 @@ final class AppState {
             erroredItemCount: erroredItemCount,
             isSyncStale: isSyncStale,
             lastSyncRelative: lastSyncRelative,
-            errorMessage: error
+            errorMessage: error,
+            notificationsEnabled: notificationsEnabled,
+            notificationPermission: notificationPermissionPresentation
         )
+    }
+
+    var notificationPermissionPresentation: NotificationPermissionPresentation {
+        NotificationPermissionPresentation.evaluate(kind: notificationPermissionState.presentationKind)
     }
 
     var usesDemoConnectionPresentation: Bool {
@@ -877,11 +884,14 @@ final class AppState {
     }
 
     func requestNotificationPermission() async -> Bool {
-        await notificationService.requestPermission()
+        let granted = await notificationService.requestPermission()
+        notificationPermissionState = await notificationService.checkPermissionStatus()
+        return granted
     }
 
     func notificationPermissionStatus() async -> NotificationPermissionState {
-        await notificationService.checkPermissionStatus()
+        notificationPermissionState = await notificationService.checkPermissionStatus()
+        return notificationPermissionState
     }
 
     func stopBackgroundRefresh() {
@@ -892,10 +902,7 @@ final class AppState {
     func loadInitialData() async {
         // Recheck notification permission at startup (user may have revoked in System Settings)
         if notificationsEnabled {
-            let permissionState = await notificationService.checkPermissionStatus()
-            if permissionState.shouldDisableNotifications {
-                notificationsEnabled = false
-            }
+            _ = await notificationPermissionStatus()
         }
 
         if CommandLine.arguments.contains("--demo") {

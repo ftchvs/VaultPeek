@@ -12,6 +12,8 @@ public enum DashboardStatusReadinessAction: String, Codable, Sendable {
     case refresh
     case reconnect
     case openSettings
+    case requestNotificationPermission
+    case openNotificationSettings
 }
 
 public struct DashboardStatusReadiness: Equatable, Sendable {
@@ -54,7 +56,9 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
         erroredItemCount: Int,
         isSyncStale: Bool,
         lastSyncRelative: String?,
-        errorMessage: String?
+        errorMessage: String?,
+        notificationsEnabled: Bool = false,
+        notificationPermission: NotificationPermissionPresentation? = nil
     ) -> DashboardStatusReadiness {
         if isDemoMode {
             return DashboardStatusReadiness(
@@ -188,6 +192,13 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
             )
         }
 
+        if let notificationRecovery = notificationPermissionRecovery(
+            notificationsEnabled: notificationsEnabled,
+            permission: notificationPermission
+        ) {
+            return notificationRecovery
+        }
+
         return DashboardStatusReadiness(
             level: .healthy,
             title: "Plaid sync healthy",
@@ -264,6 +275,65 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
     ) -> String {
         "\(count) item\(count == 1 ? "" : "s") \(count == 1 ? singularAction : pluralAction)"
     }
+
+    private static func notificationPermissionRecovery(
+        notificationsEnabled: Bool,
+        permission: NotificationPermissionPresentation?
+    ) -> DashboardStatusReadiness? {
+        guard notificationsEnabled,
+              let permission,
+              permission.shouldDisableNotifications
+        else { return nil }
+
+        switch permission.recoveryAction {
+        case .requestPermission:
+            return DashboardStatusReadiness(
+                level: .warning,
+                title: "Notification permission not requested",
+                detail: "Local alerts are enabled, but macOS permission has not been requested yet.",
+                primaryAction: .requestNotificationPermission,
+                primaryActionTitle: permission.recoveryActionTitle,
+                primaryActionIconName: permission.recoveryActionIconName,
+                secondaryActions: [.openSettings]
+            )
+        case .openSystemSettings:
+            return DashboardStatusReadiness(
+                level: .warning,
+                title: "Notifications blocked",
+                detail: "Local alerts are enabled, but macOS is blocking PlaidBar notifications. Enable PlaidBar in System Settings to recover alerts.",
+                primaryAction: .openNotificationSettings,
+                primaryActionTitle: permission.recoveryActionTitle,
+                primaryActionIconName: permission.recoveryActionIconName,
+                secondaryActions: [.openSettings]
+            )
+        case .checkAgain:
+            return DashboardStatusReadiness(
+                level: .warning,
+                title: "Notification permission unknown",
+                detail: permission.detail,
+                primaryAction: .requestNotificationPermission,
+                primaryActionTitle: "Check Permission",
+                primaryActionIconName: "arrow.clockwise",
+                secondaryActions: [.openSettings]
+            )
+        case .runBundledApp:
+            return DashboardStatusReadiness(
+                level: .warning,
+                title: "Notification identity unavailable",
+                detail: permission.detail,
+                primaryAction: .openSettings,
+                primaryActionTitle: permission.recoveryActionTitle,
+                primaryActionIconName: permission.recoveryActionIconName
+            )
+        case nil:
+            return DashboardStatusReadiness(
+                level: .warning,
+                title: "Notifications unavailable",
+                detail: permission.detail,
+                primaryAction: .openSettings
+            )
+        }
+    }
 }
 
 public extension DashboardStatusReadinessAction {
@@ -274,6 +344,8 @@ public extension DashboardStatusReadinessAction {
         case .refresh: "Refresh"
         case .reconnect: "Reconnect"
         case .openSettings: "Settings"
+        case .requestNotificationPermission: "Request Permission"
+        case .openNotificationSettings: "Open System Settings"
         }
     }
 
@@ -284,6 +356,8 @@ public extension DashboardStatusReadinessAction {
         case .refresh: "arrow.clockwise"
         case .reconnect: "link.badge.plus"
         case .openSettings: "gearshape"
+        case .requestNotificationPermission: "bell.badge"
+        case .openNotificationSettings: "gearshape"
         }
     }
 }

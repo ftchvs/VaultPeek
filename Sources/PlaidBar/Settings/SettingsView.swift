@@ -588,10 +588,13 @@ private struct PendingAccountRemoval: Identifiable {
 
 struct NotificationSettingsView: View {
     @Environment(AppState.self) private var appState
-    @State private var permissionState: NotificationPermissionState = .notDetermined
 
     private var permissionPresentation: NotificationPermissionPresentation {
-        NotificationPermissionPresentation.evaluate(kind: permissionState.presentationKind)
+        appState.notificationPermissionPresentation
+    }
+
+    private var areNotificationControlsDisabled: Bool {
+        !appState.notificationsEnabled || permissionPresentation.shouldDisableNotifications
     }
 
     var body: some View {
@@ -609,7 +612,6 @@ struct NotificationSettingsView: View {
                                     let granted = await appState.requestNotificationPermission()
                                     await refreshPermissionStatus()
                                     guard granted else {
-                                        appState.notificationsEnabled = false
                                         return
                                     }
                                 }
@@ -622,7 +624,7 @@ struct NotificationSettingsView: View {
 
                 SettingsCard(title: "Transaction Alerts") {
                     Toggle("Large transactions", isOn: $state.notifyLargeTransaction)
-                        .disabled(!appState.notificationsEnabled)
+                        .disabled(areNotificationControlsDisabled)
 
                     settingsRow("Threshold") {
                         HStack(spacing: Spacing.sm) {
@@ -637,9 +639,9 @@ struct NotificationSettingsView: View {
                             .textFieldStyle(.roundedBorder)
                         }
                     }
-                    .disabled(!appState.notificationsEnabled || !appState.notifyLargeTransaction)
+                    .disabled(areNotificationControlsDisabled || !appState.notifyLargeTransaction)
 
-                    if appState.notificationsEnabled,
+                    if !areNotificationControlsDisabled,
                        appState.notifyLargeTransaction,
                        appState.largeTransactionThreshold <= 0 {
                         InlineSettingsNotice(
@@ -650,7 +652,7 @@ struct NotificationSettingsView: View {
                     }
 
                     Toggle("Low balance warning", isOn: $state.notifyLowBalance)
-                        .disabled(!appState.notificationsEnabled)
+                        .disabled(areNotificationControlsDisabled)
 
                     settingsRow("Threshold") {
                         HStack(spacing: Spacing.sm) {
@@ -665,12 +667,12 @@ struct NotificationSettingsView: View {
                             .textFieldStyle(.roundedBorder)
                         }
                     }
-                    .disabled(!appState.notificationsEnabled || !appState.notifyLowBalance)
+                    .disabled(areNotificationControlsDisabled || !appState.notifyLowBalance)
                 }
 
                 SettingsCard(title: "Credit Alerts") {
                     Toggle("High utilization", isOn: $state.notifyHighUtilization)
-                        .disabled(!appState.notificationsEnabled)
+                        .disabled(areNotificationControlsDisabled)
                     Text("Uses credit warning threshold (\(Formatters.percent(appState.creditUtilizationThreshold, decimals: 0)))")
                         .detailText()
                         .fixedSize(horizontal: false, vertical: true)
@@ -714,12 +716,7 @@ struct NotificationSettingsView: View {
     }
 
     private func refreshPermissionStatus() async {
-        let state = await appState.notificationPermissionStatus()
-        permissionState = state
-
-        if state.shouldDisableNotifications, appState.notificationsEnabled {
-            appState.notificationsEnabled = false
-        }
+        _ = await appState.notificationPermissionStatus()
     }
 
     private func openNotificationSettings() {
