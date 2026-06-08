@@ -83,7 +83,7 @@ and `docs/autonomous-roadmap.md`.
 
 ### PR-005: Account And Card Rows
 
-- [ ] T021: Audit row density for checking, savings, credit card, loan, and
+- [x] T021: Audit row density for checking, savings, credit card, loan, and
   other account types.
 - [ ] T022: Ensure every row has a primary amount, secondary detail, freshness,
   and status signal.
