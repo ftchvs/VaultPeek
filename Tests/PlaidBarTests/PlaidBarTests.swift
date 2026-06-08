@@ -377,6 +377,87 @@ struct PlaidBarTests {
         #expect(filtered[0].id == "1")
     }
 
+    // MARK: - Dashboard Drill-In Surfaces
+
+    @Test("Depository account keeps deeper surfaces as selected-row drill-ins")
+    func depositoryDashboardDrillIns() {
+        let account = AccountDTO(
+            id: "checking",
+            itemId: "item",
+            name: "Checking",
+            type: .depository,
+            balances: BalanceDTO(available: 1200)
+        )
+
+        #expect(DashboardDrillInSurface.surfaces(for: account) == [.account, .activity, .status])
+    }
+
+    @Test("Credit account includes credit detail in selected-row drill-ins")
+    func creditDashboardDrillIns() {
+        let account = AccountDTO(
+            id: "credit",
+            itemId: "item",
+            name: "Visa",
+            type: .credit,
+            balances: BalanceDTO(current: -450, limit: 2000)
+        )
+
+        #expect(DashboardDrillInSurface.surfaces(for: account) == [.account, .activity, .credit, .status])
+    }
+
+    // MARK: - Dashboard Overview Fallback
+
+    @Test("Dashboard overview shows fallback when setup has no demo or synced data")
+    func dashboardOverviewFallbackWithoutDemoData() {
+        let fallback = DashboardOverviewFallbackState.evaluate(
+            isSetupComplete: false,
+            isDemoMode: false,
+            accountCount: 0,
+            transactionCount: 0
+        )
+
+        #expect(fallback?.title == "Overview needs data")
+        #expect(fallback?.actionTitle == "Choose Data Source")
+        #expect(fallback?.detail.contains("Demo data is not loaded yet") == true)
+    }
+
+    @Test("Dashboard overview fallback stays hidden once demo or local data exists")
+    func dashboardOverviewFallbackHiddenWithData() {
+        #expect(DashboardOverviewFallbackState.evaluate(
+            isSetupComplete: false,
+            isDemoMode: true,
+            accountCount: 0,
+            transactionCount: 0
+        ) == nil)
+
+        #expect(DashboardOverviewFallbackState.evaluate(
+            isSetupComplete: true,
+            isDemoMode: false,
+            accountCount: 1,
+            transactionCount: 0
+        ) == nil)
+    }
+
+    // MARK: - Dashboard Overview Height Budget
+
+    @Test("Dashboard overview budget fits realistic menu-bar height")
+    func dashboardOverviewBudgetFitsRealisticPopoverHeight() {
+        let budget = DashboardOverviewHeightBudget()
+
+        #expect(DashboardOverviewHeightBudget.realisticPopoverHeight == 660)
+        #expect(budget.fitsFirstGlance(visibleAccountRows: 1, includesSelectedDrillIn: true))
+        #expect(!budget.fitsFirstGlance(visibleAccountRows: 3, includesSelectedDrillIn: true))
+        #expect(budget.estimatedFirstGlanceHeight(visibleAccountRows: 1, includesSelectedDrillIn: true) <= DashboardOverviewHeightBudget.firstGlanceVisibleHeight)
+    }
+
+    @Test("Dashboard overview budget expects overflow for longer account lists")
+    func dashboardOverviewBudgetScrollsLongerAccountLists() {
+        let budget = DashboardOverviewHeightBudget()
+
+        #expect(!budget.fitsFirstGlance(visibleAccountRows: 6, includesSelectedDrillIn: true))
+        #expect(budget.fitsFirstGlance(visibleAccountRows: 6, includesSelectedDrillIn: false))
+    }
+
     // MARK: - Notification Trigger Logic
 
     @Test("Large transaction detection")
