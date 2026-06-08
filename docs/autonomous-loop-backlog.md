@@ -272,7 +272,7 @@ and `docs/autonomous-roadmap.md`.
 
 ### PR-024: PR, Review, And Merge Hygiene
 
-- [ ] T116: Ensure every autonomous PR includes task IDs, changed files, local
+- [x] T116: Ensure every autonomous PR includes task IDs, changed files, local
   checks, and secret-scan evidence.
 - [ ] T117: Require GitHub checks to be green before any merge attempt.
 - [ ] T118: Require a manual safety read of the diff before merging under scoped
