@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-08 06:14 UTC] — Feature
+
+clarify heatmap cashflow semantics (#201)
+
+`68836e6`
+
+---
+
+
 ## [2026-06-08 06:02 UTC] — Feature
 
 group dashboard overview flow (#202)
