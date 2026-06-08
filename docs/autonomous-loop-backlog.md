@@ -59,7 +59,7 @@ and `docs/autonomous-roadmap.md`.
 - [x] T007: Replace decorative visual treatment with semantic spacing,
   separators, and status color in one surface.
 - [x] T008: Normalize compact row spacing against the existing design tokens.
-- [ ] T009: Tighten one verbose label group without hiding financial meaning.
+- [x] T009: Tighten one verbose label group without hiding financial meaning.
 - [ ] T010: Add or update screenshot evidence for the changed minimalist surface.
 
 ### PR-003: Dashboard Overview Structure
