@@ -211,6 +211,9 @@ remain unmarked.
 - 2026-06-07 [T017]: added strongest recent heatmap signal summaries for
   VoiceOver so high-spend, income, and outflow days are exposed without cell-by-cell
   scanning; evidence: `SpendingHeatmapSignal` and core tests.
+- 2026-06-07 [T018]: split heatmap empty copy between missing synced data and
+  filtered-zero spend/cashflow states so empty tiles do not incorrectly imply
+  sync is missing; evidence: `SpendingHeatmapEmptyPresentation` and core tests.
 
 ## Backlog Source
 
