@@ -117,8 +117,29 @@ public enum SpendingHeatmap {
     ) -> [SpendingHeatmapSignal] {
         guard limit > 0 else { return [] }
 
-        return days
+        let candidates = days
             .filter { $0.transactionCount > 0 && abs($0.value) > 0 }
+
+        let rankedDays: [SpendingHeatmapDay]
+        switch mode {
+        case .spending:
+            rankedDays = ranked(candidates)
+        case .netCashflow:
+            let strongestIncome = ranked(candidates.filter { displayCashflowAmount($0.value) >= 0 }).first
+            let strongestOutflow = ranked(candidates.filter { displayCashflowAmount($0.value) < 0 }).first
+            rankedDays = ranked([strongestIncome, strongestOutflow].compactMap(\.self))
+        }
+
+        return rankedDays
+            .prefix(limit)
+            .enumerated()
+            .map { offset, day in
+                signal(for: day, mode: mode, rank: offset + 1)
+            }
+    }
+
+    private static func ranked(_ days: [SpendingHeatmapDay]) -> [SpendingHeatmapDay] {
+        days
             .sorted { lhs, rhs in
                 let lhsMagnitude = abs(lhs.value)
                 let rhsMagnitude = abs(rhs.value)
@@ -126,11 +147,6 @@ public enum SpendingHeatmap {
                     return lhs.date > rhs.date
                 }
                 return lhsMagnitude > rhsMagnitude
-            }
-            .prefix(limit)
-            .enumerated()
-            .map { offset, day in
-                signal(for: day, mode: mode, rank: offset + 1)
             }
     }
 
