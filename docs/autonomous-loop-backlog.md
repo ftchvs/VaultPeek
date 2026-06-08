@@ -77,7 +77,7 @@ and `docs/autonomous-roadmap.md`.
 
 - [x] T016: Confirm spend and cashflow intensity use distinguishable semantics.
 - [x] T017: Add accessible text for the strongest recent heatmap signals.
-- [ ] T018: Improve empty heatmap copy for no data vs filtered-zero states.
+- [x] T018: Improve empty heatmap copy for no data vs filtered-zero states.
 - [ ] T019: Add a focused test for heatmap bucket or legend behavior.
 - [ ] T020: Refresh screenshot evidence for the heatmap header.
 

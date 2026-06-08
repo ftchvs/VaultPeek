@@ -59,6 +59,10 @@ struct SpendingHeatmapView: View {
         SpendingHeatmap.strongestSignals(from: days, mode: mode)
     }
 
+    private var emptyPresentation: SpendingHeatmapEmptyPresentation {
+        SpendingHeatmap.emptyPresentation(transactionCount: transactions.count, mode: mode)
+    }
+
     private var weekColumns: [[SpendingHeatmapDay?]] {
         guard let firstDay = days.first,
               let firstDate = Formatters.parseTransactionDate(firstDay.date) else {
@@ -211,11 +215,13 @@ struct SpendingHeatmapView: View {
 
     private var emptyState: some View {
         ContentUnavailableView {
-            Label("No Heatmap Data", systemImage: "calendar.badge.exclamationmark")
+            Label(emptyPresentation.title, systemImage: emptyPresentation.systemImage)
         } description: {
-            Text("Daily spending intensity will appear after syncing transactions.")
+            Text(emptyPresentation.description)
         }
         .frame(height: 150)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(emptyPresentation.title). \(emptyPresentation.description)")
     }
 
     private var accessibilitySummary: String {

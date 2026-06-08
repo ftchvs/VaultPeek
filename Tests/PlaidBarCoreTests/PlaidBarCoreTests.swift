@@ -903,6 +903,27 @@ struct PlaidBarCoreTests {
         #expect(signals.last?.label == "Next strongest outflow")
     }
 
+    @Test("Heatmap empty copy distinguishes missing data from filtered-zero spend")
+    func heatmapEmptyCopyDistinguishesMissingDataFromFilteredZeroSpend() {
+        let missing = SpendingHeatmap.emptyPresentation(transactionCount: 0, mode: .spending)
+        let filtered = SpendingHeatmap.emptyPresentation(transactionCount: 3, mode: .spending)
+
+        #expect(missing.title == "No Heatmap Data")
+        #expect(missing.description.contains("after syncing transactions"))
+        #expect(filtered.title == "No Spending in This View")
+        #expect(filtered.description.contains("Transactions exist"))
+        #expect(filtered.description.contains("filters"))
+    }
+
+    @Test("Heatmap empty copy names filtered-zero cashflow separately")
+    func heatmapEmptyCopyNamesFilteredZeroCashflowSeparately() {
+        let filtered = SpendingHeatmap.emptyPresentation(transactionCount: 2, mode: .netCashflow)
+
+        #expect(filtered.title == "No Cashflow in This View")
+        #expect(filtered.description.contains("net cashflow"))
+        #expect(filtered.description.contains("transfers are excluded"))
+    }
+
     // MARK: - AccountDTO Tests
 
     @Test("AccountDTO Codable roundtrip")
