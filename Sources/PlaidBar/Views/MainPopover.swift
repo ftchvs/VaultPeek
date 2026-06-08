@@ -2082,11 +2082,14 @@ private struct SelectedAccountPanel: View {
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
+                    .accessibilityLabel(connectionRecoveryAccessibilityLabel)
+                    .accessibilityHint(connectionRecoveryAccessibilityHint)
                 }
             }
 
             AccountDrillInActionBar(
                 actions: drillInActions,
+                accountDisplayName: drillInSummary.displayName,
                 onAction: performDrillInAction
             )
 
@@ -2111,6 +2114,8 @@ private struct SelectedAccountPanel: View {
             fill: AnyShapeStyle(SurfaceTokens.panelFill(emphasisTint: shouldEmphasizeConnection ? connectionTint : nil)),
             stroke: panelStroke
         )
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(drillInSummary.accessibilityLabel)
         .confirmationDialog(
             "Remove \(institutionRemovalName)?",
             isPresented: $isConfirmingAccountRemoval,
@@ -2229,6 +2234,14 @@ private struct SelectedAccountPanel: View {
         }
     }
 
+    private var connectionRecoveryAccessibilityLabel: String {
+        "\(connectionRecoveryActionTitle) for \(drillInSummary.displayName)"
+    }
+
+    private var connectionRecoveryAccessibilityHint: String {
+        connectionPresentation.recoveryDetailLabel ?? "Refreshes this selected account's PlaidBar status."
+    }
+
     private func performConnectionRecoveryAction() {
         switch connectionPresentation.level {
         case .loginRequired, .error:
@@ -2305,6 +2318,7 @@ private struct SelectedAccountPanel: View {
 
 private struct AccountDrillInActionBar: View {
     let actions: [DashboardDrillInAction]
+    let accountDisplayName: String
     let onAction: (DashboardDrillInAction) -> Void
 
     var body: some View {
@@ -2318,6 +2332,7 @@ private struct AccountDrillInActionBar: View {
                 .buttonStyle(.bordered)
                 .controlSize(.small)
                 .tint(action == .remove ? SemanticColors.negative : nil)
+                .accessibilityLabel(action.accessibilityLabel(accountDisplayName: accountDisplayName))
                 .accessibilityHint(action.accessibilityHint)
             }
         }
@@ -2380,6 +2395,8 @@ private struct AccountConnectionBadge: View {
             .padding(.horizontal, Spacing.compactRowHorizontalPadding)
             .padding(.vertical, Spacing.compactRowVerticalPadding)
             .background(tint.opacity(0.12), in: Capsule())
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Selected account status: \(label)")
     }
 }
 
@@ -2431,6 +2448,8 @@ private struct DetailValue: View {
                 .foregroundStyle(tint)
                 .monospacedDigit()
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(title): \(value)")
     }
 }
 
@@ -2504,6 +2523,7 @@ private struct AccountActivityEmptyStateView: View {
             useLiquidGlass: false
         )
         .accessibilityElement(children: .combine)
+        .accessibilityLabel(presentation.accessibilityLabel)
     }
 
     private var tint: Color {

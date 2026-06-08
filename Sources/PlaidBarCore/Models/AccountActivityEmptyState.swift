@@ -6,6 +6,10 @@ public struct AccountActivityEmptyState: Equatable, Sendable {
     public let iconName: String
     public let tone: DashboardAccountEmptyStateTone
 
+    public var accessibilityLabel: String {
+        "\(title). \(detail)"
+    }
+
     public init(
         title: String,
         detail: String,

@@ -101,9 +101,9 @@ and `docs/autonomous-roadmap.md`.
   the selected account.
 - [x] T028: Keep reconnect, remove, and settings actions explicit and
   confirmation-gated where destructive.
-- [ ] T029: Add empty drill-in states for no synced transactions and server
+- [x] T029: Add empty drill-in states for no synced transactions and server
   offline.
-- [ ] T030: Add accessibility labels for drill-in status and action controls.
+- [x] T030: Add accessibility labels for drill-in status and action controls.
 
 ### PR-007: Empty, Loading, And Error States
 

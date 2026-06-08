@@ -551,6 +551,60 @@ struct PlaidBarCoreTests {
         #expect(!summary.subtitle.contains(account.itemId))
     }
 
+    @Test("Account drill-in summary accessibility stays display safe")
+    func accountDrillInSummaryAccessibilityStaysDisplaySafe() {
+        let account = AccountDTO(
+            id: "acct-internal-123",
+            itemId: "item-internal-456",
+            name: "Everyday",
+            type: .depository,
+            subtype: "checking",
+            mask: "1234",
+            balances: BalanceDTO(available: 500, current: 520),
+            institutionName: "Chase"
+        )
+        let summary = DashboardAccountDrillInSummary.presentation(
+            for: account,
+            transactions: [
+                TransactionDTO(id: "tx-1", accountId: account.id, amount: 24, date: "2026-06-01", name: "Coffee", pending: true)
+            ],
+            itemStatus: ItemStatus(id: account.itemId, institutionName: "Chase", status: .connected, lastSync: nil),
+            fallbackFreshnessLabel: "Fresh"
+        )
+
+        #expect(summary.accessibilityLabel.contains("Selected account drill-in"))
+        #expect(summary.accessibilityLabel.contains("Everyday"))
+        #expect(summary.accessibilityLabel.contains("Available $500.00"))
+        #expect(summary.accessibilityLabel.contains("1 synced transaction"))
+        #expect(summary.accessibilityLabel.contains("1 pending transaction"))
+        #expect(summary.accessibilityLabel.contains("Latest transaction Jun 1, 2026"))
+        #expect(!summary.accessibilityLabel.contains(account.id))
+        #expect(!summary.accessibilityLabel.contains(account.itemId))
+    }
+
+    @Test("Drill-in action accessibility labels include display names only")
+    func drillInActionAccessibilityLabelsUseDisplayNamesOnly() {
+        let displayName = "Everyday Checking"
+
+        #expect(DashboardDrillInAction.reconnect.accessibilityLabel(accountDisplayName: displayName) == "Reconnect Everyday Checking")
+        #expect(DashboardDrillInAction.remove.accessibilityLabel(accountDisplayName: displayName) == "Remove institution for Everyday Checking")
+        #expect(DashboardDrillInAction.settings.accessibilityLabel(accountDisplayName: displayName) == "Open PlaidBar settings from Everyday Checking")
+        #expect(DashboardDrillInAction.remove.accessibilityHint.contains("Requires confirmation"))
+    }
+
+    @Test("Account activity empty-state accessibility combines title and recovery detail")
+    func accountActivityEmptyStateAccessibilityCombinesTitleAndDetail() {
+        let presentation = AccountActivityEmptyState.evaluate(
+            transactionCount: 0,
+            isDemoMode: false,
+            serverConnected: false,
+            connectionLevel: .offline,
+            accountDisplayName: "Everyday Checking"
+        )
+
+        #expect(presentation?.accessibilityLabel == "Server offline. Start PlaidBarServer, then refresh to load recent activity for Everyday Checking.")
+    }
+
     @Test("Account presentation keeps credit metadata readable without due dates")
     func accountPresentationCreditMetadataWithoutDueDates() {
         let creditWithoutLimit = AccountDTO(
