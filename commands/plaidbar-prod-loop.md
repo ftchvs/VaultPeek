@@ -77,6 +77,9 @@ Repeat these phases until the timebox ends or a blocker appears:
 2. Pick the highest-leverage next task:
    - Prefer the explicit focus area in `$ARGUMENTS`.
    - Otherwise use `docs/autonomous-loop-backlog.md`.
+   - When the current slice is loop governance, first audit the backlog for
+     stale tasks, duplicate tasks, completed-but-unchecked items, and tasks that
+     no longer match PlaidBar's local-first product boundary.
    - Treat one backlog task as one autonomous iteration.
    - Combine adjacent tasks from the same PR slice only when the diff remains
      small enough to finish with verification evidence.
@@ -144,6 +147,11 @@ reviewable tasks grouped into PR slices covering:
 If a task appears stale, first inspect the current implementation. Complete it
 only if there is still a real gap; otherwise mark the task as already satisfied
 in the roadmap ledger with evidence.
+
+During loop-governance passes, remove or consolidate stale and duplicate backlog
+tasks only after recording evidence in `docs/autonomous-roadmap.md`; otherwise
+leave questionable tasks in place and report the uncertainty instead of hiding
+scope.
 
 ## Design Standard
 
