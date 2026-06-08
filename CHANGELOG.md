@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-08 02:06 UTC] — Documentation
+
+require split broad refactors (#194)
+
+`f6c9802`
+
+---
+
+
 ## [2026-06-08 01:55 UTC] — Documentation
 
 add local-first reviewer checklist (#193)
