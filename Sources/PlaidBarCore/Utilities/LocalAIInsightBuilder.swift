@@ -42,6 +42,115 @@ public enum LocalAICategorizationResolver {
     }
 }
 
+public enum LocalAICategorySuggestionGenerator {
+    public static let generatedBy = "local-ai/deterministic"
+
+    public static func suggestions(from transactions: [TransactionDTO]) -> [LocalAICategorySuggestion] {
+        transactions.compactMap(suggestion)
+            .sorted { lhs, rhs in
+                if lhs.transactionId != rhs.transactionId { return lhs.transactionId < rhs.transactionId }
+                if lhs.confidence != rhs.confidence { return lhs.confidence > rhs.confidence }
+                return lhs.suggestedCategory.rawValue < rhs.suggestedCategory.rawValue
+            }
+    }
+
+    private static func suggestion(for transaction: TransactionDTO) -> LocalAICategorySuggestion? {
+        guard let match = categoryMatch(for: transaction) else { return nil }
+        guard transaction.category != match.category else { return nil }
+
+        var evidence = [
+            LocalAIInsightEvidence(
+                kind: .localHeuristic,
+                sourceId: transaction.id,
+                label: match.reason,
+                transactionIds: [transaction.id],
+                accountIds: [transaction.accountId],
+                amount: transaction.displayAmount,
+                date: transaction.date
+            ),
+        ]
+
+        if let plaidCategory = transaction.category {
+            evidence.append(
+                LocalAIInsightEvidence(
+                    kind: .plaidCategory,
+                    sourceId: transaction.id,
+                    label: "Plaid category: \(plaidCategory.displayName)",
+                    transactionIds: [transaction.id],
+                    accountIds: [transaction.accountId]
+                )
+            )
+        }
+
+        return LocalAICategorySuggestion(
+            transactionId: transaction.id,
+            suggestedCategory: match.category,
+            confidence: match.confidence,
+            status: .proposed,
+            evidence: evidence,
+            generatedBy: generatedBy
+        )
+    }
+
+    private static func categoryMatch(for transaction: TransactionDTO)
+        -> (category: SpendingCategory, confidence: Double, reason: String)?
+    {
+        let text = normalizedSearchText(for: transaction)
+
+        if transaction.amount < 0, containsAny(text, ["payroll", "salary", "paycheck", "direct deposit", "stripe payout"]) {
+            return (.income, 0.95, "Income keyword matched local transaction text")
+        }
+
+        if containsAny(text, ["refund", "reversal", "cashback", "cash back", "credit adjustment"]) {
+            return (.income, 0.88, "Refund or credit keyword matched local transaction text")
+        }
+
+        if containsAny(text, ["transfer", "zelle", "venmo", "cash app", "paypal transfer"]) {
+            let category: SpendingCategory = transaction.amount < 0 ? .transfer : .transferOut
+            return (category, 0.88, "Transfer keyword matched local transaction text")
+        }
+
+        let expenseRules: [(SpendingCategory, Double, [String])] = [
+            (.foodAndDrink, 0.91, ["coffee", "cafe", "restaurant", "grocery", "supermarket", "whole foods", "trader joe", "doordash", "uber eats", "chipotle", "pizza"]),
+            (.transportation, 0.90, ["uber", "lyft", "taxi", "transit", "parking", "shell", "chevron", "exxon", "gas station", "metro"]),
+            (.shopping, 0.90, ["amazon", "target", "walmart", "costco", "best buy", "ebay", "store", "shop"]),
+            (.entertainment, 0.89, ["netflix", "spotify", "hulu", "disney", "amc", "cinema", "movie", "steam"]),
+            (.personalCare, 0.88, ["salon", "barber", "spa"]),
+            (.healthAndFitness, 0.89, ["pharmacy", "cvs", "walgreens", "doctor", "dentist", "gym", "medical"]),
+            (.billsAndUtilities, 0.90, ["rent", "utility", "electric", "power", "water", "internet", "comcast", "xfinity", "verizon", "at&t", "t-mobile"]),
+            (.homeImprovement, 0.88, ["home depot", "lowe", "ikea", "hardware"]),
+            (.travel, 0.90, ["airline", "hotel", "airbnb", "delta", "united", "southwest", "marriott", "hilton"]),
+            (.education, 0.88, ["tuition", "school", "university", "bookstore"]),
+            (.subscriptions, 0.88, ["subscription", "recurring", "apple.com/bill", "google storage", "adobe", "patreon"]),
+            (.bankFees, 0.91, ["atm fee", "overdraft", "bank fee", "monthly fee"]),
+            (.government, 0.88, ["irs", "tax", "dmv", "government"]),
+        ]
+
+        for rule in expenseRules where containsAny(text, rule.2) {
+            return (rule.0, rule.1, "\(rule.0.displayName) keyword matched local transaction text")
+        }
+
+        if transaction.amount < 0 {
+            return (.income, 0.86, "Incoming Plaid amount convention matched local transaction text")
+        }
+
+        return nil
+    }
+
+    private static func normalizedSearchText(for transaction: TransactionDTO) -> String {
+        [transaction.merchantName, transaction.name]
+            .compactMap { $0 }
+            .joined(separator: " ")
+            .lowercased()
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+    }
+
+    private static func containsAny(_ text: String, _ needles: [String]) -> Bool {
+        needles.contains { text.contains($0) }
+    }
+}
+
 public enum LocalAIInsightInputBuilder {
     public static func buildInputs(
         accounts: [AccountDTO],
@@ -74,7 +183,11 @@ public enum LocalAIInsightInputBuilder {
         calendar: Calendar = .current
     ) -> LocalAIActivitySummaryInput {
         let ranges = dateRanges(for: window, anchorDate: anchorDate, calendar: calendar)
-        let suggestionsByTransaction = preferredSuggestionsByTransaction(categorySuggestions)
+        let resolvedCategorySuggestions = resolvedCategorySuggestions(
+            explicitSuggestions: categorySuggestions,
+            transactions: transactions
+        )
+        let suggestionsByTransaction = preferredSuggestionsByTransaction(resolvedCategorySuggestions)
         let current = metrics(
             from: transactions,
             in: ranges.current,
@@ -105,11 +218,13 @@ public enum LocalAIInsightInputBuilder {
         evidence.append(contentsOf: current.categoryTotals.flatMap(\.evidence))
         evidence.append(contentsOf: current.topExpenses.flatMap(\.evidence))
         evidence.append(contentsOf: current.topIncome.flatMap(\.evidence))
+        evidence.append(contentsOf: resolvedCategorySuggestions.flatMap(\.evidence))
 
         return LocalAIActivitySummaryInput(
             window: window,
             currentRange: ranges.current,
             priorRange: ranges.prior,
+            categorySuggestions: resolvedCategorySuggestions,
             accountSnapshot: accountSnapshot,
             current: current,
             prior: prior,
@@ -376,6 +491,19 @@ public enum LocalAIInsightInputBuilder {
                 preferred[suggestion.transactionId] = suggestion
             }
         }
+    }
+
+    private static func resolvedCategorySuggestions(
+        explicitSuggestions: [LocalAICategorySuggestion],
+        transactions: [TransactionDTO]
+    ) -> [LocalAICategorySuggestion] {
+        let generated = LocalAICategorySuggestionGenerator.suggestions(from: transactions)
+        return Array(preferredSuggestionsByTransaction(explicitSuggestions + generated).values)
+            .sorted { lhs, rhs in
+                if lhs.transactionId != rhs.transactionId { return lhs.transactionId < rhs.transactionId }
+                if lhs.confidence != rhs.confidence { return lhs.confidence > rhs.confidence }
+                return lhs.suggestedCategory.rawValue < rhs.suggestedCategory.rawValue
+            }
     }
 }
 

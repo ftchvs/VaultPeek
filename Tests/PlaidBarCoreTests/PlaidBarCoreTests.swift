@@ -1517,6 +1517,31 @@ struct PlaidBarCoreTests {
         #expect(presentation.shouldDisableNotifications)
     }
 
+    @Test("Dashboard status readiness converges notification permission recovery")
+    func dashboardStatusReadinessSurfacesNotificationPermissionRecovery() {
+        let readiness = DashboardStatusReadiness.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 1,
+            accountCount: 1,
+            syncedItemCount: 1,
+            needsLoginItemCount: 0,
+            erroredItemCount: 0,
+            isSyncStale: false,
+            lastSyncRelative: "just now",
+            errorMessage: nil,
+            notificationsEnabled: true,
+            notificationPermission: NotificationPermissionPresentation.evaluate(kind: .denied)
+        )
+
+        #expect(readiness.level == .warning)
+        #expect(readiness.title == "Notifications blocked")
+        #expect(readiness.primaryAction == .openNotificationSettings)
+        #expect(readiness.primaryActionTitle == "Open System Settings")
+        #expect(readiness.secondaryActions == [.openSettings])
+    }
+
     @Test("Dashboard account filters include only matching account kinds")
     func dashboardAccountFiltersMatchAccountKinds() {
         let checking = AccountDTO(id: "checking", itemId: "item_cash", name: "Checking", type: .depository, subtype: "checking", balances: BalanceDTO())
@@ -2841,6 +2866,61 @@ struct PlaidBarCoreTests {
         #expect(input.current.incomeTransactionIds == ["income"])
         #expect(input.current.expenseTransactionIds == ["expense"])
         #expect(Set(input.current.transferTransactionIds) == Set(["transfer-out", "transfer-in"]))
+    }
+
+    @Test("Local AI deterministic category suggestions preserve Plaid fallback evidence")
+    func localAIDeterministicCategorySuggestionsPreservePlaidFallbackEvidence() throws {
+        let anchor = try #require(Formatters.parseTransactionDate("2026-03-15"))
+        let transaction = TransactionDTO(
+            id: "amazon-miscoded",
+            accountId: "checking",
+            amount: 80,
+            date: "2026-03-15",
+            name: "AMAZON.COM",
+            merchantName: "Amazon",
+            category: .other
+        )
+
+        let input = LocalAIInsightInputBuilder.buildInput(
+            window: .last7days,
+            accounts: [],
+            transactions: [transaction],
+            recurringTransactions: [],
+            anchorDate: anchor
+        )
+
+        let suggestion = try #require(input.categorySuggestions.first)
+        #expect(suggestion.transactionId == "amazon-miscoded")
+        #expect(suggestion.suggestedCategory == .shopping)
+        #expect(suggestion.generatedBy == LocalAICategorySuggestionGenerator.generatedBy)
+        #expect(suggestion.evidence.contains { $0.kind == .plaidCategory && $0.label == "Plaid category: Other" })
+        #expect(input.current.categoryTotals.first?.category == .shopping)
+    }
+
+    @Test("Local AI deterministic transfer hints keep expenses auditable")
+    func localAIDeterministicTransferHintsKeepExpensesAuditable() throws {
+        let anchor = try #require(Formatters.parseTransactionDate("2026-03-15"))
+        let transaction = TransactionDTO(
+            id: "venmo-transfer",
+            accountId: "checking",
+            amount: 125,
+            date: "2026-03-15",
+            name: "VENMO TRANSFER",
+            merchantName: "Venmo",
+            category: .foodAndDrink
+        )
+
+        let input = LocalAIInsightInputBuilder.buildInput(
+            window: .last7days,
+            accounts: [],
+            transactions: [transaction],
+            recurringTransactions: [],
+            anchorDate: anchor
+        )
+
+        #expect(input.categorySuggestions.first?.suggestedCategory == .transferOut)
+        #expect(input.current.expenseTransactionIds.isEmpty)
+        #expect(input.current.transferTransactionIds == ["venmo-transfer"])
     }
 
     @Test("Local AI transfer suggestions move rows out of expense totals")

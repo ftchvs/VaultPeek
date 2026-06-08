@@ -102,6 +102,7 @@ public struct LocalAIActivitySummaryInput: Codable, Sendable, Hashable {
     public let window: LocalAIInsightWindow
     public let currentRange: LocalAIInsightDateRange
     public let priorRange: LocalAIInsightDateRange?
+    public let categorySuggestions: [LocalAICategorySuggestion]
     public let accountSnapshot: LocalAIAccountSnapshot
     public let current: LocalAIActivityMetrics
     public let prior: LocalAIActivityMetrics?
@@ -112,6 +113,7 @@ public struct LocalAIActivitySummaryInput: Codable, Sendable, Hashable {
         window: LocalAIInsightWindow,
         currentRange: LocalAIInsightDateRange,
         priorRange: LocalAIInsightDateRange?,
+        categorySuggestions: [LocalAICategorySuggestion] = [],
         accountSnapshot: LocalAIAccountSnapshot,
         current: LocalAIActivityMetrics,
         prior: LocalAIActivityMetrics?,
@@ -121,6 +123,7 @@ public struct LocalAIActivitySummaryInput: Codable, Sendable, Hashable {
         self.window = window
         self.currentRange = currentRange
         self.priorRange = priorRange
+        self.categorySuggestions = categorySuggestions
         self.accountSnapshot = accountSnapshot
         self.current = current
         self.prior = prior

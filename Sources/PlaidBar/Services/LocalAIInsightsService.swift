@@ -13,7 +13,7 @@ struct LocalAIInsightsService {
         guard let runtime, !runtime.isEmpty, runtime.lowercased() != "disabled" else {
             return LocalAIAvailability(
                 state: .disabled,
-                detail: "No local AI runtime is configured. PlaidBar is using deterministic local summaries only."
+                detail: "No local AI runtime is configured. PlaidBar is using deterministic local summaries and category hints only."
             )
         }
 
