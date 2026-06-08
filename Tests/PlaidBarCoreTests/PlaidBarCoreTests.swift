@@ -534,6 +534,32 @@ struct PlaidBarCoreTests {
         ) == "Rewards, Amex, Credit, Ending in 0005, $450.00 owed, $125.00 available credit, due not synced, Synced")
     }
 
+    @Test("Account presentation row accessibility stays scoped to display-safe fields")
+    func accountPresentationRowAccessibilityUsesDisplaySafeFields() {
+        let account = AccountDTO(
+            id: "acct-internal-123",
+            itemId: "item-internal-456",
+            name: "Everyday",
+            type: .depository,
+            subtype: "checking",
+            mask: "1234",
+            balances: BalanceDTO(current: 500),
+            institutionName: "Chase"
+        )
+
+        let label = AccountPresentation.rowAccessibilityLabel(
+            for: account,
+            amountText: "$500.00",
+            connectionLabel: "Fresh",
+            pendingCount: 2,
+            isSelected: true
+        )
+
+        #expect(label == "Everyday, Chase, Depository, Ending in 1234, $500.00, Fresh, 2 pending transactions, selected")
+        #expect(!label.contains(account.id))
+        #expect(!label.contains(account.itemId))
+    }
+
     @Test("Account presentation labels credit utilization status")
     func accountPresentationUtilizationStatusLabels() {
         #expect(AccountPresentation.utilizationStatusLabel(for: 12) == "Good")
