@@ -459,6 +459,11 @@ The long-term product vision lives in
 [docs/v1.0-roadmap.md](docs/v1.0-roadmap.md). It frames PlaidBar as a
 local-first macOS menu bar finance instrument and gives Hermes-style agents a
 stable starting point for deriving small, defensible implementation slices.
+When multiple agents are active, use
+[docs/agent-collaboration.md](docs/agent-collaboration.md) for the shared
+policy and channel rules: GitHub PRs for handoff, Linear for material status
+updates, repo docs for durable policy, and uncommitted local state for
+branch/worktree ownership.
 
 Near-term release priorities:
 

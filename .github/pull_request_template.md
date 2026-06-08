@@ -8,6 +8,13 @@
 - Backlog slice: <!-- e.g. PR-001: Loop Governance And Backlog Hygiene -->
 - Scope note: <!-- one focused slice; call out if intentionally docs-only -->
 
+## Agent coordination
+
+- Builder agent: <!-- e.g. Hermes, Otto, Codex -->
+- Builder branch/worktree: <!-- branch and local checkout/worktree path if relevant -->
+- Reviewer/merge steward: <!-- usually Otto for autonomous PlaidBar PRs -->
+- Coordination note: <!-- whether another agent may push to this branch, or should review only -->
+
 ## Changed files
 
 -
@@ -25,6 +32,7 @@
 - [ ] Required GitHub checks are green before merge.
 - [ ] Skipped checks are expected and not required for this PR.
 - [ ] Any failing, pending, cancelled, missing, or ambiguous required check blocks merge.
+- [ ] Claude review auth/token/session/setup-only failures are documented as non-blocking, or there are no such failures.
 
 ## Privacy and safety impact
 
@@ -52,4 +60,6 @@
 
 - [ ] Final diff reviewed for secrets, private financial data, generated artifacts, scope creep, and unsafe destructive behavior.
 - [ ] Merge is within the scoped PlaidBar approval in `docs/autonomous-roadmap.md`, or Felipe explicitly approved this PR.
+- [ ] PR head SHA was rechecked immediately before merge.
+- [ ] No other agent is actively mutating this branch/worktree.
 - [ ] After merge, completed task IDs will be recorded in the roadmap ledger and backlog checklist.

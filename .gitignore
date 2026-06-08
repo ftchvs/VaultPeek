@@ -46,3 +46,6 @@ build/
 # Environment
 .env
 .env.local
+
+# Local agent coordination state
+.agent-state/

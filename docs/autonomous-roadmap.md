@@ -217,6 +217,13 @@ remain unmarked.
 - 2026-06-07 [T019]: moved heatmap cell intensity into a focused core helper
   with clamp/empty-day tests, keeping the SwiftUI cell on the same presentation
   rule; evidence: `SpendingHeatmap.cellIntensity` and core tests.
+- 2026-06-08 [T116]: made cross-agent PR handoff operational by adding agent
+  coordination fields to the PR template, explicit GitHub/Linear/repo-doc/local
+  state channels, and head-SHA collision checks for autonomous review/merge;
+  evidence: `docs/agent-collaboration.md`,
+  `docs/agent-coordination-state.example.json`,
+  `.github/pull_request_template.md`, `.gitignore`, and
+  `commands/plaidbar-prod-loop.md`.
 
 ## Backlog Source
 
