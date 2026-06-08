@@ -225,7 +225,10 @@ struct AccountRow: View {
         .onTapGesture(perform: onSelect)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabel)
+        .accessibilityHint(isSelected ? "Selected account row" : "Select account row")
+        .accessibilityAddTraits(.isButton)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityAction(named: isSelected ? "Deselect account" : "Select account", onSelect)
     }
 
     private var selectionFill: Color {
@@ -312,7 +315,7 @@ struct AccountRow: View {
             amountText: formattedAmount,
             connectionLabel: connectionPresentation.rowLabel,
             pendingCount: pendingCount,
-            isSelected: isSelected,
+            isSelected: isSelected ? true : nil,
             utilizationThreshold: utilizationThreshold
         )
     }
