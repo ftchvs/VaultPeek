@@ -300,8 +300,7 @@ private struct HeatmapCell: View {
     }
 
     private var intensity: Double {
-        guard day.transactionCount > 0 else { return 0 }
-        return min(max(abs(day.value) / peakValue, 0), 1)
+        SpendingHeatmap.cellIntensity(for: day, peakValue: peakValue)
     }
 
     private var helpText: String {

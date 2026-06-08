@@ -214,6 +214,9 @@ remain unmarked.
 - 2026-06-07 [T018]: split heatmap empty copy between missing synced data and
   filtered-zero spend/cashflow states so empty tiles do not incorrectly imply
   sync is missing; evidence: `SpendingHeatmapEmptyPresentation` and core tests.
+- 2026-06-07 [T019]: moved heatmap cell intensity into a focused core helper
+  with clamp/empty-day tests, keeping the SwiftUI cell on the same presentation
+  rule; evidence: `SpendingHeatmap.cellIntensity` and core tests.
 
 ## Backlog Source
 
