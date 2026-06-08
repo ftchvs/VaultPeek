@@ -91,7 +91,7 @@ and `docs/autonomous-roadmap.md`.
   without opening a budgeting workflow.
 - [x] T024: Add a selected/highlighted row state that remains subtle in dark and
   light appearances.
-- [ ] T025: Add focused tests for one shared row-presentation helper.
+- [x] T025: Add focused tests for one shared row-presentation helper.
 
 ### PR-006: Account Drill-In Surfaces
 
