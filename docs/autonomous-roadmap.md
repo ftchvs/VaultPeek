@@ -237,6 +237,9 @@ remain unmarked.
 - 2026-06-08 [T024]: added a subtle account-row selected state with a low-opacity
   accent fill, narrow leading rail, border, and selected accessibility state;
   evidence: `Sources/PlaidBar/Views/AccountsView.swift`.
+- 2026-06-08 [T025]: added focused coverage for the shared account-row
+  accessibility presentation helper, including display-safe field boundaries;
+  evidence: `Tests/PlaidBarCoreTests/PlaidBarCoreTests.swift`.
 
 ## Backlog Source
 
