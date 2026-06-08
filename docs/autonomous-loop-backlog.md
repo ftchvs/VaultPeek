@@ -15,6 +15,9 @@ and `docs/autonomous-roadmap.md`.
   priority PR slice.
 - Keep each iteration local-first, privacy-preserving, and honest about the
   current security model.
+- Split broad refactors into separate PRs whenever they cross more than one
+  module boundary, unless the boundary-crossing is a mechanical API move that
+  cannot be reviewed independently.
 - Do not add hosted backend, telemetry, cloud sync, multi-user accounts,
   budgeting workflows, or cloud AI over transaction data.
 - Optional AI work must be local-only, off by default, explainable, reversible,
@@ -43,7 +46,7 @@ and `docs/autonomous-roadmap.md`.
   checks, privacy impact, and merge safety.
 - [x] T003: Add a reviewer checklist for local-first boundaries and secret
   exposure risks.
-- [ ] T004: Add a rule that broad refactors must be split when they touch more
+- [x] T004: Add a rule that broad refactors must be split when they touch more
   than one module boundary.
 - [ ] T005: Add a recurring audit that removes stale or duplicate backlog tasks.
 
