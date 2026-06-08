@@ -33,7 +33,7 @@ run_osascript() {
     local status=0
 
     output_file="$(mktemp -t plaidbar-osascript.XXXXXX.out)"
-    osascript -e "$script" >"$output_file" 2>/dev/null &
+    osascript -e "$script" >"$output_file" 2>&1 &
     pid=$!
 
     while kill -0 "$pid" 2>/dev/null; do
@@ -51,6 +51,107 @@ run_osascript() {
     cat "$output_file"
     rm -f "$output_file"
     return "$status"
+}
+
+
+require_screen_capture() {
+    local probe_file=""
+
+    probe_file="$(mktemp -t plaidbar-screencapture.XXXXXX.png)"
+    if ! screencapture -x -R0,0,1,1 "$probe_file" >/dev/null 2>&1; then
+        rm -f "$probe_file"
+        echo "Error: Screen Recording permission is required for screenshot capture."
+        echo "Grant it to the terminal app running this script in System Settings > Privacy & Security > Screen Recording."
+        exit 1
+    fi
+    rm -f "$probe_file"
+}
+
+plaidbar_window_id() {
+    local name_hint="${1:-}"
+    local swift_file=""
+    local status=0
+
+    swift_file="$(mktemp -t plaidbar-window-id.XXXXXX.swift)"
+    cat >"$swift_file" <<'SWIFT'
+import CoreGraphics
+import Foundation
+
+let hint = ProcessInfo.processInfo.environment["PLAIDBAR_WINDOW_NAME_HINT", default: ""]
+    .trimmingCharacters(in: .whitespacesAndNewlines)
+    .lowercased()
+
+guard let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] else {
+    exit(1)
+}
+
+struct Candidate {
+    let id: Int
+    let name: String
+    let area: Double
+    let hinted: Bool
+}
+
+let candidates: [Candidate] = windows.compactMap { window in
+    guard (window[kCGWindowOwnerName as String] as? String) == "PlaidBar",
+          let id = window[kCGWindowNumber as String] as? Int,
+          let bounds = window[kCGWindowBounds as String] as? [String: Any],
+          let width = bounds["Width"] as? Double,
+          let height = bounds["Height"] as? Double,
+          width > 0,
+          height > 0
+    else { return nil }
+
+    let name = window[kCGWindowName as String] as? String ?? ""
+    let hinted = hint.isEmpty ? true : name.lowercased().contains(hint)
+    return Candidate(id: id, name: name, area: width * height, hinted: hinted)
+}
+
+let sorted = candidates.sorted { lhs, rhs in
+    if lhs.hinted != rhs.hinted { return lhs.hinted && !rhs.hinted }
+    return lhs.area > rhs.area
+}
+
+guard let match = sorted.first else { exit(1) }
+print(match.id)
+SWIFT
+
+    PLAIDBAR_WINDOW_NAME_HINT="$name_hint" swift "$swift_file" || status=$?
+    rm -f "$swift_file"
+    return "$status"
+}
+
+wait_for_plaidbar_window_id() {
+    local name_hint="${1:-}"
+    local window_id=""
+
+    for _ in {1..40}; do
+        window_id=$(plaidbar_window_id "$name_hint" 2>/dev/null || true)
+        if [ -n "$window_id" ]; then
+            echo "$window_id"
+            return 0
+        fi
+        sleep 0.5
+    done
+
+    return 1
+}
+
+capture_plaidbar_window() {
+    local output="$1"
+    local name_hint="${2:-}"
+    local window_id=""
+
+    window_id=$(wait_for_plaidbar_window_id "$name_hint") || {
+        echo "Error: Could not find a PlaidBar window to capture."
+        echo "App log:"
+        cat "$APP_LOG" 2>/dev/null || true
+        exit 1
+    }
+
+    echo "Capturing ${output}..."
+    screencapture -x -o -l"$window_id" "$ASSETS_DIR/$output"
+    chmod 644 "$ASSETS_DIR/$output"
 }
 
 capture_dashboard() {
@@ -77,6 +178,7 @@ capture_dashboard() {
                 if exists process "PlaidBar" then
                     tell process "PlaidBar"
                         if (count of windows) > 0 then
+                            set position of window 1 to {40, 80}
                             set windowPosition to position of window 1
                             set windowSize to size of window 1
                             return (item 1 of windowPosition as text) & "," & (item 2 of windowPosition as text) & "," & (item 1 of windowSize as text) & "," & (item 2 of windowSize as text)
@@ -99,9 +201,7 @@ capture_dashboard() {
         exit 1
     fi
 
-    echo "Capturing ${output}..."
-    screencapture -R"$window_rect" "$ASSETS_DIR/$output"
-    chmod 644 "$ASSETS_DIR/$output"
+    capture_plaidbar_window "$output"
 
     kill "$APP_PID" 2>/dev/null || true
     wait "$APP_PID" 2>/dev/null || true
@@ -128,6 +228,7 @@ capture_sandbox_preflight() {
                     tell process "PlaidBar"
                         set frontmost to true
                         if (count of windows) > 0 then
+                            set position of window 1 to {40, 80}
                             set windowPosition to position of window 1
                             set windowSize to size of window 1
                             return (item 1 of windowPosition as text) & "," & (item 2 of windowPosition as text) & "," & (item 1 of windowSize as text) & "," & (item 2 of windowSize as text)
@@ -163,6 +264,7 @@ capture_sandbox_preflight() {
     window_rect=$(run_osascript '
         tell application "System Events"
             tell process "PlaidBar"
+                set position of window 1 to {40, 80}
                 set windowPosition to position of window 1
                 set windowSize to size of window 1
                 return (item 1 of windowPosition as text) & "," & (item 2 of windowPosition as text) & "," & (item 1 of windowSize as text) & "," & (item 2 of windowSize as text)
@@ -170,9 +272,7 @@ capture_sandbox_preflight() {
         end tell
     ' || true)
 
-    echo "Capturing ${output}..."
-    screencapture -R"$window_rect" "$ASSETS_DIR/$output"
-    chmod 644 "$ASSETS_DIR/$output"
+    capture_plaidbar_window "$output"
 
     kill "$APP_PID" 2>/dev/null || true
     wait "$APP_PID" 2>/dev/null || true
@@ -236,6 +336,7 @@ capture_settings() {
                         set frontmost to true
                         repeat with candidateWindow in windows
                             if name of candidateWindow contains "Settings" or name of candidateWindow contains "General" or name of candidateWindow contains "Accounts" or name of candidateWindow contains "Notifications" or name of candidateWindow contains "About" then
+                                set position of candidateWindow to {40, 80}
                                 set windowPosition to position of candidateWindow
                                 set windowSize to size of candidateWindow
                                 return (item 1 of windowPosition as text) & "," & (item 2 of windowPosition as text) & "," & (item 1 of windowSize as text) & "," & (item 2 of windowSize as text)
@@ -259,9 +360,7 @@ capture_settings() {
         exit 1
     fi
 
-    echo "Capturing ${output}..."
-    screencapture -R"$window_rect" "$ASSETS_DIR/$output"
-    chmod 644 "$ASSETS_DIR/$output"
+    capture_plaidbar_window "$output" "$tab"
 
     kill "$APP_PID" 2>/dev/null || true
     wait "$APP_PID" 2>/dev/null || true
@@ -269,6 +368,8 @@ capture_settings() {
     rm -f "$APP_LOG"
     APP_LOG=""
 }
+
+require_screen_capture
 
 capture_sandbox_preflight "setup-sandbox-preflight.png"
 capture_dashboard "All" "dashboard.png"
