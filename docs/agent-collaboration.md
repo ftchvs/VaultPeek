@@ -29,6 +29,9 @@ Otto may merge PlaidBar PRs without asking Felipe when all of these are true:
 - No blocking review issue remains.
 - Local verification passed, or CI fully covers the relevant gate.
 - GitHub checks are green, or only non-required/skipped checks remain.
+- Tokenless or unconfigured Claude checks are non-blocking when they are
+  skipped, missing auth/token, or only report setup/environment noise. Do not
+  skip substantive review findings or any build/test failure.
 - Privacy/local-first boundaries are preserved.
 - No secrets, local databases, screenshots, logs, or build artifacts are added.
 - The PR branch is not being actively mutated by Hermes or another agent.
