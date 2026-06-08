@@ -99,7 +99,7 @@ and `docs/autonomous-roadmap.md`.
   and pointer path.
 - [ ] T027: Show transactions, balances, limits, freshness, and sync state for
   the selected account.
-- [ ] T028: Keep reconnect, remove, and settings actions explicit and
+- [x] T028: Keep reconnect, remove, and settings actions explicit and
   confirmation-gated where destructive.
 - [ ] T029: Add empty drill-in states for no synced transactions and server
   offline.
