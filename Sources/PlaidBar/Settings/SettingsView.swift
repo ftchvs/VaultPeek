@@ -154,7 +154,7 @@ struct GeneralSettingsView: View {
                         }
                     }
 
-                    Text("Reset removes PlaidBar database files, transaction caches, pending Link sessions, and stored Plaid access-token entries. Preferences, server.conf, app/server auth, and unrelated files stay in place.")
+                    Text("Reset removes PlaidBar database files, account and transaction caches, pending Link sessions, and stored Plaid access-token entries. Preferences, server.conf, app/server auth, and unrelated files stay in place.")
                         .detailText()
                         .fixedSize(horizontal: false, vertical: true)
 
@@ -192,7 +192,7 @@ struct GeneralSettingsView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Deletes the SQLite database, stored Plaid access tokens, sync cursors, and loaded account data under \(appState.activeStorageDirectoryDisplayText). Keeps server.conf, app/server auth, Plaid dashboard Items, shell credentials, and app preferences. Restart PlaidBarServer after resetting.")
+            Text("Deletes the SQLite database, account and transaction caches, stored Plaid access tokens, sync cursors, and loaded account data under \(appState.activeStorageDirectoryDisplayText). Keeps server.conf, app/server auth, Plaid dashboard Items, shell credentials, and app preferences. Restart PlaidBarServer after resetting.")
         }
         .alert("Local Data Reset", isPresented: Binding(
             get: { resetResultMessage != nil },

@@ -593,8 +593,15 @@ final class AppState {
         error = nil
         do {
             let refreshedAccounts = try await serverClient.getAccounts()
-            await refreshItemStatuses()
-            accounts = accountsPreservingUnavailableItems(refreshedAccounts)
+            let itemStatusesAvailable = await refreshItemStatuses()
+            accounts = itemStatusesAvailable
+                ? accountsPreservingUnavailableItems(refreshedAccounts)
+                : accountsPreservingCachedAccountsMissingFromRefresh(refreshedAccounts)
+            try LocalDataStore.saveAccounts(
+                accounts,
+                to: activeStorageDirectoryURL,
+                context: transactionCacheContext
+            )
             serverItemCount = Set(accounts.map(\.itemId)).count
             serverSyncReady = (serverItemCount ?? 0) > 0
             updateSetupCompletion()
@@ -612,8 +619,15 @@ final class AppState {
         error = nil
         do {
             let refreshedAccounts = try await serverClient.getBalances()
-            await refreshItemStatuses()
-            accounts = accountsPreservingUnavailableItems(refreshedAccounts)
+            let itemStatusesAvailable = await refreshItemStatuses()
+            accounts = itemStatusesAvailable
+                ? accountsPreservingUnavailableItems(refreshedAccounts)
+                : accountsPreservingCachedAccountsMissingFromRefresh(refreshedAccounts)
+            try LocalDataStore.saveAccounts(
+                accounts,
+                to: activeStorageDirectoryURL,
+                context: transactionCacheContext
+            )
             lastSyncDate = Date()
             recordBalanceSnapshot()
         } catch {
@@ -638,7 +652,11 @@ final class AppState {
                 }
                 let response = try await serverClient.syncTransactions()
                 let updatedTransactions = TransactionSyncReducer.applying(response, to: transactions)
-                try LocalDataStore.saveTransactions(updatedTransactions, context: transactionCacheContext)
+                try LocalDataStore.saveTransactions(
+                    updatedTransactions,
+                    to: activeStorageDirectoryURL,
+                    context: transactionCacheContext
+                )
                 transactions = updatedTransactions
                 try await serverClient.commitSyncCursors(response.pendingCursors)
                 hasMore = response.hasMore
@@ -819,9 +837,18 @@ final class AppState {
                     (transaction.itemId == nil && removedAccountIds.contains(transaction.accountId))
             }
             do {
-                try LocalDataStore.saveTransactions(transactions, context: transactionCacheContext)
+                try LocalDataStore.saveAccounts(
+                    accounts,
+                    to: activeStorageDirectoryURL,
+                    context: transactionCacheContext
+                )
+                try LocalDataStore.saveTransactions(
+                    transactions,
+                    to: activeStorageDirectoryURL,
+                    context: transactionCacheContext
+                )
             } catch {
-                self.error = "Transaction cache failed to save: \(error.localizedDescription)"
+                self.error = "Local cache failed to save: \(error.localizedDescription)"
             }
         } catch {
             self.error = error.localizedDescription
@@ -919,8 +946,10 @@ final class AppState {
         await checkServerConnection()
         if serverConnected {
             if statusItemCount > 0 {
+                loadCachedAccounts()
                 loadCachedTransactions()
             } else {
+                clearCachedAccounts()
                 clearCachedTransactions()
             }
             await refreshAccounts()
@@ -931,9 +960,36 @@ final class AppState {
 
     // MARK: - Balance History
 
+    private func loadCachedAccounts() {
+        do {
+            accounts = try LocalDataStore.loadAccounts(
+                from: activeStorageDirectoryURL,
+                context: transactionCacheContext
+            )
+        } catch {
+            self.error = "Account cache failed to load: \(error.localizedDescription)"
+        }
+    }
+
+    private func clearCachedAccounts() {
+        accounts = []
+        do {
+            try LocalDataStore.saveAccounts(
+                accounts,
+                to: activeStorageDirectoryURL,
+                context: transactionCacheContext
+            )
+        } catch {
+            self.error = "Account cache failed to clear: \(error.localizedDescription)"
+        }
+    }
+
     private func loadCachedTransactions() {
         do {
-            transactions = try LocalDataStore.loadTransactions(context: transactionCacheContext)
+            transactions = try LocalDataStore.loadTransactions(
+                from: activeStorageDirectoryURL,
+                context: transactionCacheContext
+            )
         } catch {
             self.error = "Transaction cache failed to load: \(error.localizedDescription)"
         }
@@ -942,7 +998,11 @@ final class AppState {
     private func clearCachedTransactions() {
         transactions = []
         do {
-            try LocalDataStore.saveTransactions(transactions, context: transactionCacheContext)
+            try LocalDataStore.saveTransactions(
+                transactions,
+                to: activeStorageDirectoryURL,
+                context: transactionCacheContext
+            )
         } catch {
             self.error = "Transaction cache failed to clear: \(error.localizedDescription)"
         }
@@ -986,6 +1046,16 @@ final class AppState {
 
         let preservedAccounts = accounts.filter { account in
             unavailableItemIds.contains(account.itemId) && !refreshedAccountIds.contains(account.id)
+        }
+        return refreshedAccounts + preservedAccounts
+    }
+
+    private func accountsPreservingCachedAccountsMissingFromRefresh(_ refreshedAccounts: [AccountDTO]) -> [AccountDTO] {
+        guard !accounts.isEmpty else { return refreshedAccounts }
+
+        let refreshedAccountIds = Set(refreshedAccounts.map(\.id))
+        let preservedAccounts = accounts.filter { account in
+            !refreshedAccountIds.contains(account.id)
         }
         return refreshedAccounts + preservedAccounts
     }
