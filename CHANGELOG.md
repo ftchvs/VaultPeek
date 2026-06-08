@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-08 01:39 UTC] — Feature
+
+tighten post-1 dashboard recovery and local AI (#192)
+
+`647439f`
+
+---
+
+
 ## [2026-06-08 00:53 UTC] — Fix
 
 simplify balance mix surface (#191)
