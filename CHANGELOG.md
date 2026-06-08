@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-08 03:24 UTC] — Feature
+
+normalize compact account row spacing (#196)
+
+`3fd7e6a`
+
+---
+
+
 ## [2026-06-08 02:17 UTC] — Documentation
 
 add recurring backlog audit (#195)
