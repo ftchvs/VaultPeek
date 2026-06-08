@@ -438,6 +438,25 @@ struct PlaidBarTests {
         ) == nil)
     }
 
+    // MARK: - Dashboard Overview Height Budget
+
+    @Test("Dashboard overview budget fits realistic menu-bar height")
+    func dashboardOverviewBudgetFitsRealisticPopoverHeight() {
+        let budget = DashboardOverviewHeightBudget()
+
+        #expect(DashboardOverviewHeightBudget.realisticPopoverHeight == 660)
+        #expect(budget.fitsFirstGlance(visibleAccountRows: 3, includesSelectedDrillIn: true))
+        #expect(budget.estimatedFirstGlanceHeight(visibleAccountRows: 3, includesSelectedDrillIn: true) <= DashboardOverviewHeightBudget.firstGlanceVisibleHeight)
+    }
+
+    @Test("Dashboard overview budget expects overflow for longer account lists")
+    func dashboardOverviewBudgetScrollsLongerAccountLists() {
+        let budget = DashboardOverviewHeightBudget()
+
+        #expect(!budget.fitsFirstGlance(visibleAccountRows: 6, includesSelectedDrillIn: true))
+        #expect(budget.fitsFirstGlance(visibleAccountRows: 6, includesSelectedDrillIn: false))
+    }
+
     // MARK: - Notification Trigger Logic
 
     @Test("Large transaction detection")

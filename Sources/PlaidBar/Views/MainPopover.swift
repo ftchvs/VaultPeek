@@ -15,7 +15,7 @@ struct MainPopover: View {
         static let dashboardWidth: CGFloat = 480
         static let setupWidth: CGFloat = 560
         static let dashboardMinHeight: CGFloat = 460
-        static let dashboardMaxHeight: CGFloat = 660
+        static let dashboardMaxHeight = CGFloat(DashboardOverviewHeightBudget.realisticPopoverHeight)
         static let contentHorizontalPadding: CGFloat = 12
         static let contentTopPadding: CGFloat = 8
         static let contentBottomPadding: CGFloat = 8

@@ -201,6 +201,9 @@ remain unmarked.
   answers cash, credit, recent spend, sync health, and action-needed status
   before deeper account drill-ins; evidence:
   `Sources/PlaidBar/Views/MainPopover.swift`.
+- 2026-06-07 [T015]: verified the dashboard overview against a 660-point
+  realistic menu-bar popover height budget with selected-row drill-in tests;
+  evidence: `DashboardOverviewHeightBudget` and app tests.
 
 ## Backlog Source
 
