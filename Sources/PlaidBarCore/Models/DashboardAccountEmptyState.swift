@@ -78,6 +78,7 @@ public struct DashboardAccountEmptyState: Equatable, Sendable {
         filter: DashboardAccountFilterKind,
         isDemoMode: Bool,
         serverConnected: Bool,
+        credentialsConfigured: Bool? = nil,
         linkedItemCount: Int,
         accountCount: Int,
         degradedItemCount: Int,
@@ -94,6 +95,19 @@ public struct DashboardAccountEmptyState: Equatable, Sendable {
                 action: .checkServer,
                 actionTitle: "Check Server",
                 actionIconName: "server.rack"
+            )
+        }
+
+        if !isDemoMode, credentialsConfigured == false {
+            return DashboardAccountEmptyState(
+                title: "Plaid credentials missing",
+                detail: "Add Plaid credentials to the local server environment, then check status again.",
+                iconName: "key.slash",
+                tone: .warning,
+                showsAddAccount: false,
+                action: .refresh,
+                actionTitle: "Check Credentials",
+                actionIconName: "key"
             )
         }
 
