@@ -924,6 +924,15 @@ struct PlaidBarCoreTests {
         #expect(filtered.description.contains("transfers are excluded"))
     }
 
+    @Test("Heatmap cell intensity clamps and ignores empty days")
+    func heatmapCellIntensityClampsAndIgnoresEmptyDays() {
+        #expect(SpendingHeatmap.cellIntensity(for: SpendingHeatmapDay(date: "2026-01-01", value: 50, transactionCount: 1), peakValue: 200) == 0.25)
+        #expect(SpendingHeatmap.cellIntensity(for: SpendingHeatmapDay(date: "2026-01-02", value: -75, transactionCount: 2), peakValue: 150) == 0.5)
+        #expect(SpendingHeatmap.cellIntensity(for: SpendingHeatmapDay(date: "2026-01-03", value: 300, transactionCount: 1), peakValue: 100) == 1)
+        #expect(SpendingHeatmap.cellIntensity(for: SpendingHeatmapDay(date: "2026-01-04", value: 90, transactionCount: 0), peakValue: 100) == 0)
+        #expect(SpendingHeatmap.cellIntensity(for: SpendingHeatmapDay(date: "2026-01-05", value: 90, transactionCount: 1), peakValue: 0) == 0)
+    }
+
     // MARK: - AccountDTO Tests
 
     @Test("AccountDTO Codable roundtrip")
