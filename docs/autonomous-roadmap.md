@@ -169,6 +169,10 @@ remain unmarked.
 - 2026-06-07 [T004]: added a module-boundary split rule for broad refactors in
   the autonomous loop selection rules and operating contract; evidence:
   `docs/autonomous-loop-backlog.md` and `docs/autonomous-roadmap.md` updates.
+- 2026-06-07 [T005]: added a recurring loop-governance audit for stale,
+  duplicate, completed-but-unchecked, and product-boundary-mismatched backlog
+  tasks; evidence: `docs/autonomous-loop-backlog.md` and
+  `commands/plaidbar-prod-loop.md` updates.
 
 ## Backlog Source
 

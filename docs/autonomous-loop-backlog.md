@@ -18,6 +18,9 @@ and `docs/autonomous-roadmap.md`.
 - Split broad refactors into separate PRs whenever they cross more than one
   module boundary, unless the boundary-crossing is a mechanical API move that
   cannot be reviewed independently.
+- During loop-governance passes, audit this backlog for stale tasks, duplicate
+  tasks, completed-but-unchecked items, and tasks that no longer match the
+  product boundary; remove or consolidate them only with roadmap evidence.
 - Do not add hosted backend, telemetry, cloud sync, multi-user accounts,
   budgeting workflows, or cloud AI over transaction data.
 - Optional AI work must be local-only, off by default, explainable, reversible,
@@ -48,7 +51,7 @@ and `docs/autonomous-roadmap.md`.
   exposure risks.
 - [x] T004: Add a rule that broad refactors must be split when they touch more
   than one module boundary.
-- [ ] T005: Add a recurring audit that removes stale or duplicate backlog tasks.
+- [x] T005: Add a recurring audit that removes stale or duplicate backlog tasks.
 
 ### PR-002: Minimalist Modern Design Audit
 
