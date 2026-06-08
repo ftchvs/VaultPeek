@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-08 00:13 UTC] — Documentation
+
+add backlog task ledger markers (#188)
+
+`0981b71`
+
+---
+
+
 ## [2026-06-07 23:30 UTC] — Documentation
 
 add autonomous PlaidBar loop backlog
