@@ -9,6 +9,10 @@ Use this command to keep improving PlaidBar toward a production-ready,
 local-first macOS finance utility through the 100+ task backlog in
 `docs/autonomous-loop-backlog.md`.
 
+When another local agent is active, also follow
+`docs/agent-collaboration.md` for worktree ownership, PR handoff, and
+autonomous merge gates.
+
 The default goal is:
 
 > Make PlaidBar feel like RepoBar for personal finance: a native macOS menu-bar
@@ -115,8 +119,9 @@ Repeat these phases until the timebox ends or a blocker appears:
    - Push only the focused branch for the completed task or PR slice.
    - Open or update a PR with task ID(s), changed files, local checks,
      secret-scan result, privacy/security impact, and known limitations.
-   - Wait for GitHub checks; do not merge with failing, pending, skipped, or
-     ambiguous required checks.
+   - Wait for GitHub checks; do not merge with failing, pending, or ambiguous
+     required checks. Treat tokenless or unconfigured Claude-only checks as
+     non-blocking when they are skipped, missing auth/token, or setup-noise only.
    - Review the final diff before merge for secrets, real financial data,
      scope creep, generated artifacts, destructive behavior, and local-first
      boundary violations.
