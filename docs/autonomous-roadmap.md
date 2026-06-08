@@ -152,6 +152,9 @@ remain unmarked.
   composition into `PlaidBarCore`.
 - 2026-06-07 [T001]: documented the completed-task marker convention for
   autonomous roadmap ledger entries; evidence: docs-only roadmap update.
+- 2026-06-07 [T002]: expanded the pull request template with task IDs,
+  local gates, GitHub checks, privacy impact, and merge safety sections;
+  evidence: `.github/pull_request_template.md` checklist update.
 
 ## Backlog Source
 

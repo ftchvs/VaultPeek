@@ -39,7 +39,7 @@ and `docs/autonomous-roadmap.md`.
 
 - [x] T001: Add a progress marker for completed backlog task IDs in the
   autonomous roadmap ledger.
-- [ ] T002: Add a PR-body template section for task IDs, local gates, GitHub
+- [x] T002: Add a PR-body template section for task IDs, local gates, GitHub
   checks, privacy impact, and merge safety.
 - [ ] T003: Add a reviewer checklist for local-first boundaries and secret
   exposure risks.
