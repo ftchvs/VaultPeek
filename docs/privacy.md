@@ -51,7 +51,7 @@ Current local data may include:
   Keychain when Security framework support is available
 - account metadata
 - balances
-- transaction cache
+- account and transaction caches
 - pending link-session state
 
 Sandbox and production use separate scoped stores.
@@ -92,10 +92,10 @@ public GitHub issue.
 
 ## Local Reset Boundary
 
-Resetting local data removes PlaidBar-owned database files, transaction caches,
-pending Link sessions, and stored Plaid access-token entries when present. It
-leaves `server.conf`, app/server auth, preferences, and unrelated files in the
-storage directory untouched.
+Resetting local data removes PlaidBar-owned database files, account and
+transaction caches, pending Link sessions, and stored Plaid access-token entries
+when present. It leaves `server.conf`, app/server auth, preferences, and
+unrelated files in the storage directory untouched.
 
 Local reset does not necessarily delete records from the Plaid Dashboard or
 revoke bank permissions outside PlaidBar. Users who need complete revocation

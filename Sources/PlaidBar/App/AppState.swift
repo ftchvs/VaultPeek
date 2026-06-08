@@ -595,7 +595,11 @@ final class AppState {
             let refreshedAccounts = try await serverClient.getAccounts()
             await refreshItemStatuses()
             accounts = accountsPreservingUnavailableItems(refreshedAccounts)
-            try LocalDataStore.saveAccounts(accounts, context: transactionCacheContext)
+            try LocalDataStore.saveAccounts(
+                accounts,
+                to: activeStorageDirectoryURL,
+                context: transactionCacheContext
+            )
             serverItemCount = Set(accounts.map(\.itemId)).count
             serverSyncReady = (serverItemCount ?? 0) > 0
             updateSetupCompletion()
@@ -615,7 +619,11 @@ final class AppState {
             let refreshedAccounts = try await serverClient.getBalances()
             await refreshItemStatuses()
             accounts = accountsPreservingUnavailableItems(refreshedAccounts)
-            try LocalDataStore.saveAccounts(accounts, context: transactionCacheContext)
+            try LocalDataStore.saveAccounts(
+                accounts,
+                to: activeStorageDirectoryURL,
+                context: transactionCacheContext
+            )
             lastSyncDate = Date()
             recordBalanceSnapshot()
         } catch {
@@ -821,9 +829,14 @@ final class AppState {
                     (transaction.itemId == nil && removedAccountIds.contains(transaction.accountId))
             }
             do {
+                try LocalDataStore.saveAccounts(
+                    accounts,
+                    to: activeStorageDirectoryURL,
+                    context: transactionCacheContext
+                )
                 try LocalDataStore.saveTransactions(transactions, context: transactionCacheContext)
             } catch {
-                self.error = "Transaction cache failed to save: \(error.localizedDescription)"
+                self.error = "Local cache failed to save: \(error.localizedDescription)"
             }
         } catch {
             self.error = error.localizedDescription
@@ -937,7 +950,10 @@ final class AppState {
 
     private func loadCachedAccounts() {
         do {
-            accounts = try LocalDataStore.loadAccounts(context: transactionCacheContext)
+            accounts = try LocalDataStore.loadAccounts(
+                from: activeStorageDirectoryURL,
+                context: transactionCacheContext
+            )
         } catch {
             self.error = "Account cache failed to load: \(error.localizedDescription)"
         }
@@ -946,7 +962,11 @@ final class AppState {
     private func clearCachedAccounts() {
         accounts = []
         do {
-            try LocalDataStore.saveAccounts(accounts, context: transactionCacheContext)
+            try LocalDataStore.saveAccounts(
+                accounts,
+                to: activeStorageDirectoryURL,
+                context: transactionCacheContext
+            )
         } catch {
             self.error = "Account cache failed to clear: \(error.localizedDescription)"
         }
