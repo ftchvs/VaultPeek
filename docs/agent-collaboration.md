@@ -13,9 +13,11 @@ worktree, or merge collisions.
 
 ## Worktree Ownership
 
-- Hermes should work from its own temporary worktree, commonly
-  `/private/tmp/PlaidBar-otto`.
-- Otto should review and fix from a separate checkout or worktree.
+- Hermes should work from its own builder-owned checkout or temporary worktree,
+  such as `/Users/otto/.openclaw/workspace/repos/PlaidBar` when launched via
+  the Codex CLI examples in `commands/plaidbar-prod-loop.md`.
+- Otto should review and fix from a separate operator-owned checkout or worktree,
+  such as `/private/tmp/PlaidBar-otto` for this scheduled loop.
 - Do not mutate another agent's active worktree.
 - Before pushing to a branch another agent owns, verify that agent is not
   actively editing or running a write step on the same branch.
