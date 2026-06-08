@@ -12,6 +12,9 @@ local-first macOS finance utility through the 100+ task backlog in
 When another local agent is active, also follow
 `docs/agent-collaboration.md` for worktree ownership, PR handoff, and
 autonomous merge gates.
+Use GitHub PRs as the canonical handoff channel, Linear only for material
+status/process updates, and uncommitted `.agent-state/` or `/tmp` state for
+local branch/worktree ownership when needed.
 
 The default goal is:
 
@@ -73,10 +76,14 @@ Repeat these phases until the timebox ends or a blocker appears:
 1. Sync and inspect:
    - `git status --short --branch`
    - `git fetch origin main`
+   - Inspect open PRs and active PlaidBar agent/process state before editing.
+   - If another agent owns the target branch/worktree, switch to a separate
+     branch/worktree or leave a coordination note instead of pushing over it.
    - If on `main`, create a feature branch named
      `feature/<short-production-readiness-topic>`.
    - Read `GOAL.md`, `README.md`, `DESIGN.md`, `docs/architecture.md`, and
      recent changed files before editing.
+   - Read `docs/agent-collaboration.md` before any PR, push, or merge.
 
 2. Pick the highest-leverage next task:
    - Prefer the explicit focus area in `$ARGUMENTS`.
@@ -119,12 +126,19 @@ Repeat these phases until the timebox ends or a blocker appears:
    - Push only the focused branch for the completed task or PR slice.
    - Open or update a PR with task ID(s), changed files, local checks,
      secret-scan result, privacy/security impact, and known limitations.
+   - Include the builder agent, branch, and worktree ownership note in the PR
+     body so other agents know whether it is safe to push.
    - Wait for GitHub checks; do not merge with failing, pending, or ambiguous
      required checks. Treat tokenless or unconfigured Claude-only checks as
-     non-blocking when they are skipped, missing auth/token, or setup-noise only.
+     non-blocking when they are skipped, missing auth/token, session-limited,
+     rate-limited, or setup-noise only.
+   - If Claude review is skipped or fails for auth/session/setup-only reasons,
+     leave a PR comment with that rationale before merge.
    - Review the final diff before merge for secrets, real financial data,
      scope creep, generated artifacts, destructive behavior, and local-first
      boundary violations.
+   - Re-check the PR head SHA immediately before merge. If the head changed
+     during review, fetch and re-review the new head before merging.
    - Merge only when local gates passed, GitHub checks are green, the diff is
      safe under the existing scoped approval, and no user decision is needed.
    - After merge, verify remote `main` moved as expected, then record the
