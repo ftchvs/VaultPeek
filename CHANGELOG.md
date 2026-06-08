@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-08 04:19 UTC] — Documentation
+
+refresh minimalist screenshot evidence (#199)
+
+`c3a3ebf`
+
+---
+
+
 ## [2026-06-08 03:51 UTC] — Feature
 
 tighten heatmap labels (#198)
