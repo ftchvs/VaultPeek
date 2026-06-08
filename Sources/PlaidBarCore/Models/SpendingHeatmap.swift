@@ -3,6 +3,33 @@ import Foundation
 public enum SpendingHeatmapMode: String, Codable, CaseIterable, Sendable {
     case spending
     case netCashflow
+
+    public var shortLabel: String {
+        switch self {
+        case .spending:
+            "Spend"
+        case .netCashflow:
+            "Cashflow"
+        }
+    }
+
+    public var summaryTitle: String {
+        switch self {
+        case .spending:
+            "365D Spend"
+        case .netCashflow:
+            "365D Net Cashflow"
+        }
+    }
+
+    public var semanticDescription: String {
+        switch self {
+        case .spending:
+            "Outflows only; income and transfers are excluded"
+        case .netCashflow:
+            "Income minus outflows; transfers are excluded"
+        }
+    }
 }
 
 public struct SpendingHeatmapDay: Identifiable, Sendable, Hashable {

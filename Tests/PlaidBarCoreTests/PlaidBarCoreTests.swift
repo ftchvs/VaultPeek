@@ -841,6 +841,16 @@ struct PlaidBarCoreTests {
         #expect(SpendingHeatmap.displayCashflowAmount(0) == 0)
     }
 
+    @Test("Heatmap mode labels distinguish spend from net cashflow semantics")
+    func heatmapModeLabelsDistinguishSemantics() {
+        #expect(SpendingHeatmapMode.spending.shortLabel == "Spend")
+        #expect(SpendingHeatmapMode.spending.summaryTitle == "365D Spend")
+        #expect(SpendingHeatmapMode.spending.semanticDescription.contains("Outflows only"))
+        #expect(SpendingHeatmapMode.netCashflow.shortLabel == "Cashflow")
+        #expect(SpendingHeatmapMode.netCashflow.summaryTitle == "365D Net Cashflow")
+        #expect(SpendingHeatmapMode.netCashflow.semanticDescription.contains("Income minus outflows"))
+    }
+
     // MARK: - AccountDTO Tests
 
     @Test("AccountDTO Codable roundtrip")
