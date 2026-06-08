@@ -593,8 +593,10 @@ final class AppState {
         error = nil
         do {
             let refreshedAccounts = try await serverClient.getAccounts()
-            await refreshItemStatuses()
-            accounts = accountsPreservingUnavailableItems(refreshedAccounts)
+            let itemStatusesAvailable = await refreshItemStatuses()
+            accounts = itemStatusesAvailable
+                ? accountsPreservingUnavailableItems(refreshedAccounts)
+                : accountsPreservingCachedAccountsMissingFromRefresh(refreshedAccounts)
             try LocalDataStore.saveAccounts(
                 accounts,
                 to: activeStorageDirectoryURL,
@@ -617,8 +619,10 @@ final class AppState {
         error = nil
         do {
             let refreshedAccounts = try await serverClient.getBalances()
-            await refreshItemStatuses()
-            accounts = accountsPreservingUnavailableItems(refreshedAccounts)
+            let itemStatusesAvailable = await refreshItemStatuses()
+            accounts = itemStatusesAvailable
+                ? accountsPreservingUnavailableItems(refreshedAccounts)
+                : accountsPreservingCachedAccountsMissingFromRefresh(refreshedAccounts)
             try LocalDataStore.saveAccounts(
                 accounts,
                 to: activeStorageDirectoryURL,
@@ -1027,6 +1031,16 @@ final class AppState {
 
         let preservedAccounts = accounts.filter { account in
             unavailableItemIds.contains(account.itemId) && !refreshedAccountIds.contains(account.id)
+        }
+        return refreshedAccounts + preservedAccounts
+    }
+
+    private func accountsPreservingCachedAccountsMissingFromRefresh(_ refreshedAccounts: [AccountDTO]) -> [AccountDTO] {
+        guard !accounts.isEmpty else { return refreshedAccounts }
+
+        let refreshedAccountIds = Set(refreshedAccounts.map(\.id))
+        let preservedAccounts = accounts.filter { account in
+            !refreshedAccountIds.contains(account.id)
         }
         return refreshedAccounts + preservedAccounts
     }

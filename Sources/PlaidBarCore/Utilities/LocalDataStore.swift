@@ -214,11 +214,26 @@ public enum LocalDataStore {
     }
 
     private static func isAccountCacheFilename(_ filename: String) -> Bool {
-        filename == accountCacheFilename ||
-            (
-                filename.hasPrefix("accounts-") &&
-                    (filename.hasSuffix(".json") || filename.contains(".json.backup-"))
-            )
+        let cacheFilename = normalizedCacheFilename(filename)
+        if cacheFilename == accountCacheFilename { return true }
+
+        return [PlaidEnvironment.sandbox.rawValue, PlaidEnvironment.production.rawValue].contains { environment in
+            guard cacheFilename.hasPrefix("accounts-\(environment)-"),
+                  cacheFilename.hasSuffix(".json") else { return false }
+
+            let hashStart = cacheFilename.index(cacheFilename.startIndex, offsetBy: "accounts-\(environment)-".count)
+            let hashEnd = cacheFilename.index(cacheFilename.endIndex, offsetBy: -".json".count)
+            let hash = cacheFilename[hashStart..<hashEnd]
+            return hash.count == 16 && hash.allSatisfy(\.isHexDigit)
+        }
+    }
+
+    private static func normalizedCacheFilename(_ filename: String) -> String {
+        guard let backupRange = filename.range(of: ".json.backup-") else {
+            return filename
+        }
+
+        return String(filename[..<backupRange.lowerBound]) + ".json"
     }
 
     private static func isPendingLinkSessionsFilename(_ filename: String) -> Bool {

@@ -427,24 +427,31 @@ struct PlaidBarServerTests {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
 
-        try LocalDataStore.saveAccounts(
-            [AccountDTO(
-                id: "checking",
-                itemId: "item-production",
-                name: "Everyday Checking",
-                type: .depository,
-                balances: BalanceDTO(current: 1_250)
-            )],
-            to: directory,
-            context: nil
+        let account = AccountDTO(
+            id: "checking",
+            itemId: "item-production",
+            name: "Everyday Checking",
+            type: .depository,
+            balances: BalanceDTO(current: 1_250)
         )
+        let context = TransactionCacheContext(
+            environment: .sandbox,
+            storagePath: directory.appendingPathComponent("plaidbar-sandbox.sqlite").path
+        )
+        let unrelatedExport = directory.appendingPathComponent("accounts-2026.json")
+        try Data("user export".utf8).write(to: unrelatedExport)
+        try LocalDataStore.saveAccounts([account], to: directory, context: nil)
+        try LocalDataStore.saveAccounts([account], to: directory, context: context)
 
-        _ = try LocalDataStore.resetLocalData(
+        let result = try LocalDataStore.resetLocalData(
             at: directory,
             resetKeychainTokens: false
         )
 
         #expect(try LocalDataStore.loadAccounts(from: directory).isEmpty)
+        #expect(try LocalDataStore.loadAccounts(from: directory, context: context).isEmpty)
+        #expect(FileManager.default.fileExists(atPath: unrelatedExport.path))
+        #expect(result.preservedEntries.contains("accounts-2026.json"))
     }
 
     @Test func serverCanCopyLegacyDatabaseAfterWrongEnvironmentCreatedEmptyDatabase() throws {
