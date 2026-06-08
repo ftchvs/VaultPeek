@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-08 06:56 UTC] — Feature
+
+clarify empty heatmap states (#205)
+
+`2dbeb1e`
+
+---
+
+
 ## [2026-06-08 06:42 UTC] — Feature
 
 add heatmap strongest signal accessibility
