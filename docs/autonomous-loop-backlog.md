@@ -85,7 +85,7 @@ and `docs/autonomous-roadmap.md`.
 
 - [x] T021: Audit row density for checking, savings, credit card, loan, and
   other account types.
-- [ ] T022: Ensure every row has a primary amount, secondary detail, freshness,
+- [x] T022: Ensure every row has a primary amount, secondary detail, freshness,
   and status signal.
 - [ ] T023: Make credit utilization, available credit, and due metadata readable
   without opening a budgeting workflow.
