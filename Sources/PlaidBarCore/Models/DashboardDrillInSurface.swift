@@ -102,6 +102,17 @@ public enum DashboardDrillInAction: String, CaseIterable, Sendable, Equatable {
         }
     }
 
+    public func accessibilityLabel(accountDisplayName: String) -> String {
+        switch self {
+        case .reconnect:
+            return "Reconnect \(accountDisplayName)"
+        case .remove:
+            return "Remove institution for \(accountDisplayName)"
+        case .settings:
+            return "Open PlaidBar settings from \(accountDisplayName)"
+        }
+    }
+
     public static var accountDrillInActions: [DashboardDrillInAction] {
         [.reconnect, .remove, .settings]
     }
@@ -157,6 +168,29 @@ public struct DashboardAccountDrillInSummary: Sendable, Equatable {
     public let latestTransactionDate: String?
     public let syncState: ItemConnectionStatus?
     public let freshnessLabel: String
+
+    public var accessibilityLabel: String {
+        var parts = [
+            "Selected account drill-in",
+            displayName,
+            subtitle,
+            "\(availableTitle) \(Formatters.currency(availableBalance, format: .full))",
+            "\(currentTitle) \(Formatters.currency(currentBalance, format: .full))",
+            "\(transactionCount) synced transaction\(transactionCount == 1 ? "" : "s")",
+            "\(pendingTransactionCount) pending transaction\(pendingTransactionCount == 1 ? "" : "s")",
+            "Sync \(freshnessLabel)"
+        ]
+
+        if let utilizationPercent {
+            parts.append("Utilization \(Formatters.percent(utilizationPercent, decimals: 0))")
+        }
+
+        if let latestTransactionDate {
+            parts.append("Latest transaction \(Formatters.displayTransactionDate(latestTransactionDate))")
+        }
+
+        return parts.joined(separator: ", ")
+    }
 
     public static func presentation(
         for account: AccountDTO,
