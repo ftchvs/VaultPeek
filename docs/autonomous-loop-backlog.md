@@ -95,7 +95,7 @@ and `docs/autonomous-roadmap.md`.
 
 ### PR-006: Account Drill-In Surfaces
 
-- [ ] T026: Ensure account drill-in opens from a row with a predictable keyboard
+- [x] T026: Ensure account drill-in opens from a row with a predictable keyboard
   and pointer path.
 - [ ] T027: Show transactions, balances, limits, freshness, and sync state for
   the selected account.

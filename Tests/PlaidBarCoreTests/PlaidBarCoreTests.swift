@@ -560,6 +560,32 @@ struct PlaidBarCoreTests {
         #expect(!label.contains(account.itemId))
     }
 
+    @Test("Account drill-in path gives selected rows predictable activation copy")
+    func accountDrillInPathActivationCopy() {
+        let account = AccountDTO(
+            id: "acct-internal-123",
+            itemId: "item-internal-456",
+            name: "Everyday",
+            type: .depository,
+            subtype: "checking",
+            mask: "1234",
+            balances: BalanceDTO(current: 500),
+            institutionName: "Chase"
+        )
+
+        let collapsed = DashboardAccountDrillInPath.presentation(for: account, isSelected: false)
+        let expanded = DashboardAccountDrillInPath.presentation(for: account, isSelected: true)
+
+        #expect(collapsed.accessibilityHint == "Press Return or Space to open the account drill-in below this row.")
+        #expect(collapsed.accessibilityActionName == "Open account details")
+        #expect(collapsed.pointerHelp == "Open details for Everyday")
+        #expect(expanded.accessibilityHint == "Press Return or Space to collapse the account drill-in.")
+        #expect(expanded.accessibilityActionName == "Collapse account details")
+        #expect(expanded.pointerHelp == "Collapse details for Everyday")
+        #expect(!collapsed.pointerHelp.contains(account.id))
+        #expect(!collapsed.pointerHelp.contains(account.itemId))
+    }
+
     @Test("Account presentation labels credit utilization status")
     func accountPresentationUtilizationStatusLabels() {
         #expect(AccountPresentation.utilizationStatusLabel(for: 12) == "Good")
