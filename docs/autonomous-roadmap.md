@@ -244,6 +244,10 @@ remain unmarked.
   pointer, keyboard, and assistive-technology activation paths shared open/collapse
   copy; evidence: `DashboardAccountDrillInPath`, dashboard row modifiers, and
   core tests.
+- 2026-06-08 [T027]: extracted a selected-account drill-in summary that keeps
+  transactions, balances, credit limits, freshness, and sync state in one
+  display-safe presentation model; evidence: `DashboardAccountDrillInSummary`,
+  `MainPopover` selected-account panel wiring, and core tests.
 - 2026-06-08 [T028]: added explicit selected-account drill-in actions for
   reconnect, remove, and settings, with destructive remove gated by a
   confirmation dialog; evidence: `DashboardDrillInAction` and selected account
