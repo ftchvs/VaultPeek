@@ -76,8 +76,8 @@ struct SpendingHeatmapView: View {
 
             if showModePicker {
                 Picker("Heatmap metric", selection: $mode) {
-                    Text("Spend").tag(SpendingHeatmapMode.spending)
-                    Text("Net").tag(SpendingHeatmapMode.netCashflow)
+                    Text(SpendingHeatmapMode.spending.shortLabel).tag(SpendingHeatmapMode.spending)
+                    Text(SpendingHeatmapMode.netCashflow.shortLabel).tag(SpendingHeatmapMode.netCashflow)
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
@@ -107,7 +107,7 @@ struct SpendingHeatmapView: View {
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text("Spending heatmap")
                     .sectionTitle()
-                Text(mode == .spending ? "Daily outflow intensity" : "Money out minus money in")
+                Text(mode.semanticDescription)
                     .detailText()
             }
 
