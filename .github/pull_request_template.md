@@ -2,13 +2,46 @@
 
 -
 
-## Checks
+## Autonomous task IDs
 
-- [ ] I ran `swift test` or documented why not.
-- [ ] I ran `git diff --check`.
-- [ ] I used sandbox or synthetic financial data in tests, screenshots, and examples.
-- [ ] I did not include real Plaid credentials, access tokens, account IDs, transaction exports, or screenshots with real balances.
-- [ ] I checked keyboard access and visible focus for UI changes.
-- [ ] I spot-checked VoiceOver labels or announcements for UI changes.
+- Task ID(s): <!-- e.g. T002 -->
+- Backlog slice: <!-- e.g. PR-001: Loop Governance And Backlog Hygiene -->
+- Scope note: <!-- one focused slice; call out if intentionally docs-only -->
+
+## Changed files
+
+-
+
+## Local gates
+
+- [ ] `git diff --check`
+- [ ] `swift build --target PlaidBar --skip-update --disable-keychain` or documented why not needed.
+- [ ] `swift build --target PlaidBarServer --skip-update --disable-keychain` when server/shared DTO/package code changed, or documented why not needed.
+- [ ] Focused tests or `swift test` when core/server logic changed, or documented the local Swift Testing limitation.
+- [ ] Secret scan completed for docs, source, tests, commands, workflows, and agent prompt files.
+
+## GitHub checks
+
+- [ ] Required GitHub checks are green before merge.
+- [ ] Skipped checks are expected and not required for this PR.
+- [ ] Any failing, pending, cancelled, missing, or ambiguous required check blocks merge.
+
+## Privacy and safety impact
+
+- [ ] I used only sandbox or synthetic financial data in tests, screenshots, examples, and docs.
+- [ ] I did not include real Plaid credentials, access tokens, account IDs, transaction exports, raw balances, or screenshots with real financial data.
+- [ ] This change preserves the local-first boundary: no hosted backend, telemetry, cloud sync, multi-user account system, or cloud AI over private transaction data.
+- [ ] User-facing copy remains honest about local storage, Plaid credentials, production approval, and unsupported security properties.
+
+## UI and accessibility checks
+
+- [ ] I checked keyboard access and visible focus for UI changes, or this PR has no UI changes.
+- [ ] I spot-checked VoiceOver labels or announcements for UI changes, or this PR has no UI changes.
 - [ ] I kept balances, risk, utilization, errors, and chart meaning understandable without relying on color alone.
 - [ ] I updated docs or screenshots if user-facing behavior changed.
+
+## Merge safety
+
+- [ ] Final diff reviewed for secrets, private financial data, generated artifacts, scope creep, and unsafe destructive behavior.
+- [ ] Merge is within the scoped PlaidBar approval in `docs/autonomous-roadmap.md`, or Felipe explicitly approved this PR.
+- [ ] After merge, completed task IDs will be recorded in the roadmap ledger and backlog checklist.
