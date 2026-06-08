@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-08 08:42 UTC] — Feature
+
+add account row freshness signals (#210)
+
+`7b349c1`
+
+---
+
+
 ## [2026-06-08 08:00 UTC] — Documentation
 
 audit account row density (#209)
