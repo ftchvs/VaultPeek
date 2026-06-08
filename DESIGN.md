@@ -165,6 +165,27 @@ trailing primary metric (balance owed/cash balance) | secondary metric
 
 **Anatomy:** Institution avatar (28×28 circle, DJB2-hashed color) | Account name (`.body`) + mask (`.detailText()`) | Amount (`.monospacedDigit`) with semantic color | Credit accounts: `creditcard` icon prefix + utilization badge
 
+**Density audit (2026-06-08, T021):** Account rows should preserve one shared
+two-line rhythm across checking, savings, credit card, loan, investment, and
+other account types. The current dashboard row implementation uses one 28pt
+leading glyph/status affordance, `Spacing.compactRowContentSpacing` horizontal
+gaps, `Spacing.compactRowVerticalPadding` vertical padding, a one-line primary
+label, a one-line secondary label, a trailing primary amount, a trailing
+secondary status/available-credit line, and a chevron. Checking and savings rows
+therefore occupy the same height as credit, loan, and other rows; richer credit
+metadata is compressed into the trailing secondary line rather than adding a
+third text row. Legacy account-list rows keep the same 28pt leading affordance
+and two-line text structure, but the dashboard row is the production-density
+reference for PR-005 follow-up work.
+
+| Account family | Primary metric | Secondary density rule |
+|----------------|----------------|------------------------|
+| Checking | Cash balance | Type/mask/freshness fit on the subtitle line |
+| Savings | Cash balance | Same row height and subtitle rhythm as checking |
+| Credit card | Balance owed | Utilization and available credit share one trailing line |
+| Loan | Balance owed | Uses the shared debt amount treatment without extra row height |
+| Investment/other | Current balance | Uses the same subtitle/status slot as cash rows |
+
 | State | Behavior |
 |-------|----------|
 | Default | All elements visible; amount colored by account type |

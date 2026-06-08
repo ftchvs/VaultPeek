@@ -224,6 +224,9 @@ remain unmarked.
   `docs/agent-coordination-state.example.json`,
   `.github/pull_request_template.md`, `.gitignore`, and
   `commands/plaidbar-prod-loop.md`.
+- 2026-06-08 [T021]: audited account-row density across checking, savings,
+  credit card, loan, investment, and other rows; evidence: `DESIGN.md`
+  documents the shared two-line dashboard row rhythm and follow-up constraints.
 
 ## Backlog Source
 
