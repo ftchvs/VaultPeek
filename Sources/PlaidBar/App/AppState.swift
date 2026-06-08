@@ -595,6 +595,7 @@ final class AppState {
             let refreshedAccounts = try await serverClient.getAccounts()
             await refreshItemStatuses()
             accounts = accountsPreservingUnavailableItems(refreshedAccounts)
+            try LocalDataStore.saveAccounts(accounts, context: transactionCacheContext)
             serverItemCount = Set(accounts.map(\.itemId)).count
             serverSyncReady = (serverItemCount ?? 0) > 0
             updateSetupCompletion()
@@ -614,6 +615,7 @@ final class AppState {
             let refreshedAccounts = try await serverClient.getBalances()
             await refreshItemStatuses()
             accounts = accountsPreservingUnavailableItems(refreshedAccounts)
+            try LocalDataStore.saveAccounts(accounts, context: transactionCacheContext)
             lastSyncDate = Date()
             recordBalanceSnapshot()
         } catch {
@@ -919,8 +921,10 @@ final class AppState {
         await checkServerConnection()
         if serverConnected {
             if statusItemCount > 0 {
+                loadCachedAccounts()
                 loadCachedTransactions()
             } else {
+                clearCachedAccounts()
                 clearCachedTransactions()
             }
             await refreshAccounts()
@@ -930,6 +934,23 @@ final class AppState {
     }
 
     // MARK: - Balance History
+
+    private func loadCachedAccounts() {
+        do {
+            accounts = try LocalDataStore.loadAccounts(context: transactionCacheContext)
+        } catch {
+            self.error = "Account cache failed to load: \(error.localizedDescription)"
+        }
+    }
+
+    private func clearCachedAccounts() {
+        accounts = []
+        do {
+            try LocalDataStore.saveAccounts(accounts, context: transactionCacheContext)
+        } catch {
+            self.error = "Account cache failed to clear: \(error.localizedDescription)"
+        }
+    }
 
     private func loadCachedTransactions() {
         do {

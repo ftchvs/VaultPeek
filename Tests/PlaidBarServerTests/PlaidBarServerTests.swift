@@ -393,6 +393,60 @@ struct PlaidBarServerTests {
         #expect(try Data(contentsOf: URL(fileURLWithPath: productionPath)) == Data("new-production-db".utf8))
     }
 
+    @Test func accountCacheIsScopedByEnvironmentAndStoragePath() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-account-cache-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let productionContext = TransactionCacheContext(
+            environment: .production,
+            storagePath: directory.appendingPathComponent("plaidbar-production.sqlite").path
+        )
+        let sandboxContext = TransactionCacheContext(
+            environment: .sandbox,
+            storagePath: directory.appendingPathComponent("plaidbar-sandbox.sqlite").path
+        )
+        let account = AccountDTO(
+            id: "checking",
+            itemId: "item-production",
+            name: "Everyday Checking",
+            type: .depository,
+            balances: BalanceDTO(current: 1_250)
+        )
+
+        try LocalDataStore.saveAccounts([account], to: directory, context: productionContext)
+
+        #expect(try LocalDataStore.loadAccounts(from: directory, context: productionContext).map(\.id) == ["checking"])
+        #expect(try LocalDataStore.loadAccounts(from: directory, context: sandboxContext).isEmpty)
+    }
+
+    @Test func accountCacheIsRemovedDuringLocalDataReset() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-account-cache-reset-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        try LocalDataStore.saveAccounts(
+            [AccountDTO(
+                id: "checking",
+                itemId: "item-production",
+                name: "Everyday Checking",
+                type: .depository,
+                balances: BalanceDTO(current: 1_250)
+            )],
+            to: directory,
+            context: nil
+        )
+
+        _ = try LocalDataStore.resetLocalData(
+            at: directory,
+            resetKeychainTokens: false
+        )
+
+        #expect(try LocalDataStore.loadAccounts(from: directory).isEmpty)
+    }
+
     @Test func serverCanCopyLegacyDatabaseAfterWrongEnvironmentCreatedEmptyDatabase() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("plaidbar-config-\(UUID().uuidString)", isDirectory: true)

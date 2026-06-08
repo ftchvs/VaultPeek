@@ -48,6 +48,7 @@ public enum LocalDataStore {
     public static let dataDirectoryEnvironmentVariable = "PLAIDBAR_DATA_DIR"
     public static let authTokenFilename = "auth-token"
     public static let serverConfigFilename = "server.conf"
+    public static let accountCacheFilename = "accounts.json"
     public static let transactionCacheFilename = "transactions.json"
     public static let pendingLinkSessionsFilename = "pending-link-sessions.json"
     public static let plaidAccessTokenKeychainService = "PlaidBar.PlaidAccessToken"
@@ -173,7 +174,8 @@ public enum LocalDataStore {
             return false
         }
 
-        if isTransactionCacheFilename(filename) ||
+        if isAccountCacheFilename(filename) ||
+            isTransactionCacheFilename(filename) ||
             isPendingLinkSessionsFilename(filename) {
             return true
         }
@@ -207,6 +209,14 @@ public enum LocalDataStore {
         filename == transactionCacheFilename ||
             (
                 filename.hasPrefix("transactions-") &&
+                    (filename.hasSuffix(".json") || filename.contains(".json.backup-"))
+            )
+    }
+
+    private static func isAccountCacheFilename(_ filename: String) -> Bool {
+        filename == accountCacheFilename ||
+            (
+                filename.hasPrefix("accounts-") &&
                     (filename.hasSuffix(".json") || filename.contains(".json.backup-"))
             )
     }
@@ -247,6 +257,13 @@ public enum LocalDataStore {
         directory.appendingPathComponent(transactionCacheFilename(for: context))
     }
 
+    public static func accountCacheURL(
+        in directory: URL = storageDirectoryURL(),
+        context: TransactionCacheContext? = nil
+    ) -> URL {
+        directory.appendingPathComponent(accountCacheFilename(for: context))
+    }
+
     public static func authTokenURL(
         in directory: URL = storageDirectoryURL()
     ) -> URL {
@@ -274,6 +291,20 @@ public enum LocalDataStore {
         return cache.transactions
     }
 
+    public static func loadAccounts(
+        from directory: URL = storageDirectoryURL(),
+        context: TransactionCacheContext? = nil,
+        fileManager: FileManager = .default
+    ) throws -> [AccountDTO] {
+        let url = accountCacheURL(in: directory, context: context)
+        guard fileManager.fileExists(atPath: url.path) else { return [] }
+
+        let data = try Data(contentsOf: url)
+        let cache = try JSONDecoder().decode(AccountCache.self, from: data)
+        guard context == nil || cache.context == context else { return [] }
+        return cache.accounts
+    }
+
     public static func saveTransactions(
         _ transactions: [TransactionDTO],
         to directory: URL = storageDirectoryURL(),
@@ -287,6 +318,28 @@ public enum LocalDataStore {
         let data = try JSONEncoder().encode(cache)
         try writePrivateCacheFile(data, to: url, fileManager: fileManager)
         try setPrivateCacheFilePermissions(url, fileManager: fileManager)
+    }
+
+    public static func saveAccounts(
+        _ accounts: [AccountDTO],
+        to directory: URL = storageDirectoryURL(),
+        context: TransactionCacheContext? = nil,
+        fileManager: FileManager = .default
+    ) throws {
+        try ensurePrivateDirectory(directory, fileManager: fileManager)
+
+        let url = accountCacheURL(in: directory, context: context)
+        let cache = AccountCache(context: context, accounts: accounts)
+        let data = try JSONEncoder().encode(cache)
+        try writePrivateCacheFile(data, to: url, fileManager: fileManager)
+        try setPrivateCacheFilePermissions(url, fileManager: fileManager)
+    }
+
+    private static func accountCacheFilename(for context: TransactionCacheContext?) -> String {
+        guard let context else { return accountCacheFilename }
+
+        let key = "\(context.environment.rawValue)|\(context.storagePath)"
+        return "accounts-\(context.environment.rawValue)-\(stableHashHex(key)).json"
     }
 
     private static func transactionCacheFilename(for context: TransactionCacheContext?) -> String {
@@ -402,6 +455,11 @@ public enum LocalDataStore {
 private struct TransactionCache: Codable, Sendable {
     let context: TransactionCacheContext?
     let transactions: [TransactionDTO]
+}
+
+private struct AccountCache: Codable, Sendable {
+    let context: TransactionCacheContext?
+    let accounts: [AccountDTO]
 }
 
 private extension String {
