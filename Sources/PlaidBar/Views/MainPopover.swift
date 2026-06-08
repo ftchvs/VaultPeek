@@ -15,7 +15,7 @@ struct MainPopover: View {
         static let dashboardWidth: CGFloat = 480
         static let setupWidth: CGFloat = 560
         static let dashboardMinHeight: CGFloat = 460
-        static let dashboardMaxHeight: CGFloat = 660
+        static let dashboardMaxHeight = CGFloat(DashboardOverviewHeightBudget.realisticPopoverHeight)
         static let contentHorizontalPadding: CGFloat = 12
         static let contentTopPadding: CGFloat = 8
         static let contentBottomPadding: CGFloat = 8
@@ -58,16 +58,14 @@ struct MainPopover: View {
                             .environment(appState)
                         }
 
-                        BalanceActivityHeatmap(transactions: appState.transactions)
-
-                        DashboardFilterBar(selection: filterBinding)
-
-                        AccountsSection(
+                        DashboardOverviewStack(
+                            transactions: appState.transactions,
                             accounts: filteredAccounts,
                             filter: selectedFilter,
+                            filterSelection: filterBinding,
                             selectedAccountId: selectedAccount?.id,
-                            onSelect: { selectedAccountId = $0.id },
-                            onDeselect: { selectedAccountId = "" },
+                            onSelectAccount: { selectedAccountId = $0.id },
+                            onDeselectAccount: { selectedAccountId = "" },
                             onAddAccount: openAccountSetup
                         )
                         .environment(appState)
@@ -1406,6 +1404,132 @@ private struct StatusMetricPill: View {
     }
 }
 
+// MARK: - Overview Flow
+
+private struct DashboardOverviewStack: View {
+    @Environment(AppState.self) private var appState
+    let transactions: [TransactionDTO]
+    let accounts: [AccountDTO]
+    let filter: DashboardAccountFilter
+    @Binding var filterSelection: DashboardAccountFilter
+    let selectedAccountId: String?
+    let onSelectAccount: (AccountDTO) -> Void
+    let onDeselectAccount: () -> Void
+    let onAddAccount: () -> Void
+
+    private var fallbackState: DashboardOverviewFallbackState? {
+        DashboardOverviewFallbackState.evaluate(
+            isSetupComplete: appState.isSetupComplete,
+            isDemoMode: appState.isDemoMode,
+            accountCount: appState.accounts.count,
+            transactionCount: appState.transactions.count
+        )
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: LayoutSpacing.stack) {
+            if let fallbackState {
+                DashboardOverviewFallbackBanner(presentation: fallbackState, onAction: onAddAccount)
+            } else {
+                BalanceActivityHeatmap(transactions: transactions)
+            }
+
+            VStack(alignment: .leading, spacing: LayoutSpacing.controls) {
+                OverviewFlowCaption(
+                    selectedFilter: filter,
+                    accountCount: accounts.count,
+                    hasSelectedAccount: selectedAccountId != nil
+                )
+
+                DashboardFilterBar(selection: $filterSelection)
+
+                AccountsSection(
+                    accounts: accounts,
+                    filter: filter,
+                    selectedAccountId: selectedAccountId,
+                    onSelect: onSelectAccount,
+                    onDeselect: onDeselectAccount,
+                    onAddAccount: onAddAccount
+                )
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Overview with activity heatmap, account filters, account rows, and selected account details.")
+    }
+
+    private enum LayoutSpacing {
+        static let stack: CGFloat = 6
+        static let controls: CGFloat = 5
+    }
+}
+
+private struct DashboardOverviewFallbackBanner: View {
+    let presentation: DashboardOverviewFallbackState
+    let onAction: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: presentation.iconName)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(SemanticColors.brandSecondary)
+                    .frame(width: 30, height: 30)
+                    .background(SemanticColors.brandSecondary.opacity(0.14), in: RoundedRectangle(cornerRadius: 9))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(presentation.title)
+                        .font(.callout.weight(.semibold))
+                    Text(presentation.detail)
+                        .detailText()
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(presentation.title). \(presentation.detail)")
+
+            Button(action: onAction) {
+                Label(presentation.actionTitle, systemImage: presentation.actionIconName)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .nativePanelSurface(
+            fill: AnyShapeStyle(SurfaceTokens.panelFill(emphasisTint: SemanticColors.brandSecondary.opacity(0.18))),
+            stroke: SemanticColors.brandSecondary.opacity(0.22)
+        )
+    }
+}
+
+private struct OverviewFlowCaption: View {
+    let selectedFilter: DashboardAccountFilter
+    let accountCount: Int
+    let hasSelectedAccount: Bool
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "arrow.down.right.circle.fill")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Text(captionText)
+                .microText()
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
+            Spacer(minLength: 8)
+        }
+        .padding(.horizontal, Spacing.compactRowTextSpacing)
+        .accessibilityLabel(captionText)
+    }
+
+    private var captionText: String {
+        let accountWord = accountCount == 1 ? "account" : "accounts"
+        let detailText = hasSelectedAccount ? "; selected row shows details" : "; select a row for details"
+        return "\(selectedFilter.rawValue): \(accountCount) \(accountWord) below\(detailText)"
+    }
+}
+
 // MARK: - Account List
 
 private struct AccountsSection: View {
@@ -1837,7 +1961,7 @@ private struct SelectedAccountPanel: View {
         VStack(alignment: .leading, spacing: Spacing.compactRowContentSpacing) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: Spacing.compactRowTextSpacing) {
-                    Text("Details")
+                    Text("Drill-in")
                         .sectionTitle()
                         .foregroundStyle(.secondary)
                     Text(AccountPresentation.displayName(for: account))
@@ -1856,6 +1980,8 @@ private struct SelectedAccountPanel: View {
                     tint: connectionTint
                 )
             }
+
+            DrillInSurfaceRail(surfaces: DashboardDrillInSurface.surfaces(for: account))
 
             HStack(spacing: Spacing.compactRowContentSpacing) {
                 DetailValue(title: availableTitle, value: availableText, tint: .primary)
@@ -2099,6 +2225,30 @@ private func accountConnectionTint(for level: AccountConnectionLevel) -> Color {
         return SemanticColors.negative
     case .unknown:
         return .secondary
+    }
+}
+
+private struct DrillInSurfaceRail: View {
+    let surfaces: [DashboardDrillInSurface]
+
+    var body: some View {
+        HStack(spacing: Spacing.xs) {
+            ForEach(surfaces, id: \.self) { surface in
+                Label(surface.title, systemImage: surface.iconName)
+                    .font(.caption2.weight(.semibold))
+                    .lineLimit(1)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 4)
+                    .background(Color.primary.opacity(0.04), in: Capsule())
+                    .accessibilityLabel("\(surface.title) drill-in")
+                    .accessibilityHint(surface.accessibilitySummary)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Selected account drill-in surfaces")
     }
 }
 

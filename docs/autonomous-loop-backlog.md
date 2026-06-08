@@ -66,12 +66,12 @@ and `docs/autonomous-roadmap.md`.
 
 - [x] T011: Ensure the first popover view answers cash, credit, recent change,
   sync health, and action-needed status.
-- [ ] T012: Keep the heatmap, filter bar, account rows, and selected detail in
+- [x] T012: Keep the heatmap, filter bar, account rows, and selected detail in
   one coherent overview.
-- [ ] T013: Preserve deeper account, transaction, credit, and status surfaces as
+- [x] T013: Preserve deeper account, transaction, credit, and status surfaces as
   drill-ins rather than competing first-level tabs.
-- [ ] T014: Add a fallback overview state when demo data is unavailable.
-- [ ] T015: Verify the overview fits a realistic menu-bar popover height.
+- [x] T014: Add a fallback overview state when demo data is unavailable.
+- [x] T015: Verify the overview fits a realistic menu-bar popover height.
 
 ### PR-004: Heatmap Readability
 
