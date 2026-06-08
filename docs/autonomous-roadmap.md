@@ -179,6 +179,9 @@ remain unmarked.
   `Sources/PlaidBar/Views/MainPopover.swift` updates.
 - 2026-06-07 [T006]: inventoried popover surfaces that still risk feeling
   tab-heavy or card-heavy; evidence: `DESIGN.md` popover surface inventory.
+- 2026-06-07 [T009]: tightened the dashboard heatmap label group while
+  preserving the 365-day spending and cashflow meaning; evidence:
+  `Sources/PlaidBar/Views/MainPopover.swift` UI copy update.
 
 ## Backlog Source
 
