@@ -155,6 +155,10 @@ remain unmarked.
 - 2026-06-07 [T002]: expanded the pull request template with task IDs,
   local gates, GitHub checks, privacy impact, and merge safety sections;
   evidence: `.github/pull_request_template.md` checklist update.
+- 2026-06-07 [T007]: replaced decorative balance-mix gradients with semantic
+  flat account-type color, a lighter panel fill, and a separator in the main
+  dashboard surface; evidence: `Sources/PlaidBar/Views/MainPopover.swift` UI
+  update.
 
 ## Backlog Source
 

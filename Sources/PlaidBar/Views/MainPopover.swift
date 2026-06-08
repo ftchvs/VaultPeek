@@ -433,6 +433,8 @@ private struct MetricCard: View {
 private struct BalanceCompositionStrip: View {
     @Environment(AppState.self) private var appState
 
+    private let segmentSpacing: CGFloat = 2
+
     private var segments: [BalanceCompositionSegment] {
         [
             BalanceCompositionSegment(
@@ -490,10 +492,10 @@ private struct BalanceCompositionStrip: View {
             }
 
             GeometryReader { proxy in
-                HStack(spacing: 3) {
+                HStack(spacing: segmentSpacing) {
                     ForEach(activeSegments) { segment in
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(segment.tint.gradient)
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(segment.fillColor)
                             .frame(width: segmentWidth(segment, totalWidth: proxy.size.width))
                             .accessibilityLabel(
                                 "\(segment.title), \(Formatters.currency(segment.value, format: .compact))"
@@ -501,7 +503,10 @@ private struct BalanceCompositionStrip: View {
                     }
                 }
             }
-            .frame(height: 8)
+            .frame(height: 7)
+
+            Divider()
+                .opacity(0.55)
 
             HStack(spacing: 8) {
                 ForEach(segments) { segment in
@@ -510,13 +515,16 @@ private struct BalanceCompositionStrip: View {
             }
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 9)
-        .nativePanelSurface()
+        .padding(.vertical, 8)
+        .nativePanelSurface(
+            fill: AnyShapeStyle(Color.primary.opacity(SurfaceTokens.panelFillOpacity)),
+            stroke: Color.primary.opacity(0.065)
+        )
         .accessibilityElement(children: .contain)
     }
 
     private func segmentWidth(_ segment: BalanceCompositionSegment, totalWidth: CGFloat) -> CGFloat {
-        let gaps = CGFloat(max(activeSegments.count - 1, 0)) * 3
+        let gaps = CGFloat(max(activeSegments.count - 1, 0)) * segmentSpacing
         let availableWidth = max(totalWidth - gaps, 0)
         return max(availableWidth * CGFloat(segment.value / total), 6)
     }
@@ -529,6 +537,10 @@ private struct BalanceCompositionSegment: Identifiable {
 
     var id: String {
         title
+    }
+
+    var fillColor: Color {
+        value > 0 ? tint.opacity(0.82) : Color.primary.opacity(0.08)
     }
 }
 
