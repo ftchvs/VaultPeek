@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-08 05:39 UTC] — Feature
+
+answer key overview status at first glance (#200)
+
+`a67f46e`
+
+---
+
+
 ## [2026-06-08 04:19 UTC] — Documentation
 
 refresh minimalist screenshot evidence (#199)
