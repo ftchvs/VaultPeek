@@ -3253,9 +3253,10 @@ struct PlaidBarCoreTests {
         let actions = DashboardDrillInAction.accountDrillInActions
 
         #expect(actions == [.reconnect, .remove, .settings])
-        #expect(DashboardDrillInAction.remove.title == "Remove Account")
+        #expect(DashboardDrillInAction.remove.title == "Remove Institution")
         #expect(DashboardDrillInAction.remove.iconName == "trash")
         #expect(DashboardDrillInAction.remove.accessibilityHint.localizedCaseInsensitiveContains("requires confirmation"))
+        #expect(DashboardDrillInAction.remove.accessibilityHint.localizedCaseInsensitiveContains("disconnecting this Plaid institution"))
         #expect(DashboardDrillInAction.remove.accessibilityHint.localizedCaseInsensitiveContains("local PlaidBar data"))
         #expect(DashboardDrillInAction.settings.accessibilityHint.localizedCaseInsensitiveContains("settings"))
     }

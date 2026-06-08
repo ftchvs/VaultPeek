@@ -2069,7 +2069,7 @@ private struct SelectedAccountPanel: View {
             }
 
             AccountDrillInActionBar(
-                actions: DashboardDrillInAction.accountDrillInActions,
+                actions: drillInActions,
                 onAction: performDrillInAction
             )
 
@@ -2095,16 +2095,16 @@ private struct SelectedAccountPanel: View {
             stroke: panelStroke
         )
         .confirmationDialog(
-            "Remove \(AccountPresentation.displayName(for: account))?",
+            "Remove \(institutionRemovalName)?",
             isPresented: $isConfirmingAccountRemoval,
             titleVisibility: .visible
         ) {
-            Button("Remove Account", role: .destructive) {
+            Button("Remove Institution", role: .destructive) {
                 Task { await appState.removeAccount(itemId: account.itemId) }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This removes the institution and cached local account data from PlaidBar. It does not close the bank account.")
+            Text("This disconnects the linked Plaid institution and removes \(institutionAccountCountText) plus cached local transactions from PlaidBar. It does not close any bank account.")
         }
     }
 
@@ -2134,6 +2134,25 @@ private struct SelectedAccountPanel: View {
 
     private var itemConnectionStatus: ItemStatus? {
         appState.itemStatuses.first { $0.id == account.itemId }
+    }
+
+    private var institutionRemovalName: String {
+        itemConnectionStatus?.institutionName ?? AccountPresentation.displayName(for: account)
+    }
+
+    private var institutionAccountCount: Int {
+        appState.accounts.count { $0.itemId == account.itemId }
+    }
+
+    private var institutionAccountCountText: String {
+        let count = max(institutionAccountCount, 1)
+        return count == 1 ? "1 linked account" : "\(count) linked accounts"
+    }
+
+    private var drillInActions: [DashboardDrillInAction] {
+        DashboardDrillInAction.accountDrillInActions.filter { action in
+            action != .remove || !appState.usesDemoConnectionPresentation
+        }
     }
 
     private var connectionPresentation: AccountConnectionPresentation {

@@ -74,7 +74,7 @@ public enum DashboardDrillInAction: String, CaseIterable, Sendable, Equatable {
         case .reconnect:
             return "Reconnect"
         case .remove:
-            return "Remove Account"
+            return "Remove Institution"
         case .settings:
             return "Settings"
         }
@@ -96,7 +96,7 @@ public enum DashboardDrillInAction: String, CaseIterable, Sendable, Equatable {
         case .reconnect:
             return "Opens Plaid Link update mode for this institution."
         case .remove:
-            return "Requires confirmation before removing this institution from local PlaidBar data."
+            return "Requires confirmation before disconnecting this Plaid institution and removing its local PlaidBar data."
         case .settings:
             return "Opens PlaidBar settings and local data controls."
         }
