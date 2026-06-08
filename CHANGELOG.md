@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-08 08:00 UTC] — Documentation
+
+audit account row density (#209)
+
+`a44759f`
+
+---
+
+
 ## [2026-06-08 07:43 UTC] — Documentation
 
 add cross-agent collaboration channels
