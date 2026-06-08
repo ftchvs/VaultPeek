@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-08 06:02 UTC] — Feature
+
+group dashboard overview flow (#202)
+
+`7010bf6`
+
+---
+
+
 ## [2026-06-08 05:39 UTC] — Feature
 
 answer key overview status at first glance (#200)
