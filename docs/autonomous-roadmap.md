@@ -159,6 +159,10 @@ remain unmarked.
   flat account-type color, a lighter panel fill, and a separator in the main
   dashboard surface; evidence: `Sources/PlaidBar/Views/MainPopover.swift` UI
   update.
+- 2026-06-07 [T003]: added an explicit reviewer checklist for local-first
+  boundaries, secret exposure, readiness metadata, optional local AI behavior,
+  and synthetic-only public artifacts; evidence:
+  `.github/pull_request_template.md` checklist update.
 
 ## Backlog Source
 

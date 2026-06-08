@@ -41,7 +41,7 @@ and `docs/autonomous-roadmap.md`.
   autonomous roadmap ledger.
 - [x] T002: Add a PR-body template section for task IDs, local gates, GitHub
   checks, privacy impact, and merge safety.
-- [ ] T003: Add a reviewer checklist for local-first boundaries and secret
+- [x] T003: Add a reviewer checklist for local-first boundaries and secret
   exposure risks.
 - [ ] T004: Add a rule that broad refactors must be split when they touch more
   than one module boundary.

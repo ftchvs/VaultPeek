@@ -33,6 +33,14 @@
 - [ ] This change preserves the local-first boundary: no hosted backend, telemetry, cloud sync, multi-user account system, or cloud AI over private transaction data.
 - [ ] User-facing copy remains honest about local storage, Plaid credentials, production approval, and unsupported security properties.
 
+## Reviewer local-first and secret-exposure checklist
+
+- [ ] The diff does not introduce, log, display, persist, or document real Plaid secrets, access tokens, public tokens, item IDs, account IDs, transaction exports, raw balances, or real financial screenshots.
+- [ ] New status, diagnostics, error, analytics-like, AI, or logging surfaces expose only readiness metadata or synthetic/demo data, never private financial records or identifiers.
+- [ ] Any server, storage, setup, or diagnostics change keeps PlaidBar local-first: localhost-only companion server, local data directory, no hosted backend, telemetry, tracking, cloud sync, multi-user account system, or cloud AI over transaction data.
+- [ ] Any optional AI behavior is local-only, off by default, explainable, reversible, and non-blocking when no local model runtime is configured.
+- [ ] Any documentation, examples, fixtures, tests, and screenshots use sandbox or synthetic data and do not imply production readiness, notarization, distribution, or security properties that have not been verified.
+
 ## UI and accessibility checks
 
 - [ ] I checked keyboard access and visible focus for UI changes, or this PR has no UI changes.
