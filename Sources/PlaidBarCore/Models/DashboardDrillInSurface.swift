@@ -137,3 +137,56 @@ public struct DashboardAccountDrillInPath: Sendable, Equatable {
         )
     }
 }
+
+/// Display-safe summary values for the selected account drill-in.
+///
+/// This keeps the popover's account, activity, credit/limit, freshness, and
+/// sync-state facts in one testable presentation model without exposing raw
+/// account IDs, item IDs, tokens, or Plaid payloads.
+public struct DashboardAccountDrillInSummary: Sendable, Equatable {
+    public let displayName: String
+    public let subtitle: String
+    public let availableTitle: String
+    public let availableBalance: Double
+    public let currentTitle: String
+    public let currentBalance: Double
+    public let utilizationPercent: Double?
+    public let limit: Double?
+    public let transactionCount: Int
+    public let pendingTransactionCount: Int
+    public let latestTransactionDate: String?
+    public let syncState: ItemConnectionStatus?
+    public let freshnessLabel: String
+
+    public static func presentation(
+        for account: AccountDTO,
+        transactions: [TransactionDTO],
+        itemStatus: ItemStatus?,
+        fallbackFreshnessLabel: String
+    ) -> Self {
+        let accountTransactions = transactions.filter { $0.accountId == account.id }
+        let latestTransactionDate = accountTransactions
+            .compactMap { transaction -> (raw: String, parsed: Date)? in
+                guard let parsed = Formatters.parseTransactionDate(transaction.date) else { return nil }
+                return (transaction.date, parsed)
+            }
+            .max { $0.parsed < $1.parsed }?
+            .raw
+
+        return Self(
+            displayName: AccountPresentation.displayName(for: account),
+            subtitle: AccountPresentation.subtitle(for: account),
+            availableTitle: AccountPresentation.dashboardAvailableTitle(for: account),
+            availableBalance: AccountPresentation.availableBalance(for: account),
+            currentTitle: AccountPresentation.dashboardCurrentTitle(for: account),
+            currentBalance: AccountPresentation.displayBalance(for: account),
+            utilizationPercent: account.balances.utilizationPercent,
+            limit: account.balances.limit,
+            transactionCount: accountTransactions.count,
+            pendingTransactionCount: accountTransactions.count(where: \.pending),
+            latestTransactionDate: latestTransactionDate,
+            syncState: itemStatus?.status,
+            freshnessLabel: itemStatus?.lastSync.map(Formatters.relativeDate) ?? fallbackFreshnessLabel
+        )
+    }
+}
