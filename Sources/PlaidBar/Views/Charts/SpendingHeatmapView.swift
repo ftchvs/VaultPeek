@@ -55,6 +55,10 @@ struct SpendingHeatmapView: View {
         return days.first { $0.date == selectedDate }
     }
 
+    private var strongestSignals: [SpendingHeatmapSignal] {
+        SpendingHeatmap.strongestSignals(from: days, mode: mode)
+    }
+
     private var weekColumns: [[SpendingHeatmapDay?]] {
         guard let firstDay = days.first,
               let firstDate = Formatters.parseTransactionDate(firstDay.date) else {
@@ -216,7 +220,9 @@ struct SpendingHeatmapView: View {
 
     private var accessibilitySummary: String {
         let activeDays = days.filter { $0.transactionCount > 0 }.count
-        return "\(mode == .spending ? "Spending" : "Net cashflow") heatmap with \(activeDays) active days. Peak day \(Formatters.currency(peakValue, format: .full)). Total \(totalLabel)."
+        let signalText = strongestSignals.map(\.accessibilitySummary).joined(separator: " ")
+        let signalSuffix = signalText.isEmpty ? "" : " \(signalText)"
+        return "\(mode == .spending ? "Spending" : "Net cashflow") heatmap with \(activeDays) active days. Peak day \(Formatters.currency(peakValue, format: .full)). Total \(totalLabel).\(signalSuffix)"
     }
 
     private var legendAccessibilityLabel: String {

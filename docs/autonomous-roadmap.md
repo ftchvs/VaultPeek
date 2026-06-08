@@ -208,6 +208,9 @@ remain unmarked.
   distinguishable through shared mode labels, descriptions, and a focused core
   test; evidence: `SpendingHeatmapMode` labels and
   `heatmapModeLabelsDistinguishSemantics`.
+- 2026-06-07 [T017]: added strongest recent heatmap signal summaries for
+  VoiceOver so high-spend, income, and outflow days are exposed without cell-by-cell
+  scanning; evidence: `SpendingHeatmapSignal` and core tests.
 
 ## Backlog Source
 
