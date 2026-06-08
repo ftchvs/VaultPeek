@@ -55,7 +55,7 @@ and `docs/autonomous-roadmap.md`.
 
 ### PR-002: Minimalist Modern Design Audit
 
-- [ ] T006: Inventory popover surfaces that still look tab-heavy or card-heavy.
+- [x] T006: Inventory popover surfaces that still look tab-heavy or card-heavy.
 - [x] T007: Replace decorative visual treatment with semantic spacing,
   separators, and status color in one surface.
 - [x] T008: Normalize compact row spacing against the existing design tokens.

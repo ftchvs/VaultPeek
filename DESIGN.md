@@ -317,6 +317,23 @@ Pattern for all empty states:
 | Settings | 4-tab TabView: General, Accounts, Notifications, About (480×380) | TabView |
 | Onboarding | Demo/Sandbox/Production choice with local-storage disclosure before Plaid Link | Mode choice, Back, Check Connection |
 
+### Popover Surface Inventory
+
+Inventory for T006: surfaces that still risk feeling tab-heavy or card-heavy.
+Keep this inventory about visual structure only. Do not record real balances,
+account masks, institution names, transaction names, item IDs, tokens, or local
+absolute paths when adding screenshot or review evidence.
+
+| Surface | Code reference | Current pattern | Risk | Recommended follow-up |
+|---------|----------------|-----------------|------|-----------------------|
+| Dashboard summary stack | `DashboardSummaryCards`, `MetricCard`, and `BalanceCompositionStrip` in `Sources/PlaidBar/Views/MainPopover.swift` | Several rounded panels appear after the heatmap and before account rows | Reads like stacked dashboard cards instead of one compact menu-bar instrument | Flatten at least one summary group into separator-backed inline metrics before adding more dashboard sections |
+| Selected account detail | `SelectedAccountPanel`, `AccountSignalPill`, recovery detail, and recent activity in `Sources/PlaidBar/Views/MainPopover.swift` | Inline drill-in uses an outer panel plus nested inset pills and a recovery panel | Clearest nested-card pattern in the main popover when an account is selected | Keep the inline drill-in, but reduce nested panel treatment to status color, separators, and compact rows |
+| Local insights | `LocalInsightsCard` and `InsightMetricPill` in `Sources/PlaidBar/Views/MainPopover.swift` | Optional local-only AI/status content is presented as a card with nested metric pills | Can feel like product/marketing chrome if it competes with financial rows | Prefer a compact disclosure or status row unless local insights become the selected detail focus |
+| Status and readiness | `DashboardStatusReadinessPanel` and `DashboardEmptyAccountState` in `Sources/PlaidBar/Views/MainPopover.swift` | Recovery and empty states use prominent rounded panels | Appropriate when degraded, but card-heavy if shown alongside several other panels | Keep panels exceptional for action-needed states; avoid duplicating status panels in normal healthy dashboard flow |
+| Legacy/detail surfaces | `AccountsView`, `TransactionsView`, `SpendingView`, `CreditView`, and `StatusView` | Older detail views include segmented controls, forms, grids, and diagnostic tiles | Tab-heavy if promoted back to first-level popover navigation | Treat as drill-ins or reference/screenshot surfaces; keep the main popover dashboard-first |
+| Settings | `SettingsView` | 4-tab macOS settings control plane | Tab-heavy by design, but outside the primary popover dashboard | Leave as settings unless a future settings-specific audit scopes a flatter layout |
+| Onboarding/setup | `SetupView` | Demo/Sandbox/Production choices, preflight rows, and local-storage disclosure use multiple callout blocks | First-run flow can feel card-heavy and marketing-like if choices duplicate each other | Keep boundary explanations, but consolidate duplicate choice surfaces before adding more setup panels |
+
 ## Extending the Design System
 
 ### Adding a New Component
