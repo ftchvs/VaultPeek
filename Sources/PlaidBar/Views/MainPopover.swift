@@ -1928,8 +1928,11 @@ private struct DashboardAccountRow: View {
 
 private struct SelectedAccountPanel: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.openSettings) private var openSettings
     let account: AccountDTO
     let isStatusFilter: Bool
+    @State private var isConfirmingAccountRemoval = false
+    @State private var settingsCloseObserver: NSObjectProtocol?
 
     private var transactions: [TransactionDTO] {
         Array(accountTransactions.prefix(5))
@@ -2066,6 +2069,11 @@ private struct SelectedAccountPanel: View {
                 }
             }
 
+            AccountDrillInActionBar(
+                actions: drillInActions,
+                onAction: performDrillInAction
+            )
+
             VStack(alignment: .leading, spacing: Spacing.rowVertical) {
                 Text("Recent Activity")
                     .sectionTitle()
@@ -2087,6 +2095,18 @@ private struct SelectedAccountPanel: View {
             fill: AnyShapeStyle(SurfaceTokens.panelFill(emphasisTint: shouldEmphasizeConnection ? connectionTint : nil)),
             stroke: panelStroke
         )
+        .confirmationDialog(
+            "Remove \(institutionRemovalName)?",
+            isPresented: $isConfirmingAccountRemoval,
+            titleVisibility: .visible
+        ) {
+            Button("Remove Institution", role: .destructive) {
+                Task { await appState.removeAccount(itemId: account.itemId) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This disconnects the linked Plaid institution and removes \(institutionAccountCountText) plus cached local transactions from PlaidBar. It does not close any bank account.")
+        }
     }
 
     private var availableText: String {
@@ -2115,6 +2135,25 @@ private struct SelectedAccountPanel: View {
 
     private var itemConnectionStatus: ItemStatus? {
         appState.itemStatuses.first { $0.id == account.itemId }
+    }
+
+    private var institutionRemovalName: String {
+        itemConnectionStatus?.institutionName ?? AccountPresentation.displayName(for: account)
+    }
+
+    private var institutionAccountCount: Int {
+        appState.accounts.count { $0.itemId == account.itemId }
+    }
+
+    private var institutionAccountCountText: String {
+        let count = max(institutionAccountCount, 1)
+        return count == 1 ? "1 linked account" : "\(count) linked accounts"
+    }
+
+    private var drillInActions: [DashboardDrillInAction] {
+        DashboardDrillInAction.accountDrillInActions(
+            isDemoMode: appState.isDemoMode
+        )
     }
 
     private var connectionPresentation: AccountConnectionPresentation {
@@ -2193,6 +2232,51 @@ private struct SelectedAccountPanel: View {
         }
     }
 
+    private func performDrillInAction(_ action: DashboardDrillInAction) {
+        switch action {
+        case .reconnect:
+            Task { await appState.reconnectItem(itemId: account.itemId) }
+        case .remove:
+            isConfirmingAccountRemoval = true
+        case .settings:
+            openSettingsWindow()
+        }
+    }
+
+    private func openSettingsWindow() {
+        openSettings()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            NSApp.setActivationPolicy(.regular)
+            NSApp.activate(ignoringOtherApps: true)
+            if let settingsWindow = NSApp.keyWindow ?? NSApp.windows.first(where: {
+                $0.canBecomeKey && $0.isVisible && $0.level == .normal
+            }) {
+                settingsWindow.orderFrontRegardless()
+                if let existing = settingsCloseObserver {
+                    NotificationCenter.default.removeObserver(existing)
+                }
+                settingsCloseObserver = NotificationCenter.default.addObserver(
+                    forName: NSWindow.willCloseNotification,
+                    object: settingsWindow,
+                    queue: .main
+                ) { _ in
+                    Task { @MainActor in
+                        restoreAccessoryActivationPolicy()
+                    }
+                }
+            }
+        }
+    }
+
+    @MainActor
+    private func restoreAccessoryActivationPolicy() {
+        NSApp.setActivationPolicy(.accessory)
+        if let observer = settingsCloseObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        settingsCloseObserver = nil
+    }
+
     private var panelStroke: Color {
         shouldEmphasizeConnection ? connectionTint.opacity(0.18) : Color.primary.opacity(0.07)
     }
@@ -2208,6 +2292,29 @@ private struct SelectedAccountPanel: View {
         case .demo, .offline, .healthy, .unknown:
             return false
         }
+    }
+}
+
+private struct AccountDrillInActionBar: View {
+    let actions: [DashboardDrillInAction]
+    let onAction: (DashboardDrillInAction) -> Void
+
+    var body: some View {
+        HStack(spacing: Spacing.compactRowContentSpacing) {
+            ForEach(actions, id: \.self) { action in
+                Button {
+                    onAction(action)
+                } label: {
+                    Label(action.title, systemImage: action.iconName)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .tint(action == .remove ? SemanticColors.negative : nil)
+                .accessibilityHint(action.accessibilityHint)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Selected account actions")
     }
 }
 
