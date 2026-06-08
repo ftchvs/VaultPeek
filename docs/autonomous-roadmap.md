@@ -173,6 +173,10 @@ remain unmarked.
   duplicate, completed-but-unchecked, and product-boundary-mismatched backlog
   tasks; evidence: `docs/autonomous-loop-backlog.md` and
   `commands/plaidbar-prod-loop.md` updates.
+- 2026-06-07 [T008]: normalized dashboard account-row and selected-detail
+  spacing through compact row design tokens; evidence:
+  `Sources/PlaidBar/Theme/DesignTokens.swift` and
+  `Sources/PlaidBar/Views/MainPopover.swift` updates.
 
 ## Backlog Source
 

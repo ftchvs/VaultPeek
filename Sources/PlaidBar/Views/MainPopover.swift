@@ -1365,8 +1365,8 @@ private struct AccountsSection: View {
                     .sectionTitle()
                     .foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 2)
-            .padding(.bottom, 5)
+            .padding(.horizontal, Spacing.compactRowTextSpacing)
+            .padding(.bottom, Spacing.xs)
 
             if accounts.isEmpty {
                 DashboardEmptyAccountState(filter: filter, onAddAccount: onAddAccount)
@@ -1415,8 +1415,8 @@ private struct AccountRowWithDrilldown: View {
             if isSelected {
                 SelectedAccountPanel(account: account, isStatusFilter: isStatusFilter)
                     .environment(appState)
-                    .padding(.top, 6)
-                    .padding(.bottom, 8)
+                    .padding(.top, Spacing.compactRowVerticalPadding)
+                    .padding(.bottom, Spacing.compactRowContentSpacing)
             }
         }
     }
@@ -1599,7 +1599,7 @@ private struct DashboardAccountRow: View {
     let isSelected: Bool
 
     var body: some View {
-        HStack(spacing: 9) {
+        HStack(spacing: Spacing.compactRowContentSpacing) {
             Image(systemName: AccountPresentation.iconName(for: account))
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(accountTint)
@@ -1615,7 +1615,7 @@ private struct DashboardAccountRow: View {
                         }
                 }
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: Spacing.compactRowTextSpacing) {
                 Text(account.name)
                     .font(.callout.weight(.semibold))
                     .lineLimit(1)
@@ -1624,9 +1624,9 @@ private struct DashboardAccountRow: View {
                     .lineLimit(1)
             }
 
-            Spacer(minLength: 8)
+            Spacer(minLength: Spacing.compactRowContentSpacing)
 
-            VStack(alignment: .trailing, spacing: 4) {
+            VStack(alignment: .trailing, spacing: Spacing.xs) {
                 Text(amountText)
                     .font(.callout.weight(.bold))
                     .monospacedDigit()
@@ -1655,8 +1655,8 @@ private struct DashboardAccountRow: View {
                 .font(.caption.weight(.bold))
                 .foregroundStyle(.tertiary)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.horizontal, Spacing.compactRowHorizontalPadding)
+        .padding(.vertical, Spacing.compactRowVerticalPadding)
         .background(isSelected ? SemanticColors.brand.opacity(SurfaceTokens.selectedFillOpacity) : Color.primary.opacity(0.012))
         .overlay(alignment: .leading) {
             if isSelected {
@@ -1771,9 +1771,9 @@ private struct SelectedAccountPanel: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Spacing.compactRowContentSpacing) {
             HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: Spacing.compactRowTextSpacing) {
                     Text("Details")
                         .sectionTitle()
                         .foregroundStyle(.secondary)
@@ -1794,7 +1794,7 @@ private struct SelectedAccountPanel: View {
                 )
             }
 
-            HStack(spacing: 8) {
+            HStack(spacing: Spacing.compactRowContentSpacing) {
                 DetailValue(title: availableTitle, value: availableText, tint: .primary)
                 DetailValue(title: currentTitle, value: currentText, tint: currentTint)
 
@@ -1817,7 +1817,7 @@ private struct SelectedAccountPanel: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            HStack(spacing: 7) {
+            HStack(spacing: Spacing.compactRowContentSpacing) {
                 AccountSignalPill(
                     title: "Pending",
                     value: "\(pendingTransactions.count)",
@@ -1845,7 +1845,7 @@ private struct SelectedAccountPanel: View {
             }
 
             if isStatusFilter, let recoveryDetailLabel = connectionPresentation.recoveryDetailLabel {
-                HStack(alignment: .top, spacing: 8) {
+                HStack(alignment: .top, spacing: Spacing.compactRowContentSpacing) {
                     Image(systemName: connectionIcon)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(connectionTint)
@@ -1854,8 +1854,8 @@ private struct SelectedAccountPanel: View {
                         .detailText()
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
+                .padding(.horizontal, Spacing.compactRowHorizontalPadding)
+                .padding(.vertical, Spacing.compactRowVerticalPadding)
                 .nativePanelSurface(
                     cornerRadius: SurfaceTokens.panelCornerRadius,
                     fill: AnyShapeStyle(recoveryFill),
@@ -1866,7 +1866,7 @@ private struct SelectedAccountPanel: View {
             }
 
             if shouldShowRecoveryActions {
-                HStack(spacing: 8) {
+                HStack(spacing: Spacing.compactRowContentSpacing) {
                     Button {
                         performConnectionRecoveryAction()
                     } label: {
@@ -1877,7 +1877,7 @@ private struct SelectedAccountPanel: View {
                 }
             }
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: Spacing.rowVertical) {
                 Text("Recent Activity")
                     .sectionTitle()
                     .foregroundStyle(.secondary)
@@ -1893,7 +1893,7 @@ private struct SelectedAccountPanel: View {
                 }
             }
         }
-        .padding(12)
+        .padding(Spacing.md)
         .nativePanelSurface(
             fill: AnyShapeStyle(SurfaceTokens.panelFill(emphasisTint: shouldEmphasizeConnection ? connectionTint : nil)),
             stroke: panelStroke
@@ -2049,8 +2049,8 @@ private struct AccountConnectionBadge: View {
             .font(.caption.weight(.semibold))
             .lineLimit(1)
             .foregroundStyle(tint)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.horizontal, Spacing.compactRowHorizontalPadding)
+            .padding(.vertical, Spacing.compactRowVerticalPadding)
             .background(tint.opacity(0.12), in: Capsule())
     }
 }
@@ -2062,13 +2062,13 @@ private struct AccountSignalPill: View {
     let tint: Color
 
     var body: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: Spacing.xs) {
             Image(systemName: icon)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(tint)
                 .frame(width: 12)
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: Spacing.compactRowTextSpacing) {
                 Text(title)
                     .microText()
                     .foregroundStyle(.secondary)
@@ -2079,8 +2079,8 @@ private struct AccountSignalPill: View {
                     .minimumScaleFactor(0.82)
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
+        .padding(.horizontal, Spacing.compactRowHorizontalPadding)
+        .padding(.vertical, Spacing.compactRowVerticalPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .nativeInsetSurface(cornerRadius: SurfaceTokens.panelCornerRadius)
         .accessibilityElement(children: .ignore)
@@ -2094,7 +2094,7 @@ private struct DetailValue: View {
     let tint: Color
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
             Text(title)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
@@ -2110,12 +2110,12 @@ private struct TransactionMiniRow: View {
     let transaction: TransactionDTO
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Spacing.compactRowContentSpacing) {
             Circle()
                 .fill(transaction.isIncome ? SemanticColors.positive : Color.secondary.opacity(0.55))
                 .frame(width: 8, height: 8)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Spacing.compactRowTextSpacing) {
                 Text(transaction.displayName)
                     .font(.callout.weight(.semibold))
                     .lineLimit(1)
@@ -2150,14 +2150,14 @@ private struct AccountActivityEmptyStateView: View {
     let presentation: AccountActivityEmptyState
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .top, spacing: Spacing.compactRowContentSpacing) {
             Image(systemName: presentation.iconName)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(tint)
                 .frame(width: 18, height: 18)
                 .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 5))
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Spacing.compactRowTextSpacing) {
                 Text(presentation.title)
                     .font(.caption.weight(.semibold))
                 Text(presentation.detail)
@@ -2165,10 +2165,10 @@ private struct AccountActivityEmptyStateView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            Spacer(minLength: 8)
+            Spacer(minLength: Spacing.compactRowContentSpacing)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 8)
+        .padding(.horizontal, Spacing.compactRowHorizontalPadding)
+        .padding(.vertical, Spacing.compactRowContentSpacing)
         .nativePanelSurface(
             cornerRadius: SurfaceTokens.panelCornerRadius,
             fill: AnyShapeStyle(tint.opacity(0.055)),

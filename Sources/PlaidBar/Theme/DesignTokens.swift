@@ -84,6 +84,10 @@ enum Spacing {
     static let lg: CGFloat = 16
     static let xl: CGFloat = 24
     static let rowVertical: CGFloat = 6
+    static let compactRowHorizontalPadding: CGFloat = sm
+    static let compactRowVerticalPadding: CGFloat = xs
+    static let compactRowContentSpacing: CGFloat = sm
+    static let compactRowTextSpacing: CGFloat = xxs
 }
 
 // MARK: - Native Surfaces
