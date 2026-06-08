@@ -264,6 +264,10 @@ remain unmarked.
   missing-credentials, no-linked-bank, no-account-data, healthy-status, and
   filtered-zero states; evidence: `DashboardAccountEmptyState`, `MainPopover`,
   and core tests.
+- 2026-06-08 [T032]: verified each dashboard account empty panel state has one
+  explicit recovery action, including Check Server, Check Credentials, Check
+  Status, Reconnect Item, Sync Balances, Refresh, and Refresh Data; evidence:
+  `DashboardAccountEmptyState` action titles and core tests.
 
 ## Backlog Source
 
