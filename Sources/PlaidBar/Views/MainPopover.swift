@@ -352,7 +352,7 @@ private struct DashboardSummaryCards: View {
                 MetricCard(
                     title: "7D Spend",
                     value: Formatters.currency(appState.recentSpend, format: .compact),
-                    detail: appState.runwayBasisText,
+                    detail: recentSpendDetail,
                     tint: recentSpendTint,
                     emphasizesTint: appState.recentSpend > 0
                 )
@@ -382,22 +382,29 @@ private struct DashboardSummaryCards: View {
         if let utilization = appState.totalCreditUtilization {
             return Formatters.percent(utilization, decimals: 0)
         }
-        return Formatters.currency(appState.totalDebt, format: .compact)
+        guard !appState.creditAccounts.isEmpty else { return "No credit" }
+        return Formatters.currency(MenuBarSummary.totalDebt(from: appState.creditAccounts), format: .compact)
     }
 
     private var creditDetail: String {
-        let debtCount = appState.debtAccounts.count
-        guard debtCount > 0 else { return "No credit linked" }
+        let creditCount = appState.creditAccounts.count
+        guard creditCount > 0 else { return "No credit linked" }
 
         if appState.totalCreditUtilization != nil {
-            return "\(Formatters.currency(appState.totalDebt, format: .compact)) owed"
+            return "\(Formatters.currency(MenuBarSummary.totalDebt(from: appState.creditAccounts), format: .compact)) owed"
         }
-        return "\(debtCount) debt account\(debtCount == 1 ? "" : "s")"
+        return "\(creditCount) credit account\(creditCount == 1 ? "" : "s")"
     }
 
     private var shouldEmphasizeCredit: Bool {
-        guard let utilization = appState.totalCreditUtilization else { return appState.totalDebt > 0 }
+        guard let utilization = appState.totalCreditUtilization else {
+            return MenuBarSummary.totalDebt(from: appState.creditAccounts) > 0
+        }
         return utilization >= appState.creditUtilizationThreshold
+    }
+
+    private var recentSpendDetail: String {
+        appState.recentSpend > 0 ? "Last 7 days" : "No 7D spend"
     }
 
     private var recentSpendTint: Color {
