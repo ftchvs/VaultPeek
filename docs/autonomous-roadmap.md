@@ -15,6 +15,9 @@ with its local-first menu bar finance vision. It complements `GOAL.md`,
 - Do not publish releases or post externally outside normal GitHub PR/merge
   workflow without Felipe's explicit approval.
 - Keep each loop to one reviewable production-readiness slice.
+- Split broad refactors when they cross more than one module boundary; one PR
+  should be reviewable as a single boundary move, presenter extraction, UI
+  surface change, server/API change, storage change, or docs/governance change.
 - Prefer fixes that make the 1.0 promise more true: local-first trust,
   reliable onboarding, clear recovery, and dense native finance UX.
 - Preserve the privacy boundary: no PlaidBar-hosted backend, telemetry, cloud
@@ -163,6 +166,9 @@ remain unmarked.
   boundaries, secret exposure, readiness metadata, optional local AI behavior,
   and synthetic-only public artifacts; evidence:
   `.github/pull_request_template.md` checklist update.
+- 2026-06-07 [T004]: added a module-boundary split rule for broad refactors in
+  the autonomous loop selection rules and operating contract; evidence:
+  `docs/autonomous-loop-backlog.md` and `docs/autonomous-roadmap.md` updates.
 
 ## Backlog Source
 
