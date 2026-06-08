@@ -490,7 +490,8 @@ struct PlaidBarCoreTests {
         #expect(AccountPresentation.dashboardTrailingDetailText(
             for: credit,
             connectionLabel: "2m ago"
-        ) == "45% • $550 avail")
+        ) == "45% • $550 available • due not synced")
+        #expect(AccountPresentation.creditDueMetadataText(for: credit) == "due not synced")
         #expect(AccountPresentation.dashboardAvailableTitle(for: checking) == "Available")
         #expect(AccountPresentation.dashboardAvailableTitle(for: credit) == "Avail Credit")
         #expect(AccountPresentation.dashboardCurrentTitle(for: checking) == "Current")
@@ -507,7 +508,30 @@ struct PlaidBarCoreTests {
             amountText: "$450.00",
             connectionLabel: "2m ago",
             isSelected: true
-        ) == "Rewards, Amex, Credit, Ending in 0005, $450.00 owed, 45% utilization, Warning, 2m ago, selected")
+        ) == "Rewards, Amex, Credit, Ending in 0005, $450.00 owed, 45% utilization, Warning, $550.00 available credit, due not synced, 2m ago, selected")
+    }
+
+    @Test("Account presentation keeps credit metadata readable without due dates")
+    func accountPresentationCreditMetadataWithoutDueDates() {
+        let creditWithoutLimit = AccountDTO(
+            id: "2",
+            itemId: "i",
+            name: "Rewards",
+            type: .credit,
+            mask: "0005",
+            balances: BalanceDTO(available: 125, current: -450),
+            institutionName: "Amex"
+        )
+
+        #expect(AccountPresentation.dashboardTrailingDetailText(
+            for: creditWithoutLimit,
+            connectionLabel: "Synced"
+        ) == "$125 available • due not synced")
+        #expect(AccountPresentation.rowAccessibilityLabel(
+            for: creditWithoutLimit,
+            amountText: "$450.00",
+            connectionLabel: "Synced"
+        ) == "Rewards, Amex, Credit, Ending in 0005, $450.00 owed, $125.00 available credit, due not synced, Synced")
     }
 
     @Test("Account presentation labels credit utilization status")

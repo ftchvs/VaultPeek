@@ -85,13 +85,23 @@ public enum AccountPresentation {
             return connectionLabel
         }
 
-        let availableText = "\(Formatters.currency(availableBalance(for: account), format: format)) avail"
+        let availableText = "\(Formatters.currency(availableBalance(for: account), format: format)) available"
+        let dueText = creditDueMetadataText(for: account)
 
         guard let utilization = account.balances.utilizationPercent else {
-            return availableText
+            return "\(availableText) • \(dueText)"
         }
 
-        return "\(Formatters.percent(utilization, decimals: 0)) • \(availableText)"
+        return "\(Formatters.percent(utilization, decimals: 0)) • \(availableText) • \(dueText)"
+    }
+
+    public static func creditDueMetadataText(for account: AccountDTO) -> String {
+        guard account.type == .credit else { return "" }
+
+        // Plaid's account/balance payload does not include a card statement due
+        // date in PlaidBar's local DTO today. Keep the row honest and readable
+        // instead of implying a budgeting workflow or silently omitting due state.
+        return "due not synced"
     }
 
     public static func dashboardAvailableTitle(for account: AccountDTO) -> String {
@@ -146,6 +156,11 @@ public enum AccountPresentation {
                 for: utilization,
                 threshold: utilizationThreshold
             ))
+        }
+
+        if account.type == .credit {
+            components.append("\(Formatters.currency(availableBalance(for: account))) available credit")
+            components.append(creditDueMetadataText(for: account))
         }
 
         if let connectionLabel {

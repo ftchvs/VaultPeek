@@ -87,7 +87,7 @@ and `docs/autonomous-roadmap.md`.
   other account types.
 - [x] T022: Ensure every row has a primary amount, secondary detail, freshness,
   and status signal.
-- [ ] T023: Make credit utilization, available credit, and due metadata readable
+- [x] T023: Make credit utilization, available credit, and due metadata readable
   without opening a budgeting workflow.
 - [ ] T024: Add a selected/highlighted row state that remains subtle in dark and
   light appearances.

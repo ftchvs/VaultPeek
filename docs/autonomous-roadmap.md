@@ -230,6 +230,10 @@ remain unmarked.
 - 2026-06-08 [T022]: ensured account rows expose a primary amount, secondary
   account detail, freshness text, and connection status signal outside the
   dashboard drill-in; evidence: `Sources/PlaidBar/Views/AccountsView.swift`.
+- 2026-06-08 [T023]: made dashboard credit rows and accessibility summaries
+  include utilization, available credit, and an explicit due-metadata state
+  without adding a budgeting workflow; evidence:
+  `Sources/PlaidBarCore/Utilities/AccountPresentation.swift` and core tests.
 
 ## Backlog Source
 
