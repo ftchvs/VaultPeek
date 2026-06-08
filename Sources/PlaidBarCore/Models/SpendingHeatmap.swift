@@ -106,6 +106,11 @@ public enum SpendingHeatmap {
         }
     }
 
+    public static func cellIntensity(for day: SpendingHeatmapDay, peakValue: Double) -> Double {
+        guard day.transactionCount > 0, peakValue > 0 else { return 0 }
+        return min(max(abs(day.value) / peakValue, 0), 1)
+    }
+
     public static func days(
         from transactions: [TransactionDTO],
         startDate: Date,
