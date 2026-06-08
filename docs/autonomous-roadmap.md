@@ -187,6 +187,9 @@ remain unmarked.
   screenshot script capture PlaidBar windows by window ID instead of stale
   display rectangles; evidence: `Assets/*.png` screenshot refresh and
   `Scripts/screenshots.sh` capture update.
+- 2026-06-07 [T014]: added a first-overview fallback banner for the no demo/no
+  synced data path so setup recovery does not render an empty heatmap as the
+  primary state; evidence: `DashboardOverviewFallbackState` and app tests.
 - 2026-06-07 [T013]: preserved account, activity, credit, and status surfaces
   as selected-row drill-in affordances instead of competing first-level tabs;
   evidence: `DashboardDrillInSurface` and selected-account rail tests.

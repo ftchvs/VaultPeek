@@ -1407,6 +1407,7 @@ private struct StatusMetricPill: View {
 // MARK: - Overview Flow
 
 private struct DashboardOverviewStack: View {
+    @Environment(AppState.self) private var appState
     let transactions: [TransactionDTO]
     let accounts: [AccountDTO]
     let filter: DashboardAccountFilter
@@ -1416,9 +1417,22 @@ private struct DashboardOverviewStack: View {
     let onDeselectAccount: () -> Void
     let onAddAccount: () -> Void
 
+    private var fallbackState: DashboardOverviewFallbackState? {
+        DashboardOverviewFallbackState.evaluate(
+            isSetupComplete: appState.isSetupComplete,
+            isDemoMode: appState.isDemoMode,
+            accountCount: appState.accounts.count,
+            transactionCount: appState.transactions.count
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: LayoutSpacing.stack) {
-            BalanceActivityHeatmap(transactions: transactions)
+            if let fallbackState {
+                DashboardOverviewFallbackBanner(presentation: fallbackState, onAction: onAddAccount)
+            } else {
+                BalanceActivityHeatmap(transactions: transactions)
+            }
 
             VStack(alignment: .leading, spacing: LayoutSpacing.controls) {
                 OverviewFlowCaption(
@@ -1446,6 +1460,45 @@ private struct DashboardOverviewStack: View {
     private enum LayoutSpacing {
         static let stack: CGFloat = 6
         static let controls: CGFloat = 5
+    }
+}
+
+private struct DashboardOverviewFallbackBanner: View {
+    let presentation: DashboardOverviewFallbackState
+    let onAction: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: presentation.iconName)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(SemanticColors.brandSecondary)
+                    .frame(width: 30, height: 30)
+                    .background(SemanticColors.brandSecondary.opacity(0.14), in: RoundedRectangle(cornerRadius: 9))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(presentation.title)
+                        .font(.callout.weight(.semibold))
+                    Text(presentation.detail)
+                        .detailText()
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Button(action: onAction) {
+                Label(presentation.actionTitle, systemImage: presentation.actionIconName)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .nativePanelSurface(
+            fill: AnyShapeStyle(SurfaceTokens.panelFill(emphasisTint: SemanticColors.brandSecondary.opacity(0.18))),
+            stroke: SemanticColors.brandSecondary.opacity(0.22)
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(presentation.title). \(presentation.detail)")
     }
 }
 

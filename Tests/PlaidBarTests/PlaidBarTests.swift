@@ -405,6 +405,39 @@ struct PlaidBarTests {
         #expect(DashboardDrillInSurface.surfaces(for: account) == [.account, .activity, .credit, .status])
     }
 
+    // MARK: - Dashboard Overview Fallback
+
+    @Test("Dashboard overview shows fallback when setup has no demo or synced data")
+    func dashboardOverviewFallbackWithoutDemoData() {
+        let fallback = DashboardOverviewFallbackState.evaluate(
+            isSetupComplete: false,
+            isDemoMode: false,
+            accountCount: 0,
+            transactionCount: 0
+        )
+
+        #expect(fallback?.title == "Overview needs data")
+        #expect(fallback?.actionTitle == "Choose Data Source")
+        #expect(fallback?.detail.contains("Demo data is not loaded yet") == true)
+    }
+
+    @Test("Dashboard overview fallback stays hidden once demo or local data exists")
+    func dashboardOverviewFallbackHiddenWithData() {
+        #expect(DashboardOverviewFallbackState.evaluate(
+            isSetupComplete: false,
+            isDemoMode: true,
+            accountCount: 0,
+            transactionCount: 0
+        ) == nil)
+
+        #expect(DashboardOverviewFallbackState.evaluate(
+            isSetupComplete: true,
+            isDemoMode: false,
+            accountCount: 1,
+            transactionCount: 0
+        ) == nil)
+    }
+
     // MARK: - Notification Trigger Logic
 
     @Test("Large transaction detection")
