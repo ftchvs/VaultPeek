@@ -51,6 +51,10 @@ The screenshot script uses macOS UI automation. Terminal needs:
 If captures fail, open System Settings and confirm permissions for the terminal
 app running the script.
 
+The script captures PlaidBar windows by their macOS window ID after the app is
+opened into each screenshot state. This avoids stale display-rectangle captures
+when the menu-bar popover is positioned outside the active display bounds.
+
 ## Expected Assets
 
 | File | Purpose |

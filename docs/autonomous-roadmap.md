@@ -182,6 +182,11 @@ remain unmarked.
 - 2026-06-07 [T009]: tightened the dashboard heatmap label group while
   preserving the 365-day spending and cashflow meaning; evidence:
   `Sources/PlaidBar/Views/MainPopover.swift` UI copy update.
+- 2026-06-07 [T010]: refreshed the public-safe screenshot evidence for the
+  minimalist dashboard, setup preflight, and Settings surfaces, and made the
+  screenshot script capture PlaidBar windows by window ID instead of stale
+  display rectangles; evidence: `Assets/*.png` screenshot refresh and
+  `Scripts/screenshots.sh` capture update.
 
 ## Backlog Source
 
