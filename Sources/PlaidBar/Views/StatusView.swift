@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import PlaidBarCore
 
 struct StatusView: View {
@@ -337,7 +338,19 @@ struct StatusView: View {
             Task { await appState.reconnectItem(itemId: itemId) }
         case .openSettings:
             openSettings()
+        case .requestNotificationPermission:
+            Task { _ = await appState.requestNotificationPermission() }
+        case .openNotificationSettings:
+            openNotificationSettings()
         }
+    }
+
+    private func openNotificationSettings() {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") else {
+            openSettings()
+            return
+        }
+        NSWorkspace.shared.open(url)
     }
 
     private func primaryActionLabel(

@@ -1,3 +1,4 @@
+import AppKit
 import PlaidBarCore
 import SwiftUI
 
@@ -13,12 +14,12 @@ struct MainPopover: View {
     private enum Layout {
         static let dashboardWidth: CGFloat = 480
         static let setupWidth: CGFloat = 560
-        static let dashboardMinHeight: CGFloat = 480
+        static let dashboardMinHeight: CGFloat = 460
         static let dashboardMaxHeight: CGFloat = 660
         static let contentHorizontalPadding: CGFloat = 12
-        static let contentTopPadding: CGFloat = 10
-        static let contentBottomPadding: CGFloat = 10
-        static let sectionSpacing: CGFloat = 9
+        static let contentTopPadding: CGFloat = 8
+        static let contentBottomPadding: CGFloat = 8
+        static let sectionSpacing: CGFloat = 7
     }
 
     private var selectedFilter: DashboardAccountFilter {
@@ -59,9 +60,6 @@ struct MainPopover: View {
 
                         BalanceActivityHeatmap(transactions: appState.transactions)
 
-                        LocalInsightsCard()
-                            .environment(appState)
-
                         DashboardFilterBar(selection: filterBinding)
 
                         AccountsSection(
@@ -78,6 +76,9 @@ struct MainPopover: View {
                             .environment(appState)
 
                         BalanceCompositionStrip()
+                            .environment(appState)
+
+                        LocalInsightsCard()
                             .environment(appState)
 
                         if shouldShowLowerStatusReadinessPanel {
@@ -186,7 +187,7 @@ private struct DashboardHeader: View {
                     .foregroundStyle(.secondary)
 
                 Text(Formatters.currency(appState.netBalance, format: .full))
-                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .font(.system(size: 27, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .contentTransition(.numericText())
                     .lineLimit(1)
@@ -247,7 +248,7 @@ private struct DashboardStatusStrip: View {
             )
         }
         .padding(.horizontal, 9)
-        .padding(.vertical, 7)
+        .padding(.vertical, 6)
         .nativePanelSurface(
             fill: AnyShapeStyle(.regularMaterial),
             stroke: Color.primary.opacity(0.085)
@@ -669,7 +670,7 @@ private struct BalanceActivityHeatmap: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
                 Text(title)
                     .sectionTitle()
@@ -869,7 +870,7 @@ private struct LocalInsightsCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .center, spacing: 8) {
                 Text("Local Insights")
                     .sectionTitle()
@@ -882,7 +883,7 @@ private struct LocalInsightsCard: View {
 
             Text(primarySummary?.generatedSummary ?? "Local summaries are ready when transaction history is available.")
                 .font(.caption.weight(.semibold))
-                .lineLimit(2)
+                .lineLimit(1)
                 .minimumScaleFactor(0.86)
 
             HStack(spacing: 6) {
@@ -891,7 +892,7 @@ private struct LocalInsightsCard: View {
                 }
             }
 
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: 3) {
                 ForEach(Array(bullets.enumerated()), id: \.offset) { _, bullet in
                     HStack(alignment: .top, spacing: 6) {
                         Circle()
@@ -910,7 +911,7 @@ private struct LocalInsightsCard: View {
                 Image(systemName: "lock.shield.fill")
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(.secondary)
-                Text("Local-only. No cloud model calls. Plaid categories remain the auditable fallback.")
+                Text(footerText)
                     .microText()
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -923,6 +924,14 @@ private struct LocalInsightsCard: View {
         )
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Local insights. \(availability.state.displayName). \(availability.detail)")
+    }
+
+    private var footerText: String {
+        let suggestionCount = primarySummary?.input.categorySuggestions.count ?? 0
+        guard suggestionCount > 0 else {
+            return "Local-only. No cloud model calls. Plaid categories remain the auditable fallback."
+        }
+        return "\(suggestionCount) deterministic category hint\(suggestionCount == 1 ? "" : "s"). Plaid categories remain fallback evidence."
     }
 }
 
@@ -1200,7 +1209,19 @@ private struct DashboardStatusReadinessPanel: View {
             Task { await appState.reconnectItem(itemId: itemId) }
         case .openSettings:
             openSettings()
+        case .requestNotificationPermission:
+            Task { _ = await appState.requestNotificationPermission() }
+        case .openNotificationSettings:
+            openNotificationSettings()
         }
+    }
+
+    private func openNotificationSettings() {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") else {
+            openSettings()
+            return
+        }
+        NSWorkspace.shared.open(url)
     }
 
     private func primaryActionLabel(for action: DashboardStatusReadinessAction) -> String {

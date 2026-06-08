@@ -14,6 +14,9 @@ struct NativePanelSurface: ViewModifier {
         let shape = RoundedRectangle(cornerRadius: cornerRadius)
 
         if useLiquidGlass {
+            // Keep every reference to Liquid Glass APIs inside this compile-time
+            // gate. PlaidBar supports macOS 15, where the fallback fill/material
+            // surface below must remain the active type-checked path.
             #if compiler(>=6.3) && canImport(SwiftUI, _version: 7.0)
             if #available(macOS 26.0, *) {
                 content
