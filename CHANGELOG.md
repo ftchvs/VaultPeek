@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-08 03:38 UTC] — Documentation
+
+inventory popover surface density (#197)
+
+`168a761`
+
+---
+
+
 ## [2026-06-08 03:24 UTC] — Feature
 
 normalize compact account row spacing (#196)
