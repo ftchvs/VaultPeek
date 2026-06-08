@@ -30,6 +30,7 @@
 ## GitHub checks
 
 - [ ] Required GitHub checks are green before merge.
+- [ ] `otto-openclaw-merge-gate` is green before merge.
 - [ ] Skipped checks are expected and not required for this PR.
 - [ ] Any failing, pending, cancelled, missing, or ambiguous required check blocks merge.
 - [ ] Claude review auth/token/session/setup-only failures are documented as non-blocking, or there are no such failures.
