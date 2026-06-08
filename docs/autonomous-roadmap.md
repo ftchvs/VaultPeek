@@ -187,6 +187,10 @@ remain unmarked.
   screenshot script capture PlaidBar windows by window ID instead of stale
   display rectangles; evidence: `Assets/*.png` screenshot refresh and
   `Scripts/screenshots.sh` capture update.
+- 2026-06-07 [T011]: expanded the first popover overview cards so the dashboard
+  answers cash, credit, recent spend, sync health, and action-needed status
+  before deeper account drill-ins; evidence:
+  `Sources/PlaidBar/Views/MainPopover.swift`.
 
 ## Backlog Source
 

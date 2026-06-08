@@ -332,52 +332,108 @@ private struct DashboardSummaryCards: View {
     @Environment(AppState.self) private var appState
 
     var body: some View {
-        HStack(spacing: 8) {
-            MetricCard(
-                title: "Cash",
-                value: Formatters.currency(appState.totalCash, format: .compact),
-                detail: "\(appState.depositoryAccounts.count) cash account\(appState.depositoryAccounts.count == 1 ? "" : "s")",
-                tint: .secondary
-            )
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                MetricCard(
+                    title: "Cash",
+                    value: Formatters.currency(appState.totalCash, format: .compact),
+                    detail: "\(appState.depositoryAccounts.count) cash account\(appState.depositoryAccounts.count == 1 ? "" : "s")",
+                    tint: .secondary
+                )
 
-            MetricCard(
-                title: "Debt",
-                value: Formatters.currency(appState.totalDebt, format: .compact),
-                detail: debtDetail,
-                tint: SemanticColors.creditDebt,
-                emphasizesTint: appState.totalDebt > 0
-            )
+                MetricCard(
+                    title: "Credit",
+                    value: creditValue,
+                    detail: creditDetail,
+                    tint: SemanticColors.creditDebt,
+                    emphasizesTint: shouldEmphasizeCredit
+                )
 
-            MetricCard(
-                title: "Runway",
-                value: appState.runwayText,
-                detail: appState.runwayBasisText,
-                tint: runwayTint,
-                emphasizesTint: shouldEmphasizeRunway
-            )
+                MetricCard(
+                    title: "7D Spend",
+                    value: Formatters.currency(appState.recentSpend, format: .compact),
+                    detail: appState.runwayBasisText,
+                    tint: recentSpendTint,
+                    emphasizesTint: appState.recentSpend > 0
+                )
+            }
+
+            HStack(spacing: 8) {
+                MetricCard(
+                    title: "Sync",
+                    value: appState.statusSyncText,
+                    detail: appState.statusServerText,
+                    tint: syncTint,
+                    emphasizesTint: appState.isSyncStale || !appState.serverConnected
+                )
+
+                MetricCard(
+                    title: "Action",
+                    value: actionValue,
+                    detail: actionDetail,
+                    tint: actionTint,
+                    emphasizesTint: appState.dashboardStatusReadiness.level != .healthy
+                )
+            }
         }
     }
 
-    private var debtDetail: String {
+    private var creditValue: String {
+        if let utilization = appState.totalCreditUtilization {
+            return Formatters.percent(utilization, decimals: 0)
+        }
+        return Formatters.currency(appState.totalDebt, format: .compact)
+    }
+
+    private var creditDetail: String {
         let debtCount = appState.debtAccounts.count
-        guard debtCount > 0 else { return "No debt linked" }
+        guard debtCount > 0 else { return "No credit linked" }
 
-        guard let utilization = appState.totalCreditUtilization else {
-            return "\(debtCount) debt account\(debtCount == 1 ? "" : "s")"
+        if appState.totalCreditUtilization != nil {
+            return "\(Formatters.currency(appState.totalDebt, format: .compact)) owed"
         }
-        return "\(Formatters.percent(utilization, decimals: 0)) credit util"
+        return "\(debtCount) debt account\(debtCount == 1 ? "" : "s")"
     }
 
-    private var runwayTint: Color {
-        guard let months = appState.runwayMonths else { return .secondary }
-        if months < 1 { return SemanticColors.negative }
-        if months < 3 { return SemanticColors.warning }
+    private var shouldEmphasizeCredit: Bool {
+        guard let utilization = appState.totalCreditUtilization else { return appState.totalDebt > 0 }
+        return utilization >= appState.creditUtilizationThreshold
+    }
+
+    private var recentSpendTint: Color {
+        appState.recentSpend > 0 ? SemanticColors.negative : .secondary
+    }
+
+    private var syncTint: Color {
+        if !appState.serverConnected { return SemanticColors.negative }
+        if appState.isSyncStale { return SemanticColors.warning }
         return .secondary
     }
 
-    private var shouldEmphasizeRunway: Bool {
-        guard let months = appState.runwayMonths else { return false }
-        return months < 3
+    private var actionValue: String {
+        switch appState.dashboardStatusReadiness.level {
+        case .healthy:
+            return "None"
+        case .warning:
+            return "Review"
+        case .blocked:
+            return "Blocked"
+        }
+    }
+
+    private var actionDetail: String {
+        appState.dashboardStatusReadiness.title
+    }
+
+    private var actionTint: Color {
+        switch appState.dashboardStatusReadiness.level {
+        case .healthy:
+            return .secondary
+        case .warning:
+            return SemanticColors.warning
+        case .blocked:
+            return SemanticColors.negative
+        }
     }
 }
 

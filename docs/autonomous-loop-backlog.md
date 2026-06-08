@@ -64,7 +64,7 @@ and `docs/autonomous-roadmap.md`.
 
 ### PR-003: Dashboard Overview Structure
 
-- [ ] T011: Ensure the first popover view answers cash, credit, recent change,
+- [x] T011: Ensure the first popover view answers cash, credit, recent change,
   sync health, and action-needed status.
 - [ ] T012: Keep the heatmap, filter bar, account rows, and selected detail in
   one coherent overview.
