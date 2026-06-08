@@ -260,6 +260,10 @@ remain unmarked.
   account drill-in summaries, status badges, recovery buttons, action controls,
   and empty activity panels; evidence: `DashboardAccountDrillInSummary`,
   `DashboardDrillInAction`, `MainPopover`, and core tests.
+- 2026-06-08 [T031]: distinguished the dashboard account empty panel's no-server,
+  missing-credentials, no-linked-bank, no-account-data, healthy-status, and
+  filtered-zero states; evidence: `DashboardAccountEmptyState`, `MainPopover`,
+  and core tests.
 
 ## Backlog Source
 

@@ -1661,6 +1661,7 @@ private struct DashboardEmptyAccountState: View {
             filter: filter.emptyStateKind,
             isDemoMode: appState.usesDemoConnectionPresentation,
             serverConnected: appState.serverConnected,
+            credentialsConfigured: appState.serverCredentialsConfigured,
             linkedItemCount: appState.statusItemCount,
             accountCount: appState.accounts.count,
             degradedItemCount: appState.needsLoginItemCount + appState.erroredItemCount,

@@ -107,7 +107,7 @@ and `docs/autonomous-roadmap.md`.
 
 ### PR-007: Empty, Loading, And Error States
 
-- [ ] T031: Distinguish no server, no credentials, no linked item, no synced
+- [x] T031: Distinguish no server, no credentials, no linked item, no synced
   data, and filtered-zero states in one area.
 - [ ] T032: Add one clear recovery action to each state in that area.
 - [ ] T033: Preserve last-known local data during transient failures.
