@@ -1880,6 +1880,7 @@ struct PlaidBarCoreTests {
             filter: .status,
             isDemoMode: false,
             serverConnected: false,
+            credentialsConfigured: false,
             linkedItemCount: 1,
             accountCount: 0,
             degradedItemCount: 1
@@ -1889,6 +1890,27 @@ struct PlaidBarCoreTests {
         #expect(emptyState.action == .checkServer)
         #expect(emptyState.actionTitle == "Check Server")
         #expect(emptyState.actionIconName == "server.rack")
+    }
+
+    @Test("Dashboard account empty state distinguishes missing credentials before no linked bank")
+    func dashboardAccountEmptyStateCredentialsMissingBeforeLinkPrompt() {
+        let emptyState = DashboardAccountEmptyState.evaluate(
+            filter: .all,
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: false,
+            linkedItemCount: 0,
+            accountCount: 0,
+            degradedItemCount: 0
+        )
+
+        #expect(emptyState.title == "Plaid credentials missing")
+        #expect(emptyState.detail.contains("local server environment"))
+        #expect(emptyState.tone == .warning)
+        #expect(!emptyState.showsAddAccount)
+        #expect(emptyState.action == .refresh)
+        #expect(emptyState.actionTitle == "Check Credentials")
+        #expect(emptyState.actionIconName == "key")
     }
 
     @Test("Dashboard account empty state uses status check copy before a bank is linked")
