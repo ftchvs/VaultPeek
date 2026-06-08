@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-08 03:51 UTC] — Feature
+
+tighten heatmap labels (#198)
+
+`b2a6d77`
+
+---
+
+
 ## [2026-06-08 03:38 UTC] — Documentation
 
 inventory popover surface density (#197)
