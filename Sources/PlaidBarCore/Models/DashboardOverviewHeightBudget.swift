@@ -29,7 +29,7 @@ public struct DashboardOverviewHeightBudget: Equatable, Sendable {
         captionAndFilterHeight: Double = 36,
         accountsHeaderHeight: Double = 20,
         accountRowHeight: Double = 44,
-        selectedDrillInHeight: Double = 110,
+        selectedDrillInHeight: Double = 250,
         verticalPadding: Double = 16,
         lowerSectionReserve: Double = 40
     ) {

@@ -445,8 +445,9 @@ struct PlaidBarTests {
         let budget = DashboardOverviewHeightBudget()
 
         #expect(DashboardOverviewHeightBudget.realisticPopoverHeight == 660)
-        #expect(budget.fitsFirstGlance(visibleAccountRows: 3, includesSelectedDrillIn: true))
-        #expect(budget.estimatedFirstGlanceHeight(visibleAccountRows: 3, includesSelectedDrillIn: true) <= DashboardOverviewHeightBudget.firstGlanceVisibleHeight)
+        #expect(budget.fitsFirstGlance(visibleAccountRows: 1, includesSelectedDrillIn: true))
+        #expect(!budget.fitsFirstGlance(visibleAccountRows: 3, includesSelectedDrillIn: true))
+        #expect(budget.estimatedFirstGlanceHeight(visibleAccountRows: 1, includesSelectedDrillIn: true) <= DashboardOverviewHeightBudget.firstGlanceVisibleHeight)
     }
 
     @Test("Dashboard overview budget expects overflow for longer account lists")

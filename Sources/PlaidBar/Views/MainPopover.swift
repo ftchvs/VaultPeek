@@ -1484,6 +1484,8 @@ private struct DashboardOverviewFallbackBanner: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(presentation.title). \(presentation.detail)")
 
             Button(action: onAction) {
                 Label(presentation.actionTitle, systemImage: presentation.actionIconName)
@@ -1497,8 +1499,6 @@ private struct DashboardOverviewFallbackBanner: View {
             fill: AnyShapeStyle(SurfaceTokens.panelFill(emphasisTint: SemanticColors.brandSecondary.opacity(0.18))),
             stroke: SemanticColors.brandSecondary.opacity(0.22)
         )
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(presentation.title). \(presentation.detail)")
     }
 }
 
