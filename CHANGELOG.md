@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-08 06:42 UTC] — Feature
+
+add heatmap strongest signal accessibility
+
+`f2ad7b3`
+
+---
+
+
 ## [2026-06-08 06:14 UTC] — Feature
 
 clarify heatmap cashflow semantics (#201)
