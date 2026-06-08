@@ -60,3 +60,49 @@ public enum DashboardDrillInSurface: String, CaseIterable, Sendable, Equatable {
         }
     }
 }
+
+/// Display-safe action copy for account drill-ins. Destructive actions stay
+/// explicit so the SwiftUI layer can gate them with confirmation before it
+/// calls the local server.
+public enum DashboardDrillInAction: String, CaseIterable, Sendable, Equatable {
+    case reconnect
+    case remove
+    case settings
+
+    public var title: String {
+        switch self {
+        case .reconnect:
+            return "Reconnect"
+        case .remove:
+            return "Remove Account"
+        case .settings:
+            return "Settings"
+        }
+    }
+
+    public var iconName: String {
+        switch self {
+        case .reconnect:
+            return "link.badge.plus"
+        case .remove:
+            return "trash"
+        case .settings:
+            return "gearshape"
+        }
+    }
+
+    public var accessibilityHint: String {
+        switch self {
+        case .reconnect:
+            return "Opens Plaid Link update mode for this institution."
+        case .remove:
+            return "Requires confirmation before removing this institution from local PlaidBar data."
+        case .settings:
+            return "Opens PlaidBar settings and local data controls."
+        }
+    }
+
+    public static var accountDrillInActions: [DashboardDrillInAction] {
+        [.reconnect, .remove, .settings]
+    }
+}

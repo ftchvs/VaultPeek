@@ -1928,8 +1928,10 @@ private struct DashboardAccountRow: View {
 
 private struct SelectedAccountPanel: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.openSettings) private var openSettings
     let account: AccountDTO
     let isStatusFilter: Bool
+    @State private var isConfirmingAccountRemoval = false
 
     private var transactions: [TransactionDTO] {
         Array(accountTransactions.prefix(5))
@@ -2066,6 +2068,11 @@ private struct SelectedAccountPanel: View {
                 }
             }
 
+            AccountDrillInActionBar(
+                actions: DashboardDrillInAction.accountDrillInActions,
+                onAction: performDrillInAction
+            )
+
             VStack(alignment: .leading, spacing: Spacing.rowVertical) {
                 Text("Recent Activity")
                     .sectionTitle()
@@ -2087,6 +2094,18 @@ private struct SelectedAccountPanel: View {
             fill: AnyShapeStyle(SurfaceTokens.panelFill(emphasisTint: shouldEmphasizeConnection ? connectionTint : nil)),
             stroke: panelStroke
         )
+        .confirmationDialog(
+            "Remove \(AccountPresentation.displayName(for: account))?",
+            isPresented: $isConfirmingAccountRemoval,
+            titleVisibility: .visible
+        ) {
+            Button("Remove Account", role: .destructive) {
+                Task { await appState.removeAccount(itemId: account.itemId) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes the institution and cached local account data from PlaidBar. It does not close the bank account.")
+        }
     }
 
     private var availableText: String {
@@ -2193,6 +2212,17 @@ private struct SelectedAccountPanel: View {
         }
     }
 
+    private func performDrillInAction(_ action: DashboardDrillInAction) {
+        switch action {
+        case .reconnect:
+            Task { await appState.reconnectItem(itemId: account.itemId) }
+        case .remove:
+            isConfirmingAccountRemoval = true
+        case .settings:
+            openSettings()
+        }
+    }
+
     private var panelStroke: Color {
         shouldEmphasizeConnection ? connectionTint.opacity(0.18) : Color.primary.opacity(0.07)
     }
@@ -2208,6 +2238,29 @@ private struct SelectedAccountPanel: View {
         case .demo, .offline, .healthy, .unknown:
             return false
         }
+    }
+}
+
+private struct AccountDrillInActionBar: View {
+    let actions: [DashboardDrillInAction]
+    let onAction: (DashboardDrillInAction) -> Void
+
+    var body: some View {
+        HStack(spacing: Spacing.compactRowContentSpacing) {
+            ForEach(actions, id: \.self) { action in
+                Button {
+                    onAction(action)
+                } label: {
+                    Label(action.title, systemImage: action.iconName)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .tint(action == .remove ? SemanticColors.negative : nil)
+                .accessibilityHint(action.accessibilityHint)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Selected account actions")
     }
 }
 

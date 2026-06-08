@@ -3248,6 +3248,18 @@ struct PlaidBarCoreTests {
         #expect(try encoder.encode(transaction) == originalData)
     }
 
+    @Test("Account drill-in actions keep destructive remove explicit")
+    func accountDrillInActionsExposeExplicitConfirmationCopy() {
+        let actions = DashboardDrillInAction.accountDrillInActions
+
+        #expect(actions == [.reconnect, .remove, .settings])
+        #expect(DashboardDrillInAction.remove.title == "Remove Account")
+        #expect(DashboardDrillInAction.remove.iconName == "trash")
+        #expect(DashboardDrillInAction.remove.accessibilityHint.localizedCaseInsensitiveContains("requires confirmation"))
+        #expect(DashboardDrillInAction.remove.accessibilityHint.localizedCaseInsensitiveContains("local PlaidBar data"))
+        #expect(DashboardDrillInAction.settings.accessibilityHint.localizedCaseInsensitiveContains("settings"))
+    }
+
     private func posixPermissions(at url: URL) throws -> Int {
         let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
         return (attributes[.posixPermissions] as? NSNumber)?.intValue ?? -1
