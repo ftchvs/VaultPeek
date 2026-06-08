@@ -1,0 +1,255 @@
+name: Otto OpenClaw Merge Gate
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, edited, synchronize, reopened, ready_for_review, converted_to_draft]
+  push:
+    branches: [main]
+
+permissions:
+  checks: write
+  contents: read
+  pull-requests: read
+
+jobs:
+  otto-openclaw-policy-runner:
+    name: otto-openclaw-policy-runner
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validate autonomous merge handoff
+        env:
+          EVENT_PATH: ${{ github.event_path }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node <<'NODE'
+          const fs = require("fs");
+          const https = require("https");
+
+          function githubRequest(path, method = "GET", payload = null) {
+            const body = payload ? JSON.stringify(payload) : null;
+            const options = {
+              hostname: "api.github.com",
+              path,
+              method,
+              headers: {
+                "Accept": "application/vnd.github+json",
+                "Authorization": `Bearer ${process.env.GITHUB_TOKEN}`,
+                "User-Agent": "otto-openclaw-merge-gate",
+                "X-GitHub-Api-Version": "2022-11-28"
+              }
+            };
+
+            if (body) {
+              options.headers["Content-Type"] = "application/json";
+              options.headers["Content-Length"] = Buffer.byteLength(body);
+            }
+
+            return new Promise((resolve, reject) => {
+              const request = https.request(options, (res) => {
+                let data = "";
+                res.on("data", (chunk) => (data += chunk));
+                res.on("end", () => {
+                  if (res.statusCode < 200 || res.statusCode >= 300) {
+                    reject(new Error(`GitHub API ${res.statusCode}: ${data}`));
+                    return;
+                  }
+                  resolve({
+                    data: data ? JSON.parse(data) : null,
+                    link: res.headers.link || ""
+                  });
+                });
+              });
+              request.on("error", reject);
+              if (body) {
+                request.write(body);
+              }
+              request.end();
+            });
+          }
+
+          async function githubPaginated(path) {
+            const results = [];
+            let nextPath = path;
+
+            while (nextPath) {
+              const response = await githubRequest(nextPath);
+              results.push(...response.data);
+
+              const nextLink = response.link
+                .split(",")
+                .map((part) => part.trim())
+                .find((part) => part.endsWith('rel="next"'));
+              const match = nextLink && nextLink.match(/<https:\/\/api\.github\.com([^>]+)>/);
+              nextPath = match ? match[1] : "";
+            }
+
+            return results;
+          }
+
+          async function publishHeadCheck(pr, conclusion, summary, details) {
+            const [owner, repo] = process.env.GITHUB_REPOSITORY.split("/");
+            await githubRequest(`/repos/${owner}/${repo}/check-runs`, "POST", {
+              name: "otto-openclaw-merge-gate",
+              head_sha: pr.head.sha,
+              status: "completed",
+              conclusion,
+              output: {
+                title: "Otto OpenClaw Merge Gate",
+                summary,
+                text: details.slice(0, 65000)
+              }
+            });
+          }
+
+          async function main() {
+            const event = JSON.parse(fs.readFileSync(process.env.EVENT_PATH, "utf8"));
+            const pr = event.pull_request;
+
+            if (!pr) {
+              console.log("Push to main: PR handoff validation is not required.");
+              return;
+            }
+
+            const body = pr.body || "";
+            const errors = [];
+
+            if (pr.draft) {
+              errors.push("PR is draft; autonomous merge gate stays closed.");
+            }
+
+            const requiredSections = [
+              "## Summary",
+              "## Autonomous task IDs",
+              "## Agent coordination",
+              "## Changed files",
+              "## Local gates",
+              "## GitHub checks",
+              "## Privacy and safety impact",
+              "## Merge safety"
+            ];
+
+            for (const section of requiredSections) {
+              if (!body.includes(section)) {
+                errors.push(`Missing required PR template section: ${section}`);
+              }
+            }
+
+            function sectionBody(title) {
+              const escaped = title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+              const match = body.match(new RegExp(`${escaped}[ \\t]*\\r?\\n([\\s\\S]*?)(?:\\r?\\n## |\\s*$)`, "i"));
+              return match ? match[1] : "";
+            }
+
+            function fieldValue(section, field) {
+              const escaped = field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+              const match = section.match(new RegExp(`${escaped}[ \\t]*([^\\r\\n]*)`, "i"));
+              return match ? match[1].trim() : "";
+            }
+
+            const coordinationFields = [
+              "Builder agent:",
+              "Builder branch/worktree:",
+              "Reviewer/merge steward:",
+              "Coordination note:"
+            ];
+            const coordinationSection = sectionBody("## Agent coordination");
+
+            for (const field of coordinationFields) {
+              const value = fieldValue(coordinationSection, field);
+              if (!value || value.includes("<!--")) {
+                errors.push(`Agent coordination field is not filled: ${field}`);
+              }
+            }
+
+            const taskFields = [
+              "Task ID(s):",
+              "Backlog slice:",
+              "Scope note:"
+            ];
+            const taskSection = sectionBody("## Autonomous task IDs");
+
+            for (const field of taskFields) {
+              const value = fieldValue(taskSection, field);
+              if (!value || value.includes("<!--")) {
+                errors.push(`Autonomous task field is not filled: ${field}`);
+              }
+            }
+
+            const summary = sectionBody("## Summary");
+            if (summary.replace(/<!--[\s\S]*?-->/g, "").trim().length < 10) {
+              errors.push("Summary is missing or too thin for autonomous handoff.");
+            }
+
+            const localGates = sectionBody("## Local gates");
+            if (/(^|\n)- \[ \]/.test(localGates)) {
+              errors.push("Local gates checklist has unchecked items.");
+            }
+            if (!/(^|\n)- \[x\]/i.test(localGates)) {
+              errors.push("Local gates checklist has no completed items.");
+            }
+
+            const [owner, repo] = process.env.GITHUB_REPOSITORY.split("/");
+            const files = await githubPaginated(
+              `/repos/${owner}/${repo}/pulls/${pr.number}/files?per_page=100`
+            );
+            const changedFiles = files
+              .filter((file) => file.status !== "removed")
+              .map((file) => file.filename);
+
+            const forbiddenArtifacts = [
+              /(^|\/)\.agent-state(\/|$)/,
+              /(^|\/)DerivedData(\/|$)/,
+              /(^|\/)build(\/|$)/,
+              /(^|\/)\.build(\/|$)/,
+              /(^|\/)\.env(\..*)?$/i,
+              /\.ipa$/i,
+              /(^|\/)[^/]+\.xcarchive(\/|$)/,
+              /(^|\/)[^/]+\.dSYM(\.zip|\/|$)/,
+              /\.(db|sqlite|sqlite3)(-(wal|shm|journal))?$/i,
+              /\.log($|[.-](\d+|old|gz|zip|bz2|xz|zst)$)/i
+            ];
+
+            const forbiddenFiles = changedFiles.filter((file) =>
+              forbiddenArtifacts.some((pattern) => pattern.test(file))
+            );
+
+            if (forbiddenFiles.length > 0) {
+              errors.push(`PR includes generated/local artifacts: ${forbiddenFiles.join(", ")}`);
+            }
+
+            if (errors.length > 0) {
+              await publishHeadCheck(
+                pr,
+                "failure",
+                "Autonomous merge handoff failed.",
+                errors.map((error) => `- ${error}`).join("\n")
+              );
+              console.error("Otto OpenClaw merge gate failed:");
+              for (const error of errors) {
+                console.error(`- ${error}`);
+              }
+              process.exit(1);
+            }
+
+            await publishHeadCheck(
+              pr,
+              "success",
+              "Autonomous merge handoff is complete.",
+              [
+                `PR #${pr.number} is ready for required CI and merge-steward review.`,
+                `Head SHA: ${pr.head.sha}`
+              ].join("\n")
+            );
+            console.log("Otto OpenClaw merge gate passed.");
+            console.log("Published otto-openclaw-merge-gate check on the PR head SHA.");
+            console.log("Branch protection must still require the macOS CI build job before merge.");
+          }
+
+          main().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE

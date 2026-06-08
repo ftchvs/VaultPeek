@@ -66,6 +66,8 @@ coordination note instead of pushing over it.
 Otto may merge PlaidBar PRs without asking Felipe when all of these are true:
 
 - PR is not draft.
+- GitHub branch protection reports the required `CI / build` and
+  `Otto OpenClaw Merge Gate / otto-openclaw-merge-gate` checks as green.
 - Diff is scoped to one coherent task or PR slice.
 - No blocking review issue remains.
 - Local verification passed, or CI fully covers the relevant gate.
@@ -79,6 +81,27 @@ Otto may merge PlaidBar PRs without asking Felipe when all of these are true:
 - The PR branch is not being actively mutated by Hermes or another agent.
 
 If any gate is unclear, pause the merge and leave a PR comment with the blocker.
+
+## GitHub Merge Gate
+
+GitHub branch protection should treat Otto/OpenClaw as a first-class merge
+gate. The required checks on `main` are:
+
+- `CI / build`: the macOS/Xcode/Swift build, test, packaging, and sandbox smoke
+  gate.
+- `otto-openclaw-merge-gate`: the autonomous handoff and coordination gate,
+  published by the trusted base-branch workflow onto the PR head SHA.
+
+The Otto/OpenClaw gate is intentionally not a replacement for review. It runs
+from trusted base-branch workflow code via `pull_request_target`; it must not
+execute PR-controlled scripts or workflow logic. The workflow publishes the
+required `otto-openclaw-merge-gate` check run on the PR head SHA so branch
+protection evaluates the actual commit being merged. It checks that the PR is
+not draft, uses the autonomous PR template, includes filled agent coordination
+fields and autonomous task IDs, includes local gate evidence, and does not add
+obvious local/generated artifact paths. Branch protection then prevents merges
+while either required check is failing, pending, missing, cancelled, or
+ambiguous.
 
 ## PR Handoff Format
 
