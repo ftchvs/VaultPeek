@@ -3,6 +3,7 @@ import PlaidBarCore
 
 struct AccountsView: View {
     @Environment(AppState.self) private var appState
+    @State private var selectedAccountID: String?
 
     private var emptyPresentation: SecondaryContentUnavailableState {
         SecondaryContentUnavailableState.accounts(
@@ -23,7 +24,9 @@ struct AccountsView: View {
                     ForEach(appState.depositoryAccounts) { account in
                         AccountRow(
                             account: account,
-                            utilizationThreshold: appState.creditUtilizationThreshold
+                            utilizationThreshold: appState.creditUtilizationThreshold,
+                            isSelected: selectedAccountID == account.id,
+                            onSelect: { toggleSelectedAccount(account.id) }
                         )
                     }
                 }
@@ -34,7 +37,9 @@ struct AccountsView: View {
                     ForEach(appState.creditAccounts) { account in
                         AccountRow(
                             account: account,
-                            utilizationThreshold: appState.creditUtilizationThreshold
+                            utilizationThreshold: appState.creditUtilizationThreshold,
+                            isSelected: selectedAccountID == account.id,
+                            onSelect: { toggleSelectedAccount(account.id) }
                         )
                     }
                 }
@@ -44,7 +49,9 @@ struct AccountsView: View {
                     ForEach(appState.loanAccounts) { account in
                         AccountRow(
                             account: account,
-                            utilizationThreshold: appState.creditUtilizationThreshold
+                            utilizationThreshold: appState.creditUtilizationThreshold,
+                            isSelected: selectedAccountID == account.id,
+                            onSelect: { toggleSelectedAccount(account.id) }
                         )
                     }
                 }
@@ -58,7 +65,9 @@ struct AccountsView: View {
                     ForEach(otherAccounts) { account in
                         AccountRow(
                             account: account,
-                            utilizationThreshold: appState.creditUtilizationThreshold
+                            utilizationThreshold: appState.creditUtilizationThreshold,
+                            isSelected: selectedAccountID == account.id,
+                            onSelect: { toggleSelectedAccount(account.id) }
                         )
                     }
                 }
@@ -106,6 +115,10 @@ struct AccountsView: View {
         }
     }
 
+    private func toggleSelectedAccount(_ accountID: String) {
+        selectedAccountID = selectedAccountID == accountID ? nil : accountID
+    }
+
     private func sectionHeader(_ title: String) -> some View {
         Text(title)
             .sectionTitle()
@@ -148,6 +161,8 @@ struct AccountRow: View {
     @Environment(AppState.self) private var appState
     let account: AccountDTO
     let utilizationThreshold: Double
+    let isSelected: Bool
+    let onSelect: () -> Void
 
     var body: some View {
         HStack(spacing: Spacing.md) {
@@ -191,9 +206,33 @@ struct AccountRow: View {
         }
         .padding(.horizontal, Spacing.lg)
         .padding(.vertical, Spacing.rowVertical)
+        .background(selectionFill, in: RoundedRectangle(cornerRadius: SurfaceTokens.compactCornerRadius))
+        .overlay(alignment: .leading) {
+            if isSelected {
+                Capsule()
+                    .fill(Color.accentColor.opacity(0.65))
+                    .frame(width: 3)
+                    .padding(.vertical, Spacing.xs)
+            }
+        }
+        .overlay {
+            if isSelected {
+                RoundedRectangle(cornerRadius: SurfaceTokens.compactCornerRadius)
+                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+            }
+        }
         .hoverHighlight()
+        .onTapGesture(perform: onSelect)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabel)
+        .accessibilityHint(isSelected ? "Selected account row" : "Select account row")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityAction(named: isSelected ? "Deselect account" : "Select account", onSelect)
+    }
+
+    private var selectionFill: Color {
+        isSelected ? Color.accentColor.opacity(0.08) : .clear
     }
 
     private var connectionPresentation: AccountConnectionPresentation {
@@ -276,6 +315,7 @@ struct AccountRow: View {
             amountText: formattedAmount,
             connectionLabel: connectionPresentation.rowLabel,
             pendingCount: pendingCount,
+            isSelected: isSelected ? true : nil,
             utilizationThreshold: utilizationThreshold
         )
     }
