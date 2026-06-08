@@ -252,6 +252,14 @@ remain unmarked.
   reconnect, remove, and settings, with destructive remove gated by a
   confirmation dialog; evidence: `DashboardDrillInAction` and selected account
   action bar tests.
+- 2026-06-08 [T029]: confirmed selected-account recent-activity empty states
+  distinguish no synced transactions, server offline, demo-only empty activity,
+  and item recovery states; evidence: `AccountActivityEmptyState` and core
+  tests.
+- 2026-06-08 [T030]: added display-safe accessibility labels for selected
+  account drill-in summaries, status badges, recovery buttons, action controls,
+  and empty activity panels; evidence: `DashboardAccountDrillInSummary`,
+  `DashboardDrillInAction`, `MainPopover`, and core tests.
 
 ## Backlog Source
 
