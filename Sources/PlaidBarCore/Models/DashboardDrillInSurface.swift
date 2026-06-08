@@ -112,3 +112,28 @@ public enum DashboardDrillInAction: String, CaseIterable, Sendable, Equatable {
         }
     }
 }
+
+/// Keeps the row-to-drill-in activation path explicit and reusable across
+/// pointer, keyboard, and assistive-technology affordances.
+public struct DashboardAccountDrillInPath: Sendable, Equatable {
+    public let accessibilityHint: String
+    public let accessibilityActionName: String
+    public let pointerHelp: String
+
+    public static func presentation(for account: AccountDTO, isSelected: Bool) -> Self {
+        let displayName = AccountPresentation.displayName(for: account)
+        if isSelected {
+            return Self(
+                accessibilityHint: "Press Return or Space to collapse the account drill-in.",
+                accessibilityActionName: "Collapse account details",
+                pointerHelp: "Collapse details for \(displayName)"
+            )
+        }
+
+        return Self(
+            accessibilityHint: "Press Return or Space to open the account drill-in below this row.",
+            accessibilityActionName: "Open account details",
+            pointerHelp: "Open details for \(displayName)"
+        )
+    }
+}

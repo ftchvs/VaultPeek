@@ -240,6 +240,10 @@ remain unmarked.
 - 2026-06-08 [T025]: added focused coverage for the shared account-row
   accessibility presentation helper, including display-safe field boundaries;
   evidence: `Tests/PlaidBarCoreTests/PlaidBarCoreTests.swift`.
+- 2026-06-08 [T026]: made account drill-in rows explicitly focusable and gave
+  pointer, keyboard, and assistive-technology activation paths shared open/collapse
+  copy; evidence: `DashboardAccountDrillInPath`, dashboard row modifiers, and
+  core tests.
 - 2026-06-08 [T028]: added explicit selected-account drill-in actions for
   reconnect, remove, and settings, with destructive remove gated by a
   confirmation dialog; evidence: `DashboardDrillInAction` and selected account

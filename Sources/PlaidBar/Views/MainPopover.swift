@@ -1595,9 +1595,12 @@ private struct AccountRowWithDrilldown: View {
                 DashboardAccountRow(account: account, isStatusFilter: isStatusFilter, isSelected: isSelected)
             }
             .buttonStyle(.plain)
+            .focusable(true)
+            .help(drillInPath.pointerHelp)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(accountAccessibilityLabel)
-            .accessibilityHint(isSelected ? "Collapses account details." : "Shows account details.")
+            .accessibilityHint(drillInPath.accessibilityHint)
+            .accessibilityAction(named: drillInPath.accessibilityActionName, onSelect)
 
             if isSelected {
                 SelectedAccountPanel(account: account, isStatusFilter: isStatusFilter)
@@ -1621,6 +1624,10 @@ private struct AccountRowWithDrilldown: View {
 
     private var pendingCount: Int {
         appState.transactionsForAccount(account.id).count(where: \.pending)
+    }
+
+    private var drillInPath: DashboardAccountDrillInPath {
+        DashboardAccountDrillInPath.presentation(for: account, isSelected: isSelected)
     }
 
     private var itemStatus: ItemConnectionStatus? {
