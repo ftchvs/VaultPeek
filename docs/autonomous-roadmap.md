@@ -227,6 +227,9 @@ remain unmarked.
 - 2026-06-08 [T021]: audited account-row density across checking, savings,
   credit card, loan, investment, and other rows; evidence: `DESIGN.md`
   documents the shared two-line dashboard row rhythm and follow-up constraints.
+- 2026-06-08 [T022]: ensured account rows expose a primary amount, secondary
+  account detail, freshness text, and connection status signal outside the
+  dashboard drill-in; evidence: `Sources/PlaidBar/Views/AccountsView.swift`.
 
 ## Backlog Source
 

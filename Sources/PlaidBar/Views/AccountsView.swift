@@ -145,20 +145,29 @@ private struct InstitutionAvatar: View {
 }
 
 struct AccountRow: View {
+    @Environment(AppState.self) private var appState
     let account: AccountDTO
     let utilizationThreshold: Double
 
     var body: some View {
         HStack(spacing: Spacing.md) {
             InstitutionAvatar(name: account.institutionName ?? account.name)
+                .overlay(alignment: .bottomTrailing) {
+                    Circle()
+                        .fill(connectionTint)
+                        .frame(width: 8, height: 8)
+                        .overlay {
+                            Circle()
+                                .stroke(Color(nsColor: .windowBackgroundColor), lineWidth: 1.5)
+                        }
+                }
 
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(account.name)
                     .font(.body)
-                if let mask = account.mask {
-                    Text("\u{2022}\u{2022}\u{2022}\u{2022} \(mask)")
-                        .detailText()
-                }
+                Text(secondaryDetailText)
+                    .detailText()
+                    .lineLimit(1)
             }
             Spacer()
             VStack(alignment: .trailing, spacing: Spacing.xxs) {
@@ -173,16 +182,11 @@ struct AccountRow: View {
                         .monospacedDigit()
                         .foregroundStyle(amountColor)
                 }
-
-                if let utilization = account.balances.utilizationPercent {
-                    Text(Formatters.percent(utilization))
-                        .microText()
-                        .foregroundStyle(
-                            utilization >= utilizationThreshold
-                                ? SemanticColors.utilization(for: utilization, threshold: utilizationThreshold)
-                                : .secondary
-                        )
-                }
+                Text(trailingDetailText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
+                    .foregroundStyle(trailingDetailColor)
+                    .font(trailingDetailFont)
             }
         }
         .padding(.horizontal, Spacing.lg)
@@ -190,6 +194,72 @@ struct AccountRow: View {
         .hoverHighlight()
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var connectionPresentation: AccountConnectionPresentation {
+        AccountConnectionPresentation.evaluate(
+            isDemoMode: appState.usesDemoConnectionPresentation,
+            serverConnected: appState.serverConnected,
+            isSyncStale: appState.isSyncStale,
+            statusSyncText: appState.statusSyncText,
+            itemStatus: itemStatus,
+            institutionName: itemConnectionStatus?.institutionName,
+            itemLastSyncRelative: itemConnectionStatus?.lastSync.map(Formatters.relativeDate)
+        )
+    }
+
+    private var itemStatus: ItemConnectionStatus? {
+        itemConnectionStatus?.status
+    }
+
+    private var itemConnectionStatus: ItemStatus? {
+        appState.itemStatuses.first { $0.id == account.itemId }
+    }
+
+    private var pendingCount: Int {
+        appState.transactionsForAccount(account.id).filter(\.pending).count
+    }
+
+    private var secondaryDetailText: String {
+        AccountPresentation.dashboardRowSubtitle(
+            for: account,
+            connectionLabel: connectionPresentation.itemSyncLabel ?? connectionPresentation.rowLabel,
+            pendingCount: pendingCount
+        )
+    }
+
+    private var trailingDetailText: String {
+        AccountPresentation.dashboardTrailingDetailText(
+            for: account,
+            connectionLabel: connectionPresentation.signalLabel
+        )
+    }
+
+    private var trailingDetailColor: Color {
+        if let utilization = account.balances.utilizationPercent {
+            return utilization >= utilizationThreshold
+                ? SemanticColors.utilization(for: utilization, threshold: utilizationThreshold)
+                : .secondary
+        }
+        return connectionTint
+    }
+
+    private var trailingDetailFont: Font {
+        if account.balances.utilizationPercent != nil {
+            return .caption.weight(.bold)
+        }
+        return .caption2
+    }
+
+    private var connectionTint: Color {
+        switch connectionPresentation.level {
+        case .demo, .offline, .healthy, .unknown:
+            return .secondary
+        case .stale, .loginRequired:
+            return SemanticColors.warning
+        case .error:
+            return SemanticColors.negative
+        }
     }
 
     private var formattedAmount: String {
@@ -204,6 +274,8 @@ struct AccountRow: View {
         AccountPresentation.rowAccessibilityLabel(
             for: account,
             amountText: formattedAmount,
+            connectionLabel: connectionPresentation.rowLabel,
+            pendingCount: pendingCount,
             utilizationThreshold: utilizationThreshold
         )
     }
