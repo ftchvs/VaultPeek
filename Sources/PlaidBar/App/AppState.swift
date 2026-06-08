@@ -652,7 +652,11 @@ final class AppState {
                 }
                 let response = try await serverClient.syncTransactions()
                 let updatedTransactions = TransactionSyncReducer.applying(response, to: transactions)
-                try LocalDataStore.saveTransactions(updatedTransactions, context: transactionCacheContext)
+                try LocalDataStore.saveTransactions(
+                    updatedTransactions,
+                    to: activeStorageDirectoryURL,
+                    context: transactionCacheContext
+                )
                 transactions = updatedTransactions
                 try await serverClient.commitSyncCursors(response.pendingCursors)
                 hasMore = response.hasMore
@@ -838,7 +842,11 @@ final class AppState {
                     to: activeStorageDirectoryURL,
                     context: transactionCacheContext
                 )
-                try LocalDataStore.saveTransactions(transactions, context: transactionCacheContext)
+                try LocalDataStore.saveTransactions(
+                    transactions,
+                    to: activeStorageDirectoryURL,
+                    context: transactionCacheContext
+                )
             } catch {
                 self.error = "Local cache failed to save: \(error.localizedDescription)"
             }
@@ -978,7 +986,10 @@ final class AppState {
 
     private func loadCachedTransactions() {
         do {
-            transactions = try LocalDataStore.loadTransactions(context: transactionCacheContext)
+            transactions = try LocalDataStore.loadTransactions(
+                from: activeStorageDirectoryURL,
+                context: transactionCacheContext
+            )
         } catch {
             self.error = "Transaction cache failed to load: \(error.localizedDescription)"
         }
@@ -987,7 +998,11 @@ final class AppState {
     private func clearCachedTransactions() {
         transactions = []
         do {
-            try LocalDataStore.saveTransactions(transactions, context: transactionCacheContext)
+            try LocalDataStore.saveTransactions(
+                transactions,
+                to: activeStorageDirectoryURL,
+                context: transactionCacheContext
+            )
         } catch {
             self.error = "Transaction cache failed to clear: \(error.localizedDescription)"
         }
