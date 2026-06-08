@@ -204,6 +204,10 @@ remain unmarked.
 - 2026-06-07 [T015]: verified the dashboard overview against a 660-point
   realistic menu-bar popover height budget with selected-row drill-in tests;
   evidence: `DashboardOverviewHeightBudget` and app tests.
+- 2026-06-07 [T016]: confirmed heatmap spend and net-cashflow semantics stay
+  distinguishable through shared mode labels, descriptions, and a focused core
+  test; evidence: `SpendingHeatmapMode` labels and
+  `heatmapModeLabelsDistinguishSemantics`.
 
 ## Backlog Source
 

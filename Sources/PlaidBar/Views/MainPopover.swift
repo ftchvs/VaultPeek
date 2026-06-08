@@ -671,7 +671,7 @@ private struct BalanceActivityHeatmap: View {
     }
 
     private var title: String {
-        mode == .spending ? "365D Spend" : "365D Cashflow"
+        mode.summaryTitle
     }
 
     private var totalLabel: String {
@@ -740,8 +740,8 @@ private struct BalanceActivityHeatmap: View {
                 Spacer()
 
                 Picker("Heatmap metric", selection: modeBinding) {
-                    Text("Spend").tag(SpendingHeatmapMode.spending)
-                    Text("Net").tag(SpendingHeatmapMode.netCashflow)
+                    Text(SpendingHeatmapMode.spending.shortLabel).tag(SpendingHeatmapMode.spending)
+                    Text(SpendingHeatmapMode.netCashflow.shortLabel).tag(SpendingHeatmapMode.netCashflow)
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
@@ -823,7 +823,7 @@ private struct BalanceActivityHeatmap: View {
             stroke: Color.primary.opacity(0.065)
         )
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("\(title) heatmap for the last 365 days with \(activeDayCount) active days.")
+        .accessibilityLabel("\(title) heatmap for the last 365 days with \(activeDayCount) active days. \(mode.semanticDescription).")
     }
 
     private var modeBinding: Binding<SpendingHeatmapMode> {
