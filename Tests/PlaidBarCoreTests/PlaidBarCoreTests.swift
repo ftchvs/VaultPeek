@@ -511,6 +511,46 @@ struct PlaidBarCoreTests {
         ) == "Rewards, Amex, Credit, Ending in 0005, $450.00 owed, 45% utilization, Warning, $550.00 available credit, due not synced, 2m ago, selected")
     }
 
+    @Test("Account drill-in summary includes balances transactions freshness and sync")
+    func accountDrillInSummaryIncludesCoreSurfaces() {
+        let lastSync = Date(timeIntervalSince1970: 1_700_000_000)
+        let account = AccountDTO(
+            id: "acct-internal-123",
+            itemId: "item-internal-456",
+            name: "Rewards",
+            type: .credit,
+            mask: "0005",
+            balances: BalanceDTO(current: -450, limit: 1_000),
+            institutionName: "Amex"
+        )
+        let summary = DashboardAccountDrillInSummary.presentation(
+            for: account,
+            transactions: [
+                TransactionDTO(id: "tx-1", accountId: account.id, amount: 24, date: "2026-06-01", name: "Coffee"),
+                TransactionDTO(id: "tx-2", accountId: account.id, amount: -100, date: "2026-06-03", name: "Refund", pending: true),
+                TransactionDTO(id: "tx-other", accountId: "other", amount: 7, date: "2026-06-04", name: "Other"),
+            ],
+            itemStatus: ItemStatus(id: account.itemId, institutionName: "Amex", status: .loginRequired, lastSync: lastSync),
+            fallbackFreshnessLabel: "Not synced"
+        )
+
+        #expect(summary.displayName == "Rewards")
+        #expect(summary.subtitle == "Credit • Credit •••• 0005")
+        #expect(summary.availableTitle == "Avail Credit")
+        #expect(summary.availableBalance == 550)
+        #expect(summary.currentTitle == "Owed")
+        #expect(summary.currentBalance == 450)
+        #expect(summary.utilizationPercent == 45)
+        #expect(summary.limit == 1_000)
+        #expect(summary.transactionCount == 2)
+        #expect(summary.pendingTransactionCount == 1)
+        #expect(summary.latestTransactionDate == "2026-06-03")
+        #expect(summary.syncState == .loginRequired)
+        #expect(summary.freshnessLabel != "Not synced")
+        #expect(!summary.displayName.contains(account.id))
+        #expect(!summary.subtitle.contains(account.itemId))
+    }
+
     @Test("Account presentation keeps credit metadata readable without due dates")
     func accountPresentationCreditMetadataWithoutDueDates() {
         let creditWithoutLimit = AccountDTO(

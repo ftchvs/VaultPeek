@@ -1941,6 +1941,15 @@ private struct SelectedAccountPanel: View {
     @State private var isConfirmingAccountRemoval = false
     @State private var settingsCloseObserver: NSObjectProtocol?
 
+    private var drillInSummary: DashboardAccountDrillInSummary {
+        DashboardAccountDrillInSummary.presentation(
+            for: account,
+            transactions: appState.transactions,
+            itemStatus: itemConnectionStatus,
+            fallbackFreshnessLabel: connectionPresentation.signalLabel
+        )
+    }
+
     private var transactions: [TransactionDTO] {
         Array(accountTransactions.prefix(5))
     }
@@ -1974,10 +1983,10 @@ private struct SelectedAccountPanel: View {
                     Text("Drill-in")
                         .sectionTitle()
                         .foregroundStyle(.secondary)
-                    Text(AccountPresentation.displayName(for: account))
+                    Text(drillInSummary.displayName)
                         .font(.headline.weight(.bold))
                         .lineLimit(1)
-                    Text(AccountPresentation.subtitle(for: account))
+                    Text(drillInSummary.subtitle)
                         .detailText()
                         .lineLimit(1)
                 }
@@ -1994,8 +2003,8 @@ private struct SelectedAccountPanel: View {
             DrillInSurfaceRail(surfaces: DashboardDrillInSurface.surfaces(for: account))
 
             HStack(spacing: Spacing.compactRowContentSpacing) {
-                DetailValue(title: availableTitle, value: availableText, tint: .primary)
-                DetailValue(title: currentTitle, value: currentText, tint: currentTint)
+                DetailValue(title: drillInSummary.availableTitle, value: availableText, tint: .primary)
+                DetailValue(title: drillInSummary.currentTitle, value: currentText, tint: currentTint)
 
                 if let utilization = account.balances.utilizationPercent,
                    let utilizationText = AccountPresentation.dashboardUtilizationDetailText(
@@ -2117,19 +2126,11 @@ private struct SelectedAccountPanel: View {
     }
 
     private var availableText: String {
-        Formatters.currency(AccountPresentation.availableBalance(for: account), format: .compact)
-    }
-
-    private var availableTitle: String {
-        AccountPresentation.dashboardAvailableTitle(for: account)
+        Formatters.currency(drillInSummary.availableBalance, format: .compact)
     }
 
     private var currentText: String {
-        Formatters.currency(AccountPresentation.displayBalance(for: account), format: .compact)
-    }
-
-    private var currentTitle: String {
-        AccountPresentation.dashboardCurrentTitle(for: account)
+        Formatters.currency(drillInSummary.currentBalance, format: .compact)
     }
 
     private var currentTint: Color {
@@ -2188,7 +2189,7 @@ private struct SelectedAccountPanel: View {
     }
 
     private var activityText: String {
-        "\(accountTransactions.count) tx"
+        "\(drillInSummary.transactionCount) tx"
     }
 
     private var syncSignalText: String {

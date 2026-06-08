@@ -97,7 +97,7 @@ and `docs/autonomous-roadmap.md`.
 
 - [x] T026: Ensure account drill-in opens from a row with a predictable keyboard
   and pointer path.
-- [ ] T027: Show transactions, balances, limits, freshness, and sync state for
+- [x] T027: Show transactions, balances, limits, freshness, and sync state for
   the selected account.
 - [x] T028: Keep reconnect, remove, and settings actions explicit and
   confirmation-gated where destructive.
