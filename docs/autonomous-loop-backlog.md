@@ -58,7 +58,7 @@ and `docs/autonomous-roadmap.md`.
 - [ ] T006: Inventory popover surfaces that still look tab-heavy or card-heavy.
 - [x] T007: Replace decorative visual treatment with semantic spacing,
   separators, and status color in one surface.
-- [ ] T008: Normalize compact row spacing against the existing design tokens.
+- [x] T008: Normalize compact row spacing against the existing design tokens.
 - [ ] T009: Tighten one verbose label group without hiding financial meaning.
 - [ ] T010: Add or update screenshot evidence for the changed minimalist surface.
 
