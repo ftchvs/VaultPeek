@@ -268,6 +268,10 @@ remain unmarked.
   explicit recovery action, including Check Server, Check Credentials, Check
   Status, Reconnect Item, Sync Balances, Refresh, and Refresh Data; evidence:
   `DashboardAccountEmptyState` action titles and core tests.
+- 2026-06-08 [T033]: preserved last-known account rows alongside transactions
+  in the local cache so transient refresh/balance failures keep usable dashboard
+  data scoped by environment and storage path; evidence: `LocalDataStore`
+  account cache, `AppState` cache load/save wiring, and server tests.
 
 ## Backlog Source
 
