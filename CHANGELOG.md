@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-08 09:16 UTC] — Update
+
+Add Otto OpenClaw merge gate
+
+`7e5a7a9`
+
+---
+
+
 ## [2026-06-08 08:42 UTC] — Feature
 
 add account row freshness signals (#210)
