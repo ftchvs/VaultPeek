@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-08 07:05 UTC] — Documentation
+
+add agent collaboration protocol
+
+`e2da960`
+
+---
+
+
 ## [2026-06-08 06:56 UTC] — Feature
 
 clarify empty heatmap states (#205)
