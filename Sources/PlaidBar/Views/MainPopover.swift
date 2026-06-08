@@ -1908,7 +1908,7 @@ private struct SelectedAccountPanel: View {
         VStack(alignment: .leading, spacing: Spacing.compactRowContentSpacing) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: Spacing.compactRowTextSpacing) {
-                    Text("Details")
+                    Text("Drill-in")
                         .sectionTitle()
                         .foregroundStyle(.secondary)
                     Text(AccountPresentation.displayName(for: account))
@@ -1927,6 +1927,8 @@ private struct SelectedAccountPanel: View {
                     tint: connectionTint
                 )
             }
+
+            DrillInSurfaceRail(surfaces: DashboardDrillInSurface.surfaces(for: account))
 
             HStack(spacing: Spacing.compactRowContentSpacing) {
                 DetailValue(title: availableTitle, value: availableText, tint: .primary)
@@ -2170,6 +2172,30 @@ private func accountConnectionTint(for level: AccountConnectionLevel) -> Color {
         return SemanticColors.negative
     case .unknown:
         return .secondary
+    }
+}
+
+private struct DrillInSurfaceRail: View {
+    let surfaces: [DashboardDrillInSurface]
+
+    var body: some View {
+        HStack(spacing: Spacing.xs) {
+            ForEach(surfaces, id: \.self) { surface in
+                Label(surface.title, systemImage: surface.iconName)
+                    .font(.caption2.weight(.semibold))
+                    .lineLimit(1)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 4)
+                    .background(Color.primary.opacity(0.04), in: Capsule())
+                    .accessibilityLabel("\(surface.title) drill-in")
+                    .accessibilityHint(surface.accessibilitySummary)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Selected account drill-in surfaces")
     }
 }
 

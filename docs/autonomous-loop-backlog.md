@@ -68,7 +68,7 @@ and `docs/autonomous-roadmap.md`.
   sync health, and action-needed status.
 - [x] T012: Keep the heatmap, filter bar, account rows, and selected detail in
   one coherent overview.
-- [ ] T013: Preserve deeper account, transaction, credit, and status surfaces as
+- [x] T013: Preserve deeper account, transaction, credit, and status surfaces as
   drill-ins rather than competing first-level tabs.
 - [ ] T014: Add a fallback overview state when demo data is unavailable.
 - [ ] T015: Verify the overview fits a realistic menu-bar popover height.

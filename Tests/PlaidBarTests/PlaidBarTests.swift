@@ -377,6 +377,34 @@ struct PlaidBarTests {
         #expect(filtered[0].id == "1")
     }
 
+    // MARK: - Dashboard Drill-In Surfaces
+
+    @Test("Depository account keeps deeper surfaces as selected-row drill-ins")
+    func depositoryDashboardDrillIns() {
+        let account = AccountDTO(
+            id: "checking",
+            itemId: "item",
+            name: "Checking",
+            type: .depository,
+            balances: BalanceDTO(available: 1200)
+        )
+
+        #expect(DashboardDrillInSurface.surfaces(for: account) == [.account, .activity, .status])
+    }
+
+    @Test("Credit account includes credit detail in selected-row drill-ins")
+    func creditDashboardDrillIns() {
+        let account = AccountDTO(
+            id: "credit",
+            itemId: "item",
+            name: "Visa",
+            type: .credit,
+            balances: BalanceDTO(current: -450, limit: 2000)
+        )
+
+        #expect(DashboardDrillInSurface.surfaces(for: account) == [.account, .activity, .credit, .status])
+    }
+
     // MARK: - Notification Trigger Logic
 
     @Test("Large transaction detection")

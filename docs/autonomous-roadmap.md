@@ -187,6 +187,9 @@ remain unmarked.
   screenshot script capture PlaidBar windows by window ID instead of stale
   display rectangles; evidence: `Assets/*.png` screenshot refresh and
   `Scripts/screenshots.sh` capture update.
+- 2026-06-07 [T013]: preserved account, activity, credit, and status surfaces
+  as selected-row drill-in affordances instead of competing first-level tabs;
+  evidence: `DashboardDrillInSurface` and selected-account rail tests.
 - 2026-06-07 [T012]: grouped the 365-day activity heatmap, account filter bar,
   account rows, and selected-account detail into a single dashboard overview
   flow; evidence: `Sources/PlaidBar/Views/MainPopover.swift` overview stack
