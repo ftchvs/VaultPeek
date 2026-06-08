@@ -64,9 +64,46 @@ public struct SpendingHeatmapSignal: Identifiable, Sendable, Hashable {
     }
 }
 
+public struct SpendingHeatmapEmptyPresentation: Sendable, Hashable {
+    public let title: String
+    public let systemImage: String
+    public let description: String
+
+    public init(title: String, systemImage: String, description: String) {
+        self.title = title
+        self.systemImage = systemImage
+        self.description = description
+    }
+}
+
 public enum SpendingHeatmap {
     public static func displayCashflowAmount(_ value: Double) -> Double {
         -value
+    }
+
+    public static func emptyPresentation(transactionCount: Int, mode: SpendingHeatmapMode) -> SpendingHeatmapEmptyPresentation {
+        guard transactionCount > 0 else {
+            return SpendingHeatmapEmptyPresentation(
+                title: "No Heatmap Data",
+                systemImage: "calendar.badge.exclamationmark",
+                description: "Daily activity will appear after syncing transactions."
+            )
+        }
+
+        switch mode {
+        case .spending:
+            return SpendingHeatmapEmptyPresentation(
+                title: "No Spending in This View",
+                systemImage: "line.3.horizontal.decrease.circle",
+                description: "Transactions exist for this range, but none count as spend after filters, income, and transfers are excluded."
+            )
+        case .netCashflow:
+            return SpendingHeatmapEmptyPresentation(
+                title: "No Cashflow in This View",
+                systemImage: "line.3.horizontal.decrease.circle",
+                description: "Transactions exist for this range, but none count toward net cashflow after filters and transfers are excluded."
+            )
+        }
     }
 
     public static func days(
