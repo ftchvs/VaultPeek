@@ -66,7 +66,7 @@ and `docs/autonomous-roadmap.md`.
 
 - [x] T011: Ensure the first popover view answers cash, credit, recent change,
   sync health, and action-needed status.
-- [ ] T012: Keep the heatmap, filter bar, account rows, and selected detail in
+- [x] T012: Keep the heatmap, filter bar, account rows, and selected detail in
   one coherent overview.
 - [ ] T013: Preserve deeper account, transaction, credit, and status surfaces as
   drill-ins rather than competing first-level tabs.

@@ -58,16 +58,14 @@ struct MainPopover: View {
                             .environment(appState)
                         }
 
-                        BalanceActivityHeatmap(transactions: appState.transactions)
-
-                        DashboardFilterBar(selection: filterBinding)
-
-                        AccountsSection(
+                        DashboardOverviewStack(
+                            transactions: appState.transactions,
                             accounts: filteredAccounts,
                             filter: selectedFilter,
+                            filterSelection: filterBinding,
                             selectedAccountId: selectedAccount?.id,
-                            onSelect: { selectedAccountId = $0.id },
-                            onDeselect: { selectedAccountId = "" },
+                            onSelectAccount: { selectedAccountId = $0.id },
+                            onDeselectAccount: { selectedAccountId = "" },
                             onAddAccount: openAccountSetup
                         )
                         .environment(appState)
@@ -1403,6 +1401,79 @@ private struct StatusMetricPill: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .nativeInsetSurface(cornerRadius: SurfaceTokens.panelCornerRadius)
+    }
+}
+
+// MARK: - Overview Flow
+
+private struct DashboardOverviewStack: View {
+    let transactions: [TransactionDTO]
+    let accounts: [AccountDTO]
+    let filter: DashboardAccountFilter
+    @Binding var filterSelection: DashboardAccountFilter
+    let selectedAccountId: String?
+    let onSelectAccount: (AccountDTO) -> Void
+    let onDeselectAccount: () -> Void
+    let onAddAccount: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: LayoutSpacing.stack) {
+            BalanceActivityHeatmap(transactions: transactions)
+
+            VStack(alignment: .leading, spacing: LayoutSpacing.controls) {
+                OverviewFlowCaption(
+                    selectedFilter: filter,
+                    accountCount: accounts.count,
+                    hasSelectedAccount: selectedAccountId != nil
+                )
+
+                DashboardFilterBar(selection: $filterSelection)
+
+                AccountsSection(
+                    accounts: accounts,
+                    filter: filter,
+                    selectedAccountId: selectedAccountId,
+                    onSelect: onSelectAccount,
+                    onDeselect: onDeselectAccount,
+                    onAddAccount: onAddAccount
+                )
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Overview with activity heatmap, account filters, account rows, and selected account details.")
+    }
+
+    private enum LayoutSpacing {
+        static let stack: CGFloat = 6
+        static let controls: CGFloat = 5
+    }
+}
+
+private struct OverviewFlowCaption: View {
+    let selectedFilter: DashboardAccountFilter
+    let accountCount: Int
+    let hasSelectedAccount: Bool
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "arrow.down.right.circle.fill")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Text(captionText)
+                .microText()
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
+            Spacer(minLength: 8)
+        }
+        .padding(.horizontal, Spacing.compactRowTextSpacing)
+        .accessibilityLabel(captionText)
+    }
+
+    private var captionText: String {
+        let accountWord = accountCount == 1 ? "account" : "accounts"
+        let detailText = hasSelectedAccount ? "; selected row shows details" : "; select a row for details"
+        return "\(selectedFilter.rawValue): \(accountCount) \(accountWord) below\(detailText)"
     }
 }
 

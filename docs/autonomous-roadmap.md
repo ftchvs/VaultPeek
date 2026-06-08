@@ -187,6 +187,10 @@ remain unmarked.
   screenshot script capture PlaidBar windows by window ID instead of stale
   display rectangles; evidence: `Assets/*.png` screenshot refresh and
   `Scripts/screenshots.sh` capture update.
+- 2026-06-07 [T012]: grouped the 365-day activity heatmap, account filter bar,
+  account rows, and selected-account detail into a single dashboard overview
+  flow; evidence: `Sources/PlaidBar/Views/MainPopover.swift` overview stack
+  update.
 - 2026-06-07 [T011]: expanded the first popover overview cards so the dashboard
   answers cash, credit, recent spend, sync health, and action-needed status
   before deeper account drill-ins; evidence:
