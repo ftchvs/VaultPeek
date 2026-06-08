@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-08 00:53 UTC] — Fix
+
+simplify balance mix surface (#191)
+
+`296d5f0`
+
+---
+
+
 ## [2026-06-08 00:28 UTC] — Documentation
 
 mark T001 backlog task complete
