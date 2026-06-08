@@ -610,7 +610,7 @@ private struct BalanceActivityHeatmap: View {
     }
 
     private var title: String {
-        mode == .spending ? "365D Spending Activity" : "365D Cashflow Activity"
+        mode == .spending ? "365D Spend" : "365D Cashflow"
     }
 
     private var totalLabel: String {
@@ -751,7 +751,7 @@ private struct BalanceActivityHeatmap: View {
 
                 Spacer()
 
-                Text("\(activeDayCount) days · Last 365D")
+                Text("\(activeDayCount) active days")
                     .microText()
                     .foregroundStyle(.secondary)
             }
