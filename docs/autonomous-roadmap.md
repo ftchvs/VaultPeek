@@ -177,6 +177,8 @@ remain unmarked.
   spacing through compact row design tokens; evidence:
   `Sources/PlaidBar/Theme/DesignTokens.swift` and
   `Sources/PlaidBar/Views/MainPopover.swift` updates.
+- 2026-06-07 [T006]: inventoried popover surfaces that still risk feeling
+  tab-heavy or card-heavy; evidence: `DESIGN.md` popover surface inventory.
 
 ## Backlog Source
 
