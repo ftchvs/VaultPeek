@@ -4,6 +4,15 @@ All notable changes to PlaidBar.
 
 ---
 
+## [2026-06-08 01:55 UTC] — Documentation
+
+add local-first reviewer checklist (#193)
+
+`d793792`
+
+---
+
+
 ## [2026-06-08 01:39 UTC] — Feature
 
 tighten post-1 dashboard recovery and local AI (#192)
