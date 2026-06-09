@@ -235,16 +235,7 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
     }
 
     private static func userFacingErrorDetail(from message: String?) -> String? {
-        guard let message else { return nil }
-
-        let normalized = message
-            .split(whereSeparator: \.isWhitespace)
-            .joined(separator: " ")
-
-        guard !normalized.isEmpty else { return nil }
-        guard normalized.count > maxRenderedErrorLength else { return normalized }
-
-        return "\(normalized.prefix(maxRenderedErrorLength))..."
+        UserFacingError.sanitizedDetail(from: message, maxLength: maxRenderedErrorLength)
     }
 
     private static func serverModeMismatchError(from message: String?) -> (title: String, detail: String)? {
@@ -262,9 +253,7 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
 
         return (
             "Server mode mismatch",
-            normalized.count > maxRenderedErrorLength
-                ? "\(normalized.prefix(maxRenderedErrorLength))..."
-                : normalized
+            UserFacingError.sanitizedDetail(from: normalized, maxLength: maxRenderedErrorLength) ?? normalized
         )
     }
 

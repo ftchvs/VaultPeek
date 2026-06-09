@@ -272,6 +272,11 @@ remain unmarked.
   in the local cache so transient refresh/balance failures keep usable dashboard
   data scoped by environment and storage path; evidence: `LocalDataStore`
   account cache, `AppState` cache load/save wiring, and server tests.
+- 2026-06-08 [T034]: centralized display-safe error sanitization for dashboard,
+  setup, secondary empty states, and popover banners so raw server/Plaid
+  payloads, token-like values, Plaid identifiers, and stack trace tails are not
+  rendered directly; evidence: `UserFacingError`, app error-state wiring, and
+  core tests.
 
 ## Backlog Source
 
