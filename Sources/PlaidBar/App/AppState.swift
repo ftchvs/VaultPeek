@@ -33,7 +33,14 @@ final class AppState {
         }
     }
     var isLoading = false
-    var error: String?
+    var error: String? {
+        didSet {
+            guard let error else { return }
+            let sanitized = UserFacingError.sanitizedDetail(from: error)
+            guard sanitized != error else { return }
+            self.error = sanitized
+        }
+    }
     var isPopoverPresented = false
     var selectedTab: PopoverTab = .accounts
     var isSetupComplete = false

@@ -48,7 +48,7 @@ public struct FirstRunCompletionState: Equatable, Sendable {
             )
         }
 
-        if let errorMessage, !errorMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if let errorMessage = UserFacingError.sanitizedDetail(from: errorMessage) {
             return FirstRunCompletionState(
                 step: .blocked,
                 title: "Connection needs attention",
