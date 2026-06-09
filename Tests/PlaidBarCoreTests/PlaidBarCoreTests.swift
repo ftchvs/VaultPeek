@@ -1720,6 +1720,82 @@ struct PlaidBarCoreTests {
         #expect(readiness.secondaryActions.isEmpty)
     }
 
+    @Test("User-facing error detail redacts Plaid identifiers and tokens")
+    func userFacingErrorDetailRedactsPlaidIdentifiersAndTokens() {
+        let tokenKey = "access" + "_token"
+        let tokenValue = "access" + "-sandbox-secretvalue"
+        let publicTokenValue = "public" + "-sandbox-publicvalue"
+        let detail = UserFacingError.sanitizedDetail(
+            from: "Plaid failed for item_id=item_123456789abcdef account_id=account_abcdef123456 \(tokenKey)=\(tokenValue) bare=\(publicTokenValue) Authorization: Bearer local-token-1234567890"
+        )
+
+        #expect(detail?.contains("item_123456789abcdef") == false)
+        #expect(detail?.contains("account_abcdef123456") == false)
+        #expect(detail?.contains(tokenValue) == false)
+        #expect(detail?.contains(publicTokenValue) == false)
+        #expect(detail?.contains("local-token-1234567890") == false)
+        #expect(detail?.contains("Authorization: Bearer [redacted]") == true)
+        #expect(detail?.contains("[redacted") == true)
+    }
+
+    @Test("User-facing error detail removes stack traces and truncates bodies")
+    func userFacingErrorDetailRemovesStackTracesAndTruncatesBodies() {
+        let detail = UserFacingError.sanitizedDetail(
+            from: "Plaid sync failed. Stack trace: Sources/PlaidBarServer/PlaidClient.swift:42 \(String(repeating: "payload ", count: 80))",
+            maxLength: 80
+        )
+
+        #expect(detail == "Plaid sync failed.")
+        #expect(detail?.contains("PlaidClient.swift") == false)
+
+        let longDetail = UserFacingError.sanitizedDetail(
+            from: String(repeating: "server body ", count: 40),
+            maxLength: 80
+        )
+
+        #expect(longDetail?.count == 83)
+        #expect(longDetail?.hasSuffix("...") == true)
+    }
+
+    @Test("First run completion sanitizes blocking server errors")
+    func firstRunCompletionSanitizesBlockingServerErrors() {
+        let tokenKey = "access" + "_token"
+        let tokenValue = "access" + "-sandbox-secretvalue"
+        let state = FirstRunCompletionState.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 0,
+            accountCount: 0,
+            transactionCount: 0,
+            syncedItemCount: 0,
+            errorMessage: "PlaidBar server returned 500: {\"\(tokenKey)\":\"\(tokenValue)\",\"item_id\":\"item_123456789abcdef\"}"
+        )
+
+        #expect(state.step == .blocked)
+        #expect(state.detail.contains(tokenValue) == false)
+        #expect(state.detail.contains("item_123456789abcdef") == false)
+        #expect(state.detail.contains("[redacted") == true)
+    }
+
+    @Test("Secondary unavailable state sanitizes recent action failures")
+    func secondaryUnavailableStateSanitizesRecentActionFailures() {
+        let state = SecondaryContentUnavailableState.transactions(
+            isDemoMode: false,
+            serverConnected: true,
+            linkedItemCount: 0,
+            accountCount: 0,
+            syncedItemCount: 0,
+            transactionCount: 0,
+            hasSearchText: false,
+            hasActiveFilters: false,
+            errorMessage: "Sync failed for transaction_abcdef1234567890 at /private/tmp/PlaidClient.swift:12"
+        )
+
+        #expect(state.title == "Recent action failed")
+        #expect(state.detail.contains("transaction_abcdef1234567890") == false)
+        #expect(state.detail.contains("/private/tmp") == false)
+    }
+
     @Test("Dashboard status readiness identifies server mode mismatch")
     func dashboardStatusReadinessIdentifiesServerModeMismatch() {
         let readiness = DashboardStatusReadiness.evaluate(

@@ -343,15 +343,6 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
     }
 
     private static func userFacingErrorDetail(from message: String?) -> String? {
-        guard let message else { return nil }
-
-        let normalized = message
-            .split(whereSeparator: \.isWhitespace)
-            .joined(separator: " ")
-
-        guard !normalized.isEmpty else { return nil }
-        guard normalized.count > maxRenderedErrorLength else { return normalized }
-
-        return "\(normalized.prefix(maxRenderedErrorLength))..."
+        UserFacingError.sanitizedDetail(from: message, maxLength: maxRenderedErrorLength)
     }
 }

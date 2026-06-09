@@ -111,7 +111,7 @@ and `docs/autonomous-roadmap.md`.
   data, and filtered-zero states in one area.
 - [x] T032: Add one clear recovery action to each state in that area.
 - [x] T033: Preserve last-known local data during transient failures.
-- [ ] T034: Truncate or sanitize server error text before display.
+- [x] T034: Truncate or sanitize server error text before display.
 - [ ] T035: Add a focused test for one empty/error-state presenter.
 
 ### PR-008: Setup And Plaid Link Preflight
