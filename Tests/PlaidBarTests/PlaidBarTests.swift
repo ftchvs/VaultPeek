@@ -446,6 +446,8 @@ struct PlaidBarTests {
 
         #expect(DashboardOverviewHeightBudget.realisticPopoverHeight == 660)
         #expect(budget.fitsFirstGlance(visibleAccountRows: 1, includesSelectedDrillIn: true))
+        #expect(!budget.fitsFirstGlance(visibleAccountRows: 1, includesSelectedDrillIn: true, includesChangeReceipt: true))
+        #expect(budget.fitsFirstGlance(visibleAccountRows: 3, includesSelectedDrillIn: false, includesChangeReceipt: true))
         #expect(!budget.fitsFirstGlance(visibleAccountRows: 3, includesSelectedDrillIn: true))
         #expect(budget.estimatedFirstGlanceHeight(visibleAccountRows: 1, includesSelectedDrillIn: true) <= DashboardOverviewHeightBudget.firstGlanceVisibleHeight)
     }
