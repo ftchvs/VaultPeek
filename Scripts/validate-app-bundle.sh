@@ -9,10 +9,16 @@ if [ -z "$APP_DIR" ]; then
 fi
 
 APP_BINARY="$APP_DIR/Contents/MacOS/PlaidBar"
+SERVER_BINARY="$APP_DIR/Contents/MacOS/PlaidBarServer"
 SPARKLE_FRAMEWORK="$APP_DIR/Contents/Frameworks/Sparkle.framework"
 
 if [ ! -x "$APP_BINARY" ]; then
     echo "Missing executable PlaidBar binary at $APP_BINARY" >&2
+    exit 1
+fi
+
+if [ ! -x "$SERVER_BINARY" ]; then
+    echo "Missing executable PlaidBarServer binary at $SERVER_BINARY" >&2
     exit 1
 fi
 

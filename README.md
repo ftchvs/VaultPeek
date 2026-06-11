@@ -113,6 +113,32 @@ macOS Screen Recording and Accessibility permission for Terminal.
 
 ## Quick Start
 
+### DMG (easiest, no developer tools)
+
+Build a drag-install disk image from a checkout (or download one from a
+GitHub release once published):
+
+```bash
+./Scripts/package-dmg.sh
+open .build/PlaidBar-*.dmg
+```
+
+Then drag **PlaidBar.app** to **Applications** and launch it. On first
+launch, right-click PlaidBar.app and choose **Open** (the build is ad-hoc
+signed; Developer ID notarization is on the roadmap).
+
+To see demo data without any Plaid setup, choose **Demo** on the setup
+screen — no server or credentials needed. To use real or sandbox Plaid data,
+add your credentials to `~/.plaidbar/server.conf`, then quit and reopen
+PlaidBar — the app starts its bundled companion server automatically, no
+terminal needed:
+
+```ini
+PLAID_CLIENT_ID=your_client_id
+PLAID_SECRET=your_secret
+# optional: PLAID_ENV=sandbox
+```
+
 ### Homebrew
 
 Install PlaidBar from the repository tap:

@@ -974,6 +974,9 @@ final class AppState {
             return
         }
         await checkServerConnection()
+        if !serverConnected {
+            await startBundledServerIfAvailable()
+        }
         if serverConnected {
             if statusItemCount > 0 {
                 loadCachedAccounts()
@@ -985,6 +988,35 @@ final class AppState {
             await refreshAccounts()
             await syncTransactions()
             startBackgroundRefresh()
+        }
+    }
+
+    /// When installed as a standalone `.app` (DMG drag-install), the server
+    /// ships inside the bundle. Starts it at app launch so it is usually
+    /// ready before the popover first opens.
+    func prewarmBundledServer() async {
+        guard !CommandLine.arguments.contains("--demo") else { return }
+        await checkServerConnection()
+        guard !serverConnected else { return }
+        _ = ServerProcessService.shared.launchBundledServerIfNeeded(
+            isDemoMode: isDemoMode,
+            serverAlreadyReachable: serverConnected
+        )
+    }
+
+    /// Popover-open path: start the bundled server if nothing did yet, then
+    /// wait briefly for readiness (also covers a still-booting prewarm).
+    private func startBundledServerIfAvailable() async {
+        let launched = ServerProcessService.shared.launchBundledServerIfNeeded(
+            isDemoMode: isDemoMode,
+            serverAlreadyReachable: serverConnected
+        )
+        guard launched || ServerProcessService.shared.isManagingServer else { return }
+
+        for _ in 0 ..< 12 {
+            try? await Task.sleep(for: .milliseconds(400))
+            await checkServerConnection()
+            if serverConnected { break }
         }
     }
 

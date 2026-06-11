@@ -1,7 +1,7 @@
-import SwiftUI
 import MenuBarExtraAccess
 import PlaidBarCore
 import Sparkle
+import SwiftUI
 
 @main
 struct PlaidBarApp: App {
@@ -23,6 +23,9 @@ struct PlaidBarApp: App {
                 try? await Task.sleep(for: .milliseconds(700))
                 state.isPopoverPresented = true
             }
+        }
+        Task { @MainActor in
+            await state.prewarmBundledServer()
         }
     }
 
