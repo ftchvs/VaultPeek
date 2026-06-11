@@ -67,6 +67,13 @@ public enum Formatters {
 
     private static let transactionDateFormatter: DateFormatter = {
         let f = DateFormatter()
+        // Plaid transaction dates are fixed-format Gregorian yyyy-MM-dd. Pin the
+        // locale and calendar (Apple QA1480): an unpinned formatter inherits the
+        // system calendar, so on a Buddhist- or Japanese-calendar system these
+        // keys would parse and render with shifted years (e.g. 2569-06-10),
+        // silently corrupting every date bucket and cache comparison.
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.calendar = Calendar(identifier: .gregorian)
         f.dateFormat = "yyyy-MM-dd"
         return f
     }()
