@@ -1418,6 +1418,24 @@ struct PlaidBarCoreTests {
         #expect(date != nil)
     }
 
+    @Test("Transaction date keys parse and render as Gregorian components")
+    func transactionDateKeysStayGregorian() throws {
+        // Plaid keys are fixed-format Gregorian. The formatter pins
+        // en_US_POSIX + Gregorian so a non-Gregorian system calendar
+        // (e.g. Buddhist, which renders 2026-06-10 as 2569-06-10) cannot
+        // shift parsed years or rendered cache keys.
+        let parsed = try #require(Formatters.parseTransactionDate("2026-06-10"))
+
+        var gregorian = Calendar(identifier: .gregorian)
+        gregorian.timeZone = .current
+        let components = gregorian.dateComponents([.year, .month, .day], from: parsed)
+        #expect(components.year == 2026)
+        #expect(components.month == 6)
+        #expect(components.day == 10)
+
+        #expect(Formatters.transactionDateString(parsed) == "2026-06-10")
+    }
+
     @Test("Date parsing invalid")
     func dateParsingInvalid() {
         let invalid = Formatters.parseTransactionDate("not-a-date")
