@@ -13,8 +13,8 @@ struct SpendingHeatmapView: View {
 
     private let calendar = Calendar.current
 
-    private var days: [SpendingHeatmapDay] {
-        SpendingHeatmap.days(
+    private func currentLayout() -> SpendingHeatmapLayout {
+        SpendingHeatmapLayout.compute(
             from: transactions,
             startDate: startDate,
             endDate: endDate,
@@ -23,64 +23,17 @@ struct SpendingHeatmapView: View {
         )
     }
 
-    private var peakValue: Double {
-        max(days.map { abs($0.value) }.max() ?? 0, 1)
-    }
-
-    private var totalValue: Double {
-        days.reduce(0) { $0 + $1.value }
-    }
-
-    private var activeDayCount: Int {
-        days.filter { $0.transactionCount > 0 }.count
-    }
-
-    private var totalLabel: String {
-        guard mode == .netCashflow else {
-            return Formatters.currency(totalValue, format: .compact)
-        }
-        return cashflowText(for: totalValue, format: .compact)
-    }
-
-    private var totalTint: Color {
-        guard mode == .netCashflow else { return .primary }
-        let displayAmount = SpendingHeatmap.displayCashflowAmount(totalValue)
-        if displayAmount > 0 { return SemanticColors.positive }
-        if displayAmount < 0 { return SemanticColors.negative }
-        return .primary
-    }
-
-    private var selectedDay: SpendingHeatmapDay? {
-        guard let selectedDate else { return nil }
-        return days.first { $0.date == selectedDate }
-    }
-
-    private var strongestSignals: [SpendingHeatmapSignal] {
-        SpendingHeatmap.strongestSignals(from: days, mode: mode)
-    }
-
     private var emptyPresentation: SpendingHeatmapEmptyPresentation {
         SpendingHeatmap.emptyPresentation(transactionCount: transactions.count, mode: mode)
     }
 
-    private var weekColumns: [[SpendingHeatmapDay?]] {
-        guard let firstDay = days.first,
-              let firstDate = Formatters.parseTransactionDate(firstDay.date) else {
-            return []
-        }
-
-        let weekday = calendar.component(.weekday, from: firstDate)
-        let leadingEmptyDays = (weekday - calendar.firstWeekday + 7) % 7
-        let padded: [SpendingHeatmapDay?] = Array(repeating: nil, count: leadingEmptyDays) + days.map(Optional.some)
-        return stride(from: 0, to: padded.count, by: 7).map { start in
-            let week = Array(padded[start..<min(start + 7, padded.count)])
-            return week + Array(repeating: nil, count: max(0, 7 - week.count))
-        }
-    }
-
     var body: some View {
+        // Derive the layout once per render. The previous computed-property form
+        // re-aggregated every transaction on each property access.
+        let layout = currentLayout()
+
         VStack(alignment: .leading, spacing: Spacing.md) {
-            header
+            header(for: layout)
 
             if showModePicker {
                 Picker("Heatmap metric", selection: $mode) {
@@ -97,12 +50,12 @@ struct SpendingHeatmapView: View {
                 .accessibilityValue(mode == .spending ? "Spend" : "Net cashflow")
             }
 
-            if days.allSatisfy({ $0.transactionCount == 0 }) {
+            if layout.activeDayCount == 0 {
                 emptyState
             } else {
-                heatmapGrid
-                legend
-                selectedDaySummary
+                heatmapGrid(for: layout)
+                legend(for: layout)
+                selectedDaySummary(for: layout)
             }
         }
         .padding(.horizontal, Spacing.lg)
@@ -110,7 +63,27 @@ struct SpendingHeatmapView: View {
         .accessibilityElement(children: .contain)
     }
 
-    private var header: some View {
+    private func totalLabel(for layout: SpendingHeatmapLayout) -> String {
+        guard mode == .netCashflow else {
+            return Formatters.currency(layout.totalValue, format: .compact)
+        }
+        return cashflowText(for: layout.totalValue, format: .compact)
+    }
+
+    private func totalTint(for layout: SpendingHeatmapLayout) -> Color {
+        guard mode == .netCashflow else { return .primary }
+        let displayAmount = SpendingHeatmap.displayCashflowAmount(layout.totalValue)
+        if displayAmount > 0 { return SemanticColors.positive }
+        if displayAmount < 0 { return SemanticColors.negative }
+        return .primary
+    }
+
+    private func selectedDay(in layout: SpendingHeatmapLayout) -> SpendingHeatmapDay? {
+        guard let selectedDate else { return nil }
+        return layout.days.first { $0.date == selectedDate }
+    }
+
+    private func header(for layout: SpendingHeatmapLayout) -> some View {
         HStack(alignment: .top, spacing: Spacing.sm) {
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text("Spending heatmap")
@@ -121,24 +94,24 @@ struct SpendingHeatmapView: View {
 
             Spacer()
 
-            Text(totalLabel)
+            Text(totalLabel(for: layout))
                 .font(.callout.weight(.semibold))
                 .monospacedDigit()
-                .foregroundStyle(totalTint)
+                .foregroundStyle(totalTint(for: layout))
                 .lineLimit(1)
                 .layoutPriority(1)
         }
     }
 
-    private var heatmapGrid: some View {
+    private func heatmapGrid(for layout: SpendingHeatmapLayout) -> some View {
         HStack(alignment: .top, spacing: cellSpacing) {
-            ForEach(Array(weekColumns.enumerated()), id: \.offset) { _, week in
+            ForEach(Array(layout.weekColumns.enumerated()), id: \.offset) { _, week in
                 VStack(spacing: cellSpacing) {
                     ForEach(Array(week.enumerated()), id: \.offset) { _, day in
                         if let day {
                             HeatmapCell(
                                 day: day,
-                                peakValue: peakValue,
+                                peakValue: layout.peakValue,
                                 mode: mode,
                                 isSelected: selectedDate == day.date,
                                 size: cellSize
@@ -156,10 +129,10 @@ struct SpendingHeatmapView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityLabel(accessibilitySummary)
+        .accessibilityLabel(accessibilitySummary(for: layout))
     }
 
-    private var legend: some View {
+    private func legend(for layout: SpendingHeatmapLayout) -> some View {
         HStack(spacing: Spacing.xs) {
             if mode == .spending {
                 Text("Less")
@@ -182,17 +155,17 @@ struct SpendingHeatmapView: View {
 
             Spacer()
 
-            Text("\(activeDayCount) active days")
+            Text("\(layout.activeDayCount) active days")
                 .microText()
                 .foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(legendAccessibilityLabel)
+        .accessibilityLabel(legendAccessibilityLabel(for: layout))
     }
 
     @ViewBuilder
-    private var selectedDaySummary: some View {
-        if let selectedDay {
+    private func selectedDaySummary(for layout: SpendingHeatmapLayout) -> some View {
+        if let selectedDay = selectedDay(in: layout) {
             HStack(spacing: Spacing.sm) {
                 Image(systemName: mode == .spending ? "calendar" : "arrow.left.arrow.right")
                     .foregroundStyle(SemanticColors.brand)
@@ -224,18 +197,19 @@ struct SpendingHeatmapView: View {
         .accessibilityLabel("\(emptyPresentation.title). \(emptyPresentation.description)")
     }
 
-    private var accessibilitySummary: String {
-        let activeDays = days.filter { $0.transactionCount > 0 }.count
-        let signalText = strongestSignals.map(\.accessibilitySummary).joined(separator: " ")
+    private func accessibilitySummary(for layout: SpendingHeatmapLayout) -> String {
+        let signalText = SpendingHeatmap.strongestSignals(from: layout.days, mode: mode)
+            .map(\.accessibilitySummary)
+            .joined(separator: " ")
         let signalSuffix = signalText.isEmpty ? "" : " \(signalText)"
-        return "\(mode == .spending ? "Spending" : "Net cashflow") heatmap with \(activeDays) active days. Peak day \(Formatters.currency(peakValue, format: .full)). Total \(totalLabel).\(signalSuffix)"
+        return "\(mode == .spending ? "Spending" : "Net cashflow") heatmap with \(layout.activeDayCount) active days. Peak day \(Formatters.currency(layout.peakValue, format: .full)). Total \(totalLabel(for: layout)).\(signalSuffix)"
     }
 
-    private var legendAccessibilityLabel: String {
+    private func legendAccessibilityLabel(for layout: SpendingHeatmapLayout) -> String {
         if mode == .spending {
-            return "Spending heatmap legend, lighter cells mean less spending and darker cells mean more spending. \(activeDayCount) active days."
+            return "Spending heatmap legend, lighter cells mean less spending and darker cells mean more spending. \(layout.activeDayCount) active days."
         }
-        return "Net cashflow heatmap legend, green cells mean income and red cells mean outflow. \(activeDayCount) active days."
+        return "Net cashflow heatmap legend, green cells mean income and red cells mean outflow. \(layout.activeDayCount) active days."
     }
 
     private func selectedDayAccessibilityLabel(_ day: SpendingHeatmapDay) -> String {
