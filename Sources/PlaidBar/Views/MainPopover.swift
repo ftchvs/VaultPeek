@@ -1941,6 +1941,9 @@ private struct SelectedAccountPanel: View {
     }
 
     private var institutionTransactionCount: Int {
+        // The dialog message is evaluated as part of the panel body, so gate
+        // the full transaction scan on the dialog actually being presented.
+        guard isConfirmingAccountRemoval else { return 0 }
         let institutionAccountIds = Set(
             appState.accounts.filter { $0.itemId == account.itemId }.map(\.id)
         )
@@ -2525,7 +2528,11 @@ private struct ErrorBanner: View {
         .transition(.move(edge: .bottom).combined(with: .opacity))
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Error: \(error)")
-        .onAppear {
+        .task(id: error) {
+            // Keyed by the error text so each distinct error is announced,
+            // not just the first one mounted; the task also yields once so
+            // the banner is in the hierarchy before VoiceOver speaks.
+            await Task.yield()
             AccessibilityNotification.Announcement("Error: \(error)").post()
         }
     }
