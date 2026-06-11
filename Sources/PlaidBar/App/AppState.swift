@@ -427,6 +427,19 @@ final class AppState {
         )
     }
 
+    func onboardingPreflight(for environment: PlaidEnvironment) -> OnboardingPreflight {
+        OnboardingPreflight.evaluate(
+            expectedEnvironment: environment,
+            serverConnected: serverConnected,
+            serverEnvironment: serverEnvironment,
+            credentialsConfigured: serverCredentialsConfigured,
+            modeText: statusModeText,
+            credentialsText: serverCredentialsText,
+            storageText: activeStorageDirectoryDisplayText,
+            linkedItemCount: statusItemCount
+        )
+    }
+
     var firstRunCompletionState: FirstRunCompletionState {
         FirstRunCompletionState.evaluate(
             isDemoMode: isDemoMode,
