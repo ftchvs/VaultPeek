@@ -143,6 +143,9 @@ extension DashboardAccountFilterKind {
 struct DashboardFilterBar: View {
     @Environment(AppState.self) private var appState
     @Binding var selection: DashboardAccountFilter
+    /// Whether an account row is drilled in, so the container's VoiceOver
+    /// label keeps the row-selection state the old caption used to announce.
+    let hasSelectedAccount: Bool
 
     var body: some View {
         let items = DashboardNavBarModel.items(
@@ -175,7 +178,11 @@ struct DashboardFilterBar: View {
         // The selected-filter rollup lives in the container *label*, not the
         // container value: macOS VoiceOver announces a group's label when
         // entering it but does not reliably read a group's AXValue.
-        .accessibilityLabel(DashboardNavBarModel.containerAccessibilityLabel(selected: selection, items: items))
+        .accessibilityLabel(DashboardNavBarModel.containerAccessibilityLabel(
+            selected: selection,
+            items: items,
+            hasSelectedAccount: hasSelectedAccount
+        ))
     }
 }
 

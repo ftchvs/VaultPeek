@@ -1204,7 +1204,10 @@ private struct DashboardOverviewStack: View {
             }
 
             VStack(alignment: .leading, spacing: LayoutSpacing.controls) {
-                DashboardFilterBar(selection: $filterSelection)
+                DashboardFilterBar(
+                    selection: $filterSelection,
+                    hasSelectedAccount: selectedAccountId != nil
+                )
 
                 AccountsSection(
                     accounts: accounts,

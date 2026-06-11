@@ -253,12 +253,22 @@ struct DashboardNavBarModelTests {
         let items = DashboardNavBarModel.items(accounts: Self.mixedAccounts)
 
         #expect(
-            DashboardNavBarModel.containerAccessibilityLabel(selected: .all, items: items)
-                == "Account filters. All: 4 accounts"
+            DashboardNavBarModel.containerAccessibilityLabel(selected: .all, items: items, hasSelectedAccount: false)
+                == "Account filters. All: 4 accounts; select a row for details"
         )
         #expect(
-            DashboardNavBarModel.containerAccessibilityLabel(selected: .cash, items: items)
-                == "Account filters. Cash: 2 of 4 accounts"
+            DashboardNavBarModel.containerAccessibilityLabel(selected: .cash, items: items, hasSelectedAccount: false)
+                == "Account filters. Cash: 2 of 4 accounts; select a row for details"
+        )
+    }
+
+    @Test("Container label announces drill-in state when a row is selected")
+    func containerAccessibilityLabelAnnouncesDrillInState() {
+        let items = DashboardNavBarModel.items(accounts: Self.mixedAccounts)
+
+        #expect(
+            DashboardNavBarModel.containerAccessibilityLabel(selected: .cash, items: items, hasSelectedAccount: true)
+                == "Account filters. Cash: 2 of 4 accounts; selected row shows details"
         )
     }
 
@@ -267,12 +277,12 @@ struct DashboardNavBarModelTests {
         let items = DashboardNavBarModel.items(accounts: [], degradedItemIds: [])
 
         #expect(
-            DashboardNavBarModel.containerAccessibilityLabel(selected: .all, items: items)
-                == "Account filters. All: 0 accounts"
+            DashboardNavBarModel.containerAccessibilityLabel(selected: .all, items: items, hasSelectedAccount: false)
+                == "Account filters. All: 0 accounts; select a row for details"
         )
         #expect(
-            DashboardNavBarModel.containerAccessibilityLabel(selected: .status, items: items)
-                == "Account filters. Status: 0 of 0 accounts"
+            DashboardNavBarModel.containerAccessibilityLabel(selected: .status, items: items, hasSelectedAccount: false)
+                == "Account filters. Status: 0 of 0 accounts; select a row for details"
         )
     }
 

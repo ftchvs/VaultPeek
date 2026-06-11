@@ -96,12 +96,19 @@ public enum DashboardNavBarModel {
     /// macOS VoiceOver announces a group's *label* when entering it but does
     /// not reliably read a group's accessibility *value* before jumping to
     /// the children, so the selected-filter rollup is folded into the label
-    /// itself — for example "Account filters. Cash: 3 of 8 accounts".
+    /// itself — for example "Account filters. Cash: 3 of 8 accounts;
+    /// select a row for details". The drill-in clause carries over from the
+    /// removed overview caption so VoiceOver users keep the row-selection
+    /// state.
     public static func containerAccessibilityLabel(
         selected: DashboardAccountFilterKind,
-        items: [DashboardNavBarItem]
+        items: [DashboardNavBarItem],
+        hasSelectedAccount: Bool
     ) -> String {
-        "Account filters. \(summary(selected: selected, items: items))"
+        let detailClause = hasSelectedAccount
+            ? "selected row shows details"
+            : "select a row for details"
+        return "Account filters. \(summary(selected: selected, items: items)); \(detailClause)"
     }
 
     /// One-line VoiceOver/caption summary for the selected filter.
