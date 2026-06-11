@@ -705,6 +705,12 @@ final class AppState {
             serverConnected = false
             serverEnvironment = nil
             serverSyncedItemCount = nil
+            // Demo fixtures must not survive into real mode: a later refresh
+            // preserves cached accounts missing from the server response, so
+            // stale demo rows would otherwise linger on the dashboard.
+            accounts = []
+            transactions = []
+            itemStatuses = []
             return
         }
 

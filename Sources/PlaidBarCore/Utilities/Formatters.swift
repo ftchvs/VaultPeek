@@ -50,16 +50,16 @@ public enum Formatters {
 
     private static func abbreviatedCurrency(_ amount: Double, currencyCode: String) -> String {
         let sign = amount < 0 ? "-" : ""
-        let abs = abs(amount)
+        let magnitude = abs(amount)
         let symbol = currencyCode == "USD" ? "$" : currencyCode
 
-        switch abs {
+        switch magnitude {
         case 1_000_000...:
-            return "\(sign)\(symbol)\(String(format: "%.1fM", abs / 1_000_000))"
+            return "\(sign)\(symbol)\(String(format: "%.1fM", magnitude / 1_000_000))"
         case 1_000...:
-            return "\(sign)\(symbol)\(String(format: "%.1fK", abs / 1_000))"
+            return "\(sign)\(symbol)\(String(format: "%.1fK", magnitude / 1_000))"
         default:
-            return "\(sign)\(symbol)\(String(format: "%.0f", abs))"
+            return "\(sign)\(symbol)\(String(format: "%.0f", magnitude))"
         }
     }
 

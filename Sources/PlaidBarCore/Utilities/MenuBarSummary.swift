@@ -69,7 +69,7 @@ public enum MenuBarSummary {
         // the window filter avoids a DateFormatter parse per transaction. This
         // runs on the menu bar label render path, where parsing dominated cost.
         let startKey = Formatters.transactionDateString(startDate)
-        let endKey = Formatters.transactionDateString(now)
+        let endKey = Formatters.transactionDateString(calendar.startOfDay(for: now))
 
         return transactions.reduce(0) { total, transaction in
             guard !transaction.isIncome,
