@@ -99,6 +99,24 @@ struct PlaidBarCoreTests {
         #expect(feed.map(\.id) == ["pending", "posted-large", "posted-small", "old"])
     }
 
+    @Test("Account transaction activity snapshot reuses filtered transactions for summary values")
+    func accountTransactionActivitySnapshotSummarizesFilteredTransactions() {
+        let transactions = [
+            TransactionDTO(id: "old", accountId: "checking", amount: 10, date: "2026-01-13", name: "Old"),
+            TransactionDTO(id: "other", accountId: "credit", amount: 999, date: "2026-01-16", name: "Other"),
+            TransactionDTO(id: "pending", accountId: "checking", amount: 30, date: "2026-01-15", name: "Pending", pending: true),
+            TransactionDTO(id: "invalid", accountId: "checking", amount: 8, date: "not-a-date", name: "Invalid"),
+        ]
+
+        let snapshot = AccountTransactionFeed.activitySnapshot(forAccountId: "checking", in: transactions)
+
+        #expect(snapshot.transactions.map(\.id) == ["pending", "old", "invalid"])
+        #expect(snapshot.transactionCount == 3)
+        #expect(snapshot.pendingTransactionCount == 1)
+        #expect(snapshot.latestTransactionDate == "2026-01-15")
+        #expect(snapshot.recentSummary.transactionCount == 2)
+    }
+
     @Test("Account transaction feed keeps invalid dates behind dated transactions")
     func accountTransactionFeedKeepsInvalidDatesBehindDatedTransactions() {
         let transactions = [
