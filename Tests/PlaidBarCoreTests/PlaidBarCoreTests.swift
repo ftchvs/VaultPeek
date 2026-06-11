@@ -1793,6 +1793,160 @@ struct PlaidBarCoreTests {
         #expect(!state.canRetry)
     }
 
+    @Test("Heatmap empty presentation distinguishes no data from filtered-zero")
+    func heatmapEmptyPresentationDistinguishesStates() {
+        let noData = SpendingHeatmap.emptyPresentation(transactionCount: 0, mode: .spending)
+        #expect(noData.title == "No Heatmap Data")
+        #expect(noData.description.contains("after syncing"))
+
+        let filteredSpend = SpendingHeatmap.emptyPresentation(transactionCount: 12, mode: .spending)
+        #expect(filteredSpend.title == "No Spending in This View")
+        #expect(filteredSpend.description.contains("income, and transfers are excluded"))
+
+        let filteredCashflow = SpendingHeatmap.emptyPresentation(transactionCount: 12, mode: .netCashflow)
+        #expect(filteredCashflow.title == "No Cashflow in This View")
+        #expect(filteredCashflow.description.contains("net cashflow"))
+    }
+
+    // MARK: - Onboarding Preflight Tests
+
+    @Test("Onboarding preflight blocks Plaid Link while the server is offline")
+    func onboardingPreflightBlocksWhenServerOffline() {
+        let preflight = OnboardingPreflight.evaluate(
+            expectedEnvironment: .sandbox,
+            serverConnected: false,
+            serverEnvironment: nil,
+            credentialsConfigured: nil,
+            modeText: "Unknown",
+            credentialsText: "Unknown",
+            storageText: "~/.plaidbar",
+            linkedItemCount: 0
+        )
+
+        #expect(!preflight.isReady)
+        #expect(preflight.hint == "Start PlaidBarServer with --sandbox, then Check Again.")
+        #expect(preflight.rows.first { $0.title == "Server" }?.state == .blocked)
+        #expect(preflight.rows.first { $0.title == "Mode" }?.state == .unknown)
+        #expect(preflight.rows.first { $0.title == "Credentials" }?.state == .unknown)
+    }
+
+    @Test("Onboarding preflight blocks Plaid Link on environment mismatch")
+    func onboardingPreflightBlocksOnModeMismatch() {
+        let preflight = OnboardingPreflight.evaluate(
+            expectedEnvironment: .sandbox,
+            serverConnected: true,
+            serverEnvironment: .production,
+            credentialsConfigured: true,
+            modeText: "Production",
+            credentialsText: "Ready",
+            storageText: "~/.plaidbar",
+            linkedItemCount: 1
+        )
+
+        #expect(!preflight.isReady)
+        #expect(preflight.hint == "The running server is not in sandbox mode.")
+        #expect(preflight.rows.first { $0.title == "Mode" }?.state == .blocked)
+        #expect(preflight.rows.first { $0.title == "Mode" }?.accessibilityHint == "Restart PlaidBarServer in sandbox mode.")
+    }
+
+    @Test("Onboarding preflight blocks Plaid Link on missing production credentials")
+    func onboardingPreflightBlocksOnMissingProductionCredentials() {
+        let preflight = OnboardingPreflight.evaluate(
+            expectedEnvironment: .production,
+            serverConnected: true,
+            serverEnvironment: .production,
+            credentialsConfigured: false,
+            modeText: "Production",
+            credentialsText: "Missing",
+            storageText: "~/.plaidbar",
+            linkedItemCount: 0
+        )
+
+        #expect(!preflight.isReady)
+        #expect(preflight.hint == "Add Plaid credentials to the local server environment before connecting.")
+        #expect(preflight.rows.first { $0.title == "Credentials" }?.state == .blocked)
+        #expect(preflight.rows.first { $0.title == "Credentials" }?.value == "Missing")
+    }
+
+    @Test("Onboarding preflight ready output shows storage path before linking")
+    func onboardingPreflightReadyShowsStoragePath() {
+        let preflight = OnboardingPreflight.evaluate(
+            expectedEnvironment: .sandbox,
+            serverConnected: true,
+            serverEnvironment: .sandbox,
+            credentialsConfigured: true,
+            modeText: "Sandbox",
+            credentialsText: "Ready",
+            storageText: "~/.plaidbar",
+            linkedItemCount: 2
+        )
+
+        #expect(preflight.isReady)
+        #expect(preflight.hint == "Ready to open Plaid Link in your browser.")
+        #expect(preflight.rows.map(\.title) == ["Server", "Mode", "Credentials", "Storage", "Linked items"])
+        #expect(preflight.rows.first { $0.title == "Storage" }?.value == "~/.plaidbar")
+        #expect(preflight.rows.first { $0.title == "Storage" }?.state == .ready)
+        #expect(preflight.rows.first { $0.title == "Linked items" }?.value == "2")
+        #expect(preflight.rows.allSatisfy { !$0.accessibilityHint.isEmpty })
+    }
+
+    @Test("Onboarding preflight blocks production setup against a sandbox server")
+    func onboardingPreflightBlocksProductionAgainstSandboxServer() {
+        let preflight = OnboardingPreflight.evaluate(
+            expectedEnvironment: .production,
+            serverConnected: true,
+            serverEnvironment: .sandbox,
+            credentialsConfigured: true,
+            modeText: "Sandbox",
+            credentialsText: "Ready",
+            storageText: "~/.plaidbar",
+            linkedItemCount: 1
+        )
+
+        #expect(!preflight.isReady)
+        #expect(preflight.hint == "The running server is not in production mode.")
+        #expect(preflight.rows.first { $0.title == "Mode" }?.state == .blocked)
+        #expect(preflight.rows.first { $0.title == "Mode" }?.accessibilityHint == "Restart PlaidBarServer in production mode.")
+    }
+
+    @Test("Onboarding preflight treats unknown credentials as blocked while connected")
+    func onboardingPreflightTreatsUnknownCredentialsAsBlocked() {
+        // A connected server should always report credentialsConfigured; if a
+        // transient response leaves it nil, the gate stays closed (fail safe).
+        let preflight = OnboardingPreflight.evaluate(
+            expectedEnvironment: .sandbox,
+            serverConnected: true,
+            serverEnvironment: .sandbox,
+            credentialsConfigured: nil,
+            modeText: "Sandbox",
+            credentialsText: "Unknown",
+            storageText: "~/.plaidbar",
+            linkedItemCount: 0
+        )
+
+        #expect(!preflight.isReady)
+        #expect(preflight.rows.first { $0.title == "Credentials" }?.state == .blocked)
+        #expect(preflight.hint == "Add Plaid credentials to the local server environment before connecting.")
+    }
+
+    @Test("Onboarding preflight offline production hint names production credentials")
+    func onboardingPreflightOfflineProductionHint() {
+        let preflight = OnboardingPreflight.evaluate(
+            expectedEnvironment: .production,
+            serverConnected: false,
+            serverEnvironment: nil,
+            credentialsConfigured: nil,
+            modeText: "Unknown",
+            credentialsText: "Unknown",
+            storageText: "~/.plaidbar",
+            linkedItemCount: 0
+        )
+
+        #expect(!preflight.isReady)
+        #expect(preflight.hint == "Start PlaidBarServer with production credentials, then Check Again.")
+        #expect(preflight.rows.first { $0.title == "Mode" }?.value == "Unknown")
+    }
+
     // MARK: - Dashboard Status Readiness Tests
 
     @Test("Dashboard status readiness treats demo mode as local data")

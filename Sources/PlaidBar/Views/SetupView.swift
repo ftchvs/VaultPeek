@@ -247,29 +247,11 @@ struct SetupView: View {
     }
 
     private func isPreflightReady(for environment: PlaidEnvironment) -> Bool {
-        appState.serverConnected &&
-            appState.serverEnvironment == environment &&
-            appState.serverCredentialsConfigured == true
+        appState.onboardingPreflight(for: environment).isReady
     }
 
     private func preflightHint(for environment: PlaidEnvironment) -> String {
-        guard appState.serverConnected else {
-            return environment == .sandbox
-                ? "Start PlaidBarServer with --sandbox, then Check Again."
-                : "Start PlaidBarServer with production credentials, then Check Again."
-        }
-
-        guard appState.serverEnvironment == environment else {
-            return environment == .sandbox
-                ? "The running server is not in sandbox mode."
-                : "The running server is not in production mode."
-        }
-
-        guard appState.serverCredentialsConfigured == true else {
-            return "Add Plaid credentials to the local server environment before connecting."
-        }
-
-        return "Ready to open Plaid Link in your browser."
+        appState.onboardingPreflight(for: environment).hint
     }
 
     private func connectingTitle(for completion: FirstRunCompletionState) -> String {
@@ -585,40 +567,9 @@ private struct OnboardingPreflightPanel: View {
             }
 
             VStack(spacing: Spacing.xs) {
-                preflightRow(
-                    title: "Server",
-                    value: appState.serverConnected ? "Connected" : "Offline",
-                    icon: "server.rack",
-                    state: appState.serverConnected ? .ready : .blocked
-                )
-
-                preflightRow(
-                    title: "Mode",
-                    value: modeValue,
-                    icon: environment == .production ? "lock.shield" : "testtube.2",
-                    state: modeState
-                )
-
-                preflightRow(
-                    title: "Credentials",
-                    value: appState.serverCredentialsText,
-                    icon: "key",
-                    state: credentialsState
-                )
-
-                preflightRow(
-                    title: "Storage",
-                    value: appState.activeStorageDirectoryDisplayText,
-                    icon: "internaldrive",
-                    state: appState.serverConnected ? .ready : .unknown
-                )
-
-                preflightRow(
-                    title: "Linked items",
-                    value: "\(appState.statusItemCount)",
-                    icon: "link",
-                    state: .informational
-                )
+                ForEach(appState.onboardingPreflight(for: environment).rows) { row in
+                    preflightRow(row)
+                }
             }
         }
         .padding(Spacing.md)
@@ -626,84 +577,31 @@ private struct OnboardingPreflightPanel: View {
         .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
     }
 
-    private var modeValue: String {
-        guard appState.serverConnected else { return "Unknown" }
-        return appState.statusModeText
-    }
-
-    private var modeState: PreflightState {
-        guard appState.serverConnected else { return .unknown }
-        return appState.serverEnvironment == environment ? .ready : .blocked
-    }
-
-    private var credentialsState: PreflightState {
-        guard appState.serverConnected else { return .unknown }
-        return appState.serverCredentialsConfigured == true ? .ready : .blocked
-    }
-
-    private func preflightRow(
-        title: String,
-        value: String,
-        icon: String,
-        state: PreflightState
-    ) -> some View {
+    private func preflightRow(_ row: OnboardingPreflightRow) -> some View {
         HStack(spacing: Spacing.sm) {
-            Image(systemName: icon)
-                .foregroundStyle(state.color)
+            Image(systemName: row.iconName)
+                .foregroundStyle(color(for: row.state))
                 .frame(width: 18)
 
-            Text(title)
+            Text(row.title)
                 .foregroundStyle(.secondary)
 
             Spacer(minLength: Spacing.sm)
 
-            Text(value)
+            Text(row.value)
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(state.color)
+                .foregroundStyle(color(for: row.state))
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
         }
         .font(.caption)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(title): \(value)")
-        .accessibilityHint(accessibilityHint(for: title, state: state))
+        .accessibilityLabel("\(row.title): \(row.value)")
+        .accessibilityHint(row.accessibilityHint)
     }
 
-    private func accessibilityHint(for title: String, state: PreflightState) -> String {
+    private func color(for state: OnboardingPreflightRowState) -> Color {
         switch state {
-        case .ready:
-            return "\(title) is ready."
-        case .blocked:
-            return blockedAccessibilityHint(for: title)
-        case .unknown:
-            return "Start PlaidBarServer, then check again."
-        case .informational:
-            return "\(title) is informational."
-        }
-    }
-
-    private func blockedAccessibilityHint(for title: String) -> String {
-        switch title {
-        case "Server":
-            "Start PlaidBarServer, then check again."
-        case "Mode":
-            "Restart PlaidBarServer in \(environment.rawValue) mode."
-        case "Credentials":
-            "Add Plaid credentials to the local server environment."
-        default:
-            "\(title) needs attention before Plaid Link can open."
-        }
-    }
-}
-
-private enum PreflightState {
-    case ready
-    case blocked
-    case unknown
-    case informational
-
-    var color: Color {
-        switch self {
         case .ready:
             SemanticColors.positive
         case .blocked:
