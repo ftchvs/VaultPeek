@@ -186,13 +186,13 @@ and `docs/autonomous-roadmap.md`.
 
 ### PR-015: Demo Mode Polish
 
-- [ ] T071: Keep demo data realistic, synthetic, and aligned with current UI
+- [x] T071: Keep demo data realistic, synthetic, and aligned with current UI
   screenshots.
 - [ ] T072: Ensure demo mode never calls Plaid.
-- [ ] T073: Make demo balances, transactions, recurring charges, and credit
+- [x] T073: Make demo balances, transactions, recurring charges, and credit
   state tell a coherent product story.
-- [ ] T074: Add one demo edge case for stale sync or degraded status.
-- [ ] T075: Refresh README or screenshot references after demo UI changes.
+- [x] T074: Add one demo edge case for stale sync or degraded status.
+- [x] T075: Refresh README or screenshot references after demo UI changes.
 
 ### PR-016: Sandbox Reliability
 

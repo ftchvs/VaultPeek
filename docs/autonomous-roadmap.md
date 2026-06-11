@@ -317,6 +317,12 @@ remain unmarked.
   unavailable runtime states, and reversible category-hint action language;
   evidence: `LocalAIInsightReceipt`, `LocalInsightsCard`, design-system notes,
   and focused core tests.
+- 2026-06-11 [T071] [T073] [T074] [T075]: defined the synthetic demo narrative
+  contract across steady overview, cash runway, credit pressure, reconnect
+  recovery, and sandbox preflight screenshot scenarios, including fixture
+  intent, dashboard story, expected recovery state, asset traceability, and
+  reduced-noise composition guidance; evidence: `docs/demo-scenarios.md`,
+  `docs/screenshots.md`, and `README.md`.
 
 ## Backlog Source
 
