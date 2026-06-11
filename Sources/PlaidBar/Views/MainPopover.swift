@@ -7,7 +7,6 @@ struct MainPopover: View {
     @Environment(\.openSettings) private var openSettings
     @AppStorage("dashboard.accountFilter") private var selectedFilterRawValue = DashboardAccountFilter.all.rawValue
     @AppStorage("dashboard.selectedAccountId") private var selectedAccountId = ""
-    @State private var settingsActivation = SettingsWindowActivationRestorer()
     @State private var isShowingAccountSetup = false
     @State private var shouldShowSetupRecoveryDashboard = false
 
@@ -98,7 +97,7 @@ struct MainPopover: View {
                 Divider()
 
                 DashboardFooter(
-                    settingsActivation: settingsActivation,
+                    settingsActivation: .shared,
                     openSettings: openSettings,
                     onAddAccount: openAccountSetup
                 )
@@ -1678,7 +1677,6 @@ private struct SelectedAccountPanel: View {
     let account: AccountDTO
     let isStatusFilter: Bool
     @State private var isConfirmingAccountRemoval = false
-    @State private var settingsActivation = SettingsWindowActivationRestorer()
 
     private var drillInSummary: DashboardAccountDrillInSummary {
         DashboardAccountDrillInSummary.presentation(
@@ -2004,7 +2002,7 @@ private struct SelectedAccountPanel: View {
     }
 
     private func openSettingsWindow() {
-        settingsActivation.open(openSettings: openSettings)
+        SettingsWindowActivationRestorer.shared.open(openSettings: openSettings)
     }
 
     private var panelStroke: Color {
@@ -2302,7 +2300,9 @@ private struct DashboardFooter: View {
 }
 
 @MainActor
-private final class SettingsWindowActivationRestorer: @unchecked Sendable {
+private final class SettingsWindowActivationRestorer {
+    static let shared = SettingsWindowActivationRestorer()
+
     private var closeObserver: NSObjectProtocol?
     private var discoveryObserver: NSObjectProtocol?
     private var previousActivationPolicy: NSApplication.ActivationPolicy?
@@ -2341,7 +2341,7 @@ private final class SettingsWindowActivationRestorer: @unchecked Sendable {
         }
 
         DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
+            guard let self, self.discoveryObserver != nil else { return }
             _ = self.focusCurrentSettingsWindow()
         }
     }
@@ -2390,7 +2390,10 @@ private final class SettingsWindowActivationRestorer: @unchecked Sendable {
             return true
         }
 
-        return window.frame.width >= 580 && window.frame.height >= 500
+        return window.styleMask.contains(.titled)
+            && window.sheetParent == nil
+            && window.frame.width >= 580
+            && window.frame.height >= 500
     }
 
     private func removeCloseObserver() {
