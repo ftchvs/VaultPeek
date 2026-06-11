@@ -18,12 +18,14 @@ public struct DashboardOverviewHeightBudget: Equatable, Sendable {
     public let accountsHeaderHeight: Double
     public let accountRowHeight: Double
     public let selectedDrillInHeight: Double
+    public let receiptHeight: Double
     public let verticalPadding: Double
     public let lowerSectionReserve: Double
 
     public init(
         headerHeight: Double = 42,
         statusStripHeight: Double = 34,
+        receiptHeight: Double = 28,
         overviewStackSpacing: Double = 14,
         heatmapHeight: Double = 96,
         captionAndFilterHeight: Double = 36,
@@ -35,6 +37,7 @@ public struct DashboardOverviewHeightBudget: Equatable, Sendable {
     ) {
         self.headerHeight = headerHeight
         self.statusStripHeight = statusStripHeight
+        self.receiptHeight = receiptHeight
         self.overviewStackSpacing = overviewStackSpacing
         self.heatmapHeight = heatmapHeight
         self.captionAndFilterHeight = captionAndFilterHeight
@@ -47,13 +50,16 @@ public struct DashboardOverviewHeightBudget: Equatable, Sendable {
 
     public func estimatedFirstGlanceHeight(
         visibleAccountRows: Int,
-        includesSelectedDrillIn: Bool
+        includesSelectedDrillIn: Bool,
+        includesChangeReceipt: Bool = false
     ) -> Double {
         let safeRows = max(0, visibleAccountRows)
         let drillInHeight = includesSelectedDrillIn ? selectedDrillInHeight : 0
+        let localReceiptHeight = includesChangeReceipt ? receiptHeight : 0
 
         return headerHeight
             + statusStripHeight
+            + localReceiptHeight
             + overviewStackSpacing
             + heatmapHeight
             + captionAndFilterHeight
@@ -67,11 +73,13 @@ public struct DashboardOverviewHeightBudget: Equatable, Sendable {
     public func fitsFirstGlance(
         visibleAccountRows: Int,
         includesSelectedDrillIn: Bool,
+        includesChangeReceipt: Bool = false,
         availableHeight: Double = Self.firstGlanceVisibleHeight
     ) -> Bool {
         estimatedFirstGlanceHeight(
             visibleAccountRows: visibleAccountRows,
-            includesSelectedDrillIn: includesSelectedDrillIn
+            includesSelectedDrillIn: includesSelectedDrillIn,
+            includesChangeReceipt: includesChangeReceipt
         ) <= availableHeight
     }
 }
