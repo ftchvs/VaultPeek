@@ -32,6 +32,7 @@ final class ServerProcessService {
 
         let storageDirectory = LocalDataStore.storageDirectoryURL()
         let configFileURL = storageDirectory.appendingPathComponent(LocalDataStore.serverConfigFilename)
+        let configFileContents = try? String(contentsOf: configFileURL, encoding: .utf8)
         guard let plan = ServerAutoLaunchPlan.evaluate(
             bundledServerPath: Self.bundledServerExecutablePath(),
             isAppBundle: Self.isRunningFromAppBundle(),
@@ -39,6 +40,7 @@ final class ServerProcessService {
             serverAlreadyReachable: serverAlreadyReachable,
             dataDirectoryPath: storageDirectory.path,
             configFileExists: FileManager.default.fileExists(atPath: configFileURL.path),
+            configFileContents: configFileContents,
             port: PlaidBarConstants.serverPort(environment: ProcessInfo.processInfo.environment),
             parentProcessId: ProcessInfo.processInfo.processIdentifier
         ) else {

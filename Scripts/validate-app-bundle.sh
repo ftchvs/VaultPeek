@@ -11,6 +11,17 @@ fi
 APP_BINARY="$APP_DIR/Contents/MacOS/PlaidBar"
 SERVER_BINARY="$APP_DIR/Contents/MacOS/PlaidBarServer"
 SPARKLE_FRAMEWORK="$APP_DIR/Contents/Frameworks/Sparkle.framework"
+INFO_PLIST="$APP_DIR/Contents/Info.plist"
+
+if [ ! -f "$INFO_PLIST" ]; then
+    echo "Missing Info.plist at $INFO_PLIST" >&2
+    exit 1
+fi
+
+if [ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$INFO_PLIST" 2>/dev/null || true)" != "PlaidBar" ]; then
+    echo "PlaidBar.app Info.plist must set CFBundleExecutable to PlaidBar" >&2
+    exit 1
+fi
 
 if [ ! -x "$APP_BINARY" ]; then
     echo "Missing executable PlaidBar binary at $APP_BINARY" >&2

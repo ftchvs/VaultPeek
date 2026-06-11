@@ -18,6 +18,9 @@ public struct ServerAutoLaunchPlan: Equatable, Sendable {
     }
 
     public static let logFilename = "server.log"
+    public static let blockedManagedConfigKeys: Set<String> = [
+        LocalDataStore.dataDirectoryEnvironmentVariable,
+    ]
 
     /// Returns a launch plan only when every precondition for managing a
     /// bundled server holds:
@@ -32,9 +35,12 @@ public struct ServerAutoLaunchPlan: Equatable, Sendable {
     /// crash-loop. Without `server.conf`, first launch stays serverless and
     /// the app offers demo mode and setup guidance instead. The plan passes
     /// the config via `--config` so the credentials and environment selection
-    /// configured there apply to the app-managed server, the app's resolved
-    /// port via `--port` (CLI beats config) so a `PLAIDBAR_SERVER_PORT` line
-    /// in `server.conf` cannot start the server somewhere the app is not
+    /// configured there apply to the app-managed server. Managed launches
+    /// reject config files that move storage because the Finder-launched app
+    /// would otherwise keep reading the default auth-token path while the
+    /// server writes elsewhere. The plan still passes the app's resolved port
+    /// via `--port` (CLI beats config) so a `PLAIDBAR_SERVER_PORT` line in
+    /// `server.conf` cannot start the server somewhere the app is not
     /// listening, and the app's PID via `--exit-with-parent` so the server
     /// never outlives a crashed app.
     public static func evaluate(
@@ -44,11 +50,16 @@ public struct ServerAutoLaunchPlan: Equatable, Sendable {
         serverAlreadyReachable: Bool,
         dataDirectoryPath: String,
         configFileExists: Bool,
+        configFileContents: String? = "",
         port: Int,
         parentProcessId: Int32?
     ) -> ServerAutoLaunchPlan? {
         guard isAppBundle, !isDemoMode, !serverAlreadyReachable, configFileExists else { return nil }
         guard let bundledServerPath, !bundledServerPath.isEmpty else { return nil }
+        guard let configFileContents else { return nil }
+        if containsBlockedManagedConfigKey(in: configFileContents) {
+            return nil
+        }
 
         let normalizedDataDirectory = dataDirectoryPath.hasSuffix("/")
             ? String(dataDirectoryPath.dropLast())
@@ -67,5 +78,21 @@ public struct ServerAutoLaunchPlan: Equatable, Sendable {
             arguments: arguments,
             logFilePath: normalizedDataDirectory + "/" + logFilename
         )
+    }
+
+    public static func containsBlockedManagedConfigKey(in contents: String) -> Bool {
+        contents.components(separatedBy: .newlines).contains { rawLine in
+            var line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !line.isEmpty, !line.hasPrefix("#") else { return false }
+
+            if line.hasPrefix("export ") {
+                line.removeFirst("export ".count)
+                line = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+
+            guard let separator = line.firstIndex(of: "=") else { return false }
+            let key = String(line[..<separator]).trimmingCharacters(in: .whitespacesAndNewlines)
+            return blockedManagedConfigKeys.contains(key)
+        }
     }
 }

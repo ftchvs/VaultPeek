@@ -44,6 +44,8 @@ mkdir -p "$MACOS_DIR" "$FRAMEWORKS_DIR"
 cp "$BUILD_DIR/PlaidBar" "$APP_BINARY"
 cp "$BUILD_DIR/PlaidBarServer" "$MACOS_DIR/PlaidBarServer"
 cp "$RESOURCES_DIR/Info.plist" "$CONTENTS_DIR/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleExecutable PlaidBar" "$CONTENTS_DIR/Info.plist" 2>/dev/null \
+    || /usr/libexec/PlistBuddy -c "Add :CFBundleExecutable string PlaidBar" "$CONTENTS_DIR/Info.plist"
 ditto "$BUILD_DIR/Sparkle.framework" "$FRAMEWORKS_DIR/Sparkle.framework"
 chmod +x "$APP_BINARY" "$MACOS_DIR/PlaidBarServer"
 
