@@ -533,6 +533,23 @@ struct PlaidBarCoreTests {
         #expect(MenuBarSummary.recentSpend(from: transactions, now: now) == 30)
     }
 
+    @Test("Menu bar summary recent spend window keys stay consistent for non-system calendars")
+    func menuBarSummaryRecentSpendNonSystemCalendar() {
+        // A calendar whose time zone is far ahead of the system zone could
+        // previously produce an end key behind the start key (start derived
+        // from calendar.startOfDay, end from raw `now`), silently emptying
+        // the one-day window. Both keys now derive identically.
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Pacific/Kiritimati")! // UTC+14
+        let now = Date()
+        let todayKey = Formatters.transactionDateString(calendar.startOfDay(for: now))
+        let transactions = [
+            TransactionDTO(id: "1", accountId: "a", amount: 10, date: todayKey, name: "Today"),
+        ]
+
+        #expect(MenuBarSummary.recentSpend(from: transactions, now: now, calendar: calendar, days: 1) == 10)
+    }
+
     @Test("Account activity summary uses recent non-transfer cash flow")
     func accountActivitySummaryRecentCashFlow() {
         let now = Formatters.parseTransactionDate("2026-01-30")!

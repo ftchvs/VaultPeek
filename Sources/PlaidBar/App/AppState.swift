@@ -194,10 +194,7 @@ final class AppState {
             notifyHighUtilization = defaults.bool(forKey: Keys.notifyHighUtilization)
         }
         // Balance history
-        if let data = defaults.data(forKey: Keys.balanceHistory),
-           let history = try? JSONDecoder().decode([BalanceSnapshot].self, from: data) {
-            balanceHistory = history
-        }
+        loadPersistedBalanceHistory()
         // Launch at login
         launchAtLogin = LaunchService.isEnabled
     }
@@ -701,16 +698,29 @@ final class AppState {
 
         if isDemoMode {
             isDemoMode = false
+            isDemoStatusRecoveryScenario = false
             isSetupComplete = false
             serverConnected = false
             serverEnvironment = nil
+            serverVersion = nil
+            serverItemCount = nil
+            serverCredentialsConfigured = nil
+            serverStoragePath = nil
+            serverSyncReady = nil
             serverSyncedItemCount = nil
+            lastSyncDate = nil
             // Demo fixtures must not survive into real mode: a later refresh
-            // preserves cached accounts missing from the server response, so
-            // stale demo rows would otherwise linger on the dashboard.
+            // preserves cached accounts missing from the server response, and
+            // statusItemCount prefers serverItemCount, so stale demo rows and
+            // counts would otherwise linger on the real dashboard.
             accounts = []
             transactions = []
             itemStatuses = []
+            // loadDemoData() replaced the in-memory balance history with a
+            // synthetic 60-day series (the persisted copy was untouched).
+            // Restore the persisted history so the next real snapshot does
+            // not append to — and then persist — the demo series.
+            loadPersistedBalanceHistory()
             return
         }
 
@@ -1148,6 +1158,15 @@ final class AppState {
         isLoading = false
         loadDemoData()
         return true
+    }
+
+    private func loadPersistedBalanceHistory() {
+        if let data = UserDefaults.standard.data(forKey: Keys.balanceHistory),
+           let history = try? JSONDecoder().decode([BalanceSnapshot].self, from: data) {
+            balanceHistory = history
+        } else {
+            balanceHistory = []
+        }
     }
 
     private func recordBalanceSnapshot() {
