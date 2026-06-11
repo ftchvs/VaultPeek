@@ -32,8 +32,11 @@ public struct ServerAutoLaunchPlan: Equatable, Sendable {
     /// crash-loop. Without `server.conf`, first launch stays serverless and
     /// the app offers demo mode and setup guidance instead. The plan passes
     /// the config via `--config` so the credentials and environment selection
-    /// configured there apply to the app-managed server, and the app's PID
-    /// via `--exit-with-parent` so the server never outlives a crashed app.
+    /// configured there apply to the app-managed server, the app's resolved
+    /// port via `--port` (CLI beats config) so a `PLAIDBAR_SERVER_PORT` line
+    /// in `server.conf` cannot start the server somewhere the app is not
+    /// listening, and the app's PID via `--exit-with-parent` so the server
+    /// never outlives a crashed app.
     public static func evaluate(
         bundledServerPath: String?,
         isAppBundle: Bool,
@@ -41,6 +44,7 @@ public struct ServerAutoLaunchPlan: Equatable, Sendable {
         serverAlreadyReachable: Bool,
         dataDirectoryPath: String,
         configFileExists: Bool,
+        port: Int,
         parentProcessId: Int32?
     ) -> ServerAutoLaunchPlan? {
         guard isAppBundle, !isDemoMode, !serverAlreadyReachable, configFileExists else { return nil }
@@ -50,7 +54,10 @@ public struct ServerAutoLaunchPlan: Equatable, Sendable {
             ? String(dataDirectoryPath.dropLast())
             : dataDirectoryPath
 
-        var arguments = ["--config", normalizedDataDirectory + "/" + LocalDataStore.serverConfigFilename]
+        var arguments = [
+            "--config", normalizedDataDirectory + "/" + LocalDataStore.serverConfigFilename,
+            "--port", String(port),
+        ]
         if let parentProcessId {
             arguments += ["--exit-with-parent", String(parentProcessId)]
         }

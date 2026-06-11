@@ -998,19 +998,28 @@ final class AppState {
         guard !CommandLine.arguments.contains("--demo") else { return }
         await checkServerConnection()
         guard !serverConnected else { return }
+        // The authenticated status check fails for an externally managed
+        // server when the local auth token is missing or stale. Probe the
+        // unauthenticated /health endpoint so that case never spawns a
+        // second server onto an occupied port.
+        guard !(await serverClient.isLocalServerResponding()) else { return }
         _ = ServerProcessService.shared.launchBundledServerIfNeeded(
             isDemoMode: isDemoMode,
-            serverAlreadyReachable: serverConnected
+            serverAlreadyReachable: false
         )
     }
 
     /// Popover-open path: start the bundled server if nothing did yet, then
     /// wait briefly for readiness (also covers a still-booting prewarm).
     private func startBundledServerIfAvailable() async {
-        let launched = ServerProcessService.shared.launchBundledServerIfNeeded(
-            isDemoMode: isDemoMode,
-            serverAlreadyReachable: serverConnected
-        )
+        var launched = false
+        if !ServerProcessService.shared.isManagingServer,
+           !(await serverClient.isLocalServerResponding()) {
+            launched = ServerProcessService.shared.launchBundledServerIfNeeded(
+                isDemoMode: isDemoMode,
+                serverAlreadyReachable: false
+            )
+        }
         guard launched || ServerProcessService.shared.isManagingServer else { return }
 
         for _ in 0 ..< 12 {

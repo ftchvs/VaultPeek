@@ -7,7 +7,8 @@ import PlaidBarCore
 ///
 /// The service only ever manages a server it spawned itself. Externally
 /// started servers (Homebrew `plaidbar-run`, `Scripts/run.sh`, manual runs)
-/// are detected through the existing reachability check and left alone.
+/// are detected through an unauthenticated `/health` probe before any spawn
+/// decision and left alone.
 @MainActor
 final class ServerProcessService {
     static let shared = ServerProcessService()
@@ -22,6 +23,11 @@ final class ServerProcessService {
     /// Launches the bundled server when `ServerAutoLaunchPlan` allows it.
     /// Returns `true` when a process was actually started.
     func launchBundledServerIfNeeded(isDemoMode: Bool, serverAlreadyReachable: Bool) -> Bool {
+        // A previously managed server that already exited must not block a
+        // retry (e.g. it crashed on a bad config the user has since fixed).
+        if let process = managedProcess, !process.isRunning {
+            managedProcess = nil
+        }
         guard managedProcess == nil else { return false }
 
         let storageDirectory = LocalDataStore.storageDirectoryURL()
@@ -33,12 +39,15 @@ final class ServerProcessService {
             serverAlreadyReachable: serverAlreadyReachable,
             dataDirectoryPath: storageDirectory.path,
             configFileExists: FileManager.default.fileExists(atPath: configFileURL.path),
+            port: PlaidBarConstants.serverPort(environment: ProcessInfo.processInfo.environment),
             parentProcessId: ProcessInfo.processInfo.processIdentifier
         ) else {
             return false
         }
 
         try? LocalDataStore.prepareStorageDirectory(at: storageDirectory)
+        Self.enforcePrivatePermissions(atPath: configFileURL.path)
+        Self.enforcePrivatePermissions(atPath: plan.logFilePath)
         let logHandle = Self.makePrivateLogHandle(atPath: plan.logFilePath)
 
         let process = Process()
@@ -47,9 +56,15 @@ final class ServerProcessService {
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = logHandle ?? FileHandle.nullDevice
         process.standardError = logHandle ?? FileHandle.nullDevice
-        process.terminationHandler = { _ in
+        process.terminationHandler = { exited in
+            // Clear only the process that exited: a stale handler must never
+            // nil out a newer managed server.
+            let exitedPid = exited.processIdentifier
             Task { @MainActor in
-                ServerProcessService.shared.managedProcess = nil
+                let service = ServerProcessService.shared
+                if service.managedProcess?.processIdentifier == exitedPid {
+                    service.managedProcess = nil
+                }
             }
         }
 
@@ -99,6 +114,17 @@ final class ServerProcessService {
             return nil
         }
         return url.path
+    }
+
+    /// `server.conf` holds Plaid credentials and `server.log` may hold server
+    /// diagnostics; both must stay owner-only even if the user created them
+    /// with looser permissions.
+    private static func enforcePrivatePermissions(atPath path: String) {
+        guard FileManager.default.fileExists(atPath: path) else { return }
+        try? FileManager.default.setAttributes(
+            [.posixPermissions: 0o600],
+            ofItemAtPath: path
+        )
     }
 
     /// Opens the server log for appending with owner-only permissions,

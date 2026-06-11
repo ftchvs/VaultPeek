@@ -133,11 +133,21 @@ add your credentials to `~/.plaidbar/server.conf`, then quit and reopen
 PlaidBar — the app starts its bundled companion server automatically, no
 terminal needed:
 
-```ini
+```bash
+mkdir -p ~/.plaidbar && chmod 700 ~/.plaidbar
+cat > ~/.plaidbar/server.conf <<'EOF'
 PLAID_CLIENT_ID=your_client_id
 PLAID_SECRET=your_secret
 # optional: PLAID_ENV=sandbox
+EOF
+chmod 600 ~/.plaidbar/server.conf
 ```
+
+The app also enforces owner-only permissions on `server.conf` and the server
+log at launch. App-managed launches always bind the app's own port, so
+`PLAIDBAR_SERVER_PORT` or `PLAIDBAR_DATA_DIR` lines in `server.conf` are not
+supported there — set those as environment variables instead so the app and
+the server agree.
 
 ### Homebrew
 

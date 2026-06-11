@@ -16,12 +16,14 @@ struct ServerAutoLaunchPlanTests {
             serverAlreadyReachable: false,
             dataDirectoryPath: dataDirectory,
             configFileExists: true,
+            port: 8484,
             parentProcessId: 4242
         ))
 
         #expect(plan.executablePath == bundledPath)
         #expect(plan.arguments == [
             "--config", "/Users/example/.plaidbar/server.conf",
+            "--port", "8484",
             "--exit-with-parent", "4242",
         ])
         #expect(plan.logFilePath == "/Users/example/.plaidbar/server.log")
@@ -36,6 +38,7 @@ struct ServerAutoLaunchPlanTests {
             serverAlreadyReachable: false,
             dataDirectoryPath: dataDirectory + "/",
             configFileExists: true,
+            port: 8484,
             parentProcessId: 4242
         ))
 
@@ -53,6 +56,7 @@ struct ServerAutoLaunchPlanTests {
             serverAlreadyReachable: false,
             dataDirectoryPath: dataDirectory,
             configFileExists: false,
+            port: 8484,
             parentProcessId: 4242
         )
 
@@ -68,6 +72,7 @@ struct ServerAutoLaunchPlanTests {
             serverAlreadyReachable: false,
             dataDirectoryPath: dataDirectory,
             configFileExists: true,
+            port: 8484,
             parentProcessId: 4242
         )
 
@@ -83,6 +88,7 @@ struct ServerAutoLaunchPlanTests {
             serverAlreadyReachable: true,
             dataDirectoryPath: dataDirectory,
             configFileExists: true,
+            port: 8484,
             parentProcessId: 4242
         )
 
@@ -98,6 +104,7 @@ struct ServerAutoLaunchPlanTests {
             serverAlreadyReachable: false,
             dataDirectoryPath: dataDirectory,
             configFileExists: true,
+            port: 8484,
             parentProcessId: 4242
         )
 
@@ -114,6 +121,7 @@ struct ServerAutoLaunchPlanTests {
                 serverAlreadyReachable: false,
                 dataDirectoryPath: dataDirectory,
                 configFileExists: true,
+                port: 8484,
                 parentProcessId: 4242
             )
 

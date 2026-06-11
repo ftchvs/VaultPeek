@@ -120,6 +120,24 @@ actor ServerClient {
         try Self.validateHTTPResponse(response, data: data)
     }
 
+    /// Unauthenticated probe of `/health`. Distinguishes "no server is
+    /// listening" from "a server is up but this client cannot authenticate",
+    /// so the bundled-server auto-launch never races an externally managed
+    /// server just because the local auth token is missing or stale.
+    func isLocalServerResponding() async -> Bool {
+        guard let url = ServerEndpoint.url(baseURL: baseURL, path: "/health") else {
+            return false
+        }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 2
+        do {
+            let (_, response) = try await session.data(for: request)
+            return (response as? HTTPURLResponse).map { (200...299).contains($0.statusCode) } ?? false
+        } catch {
+            return false
+        }
+    }
+
     private func data(for request: URLRequest) async throws -> (Data, URLResponse) {
         do {
             return try await session.data(for: request)

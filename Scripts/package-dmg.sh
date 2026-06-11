@@ -15,7 +15,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-APP_DIR="$PROJECT_DIR/.build/PlaidBar.app"
+APP_DIR="${PLAIDBAR_PACKAGE_APP_DIR:-$PROJECT_DIR/.build/PlaidBar.app}"
+# Keep package-app.sh writing to the exact bundle path this script stages.
+export PLAIDBAR_PACKAGE_APP_DIR="$APP_DIR"
 STAGING_DIR="$PROJECT_DIR/.build/dmg-staging"
 VOLUME_NAME="PlaidBar"
 
