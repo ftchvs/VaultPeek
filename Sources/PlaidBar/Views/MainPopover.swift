@@ -239,126 +239,6 @@ private struct DashboardHeader: View {
     }
 }
 
-private struct DashboardStatusStrip: View {
-    @Environment(AppState.self) private var appState
-
-    var body: some View {
-        HStack(spacing: 0) {
-            StatusStripItem(
-                title: "Mode",
-                value: appState.statusModeText,
-                icon: appState.isDemoMode ? "play.circle.fill" : "server.rack",
-                tint: .secondary
-            )
-
-            StatusDivider()
-
-            StatusStripItem(
-                title: "Server",
-                value: appState.statusServerText,
-                icon: serverIcon,
-                tint: serverTint
-            )
-
-            StatusDivider()
-
-            StatusStripItem(
-                title: "Sync",
-                value: appState.statusSyncText,
-                icon: appState.isSyncStale ? "clock.badge.exclamationmark.fill" : "checkmark.circle.fill",
-                tint: appState.isSyncStale ? SemanticColors.warning : .secondary
-            )
-
-            StatusDivider()
-
-            StatusStripItem(
-                title: "Items",
-                value: itemsText,
-                icon: itemIcon,
-                tint: itemTint
-            )
-        }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 6)
-        .nativePanelSurface(
-            fill: AnyShapeStyle(.regularMaterial),
-            stroke: Color.primary.opacity(0.085)
-        )
-        .accessibilityElement(children: .contain)
-    }
-
-    private var serverIcon: String {
-        if appState.isDemoMode { return "play.circle.fill" }
-        if appState.isLoading { return "arrow.triangle.2.circlepath" }
-        if appState.error != nil { return "xmark.octagon.fill" }
-        return appState.serverConnected ? "checkmark.circle.fill" : "server.rack"
-    }
-
-    private var serverTint: Color {
-        if appState.isDemoMode { return .secondary }
-        if appState.isLoading { return SemanticColors.warning }
-        if appState.error != nil { return SemanticColors.negative }
-        return .secondary
-    }
-
-    private var itemsText: String {
-        if appState.erroredItemCount > 0 {
-            return "\(appState.erroredItemCount) error"
-        }
-        if appState.needsLoginItemCount > 0 {
-            return "\(appState.needsLoginItemCount) login"
-        }
-        return "\(appState.statusItemCount) linked"
-    }
-
-    private var itemIcon: String {
-        if appState.erroredItemCount > 0 { return "exclamationmark.triangle.fill" }
-        if appState.needsLoginItemCount > 0 { return "person.crop.circle.badge.exclamationmark.fill" }
-        return "link.circle.fill"
-    }
-
-    private var itemTint: Color {
-        if appState.erroredItemCount > 0 { return SemanticColors.negative }
-        if appState.needsLoginItemCount > 0 { return SemanticColors.warning }
-        return .secondary
-    }
-}
-
-private struct StatusStripItem: View {
-    let title: String
-    let value: String
-    let icon: String
-    let tint: Color
-
-    var body: some View {
-        HStack(spacing: 5) {
-            Image(systemName: icon)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(tint)
-                .frame(width: 13)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .microText()
-                    .foregroundStyle(.secondary)
-                Text(value)
-                    .font(.caption.weight(.semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.82)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-private struct StatusDivider: View {
-    var body: some View {
-        Divider()
-            .padding(.vertical, 3)
-            .padding(.horizontal, 6)
-    }
-}
-
 private struct DashboardSummaryCards: View {
     @Environment(AppState.self) private var appState
 
@@ -1044,86 +924,6 @@ private struct LocalInsightWindowMetric: View {
     }
 }
 
-// MARK: - Account Filters
-
-private enum DashboardAccountFilter: String, CaseIterable, Identifiable {
-    case all = "All"
-    case cash = "Cash"
-    case credit = "Credit"
-    case savings = "Savings"
-    case debt = "Debt"
-    case status = "Status"
-
-    var id: String {
-        rawValue
-    }
-
-    var emptyStateKind: DashboardAccountFilterKind {
-        switch self {
-        case .all:
-            return .all
-        case .cash:
-            return .cash
-        case .credit:
-            return .credit
-        case .savings:
-            return .savings
-        case .debt:
-            return .debt
-        case .status:
-            return .status
-        }
-    }
-
-    @MainActor
-    func includes(_ account: AccountDTO, appState: AppState) -> Bool {
-        emptyStateKind.includes(account, degradedItemIds: appState.degradedItemIds)
-    }
-}
-
-private struct DashboardFilterBar: View {
-    @Environment(AppState.self) private var appState
-    @Binding var selection: DashboardAccountFilter
-
-    var body: some View {
-        HStack(spacing: 1) {
-            ForEach(DashboardAccountFilter.allCases) { filter in
-                Button {
-                    selection = filter
-                } label: {
-                    Text(filter.rawValue)
-                        .font(.callout.weight(.semibold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
-                        .foregroundStyle(selection == filter ? .white : .primary)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .background(selection == filter ? SemanticColors.brand : Color.clear)
-                .accessibilityLabel("\(filter.rawValue) account filter")
-                .accessibilityValue(accessibilityValue(for: filter))
-                .accessibilityHint("Filters the dashboard account list.")
-
-                if filter != DashboardAccountFilter.allCases.last {
-                    Divider()
-                        .padding(.vertical, 6)
-                }
-            }
-        }
-        .nativeInsetSurface(cornerRadius: SurfaceTokens.panelCornerRadius)
-        .clipShape(RoundedRectangle(cornerRadius: SurfaceTokens.panelCornerRadius))
-        .accessibilityElement(children: .contain)
-    }
-
-    private func accessibilityValue(for filter: DashboardAccountFilter) -> String {
-        let matchingCount = appState.accounts.count { filter.includes($0, appState: appState) }
-        let selectedText = selection == filter ? "selected" : "not selected"
-        return "\(selectedText), \(matchingCount) matching account\(matchingCount == 1 ? "" : "s")"
-    }
-}
-
 private struct DashboardStatusReadinessPanel: View {
     @Environment(AppState.self) private var appState
     let openSettings: () -> Void
@@ -1404,12 +1204,6 @@ private struct DashboardOverviewStack: View {
             }
 
             VStack(alignment: .leading, spacing: LayoutSpacing.controls) {
-                OverviewFlowCaption(
-                    selectedFilter: filter,
-                    accountCount: accounts.count,
-                    hasSelectedAccount: selectedAccountId != nil
-                )
-
                 DashboardFilterBar(selection: $filterSelection)
 
                 AccountsSection(
@@ -1468,34 +1262,6 @@ private struct DashboardOverviewFallbackBanner: View {
             fill: AnyShapeStyle(SurfaceTokens.panelFill(emphasisTint: SemanticColors.brandSecondary.opacity(0.18))),
             stroke: SemanticColors.brandSecondary.opacity(0.22)
         )
-    }
-}
-
-private struct OverviewFlowCaption: View {
-    let selectedFilter: DashboardAccountFilter
-    let accountCount: Int
-    let hasSelectedAccount: Bool
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "arrow.down.right.circle.fill")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-            Text(captionText)
-                .microText()
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.78)
-            Spacer(minLength: 8)
-        }
-        .padding(.horizontal, Spacing.compactRowTextSpacing)
-        .accessibilityLabel(captionText)
-    }
-
-    private var captionText: String {
-        let accountWord = accountCount == 1 ? "account" : "accounts"
-        let detailText = hasSelectedAccount ? "; selected row shows details" : "; select a row for details"
-        return "\(selectedFilter.rawValue): \(accountCount) \(accountWord) below\(detailText)"
     }
 }
 
@@ -1627,7 +1393,7 @@ private struct DashboardEmptyAccountState: View {
 
     private var presentation: DashboardAccountEmptyState {
         DashboardAccountEmptyState.evaluate(
-            filter: filter.emptyStateKind,
+            filter: filter,
             isDemoMode: appState.usesDemoConnectionPresentation,
             serverConnected: appState.serverConnected,
             credentialsConfigured: appState.serverCredentialsConfigured,
