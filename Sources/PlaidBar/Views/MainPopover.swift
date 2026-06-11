@@ -7,7 +7,7 @@ struct MainPopover: View {
     @Environment(\.openSettings) private var openSettings
     @AppStorage("dashboard.accountFilter") private var selectedFilterRawValue = DashboardAccountFilter.all.rawValue
     @AppStorage("dashboard.selectedAccountId") private var selectedAccountId = ""
-    @State private var settingsCloseObserver: NSObjectProtocol?
+    @State private var settingsActivation = SettingsWindowActivationRestorer()
     @State private var isShowingAccountSetup = false
     @State private var shouldShowSetupRecoveryDashboard = false
 
@@ -98,7 +98,7 @@ struct MainPopover: View {
                 Divider()
 
                 DashboardFooter(
-                    settingsCloseObserver: $settingsCloseObserver,
+                    settingsActivation: settingsActivation,
                     openSettings: openSettings,
                     onAddAccount: openAccountSetup
                 )
@@ -1678,7 +1678,7 @@ private struct SelectedAccountPanel: View {
     let account: AccountDTO
     let isStatusFilter: Bool
     @State private var isConfirmingAccountRemoval = false
-    @State private var settingsCloseObserver: NSObjectProtocol?
+    @State private var settingsActivation = SettingsWindowActivationRestorer()
 
     private var drillInSummary: DashboardAccountDrillInSummary {
         DashboardAccountDrillInSummary.presentation(
@@ -2004,37 +2004,7 @@ private struct SelectedAccountPanel: View {
     }
 
     private func openSettingsWindow() {
-        openSettings()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            NSApp.setActivationPolicy(.regular)
-            NSApp.activate(ignoringOtherApps: true)
-            if let settingsWindow = NSApp.keyWindow ?? NSApp.windows.first(where: {
-                $0.canBecomeKey && $0.isVisible && $0.level == .normal
-            }) {
-                settingsWindow.orderFrontRegardless()
-                if let existing = settingsCloseObserver {
-                    NotificationCenter.default.removeObserver(existing)
-                }
-                settingsCloseObserver = NotificationCenter.default.addObserver(
-                    forName: NSWindow.willCloseNotification,
-                    object: settingsWindow,
-                    queue: .main
-                ) { _ in
-                    Task { @MainActor in
-                        restoreAccessoryActivationPolicy()
-                    }
-                }
-            }
-        }
-    }
-
-    @MainActor
-    private func restoreAccessoryActivationPolicy() {
-        NSApp.setActivationPolicy(.accessory)
-        if let observer = settingsCloseObserver {
-            NotificationCenter.default.removeObserver(observer)
-        }
-        settingsCloseObserver = nil
+        settingsActivation.open(openSettings: openSettings)
     }
 
     private var panelStroke: Color {
@@ -2283,7 +2253,7 @@ private struct AccountActivityEmptyStateView: View {
 
 private struct DashboardFooter: View {
     @Environment(AppState.self) private var appState
-    @Binding var settingsCloseObserver: NSObjectProtocol?
+    let settingsActivation: SettingsWindowActivationRestorer
     let openSettings: OpenSettingsAction
     let onAddAccount: () -> Void
 
@@ -2327,37 +2297,112 @@ private struct DashboardFooter: View {
     }
 
     private func openSettingsWindow() {
+        settingsActivation.open(openSettings: openSettings)
+    }
+}
+
+@MainActor
+private final class SettingsWindowActivationRestorer: @unchecked Sendable {
+    private var closeObserver: NSObjectProtocol?
+    private var discoveryObserver: NSObjectProtocol?
+    private var previousActivationPolicy: NSApplication.ActivationPolicy?
+
+    func open(openSettings: OpenSettingsAction) {
+        let app = NSApplication.shared
+        if previousActivationPolicy == nil {
+            previousActivationPolicy = app.activationPolicy()
+        }
+
+        removeDiscoveryObserver()
+        if app.activationPolicy() != .regular {
+            app.setActivationPolicy(.regular)
+        }
+
         openSettings()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            NSApp.setActivationPolicy(.regular)
-            NSApp.activate(ignoringOtherApps: true)
-            if let settingsWindow = NSApp.keyWindow ?? NSApp.windows.first(where: {
-                $0.canBecomeKey && $0.isVisible && $0.level == .normal
-            }) {
-                settingsWindow.orderFrontRegardless()
-                if let existing = settingsCloseObserver {
-                    NotificationCenter.default.removeObserver(existing)
-                }
-                settingsCloseObserver = NotificationCenter.default.addObserver(
-                    forName: NSWindow.willCloseNotification,
-                    object: settingsWindow,
-                    queue: .main
-                ) { _ in
-                    Task { @MainActor in
-                        restoreAccessoryActivationPolicy()
-                    }
-                }
+        app.activate(ignoringOtherApps: true)
+
+        if focusCurrentSettingsWindow() { return }
+
+        discoveryObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didBecomeKeyNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            let observedWindow = notification.object as? NSWindow
+            MainActor.assumeIsolated {
+                guard
+                    let self,
+                    let settingsWindow = observedWindow,
+                    Self.isSettingsWindowCandidate(settingsWindow)
+                else { return }
+
+                self.focus(settingsWindow)
+            }
+        }
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            _ = self.focusCurrentSettingsWindow()
+        }
+    }
+
+    private func focusCurrentSettingsWindow() -> Bool {
+        guard let settingsWindow = NSApplication.shared.windows.first(where: Self.isSettingsWindowCandidate) else {
+            return false
+        }
+
+        focus(settingsWindow)
+        return true
+    }
+
+    private func focus(_ settingsWindow: NSWindow) {
+        removeDiscoveryObserver()
+        removeCloseObserver()
+
+        settingsWindow.makeKeyAndOrderFront(nil)
+        settingsWindow.orderFrontRegardless()
+
+        closeObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification,
+            object: settingsWindow,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.restoreActivationPolicy()
             }
         }
     }
 
-    @MainActor
-    private func restoreAccessoryActivationPolicy() {
-        NSApp.setActivationPolicy(.accessory)
-        if let observer = settingsCloseObserver {
-            NotificationCenter.default.removeObserver(observer)
+    private func restoreActivationPolicy() {
+        let app = NSApplication.shared
+        app.setActivationPolicy(previousActivationPolicy ?? .accessory)
+        previousActivationPolicy = nil
+        removeCloseObserver()
+        removeDiscoveryObserver()
+    }
+
+    private static func isSettingsWindowCandidate(_ window: NSWindow) -> Bool {
+        guard window.isVisible, window.canBecomeKey, !window.isMiniaturized, window.level == .normal else {
+            return false
         }
-        settingsCloseObserver = nil
+
+        if window.title.localizedCaseInsensitiveContains("settings") {
+            return true
+        }
+
+        return window.frame.width >= 580 && window.frame.height >= 500
+    }
+
+    private func removeCloseObserver() {
+        guard let closeObserver else { return }
+        NotificationCenter.default.removeObserver(closeObserver)
+        self.closeObserver = nil
+    }
+
+    private func removeDiscoveryObserver() {
+        guard let discoveryObserver else { return }
+        NotificationCenter.default.removeObserver(discoveryObserver)
+        self.discoveryObserver = nil
     }
 }
 
