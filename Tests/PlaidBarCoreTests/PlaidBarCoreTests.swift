@@ -1630,6 +1630,45 @@ struct PlaidBarCoreTests {
         #expect(preflight.rows.allSatisfy { !$0.accessibilityHint.isEmpty })
     }
 
+    @Test("Onboarding preflight blocks production setup against a sandbox server")
+    func onboardingPreflightBlocksProductionAgainstSandboxServer() {
+        let preflight = OnboardingPreflight.evaluate(
+            expectedEnvironment: .production,
+            serverConnected: true,
+            serverEnvironment: .sandbox,
+            credentialsConfigured: true,
+            modeText: "Sandbox",
+            credentialsText: "Ready",
+            storageText: "~/.plaidbar",
+            linkedItemCount: 1
+        )
+
+        #expect(!preflight.isReady)
+        #expect(preflight.hint == "The running server is not in production mode.")
+        #expect(preflight.rows.first { $0.title == "Mode" }?.state == .blocked)
+        #expect(preflight.rows.first { $0.title == "Mode" }?.accessibilityHint == "Restart PlaidBarServer in production mode.")
+    }
+
+    @Test("Onboarding preflight treats unknown credentials as blocked while connected")
+    func onboardingPreflightTreatsUnknownCredentialsAsBlocked() {
+        // A connected server should always report credentialsConfigured; if a
+        // transient response leaves it nil, the gate stays closed (fail safe).
+        let preflight = OnboardingPreflight.evaluate(
+            expectedEnvironment: .sandbox,
+            serverConnected: true,
+            serverEnvironment: .sandbox,
+            credentialsConfigured: nil,
+            modeText: "Sandbox",
+            credentialsText: "Unknown",
+            storageText: "~/.plaidbar",
+            linkedItemCount: 0
+        )
+
+        #expect(!preflight.isReady)
+        #expect(preflight.rows.first { $0.title == "Credentials" }?.state == .blocked)
+        #expect(preflight.hint == "Add Plaid credentials to the local server environment before connecting.")
+    }
+
     @Test("Onboarding preflight offline production hint names production credentials")
     func onboardingPreflightOfflineProductionHint() {
         let preflight = OnboardingPreflight.evaluate(
