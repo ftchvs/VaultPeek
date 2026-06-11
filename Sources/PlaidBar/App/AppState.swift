@@ -717,9 +717,8 @@ final class AppState {
             transactions = []
             itemStatuses = []
             // loadDemoData() replaced the in-memory balance history with a
-            // synthetic 60-day series (the persisted copy was untouched).
-            // Restore the persisted history so the next real snapshot does
-            // not append to — and then persist — the demo series.
+            // synthetic 60-day series. Restore persisted real history when it
+            // exists so the first real snapshot cannot persist a demo trend.
             loadPersistedBalanceHistory()
             return
         }
