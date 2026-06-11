@@ -1193,11 +1193,15 @@ final class AppState {
         ]
         transactions.append(contentsOf: Self.historicalDemoTransactions())
 
-        // Generate demo balance history (60 days for richer sparkline)
+        // Deterministic 60-day history with a gentle upward drift so the header
+        // trend reads the same on every demo launch and screenshots reproduce.
+        let demoNetWorth = 17_604.24
         balanceHistory = (0..<60).reversed().map { daysAgo in
             let date = Calendar.current.date(byAdding: .day, value: -daysAgo, to: Date())!
-            let jitter = Double.random(in: -800...800)
-            return BalanceSnapshot(date: date, balance: 17_604.24 + jitter)
+            let progress = Double(60 - daysAgo) / 60
+            let drift = -650.0 + (650.0 * progress)
+            let wobble = sin(Double(daysAgo) / 4.5) * 180
+            return BalanceSnapshot(date: date, balance: demoNetWorth + drift + wobble)
         }
 
         isSetupComplete = true
