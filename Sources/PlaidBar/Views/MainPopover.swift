@@ -55,6 +55,9 @@ struct MainPopover: View {
                         }
 
                         if shouldElevateStatusReadinessPanel {
+                            AttentionQueueView(title: "Attention", onAddAccount: openAccountSetup)
+                                .environment(appState)
+
                             DashboardStatusReadinessPanel(
                                 openSettings: { openSettings() },
                                 onAddAccount: openAccountSetup
@@ -84,6 +87,9 @@ struct MainPopover: View {
                             .environment(appState)
 
                         if shouldShowLowerStatusReadinessPanel {
+                            AttentionQueueView(title: "Attention", onAddAccount: openAccountSetup)
+                                .environment(appState)
+
                             DashboardStatusReadinessPanel(
                                 openSettings: { openSettings() },
                                 onAddAccount: openAccountSetup

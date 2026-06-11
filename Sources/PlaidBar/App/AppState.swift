@@ -467,6 +467,21 @@ final class AppState {
         )
     }
 
+    var attentionQueue: AttentionQueue {
+        AttentionQueue.evaluate(
+            isDemoMode: isDemoMode && !isDemoStatusRecoveryScenario,
+            serverConnected: serverConnected,
+            credentialsConfigured: serverCredentialsConfigured,
+            linkedItemCount: statusItemCount,
+            accountCount: accountCount,
+            syncedItemCount: serverSyncedItemCount ?? 0,
+            itemStatuses: itemStatuses,
+            isSyncStale: isSyncStale,
+            lastSyncRelative: lastSyncRelative,
+            errorMessage: error
+        )
+    }
+
     var notificationPermissionPresentation: NotificationPermissionPresentation {
         NotificationPermissionPresentation.evaluate(kind: notificationPermissionState.presentationKind)
     }
