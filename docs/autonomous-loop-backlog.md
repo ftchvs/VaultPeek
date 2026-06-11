@@ -232,14 +232,14 @@ and `docs/autonomous-roadmap.md`.
 
 ### PR-020: Optional Local AI Boundaries
 
-- [ ] T096: Define the local AI runtime contract without naming a cloud model as
+- [x] T096: Define the local AI runtime contract without naming a cloud model as
   a dependency.
-- [ ] T097: Add copy that local AI is optional, off by default, and never
+- [x] T097: Add copy that local AI is optional, off by default, and never
   required for dashboard use.
 - [ ] T098: Ensure local AI prompts never include secrets, raw account IDs, or
   tokens.
-- [ ] T099: Add an unavailable state when no local model runtime is configured.
-- [ ] T100: Add tests for local AI availability and disabled-state presentation.
+- [x] T099: Add an unavailable state when no local model runtime is configured.
+- [x] T100: Add tests for local AI availability and disabled-state presentation.
 
 ### PR-021: Local AI Insight Quality
 

@@ -303,6 +303,23 @@ reference for PR-005 follow-up work.
 | No previous period data | Comparison section hidden entirely (`if previousPeriodSpending > 0`) |
 | Period changed | Recalculates based on `selectedPeriod` (week/month/30d); animated transition |
 
+### Local Insight Receipt
+
+**Anatomy:** Header "Local Insight Receipt" + local runtime status pill | one-line headline | evidence chips for source-row count, time window, top display category, recurring estimate, and category-hint count when present | compact confidence and limitation rows | local-only badge + reversible action copy.
+
+**Code reference:** `LocalAIInsightReceipt` in `Sources/PlaidBarCore/Models/LocalAIInsights.swift`; rendered by `LocalInsightsCard` in `Sources/PlaidBar/Views/MainPopover.swift`.
+
+| Element | Rule |
+|---------|------|
+| Headline | Short deterministic summary or future local-model summary after known local source identifiers are redacted |
+| Evidence chips | Display-safe counts, categories, amounts, and window labels only; never raw account IDs, item IDs, transaction IDs, tokens, or Plaid payload text |
+| Time window | Explicit current range such as `2026-06-05 to 2026-06-11`; no vague "recently" when source windows are known |
+| Local-only badge | Always visible as `Local-only`; no cloud AI fallback language except to state it is unsupported |
+| Confidence | Names deterministic/local source-row confidence and downgrades when no runtime, no rows, or limited history is available |
+| Limitations | States missing runtime, missing source rows, missing comparison windows, and display-safe evidence boundaries plainly |
+| Unavailable | Shows no-runtime or no-history state without blocking the dashboard; user can continue using non-AI views |
+| Reversible action | Category hints are local overlays; accepting or rejecting them is reversible and does not mutate raw Plaid records |
+
 ### Charts
 
 **Shared behavior:** All charts animate on appearance with `.spring(response: 0.3, dampingFraction: 0.8)`. When `accessibilityReduceMotion` is on, render immediately without animation.
