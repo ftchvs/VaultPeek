@@ -2139,17 +2139,57 @@ struct PlaidBarCoreTests {
         let tokenKey = "access" + "_token"
         let tokenValue = "access" + "-sandbox-secretvalue"
         let publicTokenValue = "public" + "-sandbox-publicvalue"
+        let bearerValue = "local-token-1234567890"
+        let authHeader = "Authorization: " + "Bearer " + bearerValue
         let detail = UserFacingError.sanitizedDetail(
-            from: "Plaid failed for item_id=item_123456789abcdef account_id=account_abcdef123456 \(tokenKey)=\(tokenValue) bare=\(publicTokenValue) Authorization: Bearer local-token-1234567890"
+            from: "Plaid failed for item_id=item_123456789abcdef account_id=account_abcdef123456 \(tokenKey)=\(tokenValue) bare=\(publicTokenValue) \(authHeader)"
         )
 
         #expect(detail?.contains("item_123456789abcdef") == false)
         #expect(detail?.contains("account_abcdef123456") == false)
         #expect(detail?.contains(tokenValue) == false)
         #expect(detail?.contains(publicTokenValue) == false)
-        #expect(detail?.contains("local-token-1234567890") == false)
-        #expect(detail?.contains("Authorization: Bearer [redacted]") == true)
+        #expect(detail?.contains(bearerValue) == false)
+        #expect(detail?.contains("Authorization: " + "Bearer [redacted]") == true)
         #expect(detail?.contains("[redacted") == true)
+    }
+
+    @Test("User-facing error detail redacts keyed unprefixed Plaid identifiers")
+    func userFacingErrorDetailRedactsKeyedUnprefixedPlaidIdentifiers() {
+        let itemID = "M5eVJqLnv3tbzdngLDp9FL5OlDNxlNhlE55op"
+        let accountID = "K6mPq8Jvl4fbxR2WQZk1"
+        let transactionID = "9N4kQx2Lw8mP0vYj"
+        let requestID = "req-7m8n9p0q1r2s"
+        let cursor = "eyJ2ZXJzaW9uIjoxLCJ2YWx1ZSI6InVucHJlZml4ZWQifQ"
+        let detail = UserFacingError.sanitizedDetail(
+            from: "Plaid failed {\"item_id\":\"\(itemID)\",\"account_id\":\"\(accountID)\",\"transaction_id\":\"\(transactionID)\",\"transaction_ids\":[\"txOneUnprefixed\",\"txTwoUnprefixed\"],\"request_id\":\"\(requestID)\",\"cursor\":\"\(cursor)\"} while syncing latest balances."
+        )
+
+        #expect(detail?.contains(itemID) == false)
+        #expect(detail?.contains(accountID) == false)
+        #expect(detail?.contains(transactionID) == false)
+        #expect(detail?.contains("txOneUnprefixed") == false)
+        #expect(detail?.contains("txTwoUnprefixed") == false)
+        #expect(detail?.contains(requestID) == false)
+        #expect(detail?.contains(cursor) == false)
+        #expect(detail?.contains("latest balances") == true)
+        #expect(detail?.contains("[redacted-id]") == true)
+    }
+
+    @Test("User-facing error detail redacts keyed Plaid identifiers in query strings")
+    func userFacingErrorDetailRedactsKeyedPlaidIdentifiersInQueryStrings() {
+        let itemID = "M5eVJqLnv3tbzdngLDp9FL5OlDNxlNhlE55op"
+        let accountID = "K6mPq8Jvl4fbxR2WQZk1"
+        let institutionID = "ins-109508"
+        let detail = UserFacingError.sanitizedDetail(
+            from: "Plaid request failed item_id=\(itemID)&account_id=\(accountID)&institution_id=\(institutionID) during reconnect"
+        )
+
+        #expect(detail?.contains(itemID) == false)
+        #expect(detail?.contains(accountID) == false)
+        #expect(detail?.contains(institutionID) == false)
+        #expect(detail?.contains("during reconnect") == true)
+        #expect(detail?.contains("item_id=[redacted-id]") == true)
     }
 
     @Test("User-facing error detail removes stack traces and truncates bodies")
