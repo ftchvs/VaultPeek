@@ -49,6 +49,11 @@ struct MainPopover: View {
                         DashboardStatusStrip()
                             .environment(appState)
 
+                        if selectedAccount == nil {
+                            DashboardChangeReceiptStrip()
+                                .environment(appState)
+                        }
+
                         if shouldElevateStatusReadinessPanel {
                             DashboardStatusReadinessPanel(
                                 openSettings: { openSettings() },
@@ -234,6 +239,59 @@ private struct DashboardHeader: View {
             SemanticColors.negative
         case .flat:
             .secondary
+        }
+    }
+}
+
+private struct DashboardChangeReceiptStrip: View {
+    @Environment(AppState.self) private var appState
+
+    private var receipt: DashboardChangeReceipt? {
+        DashboardChangeReceipt.evaluate(
+            history: appState.balanceHistory,
+            transactions: appState.transactions,
+            itemStatuses: appState.itemStatuses
+        )
+    }
+
+    var body: some View {
+        if let receipt {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(receipt.title.uppercased())
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                Text(receipt.summary)
+                    .font(.caption2.weight(.medium))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+
+                Spacer(minLength: 4)
+
+                HStack(spacing: 5) {
+                    ForEach(receipt.rows) { row in
+                        Text(row.value)
+                            .font(.caption2.weight(.semibold))
+                            .monospacedDigit()
+                            .lineLimit(1)
+                            .help(row.accessibilityText)
+                    }
+                }
+                .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.quaternary.opacity(0.38), in: Capsule())
+            .overlay(
+                Capsule()
+                    .strokeBorder(.secondary.opacity(0.10), lineWidth: 1)
+            )
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(receipt.accessibilitySummary)
+            .help(receipt.accessibilitySummary)
         }
     }
 }
