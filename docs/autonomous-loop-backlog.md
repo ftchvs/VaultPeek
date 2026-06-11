@@ -129,8 +129,8 @@ and `docs/autonomous-roadmap.md`.
 
 - [ ] T041: Surface token-expired and item-error states in dashboard status.
 - [ ] T042: Surface the same degraded item state in Settings or Status.
-- [ ] T043: Add a clear reconnect path that does not expose raw Plaid payloads.
-- [ ] T044: Handle browser-open failure with a copyable recovery path.
+- [x] T043: Add a clear reconnect path that does not expose raw Plaid payloads.
+- [x] T044: Handle browser-open failure with a copyable recovery path.
 - [ ] T045: Add focused tests for degraded item presentation.
 
 ### PR-010: Status And Diagnostics

@@ -300,6 +300,12 @@ remain unmarked.
   offline, mode-mismatch, missing-credentials, and ready states for sandbox and
   production; evidence: Onboarding Preflight test section in
   `Tests/PlaidBarCoreTests/PlaidBarCoreTests.swift`.
+- 2026-06-11 [T043] [T044]: made Plaid item reconnect failures display-safe and
+  actionable by routing update-link creation failures, invalid update-link URLs,
+  and browser-open failures through a focused recovery presenter that redacts
+  Plaid payloads and points users back to Settings > Accounts reconnect actions;
+  evidence: `ReconnectRecoveryMessage`, `AppState.reconnectItem`, and core
+  regression tests.
 
 ## Backlog Source
 

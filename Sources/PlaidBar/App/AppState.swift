@@ -746,18 +746,23 @@ final class AppState {
             return
         }
 
+        let institutionName = itemStatuses.first { $0.id == itemId }?.institutionName
+
         do {
             let linkResponse = try await serverClient.createUpdateLinkToken(itemId: itemId)
             guard let url = URL(string: linkResponse.linkUrl) else {
-                error = "PlaidBarServer returned an invalid Plaid update Link URL."
+                error = ReconnectRecoveryMessage.invalidUpdateLinkURL(institutionName: institutionName)
                 return
             }
 
             if !NSWorkspace.shared.open(url) {
-                error = "Could not open Plaid update Link in the browser."
+                error = ReconnectRecoveryMessage.browserOpenFailed(institutionName: institutionName)
             }
         } catch {
-            self.error = error.localizedDescription
+            self.error = ReconnectRecoveryMessage.createFailed(
+                errorMessage: error.localizedDescription,
+                institutionName: institutionName
+            )
         }
     }
 
