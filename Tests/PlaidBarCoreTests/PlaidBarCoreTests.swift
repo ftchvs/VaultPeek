@@ -262,6 +262,182 @@ struct PlaidBarCoreTests {
         #expect(days.first?.transactionCount == 1)
     }
 
+    @Test("Spending heatmap excludes non-canonical date strings")
+    func spendingHeatmapExcludesNonCanonicalDateStrings() {
+        let start = Formatters.parseTransactionDate("2026-06-01")!
+        let end = Formatters.parseTransactionDate("2026-06-03")!
+
+        let days = SpendingHeatmap.days(
+            from: [
+                TransactionDTO(id: "1", accountId: "a", amount: 25, date: "2026-06-02", name: "Canonical"),
+                TransactionDTO(id: "2", accountId: "a", amount: 30, date: "2026-6-2", name: "Unpadded"),
+                TransactionDTO(id: "3", accountId: "a", amount: 35, date: "not-a-date!", name: "Garbage"),
+            ],
+            startDate: start,
+            endDate: end,
+            mode: .spending
+        )
+
+        #expect(days.map(\.value) == [0, 25, 0])
+        #expect(days.map(\.transactionCount) == [0, 1, 0])
+    }
+
+    @Test("Spending heatmap day aggregation matches parse-based reference")
+    func spendingHeatmapMatchesParseBasedReference() {
+        let start = Formatters.parseTransactionDate("2026-04-01")!
+        let end = Formatters.parseTransactionDate("2026-05-31")!
+        let transactions = (0 ..< 240).map { index -> TransactionDTO in
+            let day = String(format: "2026-%02d-%02d", 4 + (index % 2), 1 + (index % 28))
+            let category: SpendingCategory? = index % 11 == 0 ? .transfer : (index % 7 == 0 ? .income : .shopping)
+            return TransactionDTO(
+                id: "ref_\(index)",
+                accountId: "a",
+                amount: index % 7 == 0 ? -Double(index) : Double(index) * 1.37,
+                date: day,
+                name: "Merchant \(index % 9)",
+                category: category
+            )
+        }
+
+        for mode in [SpendingHeatmapMode.spending, .netCashflow] {
+            let fast = SpendingHeatmap.days(from: transactions, startDate: start, endDate: end, mode: mode)
+            let reference = parseBasedHeatmapReference(from: transactions, startDate: start, endDate: end, mode: mode)
+            #expect(fast.count == reference.count)
+            for (lhs, rhs) in zip(fast, reference) {
+                #expect(lhs.date == rhs.date)
+                #expect(abs(lhs.value - rhs.value) < 0.000001)
+                #expect(lhs.transactionCount == rhs.transactionCount)
+            }
+        }
+    }
+
+    @Test("Spending heatmap layout matches individually derived values")
+    func spendingHeatmapLayoutMatchesDerivedValues() {
+        let start = Formatters.parseTransactionDate("2026-01-01")!
+        let end = Formatters.parseTransactionDate("2026-01-10")!
+        let transactions = [
+            TransactionDTO(id: "1", accountId: "a", amount: 25, date: "2026-01-02", name: "Coffee"),
+            TransactionDTO(id: "2", accountId: "a", amount: 75, date: "2026-01-05", name: "Groceries"),
+            TransactionDTO(id: "3", accountId: "a", amount: -200, date: "2026-01-06", name: "Refund"),
+        ]
+
+        let layout = SpendingHeatmapLayout.compute(
+            from: transactions,
+            startDate: start,
+            endDate: end,
+            mode: .spending
+        )
+        let days = SpendingHeatmap.days(from: transactions, startDate: start, endDate: end, mode: .spending)
+
+        #expect(layout.days == days)
+        #expect(layout.peakValue == max(days.map { abs($0.value) }.max() ?? 0, 1))
+        #expect(abs(layout.totalValue - days.reduce(0) { $0 + $1.value }) < 0.000001)
+        #expect(layout.activeDayCount == days.count(where: { $0.transactionCount > 0 }))
+        #expect(layout.weekColumns.flatMap(\.self).compactMap(\.self) == days)
+    }
+
+    @Test("Spending heatmap layout aligns week columns to first weekday")
+    func spendingHeatmapLayoutWeekColumnAlignment() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.firstWeekday = 1
+        // 2026-01-01 is a Thursday (weekday 5), so a Sunday-first grid pads 4 cells.
+        let start = Formatters.parseTransactionDate("2026-01-01")!
+        let end = Formatters.parseTransactionDate("2026-01-10")!
+
+        let layout = SpendingHeatmapLayout.compute(
+            from: [TransactionDTO(id: "1", accountId: "a", amount: 25, date: "2026-01-02", name: "Coffee")],
+            startDate: start,
+            endDate: end,
+            mode: .spending,
+            calendar: calendar
+        )
+
+        #expect(layout.weekColumns.count == 2)
+        #expect(layout.weekColumns.allSatisfy { $0.count == 7 })
+        #expect(layout.weekColumns[0].prefix(4).allSatisfy { $0 == nil })
+        #expect(layout.weekColumns[0][4]?.date == "2026-01-01")
+        #expect(layout.weekColumns.flatMap(\.self).compactMap(\.self).count == 10)
+    }
+
+    @Test("Spending heatmap layout dedupes month markers per month")
+    func spendingHeatmapLayoutMonthMarkers() {
+        let calendar = Calendar.current
+        // Range spans late December through early February: December has no
+        // day-of-month <= 7 in range, so only January and February get markers.
+        let start = Formatters.parseTransactionDate("2025-12-25")!
+        let end = Formatters.parseTransactionDate("2026-02-10")!
+
+        let layout = SpendingHeatmapLayout.compute(
+            from: [],
+            startDate: start,
+            endDate: end,
+            mode: .spending,
+            calendar: calendar
+        )
+
+        #expect(layout.monthMarkers.count == 2)
+        #expect(layout.monthMarkers[0].label == calendar.shortMonthSymbols[0])
+        #expect(layout.monthMarkers[1].label == calendar.shortMonthSymbols[1])
+        #expect(layout.monthMarkers[0].weekIndex < layout.monthMarkers[1].weekIndex)
+    }
+
+    @Test("Canonical transaction date key validation")
+    func canonicalTransactionDateKeyValidation() {
+        #expect(Formatters.isCanonicalTransactionDateKey("2026-06-10"))
+        #expect(Formatters.isCanonicalTransactionDateKey("1999-01-01"))
+        #expect(!Formatters.isCanonicalTransactionDateKey("2026-6-10"))
+        #expect(!Formatters.isCanonicalTransactionDateKey("2026-06-1"))
+        #expect(!Formatters.isCanonicalTransactionDateKey("2026/06/10"))
+        #expect(!Formatters.isCanonicalTransactionDateKey("2026-06-10T00:00:00"))
+        #expect(!Formatters.isCanonicalTransactionDateKey(""))
+        #expect(!Formatters.isCanonicalTransactionDateKey("yyyy-MM-dd"))
+    }
+
+    /// Pre-optimization reference implementation of `SpendingHeatmap.days`.
+    /// The transfer exclusion mirrors production's `isTransfer`, which is
+    /// purely category-based (`.transfer` / `.transferOut`); if production
+    /// ever adds non-category transfer detection, update this to match.
+    private func parseBasedHeatmapReference(
+        from transactions: [TransactionDTO],
+        startDate: Date,
+        endDate: Date,
+        mode: SpendingHeatmapMode,
+        calendar: Calendar = .current
+    ) -> [SpendingHeatmapDay] {
+        let start = calendar.startOfDay(for: startDate)
+        let end = calendar.startOfDay(for: endDate)
+        guard start <= end else { return [] }
+
+        let relevant = transactions.compactMap { transaction -> (String, Double)? in
+            guard let date = Formatters.parseTransactionDate(transaction.date) else { return nil }
+            let day = calendar.startOfDay(for: date)
+            guard day >= start, day <= end else { return nil }
+            guard transaction.category != .transfer, transaction.category != .transferOut else { return nil }
+
+            switch mode {
+            case .spending:
+                guard !transaction.isIncome else { return nil }
+                return (transaction.date, transaction.displayAmount)
+            case .netCashflow:
+                return (transaction.date, transaction.amount)
+            }
+        }
+
+        let grouped = Dictionary(grouping: relevant) { $0.0 }
+        let dayCount = calendar.dateComponents([.day], from: start, to: end).day ?? 0
+
+        return (0 ... dayCount).compactMap { offset in
+            guard let day = calendar.date(byAdding: .day, value: offset, to: start) else { return nil }
+            let dateString = Formatters.transactionDateString(day)
+            let entries = grouped[dateString] ?? []
+            return SpendingHeatmapDay(
+                date: dateString,
+                value: entries.reduce(0) { $0 + $1.1 },
+                transactionCount: entries.count
+            )
+        }
+    }
+
     // MARK: - Menu Bar Summary Tests
 
     @Test("Menu bar summary calculates net cash")
@@ -321,6 +497,22 @@ struct PlaidBarCoreTests {
         ]
 
         #expect(MenuBarSummary.recentSpend(from: transactions, now: now) == 100)
+    }
+
+    @Test("Menu bar summary recent spend respects window boundaries")
+    func menuBarSummaryRecentSpendWindowBoundaries() {
+        let now = Formatters.parseTransactionDate("2026-03-10")!
+        let transactions = [
+            TransactionDTO(id: "1", accountId: "a", amount: 10, date: "2026-03-10", name: "Today"),
+            TransactionDTO(id: "2", accountId: "a", amount: 20, date: "2026-03-04", name: "Window start"),
+            TransactionDTO(id: "3", accountId: "a", amount: 40, date: "2026-03-03", name: "Before window"),
+            TransactionDTO(id: "4", accountId: "a", amount: 80, date: "2026-03-11", name: "Future"),
+            TransactionDTO(id: "5", accountId: "a", amount: 160, date: "2026-3-9", name: "Non-canonical date"),
+        ]
+
+        // 7-day window ending 2026-03-10 starts at 2026-03-04: the boundary day
+        // counts, earlier days and future-dated or malformed entries do not.
+        #expect(MenuBarSummary.recentSpend(from: transactions, now: now) == 30)
     }
 
     @Test("Account activity summary uses recent non-transfer cash flow")

@@ -646,10 +646,10 @@ private struct BalanceActivityHeatmap: View {
         SpendingHeatmapMode(rawValue: modeRawValue) ?? .spending
     }
 
-    private var days: [SpendingHeatmapDay] {
+    private func currentLayout() -> SpendingHeatmapLayout {
         let end = calendar.startOfDay(for: Date())
         let start = calendar.date(byAdding: .day, value: -364, to: end) ?? end
-        return SpendingHeatmap.days(
+        return SpendingHeatmapLayout.compute(
             from: transactions,
             startDate: start,
             endDate: end,
@@ -658,82 +658,14 @@ private struct BalanceActivityHeatmap: View {
         )
     }
 
-    private var peakValue: Double {
-        max(days.map { abs($0.value) }.max() ?? 0, 1)
-    }
-
-    private var activeDayCount: Int {
-        days.count(where: { $0.transactionCount > 0 })
-    }
-
-    private var totalValue: Double {
-        days.reduce(0) { $0 + $1.value }
-    }
-
-    private var title: String {
-        mode.summaryTitle
-    }
-
-    private var totalLabel: String {
-        guard mode == .netCashflow else {
-            return Formatters.currency(totalValue, format: .compact)
-        }
-        return cashflowText(for: totalValue)
-    }
-
-    private var totalTint: Color {
-        guard mode == .netCashflow else { return .secondary }
-        let displayAmount = SpendingHeatmap.displayCashflowAmount(totalValue)
-        if displayAmount > 0 { return SemanticColors.positive }
-        if displayAmount < 0 { return SemanticColors.negative }
-        return .secondary
-    }
-
-    private var weekColumns: [[SpendingHeatmapDay?]] {
-        guard let firstDay = days.first,
-              let firstDate = Formatters.parseTransactionDate(firstDay.date)
-        else {
-            return []
-        }
-
-        let weekday = calendar.component(.weekday, from: firstDate)
-        let leadingEmptyDays = (weekday - calendar.firstWeekday + 7) % 7
-        let padded: [SpendingHeatmapDay?] = Array(repeating: nil, count: leadingEmptyDays) + days.map(Optional.some)
-        return stride(from: 0, to: padded.count, by: 7).map { start in
-            let week = Array(padded[start ..< min(start + 7, padded.count)])
-            return week + Array(repeating: nil, count: max(0, 7 - week.count))
-        }
-    }
-
-    private var monthMarkers: [HeatmapMonthMarker] {
-        var seenMonths = Set<String>()
-
-        return weekColumns.enumerated().compactMap { weekIndex, week in
-            for day in week.compactMap(\.self) {
-                guard let date = Formatters.parseTransactionDate(day.date),
-                      calendar.component(.day, from: date) <= 7
-                else {
-                    continue
-                }
-
-                let monthKey = "\(calendar.component(.year, from: date))-\(calendar.component(.month, from: date))"
-                guard !seenMonths.contains(monthKey) else { continue }
-                seenMonths.insert(monthKey)
-
-                return HeatmapMonthMarker(
-                    id: "\(weekIndex)-\(day.date)",
-                    weekIndex: weekIndex,
-                    label: monthLabel(for: date)
-                )
-            }
-            return nil
-        }
-    }
-
     var body: some View {
+        // Derive the layout once per render. The previous computed-property form
+        // re-aggregated every transaction on each property access (~8x per body).
+        let layout = currentLayout()
+
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
-                Text(title)
+                Text(layout.mode.summaryTitle)
                     .sectionTitle()
                     .foregroundStyle(.secondary)
 
@@ -748,19 +680,19 @@ private struct BalanceActivityHeatmap: View {
                 .controlSize(.mini)
                 .frame(width: 116)
 
-                Text(totalLabel)
+                Text(totalLabel(for: layout))
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(totalTint)
+                    .foregroundStyle(totalTint(for: layout))
                     .monospacedDigit()
                     .lineLimit(1)
             }
 
             GeometryReader { proxy in
-                let weeks = max(weekColumns.count, 1)
+                let weeks = max(layout.weekColumns.count, 1)
                 let cell = max(5, min(8, floor((proxy.size.width - (CGFloat(weeks - 1) * spacing)) / CGFloat(weeks))))
 
                 ZStack(alignment: .topLeading) {
-                    ForEach(monthMarkers) { marker in
+                    ForEach(layout.monthMarkers) { marker in
                         Text(marker.label)
                             .font(.system(size: 8, weight: .semibold))
                             .foregroundStyle(.secondary)
@@ -770,11 +702,11 @@ private struct BalanceActivityHeatmap: View {
                     }
 
                     HStack(alignment: .top, spacing: spacing) {
-                        ForEach(Array(weekColumns.enumerated()), id: \.offset) { _, week in
+                        ForEach(Array(layout.weekColumns.enumerated()), id: \.offset) { _, week in
                             VStack(spacing: spacing) {
                                 ForEach(Array(week.enumerated()), id: \.offset) { _, day in
                                     if let day {
-                                        BalanceHeatmapCell(day: day, peakValue: peakValue, mode: mode, size: cell)
+                                        BalanceHeatmapCell(day: day, peakValue: layout.peakValue, mode: layout.mode, size: cell)
                                     } else {
                                         RoundedRectangle(cornerRadius: 2)
                                             .fill(.clear)
@@ -791,14 +723,14 @@ private struct BalanceActivityHeatmap: View {
             .frame(height: monthLabelHeight + 3 + 7 * 8 + 6 * spacing)
 
             HStack(spacing: 5) {
-                if mode == .spending {
+                if layout.mode == .spending {
                     Text("Less")
                         .microText()
                         .foregroundStyle(.secondary)
 
                     ForEach([0.0, 0.25, 0.5, 0.75, 1.0], id: \.self) { intensity in
                         RoundedRectangle(cornerRadius: 2)
-                            .fill(BalanceHeatmapCell.fillColor(intensity: intensity, value: intensity, mode: mode))
+                            .fill(BalanceHeatmapCell.fillColor(intensity: intensity, value: intensity, mode: layout.mode))
                             .frame(width: 8, height: 8)
                     }
 
@@ -812,7 +744,7 @@ private struct BalanceActivityHeatmap: View {
 
                 Spacer()
 
-                Text("\(activeDayCount) active days")
+                Text("\(layout.activeDayCount) active days")
                     .microText()
                     .foregroundStyle(.secondary)
             }
@@ -823,7 +755,7 @@ private struct BalanceActivityHeatmap: View {
             stroke: Color.primary.opacity(0.065)
         )
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("\(title) heatmap for the last 365 days with \(activeDayCount) active days. \(mode.semanticDescription).")
+        .accessibilityLabel("\(layout.mode.summaryTitle) heatmap for the last 365 days with \(layout.activeDayCount) active days. \(layout.mode.semanticDescription).")
     }
 
     private var modeBinding: Binding<SpendingHeatmapMode> {
@@ -833,8 +765,19 @@ private struct BalanceActivityHeatmap: View {
         )
     }
 
-    private func monthLabel(for date: Date) -> String {
-        calendar.shortMonthSymbols[calendar.component(.month, from: date) - 1]
+    private func totalLabel(for layout: SpendingHeatmapLayout) -> String {
+        guard layout.mode == .netCashflow else {
+            return Formatters.currency(layout.totalValue, format: .compact)
+        }
+        return cashflowText(for: layout.totalValue)
+    }
+
+    private func totalTint(for layout: SpendingHeatmapLayout) -> Color {
+        guard layout.mode == .netCashflow else { return .secondary }
+        let displayAmount = SpendingHeatmap.displayCashflowAmount(layout.totalValue)
+        if displayAmount > 0 { return SemanticColors.positive }
+        if displayAmount < 0 { return SemanticColors.negative }
+        return .secondary
     }
 
     private func cashflowText(for value: Double) -> String {
@@ -860,12 +803,6 @@ private struct NetLegendKey: View {
     }
 }
 
-private struct HeatmapMonthMarker: Identifiable {
-    let id: String
-    let weekIndex: Int
-    let label: String
-}
-
 private struct BalanceHeatmapCell: View {
     let day: SpendingHeatmapDay
     let peakValue: Double
@@ -881,8 +818,7 @@ private struct BalanceHeatmapCell: View {
     }
 
     private var intensity: Double {
-        guard day.transactionCount > 0 else { return 0 }
-        return min(max(abs(day.value) / peakValue, 0), 1)
+        SpendingHeatmap.cellIntensity(for: day, peakValue: peakValue)
     }
 
     private var helpText: String {
