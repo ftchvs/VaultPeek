@@ -113,6 +113,42 @@ macOS Screen Recording and Accessibility permission for Terminal.
 
 ## Quick Start
 
+### DMG (easiest, no developer tools)
+
+Build a drag-install disk image from a checkout (or download one from a
+GitHub release once published):
+
+```bash
+./Scripts/package-dmg.sh
+open .build/PlaidBar-*.dmg
+```
+
+Then drag **PlaidBar.app** to **Applications** and launch it. On first
+launch, right-click PlaidBar.app and choose **Open** (the build is ad-hoc
+signed; Developer ID notarization is on the roadmap).
+
+To see demo data without any Plaid setup, choose **Demo** on the setup
+screen — no server or credentials needed. To use real or sandbox Plaid data,
+add your credentials to `~/.plaidbar/server.conf`, then quit and reopen
+PlaidBar — the app starts its bundled companion server automatically, no
+terminal needed:
+
+```bash
+mkdir -p ~/.plaidbar && chmod 700 ~/.plaidbar
+cat > ~/.plaidbar/server.conf <<'EOF'
+PLAID_CLIENT_ID=your_client_id
+PLAID_SECRET=your_secret
+# optional: PLAID_ENV=sandbox
+EOF
+chmod 600 ~/.plaidbar/server.conf
+```
+
+The app also enforces owner-only permissions on `server.conf` and the server
+log at launch. App-managed launches always bind the app's own port, so
+`PLAIDBAR_SERVER_PORT` or `PLAIDBAR_DATA_DIR` lines in `server.conf` are not
+supported there — set those as environment variables instead so the app and
+the server agree.
+
 ### Homebrew
 
 Install PlaidBar from the repository tap:

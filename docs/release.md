@@ -1,8 +1,12 @@
 # Release Runbook
 
-PlaidBar 1.0 ships as a source-built Homebrew formula first. A signed,
-notarized `.app` bundle, cask, Sparkle appcast, and DMG/ZIP archive are deferred
-until the signing and clean-machine Gatekeeper path is real.
+PlaidBar 1.0 ships as a source-built Homebrew formula first. A local
+drag-install DMG can be built with `./Scripts/package-dmg.sh`: it wraps a
+self-contained `PlaidBar.app` (app + bundled `PlaidBarServer`, auto-started on
+launch) with an `/Applications` symlink. The DMG is ad-hoc signed; Developer ID
+signing, notarization, cask, and the Sparkle appcast remain deferred until the
+clean-machine Gatekeeper path is real, so first launch needs right-click >
+Open and release notes must say so.
 
 ## Current Release
 
