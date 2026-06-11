@@ -281,3 +281,18 @@ and `docs/autonomous-roadmap.md`.
   include real private financial data.
 - [ ] T120: After a safe merge, update the progress ledger and choose the next
   unfinished task.
+
+### PR-025: Dashboard Nav Band Instrument Panel
+
+- [x] T121: Extract dashboard nav band views (status strip, filter bar, caption)
+  out of `MainPopover` into a dedicated file, behavior-identical.
+- [x] T122: Add a tested core presenter for filter-bar counts, attention badges,
+  and accessibility strings in `PlaidBarCore`.
+- [x] T123: Restyle the dashboard filter bar as a quiet instrument segment bar:
+  per-filter counts, tinted selection instead of a solid color block, hover and
+  focus states, attention badge paired with an icon (never color alone).
+- [x] T124: Add Cmd-1 through Cmd-6 keyboard shortcuts and help tooltips for the
+  dashboard filters.
+- [x] T125: Unify status strip and filter bar visual language (shared surface
+  tokens, typography, alignment) with an accessibility and reduced-motion pass;
+  preserve the removed caption's VoiceOver summary on the filter bar container.
