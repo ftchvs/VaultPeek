@@ -530,7 +530,7 @@ private struct BalanceCompositionStrip: View {
                             .fill(segment.fillColor)
                             .frame(width: segmentWidth(segment, totalWidth: proxy.size.width))
                             .accessibilityLabel(
-                                "\(segment.title), \(Formatters.currency(segment.value, format: .compact))"
+                                "\(segment.title), \(Formatters.currency(segment.value, format: .compact)), \(segmentPercentText(segment)) of balance mix"
                             )
                     }
                 }
@@ -559,6 +559,10 @@ private struct BalanceCompositionStrip: View {
         let gaps = CGFloat(max(activeSegments.count - 1, 0)) * segmentSpacing
         let availableWidth = max(totalWidth - gaps, 0)
         return max(availableWidth * CGFloat(segment.value / total), 6)
+    }
+
+    private func segmentPercentText(_ segment: BalanceCompositionSegment) -> String {
+        "\(Int((segment.value / total * 100).rounded()))%"
     }
 }
 
@@ -1227,6 +1231,8 @@ private struct StatusMetricPill: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .nativeInsetSurface(cornerRadius: SurfaceTokens.panelCornerRadius)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(title): \(value)")
     }
 }
 
@@ -1600,6 +1606,9 @@ private struct DashboardAccountRow: View {
                 .frame(width: 28, height: 28)
                 .background(accountTint.opacity(0.16), in: RoundedRectangle(cornerRadius: 8))
                 .overlay(alignment: .bottomTrailing) {
+                    // Decorative reinforcement only: the row subtitle carries
+                    // the connection state in text, so the tinted dot is
+                    // hidden from VoiceOver instead of being color-only.
                     Circle()
                         .fill(statusTint)
                         .frame(width: 8, height: 8)
@@ -1607,6 +1616,7 @@ private struct DashboardAccountRow: View {
                             Circle()
                                 .stroke(Color(nsColor: .windowBackgroundColor), lineWidth: 1.5)
                         }
+                        .accessibilityHidden(true)
                 }
 
             VStack(alignment: .leading, spacing: Spacing.compactRowTextSpacing) {
@@ -1926,8 +1936,20 @@ private struct SelectedAccountPanel: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This disconnects the linked Plaid institution and removes \(institutionAccountCountText) plus cached local transactions from PlaidBar. It does not close any bank account.")
+            Text("This disconnects the linked Plaid institution and removes \(institutionAccountCountText) plus \(institutionTransactionCountText) from PlaidBar. It does not close any bank account.")
         }
+    }
+
+    private var institutionTransactionCount: Int {
+        let institutionAccountIds = Set(
+            appState.accounts.filter { $0.itemId == account.itemId }.map(\.id)
+        )
+        return appState.transactions.count { institutionAccountIds.contains($0.accountId) }
+    }
+
+    private var institutionTransactionCountText: String {
+        let count = institutionTransactionCount
+        return count == 1 ? "1 cached local transaction" : "\(count) cached local transactions"
     }
 
     private var availableText: String {
@@ -2477,12 +2499,16 @@ private struct ErrorBanner: View {
     let error: String
 
     var body: some View {
-        HStack {
+        HStack(alignment: .firstTextBaseline) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.yellow)
+                .foregroundStyle(SemanticColors.negative)
+                .accessibilityHidden(true)
+            // Sanitized errors are capped at 220 characters upstream, so an
+            // uncapped line count stays bounded while never truncating the
+            // actionable part of the message.
             Text(error)
                 .font(.caption)
-                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
             Spacer()
             Button {
                 appState.error = nil
@@ -2495,7 +2521,12 @@ private struct ErrorBanner: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 7)
-        .background(.red.opacity(0.1))
+        .background(SemanticColors.negative.opacity(0.1))
         .transition(.move(edge: .bottom).combined(with: .opacity))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Error: \(error)")
+        .onAppear {
+            AccessibilityNotification.Announcement("Error: \(error)").post()
+        }
     }
 }
