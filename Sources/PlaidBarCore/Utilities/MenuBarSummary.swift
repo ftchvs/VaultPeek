@@ -65,14 +65,19 @@ public enum MenuBarSummary {
         let startDate = calendar.startOfDay(
             for: calendar.date(byAdding: .day, value: -(days - 1), to: now) ?? now
         )
+        // Canonical yyyy-MM-dd keys compare lexicographically in date order, so
+        // the window filter avoids a DateFormatter parse per transaction. This
+        // runs on the menu bar label render path, where parsing dominated cost.
+        let startKey = Formatters.transactionDateString(startDate)
+        let endKey = Formatters.transactionDateString(now)
 
         return transactions.reduce(0) { total, transaction in
             guard !transaction.isIncome,
                   transaction.category != .transfer,
                   transaction.category != .transferOut,
-                  let date = Formatters.parseTransactionDate(transaction.date),
-                  date >= startDate,
-                  date <= now
+                  Formatters.isCanonicalTransactionDateKey(transaction.date),
+                  transaction.date >= startKey,
+                  transaction.date <= endKey
             else {
                 return total
             }
