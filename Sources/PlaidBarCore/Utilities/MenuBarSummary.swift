@@ -68,8 +68,8 @@ public enum MenuBarSummary {
         // Canonical yyyy-MM-dd keys compare lexicographically in date order, so
         // the window filter avoids a DateFormatter parse per transaction. This
         // runs on the menu bar label render path, where parsing dominated cost.
-        let startKey = Formatters.transactionDateString(startDate)
-        let endKey = Formatters.transactionDateString(now)
+        let startKey = transactionDateKey(for: startDate, calendar: calendar)
+        let endKey = transactionDateKey(for: calendar.startOfDay(for: now), calendar: calendar)
 
         return transactions.reduce(0) { total, transaction in
             guard !transaction.isIncome,
@@ -83,6 +83,17 @@ public enum MenuBarSummary {
             }
             return total + transaction.displayAmount
         }
+    }
+
+    private static func transactionDateKey(for date: Date, calendar: Calendar) -> String {
+        let components = calendar.dateComponents([.year, .month, .day], from: date)
+        guard let year = components.year,
+              let month = components.month,
+              let day = components.day
+        else {
+            return Formatters.transactionDateString(date)
+        }
+        return String(format: "%04d-%02d-%02d", year, month, day)
     }
 
     public static func runwayMonths(
