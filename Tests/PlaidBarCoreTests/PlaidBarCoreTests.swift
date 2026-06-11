@@ -2212,6 +2212,46 @@ struct PlaidBarCoreTests {
         #expect(detail?.contains("item_id=[redacted-id]") == true)
     }
 
+    @Test("Reconnect recovery message redacts Plaid payloads and names Settings path")
+    func reconnectRecoveryMessageRedactsPlaidPayloadsAndNamesSettingsPath() {
+        let itemID = "M5eVJqLnv3tbzdngLDp9FL5OlDNxlNhlE55op"
+        let tokenKey = "access" + "_token"
+        let accessToken = "access" + "-sandbox-secretvalue123456"
+        let message = ReconnectRecoveryMessage.createFailed(
+            errorMessage: "Plaid update Link failed item_id=\(itemID) \(tokenKey)=\(accessToken) raw server body",
+            institutionName: " Chase "
+        )
+
+        #expect(message.contains(itemID) == false)
+        #expect(message.contains(accessToken) == false)
+        #expect(message.contains("[redacted") == true)
+        #expect(message.contains("Settings > Accounts > Reconnect Chase"))
+    }
+
+    @Test("Reconnect recovery message gives browser-open recovery without link URL")
+    func reconnectRecoveryMessageGivesBrowserOpenRecoveryWithoutLinkURL() {
+        let message = ReconnectRecoveryMessage.browserOpenFailed(institutionName: nil)
+
+        #expect(message.contains("Plaid Link"))
+        #expect(message.contains("Set a default browser"))
+        #expect(message.contains("Settings > Accounts > Reconnect Item"))
+        #expect(message.contains("http") == false)
+    }
+
+    @Test("Reconnect recovery message keeps Settings path after long error detail")
+    func reconnectRecoveryMessageKeepsSettingsPathAfterLongErrorDetail() {
+        let longDetail = String(repeating: "Plaid server response body ", count: 20)
+        let message = ReconnectRecoveryMessage.createFailed(
+            errorMessage: longDetail,
+            institutionName: "Amex"
+        )
+        let appStateSanitized = UserFacingError.sanitizedDetail(from: message)
+
+        #expect(message.count <= 220)
+        #expect(appStateSanitized?.contains("Settings > Accounts > Reconnect Amex") == true)
+        #expect(appStateSanitized == message)
+    }
+
     @Test("User-facing error detail removes stack traces and truncates bodies")
     func userFacingErrorDetailRemovesStackTracesAndTruncatesBodies() {
         let detail = UserFacingError.sanitizedDetail(
