@@ -2173,6 +2173,8 @@ struct PlaidBarCoreTests {
         #expect(detail?.contains(requestID) == false)
         #expect(detail?.contains(cursor) == false)
         #expect(detail?.contains("latest balances") == true)
+        #expect(detail?.contains("transaction_ids\":[redacted-id]") == true)
+        #expect(detail?.contains("]]") == false)
         #expect(detail?.contains("[redacted-id]") == true)
     }
 
