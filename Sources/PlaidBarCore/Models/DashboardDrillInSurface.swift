@@ -198,16 +198,21 @@ public struct DashboardAccountDrillInSummary: Sendable, Equatable {
         itemStatus: ItemStatus?,
         fallbackFreshnessLabel: String
     ) -> Self {
-        let accountTransactions = transactions.filter { $0.accountId == account.id }
-        let latestTransactionDate = accountTransactions
-            .compactMap { transaction -> (raw: String, parsed: Date)? in
-                guard let parsed = Formatters.parseTransactionDate(transaction.date) else { return nil }
-                return (transaction.date, parsed)
-            }
-            .max { $0.parsed < $1.parsed }?
-            .raw
+        presentation(
+            for: account,
+            activitySnapshot: AccountTransactionFeed.activitySnapshot(forAccountId: account.id, in: transactions),
+            itemStatus: itemStatus,
+            fallbackFreshnessLabel: fallbackFreshnessLabel
+        )
+    }
 
-        return Self(
+    public static func presentation(
+        for account: AccountDTO,
+        activitySnapshot: AccountTransactionFeed.AccountActivitySnapshot,
+        itemStatus: ItemStatus?,
+        fallbackFreshnessLabel: String
+    ) -> Self {
+        Self(
             displayName: AccountPresentation.displayName(for: account),
             subtitle: AccountPresentation.subtitle(for: account),
             availableTitle: AccountPresentation.dashboardAvailableTitle(for: account),
@@ -216,9 +221,9 @@ public struct DashboardAccountDrillInSummary: Sendable, Equatable {
             currentBalance: AccountPresentation.displayBalance(for: account),
             utilizationPercent: account.balances.utilizationPercent,
             limit: account.balances.limit,
-            transactionCount: accountTransactions.count,
-            pendingTransactionCount: accountTransactions.count(where: \.pending),
-            latestTransactionDate: latestTransactionDate,
+            transactionCount: activitySnapshot.transactionCount,
+            pendingTransactionCount: activitySnapshot.pendingTransactionCount,
+            latestTransactionDate: activitySnapshot.latestTransactionDate,
             syncState: itemStatus?.status,
             freshnessLabel: itemStatus?.lastSync.map(Formatters.relativeDate) ?? fallbackFreshnessLabel
         )

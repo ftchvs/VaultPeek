@@ -556,7 +556,11 @@ final class AppState {
     }
 
     func transactionsForAccount(_ accountId: String) -> [TransactionDTO] {
-        AccountTransactionFeed.transactions(forAccountId: accountId, in: transactions)
+        accountActivitySnapshot(for: accountId).transactions
+    }
+
+    func accountActivitySnapshot(for accountId: String) -> AccountTransactionFeed.AccountActivitySnapshot {
+        AccountTransactionFeed.activitySnapshot(forAccountId: accountId, in: transactions)
     }
 
     func transactionsForMerchant(_ merchantName: String, excluding transactionId: String) -> [TransactionDTO] {

@@ -1340,7 +1340,11 @@ private struct AccountRowWithDrilldown: View {
             .accessibilityAction(named: drillInPath.accessibilityActionName, onSelect)
 
             if isSelected {
-                SelectedAccountPanel(account: account, isStatusFilter: isStatusFilter)
+                SelectedAccountPanel(
+                    account: account,
+                    isStatusFilter: isStatusFilter,
+                    activitySnapshot: appState.accountActivitySnapshot(for: account.id)
+                )
                     .environment(appState)
                     .padding(.top, Spacing.compactRowVerticalPadding)
                     .padding(.bottom, Spacing.compactRowContentSpacing)
@@ -1676,36 +1680,37 @@ private struct SelectedAccountPanel: View {
     @Environment(\.openSettings) private var openSettings
     let account: AccountDTO
     let isStatusFilter: Bool
+    let activitySnapshot: AccountTransactionFeed.AccountActivitySnapshot
     @State private var isConfirmingAccountRemoval = false
 
     private var drillInSummary: DashboardAccountDrillInSummary {
         DashboardAccountDrillInSummary.presentation(
             for: account,
-            transactions: appState.transactions,
+            activitySnapshot: activitySnapshot,
             itemStatus: itemConnectionStatus,
             fallbackFreshnessLabel: connectionPresentation.signalLabel
         )
     }
 
     private var transactions: [TransactionDTO] {
-        Array(accountTransactions.prefix(5))
+        Array(activitySnapshot.transactions.prefix(5))
     }
 
     private var accountTransactions: [TransactionDTO] {
-        appState.transactionsForAccount(account.id)
+        activitySnapshot.transactions
     }
 
     private var pendingTransactions: [TransactionDTO] {
-        accountTransactions.filter(\.pending)
+        activitySnapshot.pendingTransactions
     }
 
     private var activitySummary: AccountActivitySummary {
-        AccountActivitySummary.recent(from: accountTransactions)
+        activitySnapshot.recentSummary
     }
 
     private var emptyState: AccountActivityEmptyState? {
         AccountActivityEmptyState.evaluate(
-            transactionCount: accountTransactions.count,
+            transactionCount: activitySnapshot.transactionCount,
             isDemoMode: appState.usesDemoConnectionPresentation,
             serverConnected: appState.serverConnected,
             connectionLevel: connectionPresentation.level,
