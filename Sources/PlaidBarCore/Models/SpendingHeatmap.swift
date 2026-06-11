@@ -76,6 +76,119 @@ public struct SpendingHeatmapEmptyPresentation: Sendable, Hashable {
     }
 }
 
+public struct SpendingHeatmapMonthMarker: Identifiable, Sendable, Hashable {
+    public let id: String
+    public let weekIndex: Int
+    public let label: String
+
+    public init(id: String, weekIndex: Int, label: String) {
+        self.id = id
+        self.weekIndex = weekIndex
+        self.label = label
+    }
+}
+
+/// One-pass derivation of everything a heatmap render needs. SwiftUI bodies
+/// should compute this once per render instead of re-deriving days, peak,
+/// totals, and week columns from separate computed properties — each of those
+/// re-aggregated every transaction on every access.
+public struct SpendingHeatmapLayout: Sendable {
+    public let mode: SpendingHeatmapMode
+    public let days: [SpendingHeatmapDay]
+    /// Largest absolute day value, floored at 1 so intensity division is safe.
+    public let peakValue: Double
+    public let totalValue: Double
+    public let activeDayCount: Int
+    /// Days grouped into 7-row week columns, padded with nil so the first
+    /// column aligns to the calendar's first weekday.
+    public let weekColumns: [[SpendingHeatmapDay?]]
+    /// First week column of each month (anchored on days 1-7), deduplicated.
+    public let monthMarkers: [SpendingHeatmapMonthMarker]
+
+    public static func compute(
+        from transactions: [TransactionDTO],
+        startDate: Date,
+        endDate: Date,
+        mode: SpendingHeatmapMode,
+        calendar: Calendar = .current
+    ) -> SpendingHeatmapLayout {
+        let days = SpendingHeatmap.days(
+            from: transactions,
+            startDate: startDate,
+            endDate: endDate,
+            mode: mode,
+            calendar: calendar
+        )
+
+        var peak = 0.0
+        var total = 0.0
+        var activeCount = 0
+        for day in days {
+            peak = max(peak, abs(day.value))
+            total += day.value
+            if day.transactionCount > 0 { activeCount += 1 }
+        }
+
+        let weekColumns = Self.weekColumns(from: days, calendar: calendar)
+
+        return SpendingHeatmapLayout(
+            mode: mode,
+            days: days,
+            peakValue: max(peak, 1),
+            totalValue: total,
+            activeDayCount: activeCount,
+            weekColumns: weekColumns,
+            monthMarkers: Self.monthMarkers(from: weekColumns, calendar: calendar)
+        )
+    }
+
+    private static func weekColumns(
+        from days: [SpendingHeatmapDay],
+        calendar: Calendar
+    ) -> [[SpendingHeatmapDay?]] {
+        guard let firstDay = days.first,
+              let firstDate = Formatters.parseTransactionDate(firstDay.date) else {
+            return []
+        }
+
+        let weekday = calendar.component(.weekday, from: firstDate)
+        let leadingEmptyDays = (weekday - calendar.firstWeekday + 7) % 7
+        let padded: [SpendingHeatmapDay?] = Array(repeating: nil, count: leadingEmptyDays) + days.map(Optional.some)
+        return stride(from: 0, to: padded.count, by: 7).map { start in
+            let week = Array(padded[start ..< min(start + 7, padded.count)])
+            return week + Array(repeating: nil, count: max(0, 7 - week.count))
+        }
+    }
+
+    private static func monthMarkers(
+        from weekColumns: [[SpendingHeatmapDay?]],
+        calendar: Calendar
+    ) -> [SpendingHeatmapMonthMarker] {
+        var seenMonths = Set<String>()
+
+        return weekColumns.enumerated().compactMap { weekIndex, week in
+            for day in week.compactMap(\.self) {
+                guard let date = Formatters.parseTransactionDate(day.date),
+                      calendar.component(.day, from: date) <= 7
+                else {
+                    continue
+                }
+
+                let monthKey = "\(calendar.component(.year, from: date))-\(calendar.component(.month, from: date))"
+                guard !seenMonths.contains(monthKey) else { continue }
+                seenMonths.insert(monthKey)
+
+                return SpendingHeatmapMonthMarker(
+                    id: "\(weekIndex)-\(day.date)",
+                    weekIndex: weekIndex,
+                    label: calendar.shortMonthSymbols[calendar.component(.month, from: date) - 1]
+                )
+            }
+            return nil
+        }
+    }
+}
+
 public enum SpendingHeatmap {
     public static func displayCashflowAmount(_ value: Double) -> Double {
         -value
@@ -122,32 +235,43 @@ public enum SpendingHeatmap {
         let end = calendar.startOfDay(for: endDate)
         guard start <= end else { return [] }
 
-        let relevant = transactions.compactMap { transaction -> (String, Double)? in
-            guard let date = Formatters.parseTransactionDate(transaction.date) else { return nil }
-            let day = calendar.startOfDay(for: date)
-            guard day >= start && day <= end else { return nil }
-            guard !isTransfer(transaction) else { return nil }
+        // Canonical yyyy-MM-dd keys sort lexicographically in date order, so the
+        // range filter is a string comparison instead of a DateFormatter parse
+        // per transaction. Non-canonical date strings never matched a bucket key
+        // before either; they are excluded up front.
+        let startKey = Formatters.transactionDateString(start)
+        let endKey = Formatters.transactionDateString(end)
 
+        var totals: [String: (value: Double, count: Int)] = [:]
+        totals.reserveCapacity(min(transactions.count, 366))
+        for transaction in transactions {
+            let key = transaction.date
+            guard Formatters.isCanonicalTransactionDateKey(key),
+                  key >= startKey, key <= endKey,
+                  !isTransfer(transaction) else { continue }
+
+            let value: Double
             switch mode {
             case .spending:
-                guard !transaction.isIncome else { return nil }
-                return (transaction.date, transaction.displayAmount)
+                guard !transaction.isIncome else { continue }
+                value = transaction.displayAmount
             case .netCashflow:
-                return (transaction.date, transaction.amount)
+                value = transaction.amount
             }
+            let entry = totals[key] ?? (0, 0)
+            totals[key] = (entry.value + value, entry.count + 1)
         }
 
-        let grouped = Dictionary(grouping: relevant) { $0.0 }
         let dayCount = calendar.dateComponents([.day], from: start, to: end).day ?? 0
 
         return (0...dayCount).compactMap { offset in
             guard let day = calendar.date(byAdding: .day, value: offset, to: start) else { return nil }
             let dateString = Formatters.transactionDateString(day)
-            let entries = grouped[dateString] ?? []
+            let entry = totals[dateString] ?? (0, 0)
             return SpendingHeatmapDay(
                 date: dateString,
-                value: entries.reduce(0) { $0 + $1.1 },
-                transactionCount: entries.count
+                value: entry.value,
+                transactionCount: entry.count
             )
         }
     }

@@ -90,6 +90,23 @@ public enum Formatters {
         transactionDateFormatter.date(from: dateString)
     }
 
+    /// Fast structural check that a string is a canonical `yyyy-MM-dd` transaction
+    /// date key, as produced by Plaid and `transactionDateString(_:)`. Canonical
+    /// keys sort lexicographically in date order, so aggregations can range-filter
+    /// with string comparison instead of a `DateFormatter` parse per transaction.
+    public static func isCanonicalTransactionDateKey(_ value: String) -> Bool {
+        let bytes = Array(value.utf8)
+        guard bytes.count == 10 else { return false }
+        for (index, byte) in bytes.enumerated() {
+            if index == 4 || index == 7 {
+                if byte != UInt8(ascii: "-") { return false }
+            } else if byte < UInt8(ascii: "0") || byte > UInt8(ascii: "9") {
+                return false
+            }
+        }
+        return true
+    }
+
     public static func transactionDateString(_ date: Date) -> String {
         transactionDateFormatter.string(from: date)
     }
