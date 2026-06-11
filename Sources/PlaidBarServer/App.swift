@@ -1,8 +1,8 @@
 import ArgumentParser
+import FluentSQLiteDriver
 import Foundation
 import Hummingbird
 import HummingbirdFluent
-import FluentSQLiteDriver
 import Logging
 import PlaidBarCore
 
@@ -18,13 +18,20 @@ struct PlaidBarServer: AsyncParsableCommand {
     var port: Int?
 
     @Flag(name: .long, help: "Use Plaid sandbox environment")
-    var sandbox: Bool = false
+    var sandbox = false
 
     @Option(name: .long, help: "Path to config file")
     var config: String?
 
+    @Option(name: .long, help: "Exit when the process with this PID exits (used by app-managed launches)")
+    var exitWithParent: Int32?
+
     func run() async throws {
         let logger = Logger(label: "com.ftchvs.plaidbar-server")
+
+        if let parentPid = exitWithParent {
+            startParentWatchdog(parentPid: parentPid, logger: logger)
+        }
 
         let serverConfig = try ServerConfig.load(
             from: config,
@@ -73,7 +80,7 @@ struct PlaidBarServer: AsyncParsableCommand {
             pendingLinkSessions: pendingLinkSessions,
             config: serverConfig
         )
-            .register(with: api)
+        .register(with: api)
         AccountRoutes(plaidClient: plaidClient, tokenStore: tokenStore)
             .register(with: api)
         TransactionRoutes(plaidClient: plaidClient, tokenStore: tokenStore)
@@ -87,7 +94,7 @@ struct PlaidBarServer: AsyncParsableCommand {
             tokenStore: tokenStore,
             pendingLinkSessions: pendingLinkSessions
         )
-            .register(with: router)
+        .register(with: router)
 
         // Build and run application
         var app = Application(
@@ -103,5 +110,21 @@ struct PlaidBarServer: AsyncParsableCommand {
         logger.info("Environment: \(serverConfig.plaidEnvironment.rawValue)")
 
         try await app.runService()
+    }
+
+    /// App-managed launches pass the app's PID so a crashed or force-killed
+    /// app never leaves an orphaned server holding token access. Reparenting
+    /// (getppid change) is the death signal: it cannot race PID reuse.
+    private func startParentWatchdog(parentPid: Int32, logger: Logger) {
+        Task.detached {
+            while true {
+                try? await Task.sleep(for: .seconds(2))
+                if getppid() != parentPid {
+                    logger.info("Parent app exited; shutting down app-managed server.")
+                    kill(getpid(), SIGTERM)
+                    break
+                }
+            }
+        }
     }
 }

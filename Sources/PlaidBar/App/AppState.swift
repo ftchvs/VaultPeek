@@ -974,6 +974,9 @@ final class AppState {
             return
         }
         await checkServerConnection()
+        if !serverConnected {
+            await startBundledServerIfAvailable()
+        }
         if serverConnected {
             if statusItemCount > 0 {
                 loadCachedAccounts()
@@ -985,6 +988,44 @@ final class AppState {
             await refreshAccounts()
             await syncTransactions()
             startBackgroundRefresh()
+        }
+    }
+
+    /// When installed as a standalone `.app` (DMG drag-install), the server
+    /// ships inside the bundle. Starts it at app launch so it is usually
+    /// ready before the popover first opens.
+    func prewarmBundledServer() async {
+        guard !CommandLine.arguments.contains("--demo") else { return }
+        await checkServerConnection()
+        guard !serverConnected else { return }
+        // The authenticated status check fails for an externally managed
+        // server when the local auth token is missing or stale. Probe the
+        // unauthenticated /health endpoint so that case never spawns a
+        // second server onto an occupied port.
+        guard !(await serverClient.isLocalServerResponding()) else { return }
+        _ = ServerProcessService.shared.launchBundledServerIfNeeded(
+            isDemoMode: isDemoMode,
+            serverAlreadyReachable: false
+        )
+    }
+
+    /// Popover-open path: start the bundled server if nothing did yet, then
+    /// wait briefly for readiness (also covers a still-booting prewarm).
+    private func startBundledServerIfAvailable() async {
+        var launched = false
+        if !ServerProcessService.shared.isManagingServer,
+           !(await serverClient.isLocalServerResponding()) {
+            launched = ServerProcessService.shared.launchBundledServerIfNeeded(
+                isDemoMode: isDemoMode,
+                serverAlreadyReachable: false
+            )
+        }
+        guard launched || ServerProcessService.shared.isManagingServer else { return }
+
+        for _ in 0 ..< 12 {
+            try? await Task.sleep(for: .milliseconds(400))
+            await checkServerConnection()
+            if serverConnected { break }
         }
     }
 

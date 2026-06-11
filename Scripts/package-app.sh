@@ -28,6 +28,11 @@ if [ ! -x "$BUILD_DIR/PlaidBar" ]; then
     exit 1
 fi
 
+if [ ! -x "$BUILD_DIR/PlaidBarServer" ]; then
+    echo "PlaidBarServer binary not found at $BUILD_DIR/PlaidBarServer" >&2
+    exit 1
+fi
+
 if [ ! -d "$BUILD_DIR/Sparkle.framework" ]; then
     echo "Sparkle.framework not found at $BUILD_DIR/Sparkle.framework" >&2
     exit 1
@@ -37,9 +42,12 @@ rm -rf "$APP_DIR"
 mkdir -p "$MACOS_DIR" "$FRAMEWORKS_DIR"
 
 cp "$BUILD_DIR/PlaidBar" "$APP_BINARY"
+cp "$BUILD_DIR/PlaidBarServer" "$MACOS_DIR/PlaidBarServer"
 cp "$RESOURCES_DIR/Info.plist" "$CONTENTS_DIR/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleExecutable PlaidBar" "$CONTENTS_DIR/Info.plist" 2>/dev/null \
+    || /usr/libexec/PlistBuddy -c "Add :CFBundleExecutable string PlaidBar" "$CONTENTS_DIR/Info.plist"
 ditto "$BUILD_DIR/Sparkle.framework" "$FRAMEWORKS_DIR/Sparkle.framework"
-chmod +x "$APP_BINARY"
+chmod +x "$APP_BINARY" "$MACOS_DIR/PlaidBarServer"
 
 if ! otool -l "$APP_BINARY" | grep -q "@executable_path/../Frameworks"; then
     install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP_BINARY"
