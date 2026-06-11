@@ -611,6 +611,7 @@ final class AppState {
             )
             serverItemCount = Set(accounts.map(\.itemId)).count
             serverSyncReady = (serverItemCount ?? 0) > 0
+            recordBalanceSnapshot()
             updateSetupCompletion()
         } catch {
             await refreshItemStatuses()
@@ -1081,12 +1082,11 @@ final class AppState {
     }
 
     private func recordBalanceSnapshot() {
-        let snapshot = BalanceSnapshot(date: Date(), balance: netBalance)
-        balanceHistory.append(snapshot)
-        // Keep last 90 days
-        let cutoff = Calendar.current.date(byAdding: .day, value: -90, to: Date()) ?? Date()
-        balanceHistory.removeAll { $0.date < cutoff }
-        // Persist
+        guard !accounts.isEmpty else { return }
+        balanceHistory = BalanceHistoryReducer.appending(
+            BalanceSnapshot(date: Date(), balance: netBalance),
+            to: balanceHistory
+        )
         if let data = try? JSONEncoder().encode(balanceHistory) {
             UserDefaults.standard.set(data, forKey: Keys.balanceHistory)
         }
