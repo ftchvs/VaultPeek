@@ -142,7 +142,7 @@ public struct SpendingHeatmapLayout: Sendable {
         )
     }
 
-    static func weekColumns(
+    private static func weekColumns(
         from days: [SpendingHeatmapDay],
         calendar: Calendar
     ) -> [[SpendingHeatmapDay?]] {
@@ -160,7 +160,7 @@ public struct SpendingHeatmapLayout: Sendable {
         }
     }
 
-    static func monthMarkers(
+    private static func monthMarkers(
         from weekColumns: [[SpendingHeatmapDay?]],
         calendar: Calendar
     ) -> [SpendingHeatmapMonthMarker] {

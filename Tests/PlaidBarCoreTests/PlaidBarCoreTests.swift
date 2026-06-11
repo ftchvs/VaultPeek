@@ -393,6 +393,10 @@ struct PlaidBarCoreTests {
         #expect(!Formatters.isCanonicalTransactionDateKey("yyyy-MM-dd"))
     }
 
+    /// Pre-optimization reference implementation of `SpendingHeatmap.days`.
+    /// The transfer exclusion mirrors production's `isTransfer`, which is
+    /// purely category-based (`.transfer` / `.transferOut`); if production
+    /// ever adds non-category transfer detection, update this to match.
     private func parseBasedHeatmapReference(
         from transactions: [TransactionDTO],
         startDate: Date,
