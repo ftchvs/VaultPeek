@@ -27,6 +27,8 @@ public enum BalanceHistoryReducer {
         updated.append(snapshot)
 
         let cutoff = calendar.date(byAdding: .day, value: -retentionDays, to: snapshot.date) ?? snapshot.date
+        // Strict < keeps a snapshot recorded exactly retentionDays ago, giving
+        // an inclusive window; any "last N days" UI copy should match this.
         updated.removeAll { $0.date < cutoff }
         return updated.sorted { $0.date < $1.date }
     }

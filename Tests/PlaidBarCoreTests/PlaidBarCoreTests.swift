@@ -1427,6 +1427,18 @@ struct PlaidBarCoreTests {
 
     // MARK: - Balance History Reducer Tests
 
+    @Test("Balance history starts from an empty history")
+    func balanceHistoryStartsFromEmpty() throws {
+        let now = try #require(Formatters.parseTransactionDate("2026-06-10"))
+
+        let history = BalanceHistoryReducer.appending(
+            BalanceSnapshot(date: now, balance: 9_999),
+            to: []
+        )
+
+        #expect(history == [BalanceSnapshot(date: now, balance: 9_999)])
+    }
+
     @Test("Balance history keeps one snapshot per day")
     func balanceHistoryKeepsOneSnapshotPerDay() throws {
         let calendar = Calendar.current
