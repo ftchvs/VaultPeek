@@ -154,9 +154,7 @@ struct GeneralSettingsView: View {
                         }
                     }
 
-                    Text("Reset removes PlaidBar database files, account and transaction caches, pending Link sessions, and stored Plaid access-token entries. Preferences, server.conf, app/server auth, and unrelated files stay in place.")
-                        .detailText()
-                        .fixedSize(horizontal: false, vertical: true)
+                    LocalTrustReceiptView(receipt: localTrustReceipt)
 
                     HStack(alignment: .center, spacing: Spacing.sm) {
                         Button {
@@ -245,6 +243,10 @@ struct GeneralSettingsView: View {
         return "Default: \(appState.localStorageResolvedDisplayPathText)"
     }
 
+    private var localTrustReceipt: LocalTrustReceipt {
+        LocalTrustReceipt.settingsReceipt(storagePath: appState.activeStorageDirectoryDisplayText)
+    }
+
     private var localAIAvailabilityIcon: String {
         switch appState.localAIAvailability.state {
         case .available: "cpu.fill"
@@ -297,6 +299,47 @@ private struct SettingsCard<Content: View>: View {
         .padding(Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct LocalTrustReceiptView: View {
+    let receipt: LocalTrustReceipt
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                Text(receipt.title)
+                    .font(.headline)
+
+                Text(receipt.subtitle)
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                ForEach(receipt.rows) { row in
+                    HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+                        Image(systemName: row.systemImage)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 18)
+
+                        VStack(alignment: .leading, spacing: Spacing.xxs) {
+                            Text(row.title)
+                                .font(.caption.weight(.semibold))
+                            Text(row.detail)
+                                .detailText()
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("\(row.title). \(row.detail)")
+                }
+            }
+
+            Text(receipt.footer)
+                .detailText()
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 
