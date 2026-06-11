@@ -1635,6 +1635,56 @@ struct PlaidBarCoreTests {
         #expect(decoded.syncedItemCount == 0)
     }
 
+    // MARK: - Balance History Reducer Tests
+
+    @Test("Balance history starts from an empty history")
+    func balanceHistoryStartsFromEmpty() throws {
+        let now = try #require(Formatters.parseTransactionDate("2026-06-10"))
+
+        let history = BalanceHistoryReducer.appending(
+            BalanceSnapshot(date: now, balance: 9_999),
+            to: []
+        )
+
+        #expect(history == [BalanceSnapshot(date: now, balance: 9_999)])
+    }
+
+    @Test("Balance history keeps one snapshot per day")
+    func balanceHistoryKeepsOneSnapshotPerDay() throws {
+        let calendar = Calendar.current
+        let morning = try #require(Formatters.parseTransactionDate("2026-06-10"))
+        let evening = try #require(calendar.date(byAdding: .hour, value: 9, to: morning))
+
+        let history = BalanceHistoryReducer.appending(
+            BalanceSnapshot(date: evening, balance: 12_500),
+            to: [BalanceSnapshot(date: morning, balance: 12_000)],
+            calendar: calendar
+        )
+
+        #expect(history.count == 1)
+        #expect(history.first?.balance == 12_500)
+    }
+
+    @Test("Balance history prunes beyond the retention window and stays sorted")
+    func balanceHistoryPrunesAndSorts() throws {
+        let calendar = Calendar.current
+        let today = try #require(Formatters.parseTransactionDate("2026-06-10"))
+        let yesterday = try #require(calendar.date(byAdding: .day, value: -1, to: today))
+        let ancient = try #require(calendar.date(byAdding: .day, value: -120, to: today))
+
+        let history = BalanceHistoryReducer.appending(
+            BalanceSnapshot(date: today, balance: 300),
+            to: [
+                BalanceSnapshot(date: ancient, balance: 100),
+                BalanceSnapshot(date: yesterday, balance: 200),
+            ],
+            calendar: calendar
+        )
+
+        #expect(history.map(\.balance) == [200, 300])
+        #expect(history == history.sorted { $0.date < $1.date })
+    }
+
     // MARK: - First-run Completion Tests
 
     @Test("First-run completion waits for Plaid Link")
