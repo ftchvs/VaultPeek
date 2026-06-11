@@ -112,18 +112,18 @@ and `docs/autonomous-roadmap.md`.
 - [x] T032: Add one clear recovery action to each state in that area.
 - [x] T033: Preserve last-known local data during transient failures.
 - [x] T034: Truncate or sanitize server error text before display.
-- [ ] T035: Add a focused test for one empty/error-state presenter.
+- [x] T035: Add a focused test for one empty/error-state presenter.
 
 ### PR-008: Setup And Plaid Link Preflight
 
-- [ ] T036: Verify demo, sandbox, and production setup choices explain their
+- [x] T036: Verify demo, sandbox, and production setup choices explain their
   data boundaries before Plaid Link opens.
-- [ ] T037: Fail fast when sandbox credentials are missing or wrong mode is
+- [x] T037: Fail fast when sandbox credentials are missing or wrong mode is
   selected.
-- [ ] T038: Fail fast when production credentials or Plaid approval assumptions
+- [x] T038: Fail fast when production credentials or Plaid approval assumptions
   are missing.
-- [ ] T039: Show the local storage path before linking accounts.
-- [ ] T040: Add a smoke or unit check for preflight readiness output.
+- [x] T039: Show the local storage path before linking accounts.
+- [x] T040: Add a smoke or unit check for preflight readiness output.
 
 ### PR-009: Reconnect And Degraded Items
 
