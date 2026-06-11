@@ -306,6 +306,11 @@ remain unmarked.
   Plaid payloads and points users back to Settings > Accounts reconnect actions;
   evidence: `ReconnectRecoveryMessage`, `AppState.reconnectItem`, and core
   regression tests.
+- 2026-06-11 [T041] [T042] [T045] [AND-302]: added a compact, prioritized
+  three-row attention queue for recovery states across dashboard, Status, and
+  Settings account surfaces, with display-safe severity/action/accessibility
+  semantics and focused ordering/redaction/healthy-collapse tests; evidence:
+  `AttentionQueue`, `AttentionQueueView`, and `AttentionQueueTests`.
 
 ## Backlog Source
 

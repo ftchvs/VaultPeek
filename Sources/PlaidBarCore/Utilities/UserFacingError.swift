@@ -18,7 +18,7 @@ public enum UserFacingError {
             .redacting(pattern: #"(?i)["']?\b(authorization)\b["']?\s*[:=]\s*["']?Bearer\s+[^"',}\s]+"#, template: "$1: Bearer [redacted]")
             .redacting(pattern: #"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{12,}\b"#, template: "Bearer [redacted]")
             .redacting(pattern: #"(?i)\b(access|public|link|processor)-(sandbox|development|production)-[A-Za-z0-9_-]{8,}\b"#, template: "[redacted-token]")
-            .redacting(pattern: #"(?i)["']?\b(access[-_ ]?token|public[-_ ]?token|link[-_ ]?token|processor[-_ ]?token|client[-_ ]?id|secret)\b["']?\s*[:=]\s*["']?[^"',}\s]+"#, template: "$1: [redacted]")
+            .redacting(pattern: #"(?i)["']?\b(access[-_ ]?token|public[-_ ]?token|link[-_ ]?token|processor[-_ ]?token|client[-_ ]?id|client[-_ ]?secret|secret)\b["']?\s*[:=]\s*["']?[^"',}\s]+"#, template: "$1: [redacted]")
             .redacting(pattern: #"(?i)(["']?\b(item_id|item_ids|account_id|account_ids|transaction_id|transaction_ids|txn_id|txn_ids|institution_id|institution_ids|request_id|cursor|cursor_id|link_session_id|transfer_id)\b["']?\s*[:=]\s*)\[[^\]]*\]"#, template: "$1[redacted-id]")
             .redacting(pattern: #"(?i)(["']?\b(item_id|item_ids|account_id|account_ids|transaction_id|transaction_ids|txn_id|txn_ids|institution_id|institution_ids|request_id|cursor|cursor_id|link_session_id|transfer_id)\b["']?\s*[:=]\s*)(["']?)[^"',}\]\[\s&]+(["']?)"#, template: "$1$3[redacted-id]$4")
             .redacting(pattern: #"(?i)\b(access|public|link|processor|item|account|transaction|txn|ins)_[A-Za-z0-9_-]{8,}\b"#, template: "[redacted-id]")
