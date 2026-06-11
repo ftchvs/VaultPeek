@@ -1,0 +1,355 @@
+import Foundation
+
+public enum AttentionQueueSeverity: String, Codable, Sendable {
+    case healthy
+    case warning
+    case blocked
+}
+
+public struct AttentionQueueRow: Equatable, Identifiable, Sendable {
+    public let id: String
+    public let severity: AttentionQueueSeverity
+    public let title: String
+    public let detail: String
+    public let action: DashboardStatusReadinessAction?
+    public let actionTitle: String?
+    public let actionIconName: String?
+    public let targetItemId: String?
+    public let accessibilityLabel: String
+    public let accessibilityHint: String?
+
+    public init(
+        id: String,
+        severity: AttentionQueueSeverity,
+        title: String,
+        detail: String,
+        action: DashboardStatusReadinessAction? = nil,
+        actionTitle: String? = nil,
+        actionIconName: String? = nil,
+        targetItemId: String? = nil,
+        accessibilityLabel: String? = nil,
+        accessibilityHint: String? = nil
+    ) {
+        self.id = id
+        self.severity = severity
+        self.title = title
+        self.detail = detail
+        self.action = action
+        self.actionTitle = actionTitle ?? action?.defaultTitle
+        self.actionIconName = actionIconName ?? action?.defaultIconName
+        self.targetItemId = targetItemId
+        self.accessibilityLabel = accessibilityLabel ?? "\(title). \(detail)"
+        self.accessibilityHint = accessibilityHint
+    }
+}
+
+public struct AttentionQueue: Equatable, Sendable {
+    public static let maximumRowCount = 3
+    private static let maxRenderedErrorLength = 160
+
+    public let rows: [AttentionQueueRow]
+
+    public init(rows: [AttentionQueueRow]) {
+        self.rows = Array(rows.prefix(Self.maximumRowCount))
+    }
+
+    public static func evaluate(
+        isDemoMode: Bool,
+        serverConnected: Bool,
+        credentialsConfigured: Bool?,
+        linkedItemCount: Int,
+        accountCount: Int,
+        syncedItemCount: Int,
+        itemStatuses: [ItemStatus],
+        isSyncStale: Bool,
+        lastSyncRelative: String?,
+        errorMessage: String?
+    ) -> AttentionQueue {
+        if isDemoMode {
+            return AttentionQueue(rows: [healthyDemoRow])
+        }
+
+        var rows: [AttentionQueueRow] = []
+
+        if let authRow = localServerAuthRow(from: errorMessage) {
+            rows.append(authRow)
+        } else if !serverConnected {
+            rows.append(AttentionQueueRow(
+                id: "server-offline",
+                severity: .blocked,
+                title: "Server offline",
+                detail: "Start PlaidBarServer, then check the connection.",
+                action: .checkServer,
+                accessibilityHint: "Checks the local PlaidBarServer connection."
+            ))
+        }
+
+        if serverConnected, credentialsConfigured == false {
+            rows.append(AttentionQueueRow(
+                id: "credentials-missing",
+                severity: .blocked,
+                title: "Plaid credentials missing",
+                detail: "Add local Plaid credentials before linking or refreshing.",
+                action: .openSettings,
+                accessibilityHint: "Opens Settings without showing credential values."
+            ))
+        }
+
+        let credentialsReady = credentialsConfigured != false
+
+        if let modeMismatch = serverModeMismatchRow(from: errorMessage) {
+            rows.append(modeMismatch)
+        }
+
+        if credentialsReady {
+            rows.append(contentsOf: degradedItemRows(from: itemStatuses))
+        }
+
+        if let safeError = userFacingErrorDetail(from: errorMessage),
+           localServerAuthRow(from: errorMessage) == nil,
+           serverModeMismatchRow(from: errorMessage) == nil {
+            rows.append(AttentionQueueRow(
+                id: "recent-error",
+                severity: .warning,
+                title: "Recent action failed",
+                detail: safeError,
+                action: .refresh,
+                accessibilityHint: "Refreshes local PlaidBar data."
+            ))
+        }
+
+        if credentialsReady, serverConnected, linkedItemCount == 0 {
+            rows.append(AttentionQueueRow(
+                id: "no-items",
+                severity: .warning,
+                title: "No institution linked",
+                detail: "Connect a Plaid institution to show balances and activity.",
+                action: .addAccount,
+                actionTitle: "Connect Bank",
+                actionIconName: "plus.circle",
+                accessibilityHint: "Starts Plaid Link."
+            ))
+        } else if credentialsReady, serverConnected, linkedItemCount > 0, accountCount == 0 {
+            rows.append(AttentionQueueRow(
+                id: "balances-not-loaded",
+                severity: .warning,
+                title: "Balances not loaded",
+                detail: "Refresh to load account balances from linked items.",
+                action: .refresh,
+                actionTitle: "Load Balances"
+            ))
+        } else if credentialsReady, serverConnected, linkedItemCount > 0, syncedItemCount == 0 {
+            rows.append(AttentionQueueRow(
+                id: "first-sync-needed",
+                severity: .warning,
+                title: "First sync needed",
+                detail: "Run the first transaction sync for linked items.",
+                action: .refresh,
+                actionTitle: "Run First Sync"
+            ))
+        } else if credentialsReady, serverConnected, syncedItemCount < linkedItemCount {
+            rows.append(AttentionQueueRow(
+                id: "first-sync-incomplete",
+                severity: .warning,
+                title: "First sync incomplete",
+                detail: "\(syncedItemCount) of \(linkedItemCount) linked item\(linkedItemCount == 1 ? "" : "s") synced.",
+                action: .refresh,
+                actionTitle: "Finish Sync"
+            ))
+        } else if credentialsReady, serverConnected, isSyncStale {
+            rows.append(AttentionQueueRow(
+                id: "sync-stale",
+                severity: .warning,
+                title: "Sync is stale",
+                detail: "Last sync: \(lastSyncRelative ?? "never"). Refresh for current data.",
+                action: .refresh,
+                actionTitle: "Refresh Now"
+            ))
+        }
+
+        guard !rows.isEmpty else {
+            return AttentionQueue(rows: [healthyRow(linkedItemCount: linkedItemCount, lastSyncRelative: lastSyncRelative)])
+        }
+
+        return AttentionQueue(rows: rows.sorted(by: rowSort))
+    }
+
+    private static var healthyDemoRow: AttentionQueueRow {
+        AttentionQueueRow(
+            id: "demo-healthy",
+            severity: .healthy,
+            title: "Demo data ready",
+            detail: "Local demo accounts are loaded.",
+            action: .addAccount,
+            actionTitle: "Connect Bank"
+        )
+    }
+
+    private static func healthyRow(linkedItemCount: Int, lastSyncRelative: String?) -> AttentionQueueRow {
+        AttentionQueueRow(
+            id: "healthy",
+            severity: .healthy,
+            title: "Plaid sync healthy",
+            detail: "\(linkedItemCount) linked item\(linkedItemCount == 1 ? "" : "s") connected. Last sync: \(lastSyncRelative ?? "just now").",
+            action: .refresh,
+            actionTitle: "Refresh Data"
+        )
+    }
+
+    private static func degradedItemRows(from itemStatuses: [ItemStatus]) -> [AttentionQueueRow] {
+        itemStatuses.enumerated().compactMap { index, item in
+            switch item.status {
+            case .connected:
+                return nil
+            case .error:
+                return AttentionQueueRow(
+                    id: "item-error-\(index)",
+                    severity: .blocked,
+                    title: itemTitle(item, fallback: "Institution needs attention"),
+                    detail: itemDetail(item, fallback: "Plaid reported an item error. Reconnect, then refresh."),
+                    action: .reconnect,
+                    actionTitle: reconnectTitle(item),
+                    actionIconName: "link.badge.plus",
+                    targetItemId: item.id,
+                    accessibilityHint: "Reconnects this institution through Plaid Link."
+                )
+            case .loginRequired:
+                return AttentionQueueRow(
+                    id: "item-login-\(index)",
+                    severity: .warning,
+                    title: itemTitle(item, fallback: "Fresh login needed"),
+                    detail: itemDetail(item, fallback: "Plaid requires a fresh bank login before sync can continue."),
+                    action: .reconnect,
+                    actionTitle: reconnectTitle(item),
+                    actionIconName: "link.badge.plus",
+                    targetItemId: item.id,
+                    accessibilityHint: "Reconnects this institution through Plaid Link."
+                )
+            }
+        }
+    }
+
+    private static func itemTitle(_ item: ItemStatus, fallback: String) -> String {
+        guard let institutionName = normalizedInstitutionName(item.institutionName) else { return fallback }
+        switch item.status {
+        case .connected:
+            return institutionName
+        case .loginRequired:
+            return "\(institutionName) needs login"
+        case .error:
+            return "\(institutionName) needs attention"
+        }
+    }
+
+    private static func itemDetail(_ item: ItemStatus, fallback: String) -> String {
+        guard let institutionName = normalizedInstitutionName(item.institutionName) else { return fallback }
+        switch item.status {
+        case .connected:
+            return "Connected."
+        case .loginRequired:
+            return "Plaid requires a fresh \(institutionName) login before sync can continue."
+        case .error:
+            return "Plaid reported an item error for \(institutionName). Reconnect, then refresh."
+        }
+    }
+
+    private static func reconnectTitle(_ item: ItemStatus) -> String {
+        guard let institutionName = normalizedInstitutionName(item.institutionName) else { return "Reconnect Item" }
+        return "Reconnect \(institutionName)"
+    }
+
+    private static func localServerAuthRow(from message: String?) -> AttentionQueueRow? {
+        guard let message else { return nil }
+        let normalized = message
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+            .lowercased()
+
+        if normalized.contains("auth token is unavailable") {
+            return AttentionQueueRow(
+                id: "local-auth-missing",
+                severity: .blocked,
+                title: "Local server auth missing",
+                detail: "Restart PlaidBarServer, then check the connection.",
+                action: .openSettings
+            )
+        }
+
+        if normalized.contains("plaidbar server returned 401") ||
+            normalized.contains("plaidbar server returned 403") {
+            return AttentionQueueRow(
+                id: "local-auth-rejected",
+                severity: .blocked,
+                title: "Local server auth rejected",
+                detail: "Restart PlaidBarServer so the local token is regenerated.",
+                action: .openSettings
+            )
+        }
+
+        return nil
+    }
+
+    private static func serverModeMismatchRow(from message: String?) -> AttentionQueueRow? {
+        guard let message else { return nil }
+        let normalized = message
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+        let lowercased = normalized.lowercased()
+
+        guard lowercased.contains("server is running in"),
+              lowercased.contains("not sandbox") || lowercased.contains("not production")
+        else { return nil }
+
+        return AttentionQueueRow(
+            id: "server-mode-mismatch",
+            severity: .blocked,
+            title: "Server mode mismatch",
+            detail: UserFacingError.sanitizedDetail(from: normalized, maxLength: maxRenderedErrorLength) ?? "Restart PlaidBarServer in the selected environment.",
+            action: .checkServer,
+            accessibilityHint: "Checks whether PlaidBarServer is running in the selected Plaid environment."
+        )
+    }
+
+    private static func userFacingErrorDetail(from message: String?) -> String? {
+        UserFacingError.sanitizedDetail(from: message, maxLength: maxRenderedErrorLength)
+    }
+
+    private static func normalizedInstitutionName(_ institutionName: String?) -> String? {
+        guard let institutionName else { return nil }
+        let trimmed = institutionName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private static func rowSort(_ lhs: AttentionQueueRow, _ rhs: AttentionQueueRow) -> Bool {
+        let lhsRank = rowRank(lhs)
+        let rhsRank = rowRank(rhs)
+        if lhsRank != rhsRank { return lhsRank < rhsRank }
+        return lhs.id < rhs.id
+    }
+
+    private static func rowRank(_ row: AttentionQueueRow) -> Int {
+        switch row.id {
+        case "local-auth-missing", "local-auth-rejected": return 0
+        case "server-offline": return 1
+        case "credentials-missing": return 2
+        default:
+            if row.id.hasPrefix("item-error-") { return 4 }
+            if row.id.hasPrefix("item-login-") { return 5 }
+            switch row.id {
+            case "server-mode-mismatch": return 3
+            case "recent-error": return 6
+            case "no-items": return 7
+            case "balances-not-loaded": return 8
+            case "first-sync-needed": return 9
+            case "first-sync-incomplete": return 10
+            case "sync-stale": return 11
+            default:
+                switch row.severity {
+                case .blocked: return 20
+                case .warning: return 30
+                case .healthy: return 40
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,153 @@
+import Foundation
+import Testing
+@testable import PlaidBarCore
+
+@Suite("AttentionQueue Tests")
+struct AttentionQueueTests {
+    @Test("Queue prioritizes blocked recovery before login, stale sync, and healthy rows")
+    func orderingPrioritizesBlockedRecovery() {
+        let queue = AttentionQueue.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: false,
+            linkedItemCount: 2,
+            accountCount: 4,
+            syncedItemCount: 2,
+            itemStatuses: [
+                ItemStatus(id: "item-login-secret", institutionName: "Example Bank", status: .loginRequired),
+                ItemStatus(id: "item-error-secret", institutionName: "City Credit", status: .error),
+            ],
+            isSyncStale: true,
+            lastSyncRelative: "3 days ago",
+            errorMessage: nil
+        )
+
+        #expect(queue.rows.map(\.id) == [
+            "credentials-missing",
+        ])
+        #expect(queue.rows.count == 1)
+        #expect(queue.rows.map(\.severity) == [.blocked])
+        #expect(queue.rows[0].action == .openSettings)
+        #expect(queue.rows[0].targetItemId == nil)
+    }
+
+    @Test("Queue redacts token-like error details from display and accessibility copy")
+    func redactsSensitiveErrorDetails() {
+        let tokenName = "access" + "-sandbox" + "-abc123456789"
+        let secretName = "client" + "_secret"
+        let secretValue = "super" + "-secret" + "-value"
+        let queue = AttentionQueue.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 1,
+            accountCount: 1,
+            syncedItemCount: 1,
+            itemStatuses: [],
+            isSyncStale: false,
+            lastSyncRelative: "now",
+            errorMessage: #"Plaid failed with \#(tokenName) and \#(secretName)="\#(secretValue)""#
+        )
+
+        let joinedDisplayCopy = queue.rows
+            .flatMap { [$0.title, $0.detail, $0.actionTitle ?? "", $0.accessibilityLabel, $0.accessibilityHint ?? ""] }
+            .joined(separator: " ")
+
+        #expect(joinedDisplayCopy.contains(tokenName) == false)
+        #expect(joinedDisplayCopy.contains(secretValue) == false)
+        #expect(joinedDisplayCopy.contains("[redacted-token]"))
+        #expect(joinedDisplayCopy.contains("\(secretName): [redacted]"))
+    }
+
+    @Test("Queue preserves server mode mismatch recovery action")
+    func preservesServerModeMismatchRecoveryAction() {
+        let queue = AttentionQueue.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 1,
+            accountCount: 1,
+            syncedItemCount: 1,
+            itemStatuses: [],
+            isSyncStale: false,
+            lastSyncRelative: "now",
+            errorMessage: "Server is running in production, not sandbox. Restart the server in sandbox mode."
+        )
+
+        #expect(queue.rows.first?.id == "server-mode-mismatch")
+        #expect(queue.rows.first?.severity == .blocked)
+        #expect(queue.rows.first?.title == "Server mode mismatch")
+        #expect(queue.rows.first?.action == .checkServer)
+        #expect(queue.rows.contains { $0.id == "recent-error" } == false)
+    }
+
+    @Test("Queue suppresses downstream Plaid actions until credentials are configured")
+    func suppressesDownstreamActionsUntilCredentialsConfigured() {
+        let queue = AttentionQueue.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: false,
+            linkedItemCount: 0,
+            accountCount: 0,
+            syncedItemCount: 0,
+            itemStatuses: [
+                ItemStatus(id: "item-login-secret", institutionName: "Example Bank", status: .loginRequired),
+            ],
+            isSyncStale: true,
+            lastSyncRelative: "never",
+            errorMessage: nil
+        )
+
+        #expect(queue.rows.map(\.id) == ["credentials-missing"])
+        #expect(queue.rows.first?.action == .openSettings)
+        #expect(queue.rows.contains { $0.action == .addAccount || $0.action == .reconnect || $0.action == .refresh } == false)
+    }
+
+    @Test("Queue ranks server mode mismatch above item reconnect rows")
+    func ranksServerModeMismatchAboveItemReconnectRows() {
+        let queue = AttentionQueue.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 4,
+            accountCount: 4,
+            syncedItemCount: 4,
+            itemStatuses: [
+                ItemStatus(id: "item-error-a", institutionName: "Bank A", status: .error),
+                ItemStatus(id: "item-error-b", institutionName: "Bank B", status: .error),
+                ItemStatus(id: "item-error-c", institutionName: "Bank C", status: .error),
+            ],
+            isSyncStale: false,
+            lastSyncRelative: "now",
+            errorMessage: "Server is running in production, not sandbox."
+        )
+
+        #expect(queue.rows.map(\.id).first == "server-mode-mismatch")
+        #expect(queue.rows.map(\.id).contains("server-mode-mismatch"))
+    }
+
+    @Test("Healthy recovery state collapses to one compact row")
+    func healthyStateCollapsesToOneRow() {
+        let queue = AttentionQueue.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 2,
+            accountCount: 5,
+            syncedItemCount: 2,
+            itemStatuses: [
+                ItemStatus(id: "item-a", institutionName: "Example Bank", status: .connected),
+                ItemStatus(id: "item-b", institutionName: "City Credit", status: .connected),
+            ],
+            isSyncStale: false,
+            lastSyncRelative: "4 minutes ago",
+            errorMessage: nil
+        )
+
+        #expect(queue.rows.count == 1)
+        #expect(queue.rows[0].id == "healthy")
+        #expect(queue.rows[0].severity == .healthy)
+        #expect(queue.rows[0].title == "Plaid sync healthy")
+        #expect(queue.rows[0].detail.contains("2 linked items connected"))
+    }
+}

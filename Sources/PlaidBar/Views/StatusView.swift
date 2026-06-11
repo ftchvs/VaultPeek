@@ -10,6 +10,9 @@ struct StatusView: View {
         VStack(alignment: .leading, spacing: Spacing.lg) {
             statusHeader
 
+            AttentionQueueView(title: "ATTENTION")
+                .environment(appState)
+
             diagnosticsGrid
 
             if !appState.itemStatuses.isEmpty {

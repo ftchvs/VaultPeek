@@ -376,7 +376,15 @@ struct AccountSettingsView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading) {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            AttentionQueueView(
+                title: "ATTENTION",
+                showsHealthyRow: false,
+                onAddAccount: handleAddAccount
+            )
+            .environment(appState)
+            .padding([.horizontal, .top], Spacing.md)
+
             if appState.accounts.isEmpty {
                 SecondaryUnavailableView(presentation: emptyPresentation) {
                     performEmptyAction(emptyPresentation.action)
