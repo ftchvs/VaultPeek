@@ -2929,6 +2929,84 @@ struct PlaidBarCoreTests {
         #expect(ItemRecoveryTarget.actionTitle(from: statuses) == nil)
     }
 
+    // MARK: - Balance Trend Tests
+
+    @Test("Balance trend reports an upward delta with honest span")
+    func balanceTrendReportsUpwardDelta() throws {
+        let calendar = Calendar.current
+        let now = try #require(Formatters.parseTransactionDate("2026-06-10"))
+        let history = (0 ..< 30).map { daysAgo in
+            BalanceSnapshot(
+                date: calendar.date(byAdding: .day, value: -daysAgo, to: now)!,
+                balance: 17_000 - Double(daysAgo) * 40
+            )
+        }
+
+        let trend = try #require(BalanceTrend.evaluate(history: history, now: now, calendar: calendar))
+
+        #expect(trend.direction == .up)
+        #expect(abs(trend.delta - 1_160) < 0.01)
+        #expect(trend.spanDays == 29)
+        #expect(trend.spanText == "29D")
+        #expect(trend.deltaText.hasPrefix("+$"))
+        #expect(trend.accessibilitySummary.contains("up"))
+        #expect(trend.points.count == 30)
+        #expect(trend.points.map(\.date) == trend.points.map(\.date).sorted())
+    }
+
+    @Test("Balance trend reports downward and flat directions")
+    func balanceTrendReportsDownwardAndFlat() throws {
+        let calendar = Calendar.current
+        let now = try #require(Formatters.parseTransactionDate("2026-06-10"))
+        let yesterday = try #require(calendar.date(byAdding: .day, value: -1, to: now))
+
+        let down = try #require(BalanceTrend.evaluate(
+            history: [
+                BalanceSnapshot(date: yesterday, balance: 10_000),
+                BalanceSnapshot(date: now, balance: 9_400),
+            ],
+            now: now,
+            calendar: calendar
+        ))
+        #expect(down.direction == .down)
+        #expect(down.deltaText.hasPrefix("-$"))
+        #expect(down.accessibilitySummary.contains("down"))
+
+        let flat = try #require(BalanceTrend.evaluate(
+            history: [
+                BalanceSnapshot(date: yesterday, balance: 10_000),
+                BalanceSnapshot(date: now, balance: 10_000),
+            ],
+            now: now,
+            calendar: calendar
+        ))
+        #expect(flat.direction == .flat)
+        #expect(flat.accessibilitySummary.contains("unchanged"))
+    }
+
+    @Test("Balance trend needs two points inside the window")
+    func balanceTrendNeedsTwoPointsInWindow() throws {
+        let calendar = Calendar.current
+        let now = try #require(Formatters.parseTransactionDate("2026-06-10"))
+        let ancient = try #require(calendar.date(byAdding: .day, value: -200, to: now))
+
+        #expect(BalanceTrend.evaluate(history: [], now: now, calendar: calendar) == nil)
+        #expect(BalanceTrend.evaluate(
+            history: [BalanceSnapshot(date: now, balance: 5_000)],
+            now: now,
+            calendar: calendar
+        ) == nil)
+        // A second point outside the 90-day window does not count.
+        #expect(BalanceTrend.evaluate(
+            history: [
+                BalanceSnapshot(date: ancient, balance: 4_000),
+                BalanceSnapshot(date: now, balance: 5_000),
+            ],
+            now: now,
+            calendar: calendar
+        ) == nil)
+    }
+
     // MARK: - ItemStatus Tests
 
     @Test("ItemStatus Codable")

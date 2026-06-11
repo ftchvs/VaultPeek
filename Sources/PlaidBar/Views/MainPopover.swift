@@ -177,6 +177,10 @@ struct MainPopover: View {
 private struct DashboardHeader: View {
     @Environment(AppState.self) private var appState
 
+    private var trend: BalanceTrend? {
+        BalanceTrend.evaluate(history: appState.balanceHistory)
+    }
+
     var body: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 4) {
@@ -192,7 +196,25 @@ private struct DashboardHeader: View {
                     .minimumScaleFactor(0.72)
             }
 
-            Spacer(minLength: 16)
+            Spacer(minLength: 12)
+
+            if let trend {
+                VStack(alignment: .trailing, spacing: 3) {
+                    BalanceTrendChart(trend: trend)
+                        .frame(width: 92, height: 21)
+
+                    Text("\(trend.deltaText) \(trend.spanText)")
+                        .font(.caption2.weight(.semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(deltaTint(for: trend.direction))
+                        .lineLimit(1)
+                }
+                .padding(.top, 3)
+                .padding(.trailing, 14)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(trend.accessibilitySummary)
+                .help(trend.accessibilitySummary)
+            }
 
             VStack(alignment: .trailing, spacing: 3) {
                 Text("PlaidBar")
@@ -202,6 +224,17 @@ private struct DashboardHeader: View {
                     .lineLimit(1)
             }
             .padding(.top, 3)
+        }
+    }
+
+    private func deltaTint(for direction: BalanceTrend.Direction) -> Color {
+        switch direction {
+        case .up:
+            SemanticColors.positive
+        case .down:
+            SemanticColors.negative
+        case .flat:
+            .secondary
         }
     }
 }
