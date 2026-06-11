@@ -87,9 +87,10 @@ unclear, stop and ask Felipe.
 - Secret scan from `commands/plaidbar-prod-loop.md`
 
 Use `swift test --skip-update --disable-keychain` when the local Swift toolchain
-supports the `Testing` module. On this machine, the current baseline is
-`no such module 'Testing'`; record that limitation instead of treating it as a
-new regression.
+supports the `Testing` module. As of 2026-06-10 the local toolchain builds and
+runs the full Swift Testing suite (`swift test` passes, 276+ tests), so test
+runs are expected locally; if a machine hits `no such module 'Testing'`, record
+that limitation instead of treating it as a new regression.
 
 ## Progress Ledger
 
@@ -277,6 +278,28 @@ remain unmarked.
   payloads, token-like values, Plaid identifiers, and stack trace tails are not
   rendered directly; evidence: `UserFacingError`, app error-state wiring, and
   core tests.
+- 2026-06-10 [T035]: added focused coverage for the heatmap empty-state
+  presenter distinguishing no-synced-data from filtered-zero spend and cashflow
+  states; evidence: `heatmapEmptyPresentationDistinguishesStates` core test.
+- 2026-06-10 [T036]: verified demo, sandbox, and production setup choices
+  explain their data boundaries before Plaid Link opens; evidence: onboarding
+  choice subtitles ("Local sample data. No Plaid credentials.", "Plaid test
+  institutions.", "Approved Plaid access for real accounts.") and the
+  link-prep storage disclosure rows in `Sources/PlaidBar/Views/SetupView.swift`.
+- 2026-06-10 [T037] [T038]: moved setup preflight readiness into a display-safe
+  `OnboardingPreflight` core presenter so sandbox and production Plaid Link
+  stay blocked (button disabled, fail-fast hint shown) while the server is
+  offline, in the wrong mode, or missing credentials; the action path keeps the
+  same guards in `AppState.connectForOnboarding`; evidence:
+  `Sources/PlaidBarCore/Models/OnboardingPreflight.swift` and core tests.
+- 2026-06-10 [T039]: confirmed the local storage path is shown before linking
+  accounts in both the link-prep disclosure rows and the preflight Storage row,
+  now covered by `onboardingPreflightReadyShowsStoragePath`; evidence:
+  `SetupView` storage disclosure and `OnboardingPreflight` core test.
+- 2026-06-10 [T040]: added unit checks for preflight readiness output covering
+  offline, mode-mismatch, missing-credentials, and ready states for sandbox and
+  production; evidence: Onboarding Preflight test section in
+  `Tests/PlaidBarCoreTests/PlaidBarCoreTests.swift`.
 
 ## Backlog Source
 
