@@ -196,21 +196,21 @@ and `docs/autonomous-roadmap.md`.
 
 ### PR-016: Sandbox Reliability
 
-- [ ] T076: Verify sandbox setup succeeds from a clean temporary data directory.
-- [ ] T077: Add clearer failure handling for missing sandbox credentials.
-- [ ] T078: Verify sandbox transaction sync preserves cursor state.
-- [ ] T079: Add smoke-script coverage for one new sandbox readiness assertion.
-- [ ] T080: Document any remaining sandbox limitation without implying
+- [x] T076: Verify sandbox setup succeeds from a clean temporary data directory.
+- [x] T077: Add clearer failure handling for missing sandbox credentials.
+- [x] T078: Verify sandbox transaction sync preserves cursor state.
+- [x] T079: Add smoke-script coverage for one new sandbox readiness assertion.
+- [x] T080: Document any remaining sandbox limitation without implying
   production readiness.
 
 ### PR-017: Production Readiness Boundaries
 
-- [ ] T081: Keep production setup copy explicit about Plaid approval and real
+- [x] T081: Keep production setup copy explicit about Plaid approval and real
   financial data.
-- [ ] T082: Verify production mode uses separate storage from sandbox.
-- [ ] T083: Add a release checklist item for clean-profile production setup.
-- [ ] T084: Avoid notarization, appcast, or distribution claims until verified.
-- [ ] T085: Update troubleshooting for one production credential or mode failure.
+- [x] T082: Verify production mode uses separate storage from sandbox.
+- [x] T083: Add a release checklist item for clean-profile production setup.
+- [x] T084: Avoid notarization, appcast, or distribution claims until verified.
+- [x] T085: Update troubleshooting for one production credential or mode failure.
 
 ### PR-018: Accessibility And Keyboard Flow
 

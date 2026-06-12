@@ -106,12 +106,11 @@ struct TransactionRoutes: Sendable {
     ) async throws -> HTTPResponse.Status {
         let commitRequest = try await request.decode(as: SyncCursorCommitRequest.self, context: context)
         for (itemId, cursor) in commitRequest.cursors {
-            let trimmedCursor = cursor.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmedCursor.isEmpty else { continue }
+            guard let committableCursor = Self.normalizedCommittableCursor(cursor) else { continue }
             guard try await tokenStore.getItem(id: itemId) != nil else {
                 throw HTTPError(.badRequest, message: "Cannot commit cursor for unknown item")
             }
-            try await tokenStore.saveSyncCursor(itemId: itemId, cursor: trimmedCursor)
+            try await tokenStore.saveSyncCursor(itemId: itemId, cursor: committableCursor)
         }
         return .ok
     }
@@ -120,6 +119,14 @@ struct TransactionRoutes: Sendable {
 
     static func shouldFailSync(attemptedItemCount: Int, successfulItemCount: Int) -> Bool {
         attemptedItemCount > 0 && successfulItemCount == 0
+    }
+
+    /// Cursor-state preservation guard: an empty or whitespace-only cursor
+    /// must never overwrite a stored cursor, otherwise the next sync would
+    /// silently restart from the beginning of the item's history.
+    static func normalizedCommittableCursor(_ cursor: String) -> String? {
+        let trimmed = cursor.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private static func toDTO(_ plaidTx: PlaidTransaction, itemId: String) -> TransactionDTO {

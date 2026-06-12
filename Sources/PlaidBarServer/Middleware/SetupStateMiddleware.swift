@@ -1,6 +1,7 @@
 import Foundation
 import Hummingbird
 import NIOCore
+import PlaidBarCore
 
 /// Maps the credential-less setup state to a clear 503 on Plaid-backed
 /// routes, so clients can tell "server is up but awaiting credentials" apart
@@ -13,13 +14,27 @@ import NIOCore
 /// catch stays as a safety net for any Plaid call reached through a path the
 /// prefix list does not name.
 ///
+/// The 503 body names exactly which credential variable is missing and is
+/// scoped to the server's Plaid environment, so a partially configured
+/// `server.conf` (one variable set, the other forgotten) gets an actionable
+/// message instead of a generic "credentials are not configured".
+///
 /// The body is a flat `{"error": ...}` object because that is the shape the
 /// app's `ServerClient` extracts a user-facing message from.
 struct SetupStateMiddleware<Context: RequestContext>: RouterMiddleware {
-    let credentialsConfigured: Bool
+    let credentialDiagnosis: CredentialSetupDiagnosis
+    let plaidEnvironment: PlaidEnvironment
 
-    static var setupStateMessage: String {
-        "Plaid credentials are not configured on the VaultPeek companion server. "
+    var credentialsConfigured: Bool {
+        credentialDiagnosis.isConfigured
+    }
+
+    static func setupStateMessage(
+        diagnosis: CredentialSetupDiagnosis,
+        environment: PlaidEnvironment
+    ) -> String {
+        diagnosis.setupGuidance(environment: environment)
+            ?? "Plaid credentials are not configured on the VaultPeek companion server. "
             + "Add PLAID_CLIENT_ID and PLAID_SECRET to server.conf; "
             + "the menu bar app restarts its bundled server automatically."
     }
@@ -45,17 +60,21 @@ struct SetupStateMiddleware<Context: RequestContext>: RouterMiddleware {
         next: (Request, Context) async throws -> Response
     ) async throws -> Response {
         if !credentialsConfigured, Self.isPlaidBackedPath(request.uri.path) {
-            return try Self.setupStateResponse()
+            return try setupStateResponse()
         }
         do {
             return try await next(request, context)
         } catch PlaidError.credentialsNotConfigured {
-            return try Self.setupStateResponse()
+            return try setupStateResponse()
         }
     }
 
-    private static func setupStateResponse() throws -> Response {
-        let body = try JSONEncoder().encode(["error": setupStateMessage])
+    private func setupStateResponse() throws -> Response {
+        let message = Self.setupStateMessage(
+            diagnosis: credentialDiagnosis,
+            environment: plaidEnvironment
+        )
+        let body = try JSONEncoder().encode(["error": message])
         return Response(
             status: .serviceUnavailable,
             headers: [.contentType: "application/json"],

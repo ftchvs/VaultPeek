@@ -92,6 +92,23 @@ Clean-install verification (required before distributing):
 3. Confirm the menu bar item appears and the bundled server reports healthy
    in the Status view before distributing.
 
+Verify clean-profile production setup before distributing — on a clean macOS
+user profile (or with `PLAIDBAR_DATA_DIR` pointed at an empty directory):
+
+1. Launch the app with no existing local data; the server must boot into the
+   credential-less setup state (app reachable, `/api/status` reports
+   `credentialsConfigured=false`, setup surfaces show guidance — no crash, no
+   silent failure).
+2. Add production credentials to `server.conf` and restart; the setup
+   preflight must show production mode with credentials configured.
+3. Confirm the storage path uses the production store
+   (`plaidbar-production.sqlite`) and that no sandbox store or sandbox data is
+   created or read.
+
+This step requires Plaid production approval and real production credentials;
+it cannot be simulated with sandbox credentials. If production approval is not
+in place, record the step as not verified rather than skipping it silently.
+
 Distribute the resulting DMG privately to licensed users.
 
 ## Distribution Scope
