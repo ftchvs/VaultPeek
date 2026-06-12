@@ -1,9 +1,13 @@
 # Architecture
 
-PlaidBar is intentionally split into a native macOS app, a local companion
+VaultPeek is intentionally split into a native macOS app, a local companion
 server, and a shared core library. The split keeps Plaid secrets out of the UI
 process and keeps the public product story simple: local app, local server,
 Plaid API, local storage.
+
+VaultPeek is the product name (formerly PlaidBar). Module, target, and
+executable names below intentionally keep the PlaidBar name; see
+[Naming Compatibility](#naming-compatibility).
 
 ## Module Boundaries
 
@@ -16,7 +20,7 @@ Plaid API, local storage.
 ## Runtime Topology
 
 ```text
-PlaidBar.app
+VaultPeek.app
   SwiftUI MenuBarExtra
   Settings and setup windows
   ServerClient with local bearer token
@@ -52,7 +56,7 @@ The app talks to the server through `ServerClient`. The server exposes:
 - `DELETE /api/accounts/:itemId`
 
 `/health` and `/oauth/callback` are public on localhost. `/api/*` requires the
-local bearer token stored in the PlaidBar data directory.
+local bearer token stored in the VaultPeek data directory.
 
 ## Configuration
 
@@ -103,6 +107,25 @@ Those Keychain references intentionally keep the original PlaidBar service name
 during the storage migration so existing linked items keep resolving.
 Fallback builds without Keychain support may store token bytes locally in the
 SQLite store, so release/security docs must stay explicit about that boundary.
+
+## Naming Compatibility
+
+VaultPeek was renamed from PlaidBar at the product level. The following
+surfaces intentionally keep the PlaidBar name and must not be renamed without
+an explicit migration plan:
+
+- SwiftPM targets/products and executables: `PlaidBar`, `PlaidBarServer`,
+  `PlaidBarCore`, `plaidbar`, `plaidbar-server` (staged rename, tracked
+  separately).
+- Environment variables and config keys: `PLAIDBAR_SERVER_PORT`,
+  `PLAIDBAR_DATA_DIR`, `PLAIDBAR_MIGRATE_LEGACY_DATABASE`,
+  `PLAIDBAR_SMOKE_PORT`.
+- Keychain service: `PlaidBar.PlaidAccessToken` — SQLite `keychain:<item_id>`
+  references must keep resolving.
+- SQLite store filenames: `plaidbar-sandbox.sqlite`,
+  `plaidbar-production.sqlite`.
+- Legacy default data directory: `~/.plaidbar/` (migration source only).
+- GitHub repository slug `ftchvs/PlaidBar` until the repo rename lands.
 
 ## Status Endpoint Contract
 

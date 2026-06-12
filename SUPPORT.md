@@ -1,7 +1,7 @@
 # Support
 
-PlaidBar is a proprietary, local-first macOS product for sensitive financial
-data. Support is provided to licensed users and should stay useful without
+VaultPeek (formerly PlaidBar) is a proprietary, local-first macOS product for
+sensitive financial data. Support is provided to licensed users and should stay useful without
 exposing private account details.
 
 ## Supported Versions
@@ -44,6 +44,6 @@ follow [SECURITY.md](SECURITY.md).
 ## Plaid-Specific Support
 
 Plaid institution coverage, production approval, and Plaid API behavior may
-require Plaid documentation or Plaid support. PlaidBar can help make local
+require Plaid documentation or Plaid support. VaultPeek can help make local
 server state and setup readiness visible, but it cannot grant Plaid production
 access or change institution support.
