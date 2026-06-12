@@ -9,6 +9,7 @@ DATA_DIR="$HOME/.vaultpeek"
 
 # Create data directory
 mkdir -p "$DATA_DIR"
+chmod 700 "$DATA_DIR"
 echo "Created data directory: $DATA_DIR"
 
 # Check for Plaid credentials

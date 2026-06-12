@@ -123,7 +123,7 @@ GitHub release once published):
 
 ```bash
 ./Scripts/package-dmg.sh
-open .build/PlaidBar-*.dmg
+open .build/VaultPeek-*.dmg
 ```
 
 Then drag **VaultPeek.app** to **Applications** and launch it. On first

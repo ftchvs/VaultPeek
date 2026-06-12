@@ -22,14 +22,17 @@ regenerate `Sources/PlaidBar/Resources/AppIcon.icns` after design changes.
 - 1.0 distribution shape: privately-distributed drag-install DMG
 - GitHub release: tagged from clean `main` (private repo)
 
-Bundled commands (inside `VaultPeek.app`; executable names stay
-`plaidbar`/`plaidbar-server` until the staged SwiftPM product rename):
+Bundled executables (inside `VaultPeek.app`; executable names stay
+`PlaidBar`/`PlaidBarServer` until the staged SwiftPM product rename):
 
 ```bash
-plaidbar --demo
-plaidbar-server --sandbox
-vaultpeek-run --sandbox   # plaidbar-run remains a deprecated alias
+VaultPeek.app/Contents/MacOS/PlaidBar --demo
+VaultPeek.app/Contents/MacOS/PlaidBarServer --sandbox
 ```
+
+Repository helper scripts such as `Scripts/vaultpeek-run` and the deprecated
+`Scripts/plaidbar-run` alias are source-checkout conveniences. They are not
+staged into the drag-install DMG.
 
 ## Release-Prep PR Checklist
 
@@ -93,12 +96,14 @@ Distribute the resulting DMG privately to licensed users.
 
 ## Distribution Scope
 
-The DMG ships a self-contained `VaultPeek.app` bundling the menu bar app, local
-companion server, and launcher:
+The DMG ships a self-contained `VaultPeek.app` bundling the menu bar app and
+local companion server:
 
-- `plaidbar`
-- `plaidbar-server`
-- `vaultpeek-run` (with `plaidbar-run` kept as a deprecated alias)
+- `PlaidBar` app executable (displayed to users as VaultPeek)
+- `PlaidBarServer` companion server executable
+
+Source-checkout launcher scripts (`Scripts/vaultpeek-run` and the deprecated
+`Scripts/plaidbar-run` alias) are not included in the DMG.
 
 The ad-hoc-signed DMG is acceptable for 1.0 because VaultPeek is local-first and
 distributed privately to a controlled set of licensed users who can complete the
