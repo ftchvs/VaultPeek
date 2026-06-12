@@ -145,6 +145,8 @@ final class AppState {
     private let localAIInsightsService = LocalAIInsightsService()
     private let notificationService: any NotificationServiceProtocol
     private var refreshTask: Task<Void, Never>?
+    private var isUpgradingManagedServer = false
+    private var lastAttemptedCredentialUpgradeConfig: String?
 
     // MARK: - Init
 
@@ -603,6 +605,7 @@ final class AppState {
                 itemStatuses = []
                 updateSetupCompletion()
             }
+            await upgradeManagedServerIfCredentialsArrived()
         } catch {
             serverConnected = false
             serverEnvironment = nil
@@ -805,7 +808,10 @@ final class AppState {
         if refreshDemoDataIfNeeded() { return }
 
         await checkServerConnection()
-        if serverConnected {
+        // Setup state (credentials missing) cannot refresh anything from
+        // Plaid; the status surfaces guide the user instead of surfacing a
+        // 503 banner on every cycle.
+        if serverConnected, serverCredentialsConfigured != false {
             await refreshAccounts()
             await syncTransactions()
         }
@@ -1008,15 +1014,21 @@ final class AppState {
             await startBundledServerIfAvailable()
         }
         if serverConnected {
-            if statusItemCount > 0 {
-                loadCachedAccounts()
-                loadCachedTransactions()
-            } else {
-                clearCachedAccounts()
-                clearCachedTransactions()
+            // In setup state (credentials missing) there is nothing to fetch
+            // from Plaid yet, but the background refresh still runs: its
+            // status checks notice when server.conf gains credentials and
+            // restart the managed server.
+            if serverCredentialsConfigured != false {
+                if statusItemCount > 0 {
+                    loadCachedAccounts()
+                    loadCachedTransactions()
+                } else {
+                    clearCachedAccounts()
+                    clearCachedTransactions()
+                }
+                await refreshAccounts()
+                await syncTransactions()
             }
-            await refreshAccounts()
-            await syncTransactions()
             startBackgroundRefresh()
         }
     }
@@ -1037,6 +1049,46 @@ final class AppState {
             isDemoMode: isDemoMode,
             serverAlreadyReachable: false
         )
+    }
+
+    /// A managed server launched before `server.conf` existed runs in a
+    /// credential-less setup state. The server cannot hot-reload credentials,
+    /// so once the user writes a config that provides them, restart it
+    /// through a freshly evaluated launch plan. Runs after every successful
+    /// status check, which covers the background refresh cadence and every
+    /// "check again" action in the UI.
+    private func upgradeManagedServerIfCredentialsArrived() async {
+        guard !isDemoMode,
+              !isUpgradingManagedServer,
+              serverConnected,
+              serverCredentialsConfigured == false,
+              ServerProcessService.shared.isManagingServer
+        else { return }
+
+        let configFileURL = LocalDataStore.storageDirectoryURL()
+            .appendingPathComponent(LocalDataStore.serverConfigFilename)
+        guard let configFileContents = try? String(contentsOf: configFileURL, encoding: .utf8),
+              configFileContents != lastAttemptedCredentialUpgradeConfig,
+              ServerAutoLaunchPlan.configProvidesCredentials(in: configFileContents),
+              !ServerAutoLaunchPlan.containsBlockedManagedConfigKey(in: configFileContents)
+        else { return }
+
+        isUpgradingManagedServer = true
+        defer { isUpgradingManagedServer = false }
+
+        guard await ServerProcessService.shared.restartManagedServer(isDemoMode: isDemoMode) else {
+            return
+        }
+        // Remember the attempted config so a server that still reports
+        // missing credentials (e.g. values Plaid rejects) is not restarted
+        // every refresh; editing the file again retries.
+        lastAttemptedCredentialUpgradeConfig = configFileContents
+
+        for _ in 0 ..< 12 {
+            try? await Task.sleep(for: .milliseconds(400))
+            await checkServerConnection()
+            if serverConnected { break }
+        }
     }
 
     /// Popover-open path: start the bundled server if nothing did yet, then
