@@ -3,7 +3,6 @@ import SwiftUI
 // MARK: - Semantic Colors
 
 enum SemanticColors {
-
     // MARK: - Financial Meaning
 
     /// Money received — paycheck deposits, refunds, Venmo inflows.
@@ -23,8 +22,8 @@ enum SemanticColors {
 
     // MARK: - Status Indicators
 
-    /// General caution indicator — moderate credit utilization (30-50%),
-    /// stale sync badge.
+    /// General caution indicator — credit utilization at or above the
+    /// user's warning threshold (icon tint), stale sync badge.
     static let warning = Color.orange
 
     /// Favorable delta — spending decreased vs. prior period, balance increased.
@@ -55,12 +54,14 @@ enum SemanticColors {
     /// Detected recurring charges badge and recurring transaction section header.
     static let recurring = Color.indigo
 
-    // Utilization thresholds
+    /// Utilization thresholds. Yellow is excluded from the ramp: yellow text
+    /// at caption size falls below 4.5:1 contrast in both appearances, so the
+    /// 30-75% band shares orange and the icon ladder (below) carries the
+    /// severity distinction.
     static func utilization(for percent: Double, threshold: Double = 30) -> Color {
         guard percent >= threshold else { return .green }
         switch percent {
-        case ..<50: return .yellow
-        case 50..<75: return .orange
+        case ..<75: return .orange
         default: return .red
         }
     }
@@ -84,10 +85,51 @@ enum Spacing {
     static let lg: CGFloat = 16
     static let xl: CGFloat = 24
     static let rowVertical: CGFloat = 6
+    static let chipVertical: CGFloat = 3
     static let compactRowHorizontalPadding: CGFloat = sm
     static let compactRowVerticalPadding: CGFloat = xs
     static let compactRowContentSpacing: CGFloat = sm
     static let compactRowTextSpacing: CGFloat = xxs
+}
+
+// MARK: - Radius
+
+/// The app-wide corner radius scale. Panels and clipped lists use `panel`,
+/// controls/rows/hover washes use `control`, heatmap cells use `cell`.
+enum Radius {
+    static let panel: CGFloat = 8
+    static let control: CGFloat = 6
+    static let cell: CGFloat = 2
+}
+
+// MARK: - Sizing
+
+/// Fixed-frame sizes for icons, chips, and rows so the same visual role
+/// always renders at the same size across surfaces.
+enum Sizing {
+    static let iconInline: CGFloat = 16
+    static let iconNav: CGFloat = 20
+    static let iconChip: CGFloat = 28
+    static let statusDot: CGFloat = 8
+    static let hitTargetMin: CGFloat = 24
+}
+
+// MARK: - Motion
+
+/// The motion system: three durations, one reduce-motion gate. Every
+/// animation in the app flows through `animation(_:reduceMotion:)` so
+/// Reduce Motion disables movement in one place.
+enum MotionTokens {
+    /// Hover, press, chip toggles.
+    static let micro = Animation.easeOut(duration: 0.12)
+    /// Selection, filter swaps, disclosure, banner entrances.
+    static let standard = Animation.easeInOut(duration: 0.2)
+    /// Drill-in/fly-out expansion and number transitions.
+    static let content = Animation.spring(response: 0.3, dampingFraction: 0.85)
+
+    static func animation(_ animation: Animation, reduceMotion: Bool) -> Animation? {
+        reduceMotion ? nil : animation
+    }
 }
 
 // MARK: - Native Surfaces

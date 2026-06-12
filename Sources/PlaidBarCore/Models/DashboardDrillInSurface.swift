@@ -11,39 +11,39 @@ public enum DashboardDrillInSurface: String, CaseIterable, Sendable, Equatable {
     public var title: String {
         switch self {
         case .account:
-            return "Account"
+            "Account"
         case .activity:
-            return "Activity"
+            "Activity"
         case .credit:
-            return "Credit"
+            "Credit"
         case .status:
-            return "Status"
+            "Status"
         }
     }
 
     public var iconName: String {
         switch self {
         case .account:
-            return "building.columns.fill"
+            "building.columns.fill"
         case .activity:
-            return "list.bullet.rectangle"
+            "list.bullet.rectangle"
         case .credit:
-            return "creditcard.fill"
+            "creditcard.fill"
         case .status:
-            return "waveform.path.ecg"
+            "waveform.path.ecg"
         }
     }
 
     public var accessibilitySummary: String {
         switch self {
         case .account:
-            return "balances and account metadata"
+            "balances and account metadata"
         case .activity:
-            return "recent account transactions"
+            "recent account transactions"
         case .credit:
-            return "credit utilization or debt detail when relevant"
+            "credit utilization or debt detail when relevant"
         case .status:
-            return "sync freshness and reconnect state"
+            "sync freshness and reconnect state"
         }
     }
 
@@ -54,9 +54,9 @@ public enum DashboardDrillInSurface: String, CaseIterable, Sendable, Equatable {
     public func isRelevant(for account: AccountDTO) -> Bool {
         switch self {
         case .account, .activity, .status:
-            return true
+            true
         case .credit:
-            return account.type == .credit || account.type == .loan
+            account.type == .credit || account.type == .loan
         }
     }
 }
@@ -72,44 +72,44 @@ public enum DashboardDrillInAction: String, CaseIterable, Sendable, Equatable {
     public var title: String {
         switch self {
         case .reconnect:
-            return "Reconnect"
+            "Reconnect"
         case .remove:
-            return "Remove Institution"
+            "Remove Institution"
         case .settings:
-            return "Settings"
+            "Settings"
         }
     }
 
     public var iconName: String {
         switch self {
         case .reconnect:
-            return "link.badge.plus"
+            "link.badge.plus"
         case .remove:
-            return "trash"
+            "trash"
         case .settings:
-            return "gearshape"
+            "gearshape"
         }
     }
 
     public var accessibilityHint: String {
         switch self {
         case .reconnect:
-            return "Opens Plaid Link update mode for this institution."
+            "Opens Plaid Link update mode for this institution."
         case .remove:
-            return "Requires confirmation before disconnecting this Plaid institution and removing its local PlaidBar data."
+            "Requires confirmation before disconnecting this Plaid institution and removing its local PlaidBar data."
         case .settings:
-            return "Opens PlaidBar settings and local data controls."
+            "Opens PlaidBar settings and local data controls."
         }
     }
 
     public func accessibilityLabel(accountDisplayName: String) -> String {
         switch self {
         case .reconnect:
-            return "Reconnect \(accountDisplayName)"
+            "Reconnect \(accountDisplayName)"
         case .remove:
-            return "Remove institution for \(accountDisplayName)"
+            "Remove institution for \(accountDisplayName)"
         case .settings:
-            return "Open PlaidBar settings from \(accountDisplayName)"
+            "Open PlaidBar settings from \(accountDisplayName)"
         }
     }
 
@@ -135,14 +135,14 @@ public struct DashboardAccountDrillInPath: Sendable, Equatable {
         let displayName = AccountPresentation.displayName(for: account)
         if isSelected {
             return Self(
-                accessibilityHint: "Press Return or Space to collapse the account drill-in.",
-                accessibilityActionName: "Collapse account details",
-                pointerHelp: "Collapse details for \(displayName)"
+                accessibilityHint: "Press Return or Space to close the account details panel.",
+                accessibilityActionName: "Close account details",
+                pointerHelp: "Close details for \(displayName)"
             )
         }
 
         return Self(
-            accessibilityHint: "Press Return or Space to open the account drill-in below this row.",
+            accessibilityHint: "Press Return or Space to open the account details panel beside the dashboard.",
             accessibilityActionName: "Open account details",
             pointerHelp: "Open details for \(displayName)"
         )
@@ -178,7 +178,7 @@ public struct DashboardAccountDrillInSummary: Sendable, Equatable {
             "\(currentTitle) \(Formatters.currency(currentBalance, format: .full))",
             "\(transactionCount) synced transaction\(transactionCount == 1 ? "" : "s")",
             "\(pendingTransactionCount) pending transaction\(pendingTransactionCount == 1 ? "" : "s")",
-            "Sync \(freshnessLabel)"
+            "Sync \(freshnessLabel)",
         ]
 
         if let utilizationPercent {
