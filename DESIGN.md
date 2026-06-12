@@ -129,7 +129,7 @@ nest more than two ranks below the popover root.
 | `.glassSurface(.inset)` | Quiet secondary surfaces: metric strip, balance mix, insights |
 | `.glassSurface(.emphasized(tint))` | Attention states only — tinted fill plus hairline |
 | `Radius.panel` / `.control` / `.cell` | 8 / 6 / 2pt corner radius scale |
-| `Sizing` | Icon (16/20/28), status dot (8), 24pt minimum hit target |
+| `Sizing` | Icon (16/20/28), status dot (8), 28pt minimum hit target |
 | `MotionTokens.micro/.standard/.content` | 120ms / 200ms / spring(0.3, 0.85); all gated by `MotionTokens.animation(_:reduceMotion:)` |
 | `.hoverHighlight()` | Rounded, 120ms-animated hover wash for rows |
 | `.nativePanelSurface(...)` / `.nativeInsetSurface(...)` | Legacy fill+stroke treatment still used by setup/attention surfaces |
