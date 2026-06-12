@@ -33,8 +33,8 @@ struct MenuBarLabel: View {
         if appState.serverConnected || appState.isDemoMode {
             return "dollarsign.circle"
         }
-        // Server unreachable is a warning-tier state — it must not render
-        // as the heaviest, healthiest-looking glyph in the ladder.
-        return "exclamationmark.triangle"
+        // Server unreachable gets its own glyph so it stays distinguishable
+        // from stale-sync/login states at the same warning tier.
+        return "network.slash"
     }
 }

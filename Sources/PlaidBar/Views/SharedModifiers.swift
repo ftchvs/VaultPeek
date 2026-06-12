@@ -63,10 +63,8 @@ private struct GlassSurface: ViewModifier {
     }
 
     private var emphasizedFill: AnyShapeStyle? {
-        if case .emphasized = rank {
-            return rank.fill
-        }
-        return nil
+        guard case let .emphasized(tint) = rank else { return nil }
+        return AnyShapeStyle(tint.opacity(0.10))
     }
 
     private func fallback(content: Content, shape: RoundedRectangle) -> some View {
@@ -133,6 +131,9 @@ struct NativePanelSurface: ViewModifier {
 }
 
 extension View {
+    /// Legacy fill+stroke surface treatment. New surfaces should use the
+    /// rank-based `glassSurface(_:cornerRadius:)` vibrancy system above;
+    /// this remains for setup/attention surfaces not yet migrated.
     func nativePanelSurface(
         cornerRadius: CGFloat = SurfaceTokens.panelCornerRadius,
         fill: AnyShapeStyle = AnyShapeStyle(SurfaceTokens.panelFill()),
