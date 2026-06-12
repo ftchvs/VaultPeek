@@ -32,6 +32,7 @@ public enum DashboardAccountFilterKind: String, CaseIterable, Sendable {
 public enum DashboardAccountEmptyStateTone: String, Sendable {
     case brand
     case healthy
+    case loading
     case offline
     case secondary
     case warning
@@ -74,9 +75,17 @@ public struct DashboardAccountEmptyState: Equatable, Sendable {
         self.actionIconName = actionIconName
     }
 
+    /// True while the first fetch is still in flight. Views prefer skeleton
+    /// rows over this panel, but any consumer that does render it must not
+    /// present loading as an actionable failure.
+    public var isLoading: Bool {
+        tone == .loading
+    }
+
     public static func evaluate(
         filter: DashboardAccountFilterKind,
         isDemoMode: Bool,
+        isInitialLoad: Bool = false,
         serverConnected: Bool,
         credentialsConfigured: Bool? = nil,
         linkedItemCount: Int,
@@ -85,6 +94,21 @@ public struct DashboardAccountEmptyState: Equatable, Sendable {
         degradedItemRecoveryTitle: String? = nil,
         degradedItemRecoveryDetail: String? = nil
     ) -> DashboardAccountEmptyState {
+        // The first fetch outranks offline/empty messaging: boot must read
+        // as loading, not as a broken or offline app.
+        if !isDemoMode, isInitialLoad {
+            return DashboardAccountEmptyState(
+                title: "Loading accounts",
+                detail: "Fetching linked account balances from the local VaultPeek server. This usually takes a few seconds.",
+                iconName: "arrow.triangle.2.circlepath",
+                tone: .loading,
+                showsAddAccount: false,
+                action: .refresh,
+                actionTitle: "Refresh",
+                actionIconName: "arrow.clockwise"
+            )
+        }
+
         if !isDemoMode, !serverConnected {
             return DashboardAccountEmptyState(
                 title: "Server offline",
