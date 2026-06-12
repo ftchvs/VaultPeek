@@ -10,7 +10,7 @@ struct SetupView: View {
     @State private var setupMode: SetupMode = .choose
     var onComplete: (() -> Void)?
 
-    enum SetupMode: Equatable {
+    enum SetupMode: Sendable, Equatable {
         case choose
         case sandbox
         case production
@@ -568,8 +568,21 @@ private struct OnboardingPreflightPanel: View {
         }
         .font(.caption)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(row.title): \(row.value)")
+        .accessibilityLabel(preflightRowAccessibilityLabel(for: row))
         .accessibilityHint(row.accessibilityHint)
+    }
+
+    /// The explicit label suppresses the state icon for VoiceOver, so the
+    /// ready/blocked/checking signal the icon shape conveys is appended to
+    /// the label text instead.
+    private func preflightRowAccessibilityLabel(for row: OnboardingPreflightRow) -> String {
+        let base = "\(row.title): \(row.value)"
+        return switch row.state {
+        case .ready: "\(base), ready"
+        case .blocked: "\(base), blocked"
+        case .unknown: "\(base), checking"
+        case .informational: base
+        }
     }
 
     private func stateIconName(for state: OnboardingPreflightRowState) -> String? {

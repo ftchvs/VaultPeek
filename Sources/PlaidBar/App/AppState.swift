@@ -20,6 +20,7 @@ final class AppState {
         static let notifyLargeTransaction = "notifyLargeTransaction"
         static let notifyLowBalance = "notifyLowBalance"
         static let notifyHighUtilization = "notifyHighUtilization"
+        static let setupCompletedOnce = "setup.completedOnce"
     }
 
     // MARK: - State
@@ -48,19 +49,17 @@ final class AppState {
     /// the dashboard instead of flashing first-run onboarding until the
     /// initial server handshake completes. Demo sessions never persist
     /// completion; explicit resets clear it.
-    var isSetupComplete = UserDefaults.standard.bool(forKey: AppState.setupCompletedDefaultsKey) {
+    var isSetupComplete = UserDefaults.standard.bool(forKey: Keys.setupCompletedOnce) {
         didSet {
             guard oldValue != isSetupComplete else { return }
             if isSetupComplete {
                 guard !isDemoMode else { return }
-                UserDefaults.standard.set(true, forKey: AppState.setupCompletedDefaultsKey)
+                UserDefaults.standard.set(true, forKey: Keys.setupCompletedOnce)
             } else {
-                UserDefaults.standard.set(false, forKey: AppState.setupCompletedDefaultsKey)
+                UserDefaults.standard.set(false, forKey: Keys.setupCompletedOnce)
             }
         }
     }
-
-    static let setupCompletedDefaultsKey = "setup.completedOnce"
     var serverConnected = false
     var serverEnvironment: PlaidEnvironment?
     var serverVersion: String?
@@ -1265,7 +1264,13 @@ final class AppState {
     }
 
     private func updateSetupCompletion() {
-        isSetupComplete = firstRunCompletionState.isReady
+        // Promote-only: transient startup probes (prewarmBundledServer /
+        // loadInitialData before the server is reachable) report not-ready
+        // and must not erase the persisted completion bit. Explicit resets
+        // (resetLocalData, demo exit) set isSetupComplete = false directly.
+        if firstRunCompletionState.isReady {
+            isSetupComplete = true
+        }
     }
 
     @discardableResult
