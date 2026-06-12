@@ -63,6 +63,11 @@ struct MainPopover: View {
                 )
                 .environment(appState)
                 .frame(width: Layout.flyoutWidth)
+                // Cap the fly-out to the same screen-bounded height as the
+                // dashboard scroll column so tall detail content scrolls
+                // inside the fly-out instead of growing the whole popover
+                // past the intended screen-bounded height.
+                .frame(maxHeight: dashboardScrollHeight)
                 .transition(.move(edge: .leading).combined(with: .opacity))
 
                 Divider()
