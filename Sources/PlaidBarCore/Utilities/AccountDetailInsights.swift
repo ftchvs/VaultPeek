@@ -96,7 +96,7 @@ public struct AccountDetailInsights: Sendable, Equatable {
     /// - Income (`isIncome`, amount < 0 in Plaid convention) is excluded from
     ///   `topCategories` — category slices describe spending only.
     /// - Pending transactions count toward totals and categories (they are real spending
-    ///   signals) and lead `reviewItems`, followed by posted expenses at or above
+    ///   signals) and lead `reviewItems`, followed by posted, non-transfer expenses at or above
     ///   `largeAmountThreshold`. The default threshold mirrors
     ///   `NotificationTriggers.largeTransactionThreshold`'s default of 500.
     public static func compute(
@@ -210,6 +210,7 @@ public struct AccountDetailInsights: Sendable, Equatable {
             .filter { transaction in
                 !transaction.pending &&
                     !transaction.isIncome &&
+                    !transaction.isTransfer &&
                     transaction.displayAmount >= largeAmountThreshold &&
                     !pendingIds.contains(transaction.id)
             }

@@ -253,6 +253,22 @@ struct AccountDetailInsightsTests {
         #expect(insights.reviewItems[0].reason == .largeAmount)
     }
 
+    @Test("Large transfers are excluded from review items")
+    func largeTransfersNotReviewed() {
+        let insights = AccountDetailInsights.compute(
+            transactions: [
+                expense("large-transfer-in", amount: 2000, date: "2026-06-10", category: .transfer),
+                expense("large-transfer-out", amount: 1500, date: "2026-06-09", category: .transferOut),
+                expense("large-spend", amount: 800, date: "2026-06-08"),
+            ],
+            now: now
+        )
+
+        // Only the genuine large expense surfaces; transfers above the
+        // threshold are not spending to review.
+        #expect(insights.reviewItems.map(\.id) == ["large-spend"])
+    }
+
     @Test("A pending transaction over the threshold appears once, as pending")
     func dedupPendingAndLarge() {
         let insights = AccountDetailInsights.compute(
