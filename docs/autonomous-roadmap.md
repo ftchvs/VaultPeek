@@ -323,6 +323,11 @@ remain unmarked.
   intent, dashboard story, expected recovery state, asset traceability, and
   reduced-noise composition guidance; evidence: `docs/demo-scenarios.md`,
   `docs/screenshots.md`, and `README.md`.
+- 2026-06-11 [T047] [T049]: verified the existing dashboard/status treatment
+  for offline, syncing, stale, missing-credential, and linked-item-count
+  states, then made the current status refresh/connect/recovery actions
+  reachable directly from the dashboard status strip; evidence:
+  `DashboardStatusReadiness`, `AttentionQueue`, and `DashboardStatusStrip`.
 - 2026-06-12 [T048] [T050]: added a dedicated local-only active data directory
   diagnostic row to the Status surface and regression coverage that status
   readiness and attention queue presentation copy redacts sensitive IDs and
