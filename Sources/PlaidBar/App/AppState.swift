@@ -266,14 +266,21 @@ final class AppState {
         )
     }
 
+    var menuBarStatusPresentation: MenuBarStatusPresentation {
+        MenuBarStatusPresentation.evaluate(
+            isDemoMode: isDemoMode,
+            isLoading: isLoading,
+            serverConnected: serverConnected,
+            errorMessage: error,
+            erroredItemCount: erroredItemCount,
+            needsLoginItemCount: needsLoginItemCount,
+            isSyncStale: isSyncStale,
+            hasEverSynced: lastSyncDate != nil
+        )
+    }
+
     var menuBarAttentionText: String? {
-        if isDemoMode { return nil }
-        if serverConnectionPresentation.attentionText == "Auth" { return "Auth" }
-        if error != nil || erroredItemCount > 0 { return "Error" }
-        if let attentionText = serverConnectionPresentation.attentionText { return attentionText }
-        if needsLoginItemCount > 0 { return "Login" }
-        if isSyncStale { return lastSyncDate == nil ? "Never" : "Stale" }
-        return nil
+        menuBarStatusPresentation.attentionText
     }
 
     var menuBarHelpText: String {
@@ -423,7 +430,7 @@ final class AppState {
         let serverPresentation = serverConnectionPresentation
         if isDemoMode { return serverPresentation.diagnosticsSummary }
         switch serverPresentation.issue {
-        case .offline, .localAuthMissing, .localAuthRejected:
+        case .offline, .localAuthMissing, .localAuthRejected, .serverModeMismatch:
             return serverPresentation.diagnosticsSummary
         case .demo, .syncing, .connected, .error:
             break
