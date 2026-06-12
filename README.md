@@ -482,7 +482,7 @@ when the local app created the Hosted Link session.
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/health` | Health check |
-| `GET` | `/api/status` | Server version, environment, item count, synced item count, storage readiness |
+| `GET` | `/api/status` | Readiness metadata only: server version, environment, item/synced counts, last sync, credential/storage readiness; no secrets, account IDs, balances, transactions, Plaid tokens, or raw payloads |
 | `GET` | `/api/items` | List connected bank items |
 | `POST` | `/api/link/create` | Create one-time Plaid Hosted Link token + URL |
 | `POST` | `/api/link/update/:itemId` | Create one-time Plaid Hosted Link update-mode URL for reconnect |

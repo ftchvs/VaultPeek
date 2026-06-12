@@ -135,7 +135,7 @@ and `docs/autonomous-roadmap.md`.
 
 ### PR-010: Status And Diagnostics
 
-- [ ] T046: Keep `/api/status` limited to readiness metadata.
+- [x] T046: Keep `/api/status` limited to readiness metadata.
 - [ ] T047: Add or verify UI treatment for server offline, syncing, stale data,
   credentials missing, and linked item counts.
 - [x] T048: Add a local-only diagnostic row for the active data directory.
