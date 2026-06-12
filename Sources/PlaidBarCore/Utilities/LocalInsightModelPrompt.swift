@@ -1,0 +1,115 @@
+import Foundation
+
+/// A redaction-safe chat prompt for an on-device language model.
+///
+/// PlaidBar may run a small local model (e.g. a quantized Gemma) to phrase
+/// spending summaries in natural language. The model only ever sees the
+/// *display-safe aggregates* assembled here — never raw Plaid identifiers,
+/// access tokens, item IDs, transaction IDs, or account IDs. The deterministic
+/// summary in `LocalAIInsightsService` remains the always-available fallback,
+/// so the model is an enhancement, never a dependency.
+public struct LocalInsightModelPrompt: Sendable, Equatable {
+    /// Instruction/system message: scope, tone, and hard guardrails.
+    public let system: String
+    /// User message: the display-safe numbers the model may phrase.
+    public let user: String
+
+    public init(system: String, user: String) {
+        self.system = system
+        self.user = user
+    }
+}
+
+/// The seam an on-device model runtime implements (in the app target, where
+/// the model framework lives). PlaidBarCore stays free of any model
+/// dependency so it remains pure and testable.
+public protocol LocalInsightModel: Sendable {
+    /// Phrase a one-to-two sentence summary from a redaction-safe prompt.
+    /// Implementations must run entirely on-device and never transmit the
+    /// prompt off the machine.
+    func summarize(_ prompt: LocalInsightModelPrompt, maxTokens: Int) async throws -> String
+}
+
+public enum LocalInsightPromptBuilder {
+    /// The hard guardrails the model runs under. Kept terse so a small model
+    /// follows them reliably.
+    public static let systemInstruction = """
+    You are PlaidBar's on-device finance summarizer. Write a short, factual \
+    summary of the user's own spending for the given period using ONLY the \
+    numbers provided below. Rules: one or two sentences, plain English, no \
+    financial advice, no predictions, never invent merchants or figures that \
+    are not listed, do not mention that you are an AI or a model. The data is \
+    processed locally on the user's Mac.
+    """
+
+    /// Build a redaction-safe prompt from the deterministic insight input.
+    ///
+    /// Only display-safe fields are included: window labels, date ranges,
+    /// aggregate totals, category display names, and merchant display names.
+    /// Every identifier-bearing field on the input (`transactionIds`,
+    /// `accountIds`, `sourceId`, per-item `transactionId`/`accountId`, and the
+    /// `evidence` arrays) is intentionally omitted.
+    public static func make(
+        from input: LocalAIActivitySummaryInput,
+        maxCategories: Int = 4,
+        maxMerchants: Int = 3
+    ) -> LocalInsightModelPrompt {
+        var lines: [String] = []
+        lines.append("Period: \(input.window.displayName) (\(input.currentRange.startDate) to \(input.currentRange.endDate)).")
+        lines.append(
+            "Totals: expenses \(money(input.current.expenseTotal)), "
+                + "income \(money(input.current.incomeTotal)), "
+                + "net \(signedMoney(input.current.netCashflow)), "
+                + "across \(input.current.transactionCount) transaction\(plural(input.current.transactionCount))."
+        )
+
+        let categories = input.current.categoryTotals.prefix(maxCategories)
+        if !categories.isEmpty {
+            let rendered = categories
+                .map { "\($0.category.displayName) \(money($0.totalAmount))" }
+                .joined(separator: ", ")
+            lines.append("Top categories: \(rendered).")
+        }
+
+        let merchants = input.current.topExpenses.prefix(maxMerchants)
+        if !merchants.isEmpty {
+            let rendered = merchants
+                .map { "\($0.displayName) \(money($0.amount))" }
+                .joined(separator: ", ")
+            lines.append("Largest expenses: \(rendered).")
+        }
+
+        if let prior = input.prior, prior.expenseTotal > 0 {
+            let delta = input.current.expenseTotal - prior.expenseTotal
+            let direction = delta >= 0 ? "up" : "down"
+            lines.append(
+                "Versus the prior period: spending is \(direction) "
+                    + "\(money(abs(delta))) (prior expenses \(money(prior.expenseTotal)))."
+            )
+        }
+
+        if input.recurringSnapshot.estimatedMonthlyTotal > 0 {
+            lines.append("Estimated recurring monthly cost: \(money(input.recurringSnapshot.estimatedMonthlyTotal)).")
+        }
+
+        return LocalInsightModelPrompt(
+            system: systemInstruction,
+            user: lines.joined(separator: "\n")
+        )
+    }
+
+    // MARK: - Display helpers
+
+    private static func money(_ value: Double) -> String {
+        Formatters.currency(value, format: .full)
+    }
+
+    private static func signedMoney(_ value: Double) -> String {
+        let prefix = value > 0 ? "+" : value < 0 ? "-" : ""
+        return "\(prefix)\(Formatters.currency(abs(value), format: .full))"
+    }
+
+    private static func plural(_ count: Int) -> String {
+        count == 1 ? "" : "s"
+    }
+}
