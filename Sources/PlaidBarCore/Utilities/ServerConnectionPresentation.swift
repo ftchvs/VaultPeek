@@ -30,6 +30,7 @@ public struct ServerConnectionPresentation: Sendable, Equatable {
 
     public static func evaluate(
         isDemoMode: Bool,
+        isInitialLoad: Bool = false,
         isLoading: Bool,
         serverConnected: Bool,
         errorMessage: String?
@@ -44,6 +45,16 @@ public struct ServerConnectionPresentation: Sendable, Equatable {
 
         if let authIssue = localAuthIssue(from: errorMessage) {
             return authIssue
+        }
+
+        // Boot handshake: the first connectivity check has not completed,
+        // so neither "Offline" nor an attention badge is a real verdict yet.
+        if isInitialLoad {
+            return ServerConnectionPresentation(
+                issue: .syncing,
+                statusText: "Connecting",
+                diagnosticsSummary: "Connecting to the local server"
+            )
         }
 
         if isLoading {

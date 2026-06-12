@@ -7,6 +7,7 @@ struct RecurringView: View {
     private var emptyPresentation: SecondaryContentUnavailableState {
         SecondaryContentUnavailableState.recurring(
             isDemoMode: appState.isDemoMode,
+            isInitialLoad: appState.loadState(for: .recurring).isInitialLoad,
             serverConnected: appState.serverConnected,
             linkedItemCount: appState.statusItemCount,
             accountCount: appState.accounts.count,

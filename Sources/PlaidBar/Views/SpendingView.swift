@@ -92,6 +92,7 @@ struct SpendingView: View {
     private var emptyActivityPresentation: SecondaryContentUnavailableState {
         SecondaryContentUnavailableState.spendingActivity(
             isDemoMode: appState.isDemoMode,
+            isInitialLoad: appState.loadState(for: .spending).isInitialLoad,
             serverConnected: appState.serverConnected,
             linkedItemCount: appState.statusItemCount,
             accountCount: appState.accounts.count,

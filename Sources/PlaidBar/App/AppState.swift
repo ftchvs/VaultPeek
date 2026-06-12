@@ -22,6 +22,7 @@ final class AppState {
         static let notifyHighUtilization = "notifyHighUtilization"
         static let setupCompletedOnce = "setup.completedOnce"
         static let setupCompletedContextPrefix = "setup.completedOnce.context"
+        static let lastTransactionCacheContext = "cache.lastTransactionCacheContext"
     }
 
     // MARK: - State
@@ -35,6 +36,11 @@ final class AppState {
         }
     }
     var isLoading = false
+    /// True from launch until the first `loadInitialData()` pass completes.
+    /// While booting, data surfaces render loading/skeleton states instead
+    /// of offline or empty verdicts — the first connectivity check has not
+    /// delivered a verdict yet.
+    var isBooting = true
     var error: String? {
         didSet {
             guard let error else { return }
@@ -221,6 +227,36 @@ final class AppState {
 
     // MARK: - Computed
 
+    /// True while the launch handshake is still running for a real (non-demo)
+    /// session. Demo data loads synchronously and never boots into skeletons.
+    var isBootLoadInFlight: Bool {
+        isBooting && !isDemoMode
+    }
+
+    /// Load-phase presenter per data surface. Surfaces with content keep
+    /// rendering it; surfaces without content show a skeleton while the
+    /// first fetch is in flight instead of offline/empty copy.
+    func loadState(for surface: DashboardLoadSurface) -> DashboardLoadState {
+        DashboardLoadState.evaluate(
+            surface: surface,
+            isDemoMode: isDemoMode,
+            isBooting: isBooting,
+            isLoading: isLoading,
+            serverConnected: serverConnected,
+            hasContent: hasContent(for: surface),
+            errorMessage: error
+        )
+    }
+
+    private func hasContent(for surface: DashboardLoadSurface) -> Bool {
+        switch surface {
+        case .menuBarSummary, .summaryCards, .accounts, .credit:
+            accountCount > 0
+        case .transactions, .spending, .recurring, .activityHeatmap:
+            transactionCount > 0
+        }
+    }
+
     var netBalance: Double {
         MenuBarSummary.netCash(from: accounts)
     }
@@ -262,12 +298,17 @@ final class AppState {
             mode: menuBarSummaryMode,
             accounts: accounts,
             transactions: transactions,
-            currencyFormat: balanceFormat
+            currencyFormat: balanceFormat,
+            isInitialLoad: isBootLoadInFlight
         )
     }
 
     var menuBarAttentionText: String? {
         if isDemoMode { return nil }
+        // Boot handshake in flight: "Offline"/"Never"/"Stale" are not real
+        // verdicts yet, so the menu bar stays quiet instead of flashing an
+        // attention badge on every launch.
+        if isBootLoadInFlight { return nil }
         if serverConnectionPresentation.attentionText == "Auth" { return "Auth" }
         if error != nil || erroredItemCount > 0 { return "Error" }
         if let attentionText = serverConnectionPresentation.attentionText { return attentionText }
@@ -438,6 +479,7 @@ final class AppState {
     private var serverConnectionPresentation: ServerConnectionPresentation {
         ServerConnectionPresentation.evaluate(
             isDemoMode: isDemoMode,
+            isInitialLoad: isBootLoadInFlight,
             isLoading: isLoading,
             serverConnected: serverConnected,
             errorMessage: error
@@ -472,6 +514,7 @@ final class AppState {
     var dashboardStatusReadiness: DashboardStatusReadiness {
         DashboardStatusReadiness.evaluate(
             isDemoMode: isDemoMode && !isDemoStatusRecoveryScenario,
+            isInitialLoad: isBootLoadInFlight,
             serverConnected: serverConnected,
             credentialsConfigured: serverCredentialsConfigured,
             linkedItemCount: statusItemCount,
@@ -511,12 +554,18 @@ final class AppState {
     }
 
     var isSyncStale: Bool {
+        // Staleness is a verdict about completed syncs. During the boot
+        // handshake the first sync is still in flight, so stale warnings
+        // (menu bar badge, row tints, status strip) stay reserved for real
+        // staleness measured after the check completes.
+        if isBootLoadInFlight { return false }
         guard let lastSyncDate else { return true }
         let staleAfter = max(refreshInterval * 2, PlaidBarConstants.transactionSyncInterval * 2)
         return Date().timeIntervalSince(lastSyncDate) > staleAfter
     }
 
     var statusSyncText: String {
+        if isBootLoadInFlight { return "Syncing" }
         guard let lastSyncRelative else { return "Never synced" }
         return isSyncStale ? "Stale \(lastSyncRelative)" : "Synced \(lastSyncRelative)"
     }
@@ -618,6 +667,7 @@ final class AppState {
             serverSyncReady = status.syncReady
             serverSyncedItemCount = status.syncedItemCount
             lastSyncDate = status.lastSync
+            persistTransactionCacheContext()
             refreshSetupCompletionForActiveContext()
             updateSetupCompletion()
             if !(await refreshItemStatuses()) {
@@ -989,6 +1039,7 @@ final class AppState {
 
         balanceHistory = []
         UserDefaults.standard.removeObject(forKey: Keys.balanceHistory)
+        UserDefaults.standard.removeObject(forKey: Keys.lastTransactionCacheContext)
         notificationService.resetDeduplicationState()
 
         return result
@@ -1039,6 +1090,10 @@ final class AppState {
     }
 
     func loadInitialData() async {
+        // The boot window ends when this pass returns, on every path: from
+        // then on, offline/empty verdicts are real and may render.
+        defer { isBooting = false }
+
         // Recheck notification permission at startup (user may have revoked in System Settings)
         if notificationsEnabled {
             _ = await notificationPermissionStatus()
@@ -1055,6 +1110,10 @@ final class AppState {
             }
             return
         }
+        // Returning users see cached last-known data immediately: the cache
+        // loads before the connectivity check (which can take seconds while
+        // a bundled server boots) instead of after it.
+        preloadCachedDataBeforeFirstConnect()
         await checkServerConnection()
         if !serverConnected {
             await startBundledServerIfAvailable()
@@ -1163,6 +1222,44 @@ final class AppState {
             await checkServerConnection()
             if serverConnected { break }
         }
+    }
+
+    /// Warm start for returning users: hydrate accounts/transactions from the
+    /// local cache saved under the last-known server context before the first
+    /// connectivity check runs. Opportunistic — failures and context
+    /// mismatches fall through to the normal post-connect cache path without
+    /// surfacing an error during boot.
+    private func preloadCachedDataBeforeFirstConnect() {
+        guard accounts.isEmpty, transactions.isEmpty,
+              let context = persistedTransactionCacheContext()
+        else { return }
+
+        if let cachedAccounts = try? LocalDataStore.loadAccounts(
+            from: activeStorageDirectoryURL,
+            context: context
+        ), !cachedAccounts.isEmpty {
+            accounts = cachedAccounts
+        }
+        if let cachedTransactions = try? LocalDataStore.loadTransactions(
+            from: activeStorageDirectoryURL,
+            context: context
+        ), !cachedTransactions.isEmpty {
+            transactions = cachedTransactions
+        }
+    }
+
+    private func persistedTransactionCacheContext() -> TransactionCacheContext? {
+        guard let data = UserDefaults.standard.data(forKey: Keys.lastTransactionCacheContext) else {
+            return nil
+        }
+        return try? JSONDecoder().decode(TransactionCacheContext.self, from: data)
+    }
+
+    private func persistTransactionCacheContext() {
+        guard let transactionCacheContext,
+              let data = try? JSONEncoder().encode(transactionCacheContext)
+        else { return }
+        UserDefaults.standard.set(data, forKey: Keys.lastTransactionCacheContext)
     }
 
     // MARK: - Balance History
@@ -1393,6 +1490,8 @@ final class AppState {
 
     func loadDemoData() {
         isDemoMode = true
+        // Demo fixtures load synchronously: there is no boot handshake to wait for.
+        isBooting = false
         isDemoStatusRecoveryScenario = CommandLine.arguments.contains("--screenshot-status-recovery")
 
         let today = Self.dateString(daysAgo: 0)

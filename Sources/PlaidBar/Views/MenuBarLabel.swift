@@ -27,6 +27,12 @@ struct MenuBarLabel: View {
         if appState.error != nil || appState.erroredItemCount > 0 {
             return "exclamationmark.octagon"
         }
+        // Boot handshake in flight: the first connectivity check has not
+        // delivered a verdict, so the menu bar keeps the neutral glyph
+        // instead of flashing offline/stale symbols on every launch.
+        if appState.isBootLoadInFlight {
+            return "dollarsign.circle"
+        }
         // Offline is checked before stale/login: when the server is
         // unreachable, isSyncStale is usually also true (no recent or no
         // first sync), so the offline glyph must win to stay distinct.
