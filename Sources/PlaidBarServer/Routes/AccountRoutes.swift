@@ -36,6 +36,11 @@ struct AccountRoutes: Sendable {
                 )
                 try await tokenStore.updateItemStatus(id: itemId, status: ItemConnectionStatus.connected.rawValue)
                 successfulItemCount += 1
+            } catch PlaidError.credentialsNotConfigured {
+                // Setup state affects every item identically: surface the 503
+                // credential guidance instead of marking items errored and
+                // reporting a misleading per-item refresh failure.
+                throw PlaidError.credentialsNotConfigured
             } catch {
                 try await tokenStore.updateItemStatus(id: itemId, status: itemStatus(for: error).rawValue)
                 continue
@@ -91,6 +96,8 @@ struct AccountRoutes: Sendable {
                 )
                 try await tokenStore.updateItemStatus(id: itemId, status: ItemConnectionStatus.connected.rawValue)
                 successfulItemCount += 1
+            } catch PlaidError.credentialsNotConfigured {
+                throw PlaidError.credentialsNotConfigured
             } catch {
                 try await tokenStore.updateItemStatus(id: itemId, status: itemStatus(for: error).rawValue)
                 continue
@@ -139,6 +146,10 @@ struct AccountRoutes: Sendable {
             do {
                 let accessToken = try tokenStore.accessToken(for: item)
                 try await plaidClient.removeItem(accessToken: accessToken)
+            } catch PlaidError.credentialsNotConfigured {
+                // Revocation cannot run in setup state; keep the local item
+                // untouched and surface the 503 credential guidance.
+                throw PlaidError.credentialsNotConfigured
             } catch {
                 guard Self.canDeleteLocalItemAfterPlaidRemoveError(error) else {
                     try await tokenStore.updateItemStatus(id: itemId, status: ItemConnectionStatus.error.rawValue)

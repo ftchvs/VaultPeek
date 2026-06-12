@@ -146,6 +146,7 @@ final class AppState {
     private let notificationService: any NotificationServiceProtocol
     private var refreshTask: Task<Void, Never>?
     private var isUpgradingManagedServer = false
+    private var isStartingBundledServer = false
     private var lastAttemptedCredentialUpgradeConfig: String?
 
     // MARK: - Init
@@ -622,7 +623,22 @@ final class AppState {
                 self.error = error.localizedDescription
             }
             updateSetupCompletion()
+            await recoverBundledServerIfNeeded()
         }
+    }
+
+    /// A managed server can exit right after launch when `server.conf` is
+    /// broken in a way the pre-checks cannot see (for example an invalid
+    /// `PLAID_ENV` that passed `configProvidesCredentials`). Re-attempt the
+    /// launch plan on every failed connection check so "check again" and the
+    /// background refresh recover once the user fixes the file, instead of
+    /// requiring an app relaunch. Safe to run unconditionally: the plan
+    /// declines outside an app bundle, in demo mode, and when any server is
+    /// already reachable, and nothing is spawned while a managed process is
+    /// still alive.
+    private func recoverBundledServerIfNeeded() async {
+        guard !isDemoMode, !isUpgradingManagedServer else { return }
+        await startBundledServerIfAvailable()
     }
 
     func refreshAccounts() async {
@@ -1093,7 +1109,15 @@ final class AppState {
 
     /// Popover-open path: start the bundled server if nothing did yet, then
     /// wait briefly for readiness (also covers a still-booting prewarm).
+    /// Reentrancy-guarded because the readiness wait runs
+    /// `checkServerConnection`, whose failure path calls back into
+    /// `recoverBundledServerIfNeeded`; without the guard a server that
+    /// crashes at boot would respawn once per wait iteration.
     private func startBundledServerIfAvailable() async {
+        guard !isStartingBundledServer else { return }
+        isStartingBundledServer = true
+        defer { isStartingBundledServer = false }
+
         var launched = false
         if !ServerProcessService.shared.isManagingServer,
            !(await serverClient.isLocalServerResponding()) {
