@@ -30,6 +30,7 @@ final class ServerProcessService {
         }
         guard managedProcess == nil else { return false }
 
+        _ = try? LocalDataStore.migrateLegacyDefaultStorageIfNeeded()
         let storageDirectory = LocalDataStore.storageDirectoryURL()
         let configFileURL = storageDirectory.appendingPathComponent(LocalDataStore.serverConfigFilename)
         let configFileContents = try? String(contentsOf: configFileURL, encoding: .utf8)
@@ -158,7 +159,7 @@ final class ServerProcessService {
     }
 
     /// Opens the server log for appending with owner-only permissions,
-    /// matching the repo's private-file conventions for `~/.plaidbar`.
+    /// matching the repo's private-file conventions for local data storage.
     private static func makePrivateLogHandle(atPath path: String) -> FileHandle? {
         let fileManager = FileManager.default
         if !fileManager.fileExists(atPath: path) {

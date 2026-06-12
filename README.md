@@ -138,16 +138,16 @@ generic failure. To see demo data without any Plaid setup, choose **Demo**
 on the setup screen — no server or credentials needed.
 
 To use real or sandbox Plaid data, add your credentials to
-`~/.plaidbar/server.conf`:
+`~/.vaultpeek/server.conf`:
 
 ```bash
-mkdir -p ~/.plaidbar && chmod 700 ~/.plaidbar
-cat > ~/.plaidbar/server.conf <<'EOF'
+mkdir -p ~/.vaultpeek && chmod 700 ~/.vaultpeek
+cat > ~/.vaultpeek/server.conf <<'EOF'
 PLAID_CLIENT_ID=your_client_id
 PLAID_SECRET=your_secret
 # optional: PLAID_ENV=sandbox
 EOF
-chmod 600 ~/.plaidbar/server.conf
+chmod 600 ~/.vaultpeek/server.conf
 ```
 
 No restart dance required: the app notices the new credentials on its next
@@ -224,7 +224,7 @@ First run now asks you to choose a data source:
 - **Connect Sandbox** opens Plaid Link only when the local server is running in sandbox mode with sandbox credentials.
 - **Use Production Credentials** opens the same connect flow only when the local server reports production mode. Production uses real account data and requires Plaid approval.
 
-Before Plaid Link opens, the app explains that Plaid item records and synced account data are stored locally under `~/.plaidbar/`, Plaid access-token bytes are kept in macOS Keychain when available, and Plaid credentials remain in the local server environment.
+Before Plaid Link opens, the app explains that Plaid item records and synced account data are stored locally under `~/.vaultpeek/`, Plaid access-token bytes are kept in macOS Keychain when available, and Plaid credentials remain in the local server environment. Existing default `~/.plaidbar/` installs are copied into `~/.vaultpeek/` without overwriting newer files.
 
 ### 4. Use with real bank data (optional)
 
@@ -240,15 +240,15 @@ You can also keep server settings in a local key-value config file and pass it
 to the standalone server:
 
 ```bash
-mkdir -p ~/.plaidbar
-cat > ~/.plaidbar/server.conf <<'EOF'
+mkdir -p ~/.vaultpeek
+cat > ~/.vaultpeek/server.conf <<'EOF'
 PLAID_CLIENT_ID=your_client_id
 PLAID_SECRET=your_secret
 PLAID_ENV=sandbox
-PLAIDBAR_DATA_DIR=~/.plaidbar
+PLAIDBAR_DATA_DIR=~/.vaultpeek
 EOF
 
-swift run PlaidBarServer --config ~/.plaidbar/server.conf
+swift run PlaidBarServer --config ~/.vaultpeek/server.conf
 ```
 
 The config file uses the same keys as the environment. Values in the config
@@ -428,7 +428,7 @@ swift test
 swift run PlaidBarServer --sandbox
 
 # Run server with a local config file
-swift run PlaidBarServer --config ~/.plaidbar/server.conf
+swift run PlaidBarServer --config ~/.vaultpeek/server.conf
 
 # Run server/app on a custom localhost port
 PLAIDBAR_SERVER_PORT=9494 ./Scripts/run.sh --sandbox
@@ -483,7 +483,7 @@ commit, push, review, and production-readiness work.
 
 The companion server exposes these localhost endpoints. `/health` and
 `/oauth/callback` are unauthenticated; `/api/*` requires the local bearer token
-stored under `~/.plaidbar/auth-token` or `PLAIDBAR_DATA_DIR/auth-token`.
+stored under `~/.vaultpeek/auth-token` or `PLAIDBAR_DATA_DIR/auth-token`.
 Plaid Link completion callbacks must also include the one-time `state` generated
 when the local app created the Hosted Link session.
 

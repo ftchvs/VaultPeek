@@ -85,9 +85,39 @@ directory.
 Checks:
 
 - Confirm the app and server use the same `PLAIDBAR_DATA_DIR`.
-- Confirm `~/.plaidbar/auth-token` exists.
+- Confirm `~/.vaultpeek/auth-token` exists for default installs.
+- If this Mac was used before the VaultPeek storage migration, confirm
+  `~/.plaidbar/auth-token` was copied or restart once with both directories
+  available.
 - Restart both the app and server after changing the data directory.
 - Avoid copying `auth-token` into public logs or issues.
+
+## Default Storage Did Not Migrate
+
+PlaidBar now uses `~/.vaultpeek/` as its default local data/config directory.
+On startup, default installs copy missing files from `~/.plaidbar/` into
+`~/.vaultpeek/`.
+
+Expected behavior:
+
+- Existing `auth-token`, `server.conf`, SQLite stores and sidecars, account and
+  transaction caches, pending link sessions, and `server.log` are copied when
+  the destination filename is absent.
+- Existing `~/.vaultpeek/` files are preserved and never overwritten.
+- `~/.plaidbar/` is left in place for rollback until the user deletes it.
+- After a local reset, PlaidBar writes a small reset marker so old databases,
+  caches, and pending link sessions are not copied back from `~/.plaidbar/`.
+- Keychain Plaid access tokens keep the existing service name so SQLite
+  `keychain:<item_id>` references remain valid after file migration.
+
+Recovery checks:
+
+- Quit PlaidBar and PlaidBarServer.
+- Confirm both directories are private to the current user.
+- Move only the missing file from `~/.plaidbar/` to `~/.vaultpeek/` if a newer
+  VaultPeek file is not already present.
+- To roll back temporarily, set `PLAIDBAR_DATA_DIR=~/.plaidbar` before starting
+  both the app and server.
 
 ## Accounts Are Linked But Transactions Are Empty
 

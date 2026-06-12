@@ -164,6 +164,7 @@ final class AppState {
     // MARK: - Init
 
     init(notificationService: (any NotificationServiceProtocol)? = nil) {
+        _ = try? LocalDataStore.migrateLegacyDefaultStorageIfNeeded()
         self.notificationService = notificationService ?? NotificationService.shared
         loadSettings()
         isSetupComplete = storedSetupCompletion()

@@ -38,10 +38,14 @@ PlaidBar does not include:
 By default, PlaidBar stores local data under:
 
 ```text
-~/.plaidbar/
+~/.vaultpeek/
 ```
 
 The directory can be overridden with `PLAIDBAR_DATA_DIR`.
+Existing default installs using `~/.plaidbar/` are copied into
+`~/.vaultpeek/` on startup when the new directory does not already contain the
+same file. The legacy directory is left in place as rollback evidence, and
+newer `~/.vaultpeek/` files are never overwritten by migration.
 
 Current local data may include:
 
@@ -53,6 +57,7 @@ Current local data may include:
 - balances
 - account and transaction caches
 - pending link-session state
+- local server logs
 
 Sandbox and production use separate scoped stores.
 
@@ -96,6 +101,10 @@ Resetting local data removes PlaidBar-owned database files, account and
 transaction caches, pending Link sessions, and stored Plaid access-token entries
 when present. It leaves `server.conf`, app/server auth, preferences, and
 unrelated files in the storage directory untouched.
+
+The storage-directory migration does not rename Keychain entries. Plaid access
+tokens continue to use the existing Keychain service so migrated SQLite
+`keychain:<item_id>` references keep working.
 
 Local reset does not necessarily delete records from the Plaid Dashboard or
 revoke bank permissions outside PlaidBar. Users who need complete revocation

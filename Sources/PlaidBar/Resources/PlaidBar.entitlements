@@ -8,6 +8,7 @@
     <true/>
     <key>com.apple.security.temporary-exception.files.home-relative-path.read-write</key>
     <array>
+        <string>/.vaultpeek/</string>
         <string>/.plaidbar/</string>
     </array>
     <key>keychain-access-groups</key>

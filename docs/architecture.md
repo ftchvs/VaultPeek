@@ -26,7 +26,7 @@ PlaidBar.app
 PlaidBarServer
   /health without auth
   /api/* with local bearer token
-  SQLite under ~/.plaidbar/
+  SQLite under ~/.vaultpeek/
   Plaid API client
         |
         | HTTPS
@@ -65,7 +65,7 @@ file, and explicit CLI flags. Later inputs override earlier ones.
 | `PLAID_SECRET` | Plaid secret for the selected environment |
 | `PLAID_ENV` | `sandbox` or `production` |
 | `PLAIDBAR_SERVER_PORT` | Local server port, default from `PlaidBarConstants` |
-| `PLAIDBAR_DATA_DIR` | Local data directory, default `~/.plaidbar/` |
+| `PLAIDBAR_DATA_DIR` | Local data directory, default `~/.vaultpeek/` |
 | `PLAIDBAR_MIGRATE_LEGACY_DATABASE` | Explicit legacy migration environment |
 
 The default server should bind to localhost only. If a future change expands
@@ -77,8 +77,13 @@ the setup UI.
 Default local data directory:
 
 ```text
-~/.plaidbar/
+~/.vaultpeek/
 ```
+
+Default installs copy missing files from the legacy `~/.plaidbar/` directory
+into `~/.vaultpeek/` on startup. Existing `~/.vaultpeek/` files win, so the
+migration is idempotent and does not overwrite newer data. `PLAIDBAR_DATA_DIR`
+keeps pointing app and server to an explicit custom directory when needed.
 
 Current important files:
 
@@ -94,6 +99,8 @@ The data directory is created with private user permissions. Cache/token files
 are written with private file permissions where the platform supports it.
 On macOS runtime builds with Security framework support, Plaid access-token
 bytes are stored in Keychain and SQLite stores `keychain:<item_id>` references.
+Those Keychain references intentionally keep the original PlaidBar service name
+during the storage migration so existing linked items keep resolving.
 Fallback builds without Keychain support may store token bytes locally in the
 SQLite store, so release/security docs must stay explicit about that boundary.
 

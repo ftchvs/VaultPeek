@@ -111,7 +111,7 @@ for _ in {1..30}; do
 done
 
 curl -fsS "http://127.0.0.1:$SERVER_PORT/health" >/dev/null
-DATA_DIR="${PLAIDBAR_DATA_DIR:-$HOME/.plaidbar}"
+DATA_DIR="${PLAIDBAR_DATA_DIR:-$HOME/.vaultpeek}"
 case "$DATA_DIR" in
     "~")
         DATA_DIR="$HOME"
