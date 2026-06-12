@@ -1,4 +1,5 @@
 import Foundation
+import PlaidBarCore
 #if canImport(FoundationNetworking)
     import FoundationNetworking
 #endif
@@ -40,7 +41,7 @@ actor PlaidClient {
         let body = PlaidLinkTokenRequest(
             clientId: config.plaidClientId,
             secret: config.plaidSecret,
-            clientName: "PlaidBar",
+            clientName: PlaidBarConstants.appName,
             user: .init(clientUserId: userId),
             products: ["transactions"],
             countryCodes: ["US"],
@@ -62,7 +63,7 @@ actor PlaidClient {
         let body = PlaidLinkTokenRequest(
             clientId: config.plaidClientId,
             secret: config.plaidSecret,
-            clientName: "PlaidBar",
+            clientName: PlaidBarConstants.appName,
             user: .init(clientUserId: userId),
             countryCodes: ["US"],
             language: "en",
@@ -273,7 +274,7 @@ enum PlaidError: Error, LocalizedError, Equatable, Sendable {
         switch self {
         case .credentialsNotConfigured:
             "Plaid credentials are not configured. Add PLAID_CLIENT_ID and PLAID_SECRET "
-                + "to server.conf, then restart PlaidBarServer."
+                + "to server.conf, then restart the VaultPeek companion server."
         case .invalidResponse:
             "Invalid response from Plaid API"
         case let .apiError(statusCode, _, _, message):

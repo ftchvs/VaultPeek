@@ -74,7 +74,7 @@ struct AccountDetailFlyout: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(
-                "This disconnects the linked Plaid institution and removes \(institutionAccountCountText) plus \(institutionTransactionCountText) from PlaidBar. It does not close any bank account."
+                "This disconnects the linked Plaid institution and removes \(institutionAccountCountText) plus \(institutionTransactionCountText) from VaultPeek. It does not close any bank account."
             )
         }
     }
@@ -148,7 +148,7 @@ struct AccountDetailFlyout: View {
                 .accessibilityLabel("\(connectionRecoveryActionTitle) for \(summary.displayName)")
                 .accessibilityHint(
                     connection.recoveryDetailLabel
-                        ?? "Refreshes this account's PlaidBar status."
+                        ?? "Refreshes this account's VaultPeek status."
                 )
             }
         }

@@ -27,7 +27,7 @@ struct SetupView: View {
                     environment: .sandbox,
                     icon: "testtube.2",
                     title: "Connect Sandbox",
-                    summary: "Test institutions with Plaid sandbox credentials on PlaidBarServer.",
+                    summary: "Test institutions with Plaid sandbox credentials on the VaultPeek companion server.",
                     primaryTitle: "Open Link"
                 )
             case .production:
@@ -62,10 +62,10 @@ struct SetupView: View {
                     .background(SemanticColors.brand.opacity(0.14), in: RoundedRectangle(cornerRadius: Radius.panel))
 
                 VStack(alignment: .leading, spacing: Spacing.xs) {
-                    Text("PlaidBar")
+                    Text(PlaidBarConstants.appName)
                         .font(.title3.weight(.semibold))
                     Text(
-                        "Your accounts, one click away. Choose demo data or connect through your local PlaidBarServer."
+                        "Your accounts, one click away. Choose demo data or connect through the local VaultPeek companion server."
                     )
                     .detailText()
                     .fixedSize(horizontal: false, vertical: true)
@@ -145,7 +145,7 @@ struct SetupView: View {
                 )
                 StorageDisclosureRow(
                     icon: "eye.slash",
-                    text: "No PlaidBar cloud backend, analytics, or telemetry."
+                    text: "No VaultPeek cloud backend, analytics, or telemetry."
                 )
             }
             .padding(Spacing.md)

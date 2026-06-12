@@ -2,7 +2,7 @@ import Foundation
 
 /// A redaction-safe chat prompt for an on-device language model.
 ///
-/// PlaidBar may run a small local model (e.g. a quantized Gemma) to phrase
+/// VaultPeek may run a small local model (e.g. a quantized Gemma) to phrase
 /// spending summaries in natural language. The model only ever sees the
 /// *display-safe aggregates* assembled here — never raw Plaid identifiers,
 /// access tokens, item IDs, transaction IDs, or account IDs. The deterministic
@@ -34,7 +34,7 @@ public enum LocalInsightPromptBuilder {
     /// The hard guardrails the model runs under. Kept terse so a small model
     /// follows them reliably.
     public static let systemInstruction = """
-    You are PlaidBar's on-device finance summarizer. Write a short, factual \
+    You are VaultPeek's on-device finance summarizer. Write a short, factual \
     summary of the user's own spending for the given period using ONLY the \
     numbers provided below. Rules: one or two sentences, plain English, no \
     financial advice, no predictions, never invent merchants or figures that \

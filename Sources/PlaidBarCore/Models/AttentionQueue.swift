@@ -78,9 +78,9 @@ public struct AttentionQueue: Equatable, Sendable {
                 id: "server-offline",
                 severity: .blocked,
                 title: "Server offline",
-                detail: "Start PlaidBarServer, then check the connection.",
+                detail: "Start the VaultPeek companion server, then check the connection.",
                 action: .checkServer,
-                accessibilityHint: "Checks the local PlaidBarServer connection."
+                accessibilityHint: "Checks the local VaultPeek companion server connection."
             ))
         }
 
@@ -114,7 +114,7 @@ public struct AttentionQueue: Equatable, Sendable {
                 title: "Recent action failed",
                 detail: safeError,
                 action: .refresh,
-                accessibilityHint: "Refreshes local PlaidBar data."
+                accessibilityHint: "Refreshes local VaultPeek data."
             ))
         }
 
@@ -270,18 +270,20 @@ public struct AttentionQueue: Equatable, Sendable {
                 id: "local-auth-missing",
                 severity: .blocked,
                 title: "Local server auth missing",
-                detail: "Restart PlaidBarServer, then check the connection.",
+                detail: "Restart the VaultPeek companion server, then check the connection.",
                 action: .openSettings
             )
         }
 
         if normalized.contains("plaidbar server returned 401") ||
-            normalized.contains("plaidbar server returned 403") {
+            normalized.contains("plaidbar server returned 403") ||
+            normalized.contains("vaultpeek companion server returned 401") ||
+            normalized.contains("vaultpeek companion server returned 403") {
             return AttentionQueueRow(
                 id: "local-auth-rejected",
                 severity: .blocked,
                 title: "Local server auth rejected",
-                detail: "Restart PlaidBarServer so the local token is regenerated.",
+                detail: "Restart the VaultPeek companion server so the local token is regenerated.",
                 action: .openSettings
             )
         }
@@ -304,9 +306,9 @@ public struct AttentionQueue: Equatable, Sendable {
             id: "server-mode-mismatch",
             severity: .blocked,
             title: "Server mode mismatch",
-            detail: UserFacingError.sanitizedDetail(from: normalized, maxLength: maxRenderedErrorLength) ?? "Restart PlaidBarServer in the selected environment.",
+            detail: UserFacingError.sanitizedDetail(from: normalized, maxLength: maxRenderedErrorLength) ?? "Restart the VaultPeek companion server in the selected environment.",
             action: .checkServer,
-            accessibilityHint: "Checks whether PlaidBarServer is running in the selected Plaid environment."
+            accessibilityHint: "Checks whether the VaultPeek companion server is running in the selected Plaid environment."
         )
     }
 

@@ -96,7 +96,9 @@ public struct ServerConnectionPresentation: Sendable, Equatable {
         }
 
         if normalized.contains("plaidbar server returned 401") ||
-            normalized.contains("plaidbar server returned 403") {
+            normalized.contains("plaidbar server returned 403") ||
+            normalized.contains("vaultpeek companion server returned 401") ||
+            normalized.contains("vaultpeek companion server returned 403") {
             return ServerConnectionPresentation(
                 issue: .localAuthRejected,
                 statusText: "Auth rejected",

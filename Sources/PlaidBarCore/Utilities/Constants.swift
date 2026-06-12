@@ -51,7 +51,7 @@ public enum PlaidBarConstants {
 
     // App Info
     public static let appVersion: String = "1.0.0"
-    public static let appName: String = "PlaidBar"
+    public static let appName: String = "VaultPeek"
 
     // Plaid
     public static var plaidSandboxRedirectUri: String {

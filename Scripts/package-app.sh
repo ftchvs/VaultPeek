@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Build a local PlaidBar.app bundle that includes SwiftPM dynamic frameworks.
+# Build a local VaultPeek.app bundle that includes SwiftPM dynamic frameworks.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 CONFIGURATION="${PLAIDBAR_PACKAGE_CONFIGURATION:-release}"
 BUILD_DIR="$PROJECT_DIR/.build/$CONFIGURATION"
-APP_DIR="${PLAIDBAR_PACKAGE_APP_DIR:-$PROJECT_DIR/.build/PlaidBar.app}"
+APP_DIR="${PLAIDBAR_PACKAGE_APP_DIR:-$PROJECT_DIR/.build/VaultPeek.app}"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 FRAMEWORKS_DIR="$CONTENTS_DIR/Frameworks"
@@ -16,7 +16,7 @@ APP_BINARY="$MACOS_DIR/PlaidBar"
 if [ "$CONFIGURATION" = "release" ]; then
     BUILD_FLAGS=(-c release)
 else
-    BUILD_FLAGS=()
+    BUILD_FLAGS=("--configuration" "$CONFIGURATION")
 fi
 
 echo "Building PlaidBar ($CONFIGURATION)..."
@@ -63,7 +63,7 @@ if [ "${PLAIDBAR_PACKAGE_SMOKE_LAUNCH:-0}" = "1" ]; then
     app_pid=$!
     sleep 2
     if ! kill -0 "$app_pid" 2>/dev/null; then
-        echo "Packaged PlaidBar.app exited during smoke launch" >&2
+        echo "Packaged VaultPeek.app exited during smoke launch" >&2
         cat /tmp/plaidbar-package-smoke.log >&2 || true
         exit 1
     fi
@@ -71,4 +71,4 @@ if [ "${PLAIDBAR_PACKAGE_SMOKE_LAUNCH:-0}" = "1" ]; then
     wait "$app_pid" 2>/dev/null || true
 fi
 
-echo "Packaged PlaidBar.app at $APP_DIR"
+echo "Packaged VaultPeek.app at $APP_DIR"

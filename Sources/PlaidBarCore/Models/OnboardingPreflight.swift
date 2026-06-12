@@ -62,7 +62,7 @@ public struct OnboardingPreflight: Sendable, Equatable {
             state: serverConnected ? .ready : .blocked,
             accessibilityHint: serverConnected
                 ? "Server is ready."
-                : "Start PlaidBarServer, then check again."
+                : "Start the VaultPeek companion server, then check again."
         )
 
         let modeState: OnboardingPreflightRowState = serverConnected
@@ -76,7 +76,7 @@ public struct OnboardingPreflight: Sendable, Equatable {
             accessibilityHint: accessibilityHint(
                 for: modeState,
                 title: "Mode",
-                blockedHint: "Restart PlaidBarServer in \(expectedEnvironment.rawValue) mode."
+                blockedHint: "Restart the VaultPeek companion server in \(expectedEnvironment.rawValue) mode."
             )
         )
 
@@ -136,8 +136,8 @@ public struct OnboardingPreflight: Sendable, Equatable {
     ) -> String {
         guard serverConnected else {
             return expectedEnvironment == .sandbox
-                ? "Start PlaidBarServer with --sandbox, then Check Again."
-                : "Start PlaidBarServer with production credentials, then Check Again."
+                ? "Start the VaultPeek companion server with --sandbox, then Check Again."
+                : "Start the VaultPeek companion server with production credentials, then Check Again."
         }
 
         guard modeMatches else {
@@ -164,7 +164,7 @@ public struct OnboardingPreflight: Sendable, Equatable {
         case .blocked:
             blockedHint
         case .unknown:
-            "Start PlaidBarServer, then check again."
+            "Start the VaultPeek companion server, then check again."
         case .informational:
             "\(title) is informational."
         }

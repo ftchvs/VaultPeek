@@ -172,7 +172,7 @@ struct PlaidBarCoreTests {
 
         #expect(presentation?.title == "Server offline")
         #expect(presentation?.tone == .offline)
-        #expect(presentation?.detail.contains("Start PlaidBarServer") == true)
+        #expect(presentation?.detail.contains("Start the VaultPeek companion server") == true)
     }
 
     @Test("Account activity empty state explains login recovery")
@@ -821,7 +821,7 @@ struct PlaidBarCoreTests {
 
         #expect(DashboardDrillInAction.reconnect.accessibilityLabel(accountDisplayName: displayName) == "Reconnect Everyday Checking")
         #expect(DashboardDrillInAction.remove.accessibilityLabel(accountDisplayName: displayName) == "Remove institution for Everyday Checking")
-        #expect(DashboardDrillInAction.settings.accessibilityLabel(accountDisplayName: displayName) == "Open PlaidBar settings from Everyday Checking")
+        #expect(DashboardDrillInAction.settings.accessibilityLabel(accountDisplayName: displayName) == "Open VaultPeek settings from Everyday Checking")
         #expect(DashboardDrillInAction.remove.accessibilityHint.contains("Requires confirmation"))
     }
 
@@ -835,7 +835,7 @@ struct PlaidBarCoreTests {
             accountDisplayName: "Everyday Checking"
         )
 
-        #expect(presentation?.accessibilityLabel == "Server offline. Start PlaidBarServer, then refresh to load recent activity for Everyday Checking.")
+        #expect(presentation?.accessibilityLabel == "Server offline. Start the VaultPeek companion server, then refresh to load recent activity for Everyday Checking.")
     }
 
     @Test("Account presentation keeps credit metadata readable without due dates")
@@ -1742,7 +1742,7 @@ struct PlaidBarCoreTests {
 
         #expect(state.step == .openPlaidLink)
         #expect(state.title == "No linked item returned")
-        #expect(state.detail == "PlaidBar cannot see a linked item yet. Finish Plaid Link in the browser, then check again.")
+        #expect(state.detail == "VaultPeek cannot see a linked item yet. Finish Plaid Link in the browser, then check again.")
         #expect(!state.isReady)
         #expect(state.canRetry)
     }
@@ -1865,7 +1865,7 @@ struct PlaidBarCoreTests {
         )
 
         #expect(!preflight.isReady)
-        #expect(preflight.hint == "Start PlaidBarServer with --sandbox, then Check Again.")
+        #expect(preflight.hint == "Start the VaultPeek companion server with --sandbox, then Check Again.")
         #expect(preflight.rows.first { $0.title == "Server" }?.state == .blocked)
         #expect(preflight.rows.first { $0.title == "Mode" }?.state == .unknown)
         #expect(preflight.rows.first { $0.title == "Credentials" }?.state == .unknown)
@@ -1887,7 +1887,7 @@ struct PlaidBarCoreTests {
         #expect(!preflight.isReady)
         #expect(preflight.hint == "The running server is not in sandbox mode.")
         #expect(preflight.rows.first { $0.title == "Mode" }?.state == .blocked)
-        #expect(preflight.rows.first { $0.title == "Mode" }?.accessibilityHint == "Restart PlaidBarServer in sandbox mode.")
+        #expect(preflight.rows.first { $0.title == "Mode" }?.accessibilityHint == "Restart the VaultPeek companion server in sandbox mode.")
     }
 
     @Test("Onboarding preflight blocks Plaid Link on missing production credentials")
@@ -1947,7 +1947,7 @@ struct PlaidBarCoreTests {
         #expect(!preflight.isReady)
         #expect(preflight.hint == "The running server is not in production mode.")
         #expect(preflight.rows.first { $0.title == "Mode" }?.state == .blocked)
-        #expect(preflight.rows.first { $0.title == "Mode" }?.accessibilityHint == "Restart PlaidBarServer in production mode.")
+        #expect(preflight.rows.first { $0.title == "Mode" }?.accessibilityHint == "Restart the VaultPeek companion server in production mode.")
     }
 
     @Test("Onboarding preflight treats unknown credentials as blocked while connected")
@@ -1984,7 +1984,7 @@ struct PlaidBarCoreTests {
         )
 
         #expect(!preflight.isReady)
-        #expect(preflight.hint == "Start PlaidBarServer with production credentials, then Check Again.")
+        #expect(preflight.hint == "Start the VaultPeek companion server with production credentials, then Check Again.")
         #expect(preflight.rows.first { $0.title == "Mode" }?.value == "Unknown")
     }
 
@@ -2003,7 +2003,7 @@ struct PlaidBarCoreTests {
             erroredItemCount: 0,
             isSyncStale: true,
             lastSyncRelative: nil,
-            errorMessage: "PlaidBar server is not running"
+            errorMessage: "The VaultPeek companion server is not running"
         )
 
         #expect(readiness.level == .healthy)
@@ -2048,7 +2048,7 @@ struct PlaidBarCoreTests {
             erroredItemCount: 0,
             isSyncStale: true,
             lastSyncRelative: nil,
-            errorMessage: "PlaidBar server auth token is unavailable"
+            errorMessage: "VaultPeek companion server auth token is unavailable"
         )
 
         #expect(readiness.level == .blocked)
@@ -2071,7 +2071,7 @@ struct PlaidBarCoreTests {
             erroredItemCount: 0,
             isSyncStale: true,
             lastSyncRelative: nil,
-            errorMessage: "PlaidBar server returned 401: unauthorized"
+            errorMessage: "VaultPeek companion server returned 401: unauthorized"
         )
 
         #expect(readiness.level == .blocked)
@@ -2108,13 +2108,13 @@ struct PlaidBarCoreTests {
             isDemoMode: false,
             isLoading: false,
             serverConnected: false,
-            errorMessage: "PlaidBar server auth token is unavailable"
+            errorMessage: "VaultPeek companion server auth token is unavailable"
         )
         let rejected = ServerConnectionPresentation.evaluate(
             isDemoMode: false,
             isLoading: false,
             serverConnected: true,
-            errorMessage: "PlaidBar server returned 403: forbidden"
+            errorMessage: "VaultPeek companion server returned 403: forbidden"
         )
 
         #expect(missing.issue == .localAuthMissing)
@@ -2139,7 +2139,7 @@ struct PlaidBarCoreTests {
             isDemoMode: false,
             isLoading: false,
             serverConnected: true,
-            errorMessage: "PlaidBar server returned 500: internal server error"
+            errorMessage: "VaultPeek companion server returned 500: internal server error"
         )
 
         #expect(offline.issue == .offline)
@@ -2305,7 +2305,7 @@ struct PlaidBarCoreTests {
             accountCount: 0,
             transactionCount: 0,
             syncedItemCount: 0,
-            errorMessage: "PlaidBar server returned 500: {\"\(tokenKey)\":\"\(tokenValue)\",\"item_id\":\"item_123456789abcdef\"}"
+            errorMessage: "VaultPeek companion server returned 500: {\"\(tokenKey)\":\"\(tokenValue)\",\"item_id\":\"item_123456789abcdef\"}"
         )
 
         #expect(state.step == .blocked)
@@ -3226,6 +3226,7 @@ struct PlaidBarCoreTests {
         #expect(!PlaidBarConstants.keychainServiceName.isEmpty)
         #expect(!PlaidBarConstants.appVersion.isEmpty)
         #expect(!PlaidBarConstants.appName.isEmpty)
+        #expect(PlaidBarConstants.appName == "VaultPeek")
     }
 
     @Test("Background refresh interval rejects invalid persisted values")
@@ -4333,7 +4334,7 @@ struct PlaidBarCoreTests {
         #expect(DashboardDrillInAction.remove.iconName == "trash")
         #expect(DashboardDrillInAction.remove.accessibilityHint.localizedCaseInsensitiveContains("requires confirmation"))
         #expect(DashboardDrillInAction.remove.accessibilityHint.localizedCaseInsensitiveContains("disconnecting this Plaid institution"))
-        #expect(DashboardDrillInAction.remove.accessibilityHint.localizedCaseInsensitiveContains("local PlaidBar data"))
+        #expect(DashboardDrillInAction.remove.accessibilityHint.localizedCaseInsensitiveContains("local VaultPeek data"))
         #expect(DashboardDrillInAction.settings.accessibilityHint.localizedCaseInsensitiveContains("settings"))
     }
 

@@ -126,8 +126,8 @@ GitHub release once published):
 open .build/PlaidBar-*.dmg
 ```
 
-Then drag **PlaidBar.app** to **Applications** and launch it. On first
-launch, right-click PlaidBar.app and choose **Open** (the build is ad-hoc
+Then drag **VaultPeek.app** to **Applications** and launch it. On first
+launch, right-click VaultPeek.app and choose **Open** (the build is ad-hoc
 signed; Developer ID notarization is on the roadmap).
 
 The app starts its bundled companion server automatically — no terminal
@@ -302,7 +302,7 @@ PlaidBar uses a **two-process architecture** — a SwiftUI menu bar app talks to
 
 ```
 ┌─────────────────────────────────────┐
-│  PlaidBar.app (SwiftUI)             │
+│  VaultPeek.app (SwiftUI)            │
 │  MenuBarExtra · Swift Charts        │
 │  Accounts · Transactions · Spending │
 └──────────────┬──────────────────────┘

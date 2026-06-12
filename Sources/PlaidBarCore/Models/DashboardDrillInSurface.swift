@@ -96,9 +96,9 @@ public enum DashboardDrillInAction: String, CaseIterable, Sendable, Equatable {
         case .reconnect:
             "Opens Plaid Link update mode for this institution."
         case .remove:
-            "Requires confirmation before disconnecting this Plaid institution and removing its local PlaidBar data."
+            "Requires confirmation before disconnecting this Plaid institution and removing its local VaultPeek data."
         case .settings:
-            "Opens PlaidBar settings and local data controls."
+            "Opens VaultPeek settings and local data controls."
         }
     }
 
@@ -109,7 +109,7 @@ public enum DashboardDrillInAction: String, CaseIterable, Sendable, Equatable {
         case .remove:
             "Remove institution for \(accountDisplayName)"
         case .settings:
-            "Open PlaidBar settings from \(accountDisplayName)"
+            "Open VaultPeek settings from \(accountDisplayName)"
         }
     }
 

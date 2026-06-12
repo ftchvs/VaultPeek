@@ -4,7 +4,7 @@ import Testing
 
 @Suite("Server Auto-Launch Plan Tests")
 struct ServerAutoLaunchPlanTests {
-    private let bundledPath = "/Applications/PlaidBar.app/Contents/MacOS/PlaidBarServer"
+    private let bundledPath = "/Applications/VaultPeek.app/Contents/MacOS/PlaidBarServer"
     private let dataDirectory = "/Users/example/.vaultpeek"
 
     @Test("Plan launches the bundled server with the configured server.conf")
