@@ -27,14 +27,15 @@ struct MenuBarLabel: View {
         if appState.error != nil || appState.erroredItemCount > 0 {
             return "exclamationmark.octagon"
         }
+        // Offline is checked before stale/login: when the server is
+        // unreachable, isSyncStale is usually also true (no recent or no
+        // first sync), so the offline glyph must win to stay distinct.
+        if !appState.serverConnected, !appState.isDemoMode {
+            return "network.slash"
+        }
         if appState.needsLoginItemCount > 0 || appState.isSyncStale {
             return "exclamationmark.triangle"
         }
-        if appState.serverConnected || appState.isDemoMode {
-            return "dollarsign.circle"
-        }
-        // Server unreachable gets its own glyph so it stays distinguishable
-        // from stale-sync/login states at the same warning tier.
-        return "network.slash"
+        return "dollarsign.circle"
     }
 }
