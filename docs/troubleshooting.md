@@ -243,3 +243,50 @@ git diff --check
 bash -n Scripts/*.sh Scripts/vaultpeek-run Scripts/plaidbar-run
 swift build --target PlaidBar --skip-update --disable-keychain
 ```
+
+## Every CI Job Fails In ~4 Seconds Before Any Step Runs
+
+Symptom: every workflow (build, Claude review, Codex review, merge gate) shows a
+red X within seconds, with the annotation *"The job was not started because
+recent account payments have failed or your spending limit needs to be increased."*
+
+This is a GitHub Actions **account billing block**, not a workflow or code
+problem — it is applied before a runner is allocated, so no workflow change can
+bypass it. Fix it in account settings:
+
+1. `github.com/settings/billing` → **Payment information** → confirm a valid card
+   and clear any failed/pending invoice (check **Payment history**).
+2. Same page → **Budgets and alerts** → set an Actions budget above `$0` (the old
+   "spending limit" control now lives here; a `$0` budget with stop-on-limit is
+   the legacy hard block).
+3. Re-run a failed job after a few minutes. If it still fails with a valid card
+   and non-zero budget, only GitHub Support can clear the lock.
+
+Note: the `macos-15` build in `ci.yml` bills at ~10× the Linux rate (~200 of the
+2,000 free private-repo minutes per run), so it is the main consumer that
+re-triggers this block. `ci.yml` and the two review workflows now use
+`concurrency: cancel-in-progress` to drop superseded runs.
+
+## Codex Review Gate Starts Failing Every PR (401 / token expired)
+
+The Codex review gate authenticates with a ChatGPT-login `auth.json` seeded from
+the `CODEX_AUTH_JSON_B64` secret. That OAuth token bundle expires (~8 days idle,
+or when the refresh token rotates). To keep it durable, `codex-code-review.yml`
+persists the refreshed `auth.json` back to the secret after each run — but that
+write requires a token with **Secrets: write**, which the default `GITHUB_TOKEN`
+does not have.
+
+Enable durable OAuth (one-time setup):
+
+1. Create a **fine-grained PAT** scoped to the PlaidBar repo with
+   **Repository permissions → Secrets: Read and write**.
+2. Add it as the repository secret `CODEX_SECRET_WRITE_TOKEN`
+   (`gh secret set CODEX_SECRET_WRITE_TOKEN`).
+
+Until that secret exists, the gate still runs but keeps using the static seed and
+logs a warning; it will 401 once the seed goes stale. If the gate 401s, reseed:
+run `codex login` locally, then
+`base64 < ~/.codex/auth.json | tr -d '\n' | gh secret set CODEX_AUTH_JSON_B64`.
+
+To reauthorize the **Claude** review gate, regenerate its OAuth token with
+`claude setup-token` and update the `CLAUDE_CODE_OAUTH_TOKEN` secret.
