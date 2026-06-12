@@ -109,12 +109,17 @@ struct TransactionsList: AsyncParsableCommand {
     var commit = false
 
     func run() async throws {
-        let response = try await syncResponse(options: options, item: item, commit: commit)
+        let client = PlaidBarCLIHTTPClient(options: options)
+        let response = try await fetchSync(client: client, item: item)
         let transactions = response.added + response.modified
         if options.json {
             try PlaidBarCLIOutput.write(response, json: true) { "" }
         } else {
-            print(PlaidBarCLITableFormatter.transactions(transactions, count: count))
+            // When committing, show every returned change so advancing the
+            // server cursor cannot hide transactions behind the table --count
+            // limit; otherwise honor the requested row cap.
+            let rowCount = commit ? transactions.count : count
+            print(PlaidBarCLITableFormatter.transactions(transactions, count: rowCount))
             if response.hasMore {
                 PlaidBarCLIOutput.writeError("More transactions are available; run again to continue syncing.")
             }
@@ -122,6 +127,9 @@ struct TransactionsList: AsyncParsableCommand {
                 PlaidBarCLIOutput.writeError("Sync cursors were not committed. Re-run with --commit after reviewing results.")
             }
         }
+        // Commit only after output succeeds, so a broken pipe or failed write
+        // never advances the cursor past transactions the user has not seen.
+        try await commitSyncIfRequested(client: client, response: response, commit: commit)
     }
 }
 
@@ -137,7 +145,8 @@ struct TransactionsSync: AsyncParsableCommand {
     var commit = false
 
     func run() async throws {
-        let response = try await syncResponse(options: options, item: item, commit: commit)
+        let client = PlaidBarCLIHTTPClient(options: options)
+        let response = try await fetchSync(client: client, item: item)
         try PlaidBarCLIOutput.write(response, json: options.json) {
             let transactions = response.added + response.modified
             return PlaidBarCLITableFormatter.transactions(transactions, count: transactions.count)
@@ -148,6 +157,8 @@ struct TransactionsSync: AsyncParsableCommand {
         if !response.pendingCursors.isEmpty && !commit {
             PlaidBarCLIOutput.writeError("Sync cursors were not committed. Re-run with --commit after reviewing results.")
         }
+        // Commit only after the full response has been written to stdout.
+        try await commitSyncIfRequested(client: client, response: response, commit: commit)
     }
 }
 
@@ -179,17 +190,20 @@ struct Link: AsyncParsableCommand {
     }
 }
 
-private func syncResponse(
-    options: PlaidBarCLIOptions,
-    item: String?,
-    commit: Bool
+private func fetchSync(
+    client: PlaidBarCLIHTTPClient,
+    item: String?
 ) async throws -> SyncResponse {
-    let client = PlaidBarCLIHTTPClient(options: options)
-    let response: SyncResponse = try await client.get(.transactionsSync(itemId: item))
-    if commit, !response.pendingCursors.isEmpty {
-        try await client.post(.commitCursors, body: SyncCursorCommitRequest(cursors: response.pendingCursors))
-    }
-    return response
+    try await client.get(.transactionsSync(itemId: item))
+}
+
+private func commitSyncIfRequested(
+    client: PlaidBarCLIHTTPClient,
+    response: SyncResponse,
+    commit: Bool
+) async throws {
+    guard commit, !response.pendingCursors.isEmpty else { return }
+    try await client.post(.commitCursors, body: SyncCursorCommitRequest(cursors: response.pendingCursors))
 }
 
 struct PlaidBarCLIHTTPClient: Sendable {
@@ -217,7 +231,13 @@ struct PlaidBarCLIHTTPClient: Sendable {
     }
 
     private func request(endpoint: PlaidBarCLIEndpoint) throws -> URLRequest {
-        guard let url = URL(string: options.server + endpoint.path) else {
+        // Tolerate a trailing slash on --server (e.g. http://127.0.0.1:8484/)
+        // so it does not collapse into a double-slashed /api path the server
+        // routes will not match.
+        let base = options.server.hasSuffix("/")
+            ? String(options.server.dropLast())
+            : options.server
+        guard let url = URL(string: base + endpoint.path) else {
             throw PlaidBarCLIError.invalidServerURL(options.server)
         }
         let token = try String(contentsOfFile: options.authTokenPath, encoding: .utf8)
