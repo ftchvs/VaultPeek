@@ -35,7 +35,8 @@ struct SetupView: View {
                     environment: .production,
                     icon: "lock.shield",
                     title: "Connect Production",
-                    summary: "Real accounts with approved Plaid production credentials.",
+                    summary: "Real accounts and real financial data. Requires Plaid production "
+                        + "approval and production credentials.",
                     primaryTitle: "Open Link"
                 )
             case let .connecting(environment):
@@ -98,7 +99,7 @@ struct SetupView: View {
 
                 OnboardingChoiceButton(
                     title: "Connect Production",
-                    subtitle: "Approved Plaid access for real accounts.",
+                    subtitle: "Real financial data. Requires Plaid production approval.",
                     icon: "lock.shield",
                     color: SemanticColors.positive
                 ) {

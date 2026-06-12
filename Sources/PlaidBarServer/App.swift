@@ -75,7 +75,8 @@ struct PlaidBarServer: AsyncParsableCommand {
         let api = router.group("api")
         api.add(middleware: APITokenMiddleware(authToken: serverConfig.authToken))
         api.add(middleware: SetupStateMiddleware(
-            credentialsConfigured: serverConfig.credentialsConfigured
+            credentialDiagnosis: serverConfig.credentialDiagnosis,
+            plaidEnvironment: serverConfig.plaidEnvironment
         ))
         LinkRoutes(
             plaidClient: plaidClient,
@@ -111,13 +112,13 @@ struct PlaidBarServer: AsyncParsableCommand {
 
         logger.info("VaultPeek companion server starting on http://127.0.0.1:\(serverConfig.port)")
         logger.info("Environment: \(serverConfig.plaidEnvironment.rawValue)")
-        if !serverConfig.credentialsConfigured {
+        if let setupGuidance = serverConfig.credentialDiagnosis.setupGuidance(
+            environment: serverConfig.plaidEnvironment
+        ) {
             logger.warning(
                 """
-                Plaid credentials are not configured; starting in setup state. \
-                /health and /api/status stay available, Plaid-backed routes return 503. \
-                Add PLAID_CLIENT_ID and PLAID_SECRET to server.conf and restart \
-                (the menu bar app restarts its bundled server automatically).
+                Starting in setup state: \(setupGuidance) \
+                /health and /api/status stay available; Plaid-backed routes return 503.
                 """
             )
         }

@@ -305,9 +305,27 @@ For a fast sandbox preflight without opening the menu bar app, export sandbox
 credentials and run `./Scripts/smoke-sandbox.sh`. It builds the server, starts
 it on `127.0.0.1:${PLAIDBAR_SMOKE_PORT:-18484}`, checks `/health`, and verifies
 that unauthenticated `/api` calls are rejected before checking `/api/status`
-with the generated local bearer token. The smoke script uses a temporary data
-directory by default; set `PLAIDBAR_DATA_DIR` when you intentionally want to
-point it at a specific local store.
+with the generated local bearer token. It then restarts the server against the
+same data directory to verify restart recovery (same auth token, same readiness
+state), and boots a second credential-less server on
+`127.0.0.1:${PLAIDBAR_SMOKE_SETUP_PORT:-18485}` to verify the setup state:
+`credentialsConfigured=false` on `/api/status` and a 503 on Plaid-backed routes
+whose body names the missing `PLAID_CLIENT_ID`/`PLAID_SECRET` variables. The
+smoke script uses temporary data directories by default; set
+`PLAIDBAR_DATA_DIR` when you intentionally want to point it at a specific local
+store.
+
+### Sandbox limitations
+
+Sandbox mode exercises the full local pipeline — server startup, local auth,
+Plaid Link, transaction sync, storage permissions — against Plaid's test
+institutions only. Passing sandbox (including the smoke script) does not
+demonstrate production readiness: production requires Plaid production
+approval, separate production credentials, and connects real financial data.
+Sandbox and production keep strictly separate SQLite stores and caches
+(`plaidbar-sandbox.sqlite` vs `plaidbar-production.sqlite`) in the same data
+directory, so switching modes never mixes test data with real data — and also
+means each mode starts empty until linked in that mode.
 
 ## Keyboard Shortcuts
 
