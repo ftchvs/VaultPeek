@@ -1,8 +1,25 @@
 import Foundation
 import Hummingbird
+import HTTPTypes
+import Logging
+import NIOCore
 @testable import PlaidBarCore
 @testable import PlaidBarServer
 import Testing
+
+private struct TestRequestContextSource: RequestContextSource {
+    let logger = Logger(label: "com.ftchvs.plaidbar-server-tests")
+}
+
+private struct TestRequestContext: RequestContext {
+    typealias Source = TestRequestContextSource
+
+    var coreContext: CoreRequestContextStorage
+
+    init(source: TestRequestContextSource) {
+        coreContext = CoreRequestContextStorage(source: source)
+    }
+}
 
 private let plaidTokenVaultKeychainAvailable: Bool = {
     let itemId = "test_keychain_probe_\(UUID().uuidString)"
@@ -120,6 +137,55 @@ struct PlaidBarServerTests {
         #expect(!payload.contains("\"publicToken\""))
         #expect(!payload.contains("\"rawPayload\""))
         #expect(!payload.contains("\"transactions\""))
+    }
+
+    @Test func serverStatusPayloadDoesNotExposeSecretBearingFieldNames() throws {
+        let status = ServerStatus(
+            version: "0.8.0",
+            environment: .sandbox,
+            itemCount: 1,
+            lastSync: Date(timeIntervalSince1970: 1_800_000_001),
+            credentialsConfigured: true,
+            storagePath: "/Users/example/.plaidbar",
+            syncReady: true,
+            syncedItemCount: 1
+        )
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+
+        let data = try encoder.encode(status)
+        let payload = try #require(String(data: data, encoding: .utf8))
+        let forbiddenFieldNames = [
+            "accessToken",
+            "access_token",
+            "accountId",
+            "account_id",
+            "balance",
+            "balances",
+            "clientId",
+            "client_id",
+            "clientSecret",
+            "client_secret",
+            "institutionId",
+            "institution_id",
+            "itemId",
+            "item_id",
+            "linkToken",
+            "link_token",
+            "plaidPayload",
+            "publicToken",
+            "public_token",
+            "rawPayload",
+            "secret",
+            "token",
+            "transactionId",
+            "transaction_id",
+            "transactions",
+        ]
+
+        for fieldName in forbiddenFieldNames {
+            #expect(!payload.contains("\"\(fieldName)\""))
+        }
     }
 
     @Test func serverConfigLoadsExplicitConfigFile() throws {
@@ -331,12 +397,61 @@ struct PlaidBarServerTests {
         #expect(!APITokenAuthorization.constantTimeEquals("Bearer token-123", "Bearer token-123-extra"))
     }
 
+    @Test func apiMiddlewareRejectsMissingAndInvalidBearerTokens() async throws {
+        let middleware = APITokenMiddleware<TestRequestContext>(authToken: "local-token")
+        let context = TestRequestContext(source: TestRequestContextSource())
+
+        for request in [
+            Self.makeRequest(path: "/api/status"),
+            Self.makeRequest(path: "/api/status", authorization: "local-token"),
+            Self.makeRequest(path: "/api/status", authorization: "Bearer wrong-token"),
+            Self.makeRequest(path: "/api/accounts", authorization: "Bearer local-token-extra"),
+        ] {
+            do {
+                _ = try await middleware.handle(request, context: context) { _, _ in
+                    Response(status: .ok)
+                }
+                #expect(Bool(false), "Expected unauthorized API request to throw")
+            } catch let error as HTTPError {
+                #expect(error.status == .unauthorized)
+                #expect(error.body == "Missing or invalid authorization token")
+            } catch {
+                #expect(Bool(false), "Expected HTTPError, got \(error)")
+            }
+        }
+    }
+
+    @Test func apiMiddlewareAcceptsExactBearerTokenOnly() async throws {
+        let middleware = APITokenMiddleware<TestRequestContext>(authToken: "local-token")
+        let context = TestRequestContext(source: TestRequestContextSource())
+
+        let response = try await middleware.handle(
+            Self.makeRequest(path: "/api/status", authorization: "Bearer local-token"),
+            context: context
+        ) { _, _ in
+            Response(status: .ok)
+        }
+
+        #expect(response.status == .ok)
+    }
+
     @Test func oauthCallbackErrorPageEscapesDynamicMessage() {
         let html = OAuthCallbackRoute.errorPage("<script>alert('x')</script> & retry \"soon\"")
 
         #expect(!html.contains("<script>"))
         #expect(html.contains("&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt;"))
         #expect(html.contains("&amp; retry &quot;soon&quot;"))
+    }
+
+    private static func makeRequest(path: String, authorization: String? = nil) -> Request {
+        var headers = HTTPFields()
+        if let authorization {
+            headers[.authorization] = authorization
+        }
+        return Request(
+            head: HTTPRequest(method: .get, scheme: nil, authority: nil, path: path, headerFields: headers),
+            body: RequestBody(buffer: ByteBuffer())
+        )
     }
 
     @Test func serverDatabasePathIsScopedByPlaidEnvironment() {
