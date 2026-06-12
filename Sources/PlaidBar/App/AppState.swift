@@ -43,7 +43,24 @@ final class AppState {
     }
     var isPopoverPresented = false
     var selectedTab: PopoverTab = .accounts
-    var isSetupComplete = false
+
+    /// Persisted across launches so configured installs boot straight into
+    /// the dashboard instead of flashing first-run onboarding until the
+    /// initial server handshake completes. Demo sessions never persist
+    /// completion; explicit resets clear it.
+    var isSetupComplete = UserDefaults.standard.bool(forKey: AppState.setupCompletedDefaultsKey) {
+        didSet {
+            guard oldValue != isSetupComplete else { return }
+            if isSetupComplete {
+                guard !isDemoMode else { return }
+                UserDefaults.standard.set(true, forKey: AppState.setupCompletedDefaultsKey)
+            } else {
+                UserDefaults.standard.set(false, forKey: AppState.setupCompletedDefaultsKey)
+            }
+        }
+    }
+
+    static let setupCompletedDefaultsKey = "setup.completedOnce"
     var serverConnected = false
     var serverEnvironment: PlaidEnvironment?
     var serverVersion: String?
