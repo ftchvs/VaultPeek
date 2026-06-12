@@ -236,7 +236,10 @@ enum ServerClientError: Error, LocalizedError {
         switch self {
         case .requestFailed: "Request to PlaidBar server failed"
         case .serverNotRunning: "PlaidBar server is not running"
-        case .authTokenUnavailable: "PlaidBarServer auth token not found. Start the server, then check again."
+        // Keep the "auth token is unavailable" substring intact: the recovery
+        // matchers in DashboardStatusReadiness, AttentionQueue, and
+        // ServerConnectionPresentation key off it.
+        case .authTokenUnavailable: "PlaidBar server auth token is unavailable. Start the server, then check again."
         case let .httpError(statusCode, message):
             "PlaidBar server returned \(statusCode): \(message)"
         }
