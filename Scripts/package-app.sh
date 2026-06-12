@@ -39,11 +39,12 @@ if [ ! -d "$BUILD_DIR/Sparkle.framework" ]; then
 fi
 
 rm -rf "$APP_DIR"
-mkdir -p "$MACOS_DIR" "$FRAMEWORKS_DIR"
+mkdir -p "$MACOS_DIR" "$FRAMEWORKS_DIR" "$CONTENTS_DIR/Resources"
 
 cp "$BUILD_DIR/PlaidBar" "$APP_BINARY"
 cp "$BUILD_DIR/PlaidBarServer" "$MACOS_DIR/PlaidBarServer"
 cp "$RESOURCES_DIR/Info.plist" "$CONTENTS_DIR/Info.plist"
+cp "$RESOURCES_DIR/AppIcon.icns" "$CONTENTS_DIR/Resources/AppIcon.icns"
 /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable PlaidBar" "$CONTENTS_DIR/Info.plist" 2>/dev/null \
     || /usr/libexec/PlistBuddy -c "Add :CFBundleExecutable string PlaidBar" "$CONTENTS_DIR/Info.plist"
 ditto "$BUILD_DIR/Sparkle.framework" "$FRAMEWORKS_DIR/Sparkle.framework"
