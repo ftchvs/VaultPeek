@@ -49,6 +49,7 @@ enum SnapshotRenderer {
         // Dashboard with no selection.
         UserDefaults.standard.set("", forKey: "dashboard.selectedAccountId")
         appState.isPopoverPresented = true
+        _ = await waitForPopoverWindow(appState: appState)
         try? await Task.sleep(for: .milliseconds(2200))
         if !capturePopoverWindow(to: directoryURL.appendingPathComponent("render-dashboard.png")) {
             failureCount += 1
@@ -65,9 +66,30 @@ enum SnapshotRenderer {
         return failureCount
     }
 
+    /// Polls for the popover window, re-toggling presentation when needed:
+    /// the first `isPopoverPresented = true` can fire before the MenuBarExtra
+    /// status item exists (commonly when the menu bar is crowded and the item
+    /// starts in overflow), in which case the popover never opens.
+    private static func waitForPopoverWindow(appState: AppState, attempts: Int = 20) async -> Bool {
+        for attempt in 0..<attempts {
+            if popoverWindow() != nil { return true }
+            if attempt % 4 == 3 {
+                appState.isPopoverPresented = false
+                try? await Task.sleep(for: .milliseconds(150))
+                appState.isPopoverPresented = true
+            }
+            try? await Task.sleep(for: .milliseconds(500))
+        }
+        return popoverWindow() != nil
+    }
+
+    private static func popoverWindow() -> NSWindow? {
+        NSApp.windows.first { $0.isVisible && $0.frame.width >= 400 }
+    }
+
     /// Returns `true` when the PNG was written.
     private static func capturePopoverWindow(to url: URL) -> Bool {
-        guard let window = NSApp.windows.first(where: { $0.isVisible && $0.frame.width >= 400 }),
+        guard let window = popoverWindow(),
               let contentView = window.contentView
         else {
             print("snapshot: no visible popover window to capture for \(url.lastPathComponent)")
