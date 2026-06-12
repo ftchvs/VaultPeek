@@ -56,6 +56,7 @@ let package = Package(
             ],
             path: "Sources/PlaidBar",
             exclude: [
+                "Resources/AppIcon.icns",
                 "Resources/Info.plist",
                 "Resources/PlaidBar.entitlements",
             ],

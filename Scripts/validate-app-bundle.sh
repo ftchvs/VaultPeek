@@ -12,6 +12,7 @@ APP_BINARY="$APP_DIR/Contents/MacOS/PlaidBar"
 SERVER_BINARY="$APP_DIR/Contents/MacOS/PlaidBarServer"
 SPARKLE_FRAMEWORK="$APP_DIR/Contents/Frameworks/Sparkle.framework"
 INFO_PLIST="$APP_DIR/Contents/Info.plist"
+APP_ICON="$APP_DIR/Contents/Resources/AppIcon.icns"
 
 if [ ! -f "$INFO_PLIST" ]; then
     echo "Missing Info.plist at $INFO_PLIST" >&2
@@ -20,6 +21,16 @@ fi
 
 if [ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$INFO_PLIST" 2>/dev/null || true)" != "PlaidBar" ]; then
     echo "PlaidBar.app Info.plist must set CFBundleExecutable to PlaidBar" >&2
+    exit 1
+fi
+
+if [ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$INFO_PLIST" 2>/dev/null || true)" != "AppIcon" ]; then
+    echo "PlaidBar.app Info.plist must set CFBundleIconFile to AppIcon" >&2
+    exit 1
+fi
+
+if [ ! -f "$APP_ICON" ]; then
+    echo "Missing app icon at $APP_ICON" >&2
     exit 1
 fi
 
