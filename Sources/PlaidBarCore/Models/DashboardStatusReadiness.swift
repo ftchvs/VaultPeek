@@ -12,7 +12,7 @@ public enum DashboardStatusReadinessLevel: String, Codable, Sendable {
     /// path and may use chrome-level alert treatments.
     public var errorSeverity: ErrorSeverity? {
         switch self {
-        case .healthy: nil
+        case .healthy, .loading: nil
         case .warning: .advisory
         case .blocked: .blocking
         }
