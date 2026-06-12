@@ -1,0 +1,28 @@
+import Foundation
+
+public struct PopoverTransparencySetting: Sendable, Equatable {
+    public static let storageKey = "appearance.popoverTransparency"
+    public static let defaultValue = 70.0
+    public static let minimumValue = 20.0
+    public static let maximumValue = 85.0
+
+    public let value: Double
+
+    public init(value: Double) {
+        self.value = min(Self.maximumValue, max(Self.minimumValue, value))
+    }
+
+    public var displayPercent: Int {
+        Int(value.rounded())
+    }
+
+    /// Solid fill layered over `.ultraThinMaterial`. Lower values produce a
+    /// more opaque panel; higher values preserve more desktop read-through.
+    /// The floor keeps text and numeric finance values legible at maximum
+    /// transparency.
+    public var materialOverlayOpacity: Double {
+        let progress = (value - Self.minimumValue) / (Self.maximumValue - Self.minimumValue)
+        let opacity = 0.32 - (progress * 0.26)
+        return (opacity * 100).rounded() / 100
+    }
+}
