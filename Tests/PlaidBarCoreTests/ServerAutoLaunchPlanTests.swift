@@ -91,15 +91,38 @@ struct ServerAutoLaunchPlanTests {
         #expect(!plan.arguments.contains("9494"))
     }
 
-    @Test("Plan declines without server.conf because the server cannot boot credential-less")
-    func planDeclinesWithoutConfigFile() {
-        let plan = ServerAutoLaunchPlan.evaluate(
+    @Test("Plan launches without server.conf and omits --config so the server boots in setup state")
+    func planLaunchesWithoutConfigFileInSetupState() throws {
+        let plan = try #require(ServerAutoLaunchPlan.evaluate(
             bundledServerPath: bundledPath,
             isAppBundle: true,
             isDemoMode: false,
             serverAlreadyReachable: false,
             dataDirectoryPath: dataDirectory,
             configFileExists: false,
+            configFileContents: nil,
+            port: 8484,
+            parentProcessId: 4242
+        ))
+
+        #expect(plan.executablePath == bundledPath)
+        #expect(plan.arguments == [
+            "--port", "8484",
+            "--exit-with-parent", "4242",
+        ])
+        #expect(plan.logFilePath == "/Users/example/.plaidbar/server.log")
+    }
+
+    @Test("Plan declines when server.conf exists but cannot be read")
+    func planDeclinesWhenConfigFileUnreadable() {
+        let plan = ServerAutoLaunchPlan.evaluate(
+            bundledServerPath: bundledPath,
+            isAppBundle: true,
+            isDemoMode: false,
+            serverAlreadyReachable: false,
+            dataDirectoryPath: dataDirectory,
+            configFileExists: true,
+            configFileContents: nil,
             port: 8484,
             parentProcessId: 4242
         )
@@ -171,5 +194,40 @@ struct ServerAutoLaunchPlanTests {
 
             #expect(plan == nil)
         }
+    }
+
+    @Test("Config provides credentials when both Plaid values are present and non-empty")
+    func configProvidesCredentialsWhenBothPresent() {
+        let contents = """
+        # PlaidBar server config
+        PLAID_CLIENT_ID=test-client
+        export PLAID_SECRET="test-secret"
+        PLAID_ENV=sandbox
+        """
+
+        #expect(ServerAutoLaunchPlan.configProvidesCredentials(in: contents))
+    }
+
+    @Test("Config does not provide credentials when a value is missing or blank")
+    func configDoesNotProvideCredentialsWhenIncomplete() {
+        let missingSecret = "PLAID_CLIENT_ID=test-client"
+        let blankSecret = """
+        PLAID_CLIENT_ID=test-client
+        PLAID_SECRET=
+        """
+        let quotedEmptySecret = """
+        PLAID_CLIENT_ID=test-client
+        PLAID_SECRET=""
+        """
+        let commentedOutSecret = """
+        PLAID_CLIENT_ID=test-client
+        # PLAID_SECRET=test-secret
+        """
+
+        #expect(!ServerAutoLaunchPlan.configProvidesCredentials(in: ""))
+        #expect(!ServerAutoLaunchPlan.configProvidesCredentials(in: missingSecret))
+        #expect(!ServerAutoLaunchPlan.configProvidesCredentials(in: blankSecret))
+        #expect(!ServerAutoLaunchPlan.configProvidesCredentials(in: quotedEmptySecret))
+        #expect(!ServerAutoLaunchPlan.configProvidesCredentials(in: commentedOutSecret))
     }
 }
