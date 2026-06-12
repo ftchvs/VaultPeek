@@ -131,7 +131,7 @@ Prioritize these before adding new finance features:
 
 ## First Milestone
 
-Make `main` trustworthy as a public open-source project:
+Make `main` trustworthy as a proprietary product codebase:
 
 - Demo mode runs without Plaid.
 - Sandbox mode fails fast without credentials and works with real sandbox credentials.

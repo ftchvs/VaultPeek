@@ -130,7 +130,7 @@ Checks:
 If macOS permission was revoked, re-enable notifications in System Settings and
 restart PlaidBar.
 
-Formula/source-built executable runs may report notification permission as
+Source-built executable runs may report notification permission as
 unavailable or denied if macOS cannot register the process as an app bundle.
 PlaidBar avoids calling the notification center in that state so Settings does
 not crash. Signed/notarized app-bundle notification behavior remains part of the
@@ -170,6 +170,5 @@ Still run the smaller local gates:
 ```bash
 git diff --check
 bash -n Scripts/*.sh Scripts/plaidbar-run
-ruby -c Formula/plaidbar.rb
 swift build --target PlaidBar --skip-update --disable-keychain
 ```
