@@ -41,7 +41,13 @@ struct ServerConfig: Sendable {
     /// what lets a fresh DMG install auto-start its bundled server before
     /// `server.conf` exists.
     var credentialsConfigured: Bool {
-        !plaidClientId.isEmpty && !plaidSecret.isEmpty
+        credentialDiagnosis.isConfigured
+    }
+
+    /// Which credential is missing (if any), so setup-state responses and
+    /// the boot log can name the exact variable to fix.
+    var credentialDiagnosis: CredentialSetupDiagnosis {
+        .diagnose(clientId: plaidClientId, secret: plaidSecret)
     }
 
     static func load(

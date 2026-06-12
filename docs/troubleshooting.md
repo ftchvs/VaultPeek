@@ -68,6 +68,35 @@ Checks:
 
 Do not reuse sandbox credentials in production mode.
 
+## Production Mode Reports Missing Credentials (503)
+
+The server boots without credentials into a setup state: `/health` and
+`/api/status` keep working, and Plaid-backed routes return `503` until both
+credentials are present and the server restarts.
+
+The `503` body and the server boot log name exactly which variable is missing.
+A partially configured `server.conf` (for example `PLAID_CLIENT_ID` set but
+`PLAID_SECRET` forgotten) is the most common cause and reports the single
+missing variable instead of a generic credentials message.
+
+Checks:
+
+- Read the `503` error body or server log line: it says whether
+  `PLAID_CLIENT_ID`, `PLAID_SECRET`, or both are missing.
+- Confirm both values are in `server.conf` (or exported in the server's
+  environment) with no empty values — blank assignments count as missing.
+- Restart the server after fixing `server.conf`; credentials are read at boot.
+- For production, confirm the values are production credentials from an
+  approved Plaid application. Sandbox credentials will not work in production
+  mode.
+
+## Production Mode Shows No Linked Accounts After Sandbox Testing
+
+That is expected, not data loss. Sandbox and production use strictly separate
+local stores (`plaidbar-sandbox.sqlite` vs `plaidbar-production.sqlite`) and
+separate caches in the same data directory, so real financial data and test
+data never mix. Each mode starts empty until accounts are linked in that mode.
+
 ## App Says Server Is Offline
 
 Checks:
