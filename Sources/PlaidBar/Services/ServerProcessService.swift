@@ -88,17 +88,21 @@ final class ServerProcessService {
     /// restart re-reads the config. Waits for the old process to exit so the
     /// relaunch never races it for the port. Returns `true` when a new
     /// process was started.
+    ///
+    /// The old process stays referenced as `managedProcess` until its exit is
+    /// observed: a server slow to honor SIGTERM still occupies the port, and
+    /// dropping the reference early would flip `isManagingServer` to false,
+    /// making later credential-upgrade checks skip the retry and leaving the
+    /// app stuck in setup state.
     func restartManagedServer(isDemoMode: Bool) async -> Bool {
         if let process = managedProcess, process.isRunning {
             process.terminate()
-            managedProcess = nil
             for _ in 0 ..< 25 where process.isRunning {
                 try? await Task.sleep(for: .milliseconds(200))
             }
             guard !process.isRunning else { return false }
-        } else {
-            managedProcess = nil
         }
+        managedProcess = nil
         return launchBundledServerIfNeeded(
             isDemoMode: isDemoMode,
             serverAlreadyReachable: false
