@@ -77,7 +77,18 @@ struct MainPopover: View {
                 .frame(width: Layout.dashboardWidth)
         }
         .frame(width: popoverWidth)
-        .background(.regularMaterial)
+        // Stronger liquid-glass transparency: the thinnest system material
+        // lets the desktop read through the popover while staying legible.
+        .background(.ultraThinMaterial)
+        // Keep the dashboard stationary when the fly-out opens: pin the
+        // window's right edge so the extra width grows leftward instead of
+        // letting AppKit re-center the widened popover under the menu bar item.
+        .background {
+            PopoverTrailingEdgeAnchor(
+                isExpanded: selectedAccount != nil && !shouldShowSetupScreen,
+                collapsedWidth: Layout.dashboardWidth
+            )
+        }
         .animation(
             MotionTokens.animation(MotionTokens.content, reduceMotion: reduceMotion),
             value: selectedAccount?.id
