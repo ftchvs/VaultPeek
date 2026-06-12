@@ -29,6 +29,9 @@ jobs:
         run: |
           bash -n Scripts/*.sh Scripts/vaultpeek-run Scripts/plaidbar-run
 
+      - name: Version metadata alignment
+        run: ./Scripts/verify-version-alignment.sh
+
       - name: Clear stale SwiftPM binary artifact cache
         run: |
           rm -rf ~/Library/Caches/org.swift.swiftpm/artifacts/https___github_com_sparkle_project_Sparkle_releases_download_2_9_3_Sparkle_for_Swift_Package_Manager_zip
@@ -51,3 +54,8 @@ jobs:
           PLAID_SECRET: ci_smoke_secret
           PLAIDBAR_SMOKE_PORT: 18487
         run: ./Scripts/smoke-sandbox.sh
+
+      - name: App bundle package validation
+        run: |
+          ./Scripts/package-app.sh
+          ./Scripts/validate-app-bundle.sh
