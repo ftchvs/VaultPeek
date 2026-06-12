@@ -430,7 +430,7 @@ final class AppState {
         let serverPresentation = serverConnectionPresentation
         if isDemoMode { return serverPresentation.diagnosticsSummary }
         switch serverPresentation.issue {
-        case .offline, .localAuthMissing, .localAuthRejected:
+        case .offline, .localAuthMissing, .localAuthRejected, .serverModeMismatch:
             return serverPresentation.diagnosticsSummary
         case .demo, .syncing, .connected, .error:
             break

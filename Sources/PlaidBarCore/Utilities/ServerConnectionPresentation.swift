@@ -7,6 +7,7 @@ public enum ServerConnectionIssue: Sendable, Equatable {
     case offline
     case localAuthMissing
     case localAuthRejected
+    case serverModeMismatch
     case error
 
     /// Severity tier of this connection state; `nil` when nothing failed.
@@ -17,7 +18,7 @@ public enum ServerConnectionIssue: Sendable, Equatable {
     public var errorSeverity: ErrorSeverity? {
         switch self {
         case .demo, .syncing, .connected: nil
-        case .offline, .localAuthMissing, .localAuthRejected: .blocking
+        case .offline, .localAuthMissing, .localAuthRejected, .serverModeMismatch: .blocking
         case .error: .advisory
         }
     }
@@ -60,8 +61,8 @@ public struct ServerConnectionPresentation: Sendable, Equatable {
             )
         }
 
-        if let authIssue = localAuthIssue(from: errorMessage) {
-            return authIssue
+        if let blockingIssue = blockingIssue(from: errorMessage) {
+            return blockingIssue
         }
 
         if isLoading {
@@ -101,12 +102,22 @@ public struct ServerConnectionPresentation: Sendable, Equatable {
         )
     }
 
-    private static func localAuthIssue(from message: String?) -> ServerConnectionPresentation? {
+    private static func blockingIssue(from message: String?) -> ServerConnectionPresentation? {
         guard let message else { return nil }
         let normalized = message
             .split(whereSeparator: \.isWhitespace)
             .joined(separator: " ")
             .lowercased()
+
+        if normalized.contains("server is running in") &&
+            (normalized.contains("not sandbox") || normalized.contains("not production")) {
+            return ServerConnectionPresentation(
+                issue: .serverModeMismatch,
+                statusText: "Mode mismatch",
+                diagnosticsSummary: "Server mode mismatch",
+                attentionText: "Mode"
+            )
+        }
 
         if normalized.contains("auth token is unavailable") {
             return ServerConnectionPresentation(

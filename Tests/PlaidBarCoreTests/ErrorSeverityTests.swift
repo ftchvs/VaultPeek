@@ -37,6 +37,7 @@ struct ErrorSeverityTests {
         #expect(ServerConnectionIssue.offline.errorSeverity == .blocking)
         #expect(ServerConnectionIssue.localAuthMissing.errorSeverity == .blocking)
         #expect(ServerConnectionIssue.localAuthRejected.errorSeverity == .blocking)
+        #expect(ServerConnectionIssue.serverModeMismatch.errorSeverity == .blocking)
         #expect(ServerConnectionIssue.error.errorSeverity == .advisory)
     }
 
@@ -183,6 +184,21 @@ struct ErrorSeverityTests {
 
         #expect(presentation.issue == .error)
         #expect(presentation.errorSeverity == .advisory)
+    }
+
+    @Test("Server mode mismatch remains blocking even when the server is reachable")
+    func serverModeMismatchIsBlocking() {
+        let presentation = ServerConnectionPresentation.evaluate(
+            isDemoMode: false,
+            isLoading: false,
+            serverConnected: true,
+            errorMessage: "Server is running in production, not sandbox. Restart with ./Scripts/run.sh --sandbox."
+        )
+
+        #expect(presentation.issue == .serverModeMismatch)
+        #expect(presentation.statusText == "Mode mismatch")
+        #expect(presentation.attentionText == "Mode")
+        #expect(presentation.errorSeverity == .blocking)
     }
 
     // MARK: - Menu bar chrome
