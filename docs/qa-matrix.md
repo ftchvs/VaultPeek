@@ -10,7 +10,6 @@ local storage, notifications, and distribution.
 |------|---------|--------------|
 | Whitespace/diff sanity | `git diff --check` | Every PR |
 | Shell syntax | `bash -n Scripts/*.sh Scripts/plaidbar-run` | Script or release changes |
-| Formula syntax | `ruby -c Formula/plaidbar.rb` | Packaging changes |
 | App build | `swift build --target PlaidBar --skip-update --disable-keychain` | Every PR |
 | Strict concurrency | `swift build -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors --disable-keychain` | Release candidates |
 | Release build | `swift build -c release --disable-keychain` | Release candidates |

@@ -929,14 +929,14 @@ struct AboutView: View {
                         "GitHub Repository",
                         systemImage: "chevron.left.forwardslash.chevron.right",
                         url: "https://github.com/ftchvs/PlaidBar",
-                        detail: "Source, issues, releases, and contribution workflow."
+                        detail: "Source, issues, and releases (private repository)."
                     )
 
                     supportLink(
                         "1.0 Roadmap",
                         systemImage: "map",
                         url: "https://github.com/ftchvs/PlaidBar/blob/main/docs/v1.0-roadmap.md",
-                        detail: "Product, design, system, security, and open-source release plan."
+                        detail: "Product, design, system, security, and release plan."
                     )
 
                     supportLink(
@@ -956,7 +956,7 @@ struct AboutView: View {
 
                     Spacer()
 
-                    Text("MIT License")
+                    Text("© 2026 Felipe Tavares Chaves · Proprietary")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }

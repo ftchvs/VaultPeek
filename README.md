@@ -10,20 +10,20 @@
 
 <p align="center">
   <a href="https://github.com/ftchvs/PlaidBar/actions/workflows/ci.yml"><img src="https://github.com/ftchvs/PlaidBar/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/ftchvs/PlaidBar/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
+  <a href="https://github.com/ftchvs/PlaidBar/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Proprietary-red.svg" alt="Proprietary License"></a>
   <img src="https://img.shields.io/badge/platform-macOS%2015%2B-lightgrey.svg" alt="macOS 15+">
   <img src="https://img.shields.io/badge/swift-6.0%2B-F05138.svg" alt="Swift 6.0+">
 </p>
 
 ---
 
-PlaidBar is an open-source macOS menu bar dashboard for [Plaid](https://plaid.com) data. It is designed in the spirit of tools like RepoBar and CodexBar: keep the high-signal numbers one click away, stay native to macOS, and avoid a hosted backend.
+PlaidBar is a macOS menu bar dashboard for [Plaid](https://plaid.com) data. It is designed in the spirit of tools like RepoBar and CodexBar: keep the high-signal numbers one click away, stay native to macOS, and avoid a hosted backend.
 
 **No cloud. No telemetry. All data stays local.**
 
 ## Why PlaidBar?
 
-Personal finance data lives behind bank website logins. The closest thing to a menu bar finance app was [Balance](https://balancemy.money/) — commercial and now defunct. PlaidBar fills that gap as an open-source, privacy-first alternative.
+Personal finance data lives behind bank website logins. The closest thing to a menu bar finance app was [Balance](https://balancemy.money/) — commercial and now defunct. PlaidBar fills that gap as a privacy-first, local-only product.
 
 - **Menu bar first** — A RepoBar-style popover with a 365-day heatmap, dense finance rows, and fast account drill-down
 - **Glanceable label** — Choose whether the menu bar shows net cash, total cash, credit utilization, recent spend, or icon-only, with a compact health signal on the icon
@@ -161,14 +161,11 @@ log at launch. App-managed launches always bind the app's own port, so
 supported there — set those as environment variables instead so the app and
 the server agree.
 
-### Homebrew
+### Installation
 
-Install PlaidBar from the repository tap:
-
-```bash
-brew tap ftchvs/plaidbar https://github.com/ftchvs/PlaidBar
-brew install plaidbar
-```
+PlaidBar is a proprietary product. Public Homebrew tap distribution has been
+discontinued; signed builds are distributed privately to licensed users. The
+commands below assume an installed build on your `PATH`.
 
 Run local demo data without Plaid credentials:
 
@@ -193,7 +190,9 @@ export PLAID_SECRET=your_sandbox_secret
 plaidbar-run --sandbox
 ```
 
-### Source build
+### Source build (licensed access only)
+
+Building from source requires authorized access to this private repository.
 
 ```bash
 git clone https://github.com/ftchvs/PlaidBar.git
@@ -375,7 +374,7 @@ PlaidBar/
 ├── PRD.md                           # Product requirements
 ├── .github/workflows/ci.yml        # GitHub Actions CI
 ├── Package.swift                    # SPM with 3 targets
-└── LICENSE                          # MIT
+└── LICENSE                          # Proprietary
 ```
 
 ## Plaid API Usage
@@ -402,11 +401,11 @@ Rate limits are well within Plaid's allowances for personal use (~2-4 requests/h
 | Network exposure | Server binds to `127.0.0.1` only |
 | App ↔ Server auth | Shared token generated at first run |
 | Data at rest | macOS encrypted APFS volume |
-| Distribution | Formula-only source build for v1.0.0; notarized app/cask remains post-1.0 until signing is real |
+| Distribution | Privately-distributed, ad-hoc-signed DMG; notarized app distribution remains post-1.0 until signing is real |
 
 **PlaidBar has no cloud backend, no analytics, no telemetry, and no tracking.** Your financial data never leaves your machine.
 
-Do not share real Plaid credentials, access tokens, account IDs, screenshots with balances, or bank transaction exports in public issues or pull requests. See [SECURITY.md](SECURITY.md) for responsible disclosure and local data handling notes.
+Do not share real Plaid credentials, access tokens, account IDs, screenshots with balances, or bank transaction exports in issues, pull requests, or support channels. See [SECURITY.md](SECURITY.md) for responsible disclosure and local data handling notes.
 
 ## Development
 
@@ -417,7 +416,7 @@ swift build
 # Build release
 swift build -c release
 
-# Run installed Homebrew commands
+# Run installed app bundle commands
 plaidbar --demo
 plaidbar-server --sandbox
 plaidbar-run --sandbox
@@ -447,7 +446,7 @@ PLAIDBAR_SERVER_PORT=9494 ./Scripts/run.sh --sandbox
 ./Scripts/setup.sh
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for code style, PR process, and architecture guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for internal development conventions (code style, architecture, build/test gates). PlaidBar is a proprietary product and does not accept public contributions.
 
 See [GOAL.md](GOAL.md) for the RepoBar/CodexBar-style product direction, design principles, and implementation priorities.
 
@@ -544,7 +543,6 @@ Deferred product candidates:
 - [ ] Investment account tracking (Plaid Investments)
 - [ ] CSV/JSON export for tax/accounting
 - [ ] Webhook support for real-time updates
-- [ ] Homebrew cask distribution
 - [ ] Dark/light theme customization
 - [ ] [Teller](https://teller.io/) as alternative provider
 
@@ -556,4 +554,4 @@ Deferred product candidates:
 
 ## License
 
-[MIT](LICENSE) — [Felipe Tavares Chaves](https://github.com/ftchvs)
+Proprietary — Copyright © 2026 [Felipe Tavares Chaves](https://github.com/ftchvs). All rights reserved. See [LICENSE](LICENSE). No use, copying, or distribution without a written agreement from the owner.

@@ -128,9 +128,9 @@ curated release messaging here.
 - README screenshot refresh for current dashboard, setup, and settings surfaces.
 - Version metadata alignment for the v0.5 release candidate.
 - 1.0 roadmap covering product, design/frontend, system architecture, security,
-  distribution, and open-source readiness.
-- Architecture, privacy, and troubleshooting docs for public contributors and
-  early users.
+  distribution, and release readiness.
+- Architecture, privacy, and troubleshooting docs for licensed users and internal
+  collaborators.
 
 ### Changed
 
@@ -147,7 +147,6 @@ curated release messaging here.
 
 - `git diff --check`
 - `bash -n Scripts/*.sh Scripts/plaidbar-run`
-- `ruby -c Formula/plaidbar.rb`
 - `swift build --target PlaidBar --skip-update --disable-keychain`
 - strict-concurrency build
 - release build
