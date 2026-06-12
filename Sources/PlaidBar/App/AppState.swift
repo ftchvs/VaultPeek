@@ -968,6 +968,7 @@ final class AppState {
     func resetLocalData() throws -> LocalDataResetResult {
         stopBackgroundRefresh()
 
+        let resetSetupCompletionDefaultsKey = setupCompletionDefaultsKey
         let result = try LocalDataStore.resetLocalData(at: activeStorageDirectoryURL)
 
         accounts = []
@@ -975,12 +976,12 @@ final class AppState {
         itemStatuses = []
         serverItemCount = 0
         serverCredentialsConfigured = nil
-        serverStoragePath = nil
         serverSyncReady = nil
         serverSyncedItemCount = nil
         lastSyncDate = nil
+        UserDefaults.standard.set(false, forKey: resetSetupCompletionDefaultsKey)
         isSetupComplete = false
-        persistSetupCompletion(false)
+        serverStoragePath = nil
         isDemoMode = false
         isDemoStatusRecoveryScenario = false
         error = nil
@@ -1284,8 +1285,8 @@ final class AppState {
 
     private func storedSetupCompletion() -> Bool {
         let defaults = UserDefaults.standard
-        if defaults.bool(forKey: setupCompletionDefaultsKey) {
-            return true
+        if let scopedValue = defaults.object(forKey: setupCompletionDefaultsKey) as? Bool {
+            return scopedValue
         }
 
         // One-time compatibility path for users who completed setup before
@@ -1390,6 +1391,7 @@ final class AppState {
     // MARK: - Demo Data
 
     func loadDemoData() {
+        isDemoMode = true
         isDemoStatusRecoveryScenario = CommandLine.arguments.contains("--screenshot-status-recovery")
 
         let today = Self.dateString(daysAgo: 0)
@@ -1500,7 +1502,6 @@ final class AppState {
         }
 
         isSetupComplete = true
-        isDemoMode = true
         serverConnected = true
         serverEnvironment = .sandbox
         serverVersion = PlaidBarConstants.appVersion
