@@ -36,45 +36,61 @@ struct DashboardFilterBar: View {
             accounts: appState.accounts,
             degradedItemIds: appState.degradedItemIds
         )
+        let statusItem = items.first { $0.kind == .status }
 
-        Picker("Account filter", selection: $selection) {
-            ForEach(items) { item in
-                Text(item.title)
-                    .accessibilityLabel(item.accessibilityLabel)
-                    .accessibilityValue(item.accessibilityValue)
-                    .tag(item.kind)
+        HStack(spacing: Spacing.xs) {
+            Picker("Account filter", selection: $selection) {
+                ForEach(items) { item in
+                    Text(item.title)
+                        .accessibilityLabel(item.accessibilityLabel)
+                        .accessibilityValue(item.accessibilityValue)
+                        .tag(item.kind)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .controlSize(.small)
+            .help(rollupText(items: items))
+            .background {
+                // Hidden, non-interactive keyboard equivalents: ⌘1-6 switch
+                // filters exactly as the old custom segments did.
+                ForEach(items) { item in
+                    Button("") { selection = item.kind }
+                        .keyboardShortcut(
+                            KeyEquivalent(Character("\(item.shortcutOrdinal)")),
+                            modifiers: .command
+                        )
+                        .buttonStyle(.plain)
+                        .focusable(false)
+                        .frame(width: 0, height: 0)
+                        .opacity(0)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+            }
+            .accessibilityElement(children: .contain)
+            // The selected-filter rollup lives in the container *label*, not the
+            // container value: macOS VoiceOver announces a group's label when
+            // entering it but does not reliably read a group's AXValue. The
+            // per-segment counts are rolled into the label too, because per-item
+            // modifiers do not reliably survive NSSegmentedControl bridging.
+            .accessibilityLabel(
+                "\(DashboardNavBarModel.containerAccessibilityLabel(selected: selection, items: items, hasSelectedAccount: hasSelectedAccount)). \(rollupText(items: items))"
+            )
+
+            // Visible, non-color attention signal for the Status segment.
+            // NSSegmentedControl bridging drops per-item SF Symbols, so the
+            // warning glyph lives adjacent to the picker. The symbol's shape
+            // (not its tint) carries the meaning; the warning color is
+            // redundant reinforcement only.
+            if let statusItem, statusItem.showsAttentionBadge, let iconName = statusItem.statusIconName {
+                Image(systemName: iconName)
+                    .font(.caption)
+                    .foregroundStyle(SemanticColors.warning)
+                    .help(statusItem.statusIndicatorAccessibilityLabel ?? "Needs attention")
+                    .accessibilityLabel(statusItem.statusIndicatorAccessibilityLabel ?? "Needs attention")
             }
         }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .controlSize(.small)
-        .help(rollupText(items: items))
-        .background {
-            // Hidden, non-interactive keyboard equivalents: ⌘1-6 switch
-            // filters exactly as the old custom segments did.
-            ForEach(items) { item in
-                Button("") { selection = item.kind }
-                    .keyboardShortcut(
-                        KeyEquivalent(Character("\(item.shortcutOrdinal)")),
-                        modifiers: .command
-                    )
-                    .buttonStyle(.plain)
-                    .focusable(false)
-                    .frame(width: 0, height: 0)
-                    .opacity(0)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
-            }
-        }
-        .accessibilityElement(children: .contain)
-        // The selected-filter rollup lives in the container *label*, not the
-        // container value: macOS VoiceOver announces a group's label when
-        // entering it but does not reliably read a group's AXValue. The
-        // per-segment counts are rolled into the label too, because per-item
-        // modifiers do not reliably survive NSSegmentedControl bridging.
-        .accessibilityLabel(
-            "\(DashboardNavBarModel.containerAccessibilityLabel(selected: selection, items: items, hasSelectedAccount: hasSelectedAccount)). \(rollupText(items: items))"
-        )
     }
 
     /// "All 4, Cash 2, Credit 2 (needs attention), …" — counts for every

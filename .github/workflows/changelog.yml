@@ -38,7 +38,7 @@ jobs:
           # Insert after header (line 5)
           if [ -f CHANGELOG.md ]; then
             head -5 CHANGELOG.md > /tmp/cl_top
-            printf "\n$ENTRY\n" > /tmp/cl_entry
+            printf '\n%b\n' "$ENTRY" > /tmp/cl_entry
             tail -n +6 CHANGELOG.md > /tmp/cl_rest
             cat /tmp/cl_top /tmp/cl_entry /tmp/cl_rest > CHANGELOG.md
           fi

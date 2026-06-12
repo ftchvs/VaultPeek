@@ -189,6 +189,11 @@ Available commands after installation:
 | Command | Purpose |
 |---------|---------|
 | `plaidbar --demo` | Launch the menu bar app with local fixture data |
+| `plaidbar-cli status --json` | Query the running local server with agent-friendly JSON output |
+| `plaidbar-cli item list` | List linked Plaid Items stored by PlaidBarServer |
+| `plaidbar-cli balance` | Fetch current balances through PlaidBarServer |
+| `plaidbar-cli transactions list --count 5` | Fetch recent transaction updates through PlaidBarServer |
+| `plaidbar-cli link --no-open --json` | Create a Hosted Link URL without opening a browser |
 | `plaidbar-server --sandbox` | Start the local Plaid companion server in sandbox mode |
 | `plaidbar-server --version` | Print the installed VaultPeek version |
 
@@ -214,6 +219,8 @@ few technical surfaces for compatibility, and those are not bugs:
 
 Rename history and upgrade guidance live in
 [docs/release-notes.md](docs/release-notes.md) and [CHANGELOG.md](CHANGELOG.md).
+
+`plaidbar-cli` follows the official Plaid CLI's terminal/agent conventions where they fit PlaidBar: table output by default, `--json` for structured stdout, diagnostics on stderr, and local-server bearer auth from `~/.plaidbar/auth-token`. It does not read Plaid Dashboard credentials directly; Plaid secrets and access tokens stay in `PlaidBarServer`.
 
 Run Plaid sandbox mode with the installed server and app:
 
@@ -281,6 +288,7 @@ PLAID_SECRET=your_secret
 PLAID_ENV=sandbox
 PLAIDBAR_DATA_DIR=~/.vaultpeek
 EOF
+chmod 600 ~/.vaultpeek/server.conf
 
 swift run PlaidBarServer --config ~/.vaultpeek/server.conf
 ```
@@ -401,11 +409,9 @@ PlaidBar/                            # repo checkout (repo rename pending)
 │   │   ├── Theme/                   # Design tokens, typography
 │   │   ├── Views/                   # Dashboard popover, setup, settings surfaces
 │   │   │   ├── MainPopover.swift    # Dashboard-first menu bar popover
-│   │   │   ├── AccountsView.swift   # Balance list by account type
-│   │   │   ├── TransactionsView.swift # Searchable grouped list
-│   │   │   ├── SpendingView.swift   # Donut/heatmap/trend/bar charts
-│   │   │   ├── CreditView.swift     # Utilization bars + gauge
-│   │   │   ├── StatusView.swift     # Diagnostics and recovery actions
+│   │   │   ├── DashboardNavBand.swift # Cash/Credit/Savings/Debt/Status filters
+│   │   │   ├── AccountDetailFlyout.swift # Per-account drill-in fly-out
+│   │   │   ├── AttentionQueueView.swift # Degraded-item recovery surface
 │   │   │   ├── SetupView.swift      # Onboarding flow
 │   │   │   └── Charts/             # Chart components
 │   │   ├── Models/                  # Local cache models
@@ -419,7 +425,7 @@ PlaidBar/                            # repo checkout (repo rename pending)
 │   └── PlaidBarCore/                # Shared library
 │       ├── Models/                  # DTOs (Account, Transaction, etc.)
 │       └── Utilities/               # Currency formatters, constants
-├── Tests/                           # 61 tests across 3 suites
+├── Tests/                           # Swift Testing suites for all 3 targets
 ├── Scripts/                         # build.sh, run.sh, screenshots.sh
 ├── Assets/                          # README screenshots
 ├── DESIGN.md                        # Design system spec

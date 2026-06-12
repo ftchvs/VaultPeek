@@ -154,13 +154,11 @@ Single `@Observable` state object injected via SwiftUI `@Environment`. No Combin
 ```
 MenuBarExtra
 ├── MenuBarLabel (icon + balance text)
-└── MainPopover
+└── MainPopover (dashboard-first surface)
     ├── SetupView (if !isSetupComplete)
-    └── TabContainer
-        ├── AccountsView (grouped by type, net balance)
-        ├── TransactionsView (search, group by date)
-        ├── SpendingView (donut chart, category breakdown)
-        └── CreditView (utilization bars, warnings)
+    ├── DashboardNavBand (Cash/Credit/Savings/Debt/Status filters)
+    ├── AttentionQueueView (degraded-item recovery)
+    └── AccountDetailFlyout (per-account drill-in)
 ```
 
 **Background Refresh:**
@@ -269,6 +267,8 @@ Unit tests span 3 suites, all using Swift Testing framework:
 | PlaidBarTests | Business logic: net balance, spending aggregation, filtering |
 
 Server integration tests (starting Hummingbird, making HTTP calls) are planned for v0.2.
+
+Suite size is not hard-coded in these docs; derive the current count with `swift test list` or a ripgrep over `Tests/` (`rg -n "@Test" Tests/`), which is the source of truth.
 
 ## Future Architecture Considerations
 
