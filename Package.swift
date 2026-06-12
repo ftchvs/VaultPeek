@@ -30,6 +30,7 @@ let package = Package(
     products: [
         .executable(name: "PlaidBar", targets: ["PlaidBar"]),
         .executable(name: "PlaidBarServer", targets: ["PlaidBarServer"]),
+        .executable(name: "plaidbar-cli", targets: ["PlaidBarCLI"]),
         .library(name: "PlaidBarCore", targets: ["PlaidBarCore"]),
     ],
     dependencies: [
@@ -74,6 +75,17 @@ let package = Package(
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ],
             path: "Sources/PlaidBarServer",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+
+        // MARK: - PlaidBar CLI (Local command-line client)
+        .executableTarget(
+            name: "PlaidBarCLI",
+            dependencies: [
+                "PlaidBarCore",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ],
+            path: "Sources/PlaidBarCLI",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
 
