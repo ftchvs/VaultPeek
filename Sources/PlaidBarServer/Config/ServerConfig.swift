@@ -50,6 +50,9 @@ struct ServerConfig: Sendable {
         sandboxOverride: Bool? = nil
     ) throws -> ServerConfig {
         let environmentValues = try resolvedEnvironment(from: configPath)
+        if environmentValues[LocalDataStore.dataDirectoryEnvironmentVariable]?.trimmedNonEmpty == nil {
+            try LocalDataStore.migrateLegacyDefaultStorageIfNeeded()
+        }
         let dataDir = dataDirectory(environment: environmentValues)
         try FileManager.default.createDirectory(
             atPath: dataDir,
