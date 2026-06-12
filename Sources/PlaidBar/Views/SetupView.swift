@@ -39,7 +39,7 @@ struct SetupView: View {
             }
         }
         .padding()
-        .frame(width: 520)
+        .frame(maxWidth: .infinity)
         .animation(.easeInOut(duration: 0.25), value: setupMode)
     }
 
