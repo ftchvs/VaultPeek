@@ -1,11 +1,11 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "PlaidBar Setup"
-echo "=============="
+echo "VaultPeek Setup"
+echo "==============="
 echo ""
 
-DATA_DIR="$HOME/.plaidbar"
+DATA_DIR="$HOME/.vaultpeek"
 
 # Create data directory
 mkdir -p "$DATA_DIR"
@@ -35,11 +35,11 @@ fi
 
 # Build
 echo ""
-echo "Building PlaidBar..."
+echo "Building VaultPeek..."
 swift build 2>&1
 
 echo ""
-echo "Setup complete! Run PlaidBar with:"
+echo "Setup complete! Run VaultPeek with:"
 echo "  swift run PlaidBar --demo    # Local fixture demo"
 echo "  ./Scripts/run.sh --sandbox   # Plaid sandbox"
 echo "  ./Scripts/run.sh             # Production mode"

@@ -1,9 +1,11 @@
 # Release Runbook
 
-PlaidBar is proprietary software distributed privately to licensed users. The
-public Homebrew tap has been retired and `Formula/plaidbar.rb` removed.
+VaultPeek (formerly PlaidBar) is proprietary software distributed privately to
+licensed users. Homebrew distribution is discontinued: the public tap has been
+retired and `Formula/plaidbar.rb` removed. The DMG is the distribution channel.
 
-PlaidBar 1.0 ships as a drag-install DMG built with `./Scripts/package-dmg.sh`:
+VaultPeek ships as a drag-install `VaultPeek-<version>.dmg` built with
+`./Scripts/package-dmg.sh`:
 it wraps a self-contained `VaultPeek.app` (app + bundled `PlaidBarServer`,
 auto-started on launch) with an `/Applications` symlink. The DMG is currently
 ad-hoc signed; Developer ID signing, notarization, and the Sparkle appcast
@@ -20,12 +22,13 @@ regenerate `Sources/PlaidBar/Resources/AppIcon.icns` after design changes.
 - 1.0 distribution shape: privately-distributed drag-install DMG
 - GitHub release: tagged from clean `main` (private repo)
 
-Bundled commands (inside `VaultPeek.app`):
+Bundled commands (inside `VaultPeek.app`; executable names stay
+`plaidbar`/`plaidbar-server` until the staged SwiftPM product rename):
 
 ```bash
 plaidbar --demo
 plaidbar-server --sandbox
-plaidbar-run --sandbox
+vaultpeek-run --sandbox   # plaidbar-run remains a deprecated alias
 ```
 
 ## Release-Prep PR Checklist
@@ -74,8 +77,17 @@ Then build and verify the distributable DMG on a clean release machine:
 
 ```bash
 ./Scripts/package-dmg.sh
-./Scripts/validate-app-bundle.sh
+./Scripts/validate-app-bundle.sh .build/VaultPeek.app
 ```
+
+Clean-install verification (required before distributing):
+
+1. Copy `.build/VaultPeek-<version>.dmg` to a machine (or fresh user account)
+   without a prior install or `~/.vaultpeek` data directory.
+2. Open the DMG, drag `VaultPeek.app` to `/Applications`, and launch via
+   right-click > Open (ad-hoc signed build).
+3. Confirm the menu bar item appears and the bundled server reports healthy
+   in the Status view before distributing.
 
 Distribute the resulting DMG privately to licensed users.
 
@@ -86,9 +98,9 @@ companion server, and launcher:
 
 - `plaidbar`
 - `plaidbar-server`
-- `plaidbar-run`
+- `vaultpeek-run` (with `plaidbar-run` kept as a deprecated alias)
 
-The ad-hoc-signed DMG is acceptable for 1.0 because PlaidBar is local-first and
+The ad-hoc-signed DMG is acceptable for 1.0 because VaultPeek is local-first and
 distributed privately to a controlled set of licensed users who can complete the
 first-launch right-click > Open step.
 

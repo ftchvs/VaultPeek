@@ -10,7 +10,7 @@ usage() {
     cat <<'EOF'
 Usage: ./Scripts/release.sh [--publish] [--allow-current-branch]
 
-Preflights the current PlaidBar release. With --publish, creates and pushes the
+Preflights the current VaultPeek release. With --publish, creates and pushes the
 version tag, then creates a GitHub release for ftchvs/PlaidBar.
 
 This script expects to run from a clean main branch after CI has passed.
@@ -101,11 +101,6 @@ if [[ "$RUNTIME_VERSION" != "$VERSION" ]]; then
     exit 1
 fi
 
-if ! grep -Fq "tag: \"$TAG\"" Formula/plaidbar.rb; then
-    echo "Formula/plaidbar.rb does not reference $TAG" >&2
-    exit 1
-fi
-
 echo "Running release gates for $TAG..."
 swift build -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors --disable-keychain
 swift build -c release -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors --disable-keychain
@@ -115,8 +110,7 @@ if [[ "${PLAIDBAR_RELEASE_SKIP_TESTS:-0}" == "1" ]]; then
 else
     swift test --skip-update --disable-keychain
 fi
-bash -n Scripts/*.sh Scripts/plaidbar-run
-ruby -c Formula/plaidbar.rb
+bash -n Scripts/*.sh Scripts/vaultpeek-run Scripts/plaidbar-run
 
 if git rev-parse "$TAG" >/dev/null 2>&1; then
     echo "Tag $TAG already exists locally" >&2
@@ -135,11 +129,11 @@ if [[ "$PUBLISH" != "true" ]]; then
     exit 0
 fi
 
-git tag -a "$TAG" -m "PlaidBar $TAG"
+git tag -a "$TAG" -m "VaultPeek $TAG"
 git push origin "$TAG"
 gh release create "$TAG" \
     --repo ftchvs/PlaidBar \
-    --title "PlaidBar $TAG" \
+    --title "VaultPeek $TAG" \
     --generate-notes
 
 echo "Published $TAG."

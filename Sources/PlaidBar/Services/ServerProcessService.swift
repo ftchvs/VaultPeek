@@ -3,10 +3,10 @@ import Foundation
 import PlaidBarCore
 
 /// Starts and supervises the `PlaidBarServer` executable bundled inside
-/// `PlaidBar.app`, so a drag-installed app works without a manual server step.
+/// `VaultPeek.app`, so a drag-installed app works without a manual server step.
 ///
 /// The service only ever manages a server it spawned itself. Externally
-/// started servers (Homebrew `plaidbar-run`, `Scripts/run.sh`, manual runs)
+/// started servers (`Scripts/vaultpeek-run`, `Scripts/run.sh`, manual runs)
 /// are detected through an unauthenticated `/health` probe before any spawn
 /// decision and left alone.
 @MainActor

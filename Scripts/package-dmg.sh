@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Build a drag-install PlaidBar DMG around the self-contained VaultPeek.app.
+# Build a drag-install VaultPeek DMG around the self-contained VaultPeek.app.
 #
 # Usage: ./Scripts/package-dmg.sh
 #
-# Produces .build/PlaidBar-<version>.dmg containing VaultPeek.app and an
+# Produces .build/VaultPeek-<version>.dmg containing VaultPeek.app and an
 # /Applications symlink. The app bundle includes PlaidBarServer, which the
 # app starts automatically on first launch, so non-developers only drag,
 # drop, and open.
@@ -19,7 +19,7 @@ APP_DIR="${PLAIDBAR_PACKAGE_APP_DIR:-$PROJECT_DIR/.build/VaultPeek.app}"
 # Keep package-app.sh writing to the exact bundle path this script stages.
 export PLAIDBAR_PACKAGE_APP_DIR="$APP_DIR"
 STAGING_DIR="$PROJECT_DIR/.build/dmg-staging"
-VOLUME_NAME="PlaidBar"
+VOLUME_NAME="VaultPeek"
 
 cd "$PROJECT_DIR"
 
@@ -36,7 +36,7 @@ if [ -z "${VERSION:-}" ]; then
     exit 1
 fi
 
-DMG_PATH="$PROJECT_DIR/.build/PlaidBar-$VERSION.dmg"
+DMG_PATH="$PROJECT_DIR/.build/VaultPeek-$VERSION.dmg"
 
 "$SCRIPT_DIR/package-app.sh"
 

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# PlaidBar screenshot pipeline
+# VaultPeek screenshot pipeline
 # Captures onboarding, dashboard, and settings states for README.md.
+# Window/process lookups still target "PlaidBar" because the executable name
+# keeps that identity until the staged SwiftPM product rename lands.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -9,7 +11,7 @@ ASSETS_DIR="$PROJECT_DIR/Assets"
 
 mkdir -p "$ASSETS_DIR"
 
-echo "Building PlaidBar in release mode..."
+echo "Building VaultPeek in release mode..."
 cd "$PROJECT_DIR"
 swift build -c release --disable-keychain
 
