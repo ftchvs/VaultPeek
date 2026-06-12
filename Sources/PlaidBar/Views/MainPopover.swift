@@ -484,53 +484,39 @@ private struct BalanceCompositionStrip: View {
 
     private let segmentSpacing: CGFloat = 2
 
-    private var segments: [BalanceCompositionSegment] {
-        [
-            BalanceCompositionSegment(
-                title: "Cash",
-                value: AccountPresentation.positiveBalanceTotal(
-                    from: appState.accounts,
-                    type: .depository
-                ),
-                tint: Color.secondary.opacity(0.6)
-            ),
-            BalanceCompositionSegment(
-                title: "Investments",
-                value: AccountPresentation.positiveBalanceTotal(
-                    from: appState.accounts,
-                    type: .investment
-                ),
-                tint: Color.primary.opacity(0.36)
-            ),
-            BalanceCompositionSegment(
-                title: "Credit",
-                value: AccountPresentation.debtBalanceTotal(
-                    from: appState.accounts,
-                    type: .credit
-                ),
-                tint: SemanticColors.creditDebt
-            ),
-            BalanceCompositionSegment(
-                title: "Loans",
-                value: AccountPresentation.debtBalanceTotal(
-                    from: appState.accounts,
-                    type: .loan
-                ),
-                tint: SemanticColors.warning
-            ),
-        ]
+    private var presentation: BalanceCompositionPresentation {
+        BalanceCompositionPresentation(accounts: appState.accounts)
     }
 
     private var activeSegments: [BalanceCompositionSegment] {
-        segments.filter { $0.value > 0 }
+        presentation.segments.map { segment in
+            BalanceCompositionSegment(
+                title: segment.title,
+                value: segment.value,
+                share: segment.share,
+                tint: tint(for: segment.id)
+            )
+        }
     }
 
-    private var total: Double {
-        max(activeSegments.reduce(0) { $0 + $1.value }, 1)
+    private func tint(for id: String) -> Color {
+        switch id {
+        case "cash": Color.secondary.opacity(0.6)
+        case "investments": Color.primary.opacity(0.36)
+        case "credit": SemanticColors.creditDebt
+        case "loans": SemanticColors.warning
+        default: Color.secondary.opacity(0.6)
+        }
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
+        // Derive the active segments once per render: rebuilding the
+        // presentation re-filters the account list, so computing it here and
+        // threading the result (and its count) through the helpers avoids
+        // re-running that work for every segment in the strip and legend.
+        let activeSegments = activeSegments
+
+        return VStack(alignment: .leading, spacing: Spacing.sm) {
             HStack {
                 Text("Balance Mix")
                     .sectionTitle()
@@ -546,7 +532,13 @@ private struct BalanceCompositionStrip: View {
                     ForEach(activeSegments) { segment in
                         RoundedRectangle(cornerRadius: Radius.cell)
                             .fill(segment.fillColor)
-                            .frame(width: segmentWidth(segment, totalWidth: proxy.size.width))
+                            .frame(
+                                width: segmentWidth(
+                                    segment,
+                                    totalWidth: proxy.size.width,
+                                    segmentCount: activeSegments.count
+                                )
+                            )
                             .accessibilityLabel(
                                 "\(segment.title), \(Formatters.currency(segment.value, format: .compact)), \(segmentPercentText(segment)) of balance mix"
                             )
@@ -556,7 +548,7 @@ private struct BalanceCompositionStrip: View {
             .frame(height: 7)
 
             HStack(spacing: Spacing.sm) {
-                ForEach(segments) { segment in
+                ForEach(activeSegments) { segment in
                     BalanceCompositionLegend(segment: segment)
                 }
             }
@@ -566,20 +558,25 @@ private struct BalanceCompositionStrip: View {
         .accessibilityElement(children: .contain)
     }
 
-    private func segmentWidth(_ segment: BalanceCompositionSegment, totalWidth: CGFloat) -> CGFloat {
-        let gaps = CGFloat(max(activeSegments.count - 1, 0)) * segmentSpacing
+    private func segmentWidth(
+        _ segment: BalanceCompositionSegment,
+        totalWidth: CGFloat,
+        segmentCount: Int
+    ) -> CGFloat {
+        let gaps = CGFloat(max(segmentCount - 1, 0)) * segmentSpacing
         let availableWidth = max(totalWidth - gaps, 0)
-        return max(availableWidth * CGFloat(segment.value / total), 6)
+        return max(availableWidth * CGFloat(segment.share), 6)
     }
 
     private func segmentPercentText(_ segment: BalanceCompositionSegment) -> String {
-        "\(Int((segment.value / total * 100).rounded()))%"
+        "\(Int((segment.share * 100).rounded()))%"
     }
 }
 
 private struct BalanceCompositionSegment: Identifiable {
     let title: String
     let value: Double
+    let share: Double
     let tint: Color
 
     var id: String {
