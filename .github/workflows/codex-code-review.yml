@@ -1,5 +1,13 @@
 name: Codex Code Review
 
+# Durable OAuth gate. Auth is seeded from the CODEX_AUTH_JSON_B64 secret and the
+# refreshed auth.json is persisted back to that secret after every run (OpenAI's
+# documented restore -> run -> persist round-trip for ephemeral runners). The
+# persist step requires a fine-grained PAT with repository "Secrets: write"
+# exposed as the CODEX_SECRET_WRITE_TOKEN secret. Without that token the gate
+# still runs but keeps using the static seed, which expires (~8 days idle or when
+# the ChatGPT-login refresh token rotates) and will then 401 on every PR.
+
 on:
   pull_request:
     branches: [main]
@@ -7,6 +15,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   codex-review:
@@ -83,8 +95,12 @@ jobs:
           - Never print credentials, tokens, auth files, environment variables, or GitHub secrets in your review output.
 
           Output format:
-          - If there are no blocking P0/P1 issues, say exactly: Codex CI review passed: no blocking issues found.
-          - If there are blocking issues, list each issue with file/line evidence and the user impact.
+          - Write your review first: for each blocking issue, give file/line evidence and the user impact. If there are no blocking issues, say so briefly.
+          - The VERY LAST line of your output MUST be exactly one of these two sentinels, with nothing else on that line:
+              VERDICT: PASS
+              VERDICT: FAIL
+          - Emit "VERDICT: PASS" only if there are no blocking P0/P1 issues. Emit "VERDICT: FAIL" if there is any blocking issue.
+          - Do not write the token "VERDICT:" anywhere except on that final line.
           PROMPT
 
           {
@@ -98,11 +114,40 @@ jobs:
 
           codex exec --sandbox read-only --cd "$GITHUB_WORKSPACE" "$(cat "$RUNNER_TEMP/codex-review-prompt.md")" | tee "$RUNNER_TEMP/codex-review-output.txt"
 
-          if grep -Eiq '(^|[^a-z])(blocking|p0|p1|security issue|privacy issue|correctness issue)([^a-z]|$)' "$RUNNER_TEMP/codex-review-output.txt" \
-            && ! grep -Fq 'Codex CI review passed: no blocking issues found.' "$RUNNER_TEMP/codex-review-output.txt"; then
-            echo "Codex reported blocking review findings."
+          # Fail closed on a machine-readable sentinel instead of grepping prose.
+          # A non-zero codex exec (e.g. a 401 once the seed is stale) already fails
+          # the step via pipefail before reaching this point.
+          verdict="$(grep -E '^VERDICT: (PASS|FAIL)$' "$RUNNER_TEMP/codex-review-output.txt" | tail -n1 || true)"
+          if [ "$verdict" != "VERDICT: PASS" ]; then
+            echo "Codex did not return an explicit PASS verdict (got: '${verdict:-<none>}'). Failing closed."
             exit 1
           fi
+          echo "Codex review passed: explicit VERDICT: PASS."
+
+      - name: Persist refreshed Codex OAuth session
+        # OpenAI's CI round-trip: write the (possibly refreshed) auth.json back to
+        # the secret so ephemeral runners do not keep starting from a stale seed.
+        # Runs even when the review failed, so a token refreshed mid-run is kept.
+        if: always()
+        env:
+          CODEX_HOME: ${{ runner.temp }}/codex-home
+          CODEX_SECRET_WRITE_TOKEN: ${{ secrets.CODEX_SECRET_WRITE_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CODEX_SECRET_WRITE_TOKEN:-}" ]; then
+            echo "::warning::CODEX_SECRET_WRITE_TOKEN is not set; skipping OAuth round-trip."
+            echo "The gate will keep using the static CODEX_AUTH_JSON_B64 seed, which expires (~8 days)."
+            echo "Add a fine-grained PAT with repository 'Secrets: write' as CODEX_SECRET_WRITE_TOKEN to enable durable OAuth."
+            exit 0
+          fi
+          if [ ! -f "$CODEX_HOME/auth.json" ]; then
+            echo "No auth.json present (Codex auth never initialized this run); nothing to persist."
+            exit 0
+          fi
+          encoded="$(base64 < "$CODEX_HOME/auth.json" | tr -d '\n')"
+          printf '%s' "$encoded" | GH_TOKEN="$CODEX_SECRET_WRITE_TOKEN" gh secret set CODEX_AUTH_JSON_B64 --repo "$GH_REPO"
+          echo "Persisted refreshed Codex auth.json back to CODEX_AUTH_JSON_B64."
 
       - name: Post Codex review summary
         if: always()
@@ -114,10 +159,14 @@ jobs:
             const fs = require('fs');
             const path = process.env.CODEX_OUTPUT_PATH;
             if (!fs.existsSync(path)) return;
-            const output = fs.readFileSync(path, 'utf8').slice(-60000);
+            const output = fs.readFileSync(path, 'utf8');
+            // Only comment when Codex actually produced a verdict. This skips the
+            // infra-failure paths (secret missing, 401, empty/garbled output) where
+            // the body would otherwise be posted and mistaken for a real review.
+            if (!/^VERDICT: (PASS|FAIL)$/m.test(output)) return;
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.payload.pull_request.number,
-              body: `## Codex CI review\n\n${output}`,
+              body: `## Codex CI review\n\n${output.slice(-60000)}`,
             });
