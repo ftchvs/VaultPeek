@@ -510,7 +510,13 @@ private struct BalanceCompositionStrip: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
+        // Derive the active segments once per render: rebuilding the
+        // presentation re-filters the account list, so computing it here and
+        // threading the result (and its count) through the helpers avoids
+        // re-running that work for every segment in the strip and legend.
+        let activeSegments = activeSegments
+
+        return VStack(alignment: .leading, spacing: Spacing.sm) {
             HStack {
                 Text("Balance Mix")
                     .sectionTitle()
@@ -526,7 +532,13 @@ private struct BalanceCompositionStrip: View {
                     ForEach(activeSegments) { segment in
                         RoundedRectangle(cornerRadius: Radius.cell)
                             .fill(segment.fillColor)
-                            .frame(width: segmentWidth(segment, totalWidth: proxy.size.width))
+                            .frame(
+                                width: segmentWidth(
+                                    segment,
+                                    totalWidth: proxy.size.width,
+                                    segmentCount: activeSegments.count
+                                )
+                            )
                             .accessibilityLabel(
                                 "\(segment.title), \(Formatters.currency(segment.value, format: .compact)), \(segmentPercentText(segment)) of balance mix"
                             )
@@ -546,8 +558,12 @@ private struct BalanceCompositionStrip: View {
         .accessibilityElement(children: .contain)
     }
 
-    private func segmentWidth(_ segment: BalanceCompositionSegment, totalWidth: CGFloat) -> CGFloat {
-        let gaps = CGFloat(max(activeSegments.count - 1, 0)) * segmentSpacing
+    private func segmentWidth(
+        _ segment: BalanceCompositionSegment,
+        totalWidth: CGFloat,
+        segmentCount: Int
+    ) -> CGFloat {
+        let gaps = CGFloat(max(segmentCount - 1, 0)) * segmentSpacing
         let availableWidth = max(totalWidth - gaps, 0)
         return max(availableWidth * CGFloat(segment.share), 6)
     }
