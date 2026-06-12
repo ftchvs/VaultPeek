@@ -199,6 +199,6 @@ Still run the smaller local gates:
 
 ```bash
 git diff --check
-bash -n Scripts/*.sh Scripts/plaidbar-run
+bash -n Scripts/*.sh Scripts/vaultpeek-run Scripts/plaidbar-run
 swift build --target PlaidBar --skip-update --disable-keychain
 ```

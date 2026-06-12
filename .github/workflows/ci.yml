@@ -27,7 +27,7 @@ jobs:
 
       - name: Packaging checks
         run: |
-          bash -n Scripts/*.sh Scripts/plaidbar-run
+          bash -n Scripts/*.sh Scripts/vaultpeek-run Scripts/plaidbar-run
 
       - name: Clear stale SwiftPM binary artifact cache
         run: |
