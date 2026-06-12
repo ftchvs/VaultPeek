@@ -62,7 +62,8 @@ local storage, notifications, and distribution.
 | Status contract test | Encoded `ServerStatus` contains only release-approved keys |
 | Auth middleware | `/api/*` rejects missing/invalid bearer token |
 | Auth comparison | Bearer token comparison accepts only exact token strings |
-| Data directory | `~/.plaidbar/` uses private user permissions where supported |
+| Data directory | `~/.vaultpeek/` uses private user permissions where supported |
+| Legacy storage migration | Missing default files copy from `~/.plaidbar/` without overwriting newer `~/.vaultpeek/` files |
 | Auth token | `auth-token` uses private file permissions where supported |
 | Plaid tokens | Runtime stores access-token bytes in Keychain when available; fallback builds are documented |
 | Sandbox/production | Stores and transaction cache are scoped by environment |

@@ -5,7 +5,7 @@ import Testing
 @Suite("Server Auto-Launch Plan Tests")
 struct ServerAutoLaunchPlanTests {
     private let bundledPath = "/Applications/PlaidBar.app/Contents/MacOS/PlaidBarServer"
-    private let dataDirectory = "/Users/example/.plaidbar"
+    private let dataDirectory = "/Users/example/.vaultpeek"
 
     @Test("Plan launches the bundled server with the configured server.conf")
     func planLaunchesBundledServer() throws {
@@ -22,11 +22,11 @@ struct ServerAutoLaunchPlanTests {
 
         #expect(plan.executablePath == bundledPath)
         #expect(plan.arguments == [
-            "--config", "/Users/example/.plaidbar/server.conf",
+            "--config", "/Users/example/.vaultpeek/server.conf",
             "--port", "8484",
             "--exit-with-parent", "4242",
         ])
-        #expect(plan.logFilePath == "/Users/example/.plaidbar/server.log")
+        #expect(plan.logFilePath == "/Users/example/.vaultpeek/server.log")
     }
 
     @Test("Plan normalizes a trailing slash in the data directory")
@@ -42,9 +42,9 @@ struct ServerAutoLaunchPlanTests {
             parentProcessId: 4242
         ))
 
-        #expect(plan.logFilePath == "/Users/example/.plaidbar/server.log")
+        #expect(plan.logFilePath == "/Users/example/.vaultpeek/server.log")
         #expect(plan.arguments.contains("--config"))
-        #expect(plan.arguments.contains("/Users/example/.plaidbar/server.conf"))
+        #expect(plan.arguments.contains("/Users/example/.vaultpeek/server.conf"))
     }
 
     @Test("Plan declines when managed server config moves the data directory")
@@ -110,7 +110,7 @@ struct ServerAutoLaunchPlanTests {
             "--port", "8484",
             "--exit-with-parent", "4242",
         ])
-        #expect(plan.logFilePath == "/Users/example/.plaidbar/server.log")
+        #expect(plan.logFilePath == "/Users/example/.vaultpeek/server.log")
     }
 
     @Test("Plan declines when server.conf exists but cannot be read")

@@ -145,8 +145,8 @@ and `docs/autonomous-roadmap.md`.
 
 ### PR-011: Local Data Controls
 
-- [ ] T051: Keep Settings visibly anchored on `~/.plaidbar/` or the configured
-  `PLAIDBAR_DATA_DIR`.
+- [ ] T051: Keep Settings visibly anchored on the default local data path or
+  the configured `PLAIDBAR_DATA_DIR`.
 - [ ] T052: Ensure copy and reveal actions avoid leaking secrets in labels or
   logs.
 - [ ] T053: Confirm reset/delete copy explains local-vs-Plaid-vs-bank
