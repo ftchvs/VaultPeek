@@ -84,7 +84,10 @@ struct MainPopover: View {
         // window's right edge so the extra width grows leftward instead of
         // letting AppKit re-center the widened popover under the menu bar item.
         .background {
-            PopoverTrailingEdgeAnchor(isExpanded: selectedAccount != nil && !shouldShowSetupScreen)
+            PopoverTrailingEdgeAnchor(
+                isExpanded: selectedAccount != nil && !shouldShowSetupScreen,
+                collapsedWidth: Layout.dashboardWidth
+            )
         }
         .animation(
             MotionTokens.animation(MotionTokens.content, reduceMotion: reduceMotion),
