@@ -8,6 +8,7 @@ struct MainPopover: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("dashboard.accountFilter") private var selectedFilterRawValue = DashboardAccountFilter.all.rawValue
     @AppStorage("dashboard.selectedAccountId") private var selectedAccountId = ""
+    @AppStorage(PopoverTransparencySetting.storageKey) private var popoverTransparency = PopoverTransparencySetting.defaultValue
     @State private var isShowingAccountSetup = false
     @State private var shouldShowSetupRecoveryDashboard = false
     @State private var dashboardContentHeight: CGFloat = 0
@@ -78,8 +79,13 @@ struct MainPopover: View {
         }
         .frame(width: popoverWidth)
         // Stronger liquid-glass transparency: the thinnest system material
-        // lets the desktop read through the popover while staying legible.
-        .background(.ultraThinMaterial)
+        // lets the desktop read through the popover while the persisted
+        // overlay setting enforces a legibility floor.
+        .background {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .overlay(Color(nsColor: .windowBackgroundColor).opacity(transparencySetting.materialOverlayOpacity))
+        }
         // Keep the dashboard stationary when the fly-out opens: pin the
         // window's right edge so the extra width grows leftward instead of
         // letting AppKit re-center the widened popover under the menu bar item.
@@ -138,6 +144,10 @@ struct MainPopover: View {
         // between window sizes.
         guard !shouldShowSetupScreen else { return Layout.dashboardWidth }
         return Layout.dashboardWidth + (selectedAccount == nil ? 0 : Layout.flyoutWidth + 1)
+    }
+
+    private var transparencySetting: PopoverTransparencySetting {
+        PopoverTransparencySetting(value: popoverTransparency)
     }
 
     private var dashboardColumn: some View {
