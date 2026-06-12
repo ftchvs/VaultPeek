@@ -903,12 +903,12 @@ struct PlaidBarCoreTests {
         let collapsed = DashboardAccountDrillInPath.presentation(for: account, isSelected: false)
         let expanded = DashboardAccountDrillInPath.presentation(for: account, isSelected: true)
 
-        #expect(collapsed.accessibilityHint == "Press Return or Space to open the account details panel beside the dashboard.")
+        #expect(collapsed.accessibilityHint == "Press Return or Space to open the account drill-in below this row.")
         #expect(collapsed.accessibilityActionName == "Open account details")
         #expect(collapsed.pointerHelp == "Open details for Everyday")
-        #expect(expanded.accessibilityHint == "Press Return or Space to close the account details panel.")
-        #expect(expanded.accessibilityActionName == "Close account details")
-        #expect(expanded.pointerHelp == "Close details for Everyday")
+        #expect(expanded.accessibilityHint == "Press Return or Space to collapse the account drill-in.")
+        #expect(expanded.accessibilityActionName == "Collapse account details")
+        #expect(expanded.pointerHelp == "Collapse details for Everyday")
         #expect(!collapsed.pointerHelp.contains(account.id))
         #expect(!collapsed.pointerHelp.contains(account.itemId))
     }
