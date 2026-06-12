@@ -5,20 +5,38 @@ import SwiftUI
 struct MainPopover: View {
     @Environment(AppState.self) private var appState
     @Environment(\.openSettings) private var openSettings
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("dashboard.accountFilter") private var selectedFilterRawValue = DashboardAccountFilter.all.rawValue
     @AppStorage("dashboard.selectedAccountId") private var selectedAccountId = ""
     @State private var isShowingAccountSetup = false
     @State private var shouldShowSetupRecoveryDashboard = false
+    @State private var dashboardContentHeight: CGFloat = 0
 
     private enum Layout {
         static let dashboardWidth: CGFloat = 480
-        static let setupWidth: CGFloat = 560
+        static let flyoutWidth: CGFloat = 320
         static let dashboardMinHeight: CGFloat = 460
-        static let dashboardMaxHeight = CGFloat(DashboardOverviewHeightBudget.realisticPopoverHeight)
+        /// Vertical breathing room kept below the popover: menu bar,
+        /// footer chrome, and a Dock-safe margin.
+        static let screenHeightInset: CGFloat = 120
+
         static let contentHorizontalPadding: CGFloat = 12
         static let contentTopPadding: CGFloat = 8
         static let contentBottomPadding: CGFloat = 8
-        static let sectionSpacing: CGFloat = 7
+        static let sectionSpacing: CGFloat = Spacing.sm
+        static let groupSpacing: CGFloat = Spacing.lg
+    }
+
+    /// RepoBar-style vertical sizing: the dashboard grows with its content
+    /// up to the available screen height instead of stopping at a fixed
+    /// budget. Short content hugs; long content fills the screen and
+    /// scrolls. Falls back to the height-budget model when no screen is
+    /// available (headless renders).
+    private var dashboardScrollHeight: CGFloat {
+        let fallback = CGFloat(DashboardOverviewHeightBudget.realisticPopoverHeight)
+        let screenCap = NSScreen.main.map { $0.visibleFrame.height - Layout.screenHeightInset } ?? fallback
+        let contentCap = dashboardContentHeight > 0 ? dashboardContentHeight : screenCap
+        return max(Layout.dashboardMinHeight, min(screenCap, contentCap))
     }
 
     private var selectedFilter: DashboardAccountFilter {
@@ -36,96 +54,38 @@ struct MainPopover: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            if shouldShowSetupScreen {
-                SetupView()
-                    .frame(width: Layout.setupWidth)
-            } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
-                        DashboardHeader()
-                            .environment(appState)
-
-                        DashboardStatusStrip(
-                            openSettings: { openSettings() },
-                            onAddAccount: openAccountSetup
-                        )
-                            .environment(appState)
-
-                        if selectedAccount == nil {
-                            DashboardChangeReceiptStrip()
-                                .environment(appState)
-                        }
-
-                        if shouldElevateStatusReadinessPanel {
-                            AttentionQueueView(title: "Attention", onAddAccount: openAccountSetup)
-                                .environment(appState)
-
-                            DashboardStatusReadinessPanel(
-                                openSettings: { openSettings() },
-                                onAddAccount: openAccountSetup
-                            )
-                            .environment(appState)
-                        }
-
-                        DashboardOverviewStack(
-                            transactions: appState.transactions,
-                            accounts: filteredAccounts,
-                            filter: selectedFilter,
-                            filterSelection: filterBinding,
-                            selectedAccountId: selectedAccount?.id,
-                            onSelectAccount: { selectedAccountId = $0.id },
-                            onDeselectAccount: { selectedAccountId = "" },
-                            onAddAccount: openAccountSetup
-                        )
-                        .environment(appState)
-
-                        DashboardSummaryCards()
-                            .environment(appState)
-
-                        BalanceCompositionStrip()
-                            .environment(appState)
-
-                        LocalInsightsCard()
-                            .environment(appState)
-
-                        if shouldShowLowerStatusReadinessPanel {
-                            AttentionQueueView(title: "Attention", onAddAccount: openAccountSetup)
-                                .environment(appState)
-
-                            DashboardStatusReadinessPanel(
-                                openSettings: { openSettings() },
-                                onAddAccount: openAccountSetup
-                            )
-                            .environment(appState)
-                        }
-                    }
-                    .padding(.horizontal, Layout.contentHorizontalPadding)
-                    .padding(.top, Layout.contentTopPadding)
-                    .padding(.bottom, Layout.contentBottomPadding)
-                }
-                .scrollContentBackground(.hidden)
-                .frame(maxWidth: .infinity)
-                .frame(minHeight: Layout.dashboardMinHeight, maxHeight: Layout.dashboardMaxHeight)
-
-                Divider()
-
-                DashboardFooter(
-                    settingsActivation: .shared,
-                    openSettings: openSettings,
-                    onAddAccount: openAccountSetup
+        HStack(alignment: .top, spacing: 0) {
+            if let selectedAccount, !shouldShowSetupScreen {
+                AccountDetailFlyout(
+                    account: selectedAccount,
+                    isStatusFilter: selectedFilter == .status,
+                    onClose: { selectedAccountId = "" }
                 )
                 .environment(appState)
+                .frame(width: Layout.flyoutWidth)
+                .transition(.move(edge: .leading).combined(with: .opacity))
+
+                Divider()
             }
 
-            if let error = appState.error {
-                ErrorBanner(error: error)
-                    .environment(appState)
-            }
+            dashboardColumn
+                .frame(width: Layout.dashboardWidth)
         }
-        .frame(width: shouldShowSetupScreen ? Layout.setupWidth : Layout.dashboardWidth)
+        .frame(width: popoverWidth)
         .background(.regularMaterial)
-        .animation(.easeInOut(duration: 0.2), value: appState.error != nil)
+        .animation(
+            MotionTokens.animation(MotionTokens.content, reduceMotion: reduceMotion),
+            value: selectedAccount?.id
+        )
+        // Esc closes the fly-out. The handler is nil when no account is
+        // selected so the key event falls through and closes the popover.
+        .onExitCommand(
+            perform: selectedAccountId.isEmpty ? nil : { selectedAccountId = "" }
+        )
+        .animation(
+            MotionTokens.animation(MotionTokens.standard, reduceMotion: reduceMotion),
+            value: appState.error != nil
+        )
         .sheet(
             isPresented: $isShowingAccountSetup,
             onDismiss: {
@@ -143,8 +103,8 @@ struct MainPopover: View {
         .task {
             await appState.loadInitialData()
         }
-        .onChange(of: appState.accounts) { _, accounts in
-            guard selectedAccountId.isEmpty || !accounts.contains(where: { $0.id == selectedAccountId }) else { return }
+        .onChange(of: filteredAccounts.map(\.id)) { _, ids in
+            guard !selectedAccountId.isEmpty, !ids.contains(selectedAccountId) else { return }
             selectedAccountId = ""
         }
         .onChange(of: selectedFilterRawValue) { _, _ in
@@ -153,6 +113,111 @@ struct MainPopover: View {
         .onChange(of: appState.isSetupComplete) { _, isComplete in
             if isComplete {
                 shouldShowSetupRecoveryDashboard = false
+            }
+        }
+    }
+
+    private var popoverWidth: CGFloat {
+        // Setup renders at the dashboard's width so first run never snaps
+        // between window sizes.
+        guard !shouldShowSetupScreen else { return Layout.dashboardWidth }
+        return Layout.dashboardWidth + (selectedAccount == nil ? 0 : Layout.flyoutWidth + 1)
+    }
+
+    private var dashboardColumn: some View {
+        VStack(spacing: 0) {
+            // The error banner outranks everything below it — including the
+            // setup screen, which previously swallowed errors entirely.
+            if let error = appState.error {
+                ErrorBanner(error: error)
+                    .environment(appState)
+            }
+
+            if shouldShowSetupScreen {
+                SetupView()
+            } else {
+                ScrollView {
+                    // 16pt between concept groups, 8pt between siblings
+                    // within a group — spacing is the hierarchy.
+                    VStack(alignment: .leading, spacing: Layout.groupSpacing) {
+                        VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
+                            DashboardHeader()
+                                .environment(appState)
+
+                            DashboardChangeReceiptStrip()
+                                .environment(appState)
+                        }
+
+                        if shouldElevateStatusReadinessPanel {
+                            VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
+                                AttentionQueueView(title: "Attention", onAddAccount: openAccountSetup)
+                                    .environment(appState)
+
+                                DashboardStatusReadinessPanel(
+                                    openSettings: { openSettings() },
+                                    onAddAccount: openAccountSetup
+                                )
+                                .environment(appState)
+                            }
+                        }
+
+                        DashboardOverviewStack(
+                            transactions: appState.transactions,
+                            accounts: filteredAccounts,
+                            filter: selectedFilter,
+                            filterSelection: filterBinding,
+                            selectedAccountId: selectedAccount?.id,
+                            onSelectAccount: { selectedAccountId = $0.id },
+                            onDeselectAccount: { selectedAccountId = "" },
+                            onAddAccount: openAccountSetup
+                        )
+                        .environment(appState)
+
+                        VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
+                            DashboardSummaryCards()
+                                .environment(appState)
+
+                            BalanceCompositionStrip()
+                                .environment(appState)
+
+                            LocalInsightsCard()
+                                .environment(appState)
+                        }
+
+                        if shouldShowLowerStatusReadinessPanel {
+                            VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
+                                AttentionQueueView(title: "Attention", onAddAccount: openAccountSetup)
+                                    .environment(appState)
+
+                                DashboardStatusReadinessPanel(
+                                    openSettings: { openSettings() },
+                                    onAddAccount: openAccountSetup
+                                )
+                                .environment(appState)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, Layout.contentHorizontalPadding)
+                    .padding(.top, Layout.contentTopPadding)
+                    .padding(.bottom, Layout.contentBottomPadding)
+                    .onGeometryChange(for: CGFloat.self) { proxy in
+                        proxy.size.height
+                    } action: { height in
+                        dashboardContentHeight = height
+                    }
+                }
+                .scrollContentBackground(.hidden)
+                .frame(maxWidth: .infinity)
+                .frame(height: dashboardScrollHeight)
+
+                Divider()
+
+                DashboardFooter(
+                    settingsActivation: .shared,
+                    openSettings: openSettings,
+                    onAddAccount: openAccountSetup
+                )
+                .environment(appState)
             }
         }
     }
@@ -195,48 +260,39 @@ private struct DashboardHeader: View {
     }
 
     var body: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 4) {
+        // One hero per surface: the net worth number is the only large text.
+        // Sync state lives in the footer; the app's own name does not belong
+        // inside its own popover.
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
                 Text("Net Worth")
                     .sectionTitle()
                     .foregroundStyle(.secondary)
 
                 Text(Formatters.currency(appState.netBalance, format: .full))
-                    .font(.system(size: 27, weight: .bold, design: .rounded))
-                    .monospacedDigit()
+                    .displayBalance()
                     .contentTransition(.numericText())
                     .lineLimit(1)
-                    .minimumScaleFactor(0.72)
+                    .minimumScaleFactor(0.8)
             }
 
-            Spacer(minLength: 12)
+            Spacer(minLength: Spacing.md)
 
             if let trend {
-                VStack(alignment: .trailing, spacing: 3) {
+                VStack(alignment: .trailing, spacing: Spacing.xxs) {
                     BalanceTrendChart(trend: trend)
                         .frame(width: 92, height: 21)
 
                     Text("\(trend.deltaText) \(trend.spanText)")
-                        .font(.caption2.weight(.semibold))
+                        .font(.caption2.weight(.medium))
                         .monospacedDigit()
                         .foregroundStyle(deltaTint(for: trend.direction))
                         .lineLimit(1)
                 }
-                .padding(.top, 3)
-                .padding(.trailing, 14)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(trend.accessibilitySummary)
                 .help(trend.accessibilitySummary)
             }
-
-            VStack(alignment: .trailing, spacing: 3) {
-                Text("PlaidBar")
-                    .font(.headline.weight(.bold))
-                Text(appState.statusSyncText)
-                    .detailText()
-                    .lineLimit(1)
-            }
-            .padding(.top, 3)
         }
     }
 
@@ -267,7 +323,7 @@ private struct DashboardChangeReceiptStrip: View {
         if let receipt {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(receipt.title.uppercased())
-                    .font(.caption2.weight(.semibold))
+                    .font(.caption2.weight(.medium))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
 
@@ -290,14 +346,10 @@ private struct DashboardChangeReceiptStrip: View {
                 }
                 .foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 9)
-            .padding(.vertical, 5)
+            .padding(.horizontal, Spacing.sm)
+            .padding(.vertical, Spacing.xs)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.quaternary.opacity(0.38), in: Capsule())
-            .overlay(
-                Capsule()
-                    .strokeBorder(.secondary.opacity(0.10), lineWidth: 1)
-            )
+            .background(.quinary, in: Capsule())
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(receipt.accessibilitySummary)
             .help(receipt.accessibilitySummary)
@@ -309,49 +361,30 @@ private struct DashboardSummaryCards: View {
     @Environment(AppState.self) private var appState
 
     var body: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 8) {
-                MetricCard(
-                    title: "Cash",
-                    value: Formatters.currency(appState.totalCash, format: .compact),
-                    detail: "\(appState.depositoryAccounts.count) cash account\(appState.depositoryAccounts.count == 1 ? "" : "s")",
-                    tint: .secondary
-                )
+        // One metric row. Sync/server status is not a financial metric — it
+        // lives in the footer (healthy) or the attention queue (degraded).
+        HStack(spacing: Spacing.sm) {
+            MetricCard(
+                title: "Cash",
+                value: Formatters.currency(appState.totalCash, format: .compact),
+                detail: "\(appState.depositoryAccounts.count) cash account\(appState.depositoryAccounts.count == 1 ? "" : "s")",
+                tint: .secondary
+            )
 
-                MetricCard(
-                    title: "Credit",
-                    value: creditValue,
-                    detail: creditDetail,
-                    tint: SemanticColors.creditDebt,
-                    emphasizesTint: shouldEmphasizeCredit
-                )
+            MetricCard(
+                title: "Credit",
+                value: creditValue,
+                detail: creditDetail,
+                tint: SemanticColors.creditDebt,
+                emphasizesTint: shouldEmphasizeCredit
+            )
 
-                MetricCard(
-                    title: "7D Spend",
-                    value: Formatters.currency(appState.recentSpend, format: .compact),
-                    detail: recentSpendDetail,
-                    tint: recentSpendTint,
-                    emphasizesTint: appState.recentSpend > 0
-                )
-            }
-
-            HStack(spacing: 8) {
-                MetricCard(
-                    title: "Sync",
-                    value: appState.statusSyncText,
-                    detail: appState.statusServerText,
-                    tint: syncTint,
-                    emphasizesTint: appState.isSyncStale || !appState.serverConnected
-                )
-
-                MetricCard(
-                    title: "Action",
-                    value: actionValue,
-                    detail: actionDetail,
-                    tint: actionTint,
-                    emphasizesTint: appState.dashboardStatusReadiness.level != .healthy
-                )
-            }
+            MetricCard(
+                title: "7D Spend",
+                value: Formatters.currency(appState.recentSpend, format: .compact),
+                detail: recentSpendDetail,
+                tint: .secondary
+            )
         }
     }
 
@@ -383,42 +416,6 @@ private struct DashboardSummaryCards: View {
     private var recentSpendDetail: String {
         appState.recentSpend > 0 ? "Last 7 days" : "No 7D spend"
     }
-
-    private var recentSpendTint: Color {
-        appState.recentSpend > 0 ? SemanticColors.negative : .secondary
-    }
-
-    private var syncTint: Color {
-        if !appState.serverConnected { return SemanticColors.negative }
-        if appState.isSyncStale { return SemanticColors.warning }
-        return .secondary
-    }
-
-    private var actionValue: String {
-        switch appState.dashboardStatusReadiness.level {
-        case .healthy:
-            return "None"
-        case .warning:
-            return "Review"
-        case .blocked:
-            return "Blocked"
-        }
-    }
-
-    private var actionDetail: String {
-        appState.dashboardStatusReadiness.title
-    }
-
-    private var actionTint: Color {
-        switch appState.dashboardStatusReadiness.level {
-        case .healthy:
-            return .secondary
-        case .warning:
-            return SemanticColors.warning
-        case .blocked:
-            return SemanticColors.negative
-        }
-    }
 }
 
 private struct MetricCard: View {
@@ -429,45 +426,25 @@ private struct MetricCard: View {
     var emphasizesTint = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
             Text(title)
-                .font(.caption.weight(.semibold))
+                .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
             Text(value)
-                .font(.headline.weight(.bold))
+                .dataText()
                 .foregroundStyle(emphasizesTint ? tint : .primary)
-                .monospacedDigit()
                 .lineLimit(1)
-                .minimumScaleFactor(0.75)
+                .minimumScaleFactor(0.8)
             Text(detail)
                 .microText()
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-                .minimumScaleFactor(0.75)
+                .minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .nativePanelSurface(
-            fill: AnyShapeStyle(cardFill),
-            stroke: cardStroke
-        )
-        .overlay(alignment: .leading) {
-            if emphasizesTint {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(tint)
-                    .frame(width: 3)
-                    .padding(.vertical, 8)
-            }
-        }
-    }
-
-    private var cardFill: Color {
-        SurfaceTokens.panelFill(emphasisTint: emphasizesTint ? tint : nil)
-    }
-
-    private var cardStroke: Color {
-        SurfaceTokens.panelStroke(emphasisTint: emphasizesTint ? tint : nil)
+        .padding(.horizontal, Spacing.sm)
+        .padding(.vertical, Spacing.sm)
+        .glassSurface(emphasizesTint ? .emphasized(tint) : .inset)
     }
 }
 
@@ -522,10 +499,11 @@ private struct BalanceCompositionStrip: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
             HStack {
                 Text("Balance Mix")
-                    .font(.caption.weight(.semibold))
+                    .sectionTitle()
+                    .foregroundStyle(.secondary)
                 Spacer()
                 Text("\(appState.accountCount) accounts")
                     .microText()
@@ -535,7 +513,7 @@ private struct BalanceCompositionStrip: View {
             GeometryReader { proxy in
                 HStack(spacing: segmentSpacing) {
                     ForEach(activeSegments) { segment in
-                        RoundedRectangle(cornerRadius: 2)
+                        RoundedRectangle(cornerRadius: Radius.cell)
                             .fill(segment.fillColor)
                             .frame(width: segmentWidth(segment, totalWidth: proxy.size.width))
                             .accessibilityLabel(
@@ -546,21 +524,14 @@ private struct BalanceCompositionStrip: View {
             }
             .frame(height: 7)
 
-            Divider()
-                .opacity(0.55)
-
-            HStack(spacing: 8) {
+            HStack(spacing: Spacing.sm) {
                 ForEach(segments) { segment in
                     BalanceCompositionLegend(segment: segment)
                 }
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .nativePanelSurface(
-            fill: AnyShapeStyle(Color.primary.opacity(SurfaceTokens.panelFillOpacity)),
-            stroke: Color.primary.opacity(0.065)
-        )
+        .padding(Spacing.sm)
+        .glassSurface(.inset)
         .accessibilityElement(children: .contain)
     }
 
@@ -664,7 +635,7 @@ private struct BalanceActivityHeatmap: View {
                 .frame(width: 116)
 
                 Text(totalLabel(for: layout))
-                    .font(.caption.weight(.bold))
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(totalTint(for: layout))
                     .monospacedDigit()
                     .lineLimit(1)
@@ -689,9 +660,14 @@ private struct BalanceActivityHeatmap: View {
                             VStack(spacing: spacing) {
                                 ForEach(Array(week.enumerated()), id: \.offset) { _, day in
                                     if let day {
-                                        BalanceHeatmapCell(day: day, peakValue: layout.peakValue, mode: layout.mode, size: cell)
+                                        BalanceHeatmapCell(
+                                            day: day,
+                                            peakValue: layout.peakValue,
+                                            mode: layout.mode,
+                                            size: cell
+                                        )
                                     } else {
-                                        RoundedRectangle(cornerRadius: 2)
+                                        RoundedRectangle(cornerRadius: Radius.cell)
                                             .fill(.clear)
                                             .frame(width: cell, height: cell)
                                     }
@@ -712,8 +688,12 @@ private struct BalanceActivityHeatmap: View {
                         .foregroundStyle(.secondary)
 
                     ForEach([0.0, 0.25, 0.5, 0.75, 1.0], id: \.self) { intensity in
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(BalanceHeatmapCell.fillColor(intensity: intensity, value: intensity, mode: layout.mode))
+                        RoundedRectangle(cornerRadius: Radius.cell)
+                            .fill(BalanceHeatmapCell.fillColor(
+                                intensity: intensity,
+                                value: intensity,
+                                mode: layout.mode
+                            ))
                             .frame(width: 8, height: 8)
                     }
 
@@ -732,13 +712,12 @@ private struct BalanceActivityHeatmap: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(10)
-        .nativePanelSurface(
-            fill: AnyShapeStyle(Color.primary.opacity(SurfaceTokens.panelFillOpacity)),
-            stroke: Color.primary.opacity(0.065)
-        )
+        .padding(Spacing.sm)
+        .glassSurface(.raised)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("\(layout.mode.summaryTitle) heatmap for the last 365 days with \(layout.activeDayCount) active days. \(layout.mode.semanticDescription).")
+        .accessibilityLabel(
+            "\(layout.mode.summaryTitle) heatmap for the last 365 days with \(layout.activeDayCount) active days. \(layout.mode.semanticDescription)."
+        )
     }
 
     private var modeBinding: Binding<SpendingHeatmapMode> {
@@ -776,7 +755,7 @@ private struct NetLegendKey: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            RoundedRectangle(cornerRadius: 2)
+            RoundedRectangle(cornerRadius: Radius.cell)
                 .fill(tint.opacity(0.72))
                 .frame(width: 8, height: 8)
             Text(label)
@@ -793,7 +772,7 @@ private struct BalanceHeatmapCell: View {
     let size: CGFloat
 
     var body: some View {
-        RoundedRectangle(cornerRadius: 2)
+        RoundedRectangle(cornerRadius: Radius.cell)
             .fill(Self.fillColor(intensity: intensity, value: day.value, mode: mode))
             .frame(width: size, height: size)
             .help(helpText)
@@ -817,13 +796,17 @@ private struct BalanceHeatmapCell: View {
     }
 
     static func fillColor(intensity: Double, value: Double, mode: SpendingHeatmapMode) -> Color {
-        guard intensity > 0 else { return Color.primary.opacity(0.08) }
+        guard intensity > 0 else { return Color.primary.opacity(0.06) }
 
-        let base: Color = if mode == .netCashflow, value < 0 {
-            SemanticColors.positive
-        } else {
-            mode == .netCashflow ? SemanticColors.negative : SemanticColors.positive
+        // Spend mode uses a neutral intensity ramp: green means money-in
+        // everywhere else in the app, so green-for-heavy-spending would
+        // invert the token semantics. Net mode keeps the green/red pairing
+        // with its explicit Income/Outflow legend.
+        guard mode == .netCashflow else {
+            return Color.primary.opacity(0.14 + (0.6 * intensity))
         }
+
+        let base: Color = value < 0 ? SemanticColors.positive : SemanticColors.negative
         return base.opacity(0.18 + (0.72 * intensity))
     }
 }
@@ -901,11 +884,8 @@ private struct LocalInsightsCard: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(10)
-        .nativePanelSurface(
-            fill: AnyShapeStyle(Color.primary.opacity(SurfaceTokens.panelFillOpacity)),
-            stroke: Color.primary.opacity(0.065)
-        )
+        .padding(Spacing.sm)
+        .glassSurface(.inset)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(receipt.accessibilitySummary)
     }
@@ -928,17 +908,17 @@ private struct LocalAIStatusPill: View {
     let availability: LocalAIAvailability
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: Spacing.xs) {
             Image(systemName: iconName)
-                .font(.caption2.weight(.bold))
+                .font(.caption2.weight(.medium))
             Text("Local - \(availability.state.displayName)")
-                .font(.caption2.weight(.semibold))
+                .font(.caption.weight(.medium))
                 .lineLimit(1)
         }
         .foregroundStyle(tint)
-        .padding(.horizontal, 7)
-        .padding(.vertical, 4)
-        .nativeInsetSurface(cornerRadius: 7)
+        .padding(.horizontal, Spacing.sm)
+        .padding(.vertical, Spacing.chipVertical)
+        .background(.quinary, in: Capsule())
         .help(availability.detail)
     }
 
@@ -970,19 +950,19 @@ private struct LocalInsightEvidenceChip: View {
                 Text(chip.label)
                     .lineLimit(1)
             }
-                .microText()
-                .foregroundStyle(.secondary)
+            .microText()
+            .foregroundStyle(.secondary)
 
             Text(chip.value)
-                .font(.caption.weight(.bold))
+                .font(.caption.weight(.semibold))
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.76)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .nativeInsetSurface(cornerRadius: 7)
+        .padding(.horizontal, Spacing.sm)
+        .padding(.vertical, Spacing.rowVertical)
+        .glassSurface(.inset, cornerRadius: Radius.control)
         .help("\(chip.label): \(chip.value)")
     }
 }
@@ -1003,7 +983,7 @@ private struct DashboardStatusReadinessPanel: View {
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(tint)
                     .frame(width: 28, height: 28)
-                    .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 8))
+                    .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: Radius.panel))
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(readiness.title)
@@ -1054,11 +1034,8 @@ private struct DashboardStatusReadinessPanel: View {
                 }
             }
         }
-        .padding(12)
-        .nativePanelSurface(
-            fill: AnyShapeStyle(SurfaceTokens.panelFill(emphasisTint: readinessNeedsAttention ? tint : nil)),
-            stroke: panelStroke
-        )
+        .padding(Spacing.md)
+        .glassSurface(readinessNeedsAttention ? .emphasized(tint) : .raised)
         .accessibilityElement(children: .contain)
     }
 
@@ -1080,10 +1057,6 @@ private struct DashboardStatusReadinessPanel: View {
 
     private var readinessNeedsAttention: Bool {
         readiness.level != .healthy
-    }
-
-    private var panelStroke: Color {
-        readinessNeedsAttention ? tint.opacity(0.18) : Color.primary.opacity(0.07)
     }
 
     private func perform(_ action: DashboardStatusReadinessAction) {
@@ -1119,7 +1092,8 @@ private struct DashboardStatusReadinessPanel: View {
 
     private func primaryActionLabel(for action: DashboardStatusReadinessAction) -> String {
         if action == .reconnect,
-           let title = ItemRecoveryTarget.actionTitle(from: appState.itemStatuses) {
+           let title = ItemRecoveryTarget.actionTitle(from: appState.itemStatuses)
+        {
             return title
         }
         return readiness.primaryActionTitle ?? action.defaultTitle
@@ -1139,7 +1113,7 @@ private struct SetupRecoverySummary: View {
                 .font(.callout.weight(.semibold))
                 .foregroundStyle(color)
                 .frame(width: 20, height: 20)
-                .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+                .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: Radius.control))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Setup recovery")
@@ -1154,9 +1128,6 @@ private struct SetupRecoverySummary: View {
 
             Spacer(minLength: 8)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 7)
-        .background(color.opacity(0.06), in: RoundedRectangle(cornerRadius: 7))
         .accessibilityElement(children: .combine)
     }
 
@@ -1230,9 +1201,6 @@ private struct StatusMetricPill: View {
                 .minimumScaleFactor(0.78)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .nativeInsetSurface(cornerRadius: SurfaceTokens.panelCornerRadius)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(title): \(value)")
     }
@@ -1285,7 +1253,9 @@ private struct DashboardOverviewStack: View {
             }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Overview with activity heatmap, account filters, account rows, and selected account details.")
+        .accessibilityLabel(
+            "Overview with activity heatmap, account filters, account rows, and selected account details."
+        )
     }
 
     private enum LayoutSpacing {
@@ -1305,7 +1275,10 @@ private struct DashboardOverviewFallbackBanner: View {
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(SemanticColors.brandSecondary)
                     .frame(width: 30, height: 30)
-                    .background(SemanticColors.brandSecondary.opacity(0.14), in: RoundedRectangle(cornerRadius: 9))
+                    .background(
+                        SemanticColors.brandSecondary.opacity(0.14),
+                        in: RoundedRectangle(cornerRadius: Radius.panel)
+                    )
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(presentation.title)
@@ -1324,12 +1297,9 @@ private struct DashboardOverviewFallbackBanner: View {
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
         }
-        .padding(12)
+        .padding(Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .nativePanelSurface(
-            fill: AnyShapeStyle(SurfaceTokens.panelFill(emphasisTint: SemanticColors.brandSecondary.opacity(0.18))),
-            stroke: SemanticColors.brandSecondary.opacity(0.22)
-        )
+        .glassSurface(.emphasized(SemanticColors.brandSecondary))
     }
 }
 
@@ -1355,7 +1325,7 @@ private struct AccountsSection: View {
                     .sectionTitle()
                     .foregroundStyle(.secondary)
             }
-            .padding(.horizontal, Spacing.compactRowTextSpacing)
+            .padding(.horizontal, Spacing.compactRowHorizontalPadding)
             .padding(.bottom, Spacing.xs)
 
             if accounts.isEmpty {
@@ -1379,7 +1349,7 @@ private struct AccountsSection: View {
                         .environment(appState)
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .clipShape(RoundedRectangle(cornerRadius: Radius.panel))
             }
         }
     }
@@ -1393,29 +1363,19 @@ private struct AccountRowWithDrilldown: View {
     let onSelect: () -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
-            Button(action: onSelect) {
-                DashboardAccountRow(account: account, isStatusFilter: isStatusFilter, isSelected: isSelected)
-            }
-            .buttonStyle(.plain)
-            .focusable(true)
-            .help(drillInPath.pointerHelp)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(accountAccessibilityLabel)
-            .accessibilityHint(drillInPath.accessibilityHint)
-            .accessibilityAction(named: drillInPath.accessibilityActionName, onSelect)
-
-            if isSelected {
-                SelectedAccountPanel(
-                    account: account,
-                    isStatusFilter: isStatusFilter,
-                    activitySnapshot: appState.accountActivitySnapshot(for: account.id)
-                )
-                    .environment(appState)
-                    .padding(.top, Spacing.compactRowVerticalPadding)
-                    .padding(.bottom, Spacing.compactRowContentSpacing)
-            }
+        // Selection opens the AccountDetailFlyout to the left of the
+        // dashboard (mounted by MainPopover), not an inline panel below.
+        Button(action: onSelect) {
+            DashboardAccountRow(account: account, isStatusFilter: isStatusFilter, isSelected: isSelected)
         }
+        .buttonStyle(.plain)
+        .focusable(true)
+        .hoverHighlight()
+        .help(drillInPath.pointerHelp)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accountAccessibilityLabel)
+        .accessibilityHint(drillInPath.accessibilityHint)
+        .accessibilityAction(named: drillInPath.accessibilityActionName, onSelect)
     }
 
     private var accountAccessibilityLabel: String {
@@ -1484,7 +1444,7 @@ private struct DashboardEmptyAccountState: View {
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(tint)
                     .frame(width: 28, height: 28)
-                    .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 8))
+                    .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: Radius.panel))
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
@@ -1513,12 +1473,9 @@ private struct DashboardEmptyAccountState: View {
                 .controlSize(.small)
             }
         }
-        .padding(12)
+        .padding(Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .nativePanelSurface(
-            fill: AnyShapeStyle(SurfaceTokens.panelFill(emphasisTint: emphasizedTint)),
-            stroke: panelStroke
-        )
+        .glassSurface(emphasizedTint.map { SurfaceRank.emphasized($0) } ?? .raised)
     }
 
     private var title: String {
@@ -1536,31 +1493,22 @@ private struct DashboardEmptyAccountState: View {
     private var tint: Color {
         switch presentation.tone {
         case .brand:
-            return SemanticColors.brand
+            SemanticColors.brand
         case .healthy:
-            return .secondary
+            .secondary
         case .offline, .secondary:
-            return .secondary
+            .secondary
         case .warning:
-            return SemanticColors.warning
-        }
-    }
-
-    private var panelStroke: Color {
-        switch presentation.tone {
-        case .brand, .warning:
-            return tint.opacity(0.18)
-        case .healthy, .offline, .secondary:
-            return Color.primary.opacity(0.07)
+            SemanticColors.warning
         }
     }
 
     private var emphasizedTint: Color? {
         switch presentation.tone {
         case .brand, .warning:
-            return tint
+            tint
         case .healthy, .offline, .secondary:
-            return nil
+            nil
         }
     }
 
@@ -1603,17 +1551,17 @@ private struct DashboardAccountRow: View {
     var body: some View {
         HStack(spacing: Spacing.compactRowContentSpacing) {
             Image(systemName: AccountPresentation.iconName(for: account))
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(accountTint)
-                .frame(width: 28, height: 28)
-                .background(accountTint.opacity(0.16), in: RoundedRectangle(cornerRadius: 8))
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: Sizing.iconChip, height: Sizing.iconChip)
+                .background(.quinary, in: RoundedRectangle(cornerRadius: Radius.control))
                 .overlay(alignment: .bottomTrailing) {
                     // Decorative reinforcement only: the row subtitle carries
                     // the connection state in text, so the tinted dot is
                     // hidden from VoiceOver instead of being color-only.
                     Circle()
                         .fill(statusTint)
-                        .frame(width: 8, height: 8)
+                        .frame(width: Sizing.statusDot, height: Sizing.statusDot)
                         .overlay {
                             Circle()
                                 .stroke(Color(nsColor: .windowBackgroundColor), lineWidth: 1.5)
@@ -1623,7 +1571,7 @@ private struct DashboardAccountRow: View {
 
             VStack(alignment: .leading, spacing: Spacing.compactRowTextSpacing) {
                 Text(account.name)
-                    .font(.callout.weight(.semibold))
+                    .font(.callout.weight(.medium))
                     .lineLimit(1)
                 Text(subtitle)
                     .detailText()
@@ -1633,49 +1581,69 @@ private struct DashboardAccountRow: View {
             Spacer(minLength: Spacing.compactRowContentSpacing)
 
             VStack(alignment: .trailing, spacing: Spacing.xs) {
+                // Amounts are data, not verdicts: always .primary. Risk is
+                // carried by the utilization line below — icon + tint + text,
+                // and only once the user's own threshold is crossed.
                 Text(amountText)
-                    .font(.callout.weight(.bold))
-                    .monospacedDigit()
-                    .foregroundStyle(AccountPresentation.isDebt(account) ? SemanticColors.creditDebt : .primary)
+                    .dataText()
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
 
                 if let utilization = account.balances.utilizationPercent {
-                    Text(trailingDetailText)
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(SemanticColors.utilization(
-                            for: utilization,
-                            threshold: appState.creditUtilizationThreshold
-                        ))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.78)
+                    // Mirrors the filter-bar rule: tint the icon, never the
+                    // text — orange caption text fails 4.5:1 contrast.
+                    HStack(spacing: Spacing.xxs) {
+                        if utilizationNeedsAttention {
+                            Image(systemName: SemanticColors.utilizationIcon(
+                                for: utilization,
+                                threshold: appState.creditUtilizationThreshold
+                            ))
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(SemanticColors.utilization(
+                                for: utilization,
+                                threshold: appState.creditUtilizationThreshold
+                            ))
+                        }
+                        Text(trailingDetailText)
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(utilizationNeedsAttention ? AnyShapeStyle(.primary) :
+                                AnyShapeStyle(.secondary))
+                    }
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                 } else {
                     Text(trailingDetailText)
                         .microText()
                         .foregroundStyle(statusTint)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.78)
+                        .minimumScaleFactor(0.8)
                 }
             }
 
-            Image(systemName: isSelected ? "chevron.down" : "chevron.right")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(.tertiary)
+            // The detail panel flies out on the leading side of the
+            // dashboard; chevron.backward flips correctly under RTL.
+            Image(systemName: "chevron.backward")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.tertiary))
         }
         .padding(.horizontal, Spacing.compactRowHorizontalPadding)
         .padding(.vertical, Spacing.compactRowVerticalPadding)
-        .background(isSelected ? SemanticColors.brand.opacity(SurfaceTokens.selectedFillOpacity) : Color.primary.opacity(0.012))
-        .overlay(alignment: .leading) {
-            if isSelected {
-                Rectangle()
-                    .fill(SemanticColors.brand)
-                    .frame(width: 3)
+        .background(
+            isSelected ? Color.accentColor.opacity(SurfaceTokens.selectedFillOpacity) : .clear,
+            in: RoundedRectangle(cornerRadius: Radius.control)
+        )
+        .overlay(alignment: .bottom) {
+            if !isSelected {
+                Divider()
+                    .opacity(0.4)
             }
         }
-        .overlay(alignment: .bottom) {
-            Divider()
-                .opacity(0.55)
-        }
         .contentShape(Rectangle())
+    }
+
+    private var utilizationNeedsAttention: Bool {
+        guard let utilization = account.balances.utilizationPercent else { return false }
+        return utilization >= appState.creditUtilizationThreshold
     }
 
     private var subtitle: String {
@@ -1688,19 +1656,6 @@ private struct DashboardAccountRow: View {
 
     private var amountText: String {
         AccountPresentation.rowAmountText(for: account)
-    }
-
-    private var accountTint: Color {
-        switch account.type {
-        case .credit, .loan:
-            SemanticColors.creditDebt
-        case .investment:
-            .secondary
-        case .depository:
-            .secondary
-        case .other:
-            .secondary
-        }
     }
 
     private var pendingCount: Int {
@@ -1743,600 +1698,6 @@ private struct DashboardAccountRow: View {
     }
 }
 
-// MARK: - Selected Account
-
-private struct SelectedAccountPanel: View {
-    @Environment(AppState.self) private var appState
-    @Environment(\.openSettings) private var openSettings
-    let account: AccountDTO
-    let isStatusFilter: Bool
-    let activitySnapshot: AccountTransactionFeed.AccountActivitySnapshot
-    @State private var isConfirmingAccountRemoval = false
-
-    private var drillInSummary: DashboardAccountDrillInSummary {
-        DashboardAccountDrillInSummary.presentation(
-            for: account,
-            activitySnapshot: activitySnapshot,
-            itemStatus: itemConnectionStatus,
-            fallbackFreshnessLabel: connectionPresentation.signalLabel
-        )
-    }
-
-    private var transactions: [TransactionDTO] {
-        Array(activitySnapshot.transactions.prefix(5))
-    }
-
-    private var accountTransactions: [TransactionDTO] {
-        activitySnapshot.transactions
-    }
-
-    private var pendingTransactions: [TransactionDTO] {
-        activitySnapshot.pendingTransactions
-    }
-
-    private var activitySummary: AccountActivitySummary {
-        activitySnapshot.recentSummary
-    }
-
-    private var emptyState: AccountActivityEmptyState? {
-        AccountActivityEmptyState.evaluate(
-            transactionCount: activitySnapshot.transactionCount,
-            isDemoMode: appState.usesDemoConnectionPresentation,
-            serverConnected: appState.serverConnected,
-            connectionLevel: connectionPresentation.level,
-            accountDisplayName: AccountPresentation.displayName(for: account)
-        )
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.compactRowContentSpacing) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: Spacing.compactRowTextSpacing) {
-                    Text("Drill-in")
-                        .sectionTitle()
-                        .foregroundStyle(.secondary)
-                    Text(drillInSummary.displayName)
-                        .font(.headline.weight(.bold))
-                        .lineLimit(1)
-                    Text(drillInSummary.subtitle)
-                        .detailText()
-                        .lineLimit(1)
-                }
-
-                Spacer()
-
-                AccountConnectionBadge(
-                    label: connectionLabel,
-                    icon: connectionIcon,
-                    tint: connectionTint
-                )
-            }
-
-            DrillInSurfaceRail(surfaces: DashboardDrillInSurface.surfaces(for: account))
-
-            HStack(spacing: Spacing.compactRowContentSpacing) {
-                DetailValue(title: drillInSummary.availableTitle, value: availableText, tint: .primary)
-                DetailValue(title: drillInSummary.currentTitle, value: currentText, tint: currentTint)
-
-                if let utilization = account.balances.utilizationPercent,
-                   let utilizationText = AccountPresentation.dashboardUtilizationDetailText(
-                       for: account,
-                       threshold: appState.creditUtilizationThreshold
-                   ) {
-                    DetailValue(
-                        title: "Utilization",
-                        value: utilizationText,
-                        tint: SemanticColors.utilization(
-                            for: utilization,
-                            threshold: appState.creditUtilizationThreshold
-                        )
-                    )
-                } else {
-                    DetailValue(title: "Activity", value: activityText, tint: connectionTint)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            HStack(spacing: Spacing.compactRowContentSpacing) {
-                AccountSignalPill(
-                    title: "Pending",
-                    value: "\(pendingTransactions.count)",
-                    icon: "clock.fill",
-                    tint: pendingTransactions.isEmpty ? .secondary : SemanticColors.pending
-                )
-                AccountSignalPill(
-                    title: "30D Out",
-                    value: Formatters.currency(activitySummary.outflowTotal, format: .compact),
-                    icon: "arrow.up.right.circle.fill",
-                    tint: .secondary
-                )
-                AccountSignalPill(
-                    title: "30D In",
-                    value: Formatters.currency(activitySummary.inflowTotal, format: .compact),
-                    icon: "arrow.down.left.circle.fill",
-                    tint: .secondary
-                )
-                AccountSignalPill(
-                    title: "Sync",
-                    value: syncSignalText,
-                    icon: connectionIcon,
-                    tint: connectionTint
-                )
-            }
-
-            if isStatusFilter, let recoveryDetailLabel = connectionPresentation.recoveryDetailLabel {
-                HStack(alignment: .top, spacing: Spacing.compactRowContentSpacing) {
-                    Image(systemName: connectionIcon)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(connectionTint)
-                        .frame(width: 16)
-                    Text(recoveryDetailLabel)
-                        .detailText()
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.horizontal, Spacing.compactRowHorizontalPadding)
-                .padding(.vertical, Spacing.compactRowVerticalPadding)
-                .nativePanelSurface(
-                    cornerRadius: SurfaceTokens.panelCornerRadius,
-                    fill: AnyShapeStyle(recoveryFill),
-                    stroke: connectionTint.opacity(shouldEmphasizeConnection ? 0.14 : 0.06),
-                    useLiquidGlass: false
-                )
-                .accessibilityElement(children: .combine)
-            }
-
-            if shouldShowRecoveryActions {
-                HStack(spacing: Spacing.compactRowContentSpacing) {
-                    Button {
-                        performConnectionRecoveryAction()
-                    } label: {
-                        Label(connectionRecoveryActionTitle, systemImage: connectionRecoveryActionIcon)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .accessibilityLabel(connectionRecoveryAccessibilityLabel)
-                    .accessibilityHint(connectionRecoveryAccessibilityHint)
-                }
-            }
-
-            AccountDrillInActionBar(
-                actions: drillInActions,
-                accountDisplayName: drillInSummary.displayName,
-                onAction: performDrillInAction
-            )
-
-            VStack(alignment: .leading, spacing: Spacing.rowVertical) {
-                Text("Recent Activity")
-                    .sectionTitle()
-                    .foregroundStyle(.secondary)
-
-                if transactions.isEmpty {
-                    if let emptyState {
-                        AccountActivityEmptyStateView(presentation: emptyState)
-                    }
-                } else {
-                    ForEach(transactions) { transaction in
-                        TransactionMiniRow(transaction: transaction)
-                    }
-                }
-            }
-        }
-        .padding(Spacing.md)
-        .nativePanelSurface(
-            fill: AnyShapeStyle(SurfaceTokens.panelFill(emphasisTint: shouldEmphasizeConnection ? connectionTint : nil)),
-            stroke: panelStroke
-        )
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(drillInSummary.accessibilityLabel)
-        .confirmationDialog(
-            "Remove \(institutionRemovalName)?",
-            isPresented: $isConfirmingAccountRemoval,
-            titleVisibility: .visible
-        ) {
-            Button("Remove Institution", role: .destructive) {
-                Task { await appState.removeAccount(itemId: account.itemId) }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This disconnects the linked Plaid institution and removes \(institutionAccountCountText) plus \(institutionTransactionCountText) from PlaidBar. It does not close any bank account.")
-        }
-    }
-
-    private var institutionTransactionCount: Int {
-        // The dialog message is evaluated as part of the panel body, so gate
-        // the full transaction scan on the dialog actually being presented.
-        guard isConfirmingAccountRemoval else { return 0 }
-        let institutionAccountIds = Set(
-            appState.accounts.filter { $0.itemId == account.itemId }.map(\.id)
-        )
-        return appState.transactions.count { institutionAccountIds.contains($0.accountId) }
-    }
-
-    private var institutionTransactionCountText: String {
-        let count = institutionTransactionCount
-        return count == 1 ? "1 cached local transaction" : "\(count) cached local transactions"
-    }
-
-    private var availableText: String {
-        Formatters.currency(drillInSummary.availableBalance, format: .compact)
-    }
-
-    private var currentText: String {
-        Formatters.currency(drillInSummary.currentBalance, format: .compact)
-    }
-
-    private var currentTint: Color {
-        AccountPresentation.isDebt(account) ? SemanticColors.creditDebt : .primary
-    }
-
-    private var itemStatus: ItemConnectionStatus? {
-        itemConnectionStatus?.status
-    }
-
-    private var itemConnectionStatus: ItemStatus? {
-        appState.itemStatuses.first { $0.id == account.itemId }
-    }
-
-    private var institutionRemovalName: String {
-        itemConnectionStatus?.institutionName ?? AccountPresentation.displayName(for: account)
-    }
-
-    private var institutionAccountCount: Int {
-        appState.accounts.count { $0.itemId == account.itemId }
-    }
-
-    private var institutionAccountCountText: String {
-        let count = max(institutionAccountCount, 1)
-        return count == 1 ? "1 linked account" : "\(count) linked accounts"
-    }
-
-    private var drillInActions: [DashboardDrillInAction] {
-        DashboardDrillInAction.accountDrillInActions(
-            isDemoMode: appState.isDemoMode
-        )
-    }
-
-    private var connectionPresentation: AccountConnectionPresentation {
-        AccountConnectionPresentation.evaluate(
-            isDemoMode: appState.usesDemoConnectionPresentation,
-            serverConnected: appState.serverConnected,
-            isSyncStale: appState.isSyncStale,
-            statusSyncText: appState.statusSyncText,
-            itemStatus: itemStatus,
-            institutionName: itemConnectionStatus?.institutionName,
-            itemLastSyncRelative: itemConnectionStatus?.lastSync.map(Formatters.relativeDate)
-        )
-    }
-
-    private var connectionLabel: String {
-        connectionPresentation.detailLabel
-    }
-
-    private var connectionIcon: String {
-        connectionPresentation.iconName
-    }
-
-    private var connectionTint: Color {
-        accountConnectionTint(for: connectionPresentation.level)
-    }
-
-    private var activityText: String {
-        "\(drillInSummary.transactionCount) tx"
-    }
-
-    private var syncSignalText: String {
-        if isStatusFilter, let itemSyncLabel = connectionPresentation.itemSyncLabel {
-            return itemSyncLabel
-        }
-        return connectionPresentation.signalLabel
-    }
-
-    private var shouldShowRecoveryActions: Bool {
-        connectionPresentation.showsRecoveryActions
-    }
-
-    private var recoveryActionTitle: String {
-        connectionPresentation.recoveryActionTitle ?? "Reconnect"
-    }
-
-    private var connectionRecoveryActionTitle: String {
-        switch connectionPresentation.level {
-        case .loginRequired, .error:
-            return recoveryActionTitle
-        case .stale:
-            return "Refresh"
-        case .demo, .offline, .healthy, .unknown:
-            return "Refresh"
-        }
-    }
-
-    private var connectionRecoveryActionIcon: String {
-        switch connectionPresentation.level {
-        case .loginRequired, .error:
-            return "link.badge.plus"
-        case .stale:
-            return "arrow.clockwise"
-        case .demo, .offline, .healthy, .unknown:
-            return "arrow.clockwise"
-        }
-    }
-
-    private var connectionRecoveryAccessibilityLabel: String {
-        "\(connectionRecoveryActionTitle) for \(drillInSummary.displayName)"
-    }
-
-    private var connectionRecoveryAccessibilityHint: String {
-        connectionPresentation.recoveryDetailLabel ?? "Refreshes this selected account's PlaidBar status."
-    }
-
-    private func performConnectionRecoveryAction() {
-        switch connectionPresentation.level {
-        case .loginRequired, .error:
-            Task { await appState.reconnectItem(itemId: account.itemId) }
-        case .stale:
-            Task { await appState.refreshDashboard() }
-        case .demo, .offline, .healthy, .unknown:
-            break
-        }
-    }
-
-    private func performDrillInAction(_ action: DashboardDrillInAction) {
-        switch action {
-        case .reconnect:
-            Task { await appState.reconnectItem(itemId: account.itemId) }
-        case .remove:
-            isConfirmingAccountRemoval = true
-        case .settings:
-            openSettingsWindow()
-        }
-    }
-
-    private func openSettingsWindow() {
-        SettingsWindowActivationRestorer.shared.open(openSettings: openSettings)
-    }
-
-    private var panelStroke: Color {
-        shouldEmphasizeConnection ? connectionTint.opacity(0.18) : Color.primary.opacity(0.07)
-    }
-
-    private var recoveryFill: Color {
-        shouldEmphasizeConnection ? connectionTint.opacity(0.08) : Color.primary.opacity(0.035)
-    }
-
-    private var shouldEmphasizeConnection: Bool {
-        switch connectionPresentation.level {
-        case .stale, .loginRequired, .error:
-            return true
-        case .demo, .offline, .healthy, .unknown:
-            return false
-        }
-    }
-}
-
-private struct AccountDrillInActionBar: View {
-    let actions: [DashboardDrillInAction]
-    let accountDisplayName: String
-    let onAction: (DashboardDrillInAction) -> Void
-
-    var body: some View {
-        HStack(spacing: Spacing.compactRowContentSpacing) {
-            ForEach(actions, id: \.self) { action in
-                Button {
-                    onAction(action)
-                } label: {
-                    Label(action.title, systemImage: action.iconName)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .tint(action == .remove ? SemanticColors.negative : nil)
-                .accessibilityLabel(action.accessibilityLabel(accountDisplayName: accountDisplayName))
-                .accessibilityHint(action.accessibilityHint)
-            }
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Selected account actions")
-    }
-}
-
-private func accountConnectionTint(for level: AccountConnectionLevel) -> Color {
-    switch level {
-    case .demo:
-        return .secondary
-    case .offline:
-        return .secondary
-    case .healthy:
-        return .secondary
-    case .stale, .loginRequired:
-        return SemanticColors.warning
-    case .error:
-        return SemanticColors.negative
-    case .unknown:
-        return .secondary
-    }
-}
-
-private struct DrillInSurfaceRail: View {
-    let surfaces: [DashboardDrillInSurface]
-
-    var body: some View {
-        HStack(spacing: Spacing.xs) {
-            ForEach(surfaces, id: \.self) { surface in
-                Label(surface.title, systemImage: surface.iconName)
-                    .font(.caption2.weight(.semibold))
-                    .lineLimit(1)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 4)
-                    .background(Color.primary.opacity(0.04), in: Capsule())
-                    .accessibilityLabel("\(surface.title) drill-in")
-                    .accessibilityHint(surface.accessibilitySummary)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Selected account drill-in surfaces")
-    }
-}
-
-private struct AccountConnectionBadge: View {
-    let label: String
-    let icon: String
-    let tint: Color
-
-    var body: some View {
-        Label(label, systemImage: icon)
-            .font(.caption.weight(.semibold))
-            .lineLimit(1)
-            .foregroundStyle(tint)
-            .padding(.horizontal, Spacing.compactRowHorizontalPadding)
-            .padding(.vertical, Spacing.compactRowVerticalPadding)
-            .background(tint.opacity(0.12), in: Capsule())
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Selected account status: \(label)")
-    }
-}
-
-private struct AccountSignalPill: View {
-    let title: String
-    let value: String
-    let icon: String
-    let tint: Color
-
-    var body: some View {
-        HStack(spacing: Spacing.xs) {
-            Image(systemName: icon)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(tint)
-                .frame(width: 12)
-
-            VStack(alignment: .leading, spacing: Spacing.compactRowTextSpacing) {
-                Text(title)
-                    .microText()
-                    .foregroundStyle(.secondary)
-                Text(value)
-                    .font(.caption.weight(.bold))
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.82)
-            }
-        }
-        .padding(.horizontal, Spacing.compactRowHorizontalPadding)
-        .padding(.vertical, Spacing.compactRowVerticalPadding)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .nativeInsetSurface(cornerRadius: SurfaceTokens.panelCornerRadius)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(title): \(value)")
-    }
-}
-
-private struct DetailValue: View {
-    let title: String
-    let value: String
-    let tint: Color
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.xs) {
-            Text(title)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.callout.weight(.bold))
-                .foregroundStyle(tint)
-                .monospacedDigit()
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(title): \(value)")
-    }
-}
-
-private struct TransactionMiniRow: View {
-    let transaction: TransactionDTO
-
-    var body: some View {
-        HStack(spacing: Spacing.compactRowContentSpacing) {
-            Circle()
-                .fill(transaction.isIncome ? SemanticColors.positive : Color.secondary.opacity(0.55))
-                .frame(width: 8, height: 8)
-
-            VStack(alignment: .leading, spacing: Spacing.compactRowTextSpacing) {
-                Text(transaction.displayName)
-                    .font(.callout.weight(.semibold))
-                    .lineLimit(1)
-                Text(Formatters.displayTransactionDate(transaction.date))
-                    .microText()
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            Text(amountText)
-                .font(.callout.weight(.bold))
-                .monospacedDigit()
-                .foregroundStyle(transaction.isIncome ? SemanticColors.positive : .primary)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityLabel)
-    }
-
-    private var amountText: String {
-        let prefix = transaction.isIncome ? "+" : ""
-        return "\(prefix)\(Formatters.currency(transaction.displayAmount, format: .compact))"
-    }
-
-    private var accessibilityLabel: String {
-        let direction = transaction.isIncome ? "income" : "outflow"
-        return "\(transaction.displayName), \(direction), \(Formatters.currency(transaction.displayAmount, format: .full)), \(Formatters.displayTransactionDate(transaction.date))"
-    }
-}
-
-private struct AccountActivityEmptyStateView: View {
-    let presentation: AccountActivityEmptyState
-
-    var body: some View {
-        HStack(alignment: .top, spacing: Spacing.compactRowContentSpacing) {
-            Image(systemName: presentation.iconName)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(tint)
-                .frame(width: 18, height: 18)
-                .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 5))
-
-            VStack(alignment: .leading, spacing: Spacing.compactRowTextSpacing) {
-                Text(presentation.title)
-                    .font(.caption.weight(.semibold))
-                Text(presentation.detail)
-                    .detailText()
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer(minLength: Spacing.compactRowContentSpacing)
-        }
-        .padding(.horizontal, Spacing.compactRowHorizontalPadding)
-        .padding(.vertical, Spacing.compactRowContentSpacing)
-        .nativePanelSurface(
-            cornerRadius: SurfaceTokens.panelCornerRadius,
-            fill: AnyShapeStyle(tint.opacity(0.055)),
-            stroke: tint.opacity(0.11),
-            useLiquidGlass: false
-        )
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(presentation.accessibilityLabel)
-    }
-
-    private var tint: Color {
-        switch presentation.tone {
-        case .brand:
-            SemanticColors.brand
-        case .healthy:
-            .secondary
-        case .offline, .secondary:
-            .secondary
-        case .warning:
-            SemanticColors.warning
-        }
-    }
-}
-
 // MARK: - Footer
 
 private struct DashboardFooter: View {
@@ -2346,16 +1707,24 @@ private struct DashboardFooter: View {
     let onAddAccount: () -> Void
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: Spacing.md) {
             Button(action: onAddAccount) {
                 Image(systemName: "plus.circle")
                     .font(.body)
                     .foregroundStyle(.secondary)
+                    .frame(minWidth: Sizing.hitTargetMin, minHeight: Sizing.hitTargetMin)
             }
             .buttonStyle(.borderless)
             .help("Add Account")
             .accessibilityLabel("Add Account")
             .keyboardShortcut("n", modifiers: .command)
+
+            // The one place sync/mode status lives on a healthy dashboard.
+            Text(statusLineText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .accessibilityLabel("Status: \(statusLineText)")
 
             Spacer()
 
@@ -2364,6 +1733,7 @@ private struct DashboardFooter: View {
             } label: {
                 RefreshIcon(isLoading: appState.isLoading)
                     .foregroundStyle(.secondary)
+                    .frame(minWidth: Sizing.hitTargetMin, minHeight: Sizing.hitTargetMin)
             }
             .buttonStyle(.borderless)
             .help("Refresh")
@@ -2375,13 +1745,23 @@ private struct DashboardFooter: View {
             } label: {
                 Image(systemName: "gearshape")
                     .foregroundStyle(.secondary)
+                    .frame(minWidth: Sizing.hitTargetMin, minHeight: Sizing.hitTargetMin)
             }
             .buttonStyle(.borderless)
             .help("Settings")
             .accessibilityLabel("Settings")
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
+        .padding(.horizontal, Spacing.md)
+        .padding(.vertical, Spacing.xs)
+    }
+
+    private var statusLineText: String {
+        var parts = [appState.statusModeText]
+        parts.append(appState.statusSyncText)
+        if appState.statusItemCount > 0 {
+            parts.append("\(appState.statusItemCount) linked")
+        }
+        return parts.joined(separator: " · ")
     }
 
     private func openSettingsWindow() {
@@ -2390,7 +1770,7 @@ private struct DashboardFooter: View {
 }
 
 @MainActor
-private final class SettingsWindowActivationRestorer {
+final class SettingsWindowActivationRestorer {
     static let shared = SettingsWindowActivationRestorer()
 
     private var closeObserver: NSObjectProtocol?
@@ -2431,8 +1811,8 @@ private final class SettingsWindowActivationRestorer {
         }
 
         DispatchQueue.main.async { [weak self] in
-            guard let self, self.discoveryObserver != nil else { return }
-            _ = self.focusCurrentSettingsWindow()
+            guard let self, discoveryObserver != nil else { return }
+            _ = focusCurrentSettingsWindow()
         }
     }
 
@@ -2524,10 +1904,10 @@ private struct ErrorBanner: View {
             .help("Dismiss error")
             .accessibilityLabel("Dismiss error")
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 7)
+        .padding(.horizontal, Spacing.md)
+        .padding(.vertical, Spacing.sm)
         .background(SemanticColors.negative.opacity(0.1))
-        .transition(.move(edge: .bottom).combined(with: .opacity))
+        .transition(.move(edge: .top).combined(with: .opacity))
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Error: \(error)")
         .task(id: error) {
