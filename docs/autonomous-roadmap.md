@@ -311,6 +311,12 @@ remain unmarked.
   Settings account surfaces, with display-safe severity/action/accessibility
   semantics and focused ordering/redaction/healthy-collapse tests; evidence:
   `AttentionQueue`, `AttentionQueueView`, and `AttentionQueueTests`.
+- 2026-06-11 [T096] [T097] [T099] [T100]: defined the local insight receipt
+  pattern before richer AI summaries, including display-safe evidence chips,
+  explicit time windows, local-only status, confidence and limitation copy,
+  unavailable runtime states, and reversible category-hint action language;
+  evidence: `LocalAIInsightReceipt`, `LocalInsightsCard`, design-system notes,
+  and focused core tests.
 
 ## Backlog Source
 
