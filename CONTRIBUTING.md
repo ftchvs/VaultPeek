@@ -1,6 +1,10 @@
-# Contributing to PlaidBar
+# Internal Development Guide
 
-Thank you for your interest in contributing to PlaidBar!
+PlaidBar is proprietary software. This document covers internal development
+conventions for authorized collaborators working under a written agreement with
+the owner. **PlaidBar does not accept public/external contributions, forks, or
+pull requests.** Access to this repository does not grant any license to the
+code (see [LICENSE](LICENSE)).
 
 ## Development Setup
 
@@ -39,13 +43,13 @@ swiftlint
 
 Configuration files: `.swiftformat` and `.swiftlint.yml` in the repo root.
 
-## Pull Request Process
+## Pull Request Process (internal)
 
-1. Fork the repo and create a branch from `main`
+1. Create a branch from `main` (do not fork)
 2. Make your changes with clear, descriptive commits
 3. Add tests for new functionality
 4. Ensure `swift test` passes
-5. Submit a PR with a clear description of changes
+5. Open a PR with a clear description of changes for internal review
 
 ## Architecture Notes
 
@@ -57,10 +61,9 @@ Configuration files: `.swiftformat` and `.swiftlint.yml` in the repo root.
 
 ## Reporting Issues
 
-- Use the [bug report template](https://github.com/ftchvs/PlaidBar/issues/new?template=bug_report.yml) for bugs
-- Use the [feature request template](https://github.com/ftchvs/PlaidBar/issues/new?template=feature_request.yml) for ideas
-- Use the accessibility issue template for VoiceOver, keyboard, chart, contrast, or reduced-motion barriers
-- Read [SUPPORT.md](SUPPORT.md) before sharing logs, screenshots, or setup details
+Internal collaborators track work in Linear (Andeslab → PlaidBar project). When
+attaching logs, screenshots, or setup details, use sandbox or synthetic data
+only — never real Plaid credentials, account IDs, or balances.
 
 ## Accessibility Expectations
 
@@ -77,6 +80,10 @@ Configuration files: `.swiftformat` and `.swiftlint.yml` in the repo root.
 - [ ] I used sandbox or synthetic financial data in screenshots, tests, and examples.
 - [ ] I updated docs if user-facing behavior changed.
 
-## License
+## Intellectual Property
 
-By contributing, you agree that your contributions will be licensed under the MIT License.
+PlaidBar is proprietary and confidential. All work contributed by authorized
+collaborators is a work made for hire and/or assigned to the owner, and becomes
+the exclusive property of Felipe Tavares Chaves. Do not copy, redistribute, or
+reuse any portion of this codebase outside the scope of your written agreement.
+See [LICENSE](LICENSE).

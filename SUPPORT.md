@@ -1,7 +1,8 @@
 # Support
 
-PlaidBar is a local-first macOS utility for sensitive financial data. Public
-support should stay useful without exposing private account details.
+PlaidBar is a proprietary, local-first macOS product for sensitive financial
+data. Support is provided to licensed users and should stay useful without
+exposing private account details.
 
 ## Supported Versions
 
@@ -14,15 +15,16 @@ support should stay useful without exposing private account details.
 Security fixes target `main` first and may be released as a `1.0.x` patch when
 they affect the stable release line.
 
-## Public Issues
+## Reporting Issues
 
-Use GitHub issues for:
+Licensed users and internal collaborators report issues through the designated
+private support channel (or Linear for internal work) for:
 
 - setup bugs
 - demo or sandbox flow bugs
 - UI, accessibility, and documentation issues
 - feature requests
-- Homebrew formula/install problems
+- installation problems
 
 Do not include:
 

@@ -264,7 +264,7 @@ and `docs/autonomous-roadmap.md`.
 ### PR-023: QA, CI, And Release Gates
 
 - [ ] T111: Keep `docs/qa-matrix.md` aligned with the current minimum PR gates.
-- [ ] T112: Add or update a local command for formula or package validation.
+- [ ] T112: Add or update a local command for DMG/app-bundle package validation.
 - [ ] T113: Record known Swift toolchain baseline limitations accurately.
 - [ ] T114: Keep release notes honest about shipped behavior and deferred work.
 - [ ] T115: Add a final release-candidate checklist for privacy, security,
