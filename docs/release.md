@@ -8,6 +8,10 @@ signing, notarization, cask, and the Sparkle appcast remain deferred until the
 clean-machine Gatekeeper path is real, so first launch needs right-click >
 Open and release notes must say so.
 
+The bundle ships `AppIcon.icns` (checked by `Scripts/validate-app-bundle.sh`).
+The icon is generated from code — rerun `./Scripts/generate-app-icon.sh` to
+regenerate `Sources/PlaidBar/Resources/AppIcon.icns` after design changes.
+
 ## Current Release
 
 - Current version: `v1.0.0`
