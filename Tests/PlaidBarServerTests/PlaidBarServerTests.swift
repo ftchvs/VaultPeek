@@ -1,4 +1,5 @@
 import Foundation
+import Hummingbird
 @testable import PlaidBarCore
 @testable import PlaidBarServer
 import Testing
@@ -154,6 +155,37 @@ struct PlaidBarServerTests {
         ))
     }
 
+    @Test func serverConfigLoadsCredentialLessIntoSetupState() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-config-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let dataDirectory = directory.appendingPathComponent("data", isDirectory: true)
+        let configURL = directory.appendingPathComponent("plaidbar.conf")
+        // Blank values override any PLAID_* variables exported in the test
+        // host's environment, making this deterministic everywhere.
+        try """
+        PLAID_CLIENT_ID=
+        PLAID_SECRET=
+        PLAID_ENV=sandbox
+        PLAIDBAR_DATA_DIR=\(dataDirectory.path)
+        """.write(to: configURL, atomically: true, encoding: .utf8)
+
+        let config = try ServerConfig.load(from: configURL.path)
+
+        #expect(!config.credentialsConfigured)
+        #expect(config.plaidClientId.isEmpty)
+        #expect(config.plaidSecret.isEmpty)
+        #expect(config.plaidEnvironment == .sandbox)
+        // Setup state still provisions everything the degraded server needs:
+        // data directory, database path, and the local API auth token.
+        #expect(config.databasePath.hasPrefix(dataDirectory.path))
+        #expect(FileManager.default.fileExists(
+            atPath: dataDirectory.appendingPathComponent(LocalDataStore.authTokenFilename).path
+        ))
+    }
+
     @Test func serverConfigCliOverridesConfigFile() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("plaidbar-config-\(UUID().uuidString)", isDirectory: true)
@@ -240,6 +272,56 @@ struct PlaidBarServerTests {
             character.isLetter || character.isNumber || character == "-" || character == "_"
         })
         #expect(!token.contains("="))
+    }
+
+    @Test func plaidClientRefusesRequestsInSetupState() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-config-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let configURL = directory.appendingPathComponent("plaidbar.conf")
+        try """
+        PLAID_CLIENT_ID=
+        PLAID_SECRET=
+        PLAID_ENV=sandbox
+        PLAIDBAR_DATA_DIR=\(directory.appendingPathComponent("data").path)
+        """.write(to: configURL, atomically: true, encoding: .utf8)
+
+        let config = try ServerConfig.load(from: configURL.path)
+        let client = PlaidClient(config: config)
+
+        // The guard fires before any network request, so this fails fast and
+        // deterministically with the setup-state error.
+        await #expect(throws: PlaidError.credentialsNotConfigured) {
+            _ = try await client.createLinkToken(
+                userId: "test-user",
+                completionRedirectUri: "http://localhost:8484/oauth/callback"
+            )
+        }
+    }
+
+    @Test func setupStateMiddlewareClassifiesPlaidBackedPaths() {
+        typealias Middleware = SetupStateMiddleware<BasicRequestContext>
+
+        // Blocked in setup state: nothing on these routes works without
+        // Plaid credentials, even when no items are linked.
+        #expect(Middleware.isPlaidBackedPath("/api/link/create"))
+        #expect(Middleware.isPlaidBackedPath("/api/link/update/item-1"))
+        #expect(Middleware.isPlaidBackedPath("/api/accounts"))
+        #expect(Middleware.isPlaidBackedPath("/api/accounts/balances"))
+        #expect(Middleware.isPlaidBackedPath("/api/accounts/item-1"))
+        #expect(Middleware.isPlaidBackedPath("/api/transactions/sync"))
+        #expect(Middleware.isPlaidBackedPath("/api/transactions/sync/cursors"))
+
+        // Readiness metadata stays available so setup guidance can render.
+        #expect(!Middleware.isPlaidBackedPath("/api/status"))
+        #expect(!Middleware.isPlaidBackedPath("/api/items"))
+        #expect(!Middleware.isPlaidBackedPath("/health"))
+        #expect(!Middleware.isPlaidBackedPath("/oauth/callback"))
+
+        // Prefix matching respects path-segment boundaries.
+        #expect(!Middleware.isPlaidBackedPath("/api/accountsmetadata"))
     }
 
     @Test func apiTokenComparisonAcceptsOnlyExactBearerToken() {

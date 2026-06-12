@@ -35,6 +35,15 @@ struct ServerConfig: Sendable {
         }
     }
 
+    /// `false` means the server is in a credential-less setup state: it boots
+    /// and serves `/health` and `/api/status`, but Plaid-backed routes return
+    /// 503 until credentials are configured and the server restarts. This is
+    /// what lets a fresh DMG install auto-start its bundled server before
+    /// `server.conf` exists.
+    var credentialsConfigured: Bool {
+        !plaidClientId.isEmpty && !plaidSecret.isEmpty
+    }
+
     static func load(
         from configPath: String? = nil,
         portOverride: Int? = nil,
@@ -56,12 +65,12 @@ struct ServerConfig: Sendable {
             sandboxOverride: sandboxOverride
         )
 
-        guard let clientId = environmentValues["PLAID_CLIENT_ID"]?.trimmedNonEmpty else {
-            throw ServerConfigError.missingEnvironmentVariable("PLAID_CLIENT_ID")
-        }
-        guard let secret = environmentValues["PLAID_SECRET"]?.trimmedNonEmpty else {
-            throw ServerConfigError.missingEnvironmentVariable("PLAID_SECRET")
-        }
+        // Missing credentials are not a boot failure: the server starts in a
+        // setup state so a fresh install can probe /health and /api/status
+        // before any credentials exist. Plaid-backed routes refuse to run
+        // until both values are present.
+        let clientId = environmentValues["PLAID_CLIENT_ID"]?.trimmedNonEmpty ?? ""
+        let secret = environmentValues["PLAID_SECRET"]?.trimmedNonEmpty ?? ""
 
         let authTokenURL = LocalDataStore.authTokenURL(
             in: URL(fileURLWithPath: dataDir, isDirectory: true)
@@ -761,14 +770,11 @@ struct ServerConfig: Sendable {
 }
 
 enum ServerConfigError: LocalizedError {
-    case missingEnvironmentVariable(String)
     case invalidEnvironmentVariable(String, String)
     case invalidConfigLine(path: String, line: Int)
 
     var errorDescription: String? {
         switch self {
-        case .missingEnvironmentVariable(let name):
-            "Missing required environment variable: \(name)"
         case .invalidEnvironmentVariable(let name, let value):
             "Invalid value for \(name): \(value)"
         case .invalidConfigLine(let path, let line):

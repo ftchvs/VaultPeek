@@ -55,6 +55,10 @@ struct TransactionRoutes: Sendable {
                 )
                 try await tokenStore.updateItemStatus(id: itemId, status: ItemConnectionStatus.connected.rawValue)
                 successfulItemCount += 1
+            } catch PlaidError.credentialsNotConfigured {
+                // Setup state affects every item identically: surface the 503
+                // credential guidance instead of marking items errored.
+                throw PlaidError.credentialsNotConfigured
             } catch {
                 try await tokenStore.updateItemStatus(id: itemId, status: itemStatus(for: error).rawValue)
                 continue
