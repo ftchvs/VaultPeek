@@ -1146,7 +1146,15 @@ final class AppState {
     /// ships inside the bundle. Starts it at app launch so it is usually
     /// ready before the popover first opens.
     func prewarmBundledServer() async {
-        guard !CommandLine.arguments.contains("--demo") else { return }
+        guard !CommandLine.arguments.contains("--demo") else {
+            isBooting = false
+            return
+        }
+        // The menu bar can be used without ever opening the popover. Once the
+        // launch/server probe settles, stop treating offline/stale states as
+        // placeholder skeletons even if `loadInitialData()` has not run yet.
+        defer { isBooting = false }
+
         await checkServerConnection()
         guard !serverConnected else { return }
         // The authenticated status check fails for an externally managed
@@ -1235,21 +1243,95 @@ final class AppState {
     /// surfacing an error during boot.
     private func preloadCachedDataBeforeFirstConnect() {
         guard accounts.isEmpty, transactions.isEmpty,
-              let context = persistedTransactionCacheContext()
+              let context = persistedTransactionCacheContext(),
+              let cacheDirectory = preconnectCacheDirectory(for: context)
         else { return }
 
         if let cachedAccounts = try? LocalDataStore.loadAccounts(
-            from: activeStorageDirectoryURL,
+            from: cacheDirectory,
             context: context
         ), !cachedAccounts.isEmpty {
             accounts = cachedAccounts
         }
         if let cachedTransactions = try? LocalDataStore.loadTransactions(
-            from: activeStorageDirectoryURL,
+            from: cacheDirectory,
             context: context
         ), !cachedTransactions.isEmpty {
             transactions = cachedTransactions
         }
+    }
+
+    private func preconnectCacheDirectory(for context: TransactionCacheContext) -> URL? {
+        let normalizedContext = normalizedCacheContext(context)
+        guard let currentHint = currentPreconnectCacheContextHint(),
+              normalizedCacheContext(currentHint) == normalizedContext
+        else { return nil }
+
+        return URL(fileURLWithPath: normalizedContext.storagePath, isDirectory: true)
+    }
+
+    private func currentPreconnectCacheContextHint() -> TransactionCacheContext? {
+        var environment = ProcessInfo.processInfo.environment
+        let configURL = LocalDataStore.storageDirectoryURL()
+            .appendingPathComponent(LocalDataStore.serverConfigFilename)
+        if let configContents = try? String(contentsOf: configURL, encoding: .utf8) {
+            for rawLine in configContents.components(separatedBy: .newlines) {
+                guard let entry = parseServerConfigLine(rawLine) else { continue }
+                environment[entry.key] = entry.value
+            }
+        }
+
+        let rawEnvironment = trimmedNonEmpty(environment["PLAID_ENV"]) ?? PlaidEnvironment.production.rawValue
+        guard let plaidEnvironment = PlaidEnvironment(rawValue: unquoteConfigValue(rawEnvironment)) else {
+            return nil
+        }
+
+        return TransactionCacheContext(
+            environment: plaidEnvironment,
+            storagePath: LocalDataStore.storageDirectoryURL(environment: environment).standardizedFileURL.path
+        )
+    }
+
+    private func normalizedCacheContext(_ context: TransactionCacheContext) -> TransactionCacheContext {
+        TransactionCacheContext(
+            environment: context.environment,
+            storagePath: URL(
+                fileURLWithPath: NSString(string: context.storagePath).expandingTildeInPath,
+                isDirectory: true
+            ).standardizedFileURL.path
+        )
+    }
+
+    private func parseServerConfigLine(_ rawLine: String) -> (key: String, value: String)? {
+        var line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !line.isEmpty, !line.hasPrefix("#") else { return nil }
+        if line.hasPrefix("export ") {
+            line.removeFirst("export ".count)
+            line = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        guard let separator = line.firstIndex(of: "=") else { return nil }
+        let key = String(line[..<separator]).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return nil }
+        let value = String(line[line.index(after: separator)...])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return (key, unquoteConfigValue(value))
+    }
+
+    private func trimmedNonEmpty(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func unquoteConfigValue(_ value: String) -> String {
+        guard value.count >= 2,
+              let first = value.first,
+              let last = value.last,
+              (first == "\"" && last == "\"") || (first == "'" && last == "'")
+        else {
+            return value
+        }
+        return String(value.dropFirst().dropLast())
     }
 
     private func persistedTransactionCacheContext() -> TransactionCacheContext? {
