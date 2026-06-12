@@ -4,6 +4,17 @@ public enum AttentionQueueSeverity: String, Codable, Sendable {
     case healthy
     case warning
     case blocked
+
+    /// Severity tier of the failure this row represents; `nil` for healthy
+    /// rows, which carry no error. Warnings are advisory (inline recovery),
+    /// blocked rows gate the connection or credential path.
+    public var errorSeverity: ErrorSeverity? {
+        switch self {
+        case .healthy: nil
+        case .warning: .advisory
+        case .blocked: .blocking
+        }
+    }
 }
 
 public struct AttentionQueueRow: Equatable, Identifiable, Sendable {
@@ -17,6 +28,11 @@ public struct AttentionQueueRow: Equatable, Identifiable, Sendable {
     public let targetItemId: String?
     public let accessibilityLabel: String
     public let accessibilityHint: String?
+
+    /// Severity tier derived from the row's existing severity state.
+    public var errorSeverity: ErrorSeverity? {
+        severity.errorSeverity
+    }
 
     public init(
         id: String,
@@ -51,6 +67,13 @@ public struct AttentionQueue: Equatable, Sendable {
 
     public init(rows: [AttentionQueueRow]) {
         self.rows = Array(rows.prefix(Self.maximumRowCount))
+    }
+
+    /// Highest severity tier across the visible rows; `nil` when every row
+    /// is healthy. Chrome-level alert treatments (menu bar, status strip)
+    /// should key off `.blocking` only.
+    public var highestErrorSeverity: ErrorSeverity? {
+        rows.compactMap(\.errorSeverity).max()
     }
 
     public static func evaluate(
@@ -346,10 +369,12 @@ public struct AttentionQueue: Equatable, Sendable {
             case "first-sync-incomplete": return 10
             case "sync-stale": return 11
             default:
-                switch row.severity {
-                case .blocked: return 20
-                case .warning: return 30
-                case .healthy: return 40
+                // Unknown rows fall back to severity-tier ordering: blocking
+                // failures first, advisories next, healthy rows last.
+                switch row.errorSeverity {
+                case .blocking: return 20
+                case .advisory: return 30
+                case nil: return 40
                 }
             }
         }

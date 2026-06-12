@@ -8,6 +8,19 @@ public enum ServerConnectionIssue: Sendable, Equatable {
     case localAuthMissing
     case localAuthRejected
     case error
+
+    /// Severity tier of this connection state; `nil` when nothing failed.
+    /// Offline and local-auth failures block every Plaid-backed action, so
+    /// they own the chrome-level alert treatments. A generic `.error` means
+    /// the server is still reachable and a recent action failed — advisory,
+    /// rendered inline and cleared by the next successful refresh.
+    public var errorSeverity: ErrorSeverity? {
+        switch self {
+        case .demo, .syncing, .connected: nil
+        case .offline, .localAuthMissing, .localAuthRejected: .blocking
+        case .error: .advisory
+        }
+    }
 }
 
 public struct ServerConnectionPresentation: Sendable, Equatable {
@@ -15,6 +28,11 @@ public struct ServerConnectionPresentation: Sendable, Equatable {
     public let statusText: String
     public let diagnosticsSummary: String
     public let attentionText: String?
+
+    /// Severity tier derived from the issue this mapping already computed.
+    public var errorSeverity: ErrorSeverity? {
+        issue.errorSeverity
+    }
 
     public init(
         issue: ServerConnectionIssue,
@@ -54,21 +72,25 @@ public struct ServerConnectionPresentation: Sendable, Equatable {
             )
         }
 
-        if let errorMessage, !errorMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return ServerConnectionPresentation(
-                issue: .error,
-                statusText: "Error",
-                diagnosticsSummary: "Recent action failed",
-                attentionText: "Error"
-            )
-        }
-
+        // Offline is evaluated before a generic error message: when the
+        // server is unreachable, that blocking state is the real condition
+        // and must win over whatever advisory error the last action left
+        // behind.
         guard serverConnected else {
             return ServerConnectionPresentation(
                 issue: .offline,
                 statusText: "Offline",
                 diagnosticsSummary: "Server offline",
                 attentionText: "Offline"
+            )
+        }
+
+        if let errorMessage, !errorMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return ServerConnectionPresentation(
+                issue: .error,
+                statusText: "Error",
+                diagnosticsSummary: "Recent action failed",
+                attentionText: "Error"
             )
         }
 
