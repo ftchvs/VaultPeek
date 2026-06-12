@@ -16,6 +16,7 @@ local storage, notifications, and distribution.
 | Test suite | `swift test --skip-update --disable-keychain` | CI and local when toolchain supports Swift Testing |
 | Sandbox smoke | `./Scripts/smoke-sandbox.sh` | Server/config changes |
 | Screenshots | `./Scripts/screenshots.sh` | UI/docs release changes |
+| Appearance matrix renders | `./Scripts/qa-appearance-matrix.sh` | UI-affecting changes (light/dark regression evidence) |
 
 ## Manual Product QA
 
@@ -52,6 +53,72 @@ local storage, notifications, and distribution.
 | Focus states | Keyboard focus remains visible |
 | Reduced motion | Animations do not block comprehension |
 | Screenshot readability | README screenshots remain legible at documented widths |
+
+## Visual QA: Appearance and Transparency Matrix
+
+The popover relies on vibrant materials (`.ultraThinMaterial`) that respond to
+system appearance and to Reduce Transparency, so every release-facing surface
+must be checked in all four combinations. This matrix records what each pass
+covered and how.
+
+### How to run
+
+```bash
+# Headless light/dark renders (no Screen Recording permission needed).
+# Writes docs/qa/appearance-{light,dark}/render-{dashboard,flyout}.png.
+./Scripts/qa-appearance-matrix.sh
+
+# Reduce Transparency half: toggle System Settings > Accessibility >
+# Display > Reduce transparency manually, then:
+PLAIDBAR_QA_MATRIX_SUFFIX="-reduce-transparency" ./Scripts/qa-appearance-matrix.sh
+
+# Any single state, any appearance (also works with Scripts/screenshots.sh
+# capture states):
+.build/release/PlaidBar --demo --show-popover --appearance light
+```
+
+`--appearance light|dark` pins the whole app to one appearance regardless of
+the host system setting. Unknown values fall back to the system appearance.
+
+### Known limits of the headless path
+
+- `--render-snapshot` rasterizes the popover content view directly, so
+  vibrant materials composite against nothing instead of the desktop.
+  Translucency therefore reads darker/flatter than on-screen. Headless renders
+  are regression evidence for layout, copy, and contrast direction — final
+  visual sign-off uses `Scripts/screenshots.sh` on-screen captures or eyes.
+- Reduce Transparency is a system-wide accessibility setting with no
+  supported per-process override, so that half of the matrix cannot be
+  captured autonomously. It requires a manual toggle (procedure above).
+- `--render-snapshot` captures the dashboard and one account fly-out. The
+  Settings window, setup preflight, and the non-default dashboard filters are
+  only reachable through `Scripts/screenshots.sh` (UI automation) or a manual
+  pass.
+
+### Matrix status (last pass: 2026-06-12, demo fixtures)
+
+| Surface | Light | Dark | Light + Reduce Transparency | Dark + Reduce Transparency |
+|---------|-------|------|-----------------------------|----------------------------|
+| Dashboard overview (All) | Pass — headless render | Pass — headless render | Needs human eyes | Needs human eyes |
+| Account fly-out (credit) | Pass — headless render | Pass — headless render | Needs human eyes | Needs human eyes |
+| Account fly-out (savings) | Pass — ad hoc headless render | Not run | Needs human eyes | Needs human eyes |
+| Dashboard filters (Cash/Credit/Savings/Debt/Status) | Code-inspected only (filters reuse the All-state visual system) | Code-inspected only | Needs human eyes | Needs human eyes |
+| Settings (General/Accounts/Notifications/About) | Needs `screenshots.sh` or human eyes | Needs `screenshots.sh` or human eyes | Needs human eyes | Needs human eyes |
+| Setup sandbox preflight | Needs `screenshots.sh` or human eyes | Needs `screenshots.sh` or human eyes | Needs human eyes | Needs human eyes |
+
+2026-06-12 pass notes, recorded from the committed renders under `docs/qa/`:
+
+- Both appearances force correctly end to end (header, heatmap, account rows,
+  balance mix, insight receipt all follow the forced appearance).
+- The 365-day heatmap shows continuous activity in both appearances — the
+  former days-61–73 fixture dead zone is gone (see `DemoFixturesTests`).
+- Color-independence backups confirmed in renders and code: utilization rows
+  pair color with text ("84% • $790 available - due not synced"), the heatmap
+  ships a Less/More legend plus `accessibilityLabel` summaries, and trend
+  direction is reinforced by signed amounts, not color alone.
+- Reduce Transparency (both appearances), grayscale full-screen check, and
+  Retina hairline inspection (1px hairlines, no half-pixel chip borders) were
+  NOT verified in this pass — they need a human on a Retina display.
 
 ## Security and Privacy QA
 

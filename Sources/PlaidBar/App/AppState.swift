@@ -1580,112 +1580,12 @@ final class AppState {
         isBooting = false
         isDemoStatusRecoveryScenario = CommandLine.arguments.contains("--screenshot-status-recovery")
 
-        let today = Self.dateString(daysAgo: 0)
-        let yesterday = Self.dateString(daysAgo: 1)
-        let twoDaysAgo = Self.dateString(daysAgo: 2)
-        let threeDaysAgo = Self.dateString(daysAgo: 3)
-
-        accounts = [
-            AccountDTO(
-                id: "demo_checking", itemId: "demo_chase", name: "Chase Checking",
-                officialName: "Chase Total Checking", type: .depository, subtype: "checking",
-                mask: "4892", balances: BalanceDTO(available: 8_241.56, current: 8_241.56, isoCurrencyCode: "USD"),
-                institutionName: "Chase"
-            ),
-            AccountDTO(
-                id: "demo_savings", itemId: "demo_chase", name: "Chase Savings",
-                officialName: "Chase Savings", type: .depository, subtype: "savings",
-                mask: "7731", balances: BalanceDTO(available: 15_420.00, current: 15_420.00, isoCurrencyCode: "USD"),
-                institutionName: "Chase"
-            ),
-            AccountDTO(
-                id: "demo_amex", itemId: "demo_amex_item", name: "Amex Platinum",
-                officialName: "American Express Platinum Card", type: .credit, subtype: "credit card",
-                mask: "1008", balances: BalanceDTO(current: -1_847.32, limit: 20_000, isoCurrencyCode: "USD"),
-                institutionName: "American Express"
-            ),
-            AccountDTO(
-                id: "demo_visa", itemId: "demo_chase", name: "Chase Freedom",
-                officialName: "Chase Freedom Unlimited", type: .credit, subtype: "credit card",
-                mask: "3345", balances: BalanceDTO(current: -4_210.00, limit: 5_000, isoCurrencyCode: "USD"),
-                institutionName: "Chase"
-            ),
-        ]
-
-        let oneWeekAgo = Self.dateString(daysAgo: 8)
-        let twoWeeksAgo = Self.dateString(daysAgo: 15)
-        let threeWeeksAgo = Self.dateString(daysAgo: 22)
-        let oneMonthAgo = Self.dateString(daysAgo: 30)
-        let fiveWeeksAgo = Self.dateString(daysAgo: 35)
-        let sixWeeksAgo = Self.dateString(daysAgo: 42)
-        let twoMonthsAgo = Self.dateString(daysAgo: 60)
-
-        transactions = [
-            // Today
-            TransactionDTO(id: "tx1", accountId: "demo_checking", amount: 67.42, date: today, name: "WHOLEFDS MKT 10234", merchantName: "Whole Foods", category: .foodAndDrink),
-            TransactionDTO(id: "tx2", accountId: "demo_checking", amount: 23.50, date: today, name: "UBER TRIP", merchantName: "Uber", category: .transportation),
-            TransactionDTO(id: "tx3", accountId: "demo_checking", amount: -3_200.00, date: today, name: "STRIPE TRANSFER", merchantName: "Stripe", category: .income),
-            TransactionDTO(id: "tx4", accountId: "demo_amex", amount: 142.80, date: today, name: "AMAZON.COM", merchantName: "Amazon", category: .shopping),
-            // Yesterday
-            TransactionDTO(id: "tx5", accountId: "demo_checking", amount: 15.99, date: yesterday, name: "NETFLIX.COM", merchantName: "Netflix", category: .entertainment),
-            TransactionDTO(id: "tx6", accountId: "demo_checking", amount: 45.00, date: yesterday, name: "SHELL OIL 57422", merchantName: "Shell", category: .transportation),
-            TransactionDTO(id: "tx7", accountId: "demo_amex", amount: 89.00, date: yesterday, name: "BLUE APRON", merchantName: "Blue Apron", category: .foodAndDrink),
-            TransactionDTO(id: "tx8", accountId: "demo_visa", amount: 34.50, date: yesterday, name: "SPOTIFY", merchantName: "Spotify", category: .entertainment),
-            // 2 days ago
-            TransactionDTO(id: "tx9", accountId: "demo_checking", amount: 250.00, date: twoDaysAgo, name: "VERIZON WIRELESS", merchantName: "Verizon", category: .billsAndUtilities),
-            TransactionDTO(id: "tx10", accountId: "demo_amex", amount: 320.00, date: twoDaysAgo, name: "DELTA AIR LINES", merchantName: "Delta Airlines", category: .travel),
-            TransactionDTO(id: "tx11", accountId: "demo_checking", amount: 12.50, date: twoDaysAgo, name: "STARBUCKS 8823", merchantName: "Starbucks", category: .foodAndDrink),
-            TransactionDTO(id: "tx12", accountId: "demo_amex", amount: 650.00, date: twoDaysAgo, name: "FURNITURE STORE", merchantName: "West Elm", category: .shopping, pending: true),
-            // 3 days ago
-            TransactionDTO(id: "tx13", accountId: "demo_visa", amount: 75.00, date: threeDaysAgo, name: "PLANET FITNESS", merchantName: "Planet Fitness", category: .healthAndFitness),
-            TransactionDTO(id: "tx14", accountId: "demo_checking", amount: -1_500.00, date: threeDaysAgo, name: "VENMO PAYMENT", merchantName: "Venmo", category: .income),
-            TransactionDTO(id: "tx15", accountId: "demo_amex", amount: 55.00, date: threeDaysAgo, name: "TARGET 0392", merchantName: "Target", category: .shopping),
-            TransactionDTO(id: "tx16", accountId: "demo_checking", amount: 1_850.00, date: threeDaysAgo, name: "RENT PAYMENT", merchantName: "Rent Payment", category: .billsAndUtilities),
-            // ~1 week ago
-            TransactionDTO(id: "tx17", accountId: "demo_checking", amount: 85.00, date: oneWeekAgo, name: "COSTCO WHOLESALE", merchantName: "Costco", category: .shopping),
-            TransactionDTO(id: "tx18", accountId: "demo_amex", amount: 220.00, date: oneWeekAgo, name: "AIRBNB", merchantName: "Airbnb", category: .travel),
-            TransactionDTO(id: "tx19", accountId: "demo_checking", amount: -2_800.00, date: oneWeekAgo, name: "DIRECT DEPOSIT", merchantName: "Employer", category: .income),
-            TransactionDTO(id: "tx20", accountId: "demo_visa", amount: 42.00, date: oneWeekAgo, name: "DOORDASH", merchantName: "DoorDash", category: .foodAndDrink),
-            // ~2 weeks ago
-            TransactionDTO(id: "tx21", accountId: "demo_checking", amount: 130.00, date: twoWeeksAgo, name: "CON EDISON", merchantName: "Con Edison", category: .billsAndUtilities),
-            TransactionDTO(id: "tx22", accountId: "demo_amex", amount: 64.99, date: twoWeeksAgo, name: "ADOBE CREATIVE", merchantName: "Adobe", category: .entertainment),
-            TransactionDTO(id: "tx23", accountId: "demo_checking", amount: 95.00, date: twoWeeksAgo, name: "CVS PHARMACY", merchantName: "CVS", category: .healthAndFitness),
-            // ~3 weeks ago
-            TransactionDTO(id: "tx24", accountId: "demo_visa", amount: 175.00, date: threeWeeksAgo, name: "NORDSTROM", merchantName: "Nordstrom", category: .shopping),
-            TransactionDTO(id: "tx25", accountId: "demo_checking", amount: 48.00, date: threeWeeksAgo, name: "LYFT RIDE", merchantName: "Lyft", category: .transportation),
-            TransactionDTO(id: "tx26", accountId: "demo_amex", amount: 35.00, date: threeWeeksAgo, name: "HULU", merchantName: "Hulu", category: .entertainment),
-
-            // === ~1 month ago — recurring merchants (2nd occurrence) ===
-            TransactionDTO(id: "tx27", accountId: "demo_checking", amount: 15.99, date: oneMonthAgo, name: "NETFLIX.COM", merchantName: "Netflix", category: .entertainment),
-            TransactionDTO(id: "tx28", accountId: "demo_visa", amount: 34.50, date: oneMonthAgo, name: "SPOTIFY", merchantName: "Spotify", category: .entertainment),
-            TransactionDTO(id: "tx29", accountId: "demo_visa", amount: 75.00, date: oneMonthAgo, name: "PLANET FITNESS", merchantName: "Planet Fitness", category: .healthAndFitness),
-            TransactionDTO(id: "tx30", accountId: "demo_checking", amount: 1_850.00, date: oneMonthAgo, name: "RENT PAYMENT", merchantName: "Rent Payment", category: .billsAndUtilities),
-            TransactionDTO(id: "tx31", accountId: "demo_checking", amount: -2_800.00, date: oneMonthAgo, name: "DIRECT DEPOSIT", merchantName: "Employer", category: .income),
-            TransactionDTO(id: "tx32", accountId: "demo_checking", amount: 72.00, date: fiveWeeksAgo, name: "WHOLEFDS MKT 10234", merchantName: "Whole Foods", category: .foodAndDrink),
-            TransactionDTO(id: "tx33", accountId: "demo_amex", amount: 38.00, date: fiveWeeksAgo, name: "HULU", merchantName: "Hulu", category: .entertainment),
-            TransactionDTO(id: "tx34", accountId: "demo_amex", amount: 64.99, date: sixWeeksAgo, name: "ADOBE CREATIVE", merchantName: "Adobe", category: .entertainment),
-
-            // === ~2 months ago — recurring merchants (3rd occurrence) ===
-            TransactionDTO(id: "tx35", accountId: "demo_checking", amount: 15.99, date: twoMonthsAgo, name: "NETFLIX.COM", merchantName: "Netflix", category: .entertainment),
-            TransactionDTO(id: "tx36", accountId: "demo_visa", amount: 34.50, date: twoMonthsAgo, name: "SPOTIFY", merchantName: "Spotify", category: .entertainment),
-            TransactionDTO(id: "tx37", accountId: "demo_visa", amount: 75.00, date: twoMonthsAgo, name: "PLANET FITNESS", merchantName: "Planet Fitness", category: .healthAndFitness),
-            TransactionDTO(id: "tx38", accountId: "demo_checking", amount: 1_850.00, date: twoMonthsAgo, name: "RENT PAYMENT", merchantName: "Rent Payment", category: .billsAndUtilities),
-            TransactionDTO(id: "tx39", accountId: "demo_checking", amount: -2_800.00, date: twoMonthsAgo, name: "DIRECT DEPOSIT", merchantName: "Employer", category: .income),
-            TransactionDTO(id: "tx40", accountId: "demo_amex", amount: 64.99, date: twoMonthsAgo, name: "ADOBE CREATIVE", merchantName: "Adobe", category: .entertainment),
-            TransactionDTO(id: "tx41", accountId: "demo_amex", amount: 36.00, date: twoMonthsAgo, name: "HULU", merchantName: "Hulu", category: .entertainment),
-        ]
-        transactions.append(contentsOf: Self.historicalDemoTransactions())
-
-        // Deterministic 60-day history with a gentle upward drift so the header
-        // trend reads the same on every demo launch and screenshots reproduce.
-        let demoNetWorth = 17_604.24
-        balanceHistory = (0..<60).reversed().map { daysAgo in
-            let date = Calendar.current.date(byAdding: .day, value: -daysAgo, to: Date())!
-            let progress = Double(60 - daysAgo) / 60
-            let drift = -650.0 + (650.0 * progress)
-            let wobble = sin(Double(daysAgo) / 4.5) * 180
-            return BalanceSnapshot(date: date, balance: demoNetWorth + drift + wobble)
-        }
+        // Fixture content lives in PlaidBarCore so its continuity guarantees
+        // (no heatmap dead zone, year-round income, active savings account)
+        // stay testable. See DemoFixtures and DemoFixturesTests.
+        accounts = DemoFixtures.accounts
+        transactions = DemoFixtures.transactions()
+        balanceHistory = DemoFixtures.balanceHistory()
 
         isSetupComplete = true
         serverConnected = true
@@ -1708,55 +1608,6 @@ final class AppState {
         lastSyncDate = isDemoStatusRecoveryScenario ? recoveredSync : Date()
     }
 
-    private static func dateString(daysAgo: Int) -> String {
-        let date = Calendar.current.date(byAdding: .day, value: -daysAgo, to: Date())!
-        return Formatters.transactionDateString(date)
-    }
-
-    private static func historicalDemoTransactions() -> [TransactionDTO] {
-        struct DemoMerchant {
-            let interval: Int
-            let offset: Int
-            let accountId: String
-            let amount: Double
-            let name: String
-            let merchantName: String
-            let category: SpendingCategory
-        }
-
-        let merchants = [
-            DemoMerchant(interval: 7, offset: 4, accountId: "demo_checking", amount: 78.40, name: "WHOLEFDS MKT 10234", merchantName: "Whole Foods", category: .foodAndDrink),
-            DemoMerchant(interval: 10, offset: 6, accountId: "demo_amex", amount: 42.25, name: "SWEETGREEN", merchantName: "Sweetgreen", category: .foodAndDrink),
-            DemoMerchant(interval: 14, offset: 9, accountId: "demo_checking", amount: 28.60, name: "UBER TRIP", merchantName: "Uber", category: .transportation),
-            DemoMerchant(interval: 16, offset: 12, accountId: "demo_visa", amount: 63.15, name: "TARGET 0392", merchantName: "Target", category: .shopping),
-            DemoMerchant(interval: 21, offset: 17, accountId: "demo_amex", amount: 118.90, name: "COSTCO WHOLESALE", merchantName: "Costco", category: .shopping),
-            DemoMerchant(interval: 30, offset: 24, accountId: "demo_checking", amount: 132.00, name: "CON EDISON", merchantName: "Con Edison", category: .billsAndUtilities),
-            DemoMerchant(interval: 31, offset: 30, accountId: "demo_checking", amount: 1_850.00, name: "RENT PAYMENT", merchantName: "Rent Payment", category: .billsAndUtilities),
-            DemoMerchant(interval: 45, offset: 38, accountId: "demo_amex", amount: 310.00, name: "DELTA AIR LINES", merchantName: "Delta Airlines", category: .travel),
-        ]
-
-        return merchants.flatMap { merchant in
-            stride(from: merchant.offset + 70, through: 364, by: merchant.interval).map { daysAgo in
-                let merchantSlug = merchant.merchantName
-                    .lowercased()
-                    .replacingOccurrences(of: " ", with: "_")
-                return TransactionDTO(
-                    id: "demo_hist_\(merchantSlug)_\(daysAgo)",
-                    accountId: merchant.accountId,
-                    amount: merchant.amount + seasonalAdjustment(daysAgo: daysAgo, interval: merchant.interval),
-                    date: dateString(daysAgo: daysAgo),
-                    name: merchant.name,
-                    merchantName: merchant.merchantName,
-                    category: merchant.category
-                )
-            }
-        }
-    }
-
-    private static func seasonalAdjustment(daysAgo: Int, interval: Int) -> Double {
-        let cycle = Double((daysAgo / max(interval, 1)) % 5)
-        return cycle * 8.75
-    }
 }
 
 private enum AppStateError: LocalizedError {
