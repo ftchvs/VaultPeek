@@ -618,9 +618,15 @@ final class AppState {
             serverSyncedItemCount = nil
             itemStatuses = []
             switch error {
-            case ServerClientError.serverNotRunning, ServerClientError.authTokenUnavailable:
-                // Expected pre-setup states, not actionable errors.
+            case ServerClientError.serverNotRunning:
+                // Expected pre-setup state, not an actionable error.
                 self.error = nil
+            case ServerClientError.authTokenUnavailable:
+                // Demo mode has no server, so a missing token is expected
+                // there — but when a real server is reachable a missing
+                // token is actionable (e.g. PLAIDBAR_DATA_DIR mismatch)
+                // and must stay visible.
+                self.error = isDemoMode ? nil : error.localizedDescription
             default:
                 // Demo mode has no server; never paint the demo dashboard
                 // red over a connection probe.
