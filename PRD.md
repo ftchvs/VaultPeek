@@ -1,4 +1,8 @@
-# PlaidBar — Product Requirements
+# VaultPeek — Product Requirements
+
+> VaultPeek was renamed from PlaidBar after 1.0 shipped. Requirements below
+> use the current product name; historical releases (v0.1–v1.0) shipped under
+> the PlaidBar name.
 
 ## Vision
 
@@ -122,8 +126,8 @@ The focus is readiness, recovery, and explicit local-data boundaries.
 |---|-------------|-------------------|
 | 5.1 | Onboarding preflight | **Given** the user chooses sandbox or production setup, **When** the preparation screen appears, **Then** it shows server connectivity, expected environment match, credential readiness, storage path, and linked item count before opening Plaid Link |
 | 5.2 | Manual setup recheck | **Given** the setup preflight is stale or wrong, **When** the user clicks "Check Again", **Then** the app refreshes `/api/status` and item status without leaving onboarding |
-| 5.3 | Confirmation-gated account removal | **Given** a user clicks Remove in Settings > Accounts, **When** the destructive action is requested, **Then** PlaidBar asks for confirmation and explains local deletion vs Plaid dashboard/bank permission boundaries |
-| 5.4 | Local data controls | **Given** the user opens Settings > General, **When** Local Data is visible, **Then** PlaidBar shows the storage path, resolved path, reveal/copy actions, and confirmation-gated reset semantics |
+| 5.3 | Confirmation-gated account removal | **Given** a user clicks Remove in Settings > Accounts, **When** the destructive action is requested, **Then** VaultPeek asks for confirmation and explains local deletion vs Plaid dashboard/bank permission boundaries |
+| 5.4 | Local data controls | **Given** the user opens Settings > General, **When** Local Data is visible, **Then** VaultPeek shows the storage path, resolved path, reveal/copy actions, and confirmation-gated reset semantics |
 | 5.5 | Recovery-specific empty states | **Given** an account/transaction/credit surface has no data, **When** the app can distinguish cause, **Then** it explains server offline, no linked item, no loaded account data, no synced history, or filters returning zero results with one clear action |
 | 5.6 | Degraded item recovery | **Given** Plaid reports `login_required` or item error, **When** Status, Settings, or account detail surfaces render, **Then** the user sees item health and a reconnect action |
 | 5.7 | Current screenshots | **Given** the README screenshots are used for public review, **When** screenshots are regenerated, **Then** they show the current design system and include dashboard, onboarding, status, and settings surfaces |
@@ -131,7 +135,7 @@ The focus is readiness, recovery, and explicit local-data boundaries.
 
 ### v1.0 (shipped)
 
-PlaidBar 1.0 is the first stable release. It is installable, understandable,
+VaultPeek 1.0 (shipped as PlaidBar) is the first stable release. It is installable, understandable,
 recoverable, and credible as a proprietary local finance utility without
 maintainer hand-holding.
 
@@ -150,18 +154,18 @@ Hermes agent starting context.
 
 ### Post-1.0 (active)
 
-Post-1.0 work is design-first and trust-first. PlaidBar should become a more
+Post-1.0 work is design-first and trust-first. VaultPeek should become a more
 native RepoBar-style finance instrument before expanding finance scope.
 
 | # | Requirement | Acceptance Criteria |
 |---|-------------|-------------------|
 | P1.1 | Roadmap truth cleanup | **Given** a contributor reads README, PRD, release notes, release docs, and roadmap, **When** they compare release status, **Then** the docs agree that v1.0.0 has shipped and that notarized app/cask/Sparkle appcast distribution remains post-1.0 |
 | P1.2 | Native material surface system | **Given** the dashboard renders on macOS 15+, **When** panels, filters, selected rows, and recovery states are visible, **Then** they use shared material/fill/stroke tokens instead of one-off saturated card fills |
-| P1.3 | Liquid Glass readiness | **Given** PlaidBar is built with a macOS 26+ SDK, **When** SwiftUI Liquid Glass APIs are available, **Then** native panel surfaces may opt into `glassEffect` while preserving the macOS 15 material fallback |
+| P1.3 | Liquid Glass readiness | **Given** VaultPeek is built with a macOS 26+ SDK, **When** SwiftUI Liquid Glass APIs are available, **Then** native panel surfaces may opt into `glassEffect` while preserving the macOS 15 material fallback |
 | P1.4 | RepoBar-style dashboard density | **Given** the menu bar popover opens, **When** dashboard content is scanned, **Then** the status strip and 365-day heatmap appear before account rows, with compact filters and selected account detail actions in the same surface |
 | P1.5 | Recovery convergence | **Given** common failures occur, **When** the user views dashboard or settings, **Then** server offline, wrong mode, missing credentials, stale sync, login-required item, empty account data, filtered-zero transactions, and denied notifications each expose one clear recovery action |
-| P1.6 | Local AI activity summaries | **Given** a local AI runtime is configured, **When** the user opens the dashboard or an insights surface, **Then** PlaidBar summarizes financial activity for the last 7 days, last month, and year-over-year windows, including spending, income, balance changes, recurring charges, credit utilization, and notable anomalies without sending data to cloud models |
-| P1.7 | Local AI categorization | **Given** synced transactions include Plaid categories, merchant names, raw names, amounts, dates, and account context, **When** local AI categorization is enabled, **Then** PlaidBar suggests smarter expense and income categories with confidence and evidence while preserving raw Plaid data and allowing user correction or fallback to Plaid categories |
+| P1.6 | Local AI activity summaries | **Given** a local AI runtime is configured, **When** the user opens the dashboard or an insights surface, **Then** VaultPeek summarizes financial activity for the last 7 days, last month, and year-over-year windows, including spending, income, balance changes, recurring charges, credit utilization, and notable anomalies without sending data to cloud models |
+| P1.7 | Local AI categorization | **Given** synced transactions include Plaid categories, merchant names, raw names, amounts, dates, and account context, **When** local AI categorization is enabled, **Then** VaultPeek suggests smarter expense and income categories with confidence and evidence while preserving raw Plaid data and allowing user correction or fallback to Plaid categories |
 
 ### Future (not committed)
 
@@ -207,7 +211,7 @@ native RepoBar-style finance instrument before expanding finance scope.
 |----------|------------------|
 | User denies notification permission (macOS) | Notification toggle in settings shows "Disabled — enable in System Settings > Notifications" with deep link |
 | App launched but companion server not running | Show connection error with "Start Server" button; auto-retry every 3 seconds for 30 seconds |
-| Multiple PlaidBar instances launched | Second instance detects existing process via port 8484 check; shows alert and exits |
+| Multiple VaultPeek instances launched | Second instance detects existing process via port 8484 check; shows alert and exits |
 | Notification permission revoked in System Settings | On app startup, `loadInitialData()` rechecks permission status; if denied, sets `notificationsEnabled = false` automatically |
 | Duplicate sync (same transaction re-added) | Transaction sync uses id-based upsert (modified replaces by index, removed by id set) |
 | LRU overflow (500+ notified transactions) | Oldest entries evicted first; set kept in sync with ordered array |

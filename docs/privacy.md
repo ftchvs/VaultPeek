@@ -1,14 +1,14 @@
 # Privacy
 
-PlaidBar is local-first personal finance software. It has no hosted PlaidBar
-backend, no analytics, no telemetry, and no tracking.
+VaultPeek (formerly PlaidBar) is local-first personal finance software. It has
+no hosted VaultPeek backend, no analytics, no telemetry, and no tracking.
 
 This document states the privacy contract the implementation and public docs
 must continue to match.
 
 ## What Leaves Your Mac
 
-PlaidBar sends data to Plaid only when you use sandbox or production Plaid
+VaultPeek sends data to Plaid only when you use sandbox or production Plaid
 mode. In those modes, the local companion server calls Plaid API endpoints to:
 
 - create a link session
@@ -21,10 +21,10 @@ Demo mode does not call Plaid.
 
 ## What Does Not Leave Your Mac
 
-PlaidBar does not send financial data to a PlaidBar-owned server because there
-is no PlaidBar cloud backend.
+VaultPeek does not send financial data to a VaultPeek-owned server because
+there is no VaultPeek cloud backend.
 
-PlaidBar does not include:
+VaultPeek does not include:
 
 - analytics
 - telemetry
@@ -35,7 +35,7 @@ PlaidBar does not include:
 
 ## Local Data
 
-By default, PlaidBar stores local data under:
+By default, VaultPeek stores local data under:
 
 ```text
 ~/.vaultpeek/
@@ -97,7 +97,7 @@ public GitHub issue.
 
 ## Local Reset Boundary
 
-Resetting local data removes PlaidBar-owned database files, account and
+Resetting local data removes VaultPeek-owned database files, account and
 transaction caches, pending Link sessions, and stored Plaid access-token entries
 when present. It leaves `server.conf`, app/server auth, preferences, and
 unrelated files in the storage directory untouched.
@@ -107,7 +107,7 @@ tokens continue to use the existing Keychain service so migrated SQLite
 `keychain:<item_id>` references keep working.
 
 Local reset does not necessarily delete records from the Plaid Dashboard or
-revoke bank permissions outside PlaidBar. Users who need complete revocation
+revoke bank permissions outside VaultPeek. Users who need complete revocation
 should also review Plaid Dashboard and bank-side permission settings.
 
 ## Stable Release Privacy Checklist

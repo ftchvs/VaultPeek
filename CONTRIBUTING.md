@@ -1,9 +1,9 @@
 # Internal Development Guide
 
-PlaidBar is proprietary software. This document covers internal development
-conventions for authorized collaborators working under a written agreement with
-the owner. **PlaidBar does not accept public/external contributions, forks, or
-pull requests.** Access to this repository does not grant any license to the
+VaultPeek (formerly PlaidBar) is proprietary software. This document covers
+internal development conventions for authorized collaborators working under a
+written agreement with the owner. **VaultPeek does not accept public/external
+contributions, forks, or pull requests.** Access to this repository does not grant any license to the
 code (see [LICENSE](LICENSE)).
 
 ## Development Setup
@@ -82,7 +82,7 @@ only — never real Plaid credentials, account IDs, or balances.
 
 ## Intellectual Property
 
-PlaidBar is proprietary and confidential. All work contributed by authorized
+VaultPeek is proprietary and confidential. All work contributed by authorized
 collaborators is a work made for hire and/or assigned to the owner, and becomes
 the exclusive property of Felipe Tavares Chaves. Do not copy, redistribute, or
 reuse any portion of this codebase outside the scope of your written agreement.

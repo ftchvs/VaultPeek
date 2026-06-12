@@ -1,7 +1,9 @@
 # Troubleshooting
 
-This guide covers the common problems a new PlaidBar user or contributor should
-be able to solve without reading the source.
+This guide covers the common problems a new VaultPeek user or contributor
+should be able to solve without reading the source. (VaultPeek was renamed from
+PlaidBar; the `plaidbar`/`plaidbar-server` executable names and `PLAIDBAR_*`
+environment variables are intentionally unchanged.)
 
 ## Demo Mode Shows No Data
 
@@ -22,7 +24,8 @@ Checks:
 - Confirm the app icon is visible in the menu bar.
 - Click the menu bar icon to open the popover.
 - If setup is visible, choose View Demo.
-- Quit any older PlaidBar process and relaunch with `--demo`.
+- Quit any older VaultPeek (or legacy PlaidBar) process and relaunch with
+  `--demo`.
 
 Demo mode should not require Plaid credentials or the local server.
 
@@ -75,11 +78,13 @@ Checks:
 - Visit `http://127.0.0.1:8484/health` if using the default port.
 - If using a custom port, export the same `PLAIDBAR_SERVER_PORT` before starting
   the app.
-- Quit duplicate PlaidBar/PlaidBarServer processes if they are conflicting.
+- Quit duplicate VaultPeek app/server processes if they are conflicting.
+- If a legacy PlaidBar.app is still installed, quit and delete it: it shares
+  the same bundle identifier and default port 8484 with VaultPeek.app.
 
 ## API Calls Return Unauthorized
 
-The app and server share a local bearer token stored under the PlaidBar data
+The app and server share a local bearer token stored under the VaultPeek data
 directory.
 
 Checks:
@@ -94,7 +99,7 @@ Checks:
 
 ## Default Storage Did Not Migrate
 
-PlaidBar now uses `~/.vaultpeek/` as its default local data/config directory.
+VaultPeek uses `~/.vaultpeek/` as its default local data/config directory.
 On startup, default installs copy missing files from `~/.plaidbar/` into
 `~/.vaultpeek/`.
 
@@ -105,14 +110,14 @@ Expected behavior:
   the destination filename is absent.
 - Existing `~/.vaultpeek/` files are preserved and never overwritten.
 - `~/.plaidbar/` is left in place for rollback until the user deletes it.
-- After a local reset, PlaidBar writes a small reset marker so old databases,
+- After a local reset, VaultPeek writes a small reset marker so old databases,
   caches, and pending link sessions are not copied back from `~/.plaidbar/`.
 - Keychain Plaid access tokens keep the existing service name so SQLite
   `keychain:<item_id>` references remain valid after file migration.
 
 Recovery checks:
 
-- Quit PlaidBar and PlaidBarServer.
+- Quit the VaultPeek app and its companion server.
 - Confirm both directories are private to the current user.
 - Move only the missing file from `~/.plaidbar/` to `~/.vaultpeek/` if a newer
   VaultPeek file is not already present.
@@ -145,30 +150,30 @@ Actions:
 - Open Status or Settings > Accounts.
 - Use the reconnect action for the affected institution.
 - Complete the Plaid browser flow.
-- Refresh after returning to PlaidBar.
+- Refresh after returning to VaultPeek.
 
 ## Notifications Do Not Fire
 
 Checks:
 
 - Open Settings > Notifications.
-- Confirm notifications are enabled in PlaidBar.
-- Confirm macOS notification permission is allowed for PlaidBar.
+- Confirm notifications are enabled in VaultPeek.
+- Confirm macOS notification permission is allowed for VaultPeek.
 - Check large transaction, low balance, and credit utilization thresholds.
 - Remember that duplicate alerts are intentionally deduplicated.
 
 If macOS permission was revoked, re-enable notifications in System Settings and
-restart PlaidBar.
+restart VaultPeek.
 
 Source-built executable runs may report notification permission as
 unavailable or denied if macOS cannot register the process as an app bundle.
-PlaidBar avoids calling the notification center in that state so Settings does
+VaultPeek avoids calling the notification center in that state so Settings does
 not crash. Signed/notarized app-bundle notification behavior remains part of the
 post-1.0 distribution work.
 
 ## Local Data Reset Did Not Revoke Bank Access
 
-That is expected. Local reset clears PlaidBar's local data. It does not
+That is expected. Local reset clears VaultPeek's local data. It does not
 guarantee revocation in Plaid Dashboard or at the bank. For complete revocation,
 review Plaid Dashboard and the bank's connected-app permissions.
 
@@ -184,7 +189,7 @@ Checks:
 
 - Terminal has macOS Screen Recording permission.
 - Terminal has macOS Accessibility permission for UI automation.
-- No other PlaidBar window is blocking the scripted flow.
+- No other VaultPeek window is blocking the scripted flow.
 - Run from the repository root.
 
 Screenshots should use demo or sandbox data only.

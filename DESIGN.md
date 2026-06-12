@@ -1,6 +1,7 @@
-# PlaidBar Design System
+# VaultPeek Design System
 
-Visual design spec and component catalog for PlaidBar.
+Visual design spec and component catalog for VaultPeek (formerly PlaidBar;
+code paths and SwiftPM target names keep the PlaidBar prefix).
 
 ## Color System
 
@@ -114,7 +115,7 @@ not boldness.
 
 ## Native Surface System
 
-PlaidBar is a macOS menu bar instrument, so surfaces should feel native,
+VaultPeek is a macOS menu bar instrument, so surfaces should feel native,
 translucent, and compact rather than like stacked web cards. The dashboard
 uses the three-rank `glassSurface(_:)` system in `SharedModifiers.swift`:
 ranks use *hierarchical* shape styles (`.quaternary`/`.quinary`) so surfaces
@@ -135,7 +136,7 @@ nest more than two ranks below the popover root.
 | `.nativePanelSurface(...)` / `.nativeInsetSurface(...)` | Legacy fill+stroke treatment still used by setup/attention surfaces |
 
 Liquid Glass is a progressive enhancement only. Apple SwiftUI's `Glass.regular`
-and `glassEffect` APIs are macOS 26+, while PlaidBar currently supports
+and `glassEffect` APIs are macOS 26+, while VaultPeek currently supports
 macOS 15+. Do not raise the minimum OS for visual polish; use availability-gated
 Liquid Glass and keep a SwiftUI material/fill fallback.
 
@@ -156,7 +157,7 @@ single sync/mode status line. Selecting a row opens the fly-out to the LEFT
 of the dashboard (popover widens 480 → 801pt); Esc, the ✕ button, re-clicking
 the row, or switching filters closes it.
 
-| Element | PlaidBar Meaning |
+| Element | VaultPeek Meaning |
 |---------|------------------|
 | Heatmap header | Daily spending intensity or net cashflow from transactions, switchable in place. Spend mode uses a NEUTRAL Less/More intensity ramp (green means money-in everywhere else in the app); Net mode uses bidirectional Income/Outflow color keys with an explicit legend. |
 | Repo row | Account/card row with institution, type, balance, status, and freshness |
@@ -472,7 +473,7 @@ Checklist for contributors:
 
 ## Dark Mode
 
-PlaidBar runs on macOS, where dark mode usage is ~60%. All tokens must work in both appearances.
+VaultPeek runs on macOS, where dark mode usage is ~60%. All tokens must work in both appearances.
 
 ### Token Behavior by Appearance
 
@@ -556,7 +557,7 @@ Every element that uses color to convey meaning must have a secondary, non-color
 | AccountRow | "{institution} {account name}, balance {amount}" |
 | CreditCardRow | "{card name}, {balance} of {limit}, {percent} utilization, {status}" where status = "good" / "warning" / "high" |
 | TransactionRow | "{merchant}, {amount}, {category}, {date}" + "pending" if applicable |
-| Menu bar icon | "PlaidBar, net balance {amount}" |
+| Menu bar icon | "VaultPeek net cash {amount}. Status {summary}" (varies by summary mode) |
 | Utilization gauge | "Credit utilization {percent}, {status level}" |
 | Chart (donut) | "Spending by category. Largest: {category} at {percent}" |
 | Refresh button | "Refresh accounts" + "Last updated {time}" as hint |
