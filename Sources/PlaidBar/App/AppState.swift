@@ -50,7 +50,6 @@ final class AppState {
         }
     }
     var isPopoverPresented = false
-    var selectedTab: PopoverTab = .accounts
 
     /// Persisted across launches so configured installs boot straight into
     /// the dashboard instead of flashing first-run onboarding until the
@@ -1106,12 +1105,6 @@ final class AppState {
         if CommandLine.arguments.contains("--demo") {
             isDemoMode = true
             loadDemoData()
-            // Allow --tab flag to set initial tab for screenshots
-            if let tabIdx = CommandLine.arguments.firstIndex(of: "--tab"),
-               tabIdx + 1 < CommandLine.arguments.count,
-               let tab = PopoverTab.allCases.first(where: { $0.rawValue.lowercased() == CommandLine.arguments[tabIdx + 1].lowercased() }) {
-                selectedTab = tab
-            }
             return
         }
         // Returning users see cached last-known data immediately: the cache
@@ -1619,12 +1612,4 @@ private enum AppStateError: LocalizedError {
             "Transaction sync did not finish after \(maxPages) pages. Try again later."
         }
     }
-}
-
-enum PopoverTab: String, CaseIterable, Sendable {
-    case accounts = "Accounts"
-    case transactions = "Transactions"
-    case spending = "Spending"
-    case credit = "Credit"
-    case status = "Status"
 }
