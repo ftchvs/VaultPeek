@@ -59,7 +59,7 @@ struct PlaidBarServerTests {
         #expect(decoded.syncReady)
     }
 
-    @Test func serverStatusPayloadDoesNotExposeSecretsOrTokens() throws {
+    @Test func serverStatusPayloadIsLimitedToReadinessMetadata() throws {
         let status = ServerStatus(
             version: "0.8.0",
             environment: .production,
@@ -76,20 +76,8 @@ struct PlaidBarServerTests {
         let data = try encoder.encode(status)
         let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
         let keys = Set(object.keys)
-        let forbiddenFragments = [
-            "account",
-            "access",
-            "balance",
-            "client",
-            "institution",
-            "itemId",
-            "public",
-            "secret",
-            "token",
-            "transaction",
-        ]
-
-        #expect(keys == [
+        let payload = try #require(String(data: data, encoding: .utf8))
+        let allowedReadinessKeys: Set<String> = [
             "version",
             "environment",
             "itemCount",
@@ -98,12 +86,39 @@ struct PlaidBarServerTests {
             "storagePath",
             "syncReady",
             "syncedItemCount",
-        ])
-        #expect(try !(#require(String(data: data, encoding: .utf8)?.contains("config-secret"))))
-        #expect(try !(#require(String(data: data, encoding: .utf8)?.contains("access-sandbox"))))
+        ]
+        let forbiddenFragments = [
+            "account",
+            "access",
+            "balance",
+            "client",
+            "institution",
+            "item_id",
+            "itemId",
+            "payload",
+            "plaid",
+            "public",
+            "raw",
+            "secret",
+            "token",
+            "transaction",
+        ]
+
+        #expect(keys == allowedReadinessKeys)
         #expect(keys.allSatisfy { key in
             forbiddenFragments.allSatisfy { !key.localizedCaseInsensitiveContains($0) }
         })
+        #expect(!payload.contains("\"accountId\""))
+        #expect(!payload.contains("\"account_id\""))
+        #expect(!payload.contains("\"access_token\""))
+        #expect(!payload.contains("\"balance\""))
+        #expect(!payload.contains("\"balances\""))
+        #expect(!payload.contains("\"clientSecret\""))
+        #expect(!payload.contains("\"client_secret\""))
+        #expect(!payload.contains("\"plaidToken\""))
+        #expect(!payload.contains("\"publicToken\""))
+        #expect(!payload.contains("\"rawPayload\""))
+        #expect(!payload.contains("\"transactions\""))
     }
 
     @Test func serverConfigLoadsExplicitConfigFile() throws {
