@@ -159,6 +159,276 @@ public struct LocalAIActivitySummary: Codable, Sendable, Hashable, Identifiable 
     }
 }
 
+/// Display-safe receipt for optional local insight output.
+///
+/// The receipt is intentionally narrower than the source summary input: it keeps
+/// only user-facing counts, category names, date-window copy, local-only status,
+/// confidence/limitation copy, and reversible action language. It must not carry
+/// raw account IDs, transaction IDs, item IDs, tokens, or Plaid payload text.
+public struct LocalAIInsightReceipt: Equatable, Sendable {
+    public struct EvidenceChip: Equatable, Sendable, Identifiable {
+        public let id: String
+        public let label: String
+        public let value: String
+        public let systemImage: String
+
+        public init(id: String, label: String, value: String, systemImage: String) {
+            self.id = id
+            self.label = label
+            self.value = value
+            self.systemImage = systemImage
+        }
+    }
+
+    public let title: String
+    public let headline: String
+    public let evidenceChips: [EvidenceChip]
+    public let timeWindow: String
+    public let localOnlyBadge: String
+    public let confidence: String
+    public let limitations: [String]
+    public let unavailableState: String?
+    public let reversibleActionCopy: String
+    public let accessibilitySummary: String
+
+    public init(
+        title: String,
+        headline: String,
+        evidenceChips: [EvidenceChip],
+        timeWindow: String,
+        localOnlyBadge: String,
+        confidence: String,
+        limitations: [String],
+        unavailableState: String?,
+        reversibleActionCopy: String,
+        accessibilitySummary: String
+    ) {
+        self.title = title
+        self.headline = headline
+        self.evidenceChips = evidenceChips
+        self.timeWindow = timeWindow
+        self.localOnlyBadge = localOnlyBadge
+        self.confidence = confidence
+        self.limitations = limitations
+        self.unavailableState = unavailableState
+        self.reversibleActionCopy = reversibleActionCopy
+        self.accessibilitySummary = accessibilitySummary
+    }
+
+    public static func make(
+        summary: LocalAIActivitySummary?,
+        availability: LocalAIAvailability
+    ) -> LocalAIInsightReceipt {
+        guard let summary else {
+            return unavailable(availability: availability)
+        }
+
+        let input = summary.input
+        var chips: [EvidenceChip] = [
+            EvidenceChip(
+                id: "transactions",
+                label: "Source rows",
+                value: "\(input.current.transactionCount)",
+                systemImage: "list.bullet.rectangle"
+            ),
+            EvidenceChip(
+                id: "window",
+                label: "Window",
+                value: timeWindow(for: input),
+                systemImage: "calendar"
+            ),
+        ]
+
+        if let topCategory = input.current.categoryTotals.first {
+            chips.append(EvidenceChip(
+                id: "top-category",
+                label: "Top category",
+                value: topCategory.category.displayName,
+                systemImage: topCategory.category.iconName
+            ))
+        }
+
+        if input.recurringSnapshot.estimatedMonthlyTotal > 0 {
+            chips.append(EvidenceChip(
+                id: "recurring",
+                label: "Recurring est.",
+                value: Formatters.currency(input.recurringSnapshot.estimatedMonthlyTotal, format: .compact),
+                systemImage: "arrow.triangle.2.circlepath"
+            ))
+        }
+
+        if !input.categorySuggestions.isEmpty {
+            chips.append(EvidenceChip(
+                id: "category-hints",
+                label: "Category hints",
+                value: "\(input.categorySuggestions.count)",
+                systemImage: "tag"
+            ))
+        }
+
+        let limitations = limitations(for: input, availability: availability)
+        let unavailableState = unavailableState(for: availability)
+        let rawHeadline = summary.generatedSummary.isEmpty
+            ? fallbackHeadline(for: input)
+            : summary.generatedSummary
+        let headline = redactKnownSourceIdentifiers(in: rawHeadline, input: input)
+        let confidence = confidenceText(for: input, availability: availability)
+        let reversibleActionCopy = reversibleActionCopy(for: input)
+        let timeWindow = timeWindow(for: input)
+        let accessibility = [
+            "Local insight receipt.",
+            headline,
+            "Window \(timeWindow).",
+            "\(availability.state.displayName).",
+            confidence,
+            limitations.joined(separator: " "),
+            reversibleActionCopy,
+        ].filter { !$0.isEmpty }.joined(separator: " ")
+
+        return LocalAIInsightReceipt(
+            title: "Local Insight Receipt",
+            headline: headline,
+            evidenceChips: Array(chips.prefix(5)),
+            timeWindow: timeWindow,
+            localOnlyBadge: "Local-only",
+            confidence: confidence,
+            limitations: limitations,
+            unavailableState: unavailableState,
+            reversibleActionCopy: reversibleActionCopy,
+            accessibilitySummary: accessibility
+        )
+    }
+
+    private static func unavailable(availability: LocalAIAvailability) -> LocalAIInsightReceipt {
+        let unavailableState = unavailableState(for: availability) ?? "Local insight receipt is unavailable until local transaction history exists."
+        return LocalAIInsightReceipt(
+            title: "Local Insight Receipt",
+            headline: "Local insight receipt unavailable",
+            evidenceChips: [
+                EvidenceChip(id: "runtime", label: "Runtime", value: availability.state.displayName, systemImage: "cpu"),
+                EvidenceChip(id: "window", label: "Window", value: "No data", systemImage: "calendar.badge.exclamationmark"),
+            ],
+            timeWindow: "No local history window",
+            localOnlyBadge: "Local-only",
+            confidence: "Confidence unavailable until local source rows exist.",
+            limitations: [availability.detail, "PlaidBar will not call a cloud AI service to fill this state."],
+            unavailableState: unavailableState,
+            reversibleActionCopy: "No insight action is available yet. Connect data locally or keep using the dashboard without AI.",
+            accessibilitySummary: "Local insight receipt unavailable. \(availability.state.displayName). \(availability.detail)"
+        )
+    }
+
+    private static func confidenceText(
+        for input: LocalAIActivitySummaryInput,
+        availability: LocalAIAvailability
+    ) -> String {
+        if availability.state != .available {
+            return "Deterministic confidence: local summary only; no model runtime contributed."
+        }
+
+        if input.current.transactionCount >= 10 {
+            return "Confidence: higher, based on \(input.current.transactionCount) local source rows."
+        }
+
+        if input.current.transactionCount > 0 {
+            return "Confidence: limited, based on \(input.current.transactionCount) local source row\(input.current.transactionCount == 1 ? "" : "s")."
+        }
+
+        return "Confidence: limited until transaction history is available."
+    }
+
+    private static func limitations(
+        for input: LocalAIActivitySummaryInput,
+        availability: LocalAIAvailability
+    ) -> [String] {
+        var result: [String] = []
+
+        if availability.state == .disabled {
+            result.append("Local AI is off; this receipt uses deterministic local totals and heuristics.")
+        } else if availability.state == .unavailable {
+            result.append("The configured local runtime is unavailable; PlaidBar does not fall back to cloud AI.")
+        }
+
+        if input.current.transactionCount == 0 {
+            result.append("No transaction rows are available in this window.")
+        }
+
+        if input.prior == nil {
+            result.append("No comparison window is available for trend language.")
+        }
+
+        result.append("Evidence is summarized as display-safe counts, categories, and amounts; raw IDs and Plaid payloads are excluded.")
+        return result
+    }
+
+    private static func unavailableState(for availability: LocalAIAvailability) -> String? {
+        switch availability.state {
+        case .available:
+            nil
+        case .disabled:
+            "No local AI runtime is enabled. Deterministic local receipts remain available when source data exists."
+        case .unavailable:
+            "Configured local runtime is unavailable. Cloud AI fallback is not supported."
+        }
+    }
+
+    private static func reversibleActionCopy(for input: LocalAIActivitySummaryInput) -> String {
+        guard !input.categorySuggestions.isEmpty else {
+            return "This receipt changes nothing. Review the source dashboard rows before taking action."
+        }
+
+        return "Category hints are local overlays. Accepting or rejecting a hint is reversible and does not mutate raw Plaid records."
+    }
+
+    private static func fallbackHeadline(for input: LocalAIActivitySummaryInput) -> String {
+        "\(input.window.displayName): \(input.current.transactionCount) local source rows reviewed."
+    }
+
+    private static func timeWindow(for input: LocalAIActivitySummaryInput) -> String {
+        "\(input.currentRange.startDate) to \(input.currentRange.endDate)"
+    }
+
+    private static func redactKnownSourceIdentifiers(
+        in text: String,
+        input: LocalAIActivitySummaryInput
+    ) -> String {
+        let identifiers = knownSourceIdentifiers(input: input).sorted {
+            if $0.count != $1.count { return $0.count > $1.count }
+            return $0 < $1
+        }
+        return identifiers.reduce(text) { result, identifier in
+            result.replacingOccurrences(of: identifier, with: "[redacted]")
+        }
+    }
+
+    private static func knownSourceIdentifiers(input: LocalAIActivitySummaryInput) -> Set<String> {
+        var identifiers = Set(input.accountSnapshot.accountIds)
+        identifiers.formUnion(input.current.incomeTransactionIds)
+        identifiers.formUnion(input.current.expenseTransactionIds)
+        identifiers.formUnion(input.current.transferTransactionIds)
+        identifiers.formUnion(input.prior?.incomeTransactionIds ?? [])
+        identifiers.formUnion(input.prior?.expenseTransactionIds ?? [])
+        identifiers.formUnion(input.prior?.transferTransactionIds ?? [])
+        identifiers.formUnion(input.current.topExpenses.map(\.transactionId))
+        identifiers.formUnion(input.current.topExpenses.map(\.accountId))
+        identifiers.formUnion(input.current.topIncome.map(\.transactionId))
+        identifiers.formUnion(input.current.topIncome.map(\.accountId))
+        identifiers.formUnion(input.current.categoryTotals.flatMap(\.transactionIds))
+        identifiers.formUnion(input.recurringSnapshot.items.map(\.id))
+        identifiers.formUnion(input.recurringSnapshot.items.flatMap(\.evidence).flatMap(\.transactionIds))
+        identifiers.formUnion(input.recurringSnapshot.items.flatMap(\.evidence).flatMap(\.accountIds))
+        identifiers.formUnion(input.recurringSnapshot.items.flatMap(\.evidence).compactMap(\.sourceId))
+        identifiers.formUnion(input.categorySuggestions.map(\.transactionId))
+        identifiers.formUnion(input.categorySuggestions.flatMap(\.evidence).flatMap(\.transactionIds))
+        identifiers.formUnion(input.categorySuggestions.flatMap(\.evidence).flatMap(\.accountIds))
+        identifiers.formUnion(input.categorySuggestions.flatMap(\.evidence).compactMap(\.sourceId))
+        identifiers.formUnion(input.evidence.flatMap(\.transactionIds))
+        identifiers.formUnion(input.evidence.flatMap(\.accountIds))
+        identifiers.formUnion(input.evidence.compactMap(\.sourceId))
+        return identifiers.filter { !$0.isEmpty }
+    }
+}
+
 public struct LocalAIAccountSnapshot: Codable, Sendable, Hashable {
     public let accountCount: Int
     public let accountIds: [String]

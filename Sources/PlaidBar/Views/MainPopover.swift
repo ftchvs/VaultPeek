@@ -846,10 +846,14 @@ private struct LocalInsightsCard: View {
         Array(primarySummary?.generatedBullets.prefix(3) ?? [])
     }
 
+    private var receipt: LocalAIInsightReceipt {
+        LocalAIInsightReceipt.make(summary: primarySummary, availability: availability)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .center, spacing: 8) {
-                Text("Local Insights")
+                Text(receipt.title)
                     .sectionTitle()
                     .foregroundStyle(.secondary)
 
@@ -858,25 +862,25 @@ private struct LocalInsightsCard: View {
                 LocalAIStatusPill(availability: availability)
             }
 
-            Text(primarySummary?.generatedSummary ?? "Local summaries are ready when transaction history is available.")
+            Text(receipt.headline)
                 .font(.caption.weight(.semibold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.86)
 
             HStack(spacing: 6) {
-                ForEach(summaries) { summary in
-                    LocalInsightWindowMetric(summary: summary)
+                ForEach(receipt.evidenceChips) { chip in
+                    LocalInsightEvidenceChip(chip: chip)
                 }
             }
 
             VStack(alignment: .leading, spacing: 3) {
-                ForEach(Array(bullets.enumerated()), id: \.offset) { _, bullet in
+                ForEach(Array(receiptDetailLines.enumerated()), id: \.offset) { _, detail in
                     HStack(alignment: .top, spacing: 6) {
                         Circle()
                             .fill(Color.secondary.opacity(0.58))
                             .frame(width: 4, height: 4)
                             .padding(.top, 6)
-                        Text(bullet)
+                        Text(detail)
                             .microText()
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -900,15 +904,20 @@ private struct LocalInsightsCard: View {
             stroke: Color.primary.opacity(0.065)
         )
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Local insights. \(availability.state.displayName). \(availability.detail)")
+        .accessibilityLabel(receipt.accessibilitySummary)
+    }
+
+    private var receiptDetailLines: [String] {
+        var lines = [receipt.confidence]
+        if let unavailableState = receipt.unavailableState {
+            lines.append(unavailableState)
+        }
+        lines.append(contentsOf: receipt.limitations.prefix(2))
+        return Array(lines.prefix(3))
     }
 
     private var footerText: String {
-        let suggestionCount = primarySummary?.input.categorySuggestions.count ?? 0
-        guard suggestionCount > 0 else {
-            return "Local-only. No cloud model calls. Plaid categories remain the auditable fallback."
-        }
-        return "\(suggestionCount) deterministic category hint\(suggestionCount == 1 ? "" : "s"). Plaid categories remain fallback evidence."
+        "\(receipt.localOnlyBadge). \(receipt.reversibleActionCopy)"
     }
 }
 
@@ -947,25 +956,22 @@ private struct LocalAIStatusPill: View {
     }
 }
 
-private struct LocalInsightWindowMetric: View {
-    let summary: LocalAIActivitySummary
+private struct LocalInsightEvidenceChip: View {
+    let chip: LocalAIInsightReceipt.EvidenceChip
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(summary.window.displayName)
+            HStack(spacing: 4) {
+                Image(systemName: chip.systemImage)
+                    .font(.caption2.weight(.semibold))
+                Text(chip.label)
+                    .lineLimit(1)
+            }
                 .microText()
                 .foregroundStyle(.secondary)
-                .lineLimit(1)
 
-            Text(Formatters.currency(summary.input.current.expenseTotal, format: .compact))
+            Text(chip.value)
                 .font(.caption.weight(.bold))
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.76)
-
-            Text(netText)
-                .microText()
-                .foregroundStyle(netTint)
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.76)
@@ -974,20 +980,7 @@ private struct LocalInsightWindowMetric: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .nativeInsetSurface(cornerRadius: 7)
-        .help("\(summary.window.displayName): \(summary.input.current.transactionCount) transaction source rows.")
-    }
-
-    private var netText: String {
-        let amount = summary.input.current.netCashflow
-        let prefix = amount > 0 ? "+" : amount < 0 ? "-" : ""
-        return "\(prefix)\(Formatters.currency(abs(amount), format: .compact)) net"
-    }
-
-    private var netTint: Color {
-        let amount = summary.input.current.netCashflow
-        if amount > 0 { return SemanticColors.positive }
-        if amount < 0 { return SemanticColors.negative }
-        return .secondary
+        .help("\(chip.label): \(chip.value)")
     }
 }
 
