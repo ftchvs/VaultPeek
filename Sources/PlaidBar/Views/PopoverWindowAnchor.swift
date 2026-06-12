@@ -4,94 +4,123 @@ import SwiftUI
 /// Pins the popover window's trailing (right) edge while the left fly-out is
 /// open.
 ///
-/// A window-style `MenuBarExtra` is centered horizontally under its status
-/// item, so when the fly-out grows the popover (480 → 801pt) AppKit
-/// re-centers the wider window and the dashboard column visibly slides
-/// sideways. By holding the window's `maxX` constant across resizes, the
-/// extra width is added on the leading edge only and the dashboard stays put.
+/// A window-style `MenuBarExtra` centers its window's `midX` under the status
+/// item regardless of width, so when the fly-out grows the popover
+/// (collapsed → collapsed + fly-out) AppKit re-centers the wider window and
+/// the dashboard column visibly slides sideways. Holding the window's `maxX`
+/// constant across resizes adds the extra width on the leading edge only, so
+/// the dashboard stays put.
 struct PopoverTrailingEdgeAnchor: NSViewRepresentable {
     /// True while the fly-out is shown (popover is in its widened state).
     let isExpanded: Bool
+    /// The popover's collapsed (fly-out closed) width. Used to derive the
+    /// trailing-edge anchor even when the popover first opens already widened
+    /// (e.g. a persisted account selection): because the window is centered on
+    /// the status item independent of width, collapsed `maxX == midX + width/2`.
+    let collapsedWidth: CGFloat
 
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView(frame: .zero)
-        context.coordinator.isExpanded = isExpanded
-        context.coordinator.bind(to: view)
+    func makeNSView(context: Context) -> AnchorHostView {
+        let view = AnchorHostView()
+        context.coordinator.configure(isExpanded: isExpanded, collapsedWidth: collapsedWidth)
+        view.onMoveToWindow = { [coordinator = context.coordinator] window in
+            coordinator.attach(to: window)
+        }
         return view
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {
-        context.coordinator.isExpanded = isExpanded
-        context.coordinator.bind(to: nsView)
+    func updateNSView(_ nsView: AnchorHostView, context: Context) {
+        context.coordinator.configure(isExpanded: isExpanded, collapsedWidth: collapsedWidth)
+        context.coordinator.attach(to: nsView.window)
+    }
+
+    static func dismantleNSView(_ nsView: AnchorHostView, coordinator: Coordinator) {
+        coordinator.detach()
     }
 
     func makeCoordinator() -> Coordinator {
         Coordinator()
     }
 
+    /// Reports window-hierarchy changes so the anchor attaches as soon as the
+    /// view has a window, without a fragile deferred runloop hop.
+    final class AnchorHostView: NSView {
+        var onMoveToWindow: ((NSWindow?) -> Void)?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            onMoveToWindow?(window)
+        }
+    }
+
     @MainActor
     final class Coordinator {
-        var isExpanded = false
-
+        private var isExpanded = false
+        private var collapsedWidth: CGFloat = 0
         private weak var window: NSWindow?
-        /// The popover's right-edge screen position captured while collapsed;
-        /// this is the anchor the widened window is pinned to.
+        /// The popover's right-edge screen position the widened window is
+        /// pinned to. Captured from the collapsed geometry, or derived from the
+        /// centered `midX` when the popover opens already expanded.
         private var anchorMaxX: CGFloat?
         private var resizeObserver: NSObjectProtocol?
 
-        func bind(to view: NSView) {
-            // The hosting window is not available until the view joins the
-            // window hierarchy, so resolve it on the next runloop tick.
-            DispatchQueue.main.async { [weak self, weak view] in
-                guard let self, let window = view?.window else { return }
-                attach(to: window)
-            }
+        func configure(isExpanded: Bool, collapsedWidth: CGFloat) {
+            self.isExpanded = isExpanded
+            self.collapsedWidth = collapsedWidth
         }
 
-        private func attach(to window: NSWindow) {
-            guard window !== self.window else {
-                captureAnchorIfCollapsed()
-                return
+        func attach(to window: NSWindow?) {
+            guard let window else { return }
+            if window !== self.window {
+                detach()
+                self.window = window
+                resizeObserver = NotificationCenter.default.addObserver(
+                    forName: NSWindow.didResizeNotification,
+                    object: window,
+                    queue: .main
+                ) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.pinTrailingEdge() }
+                }
             }
-            removeObserver()
-            self.window = window
-            captureAnchorIfCollapsed()
-
-            resizeObserver = NotificationCenter.default.addObserver(
-                forName: NSWindow.didResizeNotification,
-                object: window,
-                queue: .main
-            ) { [weak self] _ in
-                MainActor.assumeIsolated { self?.pinTrailingEdge() }
-            }
+            captureAnchor()
         }
 
-        private func captureAnchorIfCollapsed() {
-            guard let window, !isExpanded else { return }
-            anchorMaxX = window.frame.maxX
+        func detach() {
+            if let resizeObserver {
+                NotificationCenter.default.removeObserver(resizeObserver)
+                self.resizeObserver = nil
+            }
+            window = nil
+        }
+
+        /// Establish the trailing-edge anchor. When collapsed, it is simply the
+        /// current right edge. When the popover opens already expanded, derive
+        /// the collapsed right edge from the centered window: the status item
+        /// fixes `midX`, so collapsed `maxX = midX + collapsedWidth / 2`.
+        private func captureAnchor() {
+            guard let window, anchorMaxX == nil else { return }
+            if isExpanded {
+                guard collapsedWidth > 0 else { return }
+                anchorMaxX = window.frame.midX + collapsedWidth / 2
+            } else {
+                anchorMaxX = window.frame.maxX
+            }
         }
 
         private func pinTrailingEdge() {
             guard let window else { return }
 
-            // Re-capture the natural anchor every time the popover returns to
-            // its collapsed width (the status item may move between sessions
-            // or displays).
+            // Returning to the collapsed width re-establishes the natural
+            // anchor (the status item may move between sessions or displays).
             guard isExpanded else {
                 anchorMaxX = window.frame.maxX
                 return
             }
 
+            if anchorMaxX == nil { captureAnchor() }
             guard let anchorMaxX else { return }
             let targetX = anchorMaxX - window.frame.width
             guard abs(window.frame.origin.x - targetX) > 0.5 else { return }
             window.setFrameOrigin(NSPoint(x: targetX, y: window.frame.origin.y))
-        }
-
-        private func removeObserver() {
-            guard let resizeObserver else { return }
-            NotificationCenter.default.removeObserver(resizeObserver)
-            self.resizeObserver = nil
         }
     }
 }
