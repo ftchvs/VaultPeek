@@ -24,6 +24,12 @@ struct SettingsView: View {
                 }
                 .tag(SettingsTab.accounts.rawValue)
 
+            AppearanceSettingsView()
+                .tabItem {
+                    Label("Appearance", systemImage: "paintbrush")
+                }
+                .tag(SettingsTab.appearance.rawValue)
+
             NotificationSettingsView()
                 .environment(appState)
                 .tabItem {
@@ -51,8 +57,54 @@ struct SettingsView: View {
 private enum SettingsTab: String {
     case general
     case accounts
+    case appearance
     case notifications
     case about
+}
+
+struct AppearanceSettingsView: View {
+    @AppStorage(PopoverTransparencySetting.storageKey) private var popoverTransparency = PopoverTransparencySetting.defaultValue
+
+    private var transparencySetting: PopoverTransparencySetting {
+        PopoverTransparencySetting(value: popoverTransparency)
+    }
+
+    var body: some View {
+        Form {
+            Section("Popover") {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    HStack {
+                        Text("Transparency")
+                        Spacer()
+                        Text("\(transparencySetting.displayPercent)%")
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Slider(
+                        value: Binding(
+                            get: { transparencySetting.value },
+                            set: { popoverTransparency = PopoverTransparencySetting(value: $0).value }
+                        ),
+                        in: PopoverTransparencySetting.minimumValue...PopoverTransparencySetting.maximumValue,
+                        step: 1
+                    ) {
+                        Text("Popover transparency")
+                    } minimumValueLabel: {
+                        Text("More solid")
+                    } maximumValueLabel: {
+                        Text("More glass")
+                    }
+                    .accessibilityValue("\(transparencySetting.displayPercent) percent transparent")
+
+                    Text("Adjusts the ultra-thin material overlay live. The range is capped to keep balances and status text legible on busy desktops.")
+                        .detailText()
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .padding(.top, Spacing.sm)
+    }
 }
 
 struct GeneralSettingsView: View {
