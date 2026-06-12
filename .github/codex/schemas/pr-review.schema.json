@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Codex CI PR Review",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["verdict", "summary", "findings"],
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "enum": ["pass", "fail"],
+      "description": "Use fail only when concrete P0/P1 blocking findings exist."
+    },
+    "summary": {
+      "type": "string",
+      "description": "A concise summary of the reviewed diff and final judgment."
+    },
+    "findings": {
+      "type": "array",
+      "description": "Concrete P0/P1 blocking findings. Empty when verdict is pass.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["severity", "title", "path", "line", "details", "recommendation"],
+        "properties": {
+          "severity": {
+            "type": "string",
+            "enum": ["P0", "P1"]
+          },
+          "title": {
+            "type": "string"
+          },
+          "path": {
+            "type": ["string", "null"]
+          },
+          "line": {
+            "type": ["integer", "null"],
+            "minimum": 1
+          },
+          "details": {
+            "type": "string"
+          },
+          "recommendation": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,253 @@
+name: Codex CI
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number to review
+        required: true
+        type: number
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codex-ci-${{ github.event.pull_request.number || inputs.pr_number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      pr_number: ${{ steps.context.outputs.pr_number }}
+      verdict: ${{ steps.normalize.outputs.verdict }}
+      has_output: ${{ steps.normalize.outputs.has_output }}
+      markdown: ${{ steps.normalize.outputs.markdown }}
+    steps:
+      - name: Resolve pull request context
+        id: context
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_PR_NUMBER: ${{ github.event.pull_request.number }}
+          INPUT_PR_NUMBER: ${{ inputs.pr_number }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            pr_number="$INPUT_PR_NUMBER"
+          else
+            pr_number="$EVENT_PR_NUMBER"
+          fi
+
+          if [ -z "$pr_number" ]; then
+            echo "::error::No pull request number was provided."
+            exit 1
+          fi
+
+          base_ref="$(gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" --json baseRefName --jq .baseRefName)"
+          head_ref="$(gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" --json headRefName --jq .headRefName)"
+          head_sha="$(gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq .headRefOid)"
+
+          {
+            echo "pr_number=$pr_number"
+            echo "base_ref=$base_ref"
+            echo "head_ref=$head_ref"
+            echo "head_sha=$head_sha"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check out pull request merge commit
+        uses: actions/checkout@v6
+        with:
+          ref: refs/pull/${{ steps.context.outputs.pr_number }}/merge
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Fetch review refs
+        env:
+          BASE_REF: ${{ steps.context.outputs.base_ref }}
+          PR_NUMBER: ${{ steps.context.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin \
+            "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF" \
+            "+refs/pull/$PR_NUMBER/head:refs/remotes/origin/pr/$PR_NUMBER/head"
+          {
+            echo "BASE_REF=$BASE_REF"
+            echo "PR_NUMBER=$PR_NUMBER"
+          } >> "$GITHUB_ENV"
+
+      - name: Run Codex review
+        id: run_codex
+        uses: openai/codex-action@v1
+        continue-on-error: true
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt-file: .github/codex/prompts/pr-review.md
+          output-file: codex-review.json
+          sandbox: read-only
+          safety-strategy: drop-sudo
+          codex-args: >-
+            ["--ephemeral","--ignore-user-config","--output-schema",".github/codex/schemas/pr-review.schema.json"]
+
+      - name: Normalize Codex result
+        id: normalize
+        if: always()
+        env:
+          CODEX_FINAL_MESSAGE: ${{ steps.run_codex.outputs.final-message }}
+          CODEX_OUTCOME: ${{ steps.run_codex.outcome }}
+        run: |
+          node <<'NODE'
+          const fs = require("fs");
+
+          const rawFromOutput = process.env.CODEX_FINAL_MESSAGE || "";
+          const rawFromFile = fs.existsSync("codex-review.json")
+            ? fs.readFileSync("codex-review.json", "utf8")
+            : "";
+          const raw = rawFromOutput.trim() || rawFromFile.trim();
+
+          let result = {
+            verdict: "fail",
+            summary: "Codex CI did not produce a valid structured review.",
+            findings: [
+              {
+                severity: "P1",
+                title: "Codex review did not complete cleanly",
+                path: null,
+                line: null,
+                details: "The Codex Action outcome was not success or its output could not be parsed as JSON.",
+                recommendation: "Open the Codex CI job logs, fix the workflow or Codex runtime failure, then rerun Codex CI."
+              }
+            ]
+          };
+
+          if (process.env.CODEX_OUTCOME === "success" && raw) {
+            try {
+              const parsed = JSON.parse(raw);
+              if (parsed && (parsed.verdict === "pass" || parsed.verdict === "fail")) {
+                result = {
+                  verdict: parsed.verdict,
+                  summary: String(parsed.summary || "Codex CI completed."),
+                  findings: Array.isArray(parsed.findings) ? parsed.findings : []
+                };
+              }
+            } catch (error) {
+              result.findings[0].details = `Codex returned output, but JSON parsing failed: ${error.message}`;
+            }
+          }
+
+          const findingLines = result.findings.map((finding) => {
+            const severity = finding.severity || "P1";
+            const title = finding.title || "Blocking finding";
+            const location = finding.path
+              ? `\`${finding.path}${finding.line ? `:${finding.line}` : ""}\``
+              : "repository";
+            const details = finding.details || "No details provided.";
+            const recommendation = finding.recommendation || "Address the finding before merging.";
+            return [
+              `- **${severity}: ${title}**`,
+              `  - Location: ${location}`,
+              `  - Details: ${details}`,
+              `  - Recommendation: ${recommendation}`
+            ].join("\n");
+          });
+
+          const markdown = [
+            "<!-- codex-ci-review -->",
+            "## Codex CI",
+            "",
+            `**Verdict:** ${result.verdict === "pass" ? "Pass" : "Needs attention"}`,
+            "",
+            result.summary,
+            "",
+            ...(findingLines.length > 0 ? ["### Findings", "", findingLines.join("\n")] : ["No blocking P0/P1 findings."])
+          ].join("\n");
+
+          fs.writeFileSync("codex-review.normalized.json", `${JSON.stringify(result, null, 2)}\n`);
+          fs.writeFileSync("codex-review.md", `${markdown}\n`);
+
+          function setOutput(name, value) {
+            const delimiter = `EOF_${name}_${Date.now()}`;
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `${name}<<${delimiter}\n${value}\n${delimiter}\n`);
+          }
+
+          setOutput("verdict", result.verdict);
+          setOutput("has_output", "true");
+          setOutput("markdown", markdown);
+          NODE
+
+      - name: Upload Codex review artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codex-ci-review
+          path: |
+            codex-review.json
+            codex-review.normalized.json
+            codex-review.md
+          if-no-files-found: ignore
+
+  post-feedback:
+    needs: review
+    if: ${{ always() && needs.review.outputs.has_output == 'true' && needs.review.outputs.pr_number != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Post or update Codex CI comment
+        uses: actions/github-script@v7
+        env:
+          CODEX_MARKDOWN: ${{ needs.review.outputs.markdown }}
+          PR_NUMBER: ${{ needs.review.outputs.pr_number }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const marker = "<!-- codex-ci-review -->";
+            const issue_number = Number(process.env.PR_NUMBER);
+            const body = process.env.CODEX_MARKDOWN;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number,
+              per_page: 100,
+            });
+
+            const existing = comments.find((comment) =>
+              comment.user?.type === "Bot" && comment.body?.includes(marker)
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number,
+                body,
+              });
+            }
+
+  gate:
+    needs: [review, post-feedback]
+    if: ${{ always() && needs.review.outputs.verdict == 'fail' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail on blocking Codex findings
+        run: |
+          echo "::error::Codex CI reported blocking findings or did not complete cleanly."
+          exit 1
