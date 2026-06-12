@@ -15,13 +15,35 @@ public enum UserFacingError {
         guard !sanitized.isEmpty else { return nil }
 
         sanitized = sanitized
-            .redacting(pattern: #"(?i)["']?\b(authorization)\b["']?\s*[:=]\s*["']?Bearer\s+[^"',}\s]+"#, template: "$1: Bearer [redacted]")
+            .redacting(
+                pattern: #"(?i)["']?\b(authorization)\b["']?\s*[:=]\s*["']?Bearer\s+[^"',}\s]+"#,
+                template: "$1: Bearer [redacted]"
+            )
             .redacting(pattern: #"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{12,}\b"#, template: "Bearer [redacted]")
-            .redacting(pattern: #"(?i)\b(access|public|link|processor)-(sandbox|development|production)-[A-Za-z0-9_-]{8,}\b"#, template: "[redacted-token]")
-            .redacting(pattern: #"(?i)["']?\b(access[-_ ]?token|public[-_ ]?token|link[-_ ]?token|processor[-_ ]?token|client[-_ ]?id|client[-_ ]?secret|secret)\b["']?\s*[:=]\s*["']?[^"',}\s]+"#, template: "$1: [redacted]")
-            .redacting(pattern: #"(?i)(["']?\b(item_id|item_ids|account_id|account_ids|transaction_id|transaction_ids|txn_id|txn_ids|institution_id|institution_ids|request_id|cursor|cursor_id|link_session_id|transfer_id)\b["']?\s*[:=]\s*)\[[^\]]*\]"#, template: "$1[redacted-id]")
-            .redacting(pattern: #"(?i)(["']?\b(item_id|item_ids|account_id|account_ids|transaction_id|transaction_ids|txn_id|txn_ids|institution_id|institution_ids|request_id|cursor|cursor_id|link_session_id|transfer_id)\b["']?\s*[:=]\s*)(["']?)[^"',}\]\[\s&]+(["']?)"#, template: "$1$3[redacted-id]$4")
-            .redacting(pattern: #"(?i)\b(access|public|link|processor|item|account|transaction|txn|ins)_[A-Za-z0-9_-]{8,}\b"#, template: "[redacted-id]")
+            .redacting(
+                pattern: #"(?i)\b(access|public|link|processor)-(sandbox|development|production)-[A-Za-z0-9_-]{8,}\b"#,
+                template: "[redacted-token]"
+            )
+            .redacting(
+                pattern: #"(?i)["']?\b(access[-_ ]?token|public[-_ ]?token|link[-_ ]?token|processor[-_ ]?token|client[-_ ]?id|client[-_ ]?secret|secret)\b["']?\s*[:=]\s*["']?[^"',}\s]+"#,
+                template: "$1: [redacted]"
+            )
+            .redacting(
+                pattern: #"(?i)(["']?\b(item_id|item_ids|account_id|account_ids|transaction_id|transaction_ids|txn_id|txn_ids|institution_id|institution_ids|request_id|cursor|cursor_id|link_session_id|transfer_id)\b["']?\s*[:=]\s*)\[[^\]]*\]"#,
+                template: "$1[redacted-id]"
+            )
+            .redacting(
+                pattern: #"(?i)(["']?\b(item_id|item_ids|account_id|account_ids|transaction_id|transaction_ids|txn_id|txn_ids|institution_id|institution_ids|request_id|cursor|cursor_id|link_session_id|transfer_id)\b["']?\s*[:=]\s*)(["']?)[^"',}\]\[\s&]+(["']?)"#,
+                template: "$1$3[redacted-id]$4"
+            )
+            .redacting(
+                pattern: #"(?i)(["']?\b(available|available_balance|balance|balances|current|current_balance|limit|balance_limit)\b["']?\s*[:=]\s*)(["']?)-?\$?\d[\d,]*(?:\.\d+)?(["']?)"#,
+                template: "$1$3[redacted-balance]$4"
+            )
+            .redacting(
+                pattern: #"(?i)\b(access|public|link|processor|item|account|transaction|txn|ins)_[A-Za-z0-9_-]{8,}\b"#,
+                template: "[redacted-id]"
+            )
 
         sanitized = sanitized.removingStackTraceDetails()
 
@@ -36,7 +58,7 @@ private extension String {
             return self
         }
 
-        let range = NSRange(startIndex..<endIndex, in: self)
+        let range = NSRange(startIndex ..< endIndex, in: self)
         return expression.stringByReplacingMatches(
             in: self,
             options: [],
@@ -51,7 +73,7 @@ private extension String {
             " traceback ",
             " at sources/",
             " at /",
-            ".swift:"
+            ".swift:",
         ]
         let lowercased = lowercased()
 
