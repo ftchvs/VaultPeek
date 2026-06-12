@@ -74,6 +74,9 @@ struct PlaidBarServer: AsyncParsableCommand {
         // API routes
         let api = router.group("api")
         api.add(middleware: APITokenMiddleware(authToken: serverConfig.authToken))
+        api.add(middleware: SetupStateMiddleware(
+            credentialsConfigured: serverConfig.credentialsConfigured
+        ))
         LinkRoutes(
             plaidClient: plaidClient,
             tokenStore: tokenStore,
@@ -108,6 +111,16 @@ struct PlaidBarServer: AsyncParsableCommand {
 
         logger.info("PlaidBar server starting on http://127.0.0.1:\(serverConfig.port)")
         logger.info("Environment: \(serverConfig.plaidEnvironment.rawValue)")
+        if !serverConfig.credentialsConfigured {
+            logger.warning(
+                """
+                Plaid credentials are not configured; starting in setup state. \
+                /health and /api/status stay available, Plaid-backed routes return 503. \
+                Add PLAID_CLIENT_ID and PLAID_SECRET to server.conf and restart \
+                (the menu bar app restarts its bundled server automatically).
+                """
+            )
+        }
 
         try await app.runService()
     }

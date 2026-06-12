@@ -81,6 +81,34 @@ final class ServerProcessService {
         return true
     }
 
+    /// Stops the managed server and relaunches it through a freshly
+    /// evaluated `ServerAutoLaunchPlan`. Used when a server that booted
+    /// credential-less (setup state) should pick up a newly written
+    /// `server.conf`: the server cannot hot-reload credentials, but a managed
+    /// restart re-reads the config. Waits for the old process to exit so the
+    /// relaunch never races it for the port. Returns `true` when a new
+    /// process was started.
+    ///
+    /// The old process stays referenced as `managedProcess` until its exit is
+    /// observed: a server slow to honor SIGTERM still occupies the port, and
+    /// dropping the reference early would flip `isManagingServer` to false,
+    /// making later credential-upgrade checks skip the retry and leaving the
+    /// app stuck in setup state.
+    func restartManagedServer(isDemoMode: Bool) async -> Bool {
+        if let process = managedProcess, process.isRunning {
+            process.terminate()
+            for _ in 0 ..< 25 where process.isRunning {
+                try? await Task.sleep(for: .milliseconds(200))
+            }
+            guard !process.isRunning else { return false }
+        }
+        managedProcess = nil
+        return launchBundledServerIfNeeded(
+            isDemoMode: isDemoMode,
+            serverAlreadyReachable: false
+        )
+    }
+
     /// Sends SIGTERM to the managed server so Hummingbird can shut down
     /// gracefully. Safe to call when nothing is managed.
     func terminateManagedServer() {

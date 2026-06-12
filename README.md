@@ -130,11 +130,15 @@ Then drag **PlaidBar.app** to **Applications** and launch it. On first
 launch, right-click PlaidBar.app and choose **Open** (the build is ad-hoc
 signed; Developer ID notarization is on the roadmap).
 
-To see demo data without any Plaid setup, choose **Demo** on the setup
-screen — no server or credentials needed. To use real or sandbox Plaid data,
-add your credentials to `~/.plaidbar/server.conf`, then quit and reopen
-PlaidBar — the app starts its bundled companion server automatically, no
-terminal needed:
+The app starts its bundled companion server automatically — no terminal
+needed. Before Plaid credentials exist the server runs in a *setup state*:
+it boots, reports status, and the dashboard shows "Plaid credentials
+missing", while Plaid-backed requests return a clear 503 instead of a
+generic failure. To see demo data without any Plaid setup, choose **Demo**
+on the setup screen — no server or credentials needed.
+
+To use real or sandbox Plaid data, add your credentials to
+`~/.plaidbar/server.conf`:
 
 ```bash
 mkdir -p ~/.plaidbar && chmod 700 ~/.plaidbar
@@ -145,6 +149,11 @@ PLAID_SECRET=your_secret
 EOF
 chmod 600 ~/.plaidbar/server.conf
 ```
+
+No restart dance required: the app notices the new credentials on its next
+status check (any "check again"/refresh action, or the periodic background
+refresh) and restarts its bundled server with them. Quitting and reopening
+PlaidBar works too.
 
 The app also enforces owner-only permissions on `server.conf` and the server
 log at launch. App-managed launches always bind the app's own port, so
