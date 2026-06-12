@@ -136,10 +136,10 @@ and `docs/autonomous-roadmap.md`.
 ### PR-010: Status And Diagnostics
 
 - [x] T046: Keep `/api/status` limited to readiness metadata.
-- [ ] T047: Add or verify UI treatment for server offline, syncing, stale data,
+- [x] T047: Add or verify UI treatment for server offline, syncing, stale data,
   credentials missing, and linked item counts.
 - [x] T048: Add a local-only diagnostic row for the active data directory.
-- [ ] T049: Make status refresh and connect actions reachable from the dashboard.
+- [x] T049: Make status refresh and connect actions reachable from the dashboard.
 - [x] T050: Add tests that status presentation does not include sensitive IDs or
   raw balances.
 
