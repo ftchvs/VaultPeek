@@ -138,9 +138,9 @@ and `docs/autonomous-roadmap.md`.
 - [x] T046: Keep `/api/status` limited to readiness metadata.
 - [x] T047: Add or verify UI treatment for server offline, syncing, stale data,
   credentials missing, and linked item counts.
-- [ ] T048: Add a local-only diagnostic row for the active data directory.
+- [x] T048: Add a local-only diagnostic row for the active data directory.
 - [x] T049: Make status refresh and connect actions reachable from the dashboard.
-- [ ] T050: Add tests that status presentation does not include sensitive IDs or
+- [x] T050: Add tests that status presentation does not include sensitive IDs or
   raw balances.
 
 ### PR-011: Local Data Controls
