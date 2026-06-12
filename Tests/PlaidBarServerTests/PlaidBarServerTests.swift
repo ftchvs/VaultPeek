@@ -1,4 +1,5 @@
 import Foundation
+import Hummingbird
 @testable import PlaidBarCore
 @testable import PlaidBarServer
 import Testing
@@ -298,6 +299,29 @@ struct PlaidBarServerTests {
                 completionRedirectUri: "http://localhost:8484/oauth/callback"
             )
         }
+    }
+
+    @Test func setupStateMiddlewareClassifiesPlaidBackedPaths() {
+        typealias Middleware = SetupStateMiddleware<BasicRequestContext>
+
+        // Blocked in setup state: nothing on these routes works without
+        // Plaid credentials, even when no items are linked.
+        #expect(Middleware.isPlaidBackedPath("/api/link/create"))
+        #expect(Middleware.isPlaidBackedPath("/api/link/update/item-1"))
+        #expect(Middleware.isPlaidBackedPath("/api/accounts"))
+        #expect(Middleware.isPlaidBackedPath("/api/accounts/balances"))
+        #expect(Middleware.isPlaidBackedPath("/api/accounts/item-1"))
+        #expect(Middleware.isPlaidBackedPath("/api/transactions/sync"))
+        #expect(Middleware.isPlaidBackedPath("/api/transactions/sync/cursors"))
+
+        // Readiness metadata stays available so setup guidance can render.
+        #expect(!Middleware.isPlaidBackedPath("/api/status"))
+        #expect(!Middleware.isPlaidBackedPath("/api/items"))
+        #expect(!Middleware.isPlaidBackedPath("/health"))
+        #expect(!Middleware.isPlaidBackedPath("/oauth/callback"))
+
+        // Prefix matching respects path-segment boundaries.
+        #expect(!Middleware.isPlaidBackedPath("/api/accountsmetadata"))
     }
 
     @Test func apiTokenComparisonAcceptsOnlyExactBearerToken() {

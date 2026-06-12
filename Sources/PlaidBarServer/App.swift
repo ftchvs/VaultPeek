@@ -74,7 +74,9 @@ struct PlaidBarServer: AsyncParsableCommand {
         // API routes
         let api = router.group("api")
         api.add(middleware: APITokenMiddleware(authToken: serverConfig.authToken))
-        api.add(middleware: SetupStateMiddleware())
+        api.add(middleware: SetupStateMiddleware(
+            credentialsConfigured: serverConfig.credentialsConfigured
+        ))
         LinkRoutes(
             plaidClient: plaidClient,
             tokenStore: tokenStore,
