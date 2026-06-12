@@ -111,7 +111,10 @@ enum Sizing {
     static let iconNav: CGFloat = 20
     static let iconChip: CGFloat = 28
     static let statusDot: CGFloat = 8
-    static let hitTargetMin: CGFloat = 24
+    /// Minimum clickable frame for borderless glyph controls. 28pt is the
+    /// macOS pointer-target floor (compact control height); the 44pt HIG
+    /// figure is a touch-input minimum and would break menu bar density.
+    static let hitTargetMin: CGFloat = 28
 }
 
 // MARK: - Motion
