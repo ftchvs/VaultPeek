@@ -41,6 +41,22 @@ The Status capture uses demo data with `--screenshot-status-recovery`. That
 fixture keeps the regular demo dashboard healthy, while the Status filter shows
 one recovered institution and one institution that needs login/reconnect.
 
+## Appearance Matrix Renders
+
+Light/dark regression evidence is captured headlessly (no Screen Recording
+permission) with:
+
+```bash
+./Scripts/qa-appearance-matrix.sh
+```
+
+It renders the demo dashboard and account fly-out under forced light AND dark
+appearance into `docs/qa/appearance-{light,dark}/`. Any capture state can also
+be pinned to one appearance with `--appearance light|dark` — useful when the
+host's system appearance would otherwise leak into `Scripts/screenshots.sh`
+output. Coverage, limits (Reduce Transparency needs a manual toggle), and the
+latest pass results live in [qa-matrix.md](qa-matrix.md).
+
 ## Demo Scenario Traceability
 
 The demo narrative is defined in [Demo Scenarios](demo-scenarios.md). Use those

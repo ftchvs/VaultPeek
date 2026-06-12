@@ -10,6 +10,7 @@ struct PlaidBarApp: App {
     private let updaterController: SPUStandardUpdaterController
 
     init() {
+        Self.applyForcedAppearance()
         Self.applyScreenshotDefaults()
 
         let state = AppState()
@@ -66,6 +67,23 @@ struct PlaidBarApp: App {
         Settings {
             SettingsView(updater: updaterController.updater)
                 .environment(appState)
+        }
+    }
+
+    /// QA aid: "--appearance light|dark" pins the whole app to one appearance
+    /// so screenshot and `--render-snapshot` passes can cover both modes
+    /// regardless of the host's system setting (docs/qa-matrix.md). Unknown
+    /// values are ignored and the system appearance stays in charge.
+    private static func applyForcedAppearance() {
+        guard let mode = CommandLineOptions.value(for: "--appearance") else { return }
+
+        switch mode.lowercased() {
+        case "light":
+            NSApplication.shared.appearance = NSAppearance(named: .aqua)
+        case "dark":
+            NSApplication.shared.appearance = NSAppearance(named: .darkAqua)
+        default:
+            break
         }
     }
 
