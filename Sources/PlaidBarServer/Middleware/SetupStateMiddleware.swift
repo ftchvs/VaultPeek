@@ -19,7 +19,7 @@ struct SetupStateMiddleware<Context: RequestContext>: RouterMiddleware {
     let credentialsConfigured: Bool
 
     static var setupStateMessage: String {
-        "Plaid credentials are not configured on PlaidBarServer. "
+        "Plaid credentials are not configured on the VaultPeek companion server. "
             + "Add PLAID_CLIENT_ID and PLAID_SECRET to server.conf; "
             + "the menu bar app restarts its bundled server automatically."
     }

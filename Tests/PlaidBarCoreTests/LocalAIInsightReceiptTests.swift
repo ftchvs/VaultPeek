@@ -96,7 +96,7 @@ struct LocalAIInsightReceiptTests {
 
     private static let disabledAvailability = LocalAIAvailability(
         state: .disabled,
-        detail: "No local AI runtime is configured. PlaidBar is using deterministic local summaries and category hints only."
+        detail: "No local AI runtime is configured. VaultPeek is using deterministic local summaries and category hints only."
     )
 
     private func makeInput(

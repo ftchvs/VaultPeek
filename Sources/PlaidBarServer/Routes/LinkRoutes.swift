@@ -194,10 +194,10 @@ struct OAuthCallbackRoute: Sendable {
         """
         <!DOCTYPE html>
         <html>
-        <head><title>PlaidBar -- Connected!</title></head>
+        <head><title>VaultPeek -- Connected!</title></head>
         <body style="font-family: -apple-system, sans-serif; text-align: center; padding: 60px;">
             <h1>Account Connected</h1>
-            <p>Your bank account has been linked to PlaidBar.</p>
+            <p>Your bank account has been linked to VaultPeek.</p>
             <p>You can close this tab and return to the app.</p>
             <script>setTimeout(() => window.close(), 3000);</script>
         </body>
@@ -210,11 +210,11 @@ struct OAuthCallbackRoute: Sendable {
         return """
         <!DOCTYPE html>
         <html>
-        <head><title>PlaidBar -- Error</title></head>
+        <head><title>VaultPeek -- Error</title></head>
         <body style="font-family: -apple-system, sans-serif; text-align: center; padding: 60px;">
             <h1>Connection Error</h1>
             <p>\(escapedMessage)</p>
-            <p>Please try again from PlaidBar.</p>
+            <p>Please try again from VaultPeek.</p>
         </body>
         </html>
         """

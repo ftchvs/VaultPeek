@@ -154,13 +154,13 @@ public enum MenuBarSummary {
     ) -> String {
         switch mode {
         case .netCash:
-            guard !accounts.isEmpty else { return "PlaidBar" }
+            guard !accounts.isEmpty else { return PlaidBarConstants.appName }
             return Formatters.currency(netCash(from: accounts), format: currencyFormat)
         case .totalCash:
-            guard !accounts.isEmpty else { return "PlaidBar" }
+            guard !accounts.isEmpty else { return PlaidBarConstants.appName }
             return Formatters.currency(totalCash(from: accounts), format: currencyFormat)
         case .creditUtilization:
-            guard !accounts.isEmpty else { return "PlaidBar" }
+            guard !accounts.isEmpty else { return PlaidBarConstants.appName }
             guard let utilization = creditUtilization(from: accounts) else { return "No credit" }
             return Formatters.percent(utilization, decimals: 0)
         case .recentSpend:

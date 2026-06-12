@@ -11,7 +11,7 @@ struct LocalTrustReceiptTests {
         #expect(receipt.subtitle.contains("on this Mac"))
         #expect(receipt.rows.map(\.id) == ["storage", "network", "plaid", "reset"])
         #expect(receipt.rows[0].detail.contains("~/.plaidbar"))
-        #expect(receipt.rows[1].detail.contains("No PlaidBar-hosted backend"))
+        #expect(receipt.rows[1].detail.contains("No VaultPeek-hosted backend"))
         #expect(receipt.rows[1].detail.contains("analytics"))
         #expect(receipt.rows[1].detail.contains("telemetry"))
         #expect(receipt.rows[1].detail.contains("cloud sync"))

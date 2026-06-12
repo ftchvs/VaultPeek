@@ -4,16 +4,16 @@ public enum ReconnectRecoveryMessage {
     private static let maxErrorDetailLength = 80
 
     public static func invalidUpdateLinkURL(institutionName: String?) -> String {
-        "PlaidBar could not prepare a safe reconnect link\(institutionSuffix(institutionName)). Refresh status, then use Settings > Accounts > \(reconnectAction(institutionName))."
+        "VaultPeek could not prepare a safe reconnect link\(institutionSuffix(institutionName)). Refresh status, then use Settings > Accounts > \(reconnectAction(institutionName))."
     }
 
     public static func browserOpenFailed(institutionName: String?) -> String {
-        "PlaidBar could not open Plaid Link in your browser\(institutionSuffix(institutionName)). Set a default browser, then use Settings > Accounts > \(reconnectAction(institutionName))."
+        "VaultPeek could not open Plaid Link in your browser\(institutionSuffix(institutionName)). Set a default browser, then use Settings > Accounts > \(reconnectAction(institutionName))."
     }
 
     public static func createFailed(errorMessage: String?, institutionName: String?) -> String {
         let safeDetail = UserFacingError.sanitizedDetail(from: errorMessage, maxLength: maxErrorDetailLength)
-        let fallback = "PlaidBar could not create a reconnect link\(institutionSuffix(institutionName))."
+        let fallback = "VaultPeek could not create a reconnect link\(institutionSuffix(institutionName))."
         let detail = safeDetail.map { "\(fallback) \($0)" } ?? fallback
         return "\(detail) Refresh status, then use Settings > Accounts > \(reconnectAction(institutionName))."
     }

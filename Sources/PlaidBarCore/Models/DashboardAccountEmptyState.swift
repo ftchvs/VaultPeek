@@ -88,7 +88,7 @@ public struct DashboardAccountEmptyState: Equatable, Sendable {
         if !isDemoMode, !serverConnected {
             return DashboardAccountEmptyState(
                 title: "Server offline",
-                detail: "Start PlaidBarServer, then check the connection again.",
+                detail: "Start the VaultPeek companion server, then check the connection again.",
                 iconName: "server.rack",
                 tone: .offline,
                 showsAddAccount: false,

@@ -62,7 +62,7 @@ public struct FirstRunCompletionState: Equatable, Sendable {
             return FirstRunCompletionState(
                 step: .blocked,
                 title: "Server offline",
-                detail: "Start PlaidBarServer, then check the connection again.",
+                detail: "Start the VaultPeek companion server, then check the connection again.",
                 isReady: false,
                 canRetry: true
             )
@@ -72,7 +72,7 @@ public struct FirstRunCompletionState: Equatable, Sendable {
             return FirstRunCompletionState(
                 step: .openPlaidLink,
                 title: "No linked item returned",
-                detail: "PlaidBar cannot see a linked item yet. Finish Plaid Link in the browser, then check again.",
+                detail: "VaultPeek cannot see a linked item yet. Finish Plaid Link in the browser, then check again.",
                 isReady: false,
                 canRetry: true
             )
@@ -82,7 +82,7 @@ public struct FirstRunCompletionState: Equatable, Sendable {
             return FirstRunCompletionState(
                 step: .loadAccounts,
                 title: "Linked item found",
-                detail: "PlaidBar can see the linked item. Load accounts to finish the first run.",
+                detail: "VaultPeek can see the linked item. Load accounts to finish the first run.",
                 isReady: false,
                 canRetry: true
             )
@@ -106,8 +106,8 @@ public struct FirstRunCompletionState: Equatable, Sendable {
             step: .ready,
             title: "Dashboard ready",
             detail: transactionCount == 1
-                ? "1 transaction synced. PlaidBar is ready."
-                : "\(transactionCount) transactions synced. PlaidBar is ready.",
+                ? "1 transaction synced. VaultPeek is ready."
+                : "\(transactionCount) transactions synced. VaultPeek is ready.",
             isReady: true,
             canRetry: false
         )

@@ -64,7 +64,7 @@ public struct NotificationPermissionPresentation: Equatable, Sendable {
         case .unsupported:
             return NotificationPermissionPresentation(
                 label: "Unavailable",
-                detail: "This PlaidBar launch does not have a macOS notification identity. Run PlaidBar from the app bundle so macOS can register it as a notification source.",
+                detail: "This VaultPeek launch does not have a macOS notification identity. Run VaultPeek from the app bundle so macOS can register it as a notification source.",
                 iconName: "bell.slash.fill",
                 tone: .secondary,
                 recoveryAction: .runBundledApp,
@@ -75,7 +75,7 @@ public struct NotificationPermissionPresentation: Equatable, Sendable {
         case .authorized:
             return NotificationPermissionPresentation(
                 label: "Allowed",
-                detail: "PlaidBar can show local transaction, balance, and credit utilization alerts.",
+                detail: "VaultPeek can show local transaction, balance, and credit utilization alerts.",
                 iconName: "checkmark.circle.fill",
                 tone: .positive,
                 isNotificationToggleDisabled: false,
@@ -84,7 +84,7 @@ public struct NotificationPermissionPresentation: Equatable, Sendable {
         case .denied:
             return NotificationPermissionPresentation(
                 label: "Denied",
-                detail: "macOS is blocking PlaidBar notifications. Enable PlaidBar in System Settings to recover local alerts.",
+                detail: "macOS is blocking VaultPeek notifications. Enable VaultPeek in System Settings to recover local alerts.",
                 iconName: "exclamationmark.triangle.fill",
                 tone: .warning,
                 recoveryAction: .openSystemSettings,
@@ -122,7 +122,7 @@ public struct NotificationPermissionPresentation: Equatable, Sendable {
         case .unknown:
             return NotificationPermissionPresentation(
                 label: "Unknown",
-                detail: "PlaidBar could not classify the current notification permission. Check again before relying on local alerts.",
+                detail: "VaultPeek could not classify the current notification permission. Check again before relying on local alerts.",
                 iconName: "questionmark.circle",
                 tone: .secondary,
                 recoveryAction: .checkAgain,
