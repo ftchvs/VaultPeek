@@ -10,7 +10,7 @@ import PlaidBarCore
 struct PlaidBarServer: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "plaidbar-server",
-        abstract: "Run the local PlaidBar companion server.",
+        abstract: "Run the local VaultPeek companion server.",
         version: PlaidBarConstants.appVersion
     )
 
@@ -109,7 +109,7 @@ struct PlaidBarServer: AsyncParsableCommand {
         )
         app.addServices(fluent)
 
-        logger.info("PlaidBar server starting on http://127.0.0.1:\(serverConfig.port)")
+        logger.info("VaultPeek companion server starting on http://127.0.0.1:\(serverConfig.port)")
         logger.info("Environment: \(serverConfig.plaidEnvironment.rawValue)")
         if !serverConfig.credentialsConfigured {
             logger.warning(

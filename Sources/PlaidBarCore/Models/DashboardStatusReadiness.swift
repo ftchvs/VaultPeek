@@ -84,7 +84,7 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
             return DashboardStatusReadiness(
                 level: .blocked,
                 title: "Server offline",
-                detail: "Start PlaidBarServer, then check the connection from this dashboard.",
+                detail: "Start the VaultPeek companion server, then check the connection from this dashboard.",
                 primaryAction: .checkServer
             )
         }
@@ -219,15 +219,17 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
         if normalized.contains("auth token is unavailable") {
             return (
                 "Local server auth missing",
-                "PlaidBar cannot read the local app-server auth token. Restart PlaidBarServer, then check the connection again."
+                "VaultPeek cannot read the local app-server auth token. Restart the VaultPeek companion server, then check the connection again."
             )
         }
 
         if normalized.contains("plaidbar server returned 401") ||
-            normalized.contains("plaidbar server returned 403") {
+            normalized.contains("plaidbar server returned 403") ||
+            normalized.contains("vaultpeek companion server returned 401") ||
+            normalized.contains("vaultpeek companion server returned 403") {
             return (
                 "Local server auth rejected",
-                "PlaidBar reached the local server, but the app-server auth token was rejected. Restart PlaidBarServer so the local token is regenerated."
+                "VaultPeek reached the local server, but the app-server auth token was rejected. Restart the VaultPeek companion server so the local token is regenerated."
             )
         }
 
@@ -289,7 +291,7 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
             return DashboardStatusReadiness(
                 level: .warning,
                 title: "Notifications blocked",
-                detail: "Local alerts are enabled, but macOS is blocking PlaidBar notifications. Enable PlaidBar in System Settings to recover alerts.",
+                detail: "Local alerts are enabled, but macOS is blocking VaultPeek notifications. Enable VaultPeek in System Settings to recover alerts.",
                 primaryAction: .openNotificationSettings,
                 primaryActionTitle: permission.recoveryActionTitle,
                 primaryActionIconName: permission.recoveryActionIconName,

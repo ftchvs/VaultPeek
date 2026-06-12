@@ -311,7 +311,7 @@ public struct LocalAIInsightReceipt: Equatable, Sendable {
             timeWindow: "No local history window",
             localOnlyBadge: "Local-only",
             confidence: "Confidence unavailable until local source rows exist.",
-            limitations: [availability.detail, "PlaidBar will not call a cloud AI service to fill this state."],
+            limitations: [availability.detail, "VaultPeek will not call a cloud AI service to fill this state."],
             unavailableState: unavailableState,
             reversibleActionCopy: "No insight action is available yet. Connect data locally or keep using the dashboard without AI.",
             accessibilitySummary: "Local insight receipt unavailable. \(availability.state.displayName). \(availability.detail)"
@@ -346,7 +346,7 @@ public struct LocalAIInsightReceipt: Equatable, Sendable {
         if availability.state == .disabled {
             result.append("Local AI is off; this receipt uses deterministic local totals and heuristics.")
         } else if availability.state == .unavailable {
-            result.append("The configured local runtime is unavailable; PlaidBar does not fall back to cloud AI.")
+            result.append("The configured local runtime is unavailable; VaultPeek does not fall back to cloud AI.")
         }
 
         if input.current.transactionCount == 0 {

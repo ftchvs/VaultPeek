@@ -43,7 +43,7 @@ public struct AccountActivityEmptyState: Equatable, Sendable {
         guard serverConnected else {
             return AccountActivityEmptyState(
                 title: "Server offline",
-                detail: "Start PlaidBarServer, then refresh to load recent activity for \(accountDisplayName).",
+                detail: "Start the VaultPeek companion server, then refresh to load recent activity for \(accountDisplayName).",
                 iconName: "server.rack",
                 tone: .offline
             )
@@ -53,7 +53,7 @@ public struct AccountActivityEmptyState: Equatable, Sendable {
         case .loginRequired:
             return AccountActivityEmptyState(
                 title: "Reconnect to sync activity",
-                detail: "Plaid needs a fresh bank login before PlaidBar can update transactions for \(accountDisplayName).",
+                detail: "Plaid needs a fresh bank login before VaultPeek can update transactions for \(accountDisplayName).",
                 iconName: "person.crop.circle.badge.exclamationmark",
                 tone: .warning
             )
@@ -67,7 +67,7 @@ public struct AccountActivityEmptyState: Equatable, Sendable {
         case .stale:
             return AccountActivityEmptyState(
                 title: "Activity may be stale",
-                detail: "Refresh PlaidBar to pull the latest transactions for \(accountDisplayName).",
+                detail: "Refresh VaultPeek to pull the latest transactions for \(accountDisplayName).",
                 iconName: "clock.badge.exclamationmark",
                 tone: .warning
             )

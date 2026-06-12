@@ -1,7 +1,7 @@
 import Foundation
 
 /// Decides whether the app should start the `PlaidBarServer` executable that
-/// ships inside `PlaidBar.app`, and with what process configuration.
+/// ships inside `VaultPeek.app`, and with what process configuration.
 ///
 /// The plan exists so DMG installs work without a separate server step while
 /// developer workflows stay untouched: `swift run`, `Scripts/run.sh`, and any

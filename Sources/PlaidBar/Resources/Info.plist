@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>PlaidBar</string>
+    <string>VaultPeek</string>
     <key>CFBundleDisplayName</key>
-    <string>PlaidBar</string>
+    <string>VaultPeek</string>
     <key>CFBundleExecutable</key>
     <string>PlaidBar</string>
     <key>CFBundlePackageType</key>

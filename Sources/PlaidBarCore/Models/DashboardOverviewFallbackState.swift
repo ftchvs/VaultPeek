@@ -34,7 +34,7 @@ public struct DashboardOverviewFallbackState: Equatable, Sendable {
 
         return DashboardOverviewFallbackState(
             title: "Overview needs data",
-            detail: "Demo data is not loaded yet. Start demo mode or connect PlaidBarServer to replace the empty overview with balances, activity, and status signals.",
+            detail: "Demo data is not loaded yet. Start demo mode or connect the VaultPeek companion server to replace the empty overview with balances, activity, and status signals.",
             iconName: "rectangle.stack.badge.play",
             actionTitle: "Choose Data Source",
             actionIconName: "plus.circle"

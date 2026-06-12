@@ -84,6 +84,6 @@ private extension String {
         }
 
         let prefix = self[..<marker.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines)
-        return prefix.isEmpty ? "A local PlaidBar error occurred. Check the server logs for details." : String(prefix)
+        return prefix.isEmpty ? "A local VaultPeek error occurred. Check the server logs for details." : String(prefix)
     }
 }

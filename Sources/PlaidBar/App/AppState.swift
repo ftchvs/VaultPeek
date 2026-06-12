@@ -280,15 +280,15 @@ final class AppState {
         let status = "Status: \(diagnosticsSummary)"
         switch menuBarSummaryMode {
         case .netCash:
-            return "PlaidBar - Net cash: \(menuBarText). \(status)"
+            return "VaultPeek - Net cash: \(menuBarText). \(status)"
         case .totalCash:
-            return "PlaidBar - Total cash: \(menuBarText). \(status)"
+            return "VaultPeek - Total cash: \(menuBarText). \(status)"
         case .creditUtilization:
-            return "PlaidBar - Credit utilization: \(menuBarText). \(status)"
+            return "VaultPeek - Credit utilization: \(menuBarText). \(status)"
         case .recentSpend:
-            return "PlaidBar - Recent spend: \(menuBarText). \(status)"
+            return "VaultPeek - Recent spend: \(menuBarText). \(status)"
         case .iconOnly:
-            return "PlaidBar. \(status)"
+            return "VaultPeek. \(status)"
         }
     }
 
@@ -296,15 +296,15 @@ final class AppState {
         let status = "Status \(diagnosticsSummary)"
         switch menuBarSummaryMode {
         case .netCash:
-            return "PlaidBar net cash \(menuBarText). \(status)"
+            return "VaultPeek net cash \(menuBarText). \(status)"
         case .totalCash:
-            return "PlaidBar total cash \(menuBarText). \(status)"
+            return "VaultPeek total cash \(menuBarText). \(status)"
         case .creditUtilization:
-            return "PlaidBar credit utilization \(menuBarText). \(status)"
+            return "VaultPeek credit utilization \(menuBarText). \(status)"
         case .recentSpend:
-            return "PlaidBar recent spend \(menuBarText). \(status)"
+            return "VaultPeek recent spend \(menuBarText). \(status)"
         case .iconOnly:
-            return "PlaidBar. \(status)"
+            return "VaultPeek. \(status)"
         }
     }
 
@@ -793,19 +793,19 @@ final class AppState {
         }
 
         guard serverConnected else {
-            error = "Start PlaidBarServer before adding an account."
+            error = "Start the VaultPeek companion server before adding an account."
             return
         }
 
         guard serverCredentialsConfigured != false else {
-            error = "Plaid credentials are not configured on PlaidBarServer."
+            error = "Plaid credentials are not configured on the VaultPeek companion server."
             return
         }
 
         do {
             let linkResponse = try await serverClient.createLinkToken()
             guard let url = URL(string: linkResponse.linkUrl) else {
-                error = "PlaidBarServer returned an invalid Plaid Link URL."
+                error = "The VaultPeek companion server returned an invalid Plaid Link URL."
                 return
             }
 
@@ -868,9 +868,9 @@ final class AppState {
         guard serverConnected else {
             switch expectedEnvironment {
             case .sandbox:
-                error = "Start PlaidBarServer with --sandbox and sandbox credentials before connecting."
+                error = "Start the VaultPeek companion server with --sandbox and sandbox credentials before connecting."
             case .production:
-                error = "Start PlaidBarServer with production credentials before connecting real accounts."
+                error = "Start the VaultPeek companion server with production credentials before connecting real accounts."
             }
             return false
         }
@@ -889,9 +889,9 @@ final class AppState {
         guard serverCredentialsConfigured == true else {
             switch expectedEnvironment {
             case .sandbox:
-                error = "Sandbox Plaid credentials are missing on PlaidBarServer. Add PLAID_CLIENT_ID and PLAID_SECRET, then check again."
+                error = "Sandbox Plaid credentials are missing on the VaultPeek companion server. Add PLAID_CLIENT_ID and PLAID_SECRET, then check again."
             case .production:
-                error = "Production Plaid credentials are missing on PlaidBarServer. Add approved production credentials, then check again."
+                error = "Production Plaid credentials are missing on the VaultPeek companion server. Add approved production credentials, then check again."
             }
             return false
         }

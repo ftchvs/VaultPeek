@@ -132,7 +132,7 @@ struct GeneralSettingsView: View {
                         .detailText()
                         .fixedSize(horizontal: false, vertical: true)
 
-                    Text("PlaidBar does not send transaction data to cloud AI services. Local insight summaries are derived from local accounts, transactions, and recurring detections; raw Plaid transaction categories remain unchanged.")
+                    Text("VaultPeek does not send transaction data to cloud AI services. Local insight summaries are derived from local accounts, transactions, and recurring detections; raw Plaid transaction categories remain unchanged.")
                         .detailText()
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -190,7 +190,7 @@ struct GeneralSettingsView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Deletes the SQLite database, account and transaction caches, stored Plaid access tokens, sync cursors, and loaded account data under \(appState.activeStorageDirectoryDisplayText). Keeps server.conf, app/server auth, Plaid dashboard Items, shell credentials, and app preferences. Restart PlaidBarServer after resetting.")
+            Text("Deletes the SQLite database, account and transaction caches, stored Plaid access tokens, sync cursors, and loaded account data under \(appState.activeStorageDirectoryDisplayText). Keeps server.conf, app/server auth, Plaid dashboard Items, shell credentials, and app preferences. Restart the VaultPeek companion server after resetting.")
         }
         .alert("Local Data Reset", isPresented: Binding(
             get: { resetResultMessage != nil },
@@ -228,7 +228,7 @@ struct GeneralSettingsView: View {
             if result.removedEntryCount == 0 {
                 resetResultMessage = "No local data found. \(LocalDataStore.displayPath(for: URL(fileURLWithPath: result.directoryPath, isDirectory: true))) is ready. \(keychainResetText(for: result))\(preservationText)"
             } else {
-                resetResultMessage = "Removed \(result.removedEntryCount) PlaidBar data item\(result.removedEntryCount == 1 ? "" : "s") from \(LocalDataStore.displayPath(for: URL(fileURLWithPath: result.directoryPath, isDirectory: true))). \(keychainResetText(for: result))\(preservationText) Restart PlaidBarServer."
+                resetResultMessage = "Removed \(result.removedEntryCount) VaultPeek data item\(result.removedEntryCount == 1 ? "" : "s") from \(LocalDataStore.displayPath(for: URL(fileURLWithPath: result.directoryPath, isDirectory: true))). \(keychainResetText(for: result))\(preservationText) Restart the VaultPeek companion server."
             }
         } catch {
             resetErrorMessage = error.localizedDescription
@@ -503,7 +503,7 @@ struct AccountSettingsView: View {
         .alert(item: $pendingRemoval) { removal in
             Alert(
                 title: Text("Remove \(removal.institutionName)?"),
-                message: Text("This removes \(removal.accountCount) linked account\(removal.accountCount == 1 ? "" : "s") from PlaidBar and clears matching cached transactions from this Mac. It does not delete the institution from Plaid's dashboard."),
+                message: Text("This removes \(removal.accountCount) linked account\(removal.accountCount == 1 ? "" : "s") from VaultPeek and clears matching cached transactions from this Mac. It does not delete the institution from Plaid's dashboard."),
                 primaryButton: .destructive(Text("Remove")) {
                     Task { await appState.removeAccount(itemId: removal.itemId) }
                 },
@@ -844,9 +844,9 @@ struct NotificationSettingsView: View {
     private func permissionActionAccessibilityHint(for action: NotificationPermissionRecoveryAction) -> Text {
         switch action {
         case .requestPermission:
-            Text("Requests macOS notification permission for PlaidBar.")
+            Text("Requests macOS notification permission for VaultPeek.")
         case .openSystemSettings:
-            Text("Opens macOS Notification settings for PlaidBar.")
+            Text("Opens macOS Notification settings for VaultPeek.")
         case .checkAgain:
             Text("Checks the current macOS notification permission again.")
         case .runBundledApp:
@@ -886,7 +886,7 @@ struct AboutView: View {
                         .accessibilityHidden(true)
 
                     VStack(alignment: .leading, spacing: Spacing.xs) {
-                        Text("PlaidBar")
+                        Text(PlaidBarConstants.appName)
                             .font(.title2)
                             .fontWeight(.bold)
 

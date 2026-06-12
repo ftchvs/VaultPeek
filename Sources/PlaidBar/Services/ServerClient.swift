@@ -234,14 +234,14 @@ enum ServerClientError: Error, LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .requestFailed: "Request to PlaidBar server failed"
-        case .serverNotRunning: "PlaidBar server is not running"
+        case .requestFailed: "Request to the VaultPeek companion server failed"
+        case .serverNotRunning: "The VaultPeek companion server is not running"
         // Keep the "auth token is unavailable" substring intact: the recovery
         // matchers in DashboardStatusReadiness, AttentionQueue, and
         // ServerConnectionPresentation key off it.
-        case .authTokenUnavailable: "PlaidBar server auth token is unavailable. Start the server, then check again."
+        case .authTokenUnavailable: "VaultPeek companion server auth token is unavailable. Start the server, then check again."
         case let .httpError(statusCode, message):
-            "PlaidBar server returned \(statusCode): \(message)"
+            "VaultPeek companion server returned \(statusCode): \(message)"
         }
     }
 }
