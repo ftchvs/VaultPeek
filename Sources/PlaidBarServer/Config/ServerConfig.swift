@@ -55,7 +55,21 @@ struct ServerConfig: Sendable {
         portOverride: Int? = nil,
         sandboxOverride: Bool? = nil
     ) throws -> ServerConfig {
+        // Validate the explicit `--port` override before any filesystem work so
+        // an out-of-range value cannot create the data dir, write the auth-token
+        // file, or trigger migrations. The env-var/default path is already
+        // clamped by PlaidBarConstants.serverPort(environment:).
+        if let portOverride, !(1...65_535).contains(portOverride) {
+            throw ServerConfigError.invalidPort(portOverride)
+        }
+
         let environmentValues = try resolvedEnvironment(from: configPath)
+
+        // The standalone `--config` path consumes a server.conf that may hold
+        // PLAID_CLIENT_ID/PLAID_SECRET; tighten it to owner-only the same way
+        // app-managed launches do (ServerProcessService.enforcePrivatePermissions).
+        tightenConfigFilePermissions(at: configPath)
+
         if environmentValues[LocalDataStore.dataDirectoryEnvironmentVariable]?.trimmedNonEmpty == nil {
             try LocalDataStore.migrateLegacyDefaultStorageIfNeeded()
         }
@@ -373,6 +387,23 @@ struct ServerConfig: Sendable {
             environmentValues[key] = value
         }
         return environmentValues
+    }
+
+    /// Tightens a user-supplied config file to owner-only (`0o600`) so a
+    /// `server.conf` created with loose `0644` shell permissions cannot leak
+    /// Plaid credentials to other local users. Best-effort: a chmod failure
+    /// must not turn into a boot failure (matches the app-managed helper in
+    /// ServerProcessService.enforcePrivatePermissions). `nil`/blank paths and
+    /// missing files are no-ops; the path is tilde-expanded to match
+    /// `loadConfigFile`.
+    private static func tightenConfigFilePermissions(at configPath: String?) {
+        guard let configPath = configPath?.trimmedNonEmpty else { return }
+        let expandedPath = NSString(string: configPath).expandingTildeInPath
+        guard FileManager.default.fileExists(atPath: expandedPath) else { return }
+        try? FileManager.default.setAttributes(
+            [.posixPermissions: 0o600],
+            ofItemAtPath: expandedPath
+        )
     }
 
     private static func loadConfigFile(at path: String) throws -> [String: String] {
@@ -781,6 +812,7 @@ struct ServerConfig: Sendable {
 enum ServerConfigError: LocalizedError {
     case invalidEnvironmentVariable(String, String)
     case invalidConfigLine(path: String, line: Int)
+    case invalidPort(Int)
 
     var errorDescription: String? {
         switch self {
@@ -788,6 +820,8 @@ enum ServerConfigError: LocalizedError {
             "Invalid value for \(name): \(value)"
         case .invalidConfigLine(let path, let line):
             "Invalid config line \(line) in \(path)"
+        case .invalidPort(let port):
+            "Invalid server port \(port): must be between 1 and 65535"
         }
     }
 }

@@ -82,11 +82,11 @@ Data flow: `PlaidBar.app` → HTTP `localhost:8484` → `PlaidBarServer` → HTT
 | Sandbox | `./Scripts/run.sh --sandbox` | Yes (sandbox API) | Plaid sandbox creds |
 | Production | `./Scripts/run.sh` | Yes (prod API) | Plaid-approved creds |
 
-Sandbox/production need `PLAID_CLIENT_ID` and `PLAID_SECRET` exported (or set in `~/.plaidbar/server.conf`). Server port defaults to `8484` (`PLAIDBAR_SERVER_PORT` to override); local data lives under `~/.plaidbar/` (`PLAIDBAR_DATA_DIR` to override). Tunable constants are centralized in `Sources/PlaidBarCore/Utilities/Constants.swift` (refresh intervals, sync page caps, credit thresholds, app version).
+Sandbox/production need `PLAID_CLIENT_ID` and `PLAID_SECRET` exported (or set in `~/.vaultpeek/server.conf`). Server port defaults to `8484` (`PLAIDBAR_SERVER_PORT` to override); local data lives under `~/.vaultpeek/` by default (`PLAIDBAR_DATA_DIR` to override; legacy `~/.plaidbar/` files are migrated forward on startup without overwriting newer files). Tunable constants are centralized in `Sources/PlaidBarCore/Utilities/Constants.swift` (refresh intervals, sync page caps, credit thresholds, app version).
 
 ## Server API
 
-Localhost endpoints. `/health` and `/oauth/callback` are open; `/api/*` requires the bearer token at `~/.plaidbar/auth-token` (or `$PLAIDBAR_DATA_DIR/auth-token`). Full table in `README.md` ("Server API Reference"). `/api/status` deliberately exposes readiness metadata only — never tokens, account IDs, balances, or transactions.
+Localhost endpoints. `/health` and `/oauth/callback` are open; `/api/*` requires the bearer token at `~/.vaultpeek/auth-token` (or `$PLAIDBAR_DATA_DIR/auth-token`). Full table in `README.md` ("Server API Reference"). `/api/status` deliberately exposes readiness metadata only — never tokens, account IDs, balances, or transactions.
 
 ## Reference docs
 

@@ -216,6 +216,35 @@ struct DashboardNavBarModelTests {
         #expect(items.filter { $0.kind != .status }.allSatisfy { $0.statusIconName == nil })
     }
 
+    @Test("Status indicator a11y label appears only for degraded status")
+    func statusIndicatorAccessibilityLabelForDegradedStatus() {
+        // One degraded credit account on the degraded item -> count 1, singular.
+        let degraded = DashboardNavBarModel.items(
+            accounts: Self.mixedAccounts,
+            degradedItemIds: [Self.degradedItemId]
+        )
+        #expect(
+            degraded.first { $0.kind == .status }?.statusIndicatorAccessibilityLabel
+                == "1 item needs attention"
+        )
+        // Non-status segments never expose the indicator label.
+        #expect(degraded.filter { $0.kind != .status }.allSatisfy { $0.statusIndicatorAccessibilityLabel == nil })
+
+        // Multiple degraded accounts -> plural wording.
+        let healthyItemDegraded = DashboardNavBarModel.items(
+            accounts: Self.mixedAccounts,
+            degradedItemIds: [Self.healthyItemId]
+        )
+        #expect(
+            healthyItemDegraded.first { $0.kind == .status }?.statusIndicatorAccessibilityLabel
+                == "3 items need attention"
+        )
+
+        // Healthy Status: no indicator label.
+        let healthy = DashboardNavBarModel.items(accounts: Self.mixedAccounts)
+        #expect(healthy.first { $0.kind == .status }?.statusIndicatorAccessibilityLabel == nil)
+    }
+
     // MARK: - Summary
 
     @Test("Summary for the all filter reads All: N accounts")

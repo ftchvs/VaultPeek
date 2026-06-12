@@ -59,6 +59,14 @@ public extension DashboardNavBarItem {
         guard kind == .status else { return nil }
         return showsAttentionBadge ? "exclamationmark.triangle.fill" : "checkmark.circle"
     }
+
+    /// VoiceOver label for the adjacent status indicator the filter bar shows
+    /// when the Status segment needs attention. `nil` for non-status segments
+    /// and for a healthy Status segment (no separate indicator is shown then).
+    var statusIndicatorAccessibilityLabel: String? {
+        guard kind == .status, showsAttentionBadge else { return nil }
+        return "\(count) \(count == 1 ? "item needs" : "items need") attention"
+    }
 }
 
 /// Pure presenter for the dashboard nav/filter bar.
