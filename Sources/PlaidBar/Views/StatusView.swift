@@ -1,6 +1,6 @@
-import SwiftUI
 import AppKit
 import PlaidBarCore
+import SwiftUI
 
 struct StatusView: View {
     @Environment(AppState.self) private var appState
@@ -12,6 +12,8 @@ struct StatusView: View {
 
             AttentionQueueView(title: "ATTENTION")
                 .environment(appState)
+
+            localDataDirectoryRow
 
             diagnosticsGrid
 
@@ -46,6 +48,42 @@ struct StatusView: View {
         .padding(Spacing.md)
         .background(.quaternary.opacity(0.5))
         .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var localDataDirectoryRow: some View {
+        HStack(alignment: .top, spacing: Spacing.sm) {
+            Image(systemName: "internaldrive")
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 26, height: 26)
+                .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 7))
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                Text("Active data directory")
+                    .font(.caption.weight(.semibold))
+
+                Text(appState.activeStorageDirectoryDisplayText)
+                    .microText()
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+
+                Text("Local-only diagnostics; credentials and Plaid IDs are not shown.")
+                    .microText()
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: Spacing.xs)
+        }
+        .padding(.horizontal, Spacing.sm)
+        .padding(.vertical, Spacing.rowVertical)
+        .nativePanelSurface()
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "Active data directory: \(appState.activeStorageDirectoryDisplayText). Local-only diagnostics; credentials and Plaid IDs are not shown."
+        )
     }
 
     private var diagnosticsGrid: some View {
@@ -108,12 +146,6 @@ struct StatusView: View {
                 title: "Endpoint",
                 value: appState.localServerURLText.replacingOccurrences(of: "http://", with: ""),
                 icon: "network",
-                color: .secondary
-            )
-            DiagnosticTile(
-                title: "Storage",
-                value: appState.serverStorageDisplayText,
-                icon: "internaldrive",
                 color: .secondary
             )
             DiagnosticTile(
@@ -183,12 +215,6 @@ struct StatusView: View {
         let readiness = appState.dashboardStatusReadiness
 
         return VStack(alignment: .leading, spacing: Spacing.sm) {
-            HStack(spacing: Spacing.xs) {
-                Image(systemName: "lock.doc")
-                Text("Local data directory: \(appState.activeStorageDirectoryDisplayText)")
-            }
-            .detailText()
-
             Text("RECOVERY")
                 .sectionTitle()
                 .foregroundStyle(.secondary)
@@ -289,11 +315,11 @@ struct StatusView: View {
     private func itemBackground(for status: ItemConnectionStatus) -> Color {
         switch status {
         case .connected:
-            return SemanticColors.positive.opacity(0.045)
+            SemanticColors.positive.opacity(0.045)
         case .loginRequired:
-            return SemanticColors.warning.opacity(0.08)
+            SemanticColors.warning.opacity(0.08)
         case .error:
-            return SemanticColors.negative.opacity(0.08)
+            SemanticColors.negative.opacity(0.08)
         }
     }
 
@@ -361,7 +387,8 @@ struct StatusView: View {
         readiness: DashboardStatusReadiness
     ) -> String {
         if action == .reconnect,
-           let title = ItemRecoveryTarget.actionTitle(from: appState.itemStatuses) {
+           let title = ItemRecoveryTarget.actionTitle(from: appState.itemStatuses)
+        {
             return title
         }
         return readiness.primaryActionTitle ?? action.defaultTitle

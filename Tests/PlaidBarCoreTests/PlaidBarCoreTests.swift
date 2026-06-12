@@ -2791,6 +2791,42 @@ struct PlaidBarCoreTests {
         #expect(readiness.primaryAction == .refresh)
     }
 
+    @Test("Dashboard status readiness hides sensitive IDs and raw balances")
+    func dashboardStatusReadinessHidesSensitiveIDsAndRawBalances() {
+        let accountID = "accountSensitiveIdentifier"
+        let itemID = "itemSensitiveIdentifier"
+        let balance = "12345.67"
+        let currentBalance = "-890.12"
+
+        let readiness = DashboardStatusReadiness.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 1,
+            accountCount: 1,
+            syncedItemCount: 1,
+            needsLoginItemCount: 0,
+            erroredItemCount: 0,
+            isSyncStale: false,
+            lastSyncRelative: "now",
+            errorMessage: "Plaid failed account_id=\(accountID) item_id=\(itemID) balance=\(balance) current_balance=\(currentBalance)"
+        )
+
+        let displayCopy = [
+            readiness.title,
+            readiness.detail,
+            readiness.primaryActionTitle ?? "",
+            readiness.primaryActionIconName ?? "",
+        ].joined(separator: " ")
+
+        #expect(displayCopy.contains(accountID) == false)
+        #expect(displayCopy.contains(itemID) == false)
+        #expect(displayCopy.contains(balance) == false)
+        #expect(displayCopy.contains(currentBalance) == false)
+        #expect(displayCopy.contains("[redacted-id]"))
+        #expect(displayCopy.contains("[redacted-balance]"))
+    }
+
     @Test("Dashboard status readiness blocks on missing credentials")
     func dashboardStatusReadinessBlocksOnMissingCredentials() {
         let readiness = DashboardStatusReadiness.evaluate(
