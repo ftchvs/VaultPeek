@@ -30,10 +30,13 @@
 ## GitHub checks
 
 - [ ] Required GitHub checks are green before merge.
+- [ ] `CI / build` is green before merge.
+- [ ] `Claude Code Review / claude-review` is green before merge.
+- [ ] `Codex Code Review / codex-review` is green before merge.
 - [ ] `otto-openclaw-merge-gate` is green before merge.
 - [ ] Skipped checks are expected and not required for this PR.
 - [ ] Any failing, pending, cancelled, missing, or ambiguous required check blocks merge.
-- [ ] Claude review auth/token/session/setup-only failures are documented as non-blocking, or there are no such failures.
+- [ ] Claude/Codex review auth/token/session/setup-only failures are documented as blocking unless Felipe explicitly grants a one-off override.
 
 ## Privacy and safety impact
 
