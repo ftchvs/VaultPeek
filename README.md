@@ -281,6 +281,7 @@ PLAID_SECRET=your_secret
 PLAID_ENV=sandbox
 PLAIDBAR_DATA_DIR=~/.vaultpeek
 EOF
+chmod 600 ~/.vaultpeek/server.conf
 
 swift run PlaidBarServer --config ~/.vaultpeek/server.conf
 ```
@@ -419,7 +420,7 @@ PlaidBar/                            # repo checkout (repo rename pending)
 │   └── PlaidBarCore/                # Shared library
 │       ├── Models/                  # DTOs (Account, Transaction, etc.)
 │       └── Utilities/               # Currency formatters, constants
-├── Tests/                           # 61 tests across 3 suites
+├── Tests/                           # Swift Testing suites for all 3 targets
 ├── Scripts/                         # build.sh, run.sh, screenshots.sh
 ├── Assets/                          # README screenshots
 ├── DESIGN.md                        # Design system spec

@@ -330,6 +330,52 @@ struct PlaidBarServerTests {
         #expect(try posixPermissions(at: authTokenURL) == 0o600)
     }
 
+    @Test func serverConfigTightensLooseConfigFilePermissions() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-config-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let dataDirectory = directory.appendingPathComponent("data", isDirectory: true)
+        let configURL = directory.appendingPathComponent("server.conf")
+        try """
+        PLAID_CLIENT_ID=config-client
+        PLAID_SECRET=config-secret
+        PLAID_ENV=sandbox
+        PLAIDBAR_DATA_DIR=\(dataDirectory.path)
+        """.write(to: configURL, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: configURL.path)
+
+        _ = try ServerConfig.load(from: configURL.path)
+
+        #expect(try posixPermissions(at: configURL) == 0o600)
+    }
+
+    @Test func serverConfigRejectsOutOfRangePortOverride() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-config-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let dataDirectory = directory.appendingPathComponent("data", isDirectory: true)
+        let configURL = directory.appendingPathComponent("plaidbar.conf")
+        try """
+        PLAID_CLIENT_ID=config-client
+        PLAID_SECRET=config-secret
+        PLAID_ENV=sandbox
+        PLAIDBAR_DATA_DIR=\(dataDirectory.path)
+        """.write(to: configURL, atomically: true, encoding: .utf8)
+
+        for badPort in [0, 70_000, -1] {
+            #expect(throws: ServerConfigError.self) {
+                _ = try ServerConfig.load(from: configURL.path, portOverride: badPort)
+            }
+        }
+
+        // Validation runs before any side effects, so a bad port never creates the data dir.
+        #expect(!FileManager.default.fileExists(atPath: dataDirectory.path))
+    }
+
     @Test func serverAuthTokenUsesURLSafeRandomBytes() {
         let token = ServerConfig.authTokenString(randomBytes: (0 ..< 32).map(UInt8.init))
 

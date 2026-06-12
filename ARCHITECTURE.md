@@ -270,6 +270,8 @@ Unit tests span 3 suites, all using Swift Testing framework:
 
 Server integration tests (starting Hummingbird, making HTTP calls) are planned for v0.2.
 
+Suite size is not hard-coded in these docs; derive the current count with `swift test list` or a ripgrep over `Tests/` (`rg -n "@Test" Tests/`), which is the source of truth.
+
 ## Future Architecture Considerations
 
 - **LaunchAgent**: Ship a plist for auto-starting the server at login

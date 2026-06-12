@@ -88,7 +88,8 @@ unclear, stop and ask Felipe.
 
 Use `swift test --skip-update --disable-keychain` when the local Swift toolchain
 supports the `Testing` module. As of 2026-06-10 the local toolchain builds and
-runs the full Swift Testing suite (`swift test` passes, 276+ tests), so test
+runs the full Swift Testing suite (`swift test` passes; run `swift test list` or
+a ripgrep over `Tests/` for the current count), so test
 runs are expected locally; if a machine hits `no such module 'Testing'`, record
 that limitation instead of treating it as a new regression.
 
