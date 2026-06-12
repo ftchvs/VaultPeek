@@ -1,6 +1,9 @@
 import Foundation
 
-/// Response from server's /api/status
+/// Response from server's /api/status.
+///
+/// Contract: readiness metadata only. Do not add secrets, account IDs,
+/// balances, transactions, Plaid tokens, or raw provider payloads here.
 public struct ServerStatus: Codable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case version

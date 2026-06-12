@@ -1,7 +1,25 @@
 import Foundation
+import Hummingbird
+import HTTPTypes
+import Logging
+import NIOCore
 @testable import PlaidBarCore
 @testable import PlaidBarServer
 import Testing
+
+private struct TestRequestContextSource: RequestContextSource {
+    let logger = Logger(label: "com.ftchvs.plaidbar-server-tests")
+}
+
+private struct TestRequestContext: RequestContext {
+    typealias Source = TestRequestContextSource
+
+    var coreContext: CoreRequestContextStorage
+
+    init(source: TestRequestContextSource) {
+        coreContext = CoreRequestContextStorage(source: source)
+    }
+}
 
 private let plaidTokenVaultKeychainAvailable: Bool = {
     let itemId = "test_keychain_probe_\(UUID().uuidString)"
@@ -59,7 +77,7 @@ struct PlaidBarServerTests {
         #expect(decoded.syncReady)
     }
 
-    @Test func serverStatusPayloadDoesNotExposeSecretsOrTokens() throws {
+    @Test func serverStatusPayloadIsLimitedToReadinessMetadata() throws {
         let status = ServerStatus(
             version: "0.8.0",
             environment: .production,
@@ -76,20 +94,8 @@ struct PlaidBarServerTests {
         let data = try encoder.encode(status)
         let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
         let keys = Set(object.keys)
-        let forbiddenFragments = [
-            "account",
-            "access",
-            "balance",
-            "client",
-            "institution",
-            "itemId",
-            "public",
-            "secret",
-            "token",
-            "transaction",
-        ]
-
-        #expect(keys == [
+        let payload = try #require(String(data: data, encoding: .utf8))
+        let allowedReadinessKeys: Set<String> = [
             "version",
             "environment",
             "itemCount",
@@ -98,12 +104,88 @@ struct PlaidBarServerTests {
             "storagePath",
             "syncReady",
             "syncedItemCount",
-        ])
-        #expect(try !(#require(String(data: data, encoding: .utf8)?.contains("config-secret"))))
-        #expect(try !(#require(String(data: data, encoding: .utf8)?.contains("access-sandbox"))))
+        ]
+        let forbiddenFragments = [
+            "account",
+            "access",
+            "balance",
+            "client",
+            "institution",
+            "item_id",
+            "itemId",
+            "payload",
+            "plaid",
+            "public",
+            "raw",
+            "secret",
+            "token",
+            "transaction",
+        ]
+
+        #expect(keys == allowedReadinessKeys)
         #expect(keys.allSatisfy { key in
             forbiddenFragments.allSatisfy { !key.localizedCaseInsensitiveContains($0) }
         })
+        #expect(!payload.contains("\"accountId\""))
+        #expect(!payload.contains("\"account_id\""))
+        #expect(!payload.contains("\"access_token\""))
+        #expect(!payload.contains("\"balance\""))
+        #expect(!payload.contains("\"balances\""))
+        #expect(!payload.contains("\"clientSecret\""))
+        #expect(!payload.contains("\"client_secret\""))
+        #expect(!payload.contains("\"plaidToken\""))
+        #expect(!payload.contains("\"publicToken\""))
+        #expect(!payload.contains("\"rawPayload\""))
+        #expect(!payload.contains("\"transactions\""))
+    }
+
+    @Test func serverStatusPayloadDoesNotExposeSecretBearingFieldNames() throws {
+        let status = ServerStatus(
+            version: "0.8.0",
+            environment: .sandbox,
+            itemCount: 1,
+            lastSync: Date(timeIntervalSince1970: 1_800_000_001),
+            credentialsConfigured: true,
+            storagePath: "/Users/example/.plaidbar",
+            syncReady: true,
+            syncedItemCount: 1
+        )
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+
+        let data = try encoder.encode(status)
+        let payload = try #require(String(data: data, encoding: .utf8))
+        let forbiddenFieldNames = [
+            "accessToken",
+            "access_token",
+            "accountId",
+            "account_id",
+            "balance",
+            "balances",
+            "clientId",
+            "client_id",
+            "clientSecret",
+            "client_secret",
+            "institutionId",
+            "institution_id",
+            "itemId",
+            "item_id",
+            "linkToken",
+            "link_token",
+            "plaidPayload",
+            "publicToken",
+            "public_token",
+            "rawPayload",
+            "secret",
+            "token",
+            "transactionId",
+            "transaction_id",
+            "transactions",
+        ]
+
+        for fieldName in forbiddenFieldNames {
+            #expect(!payload.contains("\"\(fieldName)\""))
+        }
     }
 
     @Test func serverConfigLoadsExplicitConfigFile() throws {
@@ -134,6 +216,37 @@ struct PlaidBarServerTests {
         #expect(config.databasePath.hasSuffix("/plaidbar-sandbox.sqlite"))
         #expect(config.databasePath.hasPrefix(dataDirectory.path))
         #expect(config.redirectUri == "http://localhost:9494/oauth/callback")
+        #expect(FileManager.default.fileExists(
+            atPath: dataDirectory.appendingPathComponent(LocalDataStore.authTokenFilename).path
+        ))
+    }
+
+    @Test func serverConfigLoadsCredentialLessIntoSetupState() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-config-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let dataDirectory = directory.appendingPathComponent("data", isDirectory: true)
+        let configURL = directory.appendingPathComponent("plaidbar.conf")
+        // Blank values override any PLAID_* variables exported in the test
+        // host's environment, making this deterministic everywhere.
+        try """
+        PLAID_CLIENT_ID=
+        PLAID_SECRET=
+        PLAID_ENV=sandbox
+        PLAIDBAR_DATA_DIR=\(dataDirectory.path)
+        """.write(to: configURL, atomically: true, encoding: .utf8)
+
+        let config = try ServerConfig.load(from: configURL.path)
+
+        #expect(!config.credentialsConfigured)
+        #expect(config.plaidClientId.isEmpty)
+        #expect(config.plaidSecret.isEmpty)
+        #expect(config.plaidEnvironment == .sandbox)
+        // Setup state still provisions everything the degraded server needs:
+        // data directory, database path, and the local API auth token.
+        #expect(config.databasePath.hasPrefix(dataDirectory.path))
         #expect(FileManager.default.fileExists(
             atPath: dataDirectory.appendingPathComponent(LocalDataStore.authTokenFilename).path
         ))
@@ -227,11 +340,99 @@ struct PlaidBarServerTests {
         #expect(!token.contains("="))
     }
 
+    @Test func plaidClientRefusesRequestsInSetupState() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-config-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let configURL = directory.appendingPathComponent("plaidbar.conf")
+        try """
+        PLAID_CLIENT_ID=
+        PLAID_SECRET=
+        PLAID_ENV=sandbox
+        PLAIDBAR_DATA_DIR=\(directory.appendingPathComponent("data").path)
+        """.write(to: configURL, atomically: true, encoding: .utf8)
+
+        let config = try ServerConfig.load(from: configURL.path)
+        let client = PlaidClient(config: config)
+
+        // The guard fires before any network request, so this fails fast and
+        // deterministically with the setup-state error.
+        await #expect(throws: PlaidError.credentialsNotConfigured) {
+            _ = try await client.createLinkToken(
+                userId: "test-user",
+                completionRedirectUri: "http://localhost:8484/oauth/callback"
+            )
+        }
+    }
+
+    @Test func setupStateMiddlewareClassifiesPlaidBackedPaths() {
+        typealias Middleware = SetupStateMiddleware<BasicRequestContext>
+
+        // Blocked in setup state: nothing on these routes works without
+        // Plaid credentials, even when no items are linked.
+        #expect(Middleware.isPlaidBackedPath("/api/link/create"))
+        #expect(Middleware.isPlaidBackedPath("/api/link/update/item-1"))
+        #expect(Middleware.isPlaidBackedPath("/api/accounts"))
+        #expect(Middleware.isPlaidBackedPath("/api/accounts/balances"))
+        #expect(Middleware.isPlaidBackedPath("/api/accounts/item-1"))
+        #expect(Middleware.isPlaidBackedPath("/api/transactions/sync"))
+        #expect(Middleware.isPlaidBackedPath("/api/transactions/sync/cursors"))
+
+        // Readiness metadata stays available so setup guidance can render.
+        #expect(!Middleware.isPlaidBackedPath("/api/status"))
+        #expect(!Middleware.isPlaidBackedPath("/api/items"))
+        #expect(!Middleware.isPlaidBackedPath("/health"))
+        #expect(!Middleware.isPlaidBackedPath("/oauth/callback"))
+
+        // Prefix matching respects path-segment boundaries.
+        #expect(!Middleware.isPlaidBackedPath("/api/accountsmetadata"))
+    }
+
     @Test func apiTokenComparisonAcceptsOnlyExactBearerToken() {
         #expect(APITokenAuthorization.constantTimeEquals("Bearer token-123", "Bearer token-123"))
         #expect(!APITokenAuthorization.constantTimeEquals("Bearer token-123", "Bearer token-124"))
         #expect(!APITokenAuthorization.constantTimeEquals("Bearer token-123", "token-123"))
         #expect(!APITokenAuthorization.constantTimeEquals("Bearer token-123", "Bearer token-123-extra"))
+    }
+
+    @Test func apiMiddlewareRejectsMissingAndInvalidBearerTokens() async throws {
+        let middleware = APITokenMiddleware<TestRequestContext>(authToken: "local-token")
+        let context = TestRequestContext(source: TestRequestContextSource())
+
+        for request in [
+            Self.makeRequest(path: "/api/status"),
+            Self.makeRequest(path: "/api/status", authorization: "local-token"),
+            Self.makeRequest(path: "/api/status", authorization: "Bearer wrong-token"),
+            Self.makeRequest(path: "/api/accounts", authorization: "Bearer local-token-extra"),
+        ] {
+            do {
+                _ = try await middleware.handle(request, context: context) { _, _ in
+                    Response(status: .ok)
+                }
+                #expect(Bool(false), "Expected unauthorized API request to throw")
+            } catch let error as HTTPError {
+                #expect(error.status == .unauthorized)
+                #expect(error.body == "Missing or invalid authorization token")
+            } catch {
+                #expect(Bool(false), "Expected HTTPError, got \(error)")
+            }
+        }
+    }
+
+    @Test func apiMiddlewareAcceptsExactBearerTokenOnly() async throws {
+        let middleware = APITokenMiddleware<TestRequestContext>(authToken: "local-token")
+        let context = TestRequestContext(source: TestRequestContextSource())
+
+        let response = try await middleware.handle(
+            Self.makeRequest(path: "/api/status", authorization: "Bearer local-token"),
+            context: context
+        ) { _, _ in
+            Response(status: .ok)
+        }
+
+        #expect(response.status == .ok)
     }
 
     @Test func oauthCallbackErrorPageEscapesDynamicMessage() {
@@ -240,6 +441,17 @@ struct PlaidBarServerTests {
         #expect(!html.contains("<script>"))
         #expect(html.contains("&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt;"))
         #expect(html.contains("&amp; retry &quot;soon&quot;"))
+    }
+
+    private static func makeRequest(path: String, authorization: String? = nil) -> Request {
+        var headers = HTTPFields()
+        if let authorization {
+            headers[.authorization] = authorization
+        }
+        return Request(
+            head: HTTPRequest(method: .get, scheme: nil, authority: nil, path: path, headerFields: headers),
+            body: RequestBody(buffer: ByteBuffer())
+        )
     }
 
     @Test func serverDatabasePathIsScopedByPlaidEnvironment() {

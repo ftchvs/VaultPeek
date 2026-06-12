@@ -33,6 +33,32 @@ public struct LocalDataResetResult: Equatable, Sendable {
     }
 }
 
+public struct LocalDataMigrationResult: Equatable, Sendable {
+    public let legacyDirectoryPath: String
+    public let currentDirectoryPath: String
+    public let copiedEntries: [String]
+    public let preservedCurrentEntries: [String]
+    public let legacyDirectoryFound: Bool
+
+    public var didCopyEntries: Bool {
+        !copiedEntries.isEmpty
+    }
+
+    public init(
+        legacyDirectoryPath: String,
+        currentDirectoryPath: String,
+        copiedEntries: [String],
+        preservedCurrentEntries: [String],
+        legacyDirectoryFound: Bool
+    ) {
+        self.legacyDirectoryPath = legacyDirectoryPath
+        self.currentDirectoryPath = currentDirectoryPath
+        self.copiedEntries = copiedEntries
+        self.preservedCurrentEntries = preservedCurrentEntries
+        self.legacyDirectoryFound = legacyDirectoryFound
+    }
+}
+
 public struct TransactionCacheContext: Codable, Equatable, Sendable {
     public let environment: PlaidEnvironment
     public let storagePath: String
@@ -44,14 +70,20 @@ public struct TransactionCacheContext: Codable, Equatable, Sendable {
 }
 
 public enum LocalDataStore {
-    public static let displayPath = "~/.plaidbar/"
+    public static let displayPath = "~/.vaultpeek/"
+    public static let legacyDisplayPath = "~/.plaidbar/"
     public static let dataDirectoryEnvironmentVariable = "PLAIDBAR_DATA_DIR"
     public static let authTokenFilename = "auth-token"
     public static let serverConfigFilename = "server.conf"
     public static let accountCacheFilename = "accounts.json"
     public static let transactionCacheFilename = "transactions.json"
     public static let pendingLinkSessionsFilename = "pending-link-sessions.json"
+    public static let legacyMigrationResetMarkerFilename = ".legacy-migration-reset"
+    /// Preserve the existing Keychain service while moving local files so
+    /// SQLite `keychain:<item_id>` references continue to resolve.
     public static let plaidAccessTokenKeychainService = "PlaidBar.PlaidAccessToken"
+    private static let currentDirectoryName = ".vaultpeek"
+    private static let legacyDirectoryName = ".plaidbar"
     private static let directoryPermissions = 0o700
     private static let cacheFilePermissions = 0o600
 
@@ -74,7 +106,19 @@ public enum LocalDataStore {
             return URL(fileURLWithPath: NSString(string: override).expandingTildeInPath, isDirectory: true)
         }
 
-        return homeDirectory.appendingPathComponent(".plaidbar", isDirectory: true)
+        return currentStorageDirectoryURL(homeDirectory: homeDirectory)
+    }
+
+    public static func legacyStorageDirectoryURL(
+        homeDirectory: URL = accountHomeDirectoryURL()
+    ) -> URL {
+        homeDirectory.appendingPathComponent(legacyDirectoryName, isDirectory: true)
+    }
+
+    public static func currentStorageDirectoryURL(
+        homeDirectory: URL = accountHomeDirectoryURL()
+    ) -> URL {
+        homeDirectory.appendingPathComponent(currentDirectoryName, isDirectory: true)
     }
 
     public static func storageDirectoryURL(
@@ -154,6 +198,7 @@ public enum LocalDataStore {
 
         try ensurePrivateDirectory(directory, fileManager: fileManager)
         try ensurePrivatePreservedFilePermissions(in: directory, fileManager: fileManager)
+        try writeLegacyMigrationResetMarker(in: directory, fileManager: fileManager)
 
         var keychainTokensCleared = false
         if resetKeychainTokens {
@@ -203,6 +248,51 @@ public enum LocalDataStore {
 
     private static var sqliteSidecarSuffixes: [String] {
         ["-wal", "-shm", "-journal"]
+    }
+
+    private static func ensurePrivateKnownDataFilePermissions(
+        in directory: URL,
+        fileManager: FileManager
+    ) throws {
+        let entries = try fileManager.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        )
+        for entry in entries where isKnownPrivateDataFilename(entry.lastPathComponent) {
+            try setPrivateCacheFilePermissions(entry, fileManager: fileManager)
+        }
+    }
+
+    private static func isKnownPrivateDataFilename(_ filename: String) -> Bool {
+        filename == legacyMigrationResetMarkerFilename ||
+            resetPreservedFilenames.contains(filename) ||
+            filename == ServerAutoLaunchPlan.logFilename ||
+            isAccountCacheFilename(filename) ||
+            isTransactionCacheFilename(filename) ||
+            isPendingLinkSessionsFilename(filename) ||
+            plaidBarDatabaseFilenames.contains { databaseFilename in
+                filename == databaseFilename ||
+                    sqliteSidecarSuffixes.contains { filename == databaseFilename + $0 } ||
+                    filename.hasPrefix(databaseFilename + ".backup-") ||
+                    filename.hasPrefix(databaseFilename + ".migration-") ||
+                    filename == databaseFilename + ".migrated-from-legacy"
+            }
+    }
+
+    private static func sqliteStoreBaseFilename(for filename: String) -> String? {
+        plaidBarDatabaseFilenames.first { databaseFilename in
+            filename == databaseFilename ||
+                sqliteSidecarSuffixes.contains { filename == databaseFilename + $0 }
+        }
+    }
+
+    private static func sqliteStorePathCandidates(
+        in directory: URL,
+        databaseFilename: String
+    ) -> [URL] {
+        ([databaseFilename] + sqliteSidecarSuffixes.map { databaseFilename + $0 })
+            .map { directory.appendingPathComponent($0) }
     }
 
     private static func isTransactionCacheFilename(_ filename: String) -> Bool {
@@ -289,7 +379,223 @@ public enum LocalDataStore {
         at directory: URL = storageDirectoryURL(),
         fileManager: FileManager = .default
     ) throws {
+        try migrateLegacyDefaultStorageIfNeeded(
+            destinationDirectory: directory,
+            fileManager: fileManager
+        )
         try ensurePrivateDirectory(directory, fileManager: fileManager)
+    }
+
+    @discardableResult
+    public static func migrateLegacyDefaultStorageIfNeeded(
+        homeDirectory: URL = accountHomeDirectoryURL(),
+        fileManager: FileManager = .default
+    ) throws -> LocalDataMigrationResult {
+        try migrateLegacyDefaultStorageIfNeeded(
+            homeDirectory: homeDirectory,
+            destinationDirectory: currentStorageDirectoryURL(homeDirectory: homeDirectory),
+            fileManager: fileManager
+        )
+    }
+
+    @discardableResult
+    public static func migrateLegacyDefaultStorageIfNeeded(
+        homeDirectory: URL = accountHomeDirectoryURL(),
+        destinationDirectory: URL,
+        fileManager: FileManager = .default
+    ) throws -> LocalDataMigrationResult {
+        let currentDirectory = currentStorageDirectoryURL(homeDirectory: homeDirectory)
+        let legacyDirectory = legacyStorageDirectoryURL(homeDirectory: homeDirectory)
+
+        guard destinationDirectory.standardizedFileURL == currentDirectory.standardizedFileURL else {
+            return LocalDataMigrationResult(
+                legacyDirectoryPath: legacyDirectory.path,
+                currentDirectoryPath: destinationDirectory.path,
+                copiedEntries: [],
+                preservedCurrentEntries: [],
+                legacyDirectoryFound: false
+            )
+        }
+
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: legacyDirectory.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else {
+            try ensurePrivateDirectory(currentDirectory, fileManager: fileManager)
+            return LocalDataMigrationResult(
+                legacyDirectoryPath: legacyDirectory.path,
+                currentDirectoryPath: currentDirectory.path,
+                copiedEntries: [],
+                preservedCurrentEntries: [],
+                legacyDirectoryFound: false
+            )
+        }
+
+        try ensurePrivateDirectory(currentDirectory, fileManager: fileManager)
+
+        var copiedEntries: [String] = []
+        var preservedCurrentEntries: [String] = []
+        let resetMarkerExists = fileManager.fileExists(
+            atPath: currentDirectory.appendingPathComponent(legacyMigrationResetMarkerFilename).path
+        )
+        let legacyEntries = try fileManager.contentsOfDirectory(
+            at: legacyDirectory,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        )
+        let preservedSQLiteBases = Set(plaidBarDatabaseFilenames.filter { databaseFilename in
+            sqliteStorePathCandidates(
+                in: currentDirectory,
+                databaseFilename: databaseFilename
+            ).contains { fileManager.fileExists(atPath: $0.path) }
+        })
+
+        for sourceURL in legacyEntries {
+            let filename = sourceURL.lastPathComponent
+            if resetMarkerExists && shouldRemoveDuringReset(filename) {
+                continue
+            }
+
+            if let databaseFilename = sqliteStoreBaseFilename(for: filename),
+               preservedSQLiteBases.contains(databaseFilename) {
+                preservedCurrentEntries.append(filename)
+                continue
+            }
+
+            let preparedCopy = try preparedLegacyMigrationCopy(
+                from: sourceURL,
+                legacyDirectory: legacyDirectory,
+                currentDirectory: currentDirectory
+            )
+            let destinationURL = preparedCopy.destinationURL
+            if fileManager.fileExists(atPath: destinationURL.path) {
+                preservedCurrentEntries.append(destinationURL.lastPathComponent)
+                continue
+            }
+
+            if let data = preparedCopy.data {
+                try writePrivateCacheFile(data, to: destinationURL, fileManager: fileManager)
+            } else {
+                try fileManager.copyItem(at: sourceURL, to: destinationURL)
+            }
+            copiedEntries.append(destinationURL.lastPathComponent)
+        }
+
+        try ensurePrivatePreservedFilePermissions(in: currentDirectory, fileManager: fileManager)
+        try ensurePrivateKnownDataFilePermissions(in: currentDirectory, fileManager: fileManager)
+
+        return LocalDataMigrationResult(
+            legacyDirectoryPath: legacyDirectory.path,
+            currentDirectoryPath: currentDirectory.path,
+            copiedEntries: copiedEntries.sorted(),
+            preservedCurrentEntries: preservedCurrentEntries.sorted(),
+            legacyDirectoryFound: true
+        )
+    }
+
+    private static func preparedLegacyMigrationCopy(
+        from sourceURL: URL,
+        legacyDirectory: URL,
+        currentDirectory: URL
+    ) throws -> (destinationURL: URL, data: Data?) {
+        let filename = sourceURL.lastPathComponent
+        if isTransactionCacheFilename(filename),
+           let remapped = try remappedTransactionCacheCopy(
+            from: sourceURL,
+            legacyDirectory: legacyDirectory,
+            currentDirectory: currentDirectory
+           ) {
+            return remapped
+        }
+
+        if isAccountCacheFilename(filename),
+           let remapped = try remappedAccountCacheCopy(
+            from: sourceURL,
+            legacyDirectory: legacyDirectory,
+            currentDirectory: currentDirectory
+           ) {
+            return remapped
+        }
+
+        return (currentDirectory.appendingPathComponent(filename), nil)
+    }
+
+    private static func remappedTransactionCacheCopy(
+        from sourceURL: URL,
+        legacyDirectory: URL,
+        currentDirectory: URL
+    ) throws -> (destinationURL: URL, data: Data)? {
+        let data = try Data(contentsOf: sourceURL)
+        guard let cache = try? JSONDecoder().decode(TransactionCache.self, from: data) else {
+            return nil
+        }
+        guard let context = cache.context,
+              let remappedContext = remappedLegacyContext(
+                context,
+                legacyDirectory: legacyDirectory,
+                currentDirectory: currentDirectory
+              ) else {
+            return nil
+        }
+
+        let remappedCache = TransactionCache(
+            context: remappedContext,
+            transactions: cache.transactions
+        )
+        return (
+            transactionCacheURL(in: currentDirectory, context: remappedContext),
+            try JSONEncoder().encode(remappedCache)
+        )
+    }
+
+    private static func remappedAccountCacheCopy(
+        from sourceURL: URL,
+        legacyDirectory: URL,
+        currentDirectory: URL
+    ) throws -> (destinationURL: URL, data: Data)? {
+        let data = try Data(contentsOf: sourceURL)
+        guard let cache = try? JSONDecoder().decode(AccountCache.self, from: data) else {
+            return nil
+        }
+        guard let context = cache.context,
+              let remappedContext = remappedLegacyContext(
+                context,
+                legacyDirectory: legacyDirectory,
+                currentDirectory: currentDirectory
+              ) else {
+            return nil
+        }
+
+        let remappedCache = AccountCache(
+            context: remappedContext,
+            accounts: cache.accounts
+        )
+        return (
+            accountCacheURL(in: currentDirectory, context: remappedContext),
+            try JSONEncoder().encode(remappedCache)
+        )
+    }
+
+    private static func remappedLegacyContext(
+        _ context: TransactionCacheContext,
+        legacyDirectory: URL,
+        currentDirectory: URL
+    ) -> TransactionCacheContext? {
+        let legacyPath = legacyDirectory.standardizedFileURL.path
+        let currentPath = currentDirectory.standardizedFileURL.path
+        let storagePath = URL(fileURLWithPath: context.storagePath).standardizedFileURL.path
+
+        if storagePath == legacyPath {
+            return TransactionCacheContext(
+                environment: context.environment,
+                storagePath: currentPath
+            )
+        }
+
+        guard storagePath.hasPrefix(legacyPath + "/") else { return nil }
+        return TransactionCacheContext(
+            environment: context.environment,
+            storagePath: currentPath + String(storagePath.dropFirst(legacyPath.count))
+        )
     }
 
     public static func loadTransactions(
@@ -464,6 +770,16 @@ public enum LocalDataStore {
                 ofItemAtPath: url.path
             )
         }
+    }
+
+    private static func writeLegacyMigrationResetMarker(
+        in directory: URL,
+        fileManager: FileManager
+    ) throws {
+        let url = directory.appendingPathComponent(legacyMigrationResetMarkerFilename)
+        let marker = "reset_at=\(ISO8601DateFormatter().string(from: Date()))\n"
+        try writePrivateCacheFile(Data(marker.utf8), to: url, fileManager: fileManager)
+        try setPrivateCacheFilePermissions(url, fileManager: fileManager)
     }
 }
 

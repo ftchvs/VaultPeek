@@ -1,9 +1,13 @@
 # Architecture
 
-PlaidBar is intentionally split into a native macOS app, a local companion
+VaultPeek is intentionally split into a native macOS app, a local companion
 server, and a shared core library. The split keeps Plaid secrets out of the UI
 process and keeps the public product story simple: local app, local server,
 Plaid API, local storage.
+
+VaultPeek is the product name (formerly PlaidBar). Module, target, and
+executable names below intentionally keep the PlaidBar name; see
+[Naming Compatibility](#naming-compatibility).
 
 ## Module Boundaries
 
@@ -16,7 +20,7 @@ Plaid API, local storage.
 ## Runtime Topology
 
 ```text
-PlaidBar.app
+VaultPeek.app
   SwiftUI MenuBarExtra
   Settings and setup windows
   ServerClient with local bearer token
@@ -26,7 +30,7 @@ PlaidBar.app
 PlaidBarServer
   /health without auth
   /api/* with local bearer token
-  SQLite under ~/.plaidbar/
+  SQLite under ~/.vaultpeek/
   Plaid API client
         |
         | HTTPS
@@ -52,7 +56,7 @@ The app talks to the server through `ServerClient`. The server exposes:
 - `DELETE /api/accounts/:itemId`
 
 `/health` and `/oauth/callback` are public on localhost. `/api/*` requires the
-local bearer token stored in the PlaidBar data directory.
+local bearer token stored in the VaultPeek data directory.
 
 ## Configuration
 
@@ -65,7 +69,7 @@ file, and explicit CLI flags. Later inputs override earlier ones.
 | `PLAID_SECRET` | Plaid secret for the selected environment |
 | `PLAID_ENV` | `sandbox` or `production` |
 | `PLAIDBAR_SERVER_PORT` | Local server port, default from `PlaidBarConstants` |
-| `PLAIDBAR_DATA_DIR` | Local data directory, default `~/.plaidbar/` |
+| `PLAIDBAR_DATA_DIR` | Local data directory, default `~/.vaultpeek/` |
 | `PLAIDBAR_MIGRATE_LEGACY_DATABASE` | Explicit legacy migration environment |
 
 The default server should bind to localhost only. If a future change expands
@@ -77,8 +81,13 @@ the setup UI.
 Default local data directory:
 
 ```text
-~/.plaidbar/
+~/.vaultpeek/
 ```
+
+Default installs copy missing files from the legacy `~/.plaidbar/` directory
+into `~/.vaultpeek/` on startup. Existing `~/.vaultpeek/` files win, so the
+migration is idempotent and does not overwrite newer data. `PLAIDBAR_DATA_DIR`
+keeps pointing app and server to an explicit custom directory when needed.
 
 Current important files:
 
@@ -94,8 +103,29 @@ The data directory is created with private user permissions. Cache/token files
 are written with private file permissions where the platform supports it.
 On macOS runtime builds with Security framework support, Plaid access-token
 bytes are stored in Keychain and SQLite stores `keychain:<item_id>` references.
+Those Keychain references intentionally keep the original PlaidBar service name
+during the storage migration so existing linked items keep resolving.
 Fallback builds without Keychain support may store token bytes locally in the
 SQLite store, so release/security docs must stay explicit about that boundary.
+
+## Naming Compatibility
+
+VaultPeek was renamed from PlaidBar at the product level. The following
+surfaces intentionally keep the PlaidBar name and must not be renamed without
+an explicit migration plan:
+
+- SwiftPM targets/products and executables: `PlaidBar`, `PlaidBarServer`,
+  `PlaidBarCore`, `plaidbar`, `plaidbar-server` (staged rename, tracked
+  separately).
+- Environment variables and config keys: `PLAIDBAR_SERVER_PORT`,
+  `PLAIDBAR_DATA_DIR`, `PLAIDBAR_MIGRATE_LEGACY_DATABASE`,
+  `PLAIDBAR_SMOKE_PORT`.
+- Keychain service: `PlaidBar.PlaidAccessToken` — SQLite `keychain:<item_id>`
+  references must keep resolving.
+- SQLite store filenames: `plaidbar-sandbox.sqlite`,
+  `plaidbar-production.sqlite`.
+- Legacy default data directory: `~/.plaidbar/` (migration source only).
+- GitHub repository slug `ftchvs/PlaidBar` until the repo rename lands.
 
 ## Status Endpoint Contract
 
@@ -154,5 +184,6 @@ states if any later step fails.
 - Add a clean architecture diagram to README or docs.
 - Add endpoint-level documentation for request/response DTOs.
 - Add a clean duplicate-instance strategy and document expected behavior.
-- Ship 1.0 as formula-only unless Developer ID signing, notarization, appcast,
-  and clean-machine Gatekeeper checks are completed separately.
+- Ship 1.0 as a privately-distributed, ad-hoc-signed DMG unless Developer ID
+  signing, notarization, a private update channel, and clean-machine Gatekeeper
+  checks are completed separately.

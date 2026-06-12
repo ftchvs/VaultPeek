@@ -20,6 +20,9 @@ final class AppState {
         static let notifyLargeTransaction = "notifyLargeTransaction"
         static let notifyLowBalance = "notifyLowBalance"
         static let notifyHighUtilization = "notifyHighUtilization"
+        static let setupCompletedOnce = "setup.completedOnce"
+        static let setupCompletedContextPrefix = "setup.completedOnce.context"
+        static let lastTransactionCacheContext = "cache.lastTransactionCacheContext"
     }
 
     // MARK: - State
@@ -33,6 +36,11 @@ final class AppState {
         }
     }
     var isLoading = false
+    /// True from launch until the first `loadInitialData()` pass completes.
+    /// While booting, data surfaces render loading/skeleton states instead
+    /// of offline or empty verdicts — the first connectivity check has not
+    /// delivered a verdict yet.
+    var isBooting = true
     var error: String? {
         didSet {
             guard let error else { return }
@@ -42,8 +50,17 @@ final class AppState {
         }
     }
     var isPopoverPresented = false
-    var selectedTab: PopoverTab = .accounts
-    var isSetupComplete = false
+
+    /// Persisted across launches so configured installs boot straight into
+    /// the dashboard instead of flashing first-run onboarding until the
+    /// initial server handshake completes. Demo sessions never persist
+    /// completion; explicit resets clear it.
+    var isSetupComplete = false {
+        didSet {
+            guard oldValue != isSetupComplete else { return }
+            persistSetupCompletion(isSetupComplete)
+        }
+    }
     var serverConnected = false
     var serverEnvironment: PlaidEnvironment?
     var serverVersion: String?
@@ -145,12 +162,20 @@ final class AppState {
     private let localAIInsightsService = LocalAIInsightsService()
     private let notificationService: any NotificationServiceProtocol
     private var refreshTask: Task<Void, Never>?
+    private var isUpgradingManagedServer = false
+    private var isStartingBundledServer = false
+    private var lastAttemptedCredentialUpgradeConfig: String?
 
     // MARK: - Init
 
     init(notificationService: (any NotificationServiceProtocol)? = nil) {
+        _ = try? LocalDataStore.migrateLegacyDefaultStorageIfNeeded()
         self.notificationService = notificationService ?? NotificationService.shared
         loadSettings()
+        isSetupComplete = storedSetupCompletion()
+        if isSetupComplete {
+            persistSetupCompletion(true)
+        }
     }
 
     private func loadSettings() {
@@ -201,6 +226,36 @@ final class AppState {
 
     // MARK: - Computed
 
+    /// True while the launch handshake is still running for a real (non-demo)
+    /// session. Demo data loads synchronously and never boots into skeletons.
+    var isBootLoadInFlight: Bool {
+        isBooting && !isDemoMode
+    }
+
+    /// Load-phase presenter per data surface. Surfaces with content keep
+    /// rendering it; surfaces without content show a skeleton while the
+    /// first fetch is in flight instead of offline/empty copy.
+    func loadState(for surface: DashboardLoadSurface) -> DashboardLoadState {
+        DashboardLoadState.evaluate(
+            surface: surface,
+            isDemoMode: isDemoMode,
+            isBooting: isBooting,
+            isLoading: isLoading,
+            serverConnected: serverConnected,
+            hasContent: hasContent(for: surface),
+            errorMessage: error
+        )
+    }
+
+    private func hasContent(for surface: DashboardLoadSurface) -> Bool {
+        switch surface {
+        case .menuBarSummary, .summaryCards, .accounts, .credit:
+            accountCount > 0
+        case .transactions, .spending, .recurring, .activityHeatmap:
+            transactionCount > 0
+        }
+    }
+
     var netBalance: Double {
         MenuBarSummary.netCash(from: accounts)
     }
@@ -242,33 +297,42 @@ final class AppState {
             mode: menuBarSummaryMode,
             accounts: accounts,
             transactions: transactions,
-            currencyFormat: balanceFormat
+            currencyFormat: balanceFormat,
+            isInitialLoad: isBootLoadInFlight
+        )
+    }
+
+    var menuBarStatusPresentation: MenuBarStatusPresentation {
+        MenuBarStatusPresentation.evaluate(
+            isDemoMode: isDemoMode,
+            isInitialLoad: isBootLoadInFlight,
+            isLoading: isLoading,
+            serverConnected: serverConnected,
+            errorMessage: error,
+            erroredItemCount: erroredItemCount,
+            needsLoginItemCount: needsLoginItemCount,
+            isSyncStale: isSyncStale,
+            hasEverSynced: lastSyncDate != nil
         )
     }
 
     var menuBarAttentionText: String? {
-        if isDemoMode { return nil }
-        if serverConnectionPresentation.attentionText == "Auth" { return "Auth" }
-        if error != nil || erroredItemCount > 0 { return "Error" }
-        if let attentionText = serverConnectionPresentation.attentionText { return attentionText }
-        if needsLoginItemCount > 0 { return "Login" }
-        if isSyncStale { return lastSyncDate == nil ? "Never" : "Stale" }
-        return nil
+        menuBarStatusPresentation.attentionText
     }
 
     var menuBarHelpText: String {
         let status = "Status: \(diagnosticsSummary)"
         switch menuBarSummaryMode {
         case .netCash:
-            return "PlaidBar - Net cash: \(menuBarText). \(status)"
+            return "VaultPeek - Net cash: \(menuBarText). \(status)"
         case .totalCash:
-            return "PlaidBar - Total cash: \(menuBarText). \(status)"
+            return "VaultPeek - Total cash: \(menuBarText). \(status)"
         case .creditUtilization:
-            return "PlaidBar - Credit utilization: \(menuBarText). \(status)"
+            return "VaultPeek - Credit utilization: \(menuBarText). \(status)"
         case .recentSpend:
-            return "PlaidBar - Recent spend: \(menuBarText). \(status)"
+            return "VaultPeek - Recent spend: \(menuBarText). \(status)"
         case .iconOnly:
-            return "PlaidBar. \(status)"
+            return "VaultPeek. \(status)"
         }
     }
 
@@ -276,15 +340,15 @@ final class AppState {
         let status = "Status \(diagnosticsSummary)"
         switch menuBarSummaryMode {
         case .netCash:
-            return "PlaidBar net cash \(menuBarText). \(status)"
+            return "VaultPeek net cash \(menuBarText). \(status)"
         case .totalCash:
-            return "PlaidBar total cash \(menuBarText). \(status)"
+            return "VaultPeek total cash \(menuBarText). \(status)"
         case .creditUtilization:
-            return "PlaidBar credit utilization \(menuBarText). \(status)"
+            return "VaultPeek credit utilization \(menuBarText). \(status)"
         case .recentSpend:
-            return "PlaidBar recent spend \(menuBarText). \(status)"
+            return "VaultPeek recent spend \(menuBarText). \(status)"
         case .iconOnly:
-            return "PlaidBar. \(status)"
+            return "VaultPeek. \(status)"
         }
     }
 
@@ -403,7 +467,7 @@ final class AppState {
         let serverPresentation = serverConnectionPresentation
         if isDemoMode { return serverPresentation.diagnosticsSummary }
         switch serverPresentation.issue {
-        case .offline, .localAuthMissing, .localAuthRejected:
+        case .offline, .localAuthMissing, .localAuthRejected, .serverModeMismatch:
             return serverPresentation.diagnosticsSummary
         case .demo, .syncing, .connected, .error:
             break
@@ -418,6 +482,7 @@ final class AppState {
     private var serverConnectionPresentation: ServerConnectionPresentation {
         ServerConnectionPresentation.evaluate(
             isDemoMode: isDemoMode,
+            isInitialLoad: isBootLoadInFlight,
             isLoading: isLoading,
             serverConnected: serverConnected,
             errorMessage: error
@@ -452,6 +517,7 @@ final class AppState {
     var dashboardStatusReadiness: DashboardStatusReadiness {
         DashboardStatusReadiness.evaluate(
             isDemoMode: isDemoMode && !isDemoStatusRecoveryScenario,
+            isInitialLoad: isBootLoadInFlight,
             serverConnected: serverConnected,
             credentialsConfigured: serverCredentialsConfigured,
             linkedItemCount: statusItemCount,
@@ -491,12 +557,18 @@ final class AppState {
     }
 
     var isSyncStale: Bool {
+        // Staleness is a verdict about completed syncs. During the boot
+        // handshake the first sync is still in flight, so stale warnings
+        // (menu bar badge, row tints, status strip) stay reserved for real
+        // staleness measured after the check completes.
+        if isBootLoadInFlight { return false }
         guard let lastSyncDate else { return true }
         let staleAfter = max(refreshInterval * 2, PlaidBarConstants.transactionSyncInterval * 2)
         return Date().timeIntervalSince(lastSyncDate) > staleAfter
     }
 
     var statusSyncText: String {
+        if isBootLoadInFlight { return "Syncing" }
         guard let lastSyncRelative else { return "Never synced" }
         return isSyncStale ? "Stale \(lastSyncRelative)" : "Synced \(lastSyncRelative)"
     }
@@ -598,11 +670,14 @@ final class AppState {
             serverSyncReady = status.syncReady
             serverSyncedItemCount = status.syncedItemCount
             lastSyncDate = status.lastSync
+            persistTransactionCacheContext()
+            refreshSetupCompletionForActiveContext()
             updateSetupCompletion()
             if !(await refreshItemStatuses()) {
                 itemStatuses = []
                 updateSetupCompletion()
             }
+            await upgradeManagedServerIfCredentialsArrived()
         } catch {
             serverConnected = false
             serverEnvironment = nil
@@ -613,13 +688,38 @@ final class AppState {
             serverSyncReady = nil
             serverSyncedItemCount = nil
             itemStatuses = []
-            if case ServerClientError.serverNotRunning = error {
+            switch error {
+            case ServerClientError.serverNotRunning:
+                // Expected pre-setup state, not an actionable error.
                 self.error = nil
-            } else {
-                self.error = error.localizedDescription
+            case ServerClientError.authTokenUnavailable:
+                // Demo mode has no server, so a missing token is expected
+                // there — but when a real server is reachable a missing
+                // token is actionable (e.g. PLAIDBAR_DATA_DIR mismatch)
+                // and must stay visible.
+                self.error = isDemoMode ? nil : error.localizedDescription
+            default:
+                // Demo mode has no server; never paint the demo dashboard
+                // red over a connection probe.
+                self.error = isDemoMode ? nil : error.localizedDescription
             }
             updateSetupCompletion()
+            await recoverBundledServerIfNeeded()
         }
+    }
+
+    /// A managed server can exit right after launch when `server.conf` is
+    /// broken in a way the pre-checks cannot see (for example an invalid
+    /// `PLAID_ENV` that passed `configProvidesCredentials`). Re-attempt the
+    /// launch plan on every failed connection check so "check again" and the
+    /// background refresh recover once the user fixes the file, instead of
+    /// requiring an app relaunch. Safe to run unconditionally: the plan
+    /// declines outside an app bundle, in demo mode, and when any server is
+    /// already reachable, and nothing is spawned while a managed process is
+    /// still alive.
+    private func recoverBundledServerIfNeeded() async {
+        guard !isDemoMode, !isUpgradingManagedServer else { return }
+        await startBundledServerIfAvailable()
     }
 
     func refreshAccounts() async {
@@ -746,19 +846,19 @@ final class AppState {
         }
 
         guard serverConnected else {
-            error = "Start PlaidBarServer before adding an account."
+            error = "Start the VaultPeek companion server before adding an account."
             return
         }
 
         guard serverCredentialsConfigured != false else {
-            error = "Plaid credentials are not configured on PlaidBarServer."
+            error = "Plaid credentials are not configured on the VaultPeek companion server."
             return
         }
 
         do {
             let linkResponse = try await serverClient.createLinkToken()
             guard let url = URL(string: linkResponse.linkUrl) else {
-                error = "PlaidBarServer returned an invalid Plaid Link URL."
+                error = "The VaultPeek companion server returned an invalid Plaid Link URL."
                 return
             }
 
@@ -805,7 +905,10 @@ final class AppState {
         if refreshDemoDataIfNeeded() { return }
 
         await checkServerConnection()
-        if serverConnected {
+        // Setup state (credentials missing) cannot refresh anything from
+        // Plaid; the status surfaces guide the user instead of surfacing a
+        // 503 banner on every cycle.
+        if serverConnected, serverCredentialsConfigured != false {
             await refreshAccounts()
             await syncTransactions()
         }
@@ -818,9 +921,9 @@ final class AppState {
         guard serverConnected else {
             switch expectedEnvironment {
             case .sandbox:
-                error = "Start PlaidBarServer with --sandbox and sandbox credentials before connecting."
+                error = "Start the VaultPeek companion server with --sandbox and sandbox credentials before connecting."
             case .production:
-                error = "Start PlaidBarServer with production credentials before connecting real accounts."
+                error = "Start the VaultPeek companion server with production credentials before connecting real accounts."
             }
             return false
         }
@@ -839,9 +942,9 @@ final class AppState {
         guard serverCredentialsConfigured == true else {
             switch expectedEnvironment {
             case .sandbox:
-                error = "Sandbox Plaid credentials are missing on PlaidBarServer. Add PLAID_CLIENT_ID and PLAID_SECRET, then check again."
+                error = "Sandbox Plaid credentials are missing on the VaultPeek companion server. Add PLAID_CLIENT_ID and PLAID_SECRET, then check again."
             case .production:
-                error = "Production Plaid credentials are missing on PlaidBarServer. Add approved production credentials, then check again."
+                error = "Production Plaid credentials are missing on the VaultPeek companion server. Add approved production credentials, then check again."
             }
             return false
         }
@@ -919,6 +1022,7 @@ final class AppState {
     func resetLocalData() throws -> LocalDataResetResult {
         stopBackgroundRefresh()
 
+        let resetSetupCompletionDefaultsKey = setupCompletionDefaultsKey
         let result = try LocalDataStore.resetLocalData(at: activeStorageDirectoryURL)
 
         accounts = []
@@ -926,17 +1030,19 @@ final class AppState {
         itemStatuses = []
         serverItemCount = 0
         serverCredentialsConfigured = nil
-        serverStoragePath = nil
         serverSyncReady = nil
         serverSyncedItemCount = nil
         lastSyncDate = nil
+        UserDefaults.standard.set(false, forKey: resetSetupCompletionDefaultsKey)
         isSetupComplete = false
+        serverStoragePath = nil
         isDemoMode = false
         isDemoStatusRecoveryScenario = false
         error = nil
 
         balanceHistory = []
         UserDefaults.standard.removeObject(forKey: Keys.balanceHistory)
+        UserDefaults.standard.removeObject(forKey: Keys.lastTransactionCacheContext)
         notificationService.resetDeduplicationState()
 
         return result
@@ -987,6 +1093,10 @@ final class AppState {
     }
 
     func loadInitialData() async {
+        // The boot window ends when this pass returns, on every path: from
+        // then on, offline/empty verdicts are real and may render.
+        defer { isBooting = false }
+
         // Recheck notification permission at startup (user may have revoked in System Settings)
         if notificationsEnabled {
             _ = await notificationPermissionStatus()
@@ -995,28 +1105,32 @@ final class AppState {
         if CommandLine.arguments.contains("--demo") {
             isDemoMode = true
             loadDemoData()
-            // Allow --tab flag to set initial tab for screenshots
-            if let tabIdx = CommandLine.arguments.firstIndex(of: "--tab"),
-               tabIdx + 1 < CommandLine.arguments.count,
-               let tab = PopoverTab.allCases.first(where: { $0.rawValue.lowercased() == CommandLine.arguments[tabIdx + 1].lowercased() }) {
-                selectedTab = tab
-            }
             return
         }
+        // Returning users see cached last-known data immediately: the cache
+        // loads before the connectivity check (which can take seconds while
+        // a bundled server boots) instead of after it.
+        preloadCachedDataBeforeFirstConnect()
         await checkServerConnection()
         if !serverConnected {
             await startBundledServerIfAvailable()
         }
         if serverConnected {
-            if statusItemCount > 0 {
-                loadCachedAccounts()
-                loadCachedTransactions()
-            } else {
-                clearCachedAccounts()
-                clearCachedTransactions()
+            // In setup state (credentials missing) there is nothing to fetch
+            // from Plaid yet, but the background refresh still runs: its
+            // status checks notice when server.conf gains credentials and
+            // restart the managed server.
+            if serverCredentialsConfigured != false {
+                if statusItemCount > 0 {
+                    loadCachedAccounts()
+                    loadCachedTransactions()
+                } else {
+                    clearCachedAccounts()
+                    clearCachedTransactions()
+                }
+                await refreshAccounts()
+                await syncTransactions()
             }
-            await refreshAccounts()
-            await syncTransactions()
             startBackgroundRefresh()
         }
     }
@@ -1025,7 +1139,15 @@ final class AppState {
     /// ships inside the bundle. Starts it at app launch so it is usually
     /// ready before the popover first opens.
     func prewarmBundledServer() async {
-        guard !CommandLine.arguments.contains("--demo") else { return }
+        guard !CommandLine.arguments.contains("--demo") else {
+            isBooting = false
+            return
+        }
+        // The menu bar can be used without ever opening the popover. Once the
+        // launch/server probe settles, stop treating offline/stale states as
+        // placeholder skeletons even if `loadInitialData()` has not run yet.
+        defer { isBooting = false }
+
         await checkServerConnection()
         guard !serverConnected else { return }
         // The authenticated status check fails for an externally managed
@@ -1039,9 +1161,57 @@ final class AppState {
         )
     }
 
+    /// A managed server launched before `server.conf` existed runs in a
+    /// credential-less setup state. The server cannot hot-reload credentials,
+    /// so once the user writes a config that provides them, restart it
+    /// through a freshly evaluated launch plan. Runs after every successful
+    /// status check, which covers the background refresh cadence and every
+    /// "check again" action in the UI.
+    private func upgradeManagedServerIfCredentialsArrived() async {
+        guard !isDemoMode,
+              !isUpgradingManagedServer,
+              serverConnected,
+              serverCredentialsConfigured == false,
+              ServerProcessService.shared.isManagingServer
+        else { return }
+
+        let configFileURL = LocalDataStore.storageDirectoryURL()
+            .appendingPathComponent(LocalDataStore.serverConfigFilename)
+        guard let configFileContents = try? String(contentsOf: configFileURL, encoding: .utf8),
+              configFileContents != lastAttemptedCredentialUpgradeConfig,
+              ServerAutoLaunchPlan.configProvidesCredentials(in: configFileContents),
+              !ServerAutoLaunchPlan.containsBlockedManagedConfigKey(in: configFileContents)
+        else { return }
+
+        isUpgradingManagedServer = true
+        defer { isUpgradingManagedServer = false }
+
+        guard await ServerProcessService.shared.restartManagedServer(isDemoMode: isDemoMode) else {
+            return
+        }
+        // Remember the attempted config so a server that still reports
+        // missing credentials (e.g. values Plaid rejects) is not restarted
+        // every refresh; editing the file again retries.
+        lastAttemptedCredentialUpgradeConfig = configFileContents
+
+        for _ in 0 ..< 12 {
+            try? await Task.sleep(for: .milliseconds(400))
+            await checkServerConnection()
+            if serverConnected { break }
+        }
+    }
+
     /// Popover-open path: start the bundled server if nothing did yet, then
     /// wait briefly for readiness (also covers a still-booting prewarm).
+    /// Reentrancy-guarded because the readiness wait runs
+    /// `checkServerConnection`, whose failure path calls back into
+    /// `recoverBundledServerIfNeeded`; without the guard a server that
+    /// crashes at boot would respawn once per wait iteration.
     private func startBundledServerIfAvailable() async {
+        guard !isStartingBundledServer else { return }
+        isStartingBundledServer = true
+        defer { isStartingBundledServer = false }
+
         var launched = false
         if !ServerProcessService.shared.isManagingServer,
            !(await serverClient.isLocalServerResponding()) {
@@ -1057,6 +1227,118 @@ final class AppState {
             await checkServerConnection()
             if serverConnected { break }
         }
+    }
+
+    /// Warm start for returning users: hydrate accounts/transactions from the
+    /// local cache saved under the last-known server context before the first
+    /// connectivity check runs. Opportunistic — failures and context
+    /// mismatches fall through to the normal post-connect cache path without
+    /// surfacing an error during boot.
+    private func preloadCachedDataBeforeFirstConnect() {
+        guard accounts.isEmpty, transactions.isEmpty,
+              let context = persistedTransactionCacheContext(),
+              let cacheDirectory = preconnectCacheDirectory(for: context)
+        else { return }
+
+        if let cachedAccounts = try? LocalDataStore.loadAccounts(
+            from: cacheDirectory,
+            context: context
+        ), !cachedAccounts.isEmpty {
+            accounts = cachedAccounts
+        }
+        if let cachedTransactions = try? LocalDataStore.loadTransactions(
+            from: cacheDirectory,
+            context: context
+        ), !cachedTransactions.isEmpty {
+            transactions = cachedTransactions
+        }
+    }
+
+    private func preconnectCacheDirectory(for context: TransactionCacheContext) -> URL? {
+        let normalizedContext = normalizedCacheContext(context)
+        guard let currentHint = currentPreconnectCacheContextHint(),
+              normalizedCacheContext(currentHint) == normalizedContext
+        else { return nil }
+
+        return URL(fileURLWithPath: normalizedContext.storagePath, isDirectory: true)
+    }
+
+    private func currentPreconnectCacheContextHint() -> TransactionCacheContext? {
+        var environment = ProcessInfo.processInfo.environment
+        let configURL = LocalDataStore.storageDirectoryURL()
+            .appendingPathComponent(LocalDataStore.serverConfigFilename)
+        if let configContents = try? String(contentsOf: configURL, encoding: .utf8) {
+            for rawLine in configContents.components(separatedBy: .newlines) {
+                guard let entry = parseServerConfigLine(rawLine) else { continue }
+                environment[entry.key] = entry.value
+            }
+        }
+
+        let rawEnvironment = trimmedNonEmpty(environment["PLAID_ENV"]) ?? PlaidEnvironment.production.rawValue
+        guard let plaidEnvironment = PlaidEnvironment(rawValue: unquoteConfigValue(rawEnvironment)) else {
+            return nil
+        }
+
+        return TransactionCacheContext(
+            environment: plaidEnvironment,
+            storagePath: LocalDataStore.storageDirectoryURL(environment: environment).standardizedFileURL.path
+        )
+    }
+
+    private func normalizedCacheContext(_ context: TransactionCacheContext) -> TransactionCacheContext {
+        TransactionCacheContext(
+            environment: context.environment,
+            storagePath: URL(
+                fileURLWithPath: NSString(string: context.storagePath).expandingTildeInPath,
+                isDirectory: true
+            ).standardizedFileURL.path
+        )
+    }
+
+    private func parseServerConfigLine(_ rawLine: String) -> (key: String, value: String)? {
+        var line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !line.isEmpty, !line.hasPrefix("#") else { return nil }
+        if line.hasPrefix("export ") {
+            line.removeFirst("export ".count)
+            line = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        guard let separator = line.firstIndex(of: "=") else { return nil }
+        let key = String(line[..<separator]).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return nil }
+        let value = String(line[line.index(after: separator)...])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return (key, unquoteConfigValue(value))
+    }
+
+    private func trimmedNonEmpty(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func unquoteConfigValue(_ value: String) -> String {
+        guard value.count >= 2,
+              let first = value.first,
+              let last = value.last,
+              (first == "\"" && last == "\"") || (first == "'" && last == "'")
+        else {
+            return value
+        }
+        return String(value.dropFirst().dropLast())
+    }
+
+    private func persistedTransactionCacheContext() -> TransactionCacheContext? {
+        guard let data = UserDefaults.standard.data(forKey: Keys.lastTransactionCacheContext) else {
+            return nil
+        }
+        return try? JSONDecoder().decode(TransactionCacheContext.self, from: data)
+    }
+
+    private func persistTransactionCacheContext() {
+        guard let transactionCacheContext,
+              let data = try? JSONEncoder().encode(transactionCacheContext)
+        else { return }
+        UserDefaults.standard.set(data, forKey: Keys.lastTransactionCacheContext)
     }
 
     // MARK: - Balance History
@@ -1162,7 +1444,96 @@ final class AppState {
     }
 
     private func updateSetupCompletion() {
-        isSetupComplete = firstRunCompletionState.isReady
+        // Promote-only: transient startup probes (prewarmBundledServer /
+        // loadInitialData before the server is reachable) report not-ready
+        // and must not erase the persisted completion bit. Explicit resets
+        // (resetLocalData, demo exit) set isSetupComplete = false directly.
+        if firstRunCompletionState.isReady {
+            isSetupComplete = true
+        }
+    }
+
+    private func refreshSetupCompletionForActiveContext() {
+        let storedValue = storedSetupCompletion()
+        if isSetupComplete != storedValue {
+            isSetupComplete = storedValue
+        }
+    }
+
+    private func storedSetupCompletion() -> Bool {
+        let defaults = UserDefaults.standard
+        if let scopedValue = defaults.object(forKey: setupCompletionDefaultsKey) as? Bool {
+            return scopedValue
+        }
+
+        // One-time compatibility path for users who completed setup before
+        // completion became scoped by data directory and Plaid environment.
+        return defaults.bool(forKey: Keys.setupCompletedOnce)
+            && activeStorageDirectoryURL == localStorageDirectoryURL
+            && setupCompletionEnvironment == .production
+    }
+
+    private func persistSetupCompletion(_ isComplete: Bool) {
+        guard !isComplete || !isDemoMode else { return }
+        UserDefaults.standard.set(isComplete, forKey: setupCompletionDefaultsKey)
+    }
+
+    private var setupCompletionDefaultsKey: String {
+        let environment = setupCompletionEnvironment.rawValue
+        let path = activeStorageDirectoryURL.standardizedFileURL.path
+        let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? path
+        return "\(Keys.setupCompletedContextPrefix).\(environment).\(encodedPath)"
+    }
+
+    private var setupCompletionEnvironment: PlaidEnvironment {
+        serverEnvironment ?? configuredPlaidEnvironment() ?? .production
+    }
+
+    private func configuredPlaidEnvironment() -> PlaidEnvironment? {
+        var values = ProcessInfo.processInfo.environment
+        let configURL = localStorageDirectoryURL.appendingPathComponent(LocalDataStore.serverConfigFilename)
+        if let contents = try? String(contentsOf: configURL, encoding: .utf8) {
+            for line in contents.components(separatedBy: .newlines) {
+                guard let entry = Self.parseConfigLine(line) else { continue }
+                values[entry.key] = Self.unquotedConfigValue(entry.value)
+            }
+        }
+
+        guard let rawValue = values["PLAID_ENV"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !rawValue.isEmpty
+        else {
+            return nil
+        }
+        return PlaidEnvironment(rawValue: rawValue)
+    }
+
+    private static func parseConfigLine(_ rawLine: String) -> (key: String, value: String)? {
+        var line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !line.isEmpty, !line.hasPrefix("#") else { return nil }
+
+        if line.hasPrefix("export ") {
+            line.removeFirst("export ".count)
+            line = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        guard let separator = line.firstIndex(of: "=") else { return nil }
+        let key = String(line[..<separator]).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return nil }
+        let value = String(line[line.index(after: separator)...])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return (key, value)
+    }
+
+    private static func unquotedConfigValue(_ value: String) -> String {
+        guard value.count >= 2,
+              let first = value.first,
+              let last = value.last,
+              (first == "\"" && last == "\"") || (first == "'" && last == "'")
+        else {
+            return value
+        }
+        return String(value.dropFirst().dropLast())
     }
 
     @discardableResult
@@ -1197,117 +1568,19 @@ final class AppState {
     // MARK: - Demo Data
 
     func loadDemoData() {
+        isDemoMode = true
+        // Demo fixtures load synchronously: there is no boot handshake to wait for.
+        isBooting = false
         isDemoStatusRecoveryScenario = CommandLine.arguments.contains("--screenshot-status-recovery")
 
-        let today = Self.dateString(daysAgo: 0)
-        let yesterday = Self.dateString(daysAgo: 1)
-        let twoDaysAgo = Self.dateString(daysAgo: 2)
-        let threeDaysAgo = Self.dateString(daysAgo: 3)
-
-        accounts = [
-            AccountDTO(
-                id: "demo_checking", itemId: "demo_chase", name: "Chase Checking",
-                officialName: "Chase Total Checking", type: .depository, subtype: "checking",
-                mask: "4892", balances: BalanceDTO(available: 8_241.56, current: 8_241.56, isoCurrencyCode: "USD"),
-                institutionName: "Chase"
-            ),
-            AccountDTO(
-                id: "demo_savings", itemId: "demo_chase", name: "Chase Savings",
-                officialName: "Chase Savings", type: .depository, subtype: "savings",
-                mask: "7731", balances: BalanceDTO(available: 15_420.00, current: 15_420.00, isoCurrencyCode: "USD"),
-                institutionName: "Chase"
-            ),
-            AccountDTO(
-                id: "demo_amex", itemId: "demo_amex_item", name: "Amex Platinum",
-                officialName: "American Express Platinum Card", type: .credit, subtype: "credit card",
-                mask: "1008", balances: BalanceDTO(current: -1_847.32, limit: 20_000, isoCurrencyCode: "USD"),
-                institutionName: "American Express"
-            ),
-            AccountDTO(
-                id: "demo_visa", itemId: "demo_chase", name: "Chase Freedom",
-                officialName: "Chase Freedom Unlimited", type: .credit, subtype: "credit card",
-                mask: "3345", balances: BalanceDTO(current: -4_210.00, limit: 5_000, isoCurrencyCode: "USD"),
-                institutionName: "Chase"
-            ),
-        ]
-
-        let oneWeekAgo = Self.dateString(daysAgo: 8)
-        let twoWeeksAgo = Self.dateString(daysAgo: 15)
-        let threeWeeksAgo = Self.dateString(daysAgo: 22)
-        let oneMonthAgo = Self.dateString(daysAgo: 30)
-        let fiveWeeksAgo = Self.dateString(daysAgo: 35)
-        let sixWeeksAgo = Self.dateString(daysAgo: 42)
-        let twoMonthsAgo = Self.dateString(daysAgo: 60)
-
-        transactions = [
-            // Today
-            TransactionDTO(id: "tx1", accountId: "demo_checking", amount: 67.42, date: today, name: "WHOLEFDS MKT 10234", merchantName: "Whole Foods", category: .foodAndDrink),
-            TransactionDTO(id: "tx2", accountId: "demo_checking", amount: 23.50, date: today, name: "UBER TRIP", merchantName: "Uber", category: .transportation),
-            TransactionDTO(id: "tx3", accountId: "demo_checking", amount: -3_200.00, date: today, name: "STRIPE TRANSFER", merchantName: "Stripe", category: .income),
-            TransactionDTO(id: "tx4", accountId: "demo_amex", amount: 142.80, date: today, name: "AMAZON.COM", merchantName: "Amazon", category: .shopping),
-            // Yesterday
-            TransactionDTO(id: "tx5", accountId: "demo_checking", amount: 15.99, date: yesterday, name: "NETFLIX.COM", merchantName: "Netflix", category: .entertainment),
-            TransactionDTO(id: "tx6", accountId: "demo_checking", amount: 45.00, date: yesterday, name: "SHELL OIL 57422", merchantName: "Shell", category: .transportation),
-            TransactionDTO(id: "tx7", accountId: "demo_amex", amount: 89.00, date: yesterday, name: "BLUE APRON", merchantName: "Blue Apron", category: .foodAndDrink),
-            TransactionDTO(id: "tx8", accountId: "demo_visa", amount: 34.50, date: yesterday, name: "SPOTIFY", merchantName: "Spotify", category: .entertainment),
-            // 2 days ago
-            TransactionDTO(id: "tx9", accountId: "demo_checking", amount: 250.00, date: twoDaysAgo, name: "VERIZON WIRELESS", merchantName: "Verizon", category: .billsAndUtilities),
-            TransactionDTO(id: "tx10", accountId: "demo_amex", amount: 320.00, date: twoDaysAgo, name: "DELTA AIR LINES", merchantName: "Delta Airlines", category: .travel),
-            TransactionDTO(id: "tx11", accountId: "demo_checking", amount: 12.50, date: twoDaysAgo, name: "STARBUCKS 8823", merchantName: "Starbucks", category: .foodAndDrink),
-            TransactionDTO(id: "tx12", accountId: "demo_amex", amount: 650.00, date: twoDaysAgo, name: "FURNITURE STORE", merchantName: "West Elm", category: .shopping, pending: true),
-            // 3 days ago
-            TransactionDTO(id: "tx13", accountId: "demo_visa", amount: 75.00, date: threeDaysAgo, name: "PLANET FITNESS", merchantName: "Planet Fitness", category: .healthAndFitness),
-            TransactionDTO(id: "tx14", accountId: "demo_checking", amount: -1_500.00, date: threeDaysAgo, name: "VENMO PAYMENT", merchantName: "Venmo", category: .income),
-            TransactionDTO(id: "tx15", accountId: "demo_amex", amount: 55.00, date: threeDaysAgo, name: "TARGET 0392", merchantName: "Target", category: .shopping),
-            TransactionDTO(id: "tx16", accountId: "demo_checking", amount: 1_850.00, date: threeDaysAgo, name: "RENT PAYMENT", merchantName: "Rent Payment", category: .billsAndUtilities),
-            // ~1 week ago
-            TransactionDTO(id: "tx17", accountId: "demo_checking", amount: 85.00, date: oneWeekAgo, name: "COSTCO WHOLESALE", merchantName: "Costco", category: .shopping),
-            TransactionDTO(id: "tx18", accountId: "demo_amex", amount: 220.00, date: oneWeekAgo, name: "AIRBNB", merchantName: "Airbnb", category: .travel),
-            TransactionDTO(id: "tx19", accountId: "demo_checking", amount: -2_800.00, date: oneWeekAgo, name: "DIRECT DEPOSIT", merchantName: "Employer", category: .income),
-            TransactionDTO(id: "tx20", accountId: "demo_visa", amount: 42.00, date: oneWeekAgo, name: "DOORDASH", merchantName: "DoorDash", category: .foodAndDrink),
-            // ~2 weeks ago
-            TransactionDTO(id: "tx21", accountId: "demo_checking", amount: 130.00, date: twoWeeksAgo, name: "CON EDISON", merchantName: "Con Edison", category: .billsAndUtilities),
-            TransactionDTO(id: "tx22", accountId: "demo_amex", amount: 64.99, date: twoWeeksAgo, name: "ADOBE CREATIVE", merchantName: "Adobe", category: .entertainment),
-            TransactionDTO(id: "tx23", accountId: "demo_checking", amount: 95.00, date: twoWeeksAgo, name: "CVS PHARMACY", merchantName: "CVS", category: .healthAndFitness),
-            // ~3 weeks ago
-            TransactionDTO(id: "tx24", accountId: "demo_visa", amount: 175.00, date: threeWeeksAgo, name: "NORDSTROM", merchantName: "Nordstrom", category: .shopping),
-            TransactionDTO(id: "tx25", accountId: "demo_checking", amount: 48.00, date: threeWeeksAgo, name: "LYFT RIDE", merchantName: "Lyft", category: .transportation),
-            TransactionDTO(id: "tx26", accountId: "demo_amex", amount: 35.00, date: threeWeeksAgo, name: "HULU", merchantName: "Hulu", category: .entertainment),
-
-            // === ~1 month ago — recurring merchants (2nd occurrence) ===
-            TransactionDTO(id: "tx27", accountId: "demo_checking", amount: 15.99, date: oneMonthAgo, name: "NETFLIX.COM", merchantName: "Netflix", category: .entertainment),
-            TransactionDTO(id: "tx28", accountId: "demo_visa", amount: 34.50, date: oneMonthAgo, name: "SPOTIFY", merchantName: "Spotify", category: .entertainment),
-            TransactionDTO(id: "tx29", accountId: "demo_visa", amount: 75.00, date: oneMonthAgo, name: "PLANET FITNESS", merchantName: "Planet Fitness", category: .healthAndFitness),
-            TransactionDTO(id: "tx30", accountId: "demo_checking", amount: 1_850.00, date: oneMonthAgo, name: "RENT PAYMENT", merchantName: "Rent Payment", category: .billsAndUtilities),
-            TransactionDTO(id: "tx31", accountId: "demo_checking", amount: -2_800.00, date: oneMonthAgo, name: "DIRECT DEPOSIT", merchantName: "Employer", category: .income),
-            TransactionDTO(id: "tx32", accountId: "demo_checking", amount: 72.00, date: fiveWeeksAgo, name: "WHOLEFDS MKT 10234", merchantName: "Whole Foods", category: .foodAndDrink),
-            TransactionDTO(id: "tx33", accountId: "demo_amex", amount: 38.00, date: fiveWeeksAgo, name: "HULU", merchantName: "Hulu", category: .entertainment),
-            TransactionDTO(id: "tx34", accountId: "demo_amex", amount: 64.99, date: sixWeeksAgo, name: "ADOBE CREATIVE", merchantName: "Adobe", category: .entertainment),
-
-            // === ~2 months ago — recurring merchants (3rd occurrence) ===
-            TransactionDTO(id: "tx35", accountId: "demo_checking", amount: 15.99, date: twoMonthsAgo, name: "NETFLIX.COM", merchantName: "Netflix", category: .entertainment),
-            TransactionDTO(id: "tx36", accountId: "demo_visa", amount: 34.50, date: twoMonthsAgo, name: "SPOTIFY", merchantName: "Spotify", category: .entertainment),
-            TransactionDTO(id: "tx37", accountId: "demo_visa", amount: 75.00, date: twoMonthsAgo, name: "PLANET FITNESS", merchantName: "Planet Fitness", category: .healthAndFitness),
-            TransactionDTO(id: "tx38", accountId: "demo_checking", amount: 1_850.00, date: twoMonthsAgo, name: "RENT PAYMENT", merchantName: "Rent Payment", category: .billsAndUtilities),
-            TransactionDTO(id: "tx39", accountId: "demo_checking", amount: -2_800.00, date: twoMonthsAgo, name: "DIRECT DEPOSIT", merchantName: "Employer", category: .income),
-            TransactionDTO(id: "tx40", accountId: "demo_amex", amount: 64.99, date: twoMonthsAgo, name: "ADOBE CREATIVE", merchantName: "Adobe", category: .entertainment),
-            TransactionDTO(id: "tx41", accountId: "demo_amex", amount: 36.00, date: twoMonthsAgo, name: "HULU", merchantName: "Hulu", category: .entertainment),
-        ]
-        transactions.append(contentsOf: Self.historicalDemoTransactions())
-
-        // Deterministic 60-day history with a gentle upward drift so the header
-        // trend reads the same on every demo launch and screenshots reproduce.
-        let demoNetWorth = 17_604.24
-        balanceHistory = (0..<60).reversed().map { daysAgo in
-            let date = Calendar.current.date(byAdding: .day, value: -daysAgo, to: Date())!
-            let progress = Double(60 - daysAgo) / 60
-            let drift = -650.0 + (650.0 * progress)
-            let wobble = sin(Double(daysAgo) / 4.5) * 180
-            return BalanceSnapshot(date: date, balance: demoNetWorth + drift + wobble)
-        }
+        // Fixture content lives in PlaidBarCore so its continuity guarantees
+        // (no heatmap dead zone, year-round income, active savings account)
+        // stay testable. See DemoFixtures and DemoFixturesTests.
+        accounts = DemoFixtures.accounts
+        transactions = DemoFixtures.transactions()
+        balanceHistory = DemoFixtures.balanceHistory()
 
         isSetupComplete = true
-        isDemoMode = true
         serverConnected = true
         serverEnvironment = .sandbox
         serverVersion = PlaidBarConstants.appVersion
@@ -1328,55 +1601,6 @@ final class AppState {
         lastSyncDate = isDemoStatusRecoveryScenario ? recoveredSync : Date()
     }
 
-    private static func dateString(daysAgo: Int) -> String {
-        let date = Calendar.current.date(byAdding: .day, value: -daysAgo, to: Date())!
-        return Formatters.transactionDateString(date)
-    }
-
-    private static func historicalDemoTransactions() -> [TransactionDTO] {
-        struct DemoMerchant {
-            let interval: Int
-            let offset: Int
-            let accountId: String
-            let amount: Double
-            let name: String
-            let merchantName: String
-            let category: SpendingCategory
-        }
-
-        let merchants = [
-            DemoMerchant(interval: 7, offset: 4, accountId: "demo_checking", amount: 78.40, name: "WHOLEFDS MKT 10234", merchantName: "Whole Foods", category: .foodAndDrink),
-            DemoMerchant(interval: 10, offset: 6, accountId: "demo_amex", amount: 42.25, name: "SWEETGREEN", merchantName: "Sweetgreen", category: .foodAndDrink),
-            DemoMerchant(interval: 14, offset: 9, accountId: "demo_checking", amount: 28.60, name: "UBER TRIP", merchantName: "Uber", category: .transportation),
-            DemoMerchant(interval: 16, offset: 12, accountId: "demo_visa", amount: 63.15, name: "TARGET 0392", merchantName: "Target", category: .shopping),
-            DemoMerchant(interval: 21, offset: 17, accountId: "demo_amex", amount: 118.90, name: "COSTCO WHOLESALE", merchantName: "Costco", category: .shopping),
-            DemoMerchant(interval: 30, offset: 24, accountId: "demo_checking", amount: 132.00, name: "CON EDISON", merchantName: "Con Edison", category: .billsAndUtilities),
-            DemoMerchant(interval: 31, offset: 30, accountId: "demo_checking", amount: 1_850.00, name: "RENT PAYMENT", merchantName: "Rent Payment", category: .billsAndUtilities),
-            DemoMerchant(interval: 45, offset: 38, accountId: "demo_amex", amount: 310.00, name: "DELTA AIR LINES", merchantName: "Delta Airlines", category: .travel),
-        ]
-
-        return merchants.flatMap { merchant in
-            stride(from: merchant.offset + 70, through: 364, by: merchant.interval).map { daysAgo in
-                let merchantSlug = merchant.merchantName
-                    .lowercased()
-                    .replacingOccurrences(of: " ", with: "_")
-                return TransactionDTO(
-                    id: "demo_hist_\(merchantSlug)_\(daysAgo)",
-                    accountId: merchant.accountId,
-                    amount: merchant.amount + seasonalAdjustment(daysAgo: daysAgo, interval: merchant.interval),
-                    date: dateString(daysAgo: daysAgo),
-                    name: merchant.name,
-                    merchantName: merchant.merchantName,
-                    category: merchant.category
-                )
-            }
-        }
-    }
-
-    private static func seasonalAdjustment(daysAgo: Int, interval: Int) -> Double {
-        let cycle = Double((daysAgo / max(interval, 1)) % 5)
-        return cycle * 8.75
-    }
 }
 
 private enum AppStateError: LocalizedError {
@@ -1388,12 +1612,4 @@ private enum AppStateError: LocalizedError {
             "Transaction sync did not finish after \(maxPages) pages. Try again later."
         }
     }
-}
-
-enum PopoverTab: String, CaseIterable, Sendable {
-    case accounts = "Accounts"
-    case transactions = "Transactions"
-    case spending = "Spending"
-    case credit = "Credit"
-    case status = "Status"
 }

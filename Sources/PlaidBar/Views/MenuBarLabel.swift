@@ -4,19 +4,18 @@ struct MenuBarLabel: View {
     @Environment(AppState.self) private var appState
 
     var body: some View {
+        // State is carried by the symbol shape and attention text, not
+        // color: the menu bar renders template-style monochrome like every
+        // other status item, and degraded states swap the glyph instead of
+        // tinting a dot. The blocking/advisory split lives in
+        // MenuBarStatusPresentation (PlaidBarCore): advisory failures step
+        // down to the warning glyph and never paint attention text here.
+        let presentation = appState.menuBarStatusPresentation
         HStack(spacing: Spacing.xs) {
-            Image(systemName: "dollarsign.circle.fill")
-                .foregroundStyle(appState.serverConnected || appState.isDemoMode ? SemanticColors.income : .secondary)
-                .overlay(alignment: .bottomTrailing) {
-                    Circle()
-                        .fill(statusTint)
-                        .frame(width: 6, height: 6)
-                        .offset(x: 2, y: 1)
-                }
-            if let attentionText = appState.menuBarAttentionText {
+            Image(systemName: presentation.symbolName)
+            if let attentionText = presentation.attentionText {
                 Text(attentionText)
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(statusTint)
+                    .font(.caption.weight(.medium))
                     .lineLimit(1)
             }
             if !appState.menuBarText.isEmpty {
@@ -26,18 +25,5 @@ struct MenuBarLabel: View {
         }
         .help(appState.menuBarHelpText)
         .accessibilityLabel(appState.menuBarAccessibilityLabel)
-    }
-
-    private var statusTint: Color {
-        if appState.error != nil || appState.erroredItemCount > 0 {
-            return SemanticColors.negative
-        }
-        if appState.needsLoginItemCount > 0 || appState.isSyncStale {
-            return SemanticColors.warning
-        }
-        if appState.serverConnected || appState.isDemoMode {
-            return SemanticColors.positive
-        }
-        return SemanticColors.negative
     }
 }

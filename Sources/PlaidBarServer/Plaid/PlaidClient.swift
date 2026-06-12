@@ -1,4 +1,5 @@
 import Foundation
+import PlaidBarCore
 #if canImport(FoundationNetworking)
     import FoundationNetworking
 #endif
@@ -40,7 +41,7 @@ actor PlaidClient {
         let body = PlaidLinkTokenRequest(
             clientId: config.plaidClientId,
             secret: config.plaidSecret,
-            clientName: "PlaidBar",
+            clientName: PlaidBarConstants.appName,
             user: .init(clientUserId: userId),
             products: ["transactions"],
             countryCodes: ["US"],
@@ -62,7 +63,7 @@ actor PlaidClient {
         let body = PlaidLinkTokenRequest(
             clientId: config.plaidClientId,
             secret: config.plaidSecret,
-            clientName: "PlaidBar",
+            clientName: PlaidBarConstants.appName,
             user: .init(clientUserId: userId),
             countryCodes: ["US"],
             language: "en",
@@ -150,6 +151,12 @@ actor PlaidClient {
         body: some Encodable,
         retryPolicy: PlaidRetryPolicy = .transient
     ) async throws -> R {
+        // Setup state: the server booted without credentials, so no request
+        // can ever succeed. Fail before contacting Plaid with an error the
+        // routes surface as 503 instead of leaking a Plaid auth failure.
+        guard config.credentialsConfigured else {
+            throw PlaidError.credentialsNotConfigured
+        }
         guard let url = URL(string: "\(config.plaidBaseURL)\(path)") else {
             throw PlaidError.invalidResponse
         }
@@ -253,7 +260,8 @@ enum PlaidRetryPolicy: Sendable {
 
 // MARK: - Errors
 
-enum PlaidError: Error, LocalizedError, Sendable {
+enum PlaidError: Error, LocalizedError, Equatable, Sendable {
+    case credentialsNotConfigured
     case invalidResponse
     case apiError(
         statusCode: Int,
@@ -264,6 +272,9 @@ enum PlaidError: Error, LocalizedError, Sendable {
 
     var errorDescription: String? {
         switch self {
+        case .credentialsNotConfigured:
+            "Plaid credentials are not configured. Add PLAID_CLIENT_ID and PLAID_SECRET "
+                + "to server.conf, then restart the VaultPeek companion server."
         case .invalidResponse:
             "Invalid response from Plaid API"
         case let .apiError(statusCode, _, _, message):

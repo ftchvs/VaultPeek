@@ -1,47 +1,53 @@
 # Release Runbook
 
-PlaidBar 1.0 ships as a source-built Homebrew formula first. A local
-drag-install DMG can be built with `./Scripts/package-dmg.sh`: it wraps a
-self-contained `PlaidBar.app` (app + bundled `PlaidBarServer`, auto-started on
-launch) with an `/Applications` symlink. The DMG is ad-hoc signed; Developer ID
-signing, notarization, cask, and the Sparkle appcast remain deferred until the
-clean-machine Gatekeeper path is real, so first launch needs right-click >
-Open and release notes must say so.
+VaultPeek (formerly PlaidBar) is proprietary software distributed privately to
+licensed users. Homebrew distribution is discontinued: the public tap has been
+retired and `Formula/plaidbar.rb` removed. The DMG is the distribution channel.
+
+VaultPeek ships as a drag-install `VaultPeek-<version>.dmg` built with
+`./Scripts/package-dmg.sh`:
+it wraps a self-contained `VaultPeek.app` (app + bundled `PlaidBarServer`,
+auto-started on launch) with an `/Applications` symlink. The DMG is currently
+ad-hoc signed; Developer ID signing, notarization, and the Sparkle appcast
+remain deferred until the clean-machine Gatekeeper path is real, so first launch
+needs right-click > Open and release notes must say so. The signing and
+notarization runbook (prep only, not yet performed) is `docs/distribution.md`;
+the final gate set before tagging is `docs/release-checklist.md`.
+
+The bundle ships `AppIcon.icns` (checked by `Scripts/validate-app-bundle.sh`).
+The icon is generated from code — rerun `./Scripts/generate-app-icon.sh` to
+regenerate `Sources/PlaidBar/Resources/AppIcon.icns` after design changes.
 
 ## Current Release
 
 - Current version: `v1.0.0`
-- 1.0 distribution shape: formula-only SwiftPM executable install
-- GitHub release: tagged from clean `main`
-- Homebrew tap command:
+- 1.0 distribution shape: privately-distributed drag-install DMG
+- GitHub release: tagged from clean `main` (private repo)
+
+Bundled executables (inside `VaultPeek.app`; executable names stay
+`PlaidBar`/`PlaidBarServer` until the staged SwiftPM product rename):
 
 ```bash
-brew tap ftchvs/plaidbar https://github.com/ftchvs/PlaidBar
-brew install plaidbar
+VaultPeek.app/Contents/MacOS/PlaidBar --demo
+VaultPeek.app/Contents/MacOS/PlaidBarServer --sandbox
 ```
 
-Installed commands:
-
-```bash
-plaidbar --demo
-plaidbar-server --sandbox
-plaidbar-run --sandbox
-```
+Repository helper scripts such as `Scripts/vaultpeek-run` and the deprecated
+`Scripts/plaidbar-run` alias are source-checkout conveniences. They are not
+staged into the drag-install DMG.
 
 ## Release-Prep PR Checklist
+
+Work through `docs/release-checklist.md` end to end. The command skeleton:
 
 1. Confirm metadata alignment:
 
 ```bash
-cat version.env
-/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Sources/PlaidBar/Resources/Info.plist
-/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' Sources/PlaidBar/Resources/Info.plist
-sed -n 's/.*appVersion: String = "\([^"]*\)".*/\1/p' Sources/PlaidBarCore/Utilities/Constants.swift
-rg 'tag: "v' Formula/plaidbar.rb
+./Scripts/verify-version-alignment.sh
 ```
 
 2. Commit the release-prep changes, then run local release gates from the clean
-   release-prep branch:
+   release-prep branch (this now includes app-bundle packaging and validation):
 
 ```bash
 ./Scripts/release.sh --allow-current-branch
@@ -53,22 +59,14 @@ The `ci_smoke_client` and `ci_smoke_secret` values are CI-safe dummy values for
 the server startup smoke only. The smoke script does not open Plaid Link or sync
 Plaid data, but it must still report sandbox credentials as configured.
 
-For non-publishing Homebrew verification from a development checkout, avoid
-uninstalling or reinstalling user packages. Use read-only or dry-run checks:
+3. Build and sanity-check the distributable DMG from the release-prep branch:
 
 ```bash
-ruby -c Formula/plaidbar.rb
-HOMEBREW_NO_AUTO_UPDATE=1 brew audit --strict --formula plaidbar
-HOMEBREW_NO_AUTO_UPDATE=1 brew style plaidbar
-HOMEBREW_NO_AUTO_UPDATE=1 brew install --dry-run --build-from-source plaidbar
-HOMEBREW_NO_AUTO_UPDATE=1 brew test plaidbar
+./Scripts/package-dmg.sh
+./Scripts/validate-app-bundle.sh
 ```
 
-If Homebrew reports that `plaidbar` is already installed and up to date during
-the dry run, that is enough for local branch verification. Do a destructive
-reinstall only on a clean release machine or disposable Homebrew environment.
-
-3. Open and merge the release-prep PR only after GitHub CI passes.
+4. Open and merge the release-prep PR only after GitHub CI passes.
 
 ## Publish Checklist
 
@@ -79,37 +77,61 @@ git pull --ff-only origin main
 ./Scripts/release.sh --publish
 ```
 
-Then verify the published install path:
+Then build and verify the distributable DMG on a clean release machine:
 
 ```bash
-brew tap ftchvs/plaidbar https://github.com/ftchvs/PlaidBar
-brew reinstall --build-from-source plaidbar
-plaidbar-server --help
-plaidbar-server --version
-plaidbar-run --help
+./Scripts/package-dmg.sh
+./Scripts/validate-app-bundle.sh .build/VaultPeek.app
 ```
 
-Run the published install check only on a clean release machine or disposable
-Homebrew environment so it does not disturb a user's existing local install.
+Clean-install verification (required before distributing):
 
-## Formula-Only Scope
+1. Copy `.build/VaultPeek-<version>.dmg` to a machine (or fresh user account)
+   without a prior install or `~/.vaultpeek` data directory.
+2. Open the DMG, drag `VaultPeek.app` to `/Applications`, and launch via
+   right-click > Open (ad-hoc signed build).
+3. Confirm the menu bar item appears and the bundled server reports healthy
+   in the Status view before distributing.
 
-The formula installs the SwiftPM-built menu bar executable, local companion
-server, and launcher script:
+Verify clean-profile production setup before distributing — on a clean macOS
+user profile (or with `PLAIDBAR_DATA_DIR` pointed at an empty directory):
 
-- `plaidbar`
-- `plaidbar-server`
-- `plaidbar-run`
+1. Launch the app with no existing local data; the server must boot into the
+   credential-less setup state (app reachable, `/api/status` reports
+   `credentialsConfigured=false`, setup surfaces show guidance — no crash, no
+   silent failure).
+2. Add production credentials to `server.conf` and restart; the setup
+   preflight must show production mode with credentials configured.
+3. Confirm the storage path uses the production store
+   (`plaidbar-production.sqlite`) and that no sandbox store or sandbox data is
+   created or read.
 
-The formula path is acceptable for 1.0 because PlaidBar is local-first,
-open-source, and still targeted at technical early users who can run a
-source-built macOS utility.
+This step requires Plaid production approval and real production credentials;
+it cannot be simulated with sandbox credentials. If production approval is not
+in place, record the step as not verified rather than skipping it silently.
 
-Do not claim notarized app distribution until all of these are complete:
+Distribute the resulting DMG privately to licensed users.
+
+## Distribution Scope
+
+The DMG ships a self-contained `VaultPeek.app` bundling the menu bar app and
+local companion server:
+
+- `PlaidBar` app executable (displayed to users as VaultPeek)
+- `PlaidBarServer` companion server executable
+
+Source-checkout launcher scripts (`Scripts/vaultpeek-run` and the deprecated
+`Scripts/plaidbar-run` alias) are not included in the DMG.
+
+The ad-hoc-signed DMG is acceptable for 1.0 because VaultPeek is local-first and
+distributed privately to a controlled set of licensed users who can complete the
+first-launch right-click > Open step.
+
+Do not claim notarized public app distribution until all of these are complete
+(runbook: `docs/distribution.md`, scaffold: `Scripts/notarize.sh`):
 
 - Developer ID signing configured
-- app archive or DMG/ZIP packaging decided
 - notarization and ticket stapling automated
 - Gatekeeper verified on a clean machine
-- Sparkle appcast configured, signed, hosted, and tested
-- Homebrew cask tested separately from the formula
+- Sparkle appcast (or equivalent private update channel) configured, signed,
+  hosted, and tested

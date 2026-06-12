@@ -1,6 +1,7 @@
-# PlaidBar Design System
+# VaultPeek Design System
 
-Visual design spec and component catalog for PlaidBar.
+Visual design spec and component catalog for VaultPeek (formerly PlaidBar;
+code paths and SwiftPM target names keep the PlaidBar prefix).
 
 ## Color System
 
@@ -23,10 +24,15 @@ Visual design spec and component catalog for PlaidBar.
 
 ### Utilization Gradient
 
+Yellow is excluded from the text ramp: yellow caption text falls below 4.5:1
+contrast in both appearances. The icon ladder carries the severity step inside
+the shared orange band, and dashboard rows show the icon + tint only at or
+above the user's warning threshold — below it the line stays `.secondary`.
+
 | Range | Color | Icon |
 |-------|-------|------|
 | 0-29% | Green | `checkmark.circle` |
-| 30-49% | Yellow | `exclamationmark.triangle` |
+| 30-49% | Orange | `exclamationmark.triangle` |
 | 50-74% | Orange | `exclamationmark.triangle.fill` |
 | 75%+ | Red | `xmark.octagon` |
 
@@ -56,12 +62,16 @@ Category colors from `SpendingCategory.colorHex` — fixed hex values for chart 
 
 ## Typography Scale
 
-5 levels, implemented as ViewModifiers in `Typography.swift`:
+Implemented as ViewModifiers in `Typography.swift`. Weights are capped at
+semibold; labels are medium — hierarchy comes from size, casing, and opacity,
+not boldness.
 
 | Level | Token | SwiftUI | Used For |
 |-------|-------|---------|----------|
-| Hero | `.heroBalance()` | `.system(size: 28, weight: .bold, design: .rounded).monospacedDigit()` | Net balance header |
-| Title | `.sectionTitle()` | `.caption.weight(.semibold).textCase(.uppercase)` | BANK ACCOUNTS, CREDIT CARDS |
+| Display | `.displayBalance()` | `.system(size: 30, weight: .semibold).monospacedDigit()` | The one hero number per surface (net worth) |
+| Hero (legacy) | `.heroBalance()` | `.system(size: 28, weight: .bold, design: .rounded).monospacedDigit()` | Legacy detail surfaces only |
+| Title | `.sectionTitle()` | `.caption.weight(.medium).textCase(.uppercase)` | ACCOUNTS, 365D SPEND |
+| Data | `.dataText()` | `.callout.weight(.semibold).monospacedDigit()` | Row amounts, tabular figures |
 | Body | system `.body` | default | Account names, transaction names |
 | Detail | `.detailText()` | `.caption` + `.secondary` | Masks, categories, dates |
 | Micro | `.microText()` | `.caption2.weight(.medium)` | Pending badge, percentages |
@@ -105,22 +115,28 @@ Category colors from `SpendingCategory.colorHex` — fixed hex values for chart 
 
 ## Native Surface System
 
-PlaidBar is a macOS menu bar instrument, so surfaces should feel native,
-translucent, and compact rather than like stacked web cards. Shared surface
-tokens live in `SurfaceTokens` and shared modifiers live in
-`SharedModifiers.swift`.
+VaultPeek is a macOS menu bar instrument, so surfaces should feel native,
+translucent, and compact rather than like stacked web cards. The dashboard
+uses the three-rank `glassSurface(_:)` system in `SharedModifiers.swift`:
+ranks use *hierarchical* shape styles (`.quaternary`/`.quinary`) so surfaces
+participate in macOS vibrancy over the `.regularMaterial` popover root.
+Default surfaces draw **no stroke** — separation comes from spacing;
+hairlines are reserved for emphasized (attention) states. Surfaces never
+nest more than two ranks below the popover root.
 
 | Token/Modifier | Purpose |
 |----------------|---------|
-| `SurfaceTokens.panelFillOpacity` | Default quiet panel fill for dashboard, detail, and recovery surfaces |
-| `SurfaceTokens.insetFillOpacity` | Compact inset controls such as segmented filters and metric pills |
-| `SurfaceTokens.selectedFillOpacity` | Selected account row highlight, backed by a visible accent rail |
-| `SurfaceTokens.panelStrokeOpacity` | Hairline separators around native surfaces |
-| `.nativePanelSurface(...)` | Shared rounded panel treatment with material/fill fallback and optional Liquid Glass enhancement |
-| `.nativeInsetSurface(...)` | Smaller, non-glass inset treatment for controls and dense metric pills |
+| `.glassSurface(.raised)` | Primary content panels: account list, fly-out, heatmap |
+| `.glassSurface(.inset)` | Quiet secondary surfaces: metric strip, balance mix, insights |
+| `.glassSurface(.emphasized(tint))` | Attention states only — tinted fill plus hairline |
+| `Radius.panel` / `.control` / `.cell` | 8 / 6 / 2pt corner radius scale |
+| `Sizing` | Icon (16/20/28), status dot (8), 28pt minimum hit target |
+| `MotionTokens.micro/.standard/.content` | 120ms / 200ms / spring(0.3, 0.85); all gated by `MotionTokens.animation(_:reduceMotion:)` |
+| `.hoverHighlight()` | Rounded, 120ms-animated hover wash for rows |
+| `.nativePanelSurface(...)` / `.nativeInsetSurface(...)` | Legacy fill+stroke treatment still used by setup/attention surfaces |
 
 Liquid Glass is a progressive enhancement only. Apple SwiftUI's `Glass.regular`
-and `glassEffect` APIs are macOS 26+, while PlaidBar currently supports
+and `glassEffect` APIs are macOS 26+, while VaultPeek currently supports
 macOS 15+. Do not raise the minimum OS for visual polish; use availability-gated
 Liquid Glass and keep a SwiftUI material/fill fallback.
 
@@ -132,15 +148,18 @@ Liquid Glass and keep a SwiftUI material/fill fallback.
 filter bar, dense rows, selected row highlight, and chevron-based drill-in. Use
 the RepoBar visual language as inspiration, not as literal GitHub UI.
 
-**Target anatomy:** VStack | compact net-worth header | status strip |
-Financial heatmap header (`last 365 days`, Spend or Net mode) | segmented
-filter bar (`All`, `Cash`, `Credit`, `Savings`, `Debt`, `Status`) | summary and
-balance context | list of account/card rows | inline selected account/card
-detail surface.
+**Target anatomy:** HStack | optional account-detail fly-out (left, 320pt) |
+dashboard column: net-worth hero (alone — no wordmark, no status strip) |
+change receipt | financial heatmap (`last 365 days`, Spend or Net mode) |
+native segmented filter (`All`, `Cash`, `Credit`, `Savings`, `Debt`,
+`Status`) | account/card rows | summary and balance context | footer with the
+single sync/mode status line. Selecting a row opens the fly-out to the LEFT
+of the dashboard (popover widens 480 → 801pt); Esc, the ✕ button, re-clicking
+the row, or switching filters closes it.
 
-| Element | PlaidBar Meaning |
+| Element | VaultPeek Meaning |
 |---------|------------------|
-| Heatmap header | Daily spending intensity or net cashflow from transactions, switchable in place. Spend mode uses a GitHub-style green Less/More legend; Net mode uses bidirectional Income/Outflow color keys. |
+| Heatmap header | Daily spending intensity or net cashflow from transactions, switchable in place. Spend mode uses a NEUTRAL Less/More intensity ramp (green means money-in everywhere else in the app); Net mode uses bidirectional Income/Outflow color keys with an explicit legend. |
 | Repo row | Account/card row with institution, type, balance, status, and freshness |
 | Repo stats | Balance, available credit, utilization, pending count, sync state |
 | Selected repo highlight | Selected account/card detail target |
@@ -160,6 +179,33 @@ trailing primary metric (balance owed/cash balance) | secondary metric
 | Degraded item | Warning status and `Reconnect` in detail surface |
 | Selected | Blue/accent highlight matching native menu selection; detail surface opens |
 | No data | Keep overview shell and show one compact recovery action |
+
+### AccountDetailFlyout
+
+The contextual account submenu. Opens to the LEFT of the dashboard when an
+account row is selected; one `raised`-rank surface, sections separated by
+spacing (never nested cards).
+
+**Anatomy:** header (account name + institution/type/mask metadata + close ✕)
+| Status (connection badge + sync freshness + recovery action when degraded)
+| Balances (Available / Current / Utilization) | Changes · 30 days (spending
+and income totals with signed deltas vs the prior 30-day window — arrow +
+sign + color, never color alone) | To review (pending + large transactions
+with reason chips) | Top categories · 30 days (icon + name + total + share
+bar) | Recent activity (6 rows) | account actions (reconnect / remove /
+settings).
+
+**Code reference:** `Sources/PlaidBar/Views/AccountDetailFlyout.swift`;
+insight math in `Sources/PlaidBarCore/Utilities/AccountDetailInsights.swift`
+(pure, tested).
+
+| State | Behavior |
+|-------|----------|
+| Open | Popover widens 480 → 801pt; fly-out animates in with `MotionTokens.content` (gated by Reduce Motion) |
+| Close | ✕ button, Esc, re-clicking the selected row, or switching filters |
+| Degraded item | Status section shows recovery detail + Reconnect/Refresh action |
+| No review items / categories | Sections are omitted entirely, never shown empty |
+| Demo mode | Actions reduce to the demo-safe set (`DashboardDrillInAction.accountDrillInActions`) |
 
 ### AccountRow
 
@@ -278,7 +324,7 @@ reference for PR-005 follow-up work.
 
 ### NotificationSettingsView
 
-**Anatomy:** Form | Master toggle "Enable notifications" | Permission denied warning (if applicable): `exclamationmark.triangle` icon + explanation text | Section "Transaction Alerts": Large transactions toggle + threshold field ($), Low balance toggle + threshold field ($) | Section "Credit Alerts": High utilization toggle + reference to credit warning threshold from General
+**Anatomy:** `Form` + `.formStyle(.grouped)` + switch-style toggles | First section: macOS permission status row (icon + label + detail + optional recovery action) and master toggle "Enable notifications" | Section "Transaction alerts": Large transactions toggle + "Large transaction threshold" field ($), Low balance warning toggle + "Low balance threshold" field ($) | Section "Credit alerts": High utilization toggle + reference to credit warning threshold from General
 
 **Code reference:** `Sources/PlaidBar/Settings/SettingsView.swift`
 
@@ -286,8 +332,9 @@ reference for PR-005 follow-up work.
 |-------|----------|
 | Notifications off | Master toggle off; all sub-toggles and fields disabled |
 | Notifications enabled | Master toggle on; sub-toggles and threshold fields enabled |
-| Permission denied (macOS) | Warning banner: `exclamationmark.triangle` + "Enable in System Settings > Notifications"; master toggle forced off |
+| Permission denied (macOS) | Permission status row shows warning icon + "Denied" label, explanation text, and an "Open System Settings" recovery button; sub-controls disabled |
 | Individual trigger disabled | Specific toggle off; associated threshold field disabled |
+| Zero-dollar threshold | `InlineSettingsNotice` (`bell.badge` icon + warning tint + text) explains a $0 threshold alerts on every outgoing transaction |
 | High utilization reference | Shows "Uses credit warning threshold ({X}%)" in `.detailText()` — threshold set in General tab |
 
 ### SpendingComparison
@@ -351,8 +398,8 @@ Pattern for all empty states:
 | Account rows | Compact account/card rows with balance, utilization/status, sync freshness, pending count, and chevron affordance | Click row to expand the selected account details inline |
 | Selected account panel | Connection badge, balance metrics, pending/inflow/outflow/sync pills, recent transactions, reconnect/refresh actions | Inline recovery actions for stale or degraded items |
 | Spending activity | GitHub-style 365-day grid with month labels, Spend/Net toggle, intensity legend, and total header | Hover cells for day-level transaction count plus spend or net cashflow |
-| Legacy detail views | AccountsView, TransactionsView, SpendingView, CreditView, StatusView remain available as implementation surfaces and screenshot/reference components | Prefer dashboard-first entry unless adding a focused detail surface |
-| Settings | 4-tab TabView: General, Accounts, Notifications, About (480×380) | TabView |
+| Legacy detail views | Removed (AND-312): the dead tab tree — AccountsView, TransactionsView, SpendingView, CreditView, StatusView and their chart helpers — was deleted. The dashboard popover plus `AccountDetailFlyout` is the only detail surface | Build new detail surfaces as dashboard drill-ins; do not reintroduce a tab container |
+| Settings | 4-tab TabView: General, Accounts, Notifications, About; each tab is a native grouped `Form` with switch-style toggles and sentence-case section headers; resizable window (min 560×480) | TabView + `Form(.grouped)` |
 | Onboarding | Demo/Sandbox/Production choice with local-storage disclosure before Plaid Link | Mode choice, Back, Check Connection |
 
 ### Popover Surface Inventory
@@ -368,8 +415,8 @@ absolute paths when adding screenshot or review evidence.
 | Selected account detail | `SelectedAccountPanel`, `AccountSignalPill`, recovery detail, and recent activity in `Sources/PlaidBar/Views/MainPopover.swift` | Inline drill-in uses an outer panel plus nested inset pills and a recovery panel | Clearest nested-card pattern in the main popover when an account is selected | Keep the inline drill-in, but reduce nested panel treatment to status color, separators, and compact rows |
 | Local insights | `LocalInsightsCard` and `InsightMetricPill` in `Sources/PlaidBar/Views/MainPopover.swift` | Optional local-only AI/status content is presented as a card with nested metric pills | Can feel like product/marketing chrome if it competes with financial rows | Prefer a compact disclosure or status row unless local insights become the selected detail focus |
 | Status and readiness | `DashboardStatusReadinessPanel` and `DashboardEmptyAccountState` in `Sources/PlaidBar/Views/MainPopover.swift` | Recovery and empty states use prominent rounded panels | Appropriate when degraded, but card-heavy if shown alongside several other panels | Keep panels exceptional for action-needed states; avoid duplicating status panels in normal healthy dashboard flow |
-| Legacy/detail surfaces | `AccountsView`, `TransactionsView`, `SpendingView`, `CreditView`, and `StatusView` | Older detail views include segmented controls, forms, grids, and diagnostic tiles | Tab-heavy if promoted back to first-level popover navigation | Treat as drill-ins or reference/screenshot surfaces; keep the main popover dashboard-first |
-| Settings | `SettingsView` | 4-tab macOS settings control plane | Tab-heavy by design, but outside the primary popover dashboard | Leave as settings unless a future settings-specific audit scopes a flatter layout |
+| Detail drill-in | `AccountDetailFlyout` in `Sources/PlaidBar/Views/` | Per-account fly-out is the surviving detail surface after the legacy tab tree was removed (AND-312) | Risk of regrowing into a tab-heavy container if multiple detail views are stacked | Keep detail as a single dashboard drill-in; the old `AccountsView`/`TransactionsView`/`SpendingView`/`CreditView`/`StatusView` tab tree is gone and should not return |
+| Settings | `SettingsView` | 4-tab macOS settings window; each tab a native grouped `Form` (no hand-rolled card stacks since AND-311) | Tab-heavy by design, but outside the primary popover dashboard | Keep native `Form(.grouped)` idioms for new settings rows instead of reintroducing custom card containers |
 | Onboarding/setup | `SetupView` | Demo/Sandbox/Production choices, preflight rows, and local-storage disclosure use multiple callout blocks | First-run flow can feel card-heavy and marketing-like if choices duplicate each other | Keep boundary explanations, but consolidate duplicate choice surfaces before adding more setup panels |
 
 ## Extending the Design System
@@ -427,7 +474,7 @@ Checklist for contributors:
 
 ## Dark Mode
 
-PlaidBar runs on macOS, where dark mode usage is ~60%. All tokens must work in both appearances.
+VaultPeek runs on macOS, where dark mode usage is ~60%. All tokens must work in both appearances.
 
 ### Token Behavior by Appearance
 
@@ -511,7 +558,7 @@ Every element that uses color to convey meaning must have a secondary, non-color
 | AccountRow | "{institution} {account name}, balance {amount}" |
 | CreditCardRow | "{card name}, {balance} of {limit}, {percent} utilization, {status}" where status = "good" / "warning" / "high" |
 | TransactionRow | "{merchant}, {amount}, {category}, {date}" + "pending" if applicable |
-| Menu bar icon | "PlaidBar, net balance {amount}" |
+| Menu bar icon | "VaultPeek net cash {amount}. Status {summary}" (varies by summary mode) |
 | Utilization gauge | "Credit utilization {percent}, {status level}" |
 | Chart (donut) | "Spending by category. Largest: {category} at {percent}" |
 | Refresh button | "Refresh accounts" + "Last updated {time}" as hint |

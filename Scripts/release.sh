@@ -10,7 +10,7 @@ usage() {
     cat <<'EOF'
 Usage: ./Scripts/release.sh [--publish] [--allow-current-branch]
 
-Preflights the current PlaidBar release. With --publish, creates and pushes the
+Preflights the current VaultPeek release. With --publish, creates and pushes the
 version tag, then creates a GitHub release for ftchvs/PlaidBar.
 
 This script expects to run from a clean main branch after CI has passed.
@@ -79,32 +79,7 @@ if [[ -n "$(git status --porcelain)" ]]; then
     exit 1
 fi
 
-INFO_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Sources/PlaidBar/Resources/Info.plist)"
-INFO_BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' Sources/PlaidBar/Resources/Info.plist)"
-RUNTIME_VERSION="$(
-    sed -n 's/.*appVersion: String = "\([^"]*\)".*/\1/p' \
-        Sources/PlaidBarCore/Utilities/Constants.swift
-)"
-
-if [[ "$INFO_VERSION" != "$VERSION" ]]; then
-    echo "Info.plist version $INFO_VERSION does not match version.env $VERSION" >&2
-    exit 1
-fi
-
-if [[ "$INFO_BUILD" != "$BUILD" ]]; then
-    echo "Info.plist build $INFO_BUILD does not match version.env $BUILD" >&2
-    exit 1
-fi
-
-if [[ "$RUNTIME_VERSION" != "$VERSION" ]]; then
-    echo "PlaidBarConstants.appVersion $RUNTIME_VERSION does not match version.env $VERSION" >&2
-    exit 1
-fi
-
-if ! grep -Fq "tag: \"$TAG\"" Formula/plaidbar.rb; then
-    echo "Formula/plaidbar.rb does not reference $TAG" >&2
-    exit 1
-fi
+"$SCRIPT_DIR/verify-version-alignment.sh"
 
 echo "Running release gates for $TAG..."
 swift build -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors --disable-keychain
@@ -115,8 +90,11 @@ if [[ "${PLAIDBAR_RELEASE_SKIP_TESTS:-0}" == "1" ]]; then
 else
     swift test --skip-update --disable-keychain
 fi
-bash -n Scripts/*.sh Scripts/plaidbar-run
-ruby -c Formula/plaidbar.rb
+bash -n Scripts/*.sh Scripts/vaultpeek-run Scripts/plaidbar-run
+
+echo "Validating packaged VaultPeek.app bundle..."
+"$SCRIPT_DIR/package-app.sh"
+"$SCRIPT_DIR/validate-app-bundle.sh"
 
 if git rev-parse "$TAG" >/dev/null 2>&1; then
     echo "Tag $TAG already exists locally" >&2
@@ -135,11 +113,11 @@ if [[ "$PUBLISH" != "true" ]]; then
     exit 0
 fi
 
-git tag -a "$TAG" -m "PlaidBar $TAG"
+git tag -a "$TAG" -m "VaultPeek $TAG"
 git push origin "$TAG"
 gh release create "$TAG" \
     --repo ftchvs/PlaidBar \
-    --title "PlaidBar $TAG" \
+    --title "VaultPeek $TAG" \
     --generate-notes
 
 echo "Published $TAG."

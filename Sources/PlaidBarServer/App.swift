@@ -10,7 +10,7 @@ import PlaidBarCore
 struct PlaidBarServer: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "plaidbar-server",
-        abstract: "Run the local PlaidBar companion server.",
+        abstract: "Run the local VaultPeek companion server.",
         version: PlaidBarConstants.appVersion
     )
 
@@ -74,6 +74,10 @@ struct PlaidBarServer: AsyncParsableCommand {
         // API routes
         let api = router.group("api")
         api.add(middleware: APITokenMiddleware(authToken: serverConfig.authToken))
+        api.add(middleware: SetupStateMiddleware(
+            credentialDiagnosis: serverConfig.credentialDiagnosis,
+            plaidEnvironment: serverConfig.plaidEnvironment
+        ))
         LinkRoutes(
             plaidClient: plaidClient,
             tokenStore: tokenStore,
@@ -106,8 +110,18 @@ struct PlaidBarServer: AsyncParsableCommand {
         )
         app.addServices(fluent)
 
-        logger.info("PlaidBar server starting on http://127.0.0.1:\(serverConfig.port)")
+        logger.info("VaultPeek companion server starting on http://127.0.0.1:\(serverConfig.port)")
         logger.info("Environment: \(serverConfig.plaidEnvironment.rawValue)")
+        if let setupGuidance = serverConfig.credentialDiagnosis.setupGuidance(
+            environment: serverConfig.plaidEnvironment
+        ) {
+            logger.warning(
+                """
+                Starting in setup state: \(setupGuidance) \
+                /health and /api/status stay available; Plaid-backed routes return 503.
+                """
+            )
+        }
 
         try await app.runService()
     }

@@ -135,18 +135,18 @@ and `docs/autonomous-roadmap.md`.
 
 ### PR-010: Status And Diagnostics
 
-- [ ] T046: Keep `/api/status` limited to readiness metadata.
-- [ ] T047: Add or verify UI treatment for server offline, syncing, stale data,
+- [x] T046: Keep `/api/status` limited to readiness metadata.
+- [x] T047: Add or verify UI treatment for server offline, syncing, stale data,
   credentials missing, and linked item counts.
-- [ ] T048: Add a local-only diagnostic row for the active data directory.
-- [ ] T049: Make status refresh and connect actions reachable from the dashboard.
-- [ ] T050: Add tests that status presentation does not include sensitive IDs or
+- [x] T048: Add a local-only diagnostic row for the active data directory.
+- [x] T049: Make status refresh and connect actions reachable from the dashboard.
+- [x] T050: Add tests that status presentation does not include sensitive IDs or
   raw balances.
 
 ### PR-011: Local Data Controls
 
-- [ ] T051: Keep Settings visibly anchored on `~/.plaidbar/` or the configured
-  `PLAIDBAR_DATA_DIR`.
+- [ ] T051: Keep Settings visibly anchored on the default local data path or
+  the configured `PLAIDBAR_DATA_DIR`.
 - [ ] T052: Ensure copy and reveal actions avoid leaking secrets in labels or
   logs.
 - [ ] T053: Confirm reset/delete copy explains local-vs-Plaid-vs-bank
@@ -196,21 +196,21 @@ and `docs/autonomous-roadmap.md`.
 
 ### PR-016: Sandbox Reliability
 
-- [ ] T076: Verify sandbox setup succeeds from a clean temporary data directory.
-- [ ] T077: Add clearer failure handling for missing sandbox credentials.
-- [ ] T078: Verify sandbox transaction sync preserves cursor state.
-- [ ] T079: Add smoke-script coverage for one new sandbox readiness assertion.
-- [ ] T080: Document any remaining sandbox limitation without implying
+- [x] T076: Verify sandbox setup succeeds from a clean temporary data directory.
+- [x] T077: Add clearer failure handling for missing sandbox credentials.
+- [x] T078: Verify sandbox transaction sync preserves cursor state.
+- [x] T079: Add smoke-script coverage for one new sandbox readiness assertion.
+- [x] T080: Document any remaining sandbox limitation without implying
   production readiness.
 
 ### PR-017: Production Readiness Boundaries
 
-- [ ] T081: Keep production setup copy explicit about Plaid approval and real
+- [x] T081: Keep production setup copy explicit about Plaid approval and real
   financial data.
-- [ ] T082: Verify production mode uses separate storage from sandbox.
-- [ ] T083: Add a release checklist item for clean-profile production setup.
-- [ ] T084: Avoid notarization, appcast, or distribution claims until verified.
-- [ ] T085: Update troubleshooting for one production credential or mode failure.
+- [x] T082: Verify production mode uses separate storage from sandbox.
+- [x] T083: Add a release checklist item for clean-profile production setup.
+- [x] T084: Avoid notarization, appcast, or distribution claims until verified.
+- [x] T085: Update troubleshooting for one production credential or mode failure.
 
 ### PR-018: Accessibility And Keyboard Flow
 
@@ -263,19 +263,19 @@ and `docs/autonomous-roadmap.md`.
 
 ### PR-023: QA, CI, And Release Gates
 
-- [ ] T111: Keep `docs/qa-matrix.md` aligned with the current minimum PR gates.
-- [ ] T112: Add or update a local command for formula or package validation.
-- [ ] T113: Record known Swift toolchain baseline limitations accurately.
-- [ ] T114: Keep release notes honest about shipped behavior and deferred work.
-- [ ] T115: Add a final release-candidate checklist for privacy, security,
+- [x] T111: Keep `docs/qa-matrix.md` aligned with the current minimum PR gates.
+- [x] T112: Add or update a local command for DMG/app-bundle package validation.
+- [x] T113: Record known Swift toolchain baseline limitations accurately.
+- [x] T114: Keep release notes honest about shipped behavior and deferred work.
+- [x] T115: Add a final release-candidate checklist for privacy, security,
   screenshots, and local setup.
 
 ### PR-024: PR, Review, And Merge Hygiene
 
 - [x] T116: Ensure every autonomous PR includes task IDs, changed files, local
   checks, and secret-scan evidence.
-- [ ] T117: Require GitHub checks to be green before any merge attempt.
-- [ ] T118: Require a manual safety read of the diff before merging under scoped
+- [x] T117: Require GitHub checks to be green before any merge attempt.
+- [x] T118: Require a manual safety read of the diff before merging under scoped
   approval.
 - [ ] T119: Block merge when app code, docs, screenshots, or generated files
   include real private financial data.

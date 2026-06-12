@@ -2,8 +2,21 @@ import Foundation
 
 public enum DashboardStatusReadinessLevel: String, Codable, Sendable {
     case healthy
+    case loading
     case warning
     case blocked
+
+    /// Severity tier of the failure this level represents; `nil` for the
+    /// healthy level. Warnings are advisory (inline recovery next to the
+    /// affected module), blocked levels gate the connection or credential
+    /// path and may use chrome-level alert treatments.
+    public var errorSeverity: ErrorSeverity? {
+        switch self {
+        case .healthy, .loading: nil
+        case .warning: .advisory
+        case .blocked: .blocking
+        }
+    }
 }
 
 public enum DashboardStatusReadinessAction: String, Codable, Sendable {
@@ -27,6 +40,12 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
     public let primaryActionIconName: String?
     public let secondaryActions: [DashboardStatusReadinessAction]
 
+    /// Severity tier derived from the readiness level this mapping already
+    /// computed.
+    public var errorSeverity: ErrorSeverity? {
+        level.errorSeverity
+    }
+
     public init(
         level: DashboardStatusReadinessLevel,
         title: String,
@@ -47,6 +66,7 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
 
     public static func evaluate(
         isDemoMode: Bool,
+        isInitialLoad: Bool = false,
         serverConnected: Bool,
         credentialsConfigured: Bool?,
         linkedItemCount: Int,
@@ -71,6 +91,17 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
             )
         }
 
+        // The boot handshake outranks offline/stale verdicts: warning and
+        // blocked tints are reserved for states the user can act on, not for
+        // an in-flight first load.
+        if isInitialLoad {
+            return DashboardStatusReadiness(
+                level: .loading,
+                title: "Loading financial data",
+                detail: "Connecting to the local VaultPeek server and fetching the latest balances and transactions."
+            )
+        }
+
         if let authError = localServerAuthError(from: errorMessage) {
             return DashboardStatusReadiness(
                 level: .blocked,
@@ -84,7 +115,7 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
             return DashboardStatusReadiness(
                 level: .blocked,
                 title: "Server offline",
-                detail: "Start PlaidBarServer, then check the connection from this dashboard.",
+                detail: "Start the VaultPeek companion server, then check the connection from this dashboard.",
                 primaryAction: .checkServer
             )
         }
@@ -219,15 +250,17 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
         if normalized.contains("auth token is unavailable") {
             return (
                 "Local server auth missing",
-                "PlaidBar cannot read the local app-server auth token. Restart PlaidBarServer, then check the connection again."
+                "VaultPeek cannot read the local app-server auth token. Restart the VaultPeek companion server, then check the connection again."
             )
         }
 
         if normalized.contains("plaidbar server returned 401") ||
-            normalized.contains("plaidbar server returned 403") {
+            normalized.contains("plaidbar server returned 403") ||
+            normalized.contains("vaultpeek companion server returned 401") ||
+            normalized.contains("vaultpeek companion server returned 403") {
             return (
                 "Local server auth rejected",
-                "PlaidBar reached the local server, but the app-server auth token was rejected. Restart PlaidBarServer so the local token is regenerated."
+                "VaultPeek reached the local server, but the app-server auth token was rejected. Restart the VaultPeek companion server so the local token is regenerated."
             )
         }
 
@@ -289,7 +322,7 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
             return DashboardStatusReadiness(
                 level: .warning,
                 title: "Notifications blocked",
-                detail: "Local alerts are enabled, but macOS is blocking PlaidBar notifications. Enable PlaidBar in System Settings to recover alerts.",
+                detail: "Local alerts are enabled, but macOS is blocking VaultPeek notifications. Enable VaultPeek in System Settings to recover alerts.",
                 primaryAction: .openNotificationSettings,
                 primaryActionTitle: permission.recoveryActionTitle,
                 primaryActionIconName: permission.recoveryActionIconName,

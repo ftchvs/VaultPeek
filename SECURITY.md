@@ -1,6 +1,6 @@
 # Security
 
-PlaidBar is a local-first macOS menu bar app for sensitive financial data. Treat Plaid credentials, access tokens, account identifiers, balances, transaction data, and local database contents as private.
+VaultPeek (formerly PlaidBar) is a local-first macOS menu bar app for sensitive financial data. Treat Plaid credentials, access tokens, account identifiers, balances, transaction data, and local database contents as private.
 
 ## Supported Versions
 
@@ -34,18 +34,21 @@ Use GitHub private vulnerability reporting if available, or contact the reposito
 
 ## Security Model
 
-- PlaidBar has no hosted backend, analytics, telemetry, or tracking.
+- VaultPeek has no hosted backend, analytics, telemetry, or tracking.
 - The companion server should bind to `127.0.0.1` only.
 - Plaid secrets and access tokens must not be embedded in the app binary.
-- The local server keeps Plaid item records in environment-scoped SQLite files under `~/.plaidbar/`:
-  `plaidbar-sandbox.sqlite` for sandbox and `plaidbar-production.sqlite` for production.
+- The local server keeps Plaid item records in environment-scoped SQLite files under `~/.vaultpeek/`
+  (default since the VaultPeek rename; legacy default installs are migrated from `~/.plaidbar/`):
+  `plaidbar-sandbox.sqlite` for sandbox and `plaidbar-production.sqlite` for production. The SQLite
+  filenames intentionally keep the `plaidbar-` prefix.
 - On macOS builds with Security framework support, Plaid access-token bytes are
   stored in Keychain under the `PlaidBar.PlaidAccessToken` service and SQLite
   stores only a `keychain:<item_id>` reference. Build/test environments without
   Keychain support may fall back to local SQLite token storage, so release
   claims must distinguish runtime Keychain behavior from fallback builds.
 - Existing legacy `plaidbar.sqlite` data, SQLite sidecar files, and matching transaction cache are copied into a scoped database only when the legacy environment is explicit (`PLAIDBAR_MIGRATE_LEGACY_DATABASE=sandbox|production`) or can be inferred from the existing transaction-cache context. Ambiguous legacy databases are left untouched to avoid sandbox/production token crossover. Explicit migration can replace an existing scoped store, backs up the previous scoped SQLite store and transaction cache before copying legacy data, and writes a migration marker so restarts do not reapply stale legacy data.
-- The app/server auth token is generated locally under `~/.plaidbar/auth-token`.
+- The app/server auth token is generated locally under `~/.vaultpeek/auth-token`
+  (or `$PLAIDBAR_DATA_DIR/auth-token`).
 - `/api/status` is authenticated and should expose only readiness metadata:
   version, environment, credential availability, storage path, linked item
   count, synced item count, sync readiness, and last sync time. It must not

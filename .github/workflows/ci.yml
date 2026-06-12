@@ -27,9 +27,10 @@ jobs:
 
       - name: Packaging checks
         run: |
-          bash -n Scripts/*.sh Scripts/plaidbar-run
-          ruby -c Formula/plaidbar.rb
-          brew style Formula/plaidbar.rb
+          bash -n Scripts/*.sh Scripts/vaultpeek-run Scripts/plaidbar-run
+
+      - name: Version metadata alignment
+        run: ./Scripts/verify-version-alignment.sh
 
       - name: Clear stale SwiftPM binary artifact cache
         run: |
@@ -53,3 +54,8 @@ jobs:
           PLAID_SECRET: ci_smoke_secret
           PLAIDBAR_SMOKE_PORT: 18487
         run: ./Scripts/smoke-sandbox.sh
+
+      - name: App bundle package validation
+        run: |
+          ./Scripts/package-app.sh
+          ./Scripts/validate-app-bundle.sh

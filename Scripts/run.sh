@@ -26,7 +26,7 @@ usage() {
     cat <<'EOF'
 Usage: ./Scripts/run.sh [--sandbox] [--port PORT]
 
-Builds and starts the PlaidBar server and menu bar app from a source checkout.
+Builds and starts the VaultPeek server and menu bar app from a source checkout.
 Set PLAID_CLIENT_ID and PLAID_SECRET before running against sandbox or
 production Plaid data.
 
@@ -90,11 +90,11 @@ if [[ -z "${PLAID_CLIENT_ID:-}" || -z "${PLAID_SECRET:-}" ]]; then
     exit 1
 fi
 
-echo "Building PlaidBar..."
+echo "Building VaultPeek..."
 swift build 2>&1
 
 echo ""
-echo "Starting PlaidBar server..."
+echo "Starting VaultPeek server..."
 swift run PlaidBarServer $SANDBOX_FLAG --port "$SERVER_PORT" &
 SERVER_PID=$!
 
@@ -104,14 +104,14 @@ for _ in {1..30}; do
         break
     fi
     if ! kill -0 "$SERVER_PID" 2>/dev/null; then
-        echo "PlaidBar server exited before becoming healthy."
+        echo "VaultPeek server exited before becoming healthy."
         exit 1
     fi
     sleep 1
 done
 
 curl -fsS "http://127.0.0.1:$SERVER_PORT/health" >/dev/null
-DATA_DIR="${PLAIDBAR_DATA_DIR:-$HOME/.plaidbar}"
+DATA_DIR="${PLAIDBAR_DATA_DIR:-$HOME/.vaultpeek}"
 case "$DATA_DIR" in
     "~")
         DATA_DIR="$HOME"
@@ -144,12 +144,12 @@ print(
 )
 PY
 
-echo "Starting PlaidBar app..."
+echo "Starting VaultPeek app..."
 swift run PlaidBar &
 APP_PID=$!
 
 echo ""
-echo "PlaidBar is running!"
+echo "VaultPeek is running!"
 echo "  Server PID: $SERVER_PID"
 echo "  App PID: $APP_PID"
 echo ""

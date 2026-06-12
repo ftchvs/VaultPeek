@@ -1,6 +1,12 @@
 # Architecture
 
-Deep dive into PlaidBar's design decisions and implementation details.
+Deep dive into VaultPeek's design decisions and implementation details.
+
+VaultPeek was renamed from PlaidBar; SwiftPM target names (`PlaidBar`,
+`PlaidBarServer`, `PlaidBarCore`), `PLAIDBAR_*` environment variables, SQLite
+filenames, and the Keychain service intentionally keep the old name for
+compatibility. See the "Naming compatibility" section in
+[README.md](README.md).
 
 ## Design Principles
 
@@ -19,7 +25,7 @@ Plaid's security model requires that `client_secret` and `access_token` never ex
 User clicks "Refresh"
         │
         ▼
-┌─ PlaidBar.app ──────────────────────┐
+┌─ VaultPeek.app ─────────────────────┐
 │  GET http://127.0.0.1:8484/api/accounts  │
 └──────────────────┬──────────────────┘
                    │ localhost only
@@ -148,13 +154,11 @@ Single `@Observable` state object injected via SwiftUI `@Environment`. No Combin
 ```
 MenuBarExtra
 ├── MenuBarLabel (icon + balance text)
-└── MainPopover
+└── MainPopover (dashboard-first surface)
     ├── SetupView (if !isSetupComplete)
-    └── TabContainer
-        ├── AccountsView (grouped by type, net balance)
-        ├── TransactionsView (search, group by date)
-        ├── SpendingView (donut chart, category breakdown)
-        └── CreditView (utilization bars, warnings)
+    ├── DashboardNavBand (Cash/Credit/Savings/Debt/Status filters)
+    ├── AttentionQueueView (degraded-item recovery)
+    └── AccountDetailFlyout (per-account drill-in)
 ```
 
 **Background Refresh:**
@@ -231,11 +235,16 @@ auth-token path.
 ### Data Storage
 
 ```
-~/.plaidbar/
+~/.vaultpeek/
 ├── plaidbar-sandbox.sqlite       # Sandbox items + sync cursors
 ├── plaidbar-production.sqlite    # Production items + sync cursors
 └── auth-token         # App ↔ server shared secret
 ```
+
+`~/.vaultpeek/` is the default since the VaultPeek rename. Default installs
+copy missing files from the legacy `~/.plaidbar/` directory on startup without
+overwriting newer files; `PLAIDBAR_DATA_DIR` still overrides the location, and
+the SQLite filenames intentionally keep the `plaidbar-` prefix.
 
 On upgrade, a legacy `plaidbar.sqlite`, its SQLite sidecar files, and its
 matching transaction cache are copied into an environment-scoped database only

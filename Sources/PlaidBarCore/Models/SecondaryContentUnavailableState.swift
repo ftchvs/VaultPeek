@@ -28,6 +28,9 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
     public let actionTitle: String
     public let actionIconName: String
     public let actionAccessibilityHint: String?
+    /// True while the first fetch is in flight: views render the copy as a
+    /// passive loading state and hide the recovery action.
+    public let isLoading: Bool
 
     public init(
         title: String,
@@ -36,7 +39,8 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
         action: SecondaryContentUnavailableAction,
         actionTitle: String,
         actionIconName: String,
-        actionAccessibilityHint: String? = nil
+        actionAccessibilityHint: String? = nil,
+        isLoading: Bool = false
     ) {
         self.title = title
         self.detail = detail
@@ -45,15 +49,24 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
         self.actionTitle = actionTitle
         self.actionIconName = actionIconName
         self.actionAccessibilityHint = actionAccessibilityHint
+        self.isLoading = isLoading
     }
 
     public static func accounts(
         isDemoMode: Bool,
+        isInitialLoad: Bool = false,
         serverConnected: Bool,
         linkedItemCount: Int
     ) -> SecondaryContentUnavailableState {
+        if !isDemoMode, isInitialLoad {
+            return loadingState(
+                title: "Loading accounts",
+                detail: "Fetching linked account balances from the local VaultPeek server."
+            )
+        }
+
         if !isDemoMode, !serverConnected {
-            return serverOfflineState(detail: "Start PlaidBarServer, then check the connection before account balances can load.")
+            return serverOfflineState(detail: "Start the VaultPeek companion server, then check the connection before account balances can load.")
         }
 
         if linkedItemCount == 0 {
@@ -62,7 +75,7 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
 
         return SecondaryContentUnavailableState(
             title: "Accounts not loaded",
-            detail: "PlaidBar found a linked bank, but no balances are available yet. Refresh accounts to load the latest balances.",
+            detail: "VaultPeek found a linked bank, but no balances are available yet. Refresh accounts to load the latest balances.",
             iconName: "tray",
             action: .refreshAccounts,
             actionTitle: "Refresh Accounts",
@@ -73,12 +86,20 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
 
     public static func credit(
         isDemoMode: Bool,
+        isInitialLoad: Bool = false,
         serverConnected: Bool,
         linkedItemCount: Int,
         accountCount: Int
     ) -> SecondaryContentUnavailableState {
+        if !isDemoMode, isInitialLoad {
+            return loadingState(
+                title: "Loading credit accounts",
+                detail: "Fetching credit accounts and utilization from the local VaultPeek server."
+            )
+        }
+
         if !isDemoMode, !serverConnected {
-            return serverOfflineState(detail: "Start PlaidBarServer, then check the connection before credit utilization can load.")
+            return serverOfflineState(detail: "Start the VaultPeek companion server, then check the connection before credit utilization can load.")
         }
 
         if linkedItemCount == 0 {
@@ -118,6 +139,7 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
 
     public static func transactions(
         isDemoMode: Bool,
+        isInitialLoad: Bool = false,
         serverConnected: Bool,
         linkedItemCount: Int,
         accountCount: Int,
@@ -139,12 +161,19 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
             )
         }
 
+        if !isDemoMode, isInitialLoad {
+            return loadingState(
+                title: "Loading transactions",
+                detail: "Syncing recent transaction history from the local VaultPeek server."
+            )
+        }
+
         if let errorState = recentActionFailure(from: errorMessage) {
             return errorState
         }
 
         if !isDemoMode, !serverConnected {
-            return serverOfflineState(detail: "Start PlaidBarServer, then check the connection before syncing transaction history.")
+            return serverOfflineState(detail: "Start the VaultPeek companion server, then check the connection before syncing transaction history.")
         }
 
         if linkedItemCount == 0 {
@@ -188,6 +217,7 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
 
     public static func spendingActivity(
         isDemoMode: Bool,
+        isInitialLoad: Bool = false,
         serverConnected: Bool,
         linkedItemCount: Int,
         accountCount: Int,
@@ -195,12 +225,19 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
         transactionCount: Int,
         errorMessage: String?
     ) -> SecondaryContentUnavailableState {
+        if !isDemoMode, isInitialLoad {
+            return loadingState(
+                title: "Loading spending activity",
+                detail: "Syncing transactions to build spending and cashflow views."
+            )
+        }
+
         if let errorState = recentActionFailure(from: errorMessage) {
             return errorState
         }
 
         if !isDemoMode, !serverConnected {
-            return serverOfflineState(detail: "Start PlaidBarServer, then check the connection before spending activity can sync.")
+            return serverOfflineState(detail: "Start the VaultPeek companion server, then check the connection before spending activity can sync.")
         }
 
         if linkedItemCount == 0 {
@@ -251,6 +288,7 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
 
     public static func recurring(
         isDemoMode: Bool,
+        isInitialLoad: Bool = false,
         serverConnected: Bool,
         linkedItemCount: Int,
         accountCount: Int,
@@ -258,12 +296,19 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
         transactionCount: Int,
         errorMessage: String?
     ) -> SecondaryContentUnavailableState {
+        if !isDemoMode, isInitialLoad {
+            return loadingState(
+                title: "Loading recurring charges",
+                detail: "Syncing transaction history to detect recurring charges."
+            )
+        }
+
         if let errorState = recentActionFailure(from: errorMessage) {
             return errorState
         }
 
         if !isDemoMode, !serverConnected {
-            return serverOfflineState(detail: "Start PlaidBarServer, then check the connection before detecting recurring charges.")
+            return serverOfflineState(detail: "Start the VaultPeek companion server, then check the connection before detecting recurring charges.")
         }
 
         if linkedItemCount == 0 {
@@ -285,7 +330,7 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
         if syncedItemCount == 0 || transactionCount == 0 {
             return SecondaryContentUnavailableState(
                 title: "No synced transactions",
-                detail: "Recurring detection needs transaction history. Sync transactions so PlaidBar can look for repeated charges.",
+                detail: "Recurring detection needs transaction history. Sync transactions so VaultPeek can look for repeated charges.",
                 iconName: "tray",
                 action: .syncTransactions,
                 actionTitle: "Sync Transactions",
@@ -296,12 +341,25 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
 
         return SecondaryContentUnavailableState(
             title: "No recurring charges found",
-            detail: "No repeated merchant charges were detected. PlaidBar usually needs at least 2 months of history before marking a charge as recurring.",
+            detail: "No repeated merchant charges were detected. VaultPeek usually needs at least 2 months of history before marking a charge as recurring.",
             iconName: "arrow.clockwise",
             action: .syncTransactions,
             actionTitle: "Sync Latest Transactions",
             actionIconName: "arrow.triangle.2.circlepath",
             actionAccessibilityHint: "Checks for newer transactions that may complete a recurring pattern."
+        )
+    }
+
+    private static func loadingState(title: String, detail: String) -> SecondaryContentUnavailableState {
+        SecondaryContentUnavailableState(
+            title: title,
+            detail: detail,
+            iconName: "arrow.triangle.2.circlepath",
+            action: .refresh,
+            actionTitle: "Refresh",
+            actionIconName: "arrow.clockwise",
+            actionAccessibilityHint: "Reloads the dashboard data.",
+            isLoading: true
         )
     }
 
@@ -313,7 +371,7 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
             action: .checkServer,
             actionTitle: "Check Connection",
             actionIconName: "server.rack",
-            actionAccessibilityHint: "Checks whether PlaidBarServer is reachable."
+            actionAccessibilityHint: "Checks whether the VaultPeek companion server is reachable."
         )
     }
 

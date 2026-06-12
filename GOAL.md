@@ -1,8 +1,8 @@
-# PlaidBar Goal
+# VaultPeek Goal
 
 ## North Star
 
-Build PlaidBar into a local-first macOS menu bar dashboard for Plaid data: RepoBar/CodexBar for personal finance.
+Build VaultPeek (formerly PlaidBar) into a local-first macOS menu bar dashboard for Plaid data: RepoBar/CodexBar for personal finance.
 
 The app should make the user's financial state glanceable without becoming a full budgeting product. One click should answer:
 
@@ -20,7 +20,7 @@ quiet native macOS polish, and fast account/card drill-down.
 
 ## Product Positioning
 
-PlaidBar is not a cloud finance platform, budgeting app, portfolio tracker, or analytics service. It is a native macOS utility for a single user who wants fast, private visibility into their own Plaid-connected accounts.
+VaultPeek is not a cloud finance platform, budgeting app, portfolio tracker, or analytics service. It is a native macOS utility for a single user who wants fast, private visibility into their own Plaid-connected accounts.
 
 The public repo should prove three things:
 
@@ -38,7 +38,7 @@ The public repo should prove three things:
 
 ## Design Direction
 
-PlaidBar should feel like a compact financial instrument, not a bank website squeezed into a popover.
+VaultPeek should feel like a compact financial instrument, not a bank website squeezed into a popover.
 
 The near-term visual target is RepoBar-style density adapted to finance:
 
@@ -66,7 +66,7 @@ Prioritize these before adding new finance features:
    - Reshape the main popover around a heatmap header, segmented finance filters, and dense account/card rows.
    - Replace the tab-first mental model with one glanceable overview while preserving deeper screens through row selection.
    - Make credit cards, savings/checking, and sync health readable from the same list.
-   - Use the attached RepoBar screenshot and `https://repobar.app` as the visual reference, but keep PlaidBar finance semantics.
+   - Use the attached RepoBar screenshot and `https://repobar.app` as the visual reference, but keep VaultPeek finance semantics.
 
 2. **Top status strip**
    - Show environment: Demo, Sandbox, or Production.
@@ -100,7 +100,7 @@ Prioritize these before adding new finance features:
    - Credit: explain if no credit accounts are linked.
 
 8. **Trust-first settings**
-   - Add a local data section with `~/.plaidbar/` storage path, reset/delete options, and clear warnings.
+   - Add a local data section with the `~/.vaultpeek/` storage path, reset/delete options, and clear warnings.
    - Keep dangerous actions explicit and confirmation-gated.
 
 9. **Long-running production loop**
@@ -131,7 +131,7 @@ Prioritize these before adding new finance features:
 
 ## First Milestone
 
-Make `main` trustworthy as a public open-source project:
+Make `main` trustworthy as a proprietary product codebase:
 
 - Demo mode runs without Plaid.
 - Sandbox mode fails fast without credentials and works with real sandbox credentials.

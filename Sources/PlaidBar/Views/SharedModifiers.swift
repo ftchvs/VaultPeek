@@ -1,5 +1,95 @@
-import SwiftUI
 import PlaidBarCore
+import SwiftUI
+
+// MARK: - Glass Surface Ranks
+
+/// The popover's three-rank surface system. Ranks use *hierarchical* shape
+/// styles (not flat `Color` fills) so surfaces participate in macOS vibrancy
+/// over the `.regularMaterial` popover root, and respond to Reduce
+/// Transparency / Increase Contrast for free. Default surfaces draw no
+/// stroke — separation comes from spacing; hairlines are reserved for
+/// emphasized (attention) states.
+enum SurfaceRank {
+    /// Primary content panels: account list, fly-out, heatmap.
+    case raised
+    /// Quiet secondary surfaces: metric strips, legends, chips.
+    case inset
+    /// Attention states only: tinted fill plus hairline.
+    case emphasized(Color)
+
+    var fill: AnyShapeStyle {
+        // Fills sit over the popover's `.ultraThinMaterial` root: the thinner
+        // material lets the desktop through, so panels need a little more body
+        // than over `.regularMaterial` to keep separation and keep `.secondary`
+        // text legible over a busy wallpaper.
+        switch self {
+        case .raised: AnyShapeStyle(.quaternary)
+        case .inset: AnyShapeStyle(.quaternary.opacity(0.55))
+        case let .emphasized(tint): AnyShapeStyle(tint.opacity(0.12))
+        }
+    }
+
+    var stroke: Color? {
+        switch self {
+        case .raised, .inset: nil
+        case let .emphasized(tint): tint.opacity(0.16)
+        }
+    }
+}
+
+private struct GlassSurface: ViewModifier {
+    let rank: SurfaceRank
+    let cornerRadius: CGFloat
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius)
+
+        // Liquid Glass is a macOS 26+ progressive enhancement. Raised/inset
+        // ranks carry no underlay fill so the material reads clean, but the
+        // emphasized rank keeps its tinted wash — attention states must
+        // survive the glass path.
+        #if compiler(>=6.3) && canImport(SwiftUI, _version: 7.0)
+            if #available(macOS 26.0, *) {
+                content
+                    .background(emphasizedFill ?? AnyShapeStyle(.clear), in: shape)
+                    .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
+                    .overlay {
+                        if let stroke = rank.stroke {
+                            shape.stroke(stroke, lineWidth: 1)
+                        }
+                    }
+            } else {
+                fallback(content: content, shape: shape)
+            }
+        #else
+            fallback(content: content, shape: shape)
+        #endif
+    }
+
+    private var emphasizedFill: AnyShapeStyle? {
+        guard case let .emphasized(tint) = rank else { return nil }
+        return AnyShapeStyle(tint.opacity(0.10))
+    }
+
+    private func fallback(content: Content, shape: RoundedRectangle) -> some View {
+        content
+            .background(rank.fill, in: shape)
+            .overlay {
+                if let stroke = rank.stroke {
+                    shape.stroke(stroke, lineWidth: 1)
+                }
+            }
+    }
+}
+
+extension View {
+    func glassSurface(
+        _ rank: SurfaceRank = .raised,
+        cornerRadius: CGFloat = Radius.panel
+    ) -> some View {
+        modifier(GlassSurface(rank: rank, cornerRadius: cornerRadius))
+    }
+}
 
 // MARK: - Native Panel Surface
 
@@ -9,7 +99,6 @@ struct NativePanelSurface: ViewModifier {
     let stroke: Color
     let useLiquidGlass: Bool
 
-    @ViewBuilder
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius)
 
@@ -18,18 +107,18 @@ struct NativePanelSurface: ViewModifier {
             // gate. PlaidBar supports macOS 15, where the fallback fill/material
             // surface below must remain the active type-checked path.
             #if compiler(>=6.3) && canImport(SwiftUI, _version: 7.0)
-            if #available(macOS 26.0, *) {
-                content
-                    .background(fill, in: shape)
-                    .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
-                    .overlay {
-                        shape.stroke(stroke, lineWidth: 1)
-                    }
-            } else {
-                fallback(content: content, shape: shape)
-            }
+                if #available(macOS 26.0, *) {
+                    content
+                        .background(fill, in: shape)
+                        .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
+                        .overlay {
+                            shape.stroke(stroke, lineWidth: 1)
+                        }
+                } else {
+                    fallback(content: content, shape: shape)
+                }
             #else
-            fallback(content: content, shape: shape)
+                fallback(content: content, shape: shape)
             #endif
         } else {
             fallback(content: content, shape: shape)
@@ -46,6 +135,9 @@ struct NativePanelSurface: ViewModifier {
 }
 
 extension View {
+    /// Legacy fill+stroke surface treatment. New surfaces should use the
+    /// rank-based `glassSurface(_:cornerRadius:)` vibrancy system above;
+    /// this remains for setup/attention surfaces not yet migrated.
     func nativePanelSurface(
         cornerRadius: CGFloat = SurfaceTokens.panelCornerRadius,
         fill: AnyShapeStyle = AnyShapeStyle(SurfaceTokens.panelFill()),
@@ -78,21 +170,28 @@ extension View {
 // MARK: - Hover Highlight
 
 struct HoverHighlight: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovered = false
+    var cornerRadius: CGFloat = Radius.control
 
     func body(content: Content) -> some View {
         content
             .contentShape(Rectangle())
-            .background(isHovered ? Color.primary.opacity(0.04) : .clear)
+            .background(
+                .quaternary.opacity(isHovered ? 0.55 : 0),
+                in: RoundedRectangle(cornerRadius: cornerRadius)
+            )
             .onHover { hovering in
-                isHovered = hovering
+                withAnimation(MotionTokens.animation(MotionTokens.micro, reduceMotion: reduceMotion)) {
+                    isHovered = hovering
+                }
             }
     }
 }
 
 extension View {
-    func hoverHighlight() -> some View {
-        modifier(HoverHighlight())
+    func hoverHighlight(cornerRadius: CGFloat = Radius.control) -> some View {
+        modifier(HoverHighlight(cornerRadius: cornerRadius))
     }
 }
 
@@ -100,12 +199,17 @@ extension View {
 
 struct RefreshIcon: View {
     let isLoading: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var rotation: Double = 0
 
     var body: some View {
+        // Under Reduce Motion the infinite spin is replaced by a static
+        // dimmed state — loading is still visible, nothing moves.
         Image(systemName: "arrow.clockwise")
             .rotationEffect(.degrees(rotation))
+            .opacity(reduceMotion && isLoading ? 0.5 : 1)
             .onChange(of: isLoading) { _, loading in
+                guard !reduceMotion else { return }
                 if loading {
                     withAnimation(.linear(duration: 0.8).repeatForever(autoreverses: false)) {
                         rotation = 360
@@ -117,7 +221,7 @@ struct RefreshIcon: View {
                 }
             }
             .onAppear {
-                if isLoading {
+                if isLoading, !reduceMotion {
                     withAnimation(.linear(duration: 0.8).repeatForever(autoreverses: false)) {
                         rotation = 360
                     }
@@ -139,11 +243,20 @@ struct SecondaryUnavailableView: View {
             Text(presentation.detail)
                 .multilineTextAlignment(.center)
         } actions: {
-            actionButton
+            // Loading is passive: no recovery action until the first fetch
+            // delivers a verdict the user can act on.
+            if !presentation.isLoading {
+                actionButton
+            }
         }
         .padding()
         .frame(maxWidth: .infinity, minHeight: 180)
         .accessibilityElement(children: .contain)
+        .task(id: presentation.isLoading) {
+            guard presentation.isLoading else { return }
+            await Task.yield()
+            AccessibilityNotification.Announcement("\(presentation.title). \(presentation.detail)").post()
+        }
     }
 
     @ViewBuilder

@@ -38,7 +38,7 @@ public struct LocalTrustReceipt: Equatable, Sendable {
 
         return LocalTrustReceipt(
             title: "Local Trust Receipt",
-            subtitle: "PlaidBar keeps its control plane on this Mac.",
+            subtitle: "VaultPeek keeps its control plane on this Mac.",
             rows: [
                 Row(
                     id: "storage",
@@ -49,7 +49,7 @@ public struct LocalTrustReceipt: Equatable, Sendable {
                 Row(
                     id: "network",
                     title: "Network boundary",
-                    detail: "No PlaidBar-hosted backend, analytics, telemetry, cloud sync, or cloud dashboard.",
+                    detail: "No VaultPeek-hosted backend, analytics, telemetry, cloud sync, or cloud dashboard.",
                     systemImage: "network.slash"
                 ),
                 Row(
@@ -61,7 +61,7 @@ public struct LocalTrustReceipt: Equatable, Sendable {
                 Row(
                     id: "reset",
                     title: "Reset boundary",
-                    detail: "Reset clears PlaidBar data caches and stored access-token entries when present, but preserves server.conf and app/server auth.",
+                    detail: "Reset clears VaultPeek data caches and stored access-token entries when present, but preserves server.conf and app/server auth.",
                     systemImage: "arrow.counterclockwise"
                 ),
             ],

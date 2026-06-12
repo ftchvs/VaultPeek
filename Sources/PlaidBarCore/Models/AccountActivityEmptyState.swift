@@ -25,6 +25,7 @@ public struct AccountActivityEmptyState: Equatable, Sendable {
     public static func evaluate(
         transactionCount: Int,
         isDemoMode: Bool,
+        isInitialLoad: Bool = false,
         serverConnected: Bool,
         connectionLevel: AccountConnectionLevel,
         accountDisplayName: String
@@ -40,10 +41,21 @@ public struct AccountActivityEmptyState: Equatable, Sendable {
             )
         }
 
+        // The first sync outranks offline/stale messaging: activity that has
+        // not arrived yet reads as loading, not as a degraded connection.
+        if isInitialLoad {
+            return AccountActivityEmptyState(
+                title: "Loading activity",
+                detail: "Syncing recent transactions for \(accountDisplayName).",
+                iconName: "arrow.triangle.2.circlepath",
+                tone: .loading
+            )
+        }
+
         guard serverConnected else {
             return AccountActivityEmptyState(
                 title: "Server offline",
-                detail: "Start PlaidBarServer, then refresh to load recent activity for \(accountDisplayName).",
+                detail: "Start the VaultPeek companion server, then refresh to load recent activity for \(accountDisplayName).",
                 iconName: "server.rack",
                 tone: .offline
             )
@@ -53,7 +65,7 @@ public struct AccountActivityEmptyState: Equatable, Sendable {
         case .loginRequired:
             return AccountActivityEmptyState(
                 title: "Reconnect to sync activity",
-                detail: "Plaid needs a fresh bank login before PlaidBar can update transactions for \(accountDisplayName).",
+                detail: "Plaid needs a fresh bank login before VaultPeek can update transactions for \(accountDisplayName).",
                 iconName: "person.crop.circle.badge.exclamationmark",
                 tone: .warning
             )
@@ -67,7 +79,7 @@ public struct AccountActivityEmptyState: Equatable, Sendable {
         case .stale:
             return AccountActivityEmptyState(
                 title: "Activity may be stale",
-                detail: "Refresh PlaidBar to pull the latest transactions for \(accountDisplayName).",
+                detail: "Refresh VaultPeek to pull the latest transactions for \(accountDisplayName).",
                 iconName: "clock.badge.exclamationmark",
                 tone: .warning
             )

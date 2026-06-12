@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
-# Validate that a local PlaidBar.app bundle can resolve its embedded frameworks.
+# Validate that a local VaultPeek.app bundle can resolve its embedded frameworks.
 set -euo pipefail
 
-APP_DIR="${1:-}"
-if [ -z "$APP_DIR" ]; then
-    echo "Usage: $0 path/to/PlaidBar.app" >&2
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+
+APP_DIR="${1:-$PROJECT_DIR/.build/VaultPeek.app}"
+if [ ! -d "$APP_DIR" ]; then
+    echo "Usage: $0 [path/to/VaultPeek.app]" >&2
+    echo "No app bundle found at $APP_DIR — run ./Scripts/package-app.sh first." >&2
     exit 64
 fi
 
@@ -12,6 +16,7 @@ APP_BINARY="$APP_DIR/Contents/MacOS/PlaidBar"
 SERVER_BINARY="$APP_DIR/Contents/MacOS/PlaidBarServer"
 SPARKLE_FRAMEWORK="$APP_DIR/Contents/Frameworks/Sparkle.framework"
 INFO_PLIST="$APP_DIR/Contents/Info.plist"
+APP_ICON="$APP_DIR/Contents/Resources/AppIcon.icns"
 
 if [ ! -f "$INFO_PLIST" ]; then
     echo "Missing Info.plist at $INFO_PLIST" >&2
@@ -19,7 +24,17 @@ if [ ! -f "$INFO_PLIST" ]; then
 fi
 
 if [ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$INFO_PLIST" 2>/dev/null || true)" != "PlaidBar" ]; then
-    echo "PlaidBar.app Info.plist must set CFBundleExecutable to PlaidBar" >&2
+    echo "VaultPeek.app Info.plist must keep CFBundleExecutable as PlaidBar until the binary rename slice lands" >&2
+    exit 1
+fi
+
+if [ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$INFO_PLIST" 2>/dev/null || true)" != "AppIcon" ]; then
+    echo "VaultPeek.app Info.plist must set CFBundleIconFile to AppIcon" >&2
+    exit 1
+fi
+
+if [ ! -f "$APP_ICON" ]; then
+    echo "Missing app icon at $APP_ICON" >&2
     exit 1
 fi
 
@@ -45,9 +60,15 @@ if ! otool -L "$APP_BINARY" | grep -q "@rpath/Sparkle.framework"; then
 fi
 
 if ! otool -l "$APP_BINARY" | grep -q "@executable_path/../Frameworks"; then
-    echo "PlaidBar.app is missing @executable_path/../Frameworks rpath" >&2
+    echo "VaultPeek.app is missing @executable_path/../Frameworks rpath" >&2
     otool -l "$APP_BINARY" >&2
     exit 1
 fi
 
-echo "Validated PlaidBar.app bundle at $APP_DIR"
+if ! codesign --verify --deep --strict "$APP_DIR" >/dev/null 2>&1; then
+    echo "Code signature failed to verify for $APP_DIR (ad-hoc or Developer ID)" >&2
+    codesign --verify --deep --strict --verbose=2 "$APP_DIR" >&2 || true
+    exit 1
+fi
+
+echo "Validated VaultPeek.app bundle at $APP_DIR"

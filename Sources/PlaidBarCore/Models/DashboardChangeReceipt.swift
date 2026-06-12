@@ -52,7 +52,7 @@ public struct DashboardChangeReceipt: Equatable, Sendable {
                 id: "baseline",
                 label: "Baseline",
                 value: "Saved",
-                accessibilityText: "First local snapshot saved. PlaidBar will compare future local snapshots against this baseline."
+                accessibilityText: "First local snapshot saved. VaultPeek will compare future local snapshots against this baseline."
             )]
 
             if degradedItemCount > 0 {

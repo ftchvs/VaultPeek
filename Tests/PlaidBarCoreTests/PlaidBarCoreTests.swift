@@ -172,7 +172,7 @@ struct PlaidBarCoreTests {
 
         #expect(presentation?.title == "Server offline")
         #expect(presentation?.tone == .offline)
-        #expect(presentation?.detail.contains("Start PlaidBarServer") == true)
+        #expect(presentation?.detail.contains("Start the VaultPeek companion server") == true)
     }
 
     @Test("Account activity empty state explains login recovery")
@@ -821,7 +821,7 @@ struct PlaidBarCoreTests {
 
         #expect(DashboardDrillInAction.reconnect.accessibilityLabel(accountDisplayName: displayName) == "Reconnect Everyday Checking")
         #expect(DashboardDrillInAction.remove.accessibilityLabel(accountDisplayName: displayName) == "Remove institution for Everyday Checking")
-        #expect(DashboardDrillInAction.settings.accessibilityLabel(accountDisplayName: displayName) == "Open PlaidBar settings from Everyday Checking")
+        #expect(DashboardDrillInAction.settings.accessibilityLabel(accountDisplayName: displayName) == "Open VaultPeek settings from Everyday Checking")
         #expect(DashboardDrillInAction.remove.accessibilityHint.contains("Requires confirmation"))
     }
 
@@ -835,7 +835,7 @@ struct PlaidBarCoreTests {
             accountDisplayName: "Everyday Checking"
         )
 
-        #expect(presentation?.accessibilityLabel == "Server offline. Start PlaidBarServer, then refresh to load recent activity for Everyday Checking.")
+        #expect(presentation?.accessibilityLabel == "Server offline. Start the VaultPeek companion server, then refresh to load recent activity for Everyday Checking.")
     }
 
     @Test("Account presentation keeps credit metadata readable without due dates")
@@ -903,12 +903,12 @@ struct PlaidBarCoreTests {
         let collapsed = DashboardAccountDrillInPath.presentation(for: account, isSelected: false)
         let expanded = DashboardAccountDrillInPath.presentation(for: account, isSelected: true)
 
-        #expect(collapsed.accessibilityHint == "Press Return or Space to open the account drill-in below this row.")
+        #expect(collapsed.accessibilityHint == "Press Return or Space to open the account details panel beside the dashboard.")
         #expect(collapsed.accessibilityActionName == "Open account details")
         #expect(collapsed.pointerHelp == "Open details for Everyday")
-        #expect(expanded.accessibilityHint == "Press Return or Space to collapse the account drill-in.")
-        #expect(expanded.accessibilityActionName == "Collapse account details")
-        #expect(expanded.pointerHelp == "Collapse details for Everyday")
+        #expect(expanded.accessibilityHint == "Press Return or Space to close the account details panel.")
+        #expect(expanded.accessibilityActionName == "Close account details")
+        #expect(expanded.pointerHelp == "Close details for Everyday")
         #expect(!collapsed.pointerHelp.contains(account.id))
         #expect(!collapsed.pointerHelp.contains(account.itemId))
     }
@@ -1742,7 +1742,7 @@ struct PlaidBarCoreTests {
 
         #expect(state.step == .openPlaidLink)
         #expect(state.title == "No linked item returned")
-        #expect(state.detail == "PlaidBar cannot see a linked item yet. Finish Plaid Link in the browser, then check again.")
+        #expect(state.detail == "VaultPeek cannot see a linked item yet. Finish Plaid Link in the browser, then check again.")
         #expect(!state.isReady)
         #expect(state.canRetry)
     }
@@ -1865,7 +1865,7 @@ struct PlaidBarCoreTests {
         )
 
         #expect(!preflight.isReady)
-        #expect(preflight.hint == "Start PlaidBarServer with --sandbox, then Check Again.")
+        #expect(preflight.hint == "Start the VaultPeek companion server with --sandbox, then Check Again.")
         #expect(preflight.rows.first { $0.title == "Server" }?.state == .blocked)
         #expect(preflight.rows.first { $0.title == "Mode" }?.state == .unknown)
         #expect(preflight.rows.first { $0.title == "Credentials" }?.state == .unknown)
@@ -1887,7 +1887,7 @@ struct PlaidBarCoreTests {
         #expect(!preflight.isReady)
         #expect(preflight.hint == "The running server is not in sandbox mode.")
         #expect(preflight.rows.first { $0.title == "Mode" }?.state == .blocked)
-        #expect(preflight.rows.first { $0.title == "Mode" }?.accessibilityHint == "Restart PlaidBarServer in sandbox mode.")
+        #expect(preflight.rows.first { $0.title == "Mode" }?.accessibilityHint == "Restart the VaultPeek companion server in sandbox mode.")
     }
 
     @Test("Onboarding preflight blocks Plaid Link on missing production credentials")
@@ -1947,7 +1947,7 @@ struct PlaidBarCoreTests {
         #expect(!preflight.isReady)
         #expect(preflight.hint == "The running server is not in production mode.")
         #expect(preflight.rows.first { $0.title == "Mode" }?.state == .blocked)
-        #expect(preflight.rows.first { $0.title == "Mode" }?.accessibilityHint == "Restart PlaidBarServer in production mode.")
+        #expect(preflight.rows.first { $0.title == "Mode" }?.accessibilityHint == "Restart the VaultPeek companion server in production mode.")
     }
 
     @Test("Onboarding preflight treats unknown credentials as blocked while connected")
@@ -1984,7 +1984,7 @@ struct PlaidBarCoreTests {
         )
 
         #expect(!preflight.isReady)
-        #expect(preflight.hint == "Start PlaidBarServer with production credentials, then Check Again.")
+        #expect(preflight.hint == "Start the VaultPeek companion server with production credentials, then Check Again.")
         #expect(preflight.rows.first { $0.title == "Mode" }?.value == "Unknown")
     }
 
@@ -2003,7 +2003,7 @@ struct PlaidBarCoreTests {
             erroredItemCount: 0,
             isSyncStale: true,
             lastSyncRelative: nil,
-            errorMessage: "PlaidBar server is not running"
+            errorMessage: "The VaultPeek companion server is not running"
         )
 
         #expect(readiness.level == .healthy)
@@ -2048,7 +2048,7 @@ struct PlaidBarCoreTests {
             erroredItemCount: 0,
             isSyncStale: true,
             lastSyncRelative: nil,
-            errorMessage: "PlaidBar server auth token is unavailable"
+            errorMessage: "VaultPeek companion server auth token is unavailable"
         )
 
         #expect(readiness.level == .blocked)
@@ -2071,7 +2071,7 @@ struct PlaidBarCoreTests {
             erroredItemCount: 0,
             isSyncStale: true,
             lastSyncRelative: nil,
-            errorMessage: "PlaidBar server returned 401: unauthorized"
+            errorMessage: "VaultPeek companion server returned 401: unauthorized"
         )
 
         #expect(readiness.level == .blocked)
@@ -2108,13 +2108,13 @@ struct PlaidBarCoreTests {
             isDemoMode: false,
             isLoading: false,
             serverConnected: false,
-            errorMessage: "PlaidBar server auth token is unavailable"
+            errorMessage: "VaultPeek companion server auth token is unavailable"
         )
         let rejected = ServerConnectionPresentation.evaluate(
             isDemoMode: false,
             isLoading: false,
             serverConnected: true,
-            errorMessage: "PlaidBar server returned 403: forbidden"
+            errorMessage: "VaultPeek companion server returned 403: forbidden"
         )
 
         #expect(missing.issue == .localAuthMissing)
@@ -2139,7 +2139,7 @@ struct PlaidBarCoreTests {
             isDemoMode: false,
             isLoading: false,
             serverConnected: true,
-            errorMessage: "PlaidBar server returned 500: internal server error"
+            errorMessage: "VaultPeek companion server returned 500: internal server error"
         )
 
         #expect(offline.issue == .offline)
@@ -2305,7 +2305,7 @@ struct PlaidBarCoreTests {
             accountCount: 0,
             transactionCount: 0,
             syncedItemCount: 0,
-            errorMessage: "PlaidBar server returned 500: {\"\(tokenKey)\":\"\(tokenValue)\",\"item_id\":\"item_123456789abcdef\"}"
+            errorMessage: "VaultPeek companion server returned 500: {\"\(tokenKey)\":\"\(tokenValue)\",\"item_id\":\"item_123456789abcdef\"}"
         )
 
         #expect(state.step == .blocked)
@@ -2791,6 +2791,42 @@ struct PlaidBarCoreTests {
         #expect(readiness.primaryAction == .refresh)
     }
 
+    @Test("Dashboard status readiness hides sensitive IDs and raw balances")
+    func dashboardStatusReadinessHidesSensitiveIDsAndRawBalances() {
+        let accountID = "accountSensitiveIdentifier"
+        let itemID = "itemSensitiveIdentifier"
+        let balance = "12345.67"
+        let currentBalance = "-890.12"
+
+        let readiness = DashboardStatusReadiness.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 1,
+            accountCount: 1,
+            syncedItemCount: 1,
+            needsLoginItemCount: 0,
+            erroredItemCount: 0,
+            isSyncStale: false,
+            lastSyncRelative: "now",
+            errorMessage: "Plaid failed account_id=\(accountID) item_id=\(itemID) balance=\(balance) current_balance=\(currentBalance)"
+        )
+
+        let displayCopy = [
+            readiness.title,
+            readiness.detail,
+            readiness.primaryActionTitle ?? "",
+            readiness.primaryActionIconName ?? "",
+        ].joined(separator: " ")
+
+        #expect(displayCopy.contains(accountID) == false)
+        #expect(displayCopy.contains(itemID) == false)
+        #expect(displayCopy.contains(balance) == false)
+        #expect(displayCopy.contains(currentBalance) == false)
+        #expect(displayCopy.contains("[redacted-id]"))
+        #expect(displayCopy.contains("[redacted-balance]"))
+    }
+
     @Test("Dashboard status readiness blocks on missing credentials")
     func dashboardStatusReadinessBlocksOnMissingCredentials() {
         let readiness = DashboardStatusReadiness.evaluate(
@@ -3190,6 +3226,7 @@ struct PlaidBarCoreTests {
         #expect(!PlaidBarConstants.keychainServiceName.isEmpty)
         #expect(!PlaidBarConstants.appVersion.isEmpty)
         #expect(!PlaidBarConstants.appName.isEmpty)
+        #expect(PlaidBarConstants.appName == "VaultPeek")
     }
 
     @Test("Background refresh interval rejects invalid persisted values")
@@ -3430,15 +3467,16 @@ struct PlaidBarCoreTests {
 
     // MARK: - Local Data Store
 
-    @Test("Local data store resolves hidden PlaidBar directory")
+    @Test("Local data store resolves hidden VaultPeek directory")
     func localDataStorePathResolution() {
         let home = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
 
         let directory = LocalDataStore.storageDirectoryURL(homeDirectory: home)
 
-        #expect(LocalDataStore.displayPath == "~/.plaidbar/")
-        #expect(directory.lastPathComponent == ".plaidbar")
+        #expect(LocalDataStore.displayPath == "~/.vaultpeek/")
+        #expect(LocalDataStore.legacyDisplayPath == "~/.plaidbar/")
+        #expect(directory.lastPathComponent == ".vaultpeek")
         #expect(directory.deletingLastPathComponent() == home)
     }
 
@@ -3446,7 +3484,7 @@ struct PlaidBarCoreTests {
     func localDataStoreDefaultPathUsesAccountHome() {
         let directory = LocalDataStore.storageDirectoryURL()
 
-        #expect(directory.lastPathComponent == ".plaidbar")
+        #expect(directory.lastPathComponent == ".vaultpeek")
         #expect(directory.deletingLastPathComponent() == LocalDataStore.accountHomeDirectoryURL())
     }
 
@@ -3482,7 +3520,7 @@ struct PlaidBarCoreTests {
     func localDataStoreResolvesActiveDirectoryFromServerStorageDirectory() {
         let directory = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
-            .appendingPathComponent(".plaidbar", isDirectory: true)
+            .appendingPathComponent(".vaultpeek", isDirectory: true)
 
         let resolved = LocalDataStore.storageDirectoryURL(
             forServerStoragePath: directory.path
@@ -3507,11 +3545,206 @@ struct PlaidBarCoreTests {
     @Test("Local data store display path abbreviates home")
     func localDataStoreDisplayPathAbbreviatesHome() {
         let home = URL(fileURLWithPath: "/Users/example", isDirectory: true)
-        let directory = home.appendingPathComponent(".plaidbar", isDirectory: true)
+        let directory = home.appendingPathComponent(".vaultpeek", isDirectory: true)
 
-        #expect(LocalDataStore.displayPath(for: directory, homeDirectory: home) == "~/.plaidbar")
+        #expect(LocalDataStore.displayPath(for: directory, homeDirectory: home) == "~/.vaultpeek")
         #expect(LocalDataStore.displayPath(for: home, homeDirectory: home) == "~")
         #expect(LocalDataStore.displayPath(for: URL(fileURLWithPath: "/var/tmp/plaidbar"), homeDirectory: home) == "/var/tmp/plaidbar")
+    }
+
+    @Test("Local data migration copies legacy files without overwriting current data")
+    func localDataMigrationCopiesLegacyFilesWithoutOverwritingCurrentData() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let legacyDirectory = root.appendingPathComponent(".plaidbar", isDirectory: true)
+        let currentDirectory = root.appendingPathComponent(".vaultpeek", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try FileManager.default.createDirectory(at: legacyDirectory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: currentDirectory, withIntermediateDirectories: true)
+
+        let legacyAuthToken = legacyDirectory.appendingPathComponent("auth-token")
+        let legacyServerConfig = legacyDirectory.appendingPathComponent("server.conf")
+        let legacyDatabase = legacyDirectory.appendingPathComponent("plaidbar-production.sqlite")
+        let legacyDatabaseWAL = legacyDirectory.appendingPathComponent("plaidbar-production.sqlite-wal")
+        let legacyLog = legacyDirectory.appendingPathComponent("server.log")
+        let currentServerConfig = currentDirectory.appendingPathComponent("server.conf")
+
+        try "legacy-token".write(to: legacyAuthToken, atomically: true, encoding: .utf8)
+        try "PLAID_ENV=sandbox".write(to: legacyServerConfig, atomically: true, encoding: .utf8)
+        try "db".write(to: legacyDatabase, atomically: true, encoding: .utf8)
+        try "wal".write(to: legacyDatabaseWAL, atomically: true, encoding: .utf8)
+        try "log".write(to: legacyLog, atomically: true, encoding: .utf8)
+        try "PLAID_ENV=production".write(to: currentServerConfig, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: legacyAuthToken.path)
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: legacyDatabase.path)
+
+        let result = try LocalDataStore.migrateLegacyDefaultStorageIfNeeded(homeDirectory: root)
+
+        #expect(result.legacyDirectoryFound)
+        #expect(result.copiedEntries == [
+            "auth-token",
+            "plaidbar-production.sqlite",
+            "plaidbar-production.sqlite-wal",
+            "server.log",
+        ])
+        #expect(result.preservedCurrentEntries == ["server.conf"])
+        #expect(try String(contentsOf: currentDirectory.appendingPathComponent("auth-token"), encoding: .utf8) == "legacy-token")
+        #expect(try String(contentsOf: currentServerConfig, encoding: .utf8) == "PLAID_ENV=production")
+        #expect(try String(contentsOf: legacyServerConfig, encoding: .utf8) == "PLAID_ENV=sandbox")
+        #expect(try posixPermissions(at: currentDirectory) == 0o700)
+        #expect(try posixPermissions(at: currentDirectory.appendingPathComponent("auth-token")) == 0o600)
+        #expect(try posixPermissions(at: currentDirectory.appendingPathComponent("plaidbar-production.sqlite")) == 0o600)
+
+        let secondResult = try LocalDataStore.migrateLegacyDefaultStorageIfNeeded(homeDirectory: root)
+        #expect(secondResult.copiedEntries == [])
+        #expect(secondResult.preservedCurrentEntries == [
+            "auth-token",
+            "plaidbar-production.sqlite",
+            "plaidbar-production.sqlite-wal",
+            "server.conf",
+            "server.log",
+        ])
+    }
+
+    @Test("Local data migration remaps path-scoped caches")
+    func localDataMigrationRemapsPathScopedCaches() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let legacyDirectory = root.appendingPathComponent(".plaidbar", isDirectory: true)
+        let currentDirectory = root.appendingPathComponent(".vaultpeek", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let legacyDatabasePath = legacyDirectory
+            .appendingPathComponent("plaidbar.sqlite")
+            .path
+        let currentDatabasePath = currentDirectory
+            .appendingPathComponent("plaidbar.sqlite")
+            .path
+        let legacyContext = TransactionCacheContext(
+            environment: .sandbox,
+            storagePath: legacyDatabasePath
+        )
+        let currentContext = TransactionCacheContext(
+            environment: .sandbox,
+            storagePath: currentDatabasePath
+        )
+        let transactions = [
+            TransactionDTO(id: "txn", accountId: "checking", amount: 12, date: "2026-01-01", name: "Coffee")
+        ]
+        let accounts = [
+            AccountDTO(
+                id: "checking",
+                itemId: "item",
+                name: "Checking",
+                type: .depository,
+                balances: BalanceDTO(current: 100)
+            )
+        ]
+
+        try LocalDataStore.saveTransactions(transactions, to: legacyDirectory, context: legacyContext)
+        try LocalDataStore.saveAccounts(accounts, to: legacyDirectory, context: legacyContext)
+
+        let result = try LocalDataStore.migrateLegacyDefaultStorageIfNeeded(homeDirectory: root)
+
+        #expect(result.didCopyEntries)
+        #expect(try LocalDataStore.loadTransactions(
+            from: currentDirectory,
+            context: currentContext
+        ).map(\.id) == ["txn"])
+        #expect(try LocalDataStore.loadAccounts(
+            from: currentDirectory,
+            context: currentContext
+        ).map(\.id) == ["checking"])
+        #expect(try LocalDataStore.loadTransactions(
+            from: currentDirectory,
+            context: legacyContext
+        ).isEmpty)
+    }
+
+    @Test("Local data migration does not restore reset-cleared legacy data")
+    func localDataMigrationDoesNotRestoreResetClearedLegacyData() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let legacyDirectory = root.appendingPathComponent(".plaidbar", isDirectory: true)
+        let currentDirectory = root.appendingPathComponent(".vaultpeek", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try FileManager.default.createDirectory(at: legacyDirectory, withIntermediateDirectories: true)
+        try "db".write(
+            to: legacyDirectory.appendingPathComponent("plaidbar-production.sqlite"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try "sessions".write(
+            to: legacyDirectory.appendingPathComponent("pending-link-sessions.json"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try "PLAID_ENV=production".write(
+            to: legacyDirectory.appendingPathComponent("server.conf"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        _ = try LocalDataStore.resetLocalData(
+            at: currentDirectory,
+            resetKeychainTokens: false
+        )
+        let result = try LocalDataStore.migrateLegacyDefaultStorageIfNeeded(homeDirectory: root)
+
+        #expect(result.copiedEntries == ["server.conf"])
+        #expect(!FileManager.default.fileExists(
+            atPath: currentDirectory.appendingPathComponent("plaidbar-production.sqlite").path
+        ))
+        #expect(!FileManager.default.fileExists(
+            atPath: currentDirectory.appendingPathComponent("pending-link-sessions.json").path
+        ))
+        #expect(FileManager.default.fileExists(
+            atPath: currentDirectory.appendingPathComponent(LocalDataStore.legacyMigrationResetMarkerFilename).path
+        ))
+    }
+
+    @Test("Local data migration keeps SQLite sidecars with their owning database")
+    func localDataMigrationKeepsSQLiteSidecarsWithOwningDatabase() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let legacyDirectory = root.appendingPathComponent(".plaidbar", isDirectory: true)
+        let currentDirectory = root.appendingPathComponent(".vaultpeek", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try FileManager.default.createDirectory(at: legacyDirectory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: currentDirectory, withIntermediateDirectories: true)
+        try "legacy-db".write(
+            to: legacyDirectory.appendingPathComponent("plaidbar-production.sqlite"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try "legacy-wal".write(
+            to: legacyDirectory.appendingPathComponent("plaidbar-production.sqlite-wal"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try "current-db".write(
+            to: currentDirectory.appendingPathComponent("plaidbar-production.sqlite"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let result = try LocalDataStore.migrateLegacyDefaultStorageIfNeeded(homeDirectory: root)
+
+        #expect(result.copiedEntries == [])
+        #expect(result.preservedCurrentEntries == [
+            "plaidbar-production.sqlite",
+            "plaidbar-production.sqlite-wal",
+        ])
+        #expect(!FileManager.default.fileExists(
+            atPath: currentDirectory.appendingPathComponent("plaidbar-production.sqlite-wal").path
+        ))
+        #expect(try String(
+            contentsOf: currentDirectory.appendingPathComponent("plaidbar-production.sqlite"),
+            encoding: .utf8
+        ) == "current-db")
     }
 
     @Test("Local data reset removes data files and keeps local server configuration")
@@ -3566,10 +3799,19 @@ struct PlaidBarCoreTests {
         var isDirectory: ObjCBool = false
         #expect(FileManager.default.fileExists(atPath: directory.path, isDirectory: &isDirectory))
         #expect(isDirectory.boolValue)
-        #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).sorted() == ["auth-token", "exports", "notes.txt", "server.conf"])
+        #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).sorted() == [
+            ".legacy-migration-reset",
+            "auth-token",
+            "exports",
+            "notes.txt",
+            "server.conf",
+        ])
         #expect(try String(contentsOf: authToken, encoding: .utf8) == "token")
         #expect(try String(contentsOf: serverConfig, encoding: .utf8) == "PLAID_ENV=sandbox")
         #expect(try String(contentsOf: unrelatedFile, encoding: .utf8) == "keep me")
+        #expect(FileManager.default.fileExists(
+            atPath: directory.appendingPathComponent(LocalDataStore.legacyMigrationResetMarkerFilename).path
+        ))
         #expect(FileManager.default.fileExists(atPath: unrelatedDirectory.path, isDirectory: &isDirectory))
         #expect(isDirectory.boolValue)
         #expect(try posixPermissions(at: authToken) == 0o600)
@@ -4092,7 +4334,7 @@ struct PlaidBarCoreTests {
         #expect(DashboardDrillInAction.remove.iconName == "trash")
         #expect(DashboardDrillInAction.remove.accessibilityHint.localizedCaseInsensitiveContains("requires confirmation"))
         #expect(DashboardDrillInAction.remove.accessibilityHint.localizedCaseInsensitiveContains("disconnecting this Plaid institution"))
-        #expect(DashboardDrillInAction.remove.accessibilityHint.localizedCaseInsensitiveContains("local PlaidBar data"))
+        #expect(DashboardDrillInAction.remove.accessibilityHint.localizedCaseInsensitiveContains("local VaultPeek data"))
         #expect(DashboardDrillInAction.settings.accessibilityHint.localizedCaseInsensitiveContains("settings"))
     }
 

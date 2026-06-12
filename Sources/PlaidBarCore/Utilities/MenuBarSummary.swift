@@ -150,21 +150,26 @@ public enum MenuBarSummary {
         mode: MenuBarSummaryMode,
         accounts: [AccountDTO],
         transactions: [TransactionDTO],
-        currencyFormat: CurrencyFormat
+        currencyFormat: CurrencyFormat,
+        isInitialLoad: Bool = false
     ) -> String {
         switch mode {
         case .netCash:
-            guard !accounts.isEmpty else { return "PlaidBar" }
+            guard !accounts.isEmpty else { return PlaidBarConstants.appName }
             return Formatters.currency(netCash(from: accounts), format: currencyFormat)
         case .totalCash:
-            guard !accounts.isEmpty else { return "PlaidBar" }
+            guard !accounts.isEmpty else { return PlaidBarConstants.appName }
             return Formatters.currency(totalCash(from: accounts), format: currencyFormat)
         case .creditUtilization:
-            guard !accounts.isEmpty else { return "PlaidBar" }
+            guard !accounts.isEmpty else { return PlaidBarConstants.appName }
             guard let utilization = creditUtilization(from: accounts) else { return "No credit" }
             return Formatters.percent(utilization, decimals: 0)
         case .recentSpend:
-            guard !transactions.isEmpty else { return "No spend" }
+            // During the boot fetch an empty history is unknown, not zero:
+            // show the neutral app name instead of a "No spend" verdict.
+            guard !transactions.isEmpty else {
+                return isInitialLoad ? PlaidBarConstants.appName : "No spend"
+            }
             return Formatters.currency(recentSpend(from: transactions), format: currencyFormat)
         case .iconOnly:
             return ""

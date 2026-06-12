@@ -19,7 +19,7 @@ actor ServerClient {
         configuration.timeoutIntervalForRequest = Self.requestTimeout
         configuration.timeoutIntervalForResource = Self.resourceTimeout
         configuration.waitsForConnectivity = false
-        self.session = URLSession(configuration: configuration)
+        session = URLSession(configuration: configuration)
         self.authTokenURL = authTokenURL
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -111,7 +111,7 @@ actor ServerClient {
         return try decoder.decode(T.self, from: data)
     }
 
-    private func post<T: Encodable & Sendable>(_ url: URL, body: T) async throws {
+    private func post(_ url: URL, body: some Encodable & Sendable) async throws {
         var request = try authorizedRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -132,7 +132,7 @@ actor ServerClient {
         request.timeoutInterval = 2
         do {
             let (_, response) = try await session.data(for: request)
-            return (response as? HTTPURLResponse).map { (200...299).contains($0.statusCode) } ?? false
+            return (response as? HTTPURLResponse).map { (200 ... 299).contains($0.statusCode) } ?? false
         } catch {
             return false
         }
@@ -167,7 +167,7 @@ actor ServerClient {
         guard let httpResponse = response as? HTTPURLResponse else {
             throw ServerClientError.requestFailed
         }
-        guard (200...299).contains(httpResponse.statusCode) else {
+        guard (200 ... 299).contains(httpResponse.statusCode) else {
             throw ServerClientError.httpError(
                 statusCode: httpResponse.statusCode,
                 message: errorMessage(from: data, statusCode: httpResponse.statusCode)
@@ -189,13 +189,15 @@ actor ServerClient {
 
     private static func jsonErrorMessage(from data: Data) -> String? {
         guard let object = try? JSONSerialization.jsonObject(with: data),
-              let dictionary = object as? [String: Any] else {
+              let dictionary = object as? [String: Any]
+        else {
             return nil
         }
 
         for key in ["message", "reason", "error", "detail", "title"] {
             if let value = dictionary[key] as? String,
-               let message = value.trimmedNonEmpty {
+               let message = value.trimmedNonEmpty
+            {
                 return truncate(message)
             }
         }
@@ -209,9 +211,12 @@ actor ServerClient {
     }
 
     private func authorizedRequest(url: URL) throws -> URLRequest {
-        let token = try String(contentsOf: authTokenURL, encoding: .utf8)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !token.isEmpty else {
+        // A missing token file means the server has not been started yet --
+        // surface the clean typed error, never Cocoa's raw file message.
+        guard let token = (try? String(contentsOf: authTokenURL, encoding: .utf8))?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !token.isEmpty
+        else {
             throw ServerClientError.authTokenUnavailable
         }
 
@@ -221,7 +226,7 @@ actor ServerClient {
     }
 }
 
-enum ServerClientError: Error, LocalizedError, Sendable {
+enum ServerClientError: Error, LocalizedError {
     case requestFailed
     case serverNotRunning
     case authTokenUnavailable
@@ -229,11 +234,14 @@ enum ServerClientError: Error, LocalizedError, Sendable {
 
     var errorDescription: String? {
         switch self {
-        case .requestFailed: "Request to PlaidBar server failed"
-        case .serverNotRunning: "PlaidBar server is not running"
-        case .authTokenUnavailable: "PlaidBar server auth token is unavailable"
-        case .httpError(let statusCode, let message):
-            "PlaidBar server returned \(statusCode): \(message)"
+        case .requestFailed: "Request to the VaultPeek companion server failed"
+        case .serverNotRunning: "The VaultPeek companion server is not running"
+        // Keep the "auth token is unavailable" substring intact: the recovery
+        // matchers in DashboardStatusReadiness, AttentionQueue, and
+        // ServerConnectionPresentation key off it.
+        case .authTokenUnavailable: "VaultPeek companion server auth token is unavailable. Start the server, then check again."
+        case let .httpError(statusCode, message):
+            "VaultPeek companion server returned \(statusCode): \(message)"
         }
     }
 }

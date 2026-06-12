@@ -1,6 +1,28 @@
 # Changelog
 
-All notable changes to PlaidBar.
+All notable changes to VaultPeek (formerly PlaidBar). Entries before June 2026
+use the original PlaidBar name.
+
+---
+
+## [Unreleased] — Update
+
+PlaidBar is now VaultPeek.
+
+- Renamed the visible app identity, app bundle (`VaultPeek.app`), DMG
+  (`VaultPeek-<version>.dmg`), launcher (`vaultpeek-run`), and documentation to
+  VaultPeek. Financial data stays local and the Plaid integration is unchanged.
+- Default local data directory moved to `~/.vaultpeek/` with an automatic,
+  idempotent copy migration from legacy `~/.plaidbar/` installs that never
+  overwrites newer VaultPeek files (`049f022`).
+- Upgrade note: installing VaultPeek.app does not remove an existing
+  `/Applications/PlaidBar.app` — delete the old app to avoid bundle-identifier
+  and port `8484` contention.
+- Intentionally still PlaidBar for compatibility: `plaidbar`/`plaidbar-server`
+  executables and SwiftPM targets, `PLAIDBAR_*` environment variables, the
+  `PlaidBar.PlaidAccessToken` Keychain service, `plaidbar-*.sqlite` filenames,
+  and the `ftchvs/PlaidBar` repository slug.
+- Full rename release notes: [docs/release-notes.md](docs/release-notes.md).
 
 ---
 

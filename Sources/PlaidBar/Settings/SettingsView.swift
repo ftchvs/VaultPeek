@@ -1,7 +1,7 @@
-import SwiftUI
+import AppKit
 import PlaidBarCore
 import Sparkle
-import AppKit
+import SwiftUI
 
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
@@ -24,6 +24,12 @@ struct SettingsView: View {
                 }
                 .tag(SettingsTab.accounts.rawValue)
 
+            AppearanceSettingsView()
+                .tabItem {
+                    Label("Appearance", systemImage: "paintbrush")
+                }
+                .tag(SettingsTab.appearance.rawValue)
+
             NotificationSettingsView()
                 .environment(appState)
                 .tabItem {
@@ -37,15 +43,68 @@ struct SettingsView: View {
                 }
                 .tag(SettingsTab.about.rawValue)
         }
-        .frame(width: 620, height: 560)
+        .frame(
+            minWidth: 560,
+            idealWidth: 620,
+            maxWidth: .infinity,
+            minHeight: 480,
+            idealHeight: 560,
+            maxHeight: .infinity
+        )
     }
 }
 
 private enum SettingsTab: String {
     case general
     case accounts
+    case appearance
     case notifications
     case about
+}
+
+struct AppearanceSettingsView: View {
+    @AppStorage(PopoverTransparencySetting.storageKey) private var popoverTransparency = PopoverTransparencySetting.defaultValue
+
+    private var transparencySetting: PopoverTransparencySetting {
+        PopoverTransparencySetting(value: popoverTransparency)
+    }
+
+    var body: some View {
+        Form {
+            Section("Popover") {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    HStack {
+                        Text("Transparency")
+                        Spacer()
+                        Text("\(transparencySetting.displayPercent)%")
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Slider(
+                        value: Binding(
+                            get: { transparencySetting.value },
+                            set: { popoverTransparency = PopoverTransparencySetting(value: $0).value }
+                        ),
+                        in: PopoverTransparencySetting.minimumValue...PopoverTransparencySetting.maximumValue,
+                        step: 1
+                    ) {
+                        Text("Popover transparency")
+                    } minimumValueLabel: {
+                        Text("More solid")
+                    } maximumValueLabel: {
+                        Text("More glass")
+                    }
+                    .accessibilityValue("\(transparencySetting.displayPercent) percent transparent")
+
+                    Text("Adjusts the ultra-thin material overlay live. The range is capped to keep balances and status text legible on busy desktops.")
+                        .detailText()
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .padding(.top, Spacing.sm)
+    }
 }
 
 struct GeneralSettingsView: View {
@@ -57,140 +116,137 @@ struct GeneralSettingsView: View {
     var body: some View {
         @Bindable var state = appState
 
-        ScrollView {
-            VStack(alignment: .leading, spacing: Spacing.lg) {
-                SettingsCard {
-                    settingsRow("Menu bar shows") {
-                        Picker("Menu bar shows", selection: $state.menuBarSummaryMode) {
-                            ForEach(MenuBarSummaryMode.allCases, id: \.self) { mode in
-                                Text(mode.displayName).tag(mode)
-                            }
-                        }
-                        .labelsHidden()
-                        .frame(width: 230)
+        Form {
+            Section {
+                Picker("Menu bar shows", selection: $state.menuBarSummaryMode) {
+                    ForEach(MenuBarSummaryMode.allCases, id: \.self) { mode in
+                        Text(mode.displayName).tag(mode)
                     }
-
-                    settingsRow("Balance format") {
-                        Picker("Balance format", selection: $state.balanceFormat) {
-                            Text("$12,450.32").tag(CurrencyFormat.full)
-                            Text("$12.4K").tag(CurrencyFormat.abbreviated)
-                            Text("$12,450").tag(CurrencyFormat.compact)
-                        }
-                        .labelsHidden()
-                        .frame(width: 230)
-                        .disabled(appState.menuBarSummaryMode == .creditUtilization || appState.menuBarSummaryMode == .iconOnly)
-                    }
-
-                    settingsRow("Refresh interval") {
-                        Picker("Refresh interval", selection: $state.refreshInterval) {
-                            Text("5 minutes").tag(TimeInterval(5 * 60))
-                            Text("15 minutes").tag(TimeInterval(15 * 60))
-                            Text("30 minutes").tag(TimeInterval(30 * 60))
-                            Text("1 hour").tag(TimeInterval(60 * 60))
-                        }
-                        .labelsHidden()
-                        .frame(width: 230)
-                    }
-
-                    settingsRow("Credit warning") {
-                        HStack(spacing: Spacing.sm) {
-                            TextField(
-                                "",
-                                value: $state.creditUtilizationThreshold,
-                                format: .number.precision(.fractionLength(0))
-                            )
-                            .frame(width: 72)
-                            .textFieldStyle(.roundedBorder)
-                            Text("%")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .help("Credit cards above this utilization threshold show warning colors")
-
-                    Toggle("Launch at login", isOn: $state.launchAtLogin)
-                        .padding(.top, Spacing.xs)
                 }
 
-                SettingsCard(title: "Local AI") {
-                    settingsRow("Availability") {
-                        HStack(spacing: Spacing.xs) {
-                            Image(systemName: localAIAvailabilityIcon)
-                                .foregroundStyle(localAIAvailabilityTint)
-                            Text(appState.localAIAvailability.state.displayName)
-                                .font(.body.weight(.medium))
-                        }
-                    }
+                Picker("Balance format", selection: $state.balanceFormat) {
+                    Text("$12,450.32").tag(CurrencyFormat.full)
+                    Text("$12.4K").tag(CurrencyFormat.abbreviated)
+                    Text("$12,450").tag(CurrencyFormat.compact)
+                }
+                .disabled(appState.menuBarSummaryMode == .creditUtilization || appState.menuBarSummaryMode == .iconOnly)
 
-                    settingsRow("Runtime") {
-                        Text(appState.localAIAvailability.runtimeName ?? "None configured")
+                Picker("Refresh interval", selection: $state.refreshInterval) {
+                    Text("5 minutes").tag(TimeInterval(5 * 60))
+                    Text("15 minutes").tag(TimeInterval(15 * 60))
+                    Text("30 minutes").tag(TimeInterval(30 * 60))
+                    Text("1 hour").tag(TimeInterval(60 * 60))
+                }
+
+                LabeledContent("Credit warning") {
+                    HStack(spacing: Spacing.xs) {
+                        TextField(
+                            "Credit warning threshold",
+                            value: $state.creditUtilizationThreshold,
+                            format: .number.precision(.fractionLength(0))
+                        )
+                        .labelsHidden()
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 64)
+                        .textFieldStyle(.roundedBorder)
+                        .accessibilityLabel("Credit warning threshold")
+
+                        Text("%")
                             .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
                     }
+                }
+                .help("Credit cards above this utilization threshold show warning colors")
 
-                    Text(appState.localAIAvailability.detail)
-                        .detailText()
-                        .fixedSize(horizontal: false, vertical: true)
+                Toggle("Launch at login", isOn: $state.launchAtLogin)
+            }
 
-                    Text("PlaidBar does not send transaction data to cloud AI services. Local insight summaries are derived from local accounts, transactions, and recurring detections; raw Plaid transaction categories remain unchanged.")
-                        .detailText()
-                        .fixedSize(horizontal: false, vertical: true)
+            Section("Local AI") {
+                LabeledContent("Availability") {
+                    HStack(spacing: Spacing.xs) {
+                        Image(systemName: LocalAIAvailabilityPresentation
+                            .iconName(for: appState.localAIAvailability.state))
+                            .foregroundStyle(localAIAvailabilityTint)
+                            .accessibilityHidden(true)
+                        Text(appState.localAIAvailability.state.displayName)
+                            .font(.body.weight(.medium))
+                    }
+                }
+                .accessibilityElement(children: .combine)
+
+                LabeledContent("Runtime") {
+                    Text(appState.localAIAvailability.runtimeName ?? "None configured")
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
 
-                SettingsCard(title: "Local Data") {
-                    settingsRow("Storage path", alignment: .top) {
-                        VStack(alignment: .trailing, spacing: Spacing.xs) {
-                            Text(appState.activeStorageDirectoryDisplayText)
-                                .font(.system(.body, design: .monospaced))
-                                .lineLimit(2)
-                                .multilineTextAlignment(.trailing)
-                                .textSelection(.enabled)
+                Text(appState.localAIAvailability.detail)
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
 
-                            Text(storageDetailText)
-                                .detailText()
-                                .lineLimit(2)
-                                .multilineTextAlignment(.trailing)
-                                .textSelection(.enabled)
-                        }
+                Text(
+                    "VaultPeek does not send transaction data to cloud AI services. Local insight summaries are derived from local accounts, transactions, and recurring detections; raw Plaid transaction categories remain unchanged."
+                )
+                .detailText()
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Section("Local data") {
+                LabeledContent("Storage path") {
+                    VStack(alignment: .trailing, spacing: Spacing.xs) {
+                        Text(appState.activeStorageDirectoryDisplayText)
+                            .font(.system(.body, design: .monospaced))
+                            .lineLimit(2)
+                            .multilineTextAlignment(.trailing)
+                            .textSelection(.enabled)
+
+                        Text(storageDetailText)
+                            .detailText()
+                            .lineLimit(2)
+                            .multilineTextAlignment(.trailing)
+                            .textSelection(.enabled)
                     }
+                }
 
-                    LocalTrustReceiptView(receipt: localTrustReceipt)
+                LocalTrustReceiptView(receipt: localTrustReceipt)
 
-                    HStack(alignment: .center, spacing: Spacing.sm) {
-                        Button {
-                            revealStorageDirectory()
-                        } label: {
-                            Label("Open Folder", systemImage: "folder")
-                        }
-                        .controlSize(.small)
-
-                        Button {
-                            copyStoragePath()
-                        } label: {
-                            Label("Copy Path", systemImage: "doc.on.doc")
-                        }
-                        .controlSize(.small)
-
-                        Button {
-                            isShowingResetConfirmation = true
-                        } label: {
-                            Label("Reset Local Data", systemImage: "trash")
-                        }
-                        .buttonStyle(.borderless)
-                        .controlSize(.small)
-                        .foregroundStyle(.secondary)
+                HStack(alignment: .center, spacing: Spacing.sm) {
+                    Button {
+                        revealStorageDirectory()
+                    } label: {
+                        Label("Open Folder", systemImage: "folder")
                     }
+                    .controlSize(.small)
+
+                    Button {
+                        copyStoragePath()
+                    } label: {
+                        Label("Copy Path", systemImage: "doc.on.doc")
+                    }
+                    .controlSize(.small)
+
+                    Button {
+                        isShowingResetConfirmation = true
+                    } label: {
+                        Label("Reset Local Data", systemImage: "trash")
+                    }
+                    .buttonStyle(.borderless)
+                    .controlSize(.small)
+                    .foregroundStyle(.secondary)
                 }
             }
-            .padding(Spacing.lg)
         }
+        .formStyle(.grouped)
+        .toggleStyle(.switch)
         .alert("Reset Local Data?", isPresented: $isShowingResetConfirmation) {
             Button("Reset Local Data", role: .destructive) {
                 resetLocalData()
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Deletes the SQLite database, account and transaction caches, stored Plaid access tokens, sync cursors, and loaded account data under \(appState.activeStorageDirectoryDisplayText). Keeps server.conf, app/server auth, Plaid dashboard Items, shell credentials, and app preferences. Restart PlaidBarServer after resetting.")
+            Text(
+                "Deletes the SQLite database, account and transaction caches, stored Plaid access tokens, sync cursors, and loaded account data under \(appState.activeStorageDirectoryDisplayText). Keeps server.conf, app/server auth, Plaid dashboard Items, shell credentials, and app preferences. Restart the VaultPeek companion server after resetting."
+            )
         }
         .alert("Local Data Reset", isPresented: Binding(
             get: { resetResultMessage != nil },
@@ -224,81 +280,33 @@ struct GeneralSettingsView: View {
     private func resetLocalData() {
         do {
             let result = try appState.resetLocalData()
-            let preservationText = preservedEntriesText(for: result)
-            if result.removedEntryCount == 0 {
-                resetResultMessage = "No local data found. \(LocalDataStore.displayPath(for: URL(fileURLWithPath: result.directoryPath, isDirectory: true))) is ready. \(keychainResetText(for: result))\(preservationText)"
-            } else {
-                resetResultMessage = "Removed \(result.removedEntryCount) PlaidBar data item\(result.removedEntryCount == 1 ? "" : "s") from \(LocalDataStore.displayPath(for: URL(fileURLWithPath: result.directoryPath, isDirectory: true))). \(keychainResetText(for: result))\(preservationText) Restart PlaidBarServer."
-            }
+            resetResultMessage = LocalDataResetPresentation.successMessage(for: result)
         } catch {
             resetErrorMessage = error.localizedDescription
         }
     }
 
     private var storageDetailText: String {
-        if let serverStoragePath = appState.serverStoragePath {
-            return "Server: \(LocalDataStore.displayPath(for: URL(fileURLWithPath: NSString(string: serverStoragePath).expandingTildeInPath)))"
-        }
-
-        return "Default: \(appState.localStorageResolvedDisplayPathText)"
+        LocalDataResetPresentation.storageDetail(
+            serverStoragePath: appState.serverStoragePath,
+            defaultResolvedDisplayPath: appState.localStorageResolvedDisplayPathText
+        )
     }
 
     private var localTrustReceipt: LocalTrustReceipt {
         LocalTrustReceipt.settingsReceipt(storagePath: appState.activeStorageDirectoryDisplayText)
     }
 
-    private var localAIAvailabilityIcon: String {
-        switch appState.localAIAvailability.state {
-        case .available: "cpu.fill"
-        case .disabled: "pause.circle.fill"
-        case .unavailable: "exclamationmark.triangle.fill"
-        }
-    }
-
     private var localAIAvailabilityTint: Color {
-        switch appState.localAIAvailability.state {
-        case .available: SemanticColors.positive
-        case .disabled: .secondary
-        case .unavailable: SemanticColors.warning
+        color(for: LocalAIAvailabilityPresentation.tone(for: appState.localAIAvailability.state))
+    }
+
+    private func color(for tone: SettingsStatusTone) -> Color {
+        switch tone {
+        case .positive: SemanticColors.positive
+        case .warning: SemanticColors.warning
+        case .secondary: .secondary
         }
-    }
-
-    private func keychainResetText(for result: LocalDataResetResult) -> String {
-        result.keychainTokensCleared
-            ? "Keychain token entries were cleared when present."
-            : "Keychain token entries were not cleared."
-    }
-
-    private func preservedEntriesText(for result: LocalDataResetResult) -> String {
-        guard result.preservedEntryCount > 0 else { return "" }
-        return " Left \(result.preservedEntryCount) config or unrelated item\(result.preservedEntryCount == 1 ? "" : "s") untouched."
-    }
-}
-
-private struct SettingsCard<Content: View>: View {
-    let title: String?
-    @ViewBuilder let content: Content
-
-    init(title: String? = nil, @ViewBuilder content: () -> Content) {
-        self.title = title
-        self.content = content()
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.md) {
-            if let title {
-                Text(title)
-                    .sectionTitle()
-                    .foregroundStyle(.secondary)
-            }
-
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                content
-            }
-        }
-        .padding(Spacing.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 8))
     }
 }
 
@@ -343,25 +351,6 @@ private struct LocalTrustReceiptView: View {
     }
 }
 
-@ViewBuilder
-@MainActor
-private func settingsRow<Content: View>(
-    _ title: String,
-    alignment: VerticalAlignment = .center,
-    @ViewBuilder content: () -> Content
-) -> some View {
-    HStack(alignment: alignment, spacing: Spacing.md) {
-        Text(title)
-            .foregroundStyle(.secondary)
-            .frame(width: 150, alignment: .leading)
-
-        Spacer(minLength: Spacing.md)
-
-        content()
-            .frame(maxWidth: 330, alignment: .trailing)
-    }
-}
-
 struct AccountSettingsView: View {
     @Environment(AppState.self) private var appState
     @State private var isShowingAccountSetup = false
@@ -370,130 +359,65 @@ struct AccountSettingsView: View {
     private var emptyPresentation: SecondaryContentUnavailableState {
         SecondaryContentUnavailableState.accounts(
             isDemoMode: appState.isDemoMode,
+            isInitialLoad: appState.loadState(for: .accounts).isInitialLoad,
             serverConnected: appState.serverConnected,
             linkedItemCount: appState.statusItemCount
         )
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            AttentionQueueView(
-                title: "ATTENTION",
-                showsHealthyRow: false,
-                onAddAccount: handleAddAccount
-            )
-            .environment(appState)
-            .padding([.horizontal, .top], Spacing.md)
-
+        Group {
             if appState.accounts.isEmpty {
-                SecondaryUnavailableView(presentation: emptyPresentation) {
-                    performEmptyAction(emptyPresentation.action)
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    AttentionQueueView(
+                        title: "Attention",
+                        showsHealthyRow: false,
+                        onAddAccount: handleAddAccount
+                    )
+                    .environment(appState)
+                    .padding([.horizontal, .top], Spacing.md)
+
+                    SecondaryUnavailableView(presentation: emptyPresentation) {
+                        performEmptyAction(emptyPresentation.action)
+                    }
                 }
             } else {
-                List {
+                Form {
+                    AttentionQueueView(
+                        title: "Attention",
+                        showsHealthyRow: false,
+                        onAddAccount: handleAddAccount
+                    )
+                    .environment(appState)
+
                     ForEach(accountGroups) { group in
-                        VStack(alignment: .leading, spacing: Spacing.sm) {
-                            HStack(alignment: .top) {
-                                VStack(alignment: .leading, spacing: Spacing.xxs) {
-                                    Text(group.institutionName)
-                                        .font(.headline)
-
-                                    HStack(spacing: Spacing.xs) {
-                                        Image(systemName: group.connection.iconName)
-                                            .foregroundStyle(color(for: group.connection.level))
-                                        Text(group.connection.signalLabel)
-                                            .foregroundStyle(color(for: group.connection.level))
-                                        Text("\u{00B7}")
-                                            .foregroundStyle(.tertiary)
-                                        Text("\(group.accounts.count) account\(group.accounts.count == 1 ? "" : "s")")
-                                            .foregroundStyle(.secondary)
-                                        if let itemSyncLabel = group.connection.itemSyncLabel {
-                                            Text("\u{00B7}")
-                                                .foregroundStyle(.tertiary)
-                                            Text(itemSyncLabel)
-                                                .foregroundStyle(.secondary)
-                                        }
-                                    }
-                                    .detailText()
-
-                                    if let recoveryDetailLabel = group.connection.recoveryDetailLabel {
-                                        Text(recoveryDetailLabel)
-                                            .detailText()
-                                            .foregroundStyle(.secondary)
-                                            .fixedSize(horizontal: false, vertical: true)
-                                    }
-                                }
-
-                                Spacer()
-
-                                if group.connection.showsRecoveryActions,
-                                   let recoveryActionTitle = group.connection.recoveryActionTitle {
-                                    Button {
-                                        performRecoveryAction(for: group)
-                                    } label: {
-                                        Label(recoveryActionTitle, systemImage: group.connection.level == .stale ? "arrow.clockwise" : "link.badge.plus")
-                                    }
-                                    .buttonStyle(.bordered)
-                                }
-
-                                Button(role: .destructive) {
-                                    pendingRemoval = PendingAccountRemoval(
-                                        itemId: group.id,
-                                        institutionName: group.institutionName,
-                                        accountCount: group.accounts.count
-                                    )
-                                } label: {
-                                    Label("Remove", systemImage: "trash")
-                                }
-                                .buttonStyle(.bordered)
-                            }
+                        Section {
+                            groupHeaderRow(for: group)
 
                             ForEach(group.accounts) { account in
-                                HStack {
-                                    Image(systemName: AccountPresentation.iconName(for: account))
-                                        .foregroundStyle(accountIconTint(for: account))
-                                        .frame(width: 18)
-
-                                    VStack(alignment: .leading, spacing: Spacing.xxs) {
-                                        Text(account.name)
-                                        Text(account.type.rawValue.capitalized)
-                                            .detailText()
-                                    }
-
-                                    Spacer()
-
-                                    Text(balanceText(for: account))
-                                        .monospacedDigit()
-                                        .foregroundStyle(balanceTint(for: account))
-                                }
-                                .padding(.leading, Spacing.md)
-                                .accessibilityElement(children: .combine)
-                                .accessibilityLabel(accountAccessibilityLabel(for: account))
+                                accountRow(for: account)
                             }
                         }
-                        .padding(.vertical, Spacing.xs)
-                        .accessibilityElement(children: .contain)
-                        .accessibilityLabel(groupAccessibilityLabel(for: group))
                     }
-                }
-            }
 
-            if !appState.accounts.isEmpty {
-                HStack {
-                    Spacer()
-                    Button("Add Account") {
-                        handleAddAccount()
+                    Section {
+                        HStack {
+                            Spacer()
+                            Button("Add Account") {
+                                handleAddAccount()
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
                     }
-                    .buttonStyle(.borderedProminent)
                 }
-                .padding()
+                .formStyle(.grouped)
             }
         }
         .sheet(isPresented: $isShowingAccountSetup) {
             SetupView {
                 isShowingAccountSetup = false
             }
-                .environment(appState)
+            .environment(appState)
         }
         .onChange(of: appState.isSetupComplete) { _, isComplete in
             if isComplete {
@@ -503,13 +427,102 @@ struct AccountSettingsView: View {
         .alert(item: $pendingRemoval) { removal in
             Alert(
                 title: Text("Remove \(removal.institutionName)?"),
-                message: Text("This removes \(removal.accountCount) linked account\(removal.accountCount == 1 ? "" : "s") from PlaidBar and clears matching cached transactions from this Mac. It does not delete the institution from Plaid's dashboard."),
+                message: Text(
+                    "This removes \(removal.accountCount) linked account\(removal.accountCount == 1 ? "" : "s") from VaultPeek and clears matching cached transactions from this Mac. It does not delete the institution from Plaid's dashboard."
+                ),
                 primaryButton: .destructive(Text("Remove")) {
                     Task { await appState.removeAccount(itemId: removal.itemId) }
                 },
                 secondaryButton: .cancel()
             )
         }
+    }
+
+    private func groupHeaderRow(for group: AccountItemGroup) -> some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                Text(group.institutionName)
+                    .font(.headline)
+
+                HStack(spacing: Spacing.xs) {
+                    Image(systemName: group.connection.iconName)
+                        .foregroundStyle(color(for: group.connection.level))
+                    Text(group.connection.signalLabel)
+                        .foregroundStyle(color(for: group.connection.level))
+                    Text("\u{00B7}")
+                        .foregroundStyle(.tertiary)
+                    Text("\(group.accounts.count) account\(group.accounts.count == 1 ? "" : "s")")
+                        .foregroundStyle(.secondary)
+                    if let itemSyncLabel = group.connection.itemSyncLabel {
+                        Text("\u{00B7}")
+                            .foregroundStyle(.tertiary)
+                        Text(itemSyncLabel)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .detailText()
+
+                if let recoveryDetailLabel = group.connection.recoveryDetailLabel {
+                    Text(recoveryDetailLabel)
+                        .detailText()
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(groupAccessibilityLabel(for: group))
+
+            Spacer()
+
+            if group.connection.showsRecoveryActions,
+               let recoveryActionTitle = group.connection.recoveryActionTitle
+            {
+                Button {
+                    performRecoveryAction(for: group)
+                } label: {
+                    Label(
+                        recoveryActionTitle,
+                        systemImage: group.connection.level == .stale ? "arrow.clockwise" : "link.badge.plus"
+                    )
+                }
+                .buttonStyle(.bordered)
+            }
+
+            Button(role: .destructive) {
+                pendingRemoval = PendingAccountRemoval(
+                    itemId: group.id,
+                    institutionName: group.institutionName,
+                    accountCount: group.accounts.count
+                )
+            } label: {
+                Label("Remove", systemImage: "trash")
+            }
+            .buttonStyle(.bordered)
+            .accessibilityLabel("Remove \(group.institutionName)")
+        }
+        .padding(.vertical, Spacing.xs)
+    }
+
+    private func accountRow(for account: AccountDTO) -> some View {
+        HStack {
+            Image(systemName: AccountPresentation.iconName(for: account))
+                .foregroundStyle(accountIconTint(for: account))
+                .frame(width: 18)
+
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                Text(account.name)
+                Text(account.type.rawValue.capitalized)
+                    .detailText()
+            }
+
+            Spacer()
+
+            Text(balanceText(for: account))
+                .monospacedDigit()
+                .foregroundStyle(balanceTint(for: account))
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accountAccessibilityLabel(for: account))
     }
 
     private func handleAddAccount() {
@@ -619,7 +632,6 @@ struct AccountSettingsView: View {
     private func accountAccessibilityLabel(for account: AccountDTO) -> String {
         "\(account.name), \(account.type.rawValue.capitalized), \(balanceText(for: account))"
     }
-
 }
 
 private struct AccountItemGroup: Identifiable {
@@ -634,7 +646,9 @@ private struct PendingAccountRemoval: Identifiable {
     let institutionName: String
     let accountCount: Int
 
-    var id: String { itemId }
+    var id: String {
+        itemId
+    }
 }
 
 struct NotificationSettingsView: View {
@@ -651,86 +665,95 @@ struct NotificationSettingsView: View {
     var body: some View {
         @Bindable var state = appState
 
-        ScrollView {
-            VStack(alignment: .leading, spacing: Spacing.lg) {
-                SettingsCard {
-                    permissionStatusRow
+        Form {
+            Section {
+                permissionStatusRow
 
-                    Toggle("Enable notifications", isOn: $state.notificationsEnabled)
-                        .onChange(of: appState.notificationsEnabled) { _, enabled in
-                            if enabled {
-                                Task {
-                                    let granted = await appState.requestNotificationPermission()
-                                    await refreshPermissionStatus()
-                                    guard granted else {
-                                        return
-                                    }
+                Toggle("Enable notifications", isOn: $state.notificationsEnabled)
+                    .onChange(of: appState.notificationsEnabled) { _, enabled in
+                        if enabled {
+                            Task {
+                                let granted = await appState.requestNotificationPermission()
+                                await refreshPermissionStatus()
+                                guard granted else {
+                                    return
                                 }
-                            } else {
-                                Task { await refreshPermissionStatus() }
                             }
-                        }
-                        .disabled(permissionPresentation.isNotificationToggleDisabled)
-                }
-
-                SettingsCard(title: "Transaction Alerts") {
-                    Toggle("Large transactions", isOn: $state.notifyLargeTransaction)
-                        .disabled(areNotificationControlsDisabled)
-
-                    settingsRow("Threshold") {
-                        HStack(spacing: Spacing.sm) {
-                            Text("$")
-                                .foregroundStyle(.secondary)
-                            TextField(
-                                "",
-                                value: $state.largeTransactionThreshold,
-                                format: .number.precision(.fractionLength(0))
-                            )
-                            .frame(width: 72)
-                            .textFieldStyle(.roundedBorder)
+                        } else {
+                            Task { await refreshPermissionStatus() }
                         }
                     }
-                    .disabled(areNotificationControlsDisabled || !appState.notifyLargeTransaction)
-
-                    if !areNotificationControlsDisabled,
-                       appState.notifyLargeTransaction,
-                       appState.largeTransactionThreshold <= 0 {
-                        InlineSettingsNotice(
-                            text: "A $0 threshold sends an alert for every outgoing transaction.",
-                            icon: "bell.badge",
-                            tint: SemanticColors.warning
-                        )
-                    }
-
-                    Toggle("Low balance warning", isOn: $state.notifyLowBalance)
-                        .disabled(areNotificationControlsDisabled)
-
-                    settingsRow("Threshold") {
-                        HStack(spacing: Spacing.sm) {
-                            Text("$")
-                                .foregroundStyle(.secondary)
-                            TextField(
-                                "",
-                                value: $state.lowBalanceThreshold,
-                                format: .number.precision(.fractionLength(0))
-                            )
-                            .frame(width: 72)
-                            .textFieldStyle(.roundedBorder)
-                        }
-                    }
-                    .disabled(areNotificationControlsDisabled || !appState.notifyLowBalance)
-                }
-
-                SettingsCard(title: "Credit Alerts") {
-                    Toggle("High utilization", isOn: $state.notifyHighUtilization)
-                        .disabled(areNotificationControlsDisabled)
-                    Text("Uses credit warning threshold (\(Formatters.percent(appState.creditUtilizationThreshold, decimals: 0)))")
-                        .detailText()
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                    .disabled(permissionPresentation.isNotificationToggleDisabled)
             }
-            .padding(Spacing.lg)
+
+            Section("Transaction alerts") {
+                Toggle("Large transactions", isOn: $state.notifyLargeTransaction)
+                    .disabled(areNotificationControlsDisabled)
+
+                LabeledContent("Large transaction threshold") {
+                    HStack(spacing: Spacing.xs) {
+                        Text("$")
+                            .foregroundStyle(.secondary)
+                        TextField(
+                            "Large transaction threshold",
+                            value: $state.largeTransactionThreshold,
+                            format: .number.precision(.fractionLength(0))
+                        )
+                        .labelsHidden()
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 80)
+                        .textFieldStyle(.roundedBorder)
+                        .accessibilityLabel("Large transaction threshold in dollars")
+                    }
+                }
+                .disabled(areNotificationControlsDisabled || !appState.notifyLargeTransaction)
+
+                if !areNotificationControlsDisabled,
+                   appState.notifyLargeTransaction,
+                   appState.largeTransactionThreshold <= 0
+                {
+                    InlineSettingsNotice(
+                        text: "A $0 threshold sends an alert for every outgoing transaction.",
+                        icon: "bell.badge",
+                        tint: SemanticColors.warning
+                    )
+                }
+
+                Toggle("Low balance warning", isOn: $state.notifyLowBalance)
+                    .disabled(areNotificationControlsDisabled)
+
+                LabeledContent("Low balance threshold") {
+                    HStack(spacing: Spacing.xs) {
+                        Text("$")
+                            .foregroundStyle(.secondary)
+                        TextField(
+                            "Low balance threshold",
+                            value: $state.lowBalanceThreshold,
+                            format: .number.precision(.fractionLength(0))
+                        )
+                        .labelsHidden()
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 80)
+                        .textFieldStyle(.roundedBorder)
+                        .accessibilityLabel("Low balance threshold in dollars")
+                    }
+                }
+                .disabled(areNotificationControlsDisabled || !appState.notifyLowBalance)
+            }
+
+            Section("Credit alerts") {
+                Toggle("High utilization", isOn: $state.notifyHighUtilization)
+                    .disabled(areNotificationControlsDisabled)
+
+                Text(
+                    "Uses credit warning threshold (\(Formatters.percent(appState.creditUtilizationThreshold, decimals: 0)))"
+                )
+                .detailText()
+                .fixedSize(horizontal: false, vertical: true)
+            }
         }
+        .formStyle(.grouped)
+        .toggleStyle(.switch)
         .task {
             await refreshPermissionStatus()
         }
@@ -771,7 +794,8 @@ struct NotificationSettingsView: View {
     }
 
     private func openNotificationSettings() {
-        guard let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") else { return }
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")
+        else { return }
         NSWorkspace.shared.open(url)
     }
 
@@ -844,9 +868,9 @@ struct NotificationSettingsView: View {
     private func permissionActionAccessibilityHint(for action: NotificationPermissionRecoveryAction) -> Text {
         switch action {
         case .requestPermission:
-            Text("Requests macOS notification permission for PlaidBar.")
+            Text("Requests macOS notification permission for VaultPeek.")
         case .openSystemSettings:
-            Text("Opens macOS Notification settings for PlaidBar.")
+            Text("Opens macOS Notification settings for VaultPeek.")
         case .checkAgain:
             Text("Checks the current macOS notification permission again.")
         case .runBundledApp:
@@ -877,16 +901,16 @@ struct AboutView: View {
     let updater: SPUUpdater
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Spacing.lg) {
-                HStack(alignment: .top, spacing: Spacing.md) {
-                    Image(systemName: "dollarsign.circle.fill")
-                        .font(.system(size: 46))
-                        .foregroundStyle(SemanticColors.brand)
+        Form {
+            Section {
+                HStack(alignment: .center, spacing: Spacing.md) {
+                    Image(nsImage: appIconImage)
+                        .resizable()
+                        .frame(width: 64, height: 64)
                         .accessibilityHidden(true)
 
                     VStack(alignment: .leading, spacing: Spacing.xs) {
-                        Text("PlaidBar")
+                        Text(PlaidBarConstants.appName)
                             .font(.title2)
                             .fontWeight(.bold)
 
@@ -900,53 +924,56 @@ struct AboutView: View {
 
                     Spacer()
                 }
+                .padding(.vertical, Spacing.xs)
+            }
 
-                SettingsCard(title: "Support") {
-                    supportLink(
-                        "Troubleshooting",
-                        systemImage: "wrench.and.screwdriver",
-                        url: "https://github.com/ftchvs/PlaidBar/blob/main/docs/troubleshooting.md",
-                        detail: "Setup, server, Plaid Link, notifications, and screenshot fixes."
-                    )
+            Section("Support") {
+                supportLink(
+                    "Troubleshooting",
+                    systemImage: "wrench.and.screwdriver",
+                    url: "https://github.com/ftchvs/PlaidBar/blob/main/docs/troubleshooting.md",
+                    detail: "Setup, server, Plaid Link, notifications, and screenshot fixes."
+                )
 
-                    supportLink(
-                        "Privacy",
-                        systemImage: "lock.shield",
-                        url: "https://github.com/ftchvs/PlaidBar/blob/main/docs/privacy.md",
-                        detail: "What stays local, what calls Plaid, and what not to share."
-                    )
+                supportLink(
+                    "Privacy",
+                    systemImage: "lock.shield",
+                    url: "https://github.com/ftchvs/PlaidBar/blob/main/docs/privacy.md",
+                    detail: "What stays local, what calls Plaid, and what not to share."
+                )
 
-                    supportLink(
-                        "Security",
-                        systemImage: "exclamationmark.shield",
-                        url: "https://github.com/ftchvs/PlaidBar/blob/main/SECURITY.md",
-                        detail: "Private reporting path for token, credential, or data exposure."
-                    )
-                }
+                supportLink(
+                    "Security",
+                    systemImage: "exclamationmark.shield",
+                    url: "https://github.com/ftchvs/PlaidBar/blob/main/SECURITY.md",
+                    detail: "Private reporting path for token, credential, or data exposure."
+                )
+            }
 
-                SettingsCard(title: "Project") {
-                    supportLink(
-                        "GitHub Repository",
-                        systemImage: "chevron.left.forwardslash.chevron.right",
-                        url: "https://github.com/ftchvs/PlaidBar",
-                        detail: "Source, issues, releases, and contribution workflow."
-                    )
+            Section("Project") {
+                supportLink(
+                    "GitHub Repository",
+                    systemImage: "chevron.left.forwardslash.chevron.right",
+                    url: "https://github.com/ftchvs/PlaidBar",
+                    detail: "Source, issues, and releases (private repository)."
+                )
 
-                    supportLink(
-                        "1.0 Roadmap",
-                        systemImage: "map",
-                        url: "https://github.com/ftchvs/PlaidBar/blob/main/docs/v1.0-roadmap.md",
-                        detail: "Product, design, system, security, and open-source release plan."
-                    )
+                supportLink(
+                    "1.0 Roadmap",
+                    systemImage: "map",
+                    url: "https://github.com/ftchvs/PlaidBar/blob/main/docs/v1.0-roadmap.md",
+                    detail: "Product, design, system, security, and release plan."
+                )
 
-                    supportLink(
-                        "Release Notes",
-                        systemImage: "doc.text",
-                        url: "https://github.com/ftchvs/PlaidBar/blob/main/docs/release-notes.md",
-                        detail: "Curated release summary for current and upcoming versions."
-                    )
-                }
+                supportLink(
+                    "Release Notes",
+                    systemImage: "doc.text",
+                    url: "https://github.com/ftchvs/PlaidBar/blob/main/docs/release-notes.md",
+                    detail: "Curated release summary for current and upcoming versions."
+                )
+            }
 
+            Section {
                 HStack {
                     Button {
                         updater.checkForUpdates()
@@ -956,13 +983,18 @@ struct AboutView: View {
 
                     Spacer()
 
-                    Text("MIT License")
+                    Text("© 2026 Felipe Tavares Chaves · Proprietary")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
             }
-            .padding(Spacing.lg)
         }
+        .formStyle(.grouped)
+    }
+
+    @MainActor
+    private var appIconImage: NSImage {
+        NSImage(named: NSImage.applicationIconName) ?? NSApp.applicationIconImage
     }
 
     @ViewBuilder
