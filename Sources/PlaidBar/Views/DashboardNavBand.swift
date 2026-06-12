@@ -1,3 +1,4 @@
+import AppKit
 import PlaidBarCore
 import SwiftUI
 
@@ -5,6 +6,8 @@ import SwiftUI
 
 struct DashboardStatusStrip: View {
     @Environment(AppState.self) private var appState
+    let openSettings: () -> Void
+    let onAddAccount: () -> Void
 
     var body: some View {
         HStack(spacing: 0) {
@@ -41,11 +44,38 @@ struct DashboardStatusStrip: View {
                 icon: itemIcon,
                 tint: itemTint
             )
+
+            StatusDivider()
+
+            StatusStripActions(
+                actions: statusActions,
+                labelForAction: actionLabel,
+                isDisabled: appState.isLoading,
+                perform: perform
+            )
         }
         .padding(.horizontal, Spacing.sm)
         .padding(.vertical, Spacing.rowVertical)
         .nativeInsetSurface(cornerRadius: SurfaceTokens.panelCornerRadius)
         .accessibilityElement(children: .contain)
+    }
+
+    private var readiness: DashboardStatusReadiness {
+        appState.dashboardStatusReadiness
+    }
+
+    private var statusActions: [DashboardStatusReadinessAction] {
+        var actions: [DashboardStatusReadinessAction] = []
+        if let primaryAction = readiness.primaryAction {
+            actions.append(primaryAction)
+        }
+        actions.append(contentsOf: readiness.secondaryActions)
+        let uniqueActions = actions.reduce(into: [DashboardStatusReadinessAction]()) { uniqueActions, action in
+            if !uniqueActions.contains(action) {
+                uniqueActions.append(action)
+            }
+        }
+        return Array(uniqueActions.prefix(2))
     }
 
     private var serverIcon: String {
@@ -83,6 +113,51 @@ struct DashboardStatusStrip: View {
         if appState.needsLoginItemCount > 0 { return SemanticColors.warning }
         return .secondary
     }
+
+    private func actionLabel(for action: DashboardStatusReadinessAction) -> String {
+        if action == .reconnect,
+           let title = ItemRecoveryTarget.actionTitle(from: appState.itemStatuses) {
+            return title
+        }
+        if readiness.primaryAction == action {
+            return readiness.primaryActionTitle ?? action.defaultTitle
+        }
+        if action == .addAccount {
+            return "Connect Bank"
+        }
+        return action.defaultTitle
+    }
+
+    private func perform(_ action: DashboardStatusReadinessAction) {
+        switch action {
+        case .checkServer:
+            Task { await appState.checkServerConnection() }
+        case .addAccount:
+            onAddAccount()
+        case .refresh:
+            Task { await appState.refreshDashboard() }
+        case .reconnect:
+            guard let itemId = ItemRecoveryTarget.itemId(from: appState.itemStatuses) else {
+                Task { await appState.refreshDashboard() }
+                return
+            }
+            Task { await appState.reconnectItem(itemId: itemId) }
+        case .openSettings:
+            openSettings()
+        case .requestNotificationPermission:
+            Task { _ = await appState.requestNotificationPermission() }
+        case .openNotificationSettings:
+            openNotificationSettings()
+        }
+    }
+
+    private func openNotificationSettings() {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") else {
+            openSettings()
+            return
+        }
+        NSWorkspace.shared.open(url)
+    }
 }
 
 private struct StatusStripItem: View {
@@ -111,6 +186,34 @@ private struct StatusStripItem: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct StatusStripActions: View {
+    let actions: [DashboardStatusReadinessAction]
+    let labelForAction: (DashboardStatusReadinessAction) -> String
+    let isDisabled: Bool
+    let perform: (DashboardStatusReadinessAction) -> Void
+
+    var body: some View {
+        HStack(spacing: Spacing.xs) {
+            ForEach(actions, id: \.self) { action in
+                Button {
+                    perform(action)
+                } label: {
+                    Label(labelForAction(action), systemImage: action.defaultIconName)
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.borderless)
+                .controlSize(.small)
+                .help(labelForAction(action))
+                .accessibilityLabel(labelForAction(action))
+                .disabled(isDisabled)
+            }
+        }
+        .frame(minWidth: 46, alignment: .trailing)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Status actions")
     }
 }
 

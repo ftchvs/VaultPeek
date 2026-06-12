@@ -46,7 +46,10 @@ struct MainPopover: View {
                         DashboardHeader()
                             .environment(appState)
 
-                        DashboardStatusStrip()
+                        DashboardStatusStrip(
+                            openSettings: { openSettings() },
+                            onAddAccount: openAccountSetup
+                        )
                             .environment(appState)
 
                         if selectedAccount == nil {
