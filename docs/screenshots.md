@@ -41,6 +41,20 @@ The Status capture uses demo data with `--screenshot-status-recovery`. That
 fixture keeps the regular demo dashboard healthy, while the Status filter shows
 one recovered institution and one institution that needs login/reconnect.
 
+## Demo Scenario Traceability
+
+The demo narrative is defined in [Demo Scenarios](demo-scenarios.md). Use those
+scenario names when reviewing screenshot diffs so each public image has a clear
+fixture intent, dashboard story, and expected recovery state.
+
+| Scenario | Primary assets | Review focus |
+|----------|----------------|--------------|
+| `steady-household-overview` | `Assets/dashboard.png` | First-glance cash, credit, savings, debt, sync health, and heatmap context |
+| `cash-runway-check` | `Assets/dashboard-cash.png`, `Assets/dashboard-savings.png` | Depository balances, selected-account detail, and quiet healthy status |
+| `credit-pressure-review` | `Assets/dashboard-credit.png`, `Assets/dashboard-debt.png` | Utilization, available credit, owed balances, and non-budgeting debt emphasis |
+| `reconnect-confidence-check` | `Assets/dashboard-status.png` | Login-required item recovery without raw Plaid payloads or real errors |
+| `first-run-sandbox-preflight` | `Assets/setup-sandbox-preflight.png` | Fail-closed setup readiness before Plaid Link opens |
+
 ## macOS Permissions
 
 The screenshot script uses macOS UI automation. Terminal needs:

@@ -93,6 +93,9 @@ Generate fresh dashboard screenshots with demo data:
 The screenshot script launches PlaidBar locally, captures the sandbox preflight
 screen, each dashboard filter state, and current settings surfaces. It requires
 macOS Screen Recording and Accessibility permission for Terminal.
+The named synthetic stories behind these captures are documented in
+[Demo Scenarios](docs/demo-scenarios.md), including fixture intent, expected
+status/recovery state, and reduced-noise composition guidance.
 
 ### Settings
 
