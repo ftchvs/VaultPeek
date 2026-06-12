@@ -189,6 +189,11 @@ Available commands after installation:
 | Command | Purpose |
 |---------|---------|
 | `plaidbar --demo` | Launch the menu bar app with local fixture data |
+| `plaidbar-cli status --json` | Query the running local server with agent-friendly JSON output |
+| `plaidbar-cli item list` | List linked Plaid Items stored by PlaidBarServer |
+| `plaidbar-cli balance` | Fetch current balances through PlaidBarServer |
+| `plaidbar-cli transactions list --count 5` | Fetch recent transaction updates through PlaidBarServer |
+| `plaidbar-cli link --no-open --json` | Create a Hosted Link URL without opening a browser |
 | `plaidbar-server --sandbox` | Start the local Plaid companion server in sandbox mode |
 | `plaidbar-server --version` | Print the installed VaultPeek version |
 
@@ -214,6 +219,8 @@ few technical surfaces for compatibility, and those are not bugs:
 
 Rename history and upgrade guidance live in
 [docs/release-notes.md](docs/release-notes.md) and [CHANGELOG.md](CHANGELOG.md).
+
+`plaidbar-cli` follows the official Plaid CLI's terminal/agent conventions where they fit PlaidBar: table output by default, `--json` for structured stdout, diagnostics on stderr, and local-server bearer auth from `~/.plaidbar/auth-token`. It does not read Plaid Dashboard credentials directly; Plaid secrets and access tokens stay in `PlaidBarServer`.
 
 Run Plaid sandbox mode with the installed server and app:
 
