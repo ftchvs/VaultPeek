@@ -29,7 +29,7 @@ for appearance in light dark; do
     # --show-popover is required alongside --render-snapshot: its delayed
     # presentation path reliably opens the popover even when the status item
     # starts in menu bar overflow.
-    "$BINARY" --demo --show-popover --render-snapshot "$out" --appearance "$appearance"
+    "$BINARY" --demo --show-popover --render-snapshot "$out" --appearance "$appearance" --screenshot-filter all
 done
 
 echo "Done. Review PNGs under $OUTPUT_ROOT (demo data only) before committing."
