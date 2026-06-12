@@ -324,7 +324,7 @@ reference for PR-005 follow-up work.
 
 ### NotificationSettingsView
 
-**Anatomy:** Form | Master toggle "Enable notifications" | Permission denied warning (if applicable): `exclamationmark.triangle` icon + explanation text | Section "Transaction Alerts": Large transactions toggle + threshold field ($), Low balance toggle + threshold field ($) | Section "Credit Alerts": High utilization toggle + reference to credit warning threshold from General
+**Anatomy:** `Form` + `.formStyle(.grouped)` + switch-style toggles | First section: macOS permission status row (icon + label + detail + optional recovery action) and master toggle "Enable notifications" | Section "Transaction alerts": Large transactions toggle + "Large transaction threshold" field ($), Low balance warning toggle + "Low balance threshold" field ($) | Section "Credit alerts": High utilization toggle + reference to credit warning threshold from General
 
 **Code reference:** `Sources/PlaidBar/Settings/SettingsView.swift`
 
@@ -332,8 +332,9 @@ reference for PR-005 follow-up work.
 |-------|----------|
 | Notifications off | Master toggle off; all sub-toggles and fields disabled |
 | Notifications enabled | Master toggle on; sub-toggles and threshold fields enabled |
-| Permission denied (macOS) | Warning banner: `exclamationmark.triangle` + "Enable in System Settings > Notifications"; master toggle forced off |
+| Permission denied (macOS) | Permission status row shows warning icon + "Denied" label, explanation text, and an "Open System Settings" recovery button; sub-controls disabled |
 | Individual trigger disabled | Specific toggle off; associated threshold field disabled |
+| Zero-dollar threshold | `InlineSettingsNotice` (`bell.badge` icon + warning tint + text) explains a $0 threshold alerts on every outgoing transaction |
 | High utilization reference | Shows "Uses credit warning threshold ({X}%)" in `.detailText()` — threshold set in General tab |
 
 ### SpendingComparison
@@ -398,7 +399,7 @@ Pattern for all empty states:
 | Selected account panel | Connection badge, balance metrics, pending/inflow/outflow/sync pills, recent transactions, reconnect/refresh actions | Inline recovery actions for stale or degraded items |
 | Spending activity | GitHub-style 365-day grid with month labels, Spend/Net toggle, intensity legend, and total header | Hover cells for day-level transaction count plus spend or net cashflow |
 | Legacy detail views | AccountsView, TransactionsView, SpendingView, CreditView, StatusView remain available as implementation surfaces and screenshot/reference components | Prefer dashboard-first entry unless adding a focused detail surface |
-| Settings | 4-tab TabView: General, Accounts, Notifications, About (480×380) | TabView |
+| Settings | 4-tab TabView: General, Accounts, Notifications, About; each tab is a native grouped `Form` with switch-style toggles and sentence-case section headers; resizable window (min 560×480) | TabView + `Form(.grouped)` |
 | Onboarding | Demo/Sandbox/Production choice with local-storage disclosure before Plaid Link | Mode choice, Back, Check Connection |
 
 ### Popover Surface Inventory
@@ -415,7 +416,7 @@ absolute paths when adding screenshot or review evidence.
 | Local insights | `LocalInsightsCard` and `InsightMetricPill` in `Sources/PlaidBar/Views/MainPopover.swift` | Optional local-only AI/status content is presented as a card with nested metric pills | Can feel like product/marketing chrome if it competes with financial rows | Prefer a compact disclosure or status row unless local insights become the selected detail focus |
 | Status and readiness | `DashboardStatusReadinessPanel` and `DashboardEmptyAccountState` in `Sources/PlaidBar/Views/MainPopover.swift` | Recovery and empty states use prominent rounded panels | Appropriate when degraded, but card-heavy if shown alongside several other panels | Keep panels exceptional for action-needed states; avoid duplicating status panels in normal healthy dashboard flow |
 | Legacy/detail surfaces | `AccountsView`, `TransactionsView`, `SpendingView`, `CreditView`, and `StatusView` | Older detail views include segmented controls, forms, grids, and diagnostic tiles | Tab-heavy if promoted back to first-level popover navigation | Treat as drill-ins or reference/screenshot surfaces; keep the main popover dashboard-first |
-| Settings | `SettingsView` | 4-tab macOS settings control plane | Tab-heavy by design, but outside the primary popover dashboard | Leave as settings unless a future settings-specific audit scopes a flatter layout |
+| Settings | `SettingsView` | 4-tab macOS settings window; each tab a native grouped `Form` (no hand-rolled card stacks since AND-311) | Tab-heavy by design, but outside the primary popover dashboard | Keep native `Form(.grouped)` idioms for new settings rows instead of reintroducing custom card containers |
 | Onboarding/setup | `SetupView` | Demo/Sandbox/Production choices, preflight rows, and local-storage disclosure use multiple callout blocks | First-run flow can feel card-heavy and marketing-like if choices duplicate each other | Keep boundary explanations, but consolidate duplicate choice surfaces before adding more setup panels |
 
 ## Extending the Design System
