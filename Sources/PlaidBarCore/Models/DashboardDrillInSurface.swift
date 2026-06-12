@@ -135,14 +135,14 @@ public struct DashboardAccountDrillInPath: Sendable, Equatable {
         let displayName = AccountPresentation.displayName(for: account)
         if isSelected {
             return Self(
-                accessibilityHint: "Press Return or Space to collapse the account drill-in.",
-                accessibilityActionName: "Collapse account details",
-                pointerHelp: "Collapse details for \(displayName)"
+                accessibilityHint: "Press Return or Space to close the account details panel.",
+                accessibilityActionName: "Close account details",
+                pointerHelp: "Close details for \(displayName)"
             )
         }
 
         return Self(
-            accessibilityHint: "Press Return or Space to open the account drill-in below this row.",
+            accessibilityHint: "Press Return or Space to open the account details panel beside the dashboard.",
             accessibilityActionName: "Open account details",
             pointerHelp: "Open details for \(displayName)"
         )
