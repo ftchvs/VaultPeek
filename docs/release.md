@@ -4,7 +4,7 @@ PlaidBar is proprietary software distributed privately to licensed users. The
 public Homebrew tap has been retired and `Formula/plaidbar.rb` removed.
 
 PlaidBar 1.0 ships as a drag-install DMG built with `./Scripts/package-dmg.sh`:
-it wraps a self-contained `PlaidBar.app` (app + bundled `PlaidBarServer`,
+it wraps a self-contained `VaultPeek.app` (app + bundled `PlaidBarServer`,
 auto-started on launch) with an `/Applications` symlink. The DMG is currently
 ad-hoc signed; Developer ID signing, notarization, and the Sparkle appcast
 remain deferred until the clean-machine Gatekeeper path is real, so first launch
@@ -20,7 +20,7 @@ regenerate `Sources/PlaidBar/Resources/AppIcon.icns` after design changes.
 - 1.0 distribution shape: privately-distributed drag-install DMG
 - GitHub release: tagged from clean `main` (private repo)
 
-Bundled commands (inside `PlaidBar.app`):
+Bundled commands (inside `VaultPeek.app`):
 
 ```bash
 plaidbar --demo
@@ -81,7 +81,7 @@ Distribute the resulting DMG privately to licensed users.
 
 ## Distribution Scope
 
-The DMG ships a self-contained `PlaidBar.app` bundling the menu bar app, local
+The DMG ships a self-contained `VaultPeek.app` bundling the menu bar app, local
 companion server, and launcher:
 
 - `plaidbar`
