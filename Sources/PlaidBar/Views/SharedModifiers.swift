@@ -18,10 +18,14 @@ enum SurfaceRank {
     case emphasized(Color)
 
     var fill: AnyShapeStyle {
+        // Fills sit over the popover's `.ultraThinMaterial` root: the thinner
+        // material lets the desktop through, so panels need a little more body
+        // than over `.regularMaterial` to keep separation and keep `.secondary`
+        // text legible over a busy wallpaper.
         switch self {
-        case .raised: AnyShapeStyle(.quaternary.opacity(0.5))
-        case .inset: AnyShapeStyle(.quinary)
-        case let .emphasized(tint): AnyShapeStyle(tint.opacity(0.10))
+        case .raised: AnyShapeStyle(.quaternary)
+        case .inset: AnyShapeStyle(.quaternary.opacity(0.55))
+        case let .emphasized(tint): AnyShapeStyle(tint.opacity(0.12))
         }
     }
 
