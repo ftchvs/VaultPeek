@@ -1,12 +1,16 @@
-import SwiftUI
 import PlaidBarCore
+import SwiftUI
 
+/// Onboarding: one mode choice (Demo / Sandbox / Production), one preflight
+/// checklist, one connect step. Renders at the dashboard's 480pt width so
+/// setup and dashboard never snap between window sizes.
 struct SetupView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var setupMode: SetupMode = .choose
     var onComplete: (() -> Void)?
 
-    enum SetupMode: Sendable, Equatable {
+    enum SetupMode: Equatable {
         case choose
         case sandbox
         case production
@@ -34,48 +38,49 @@ struct SetupView: View {
                     summary: "Real accounts with approved Plaid production credentials.",
                     primaryTitle: "Open Link"
                 )
-            case .connecting(let environment):
+            case let .connecting(environment):
                 connectingView(environment: environment)
             }
         }
-        .padding()
+        .padding(Spacing.lg)
         .frame(maxWidth: .infinity)
-        .animation(.easeInOut(duration: 0.25), value: setupMode)
+        .animation(
+            MotionTokens.animation(MotionTokens.standard, reduceMotion: reduceMotion),
+            value: setupMode
+        )
     }
+
+    // MARK: - Choose
 
     private var choiceView: some View {
         VStack(spacing: Spacing.lg) {
             HStack(alignment: .top, spacing: Spacing.md) {
                 Image(systemName: "menubar.rectangle")
-                    .font(.system(size: 28, weight: .semibold))
+                    .font(.system(size: 22, weight: .medium))
                     .foregroundStyle(SemanticColors.brand)
-                    .frame(width: 42, height: 42)
-                    .background(SemanticColors.brand.opacity(0.14), in: RoundedRectangle(cornerRadius: 8))
+                    .frame(width: 40, height: 40)
+                    .background(SemanticColors.brand.opacity(0.14), in: RoundedRectangle(cornerRadius: Radius.panel))
 
                 VStack(alignment: .leading, spacing: Spacing.xs) {
                     Text("PlaidBar")
-                        .font(.title2.weight(.bold))
-                    Text("Menu bar finance, one click away.")
-                        .font(.callout.weight(.medium))
-                    Text("Choose demo data or connect through your local PlaidBarServer.")
-                        .detailText()
-                        .fixedSize(horizontal: false, vertical: true)
+                        .font(.title3.weight(.semibold))
+                    Text(
+                        "Your accounts, one click away. Choose demo data or connect through your local PlaidBarServer."
+                    )
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
                 }
 
-                Spacer(minLength: Spacing.sm)
+                Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            OnboardingModeStrip(
-                onDemo: startDemoMode,
-                onSandbox: { setupMode = .sandbox },
-                onProduction: { setupMode = .production }
-            )
-
+            // One mode chooser. Each row is the single authoritative way to
+            // enter its mode — never duplicated by a second strip of pills.
             VStack(spacing: Spacing.sm) {
                 OnboardingChoiceButton(
                     title: "View Demo",
-                    subtitle: "Local sample data. No Plaid credentials.",
+                    subtitle: "Local sample data. No Plaid credentials, no server.",
                     icon: "play.circle",
                     color: SemanticColors.brandSecondary
                 ) {
@@ -84,7 +89,7 @@ struct SetupView: View {
 
                 OnboardingChoiceButton(
                     title: "Connect Sandbox",
-                    subtitle: "Plaid test institutions.",
+                    subtitle: "Plaid test institutions on your local server.",
                     icon: "testtube.2",
                     color: SemanticColors.brand
                 ) {
@@ -105,6 +110,8 @@ struct SetupView: View {
         }
     }
 
+    // MARK: - Link preparation
+
     private func linkPrepView(
         environment: PlaidEnvironment,
         icon: String,
@@ -114,13 +121,12 @@ struct SetupView: View {
     ) -> some View {
         VStack(spacing: Spacing.lg) {
             Image(systemName: icon)
-                .font(.system(size: 36))
+                .font(.system(size: 32, weight: .medium))
                 .foregroundStyle(environment == .production ? SemanticColors.positive : SemanticColors.brand)
 
             VStack(spacing: Spacing.xs) {
                 Text(title)
-                    .font(.title3)
-                    .fontWeight(.semibold)
+                    .font(.title3.weight(.semibold))
 
                 Text(summary)
                     .multilineTextAlignment(.center)
@@ -143,8 +149,8 @@ struct SetupView: View {
                 )
             }
             .padding(Spacing.md)
-            .background(.quaternary.opacity(0.5))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassSurface(.inset)
 
             OnboardingPreflightPanel(environment: environment)
                 .environment(appState)
@@ -177,7 +183,6 @@ struct SetupView: View {
             }
             .buttonStyle(.borderedProminent)
             .disabled(appState.isLoading || !isPreflightReady(for: environment))
-            .opacity(isPreflightReady(for: environment) ? 1 : 0.45)
 
             Button("Back") {
                 setupMode = .choose
@@ -191,17 +196,19 @@ struct SetupView: View {
         }
     }
 
+    // MARK: - Connecting
+
     private func connectingView(environment: PlaidEnvironment) -> some View {
         let completion = appState.firstRunCompletionState
 
         return VStack(spacing: Spacing.lg) {
-            if completion.step != .ready && completion.step != .blocked {
+            if completion.step != .ready, completion.step != .blocked {
                 ProgressView()
-                    .scaleEffect(1.5)
+                    .controlSize(.large)
             }
 
             Text(connectingTitle(for: completion))
-                .font(.title3)
+                .font(.title3.weight(.semibold))
 
             Text(connectingDetail(for: completion, environment: environment))
                 .multilineTextAlignment(.center)
@@ -217,7 +224,10 @@ struct SetupView: View {
                     }
                 }
             } label: {
-                Label(primaryCompletionActionTitle(for: completion), systemImage: primaryCompletionActionIcon(for: completion))
+                Label(
+                    primaryCompletionActionTitle(for: completion),
+                    systemImage: primaryCompletionActionIcon(for: completion)
+                )
             }
             .buttonStyle(.bordered)
             .disabled(appState.isLoading || (!completion.canRetry && !completion.isReady))
@@ -336,7 +346,7 @@ private struct FirstRunCompletionPanel: View {
         }
         .padding(Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
+        .glassSurface(.inset)
     }
 
     private var icon: String {
@@ -392,7 +402,7 @@ private struct SetupRecoveryCallout: View {
         }
         .padding(Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(color.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+        .glassSurface(.emphasized(color))
         .accessibilityElement(children: .combine)
     }
 }
@@ -439,53 +449,6 @@ private struct SetupSupportLinks: View {
     }
 }
 
-private struct OnboardingModeStrip: View {
-    let onDemo: () -> Void
-    let onSandbox: () -> Void
-    let onProduction: () -> Void
-
-    var body: some View {
-        HStack(spacing: Spacing.sm) {
-            ModePill(title: "Demo", subtitle: "Local", icon: "play.circle.fill", tint: SemanticColors.brandSecondary, action: onDemo)
-            ModePill(title: "Sandbox", subtitle: "Plaid test", icon: "testtube.2", tint: SemanticColors.brand, action: onSandbox)
-            ModePill(title: "Production", subtitle: "Real data", icon: "lock.shield.fill", tint: SemanticColors.positive, action: onProduction)
-        }
-        .frame(maxWidth: .infinity)
-    }
-}
-
-private struct ModePill: View {
-    let title: String
-    let subtitle: String
-    let icon: String
-    let tint: Color
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(tint)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title)
-                        .font(.caption.weight(.bold))
-                    Text(subtitle)
-                        .microText()
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
-    }
-}
-
 private struct OnboardingChoiceButton: View {
     let title: String
     let subtitle: String
@@ -499,7 +462,7 @@ private struct OnboardingChoiceButton: View {
                 Image(systemName: icon)
                     .font(.title3)
                     .foregroundStyle(color)
-                    .frame(width: 24)
+                    .frame(width: Sizing.iconChip)
 
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
                     Text(title)
@@ -514,7 +477,7 @@ private struct OnboardingChoiceButton: View {
                 Spacer(minLength: Spacing.sm)
 
                 Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
+                    .font(.caption.weight(.medium))
                     .foregroundStyle(.tertiary)
             }
             .padding(Spacing.md)
@@ -522,8 +485,9 @@ private struct OnboardingChoiceButton: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .background(.quaternary.opacity(0.45))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .focusable(true)
+        .hoverHighlight(cornerRadius: Radius.panel)
+        .glassSurface(.inset)
     }
 }
 
@@ -551,7 +515,7 @@ private struct OnboardingPreflightPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             HStack {
-                Text("PREFLIGHT")
+                Text("Preflight")
                     .sectionTitle()
                     .foregroundStyle(.secondary)
 
@@ -574,13 +538,13 @@ private struct OnboardingPreflightPanel: View {
         }
         .padding(Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
+        .glassSurface(.inset)
     }
 
     private func preflightRow(_ row: OnboardingPreflightRow) -> some View {
         HStack(spacing: Spacing.sm) {
             Image(systemName: row.iconName)
-                .foregroundStyle(color(for: row.state))
+                .foregroundStyle(.secondary)
                 .frame(width: 18)
 
             Text(row.title)
@@ -588,16 +552,37 @@ private struct OnboardingPreflightPanel: View {
 
             Spacer(minLength: Spacing.sm)
 
+            // The state icon changes shape per state (never tint alone),
+            // and the value text stays contrast-safe instead of being
+            // colored at caption size.
+            if let stateIcon = stateIconName(for: row.state) {
+                Image(systemName: stateIcon)
+                    .foregroundStyle(color(for: row.state))
+            }
+
             Text(row.value)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(color(for: row.state))
+                .font(.caption.weight(.medium))
+                .foregroundStyle(valueStyle(for: row.state))
                 .lineLimit(1)
-                .minimumScaleFactor(0.75)
+                .minimumScaleFactor(0.8)
         }
         .font(.caption)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(row.title): \(row.value)")
         .accessibilityHint(row.accessibilityHint)
+    }
+
+    private func stateIconName(for state: OnboardingPreflightRowState) -> String? {
+        switch state {
+        case .ready:
+            "checkmark.circle.fill"
+        case .blocked:
+            "xmark.circle.fill"
+        case .unknown:
+            "circle.dotted"
+        case .informational:
+            nil
+        }
     }
 
     private func color(for state: OnboardingPreflightRowState) -> Color {
@@ -608,6 +593,15 @@ private struct OnboardingPreflightPanel: View {
             SemanticColors.negative
         case .unknown, .informational:
             .secondary
+        }
+    }
+
+    private func valueStyle(for state: OnboardingPreflightRowState) -> AnyShapeStyle {
+        switch state {
+        case .ready, .blocked:
+            AnyShapeStyle(.primary)
+        case .unknown, .informational:
+            AnyShapeStyle(.secondary)
         }
     }
 }
