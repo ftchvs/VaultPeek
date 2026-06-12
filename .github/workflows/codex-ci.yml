@@ -20,7 +20,15 @@ concurrency:
 
 jobs:
   review:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false }}
+    if: >-
+      ${{
+        github.event_name == 'workflow_dispatch' ||
+        (
+          github.event.pull_request.draft == false &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          contains('OWNER,MEMBER,COLLABORATOR', github.event.pull_request.author_association)
+        )
+      }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -85,34 +93,69 @@ jobs:
             echo "PR_NUMBER=$PR_NUMBER"
           } >> "$GITHUB_ENV"
 
+      - name: Install Codex CLI
+        env:
+          NPM_CONFIG_AUDIT: "false"
+          NPM_CONFIG_FUND: "false"
+        run: npm install -g @openai/codex
+
+      - name: Prepare Linux sandbox
+        if: ${{ runner.os == 'Linux' && runner.environment == 'github-hosted' }}
+        run: |
+          set -euo pipefail
+
+          current_userns="$(sysctl -n kernel.unprivileged_userns_clone 2>/dev/null || true)"
+          if [ -n "$current_userns" ] && [ "$current_userns" != "1" ]; then
+            sudo sysctl -w kernel.unprivileged_userns_clone=1
+          fi
+
+          current_apparmor="$(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null || true)"
+          if [ -n "$current_apparmor" ] && [ "$current_apparmor" != "0" ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+
       - name: Run Codex review
         id: run_codex
-        uses: openai/codex-action@v1
         continue-on-error: true
-        with:
-          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
-          prompt-file: .github/codex/prompts/pr-review.md
-          output-file: codex-review.json
-          sandbox: read-only
-          safety-strategy: drop-sudo
-          codex-args: >-
-            ["--ephemeral","--ignore-user-config","--output-schema",".github/codex/schemas/pr-review.schema.json"]
+        env:
+          CODEX_ACCESS_TOKEN: ${{ secrets.CODEX_ACCESS_TOKEN }}
+        run: |
+          set +e
+
+          if [ -z "${CODEX_ACCESS_TOKEN:-}" ]; then
+            echo "::error::Missing CODEX_ACCESS_TOKEN repository secret."
+            echo "exit_code=1" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          codex exec \
+            --ephemeral \
+            --ignore-user-config \
+            --output-schema .github/codex/schemas/pr-review.schema.json \
+            --sandbox read-only \
+            -C "$GITHUB_WORKSPACE" \
+            -o codex-review.json \
+            --json \
+            - < .github/codex/prompts/pr-review.md > codex-events.jsonl
+
+          exit_code=$?
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+          exit "$exit_code"
 
       - name: Normalize Codex result
         id: normalize
         if: always()
         env:
-          CODEX_FINAL_MESSAGE: ${{ steps.run_codex.outputs.final-message }}
           CODEX_OUTCOME: ${{ steps.run_codex.outcome }}
+          CODEX_EXIT_CODE: ${{ steps.run_codex.outputs.exit_code }}
         run: |
           node <<'NODE'
           const fs = require("fs");
 
-          const rawFromOutput = process.env.CODEX_FINAL_MESSAGE || "";
           const rawFromFile = fs.existsSync("codex-review.json")
             ? fs.readFileSync("codex-review.json", "utf8")
             : "";
-          const raw = rawFromOutput.trim() || rawFromFile.trim();
+          const raw = rawFromFile.trim();
 
           let result = {
             verdict: "fail",
@@ -123,8 +166,8 @@ jobs:
                 title: "Codex review did not complete cleanly",
                 path: null,
                 line: null,
-                details: "The Codex Action outcome was not success or its output could not be parsed as JSON.",
-                recommendation: "Open the Codex CI job logs, fix the workflow or Codex runtime failure, then rerun Codex CI."
+                details: `Codex exited with status ${process.env.CODEX_EXIT_CODE || "unknown"} or its output could not be parsed as JSON.`,
+                recommendation: "Open the Codex CI job logs, fix the workflow, token, or Codex runtime failure, then rerun Codex CI."
               }
             ]
           };
@@ -193,6 +236,7 @@ jobs:
             codex-review.json
             codex-review.normalized.json
             codex-review.md
+            codex-events.jsonl
           if-no-files-found: ignore
 
   post-feedback:
