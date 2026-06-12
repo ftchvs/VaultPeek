@@ -1,3 +1,4 @@
+import AppKit
 import MenuBarExtraAccess
 import PlaidBarCore
 import Sparkle
@@ -22,6 +23,28 @@ struct PlaidBarApp: App {
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(700))
                 state.isPopoverPresented = true
+
+                // Debug aid: when the status item is hidden in menu bar
+                // overflow, macOS anchors the popover window beyond every
+                // display, where screenshot tooling cannot capture it.
+                // "--popover-origin x,y" moves it to a visible position.
+                if let origin = CommandLineOptions.value(for: "--popover-origin") {
+                    let parts = origin.split(separator: ",").compactMap { Double($0) }
+                    if parts.count == 2 {
+                        try? await Task.sleep(for: .milliseconds(600))
+                        NSApplication.shared.windows
+                            .first { $0.frame.width >= 400 }?
+                            .setFrameOrigin(NSPoint(x: parts[0], y: parts[1]))
+                    }
+                }
+            }
+        }
+        _ = SnapshotRenderer.renderIfRequested(appState: state)
+        // Debug aid: register as a regular app (Dock icon, app switcher) so
+        // automation/permission systems that skip accessory apps can see it.
+        if CommandLine.arguments.contains("--regular-activation") {
+            Task { @MainActor in
+                NSApplication.shared.setActivationPolicy(.regular)
             }
         }
         Task { @MainActor in

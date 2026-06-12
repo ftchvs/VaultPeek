@@ -617,10 +617,14 @@ final class AppState {
             serverSyncReady = nil
             serverSyncedItemCount = nil
             itemStatuses = []
-            if case ServerClientError.serverNotRunning = error {
+            switch error {
+            case ServerClientError.serverNotRunning, ServerClientError.authTokenUnavailable:
+                // Expected pre-setup states, not actionable errors.
                 self.error = nil
-            } else {
-                self.error = error.localizedDescription
+            default:
+                // Demo mode has no server; never paint the demo dashboard
+                // red over a connection probe.
+                self.error = isDemoMode ? nil : error.localizedDescription
             }
             updateSetupCompletion()
             await recoverBundledServerIfNeeded()
