@@ -154,13 +154,11 @@ Single `@Observable` state object injected via SwiftUI `@Environment`. No Combin
 ```
 MenuBarExtra
 ├── MenuBarLabel (icon + balance text)
-└── MainPopover
+└── MainPopover (dashboard-first surface)
     ├── SetupView (if !isSetupComplete)
-    └── TabContainer
-        ├── AccountsView (grouped by type, net balance)
-        ├── TransactionsView (search, group by date)
-        ├── SpendingView (donut chart, category breakdown)
-        └── CreditView (utilization bars, warnings)
+    ├── DashboardNavBand (Cash/Credit/Savings/Debt/Status filters)
+    ├── AttentionQueueView (degraded-item recovery)
+    └── AccountDetailFlyout (per-account drill-in)
 ```
 
 **Background Refresh:**
