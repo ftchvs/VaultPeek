@@ -10,7 +10,9 @@ it wraps a self-contained `VaultPeek.app` (app + bundled `PlaidBarServer`,
 auto-started on launch) with an `/Applications` symlink. The DMG is currently
 ad-hoc signed; Developer ID signing, notarization, and the Sparkle appcast
 remain deferred until the clean-machine Gatekeeper path is real, so first launch
-needs right-click > Open and release notes must say so.
+needs right-click > Open and release notes must say so. The signing and
+notarization runbook (prep only, not yet performed) is `docs/distribution.md`;
+the final gate set before tagging is `docs/release-checklist.md`.
 
 The bundle ships `AppIcon.icns` (checked by `Scripts/validate-app-bundle.sh`).
 The icon is generated from code — rerun `./Scripts/generate-app-icon.sh` to
@@ -36,17 +38,16 @@ staged into the drag-install DMG.
 
 ## Release-Prep PR Checklist
 
+Work through `docs/release-checklist.md` end to end. The command skeleton:
+
 1. Confirm metadata alignment:
 
 ```bash
-cat version.env
-/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Sources/PlaidBar/Resources/Info.plist
-/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' Sources/PlaidBar/Resources/Info.plist
-sed -n 's/.*appVersion: String = "\([^"]*\)".*/\1/p' Sources/PlaidBarCore/Utilities/Constants.swift
+./Scripts/verify-version-alignment.sh
 ```
 
 2. Commit the release-prep changes, then run local release gates from the clean
-   release-prep branch:
+   release-prep branch (this now includes app-bundle packaging and validation):
 
 ```bash
 ./Scripts/release.sh --allow-current-branch
@@ -126,7 +127,8 @@ The ad-hoc-signed DMG is acceptable for 1.0 because VaultPeek is local-first and
 distributed privately to a controlled set of licensed users who can complete the
 first-launch right-click > Open step.
 
-Do not claim notarized public app distribution until all of these are complete:
+Do not claim notarized public app distribution until all of these are complete
+(runbook: `docs/distribution.md`, scaffold: `Scripts/notarize.sh`):
 
 - Developer ID signing configured
 - notarization and ticket stapling automated

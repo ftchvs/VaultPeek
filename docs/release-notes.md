@@ -4,6 +4,38 @@ This file holds human-written release summaries before they are copied into a
 GitHub release. `CHANGELOG.md` may be generated from repository history, so keep
 curated release messaging here.
 
+## Unreleased (post-1.0.0 main)
+
+### Changed
+
+- Visible product identity renamed to VaultPeek; SwiftPM targets, executables,
+  bundle identifier, and Keychain entries intentionally remain PlaidBar.
+- Relicensed as proprietary, closed-source software. The public Homebrew
+  formula and tap were retired; distribution is now a privately shared,
+  ad-hoc-signed drag-install DMG (`./Scripts/package-dmg.sh`).
+- Default local storage moved to `~/.vaultpeek/` with a non-destructive
+  migration from `~/.plaidbar/`.
+- Release gates repaired and extended: `Scripts/release.sh` no longer checks
+  the removed Homebrew formula and now packages and validates the app bundle;
+  version alignment and bundle validation also run in CI
+  (`Scripts/verify-version-alignment.sh`, `Scripts/validate-app-bundle.sh`).
+
+### Deferred (still true, do not claim otherwise)
+
+- Developer ID signing, notarization, stapling, and a clean-machine Gatekeeper
+  pass have NOT been performed. First launch of the DMG build still requires
+  right-click > Open. Prep runbook: `docs/distribution.md`; scaffold:
+  `Scripts/notarize.sh`.
+- Sparkle auto-updates are dormant: `SUPublicEDKey` is a placeholder and no
+  appcast feed exists.
+
+### Verification Targets
+
+- `./Scripts/release.sh --allow-current-branch`
+- `./Scripts/verify-version-alignment.sh`
+- `./Scripts/package-dmg.sh` + `./Scripts/validate-app-bundle.sh`
+- `docs/release-checklist.md` end to end before the next tag
+
 ## PlaidBar Is Now VaultPeek - Unreleased
 
 PlaidBar has been renamed to **VaultPeek**. Same product, same local-first
@@ -12,8 +44,8 @@ promise: *private finance, one glance away.*
 ### What Changed
 
 - The app you see is now **VaultPeek**: app bundle (`VaultPeek.app`), menu bar
-  identity, setup/settings copy, DMG (`VaultPeek-<version>.dmg`, volume name
-  `VaultPeek`), and the `vaultpeek-run` launcher.
+  identity, setup/settings copy, and DMG (`VaultPeek-<version>.dmg`, volume
+  name `VaultPeek`).
 - The default local data directory is now `~/.vaultpeek/` (previously
   `~/.plaidbar/`). `PLAIDBAR_DATA_DIR` still overrides it.
 - Documentation, roadmap, security/privacy/support copy, and release notes use
@@ -22,7 +54,7 @@ promise: *private finance, one glance away.*
 ### What Did Not Change
 
 - **Your financial data stays local.** No cloud backend, no telemetry, no
-  tracking — the rename changes nothing about data handling.
+  tracking; the rename changes nothing about data handling.
 - **The Plaid integration is unchanged.** Linked items, credentials, sandbox
   and production modes, and the localhost-only companion server work exactly
   as before.
@@ -33,7 +65,7 @@ Default installs migrate automatically on the first launch after upgrading.
 The migration is a copy, not a move, and it is idempotent:
 
 - Files are copied from `~/.plaidbar/` into `~/.vaultpeek/` only when the
-  destination file does not already exist — newer VaultPeek files are never
+  destination file does not already exist; newer VaultPeek files are never
   overwritten.
 - SQLite stores are copied with their `-wal`/`-shm`/`-journal` sidecars as an
   atomic set; if a VaultPeek copy of a store already exists, the legacy store
@@ -73,14 +105,15 @@ Intentional, kept for compatibility:
 - Keychain service name: `PlaidBar.PlaidAccessToken`.
 - SQLite store filenames: `plaidbar-sandbox.sqlite`,
   `plaidbar-production.sqlite`.
-- `plaidbar-run` remains a deprecated alias for `vaultpeek-run`.
+- Source-checkout helper `Scripts/plaidbar-run` remains a deprecated alias for
+  `Scripts/vaultpeek-run`.
 - GitHub repository slug `ftchvs/PlaidBar` until the repo rename lands.
 
 ### Follow-Ups
 
 - Update the application display name/branding in the Plaid Dashboard so the
   Plaid Link consent screen shows VaultPeek.
-- Repo rename (`ftchvs/PlaidBar` → VaultPeek) and the in-app GitHub links that
+- Repo rename (`ftchvs/PlaidBar` -> VaultPeek) and the in-app GitHub links that
   depend on it.
 - Staged SwiftPM product/executable rename.
 
@@ -107,6 +140,10 @@ Intentional, kept for compatibility:
   recovery buttons, and selected account detail surfaces
 
 ## v1.0.0 - Published
+
+(Historical note, 2026-06: the public Homebrew formula described below was
+retired when PlaidBar was relicensed as proprietary. The notes are kept as
+shipped.)
 
 ### Added
 

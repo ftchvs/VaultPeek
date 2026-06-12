@@ -15,6 +15,10 @@ local storage, notifications, and distribution.
 | Release build | `swift build -c release --disable-keychain` | Release candidates |
 | Test suite | `swift test --skip-update --disable-keychain` | CI and local when toolchain supports Swift Testing |
 | Sandbox smoke | `./Scripts/smoke-sandbox.sh` | Server/config changes |
+| Version alignment | `./Scripts/verify-version-alignment.sh` | Version metadata changes; release candidates (also runs in CI) |
+| App bundle package validation | `./Scripts/package-app.sh` then `./Scripts/validate-app-bundle.sh` | Packaging/release changes (also runs in CI) |
+| DMG package validation | `./Scripts/package-dmg.sh` then `./Scripts/validate-app-bundle.sh` | Release candidates |
+| Release gate aggregate | `./Scripts/release.sh --allow-current-branch` | Release-prep PRs |
 | Screenshots | `./Scripts/screenshots.sh` | UI/docs release changes |
 | Appearance matrix renders | `./Scripts/qa-appearance-matrix.sh` | UI-affecting changes (light/dark regression evidence) |
 
@@ -139,9 +143,16 @@ the host system setting. Unknown values fall back to the system appearance.
 
 ## Release Candidate Exit Criteria
 
+The full final gate set lives in `docs/release-checklist.md` (version/tag
+hygiene, build/test gates with the recorded toolchain baseline, packaging,
+privacy/security, accessibility, clean-profile setup, and merge/publish
+gates). In summary:
+
 - Automated gates pass or have a documented toolchain-only exception.
 - Manual product QA has no critical blocker.
 - Accessibility QA has no keyboard or VoiceOver blocker in primary flows.
 - Security/privacy QA has no known secret, token, or real-data exposure.
 - README, PRD, release notes, screenshots, and version metadata match the
   release candidate.
+- GitHub checks are green on the head SHA and a manual safety read of the
+  final diff happened before merge.

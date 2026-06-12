@@ -333,6 +333,19 @@ remain unmarked.
   readiness and attention queue presentation copy redacts sensitive IDs and
   keyed raw balances; evidence: `StatusView`, `UserFacingError`, and focused
   core tests.
+- 2026-06-12 [T083] [T111] [T112] [T113] [T114] [T115] [T117] [T118]: repaired
+  the release gate script (removed retired Homebrew formula checks, added
+  app-bundle packaging/validation), extracted version alignment into
+  `Scripts/verify-version-alignment.sh` (release gates + CI), gave
+  `Scripts/validate-app-bundle.sh` a default bundle path and signature
+  verification, aligned `docs/qa-matrix.md` with the current gates, recorded
+  the Swift toolchain baseline, made release notes honest about the retired
+  formula and private DMG distribution shape, and added the final
+  release-candidate checklist (`docs/release-checklist.md`) covering
+  clean-profile setup and checks-green/manual-diff merge gates; also added the
+  AND-309 distribution prep runbook (`docs/distribution.md` and the
+  `Scripts/notarize.sh` scaffold — signing/notarization NOT performed);
+  evidence: chore/and-321-309-release-gates PR.
 
 ## Backlog Source
 

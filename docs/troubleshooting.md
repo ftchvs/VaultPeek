@@ -229,6 +229,13 @@ Some local Swift toolchains do not include the Swift Testing module expected by
 the test target. CI is currently the canonical test signal when local toolchain
 support is missing.
 
+The recorded toolchain baseline (CI: `macos-15` runner with Xcode 16; package
+`swift-tools-version: 6.0`) and the release-time escape hatch
+(`PLAIDBAR_RELEASE_SKIP_TESTS=1`, valid only for this documented mismatch) live
+in `docs/release-checklist.md`. `Package.swift` probes known Xcode and Command
+Line Tools paths for `lib_TestingInterop.dylib`; if your toolchain lives
+elsewhere, set `DEVELOPER_DIR` to its developer directory.
+
 Still run the smaller local gates:
 
 ```bash

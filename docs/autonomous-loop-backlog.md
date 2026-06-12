@@ -263,19 +263,19 @@ and `docs/autonomous-roadmap.md`.
 
 ### PR-023: QA, CI, And Release Gates
 
-- [ ] T111: Keep `docs/qa-matrix.md` aligned with the current minimum PR gates.
-- [ ] T112: Add or update a local command for DMG/app-bundle package validation.
-- [ ] T113: Record known Swift toolchain baseline limitations accurately.
-- [ ] T114: Keep release notes honest about shipped behavior and deferred work.
-- [ ] T115: Add a final release-candidate checklist for privacy, security,
+- [x] T111: Keep `docs/qa-matrix.md` aligned with the current minimum PR gates.
+- [x] T112: Add or update a local command for DMG/app-bundle package validation.
+- [x] T113: Record known Swift toolchain baseline limitations accurately.
+- [x] T114: Keep release notes honest about shipped behavior and deferred work.
+- [x] T115: Add a final release-candidate checklist for privacy, security,
   screenshots, and local setup.
 
 ### PR-024: PR, Review, And Merge Hygiene
 
 - [x] T116: Ensure every autonomous PR includes task IDs, changed files, local
   checks, and secret-scan evidence.
-- [ ] T117: Require GitHub checks to be green before any merge attempt.
-- [ ] T118: Require a manual safety read of the diff before merging under scoped
+- [x] T117: Require GitHub checks to be green before any merge attempt.
+- [x] T118: Require a manual safety read of the diff before merging under scoped
   approval.
 - [ ] T119: Block merge when app code, docs, screenshots, or generated files
   include real private financial data.

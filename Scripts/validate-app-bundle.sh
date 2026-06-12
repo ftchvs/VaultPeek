@@ -2,9 +2,13 @@
 # Validate that a local VaultPeek.app bundle can resolve its embedded frameworks.
 set -euo pipefail
 
-APP_DIR="${1:-}"
-if [ -z "$APP_DIR" ]; then
-    echo "Usage: $0 path/to/VaultPeek.app" >&2
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+
+APP_DIR="${1:-$PROJECT_DIR/.build/VaultPeek.app}"
+if [ ! -d "$APP_DIR" ]; then
+    echo "Usage: $0 [path/to/VaultPeek.app]" >&2
+    echo "No app bundle found at $APP_DIR — run ./Scripts/package-app.sh first." >&2
     exit 64
 fi
 
@@ -58,6 +62,12 @@ fi
 if ! otool -l "$APP_BINARY" | grep -q "@executable_path/../Frameworks"; then
     echo "VaultPeek.app is missing @executable_path/../Frameworks rpath" >&2
     otool -l "$APP_BINARY" >&2
+    exit 1
+fi
+
+if ! codesign --verify --deep --strict "$APP_DIR" >/dev/null 2>&1; then
+    echo "Code signature failed to verify for $APP_DIR (ad-hoc or Developer ID)" >&2
+    codesign --verify --deep --strict --verbose=2 "$APP_DIR" >&2 || true
     exit 1
 fi
 
