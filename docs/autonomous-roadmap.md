@@ -323,6 +323,11 @@ remain unmarked.
   intent, dashboard story, expected recovery state, asset traceability, and
   reduced-noise composition guidance; evidence: `docs/demo-scenarios.md`,
   `docs/screenshots.md`, and `README.md`.
+- 2026-06-12 [T048] [T050]: added a dedicated local-only active data directory
+  diagnostic row to the Status surface and regression coverage that status
+  readiness and attention queue presentation copy redacts sensitive IDs and
+  keyed raw balances; evidence: `StatusView`, `UserFacingError`, and focused
+  core tests.
 
 ## Backlog Source
 

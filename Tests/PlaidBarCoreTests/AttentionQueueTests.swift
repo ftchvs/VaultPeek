@@ -1,6 +1,6 @@
 import Foundation
-import Testing
 @testable import PlaidBarCore
+import Testing
 
 @Suite("AttentionQueue Tests")
 struct AttentionQueueTests {
@@ -59,6 +59,40 @@ struct AttentionQueueTests {
         #expect(joinedDisplayCopy.contains("\(secretName): [redacted]"))
     }
 
+    @Test("Queue presentation does not expose item IDs or raw balances")
+    func presentationHidesSensitiveIdentifiersAndBalances() {
+        let accountID = "accountSensitiveIdentifier"
+        let itemID = "itemSensitiveIdentifier"
+        let balance = "12345.67"
+        let currentBalance = "-890.12"
+
+        let queue = AttentionQueue.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 1,
+            accountCount: 1,
+            syncedItemCount: 1,
+            itemStatuses: [
+                ItemStatus(id: itemID, institutionName: "Example Bank", status: .loginRequired),
+            ],
+            isSyncStale: false,
+            lastSyncRelative: "now",
+            errorMessage: "Plaid failed account_id=\(accountID) item_id=\(itemID) balance=\(balance) current_balance=\(currentBalance)"
+        )
+
+        let joinedDisplayCopy = queue.rows
+            .flatMap { [$0.title, $0.detail, $0.actionTitle ?? "", $0.accessibilityLabel, $0.accessibilityHint ?? ""] }
+            .joined(separator: " ")
+
+        #expect(joinedDisplayCopy.contains(accountID) == false)
+        #expect(joinedDisplayCopy.contains(itemID) == false)
+        #expect(joinedDisplayCopy.contains(balance) == false)
+        #expect(joinedDisplayCopy.contains(currentBalance) == false)
+        #expect(joinedDisplayCopy.contains("[redacted-id]"))
+        #expect(joinedDisplayCopy.contains("[redacted-balance]"))
+    }
+
     @Test("Queue preserves server mode mismatch recovery action")
     func preservesServerModeMismatchRecoveryAction() {
         let queue = AttentionQueue.evaluate(
@@ -100,7 +134,8 @@ struct AttentionQueueTests {
 
         #expect(queue.rows.map(\.id) == ["credentials-missing"])
         #expect(queue.rows.first?.action == .openSettings)
-        #expect(queue.rows.contains { $0.action == .addAccount || $0.action == .reconnect || $0.action == .refresh } == false)
+        #expect(queue.rows
+            .contains { $0.action == .addAccount || $0.action == .reconnect || $0.action == .refresh } == false)
     }
 
     @Test("Queue ranks server mode mismatch above item reconnect rows")
