@@ -20,6 +20,8 @@ final class AppState {
         static let notifyLargeTransaction = "notifyLargeTransaction"
         static let notifyLowBalance = "notifyLowBalance"
         static let notifyHighUtilization = "notifyHighUtilization"
+        static let setupCompletedOnce = "setup.completedOnce"
+        static let setupCompletedContextPrefix = "setup.completedOnce.context"
     }
 
     // MARK: - State
@@ -43,7 +45,17 @@ final class AppState {
     }
     var isPopoverPresented = false
     var selectedTab: PopoverTab = .accounts
-    var isSetupComplete = false
+
+    /// Persisted across launches so configured installs boot straight into
+    /// the dashboard instead of flashing first-run onboarding until the
+    /// initial server handshake completes. Demo sessions never persist
+    /// completion; explicit resets clear it.
+    var isSetupComplete = false {
+        didSet {
+            guard oldValue != isSetupComplete else { return }
+            persistSetupCompletion(isSetupComplete)
+        }
+    }
     var serverConnected = false
     var serverEnvironment: PlaidEnvironment?
     var serverVersion: String?
@@ -154,6 +166,10 @@ final class AppState {
     init(notificationService: (any NotificationServiceProtocol)? = nil) {
         self.notificationService = notificationService ?? NotificationService.shared
         loadSettings()
+        isSetupComplete = storedSetupCompletion()
+        if isSetupComplete {
+            persistSetupCompletion(true)
+        }
     }
 
     private func loadSettings() {
@@ -601,6 +617,7 @@ final class AppState {
             serverSyncReady = status.syncReady
             serverSyncedItemCount = status.syncedItemCount
             lastSyncDate = status.lastSync
+            refreshSetupCompletionForActiveContext()
             updateSetupCompletion()
             if !(await refreshItemStatuses()) {
                 itemStatuses = []
@@ -951,6 +968,7 @@ final class AppState {
     func resetLocalData() throws -> LocalDataResetResult {
         stopBackgroundRefresh()
 
+        let resetSetupCompletionDefaultsKey = setupCompletionDefaultsKey
         let result = try LocalDataStore.resetLocalData(at: activeStorageDirectoryURL)
 
         accounts = []
@@ -958,11 +976,12 @@ final class AppState {
         itemStatuses = []
         serverItemCount = 0
         serverCredentialsConfigured = nil
-        serverStoragePath = nil
         serverSyncReady = nil
         serverSyncedItemCount = nil
         lastSyncDate = nil
+        UserDefaults.standard.set(false, forKey: resetSetupCompletionDefaultsKey)
         isSetupComplete = false
+        serverStoragePath = nil
         isDemoMode = false
         isDemoStatusRecoveryScenario = false
         error = nil
@@ -1248,7 +1267,96 @@ final class AppState {
     }
 
     private func updateSetupCompletion() {
-        isSetupComplete = firstRunCompletionState.isReady
+        // Promote-only: transient startup probes (prewarmBundledServer /
+        // loadInitialData before the server is reachable) report not-ready
+        // and must not erase the persisted completion bit. Explicit resets
+        // (resetLocalData, demo exit) set isSetupComplete = false directly.
+        if firstRunCompletionState.isReady {
+            isSetupComplete = true
+        }
+    }
+
+    private func refreshSetupCompletionForActiveContext() {
+        let storedValue = storedSetupCompletion()
+        if isSetupComplete != storedValue {
+            isSetupComplete = storedValue
+        }
+    }
+
+    private func storedSetupCompletion() -> Bool {
+        let defaults = UserDefaults.standard
+        if let scopedValue = defaults.object(forKey: setupCompletionDefaultsKey) as? Bool {
+            return scopedValue
+        }
+
+        // One-time compatibility path for users who completed setup before
+        // completion became scoped by data directory and Plaid environment.
+        return defaults.bool(forKey: Keys.setupCompletedOnce)
+            && activeStorageDirectoryURL == localStorageDirectoryURL
+            && setupCompletionEnvironment == .production
+    }
+
+    private func persistSetupCompletion(_ isComplete: Bool) {
+        guard !isComplete || !isDemoMode else { return }
+        UserDefaults.standard.set(isComplete, forKey: setupCompletionDefaultsKey)
+    }
+
+    private var setupCompletionDefaultsKey: String {
+        let environment = setupCompletionEnvironment.rawValue
+        let path = activeStorageDirectoryURL.standardizedFileURL.path
+        let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? path
+        return "\(Keys.setupCompletedContextPrefix).\(environment).\(encodedPath)"
+    }
+
+    private var setupCompletionEnvironment: PlaidEnvironment {
+        serverEnvironment ?? configuredPlaidEnvironment() ?? .production
+    }
+
+    private func configuredPlaidEnvironment() -> PlaidEnvironment? {
+        var values = ProcessInfo.processInfo.environment
+        let configURL = localStorageDirectoryURL.appendingPathComponent(LocalDataStore.serverConfigFilename)
+        if let contents = try? String(contentsOf: configURL, encoding: .utf8) {
+            for line in contents.components(separatedBy: .newlines) {
+                guard let entry = Self.parseConfigLine(line) else { continue }
+                values[entry.key] = Self.unquotedConfigValue(entry.value)
+            }
+        }
+
+        guard let rawValue = values["PLAID_ENV"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !rawValue.isEmpty
+        else {
+            return nil
+        }
+        return PlaidEnvironment(rawValue: rawValue)
+    }
+
+    private static func parseConfigLine(_ rawLine: String) -> (key: String, value: String)? {
+        var line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !line.isEmpty, !line.hasPrefix("#") else { return nil }
+
+        if line.hasPrefix("export ") {
+            line.removeFirst("export ".count)
+            line = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        guard let separator = line.firstIndex(of: "=") else { return nil }
+        let key = String(line[..<separator]).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return nil }
+        let value = String(line[line.index(after: separator)...])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return (key, value)
+    }
+
+    private static func unquotedConfigValue(_ value: String) -> String {
+        guard value.count >= 2,
+              let first = value.first,
+              let last = value.last,
+              (first == "\"" && last == "\"") || (first == "'" && last == "'")
+        else {
+            return value
+        }
+        return String(value.dropFirst().dropLast())
     }
 
     @discardableResult
@@ -1283,6 +1391,7 @@ final class AppState {
     // MARK: - Demo Data
 
     func loadDemoData() {
+        isDemoMode = true
         isDemoStatusRecoveryScenario = CommandLine.arguments.contains("--screenshot-status-recovery")
 
         let today = Self.dateString(daysAgo: 0)
@@ -1393,7 +1502,6 @@ final class AppState {
         }
 
         isSetupComplete = true
-        isDemoMode = true
         serverConnected = true
         serverEnvironment = .sandbox
         serverVersion = PlaidBarConstants.appVersion
