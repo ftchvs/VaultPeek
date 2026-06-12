@@ -66,16 +66,16 @@ coordination note instead of pushing over it.
 Otto may merge PlaidBar PRs without asking Felipe when all of these are true:
 
 - PR is not draft.
-- GitHub branch protection reports the required `CI / build` and
-  `Otto OpenClaw Merge Gate / otto-openclaw-merge-gate` checks as green.
+- GitHub branch protection reports these checks as green on the latest PR head:
+  `CI / build`, `Claude Code Review / claude-review`,
+  `Codex Code Review / codex-review`, and
+  `Otto OpenClaw Merge Gate / otto-openclaw-merge-gate`.
 - Diff is scoped to one coherent task or PR slice.
-- No blocking review issue remains.
+- No blocking Claude, Codex, or human review issue remains.
 - Local verification passed, or CI fully covers the relevant gate.
 - GitHub checks are green, or only non-required/skipped checks remain.
-- Tokenless or unconfigured Claude checks are non-blocking when they are
-  skipped, missing auth/token, session-limited, rate-limited, or only report
-  setup/environment noise. Do not skip substantive review findings or any
-  build/test failure.
+- Claude or Codex auth/token/session/setup failures are blocking review-gate
+  failures unless Felipe explicitly grants a one-off override for that PR.
 - Privacy/local-first boundaries are preserved.
 - No secrets, local databases, screenshots, logs, or build artifacts are added.
 - The PR branch is not being actively mutated by Hermes or another agent.
@@ -84,11 +84,17 @@ If any gate is unclear, pause the merge and leave a PR comment with the blocker.
 
 ## GitHub Merge Gate
 
-GitHub branch protection should treat Otto/OpenClaw as a first-class merge
-gate. The required checks on `main` are:
+GitHub branch protection should treat CI, both LLM review gates, and
+Otto/OpenClaw as first-class merge gates. The required checks on `main` are:
 
 - `CI / build`: the macOS/Xcode/Swift build, test, packaging, and sandbox smoke
   gate.
+- `Claude Code Review / claude-review`: automatic Claude review on every PR
+  opened, synchronized, reopened, or marked ready for review.
+- `Codex Code Review / codex-review`: automatic Codex CLI OAuth review on every
+  PR opened, synchronized, reopened, or marked ready for review. The job fails
+  closed if the repository `CODEX_AUTH_JSON_B64` secret is unavailable or the
+  Codex CLI review fails.
 - `otto-openclaw-merge-gate`: the autonomous handoff and coordination gate,
   published by the trusted base-branch workflow onto the PR head SHA.
 
@@ -138,9 +144,9 @@ privacy/security decisions, or work outside PlaidBar's scoped autonomy.
 - **Routine implementation:** PR body plus local gates are enough.
 - **Head changed during review:** PR comment with the old/new SHA and a
   re-review note.
-- **Skipped Claude review:** PR comment explaining whether the failure was
-  auth/token/session/setup-only noise and confirming no substantive comments
-  were emitted.
+- **Claude/Codex review failure:** treat auth, token, quota, session, setup, and
+  substantive findings as blocking unless Felipe explicitly grants a one-off
+  override; document the exact check and reason in the PR.
 - **Merge completed:** PR merge body records local gates and CI state; Linear
   update only when the merge is part of a broader milestone or policy change.
 - **Collision or unclear ownership:** pause the push/merge and leave a PR

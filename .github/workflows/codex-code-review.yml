@@ -1,0 +1,123 @@
+name: Codex Code Review
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, ready_for_review, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  codex-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Require Codex OAuth secret
+        env:
+          CODEX_AUTH_JSON_B64: ${{ secrets.CODEX_AUTH_JSON_B64 }}
+        run: |
+          if [ -z "$CODEX_AUTH_JSON_B64" ]; then
+            echo "CODEX_AUTH_JSON_B64 repository secret is required for the Codex OAuth review gate."
+            exit 1
+          fi
+
+      - name: Checkout pull request merge commit
+        uses: actions/checkout@v6
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+          persist-credentials: false
+
+      - name: Pre-fetch base and head refs
+        env:
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          git fetch --no-tags origin \
+            "$PR_BASE_REF" \
+            "+refs/pull/$PR_NUMBER/head"
+
+      - name: Install Codex CLI
+        run: npm install -g @openai/codex
+
+      - name: Restore Codex OAuth session
+        env:
+          CODEX_AUTH_JSON_B64: ${{ secrets.CODEX_AUTH_JSON_B64 }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/codex-home"
+          printf '%s' "$CODEX_AUTH_JSON_B64" | base64 -d > "$RUNNER_TEMP/codex-home/auth.json"
+          chmod 700 "$RUNNER_TEMP/codex-home"
+          chmod 600 "$RUNNER_TEMP/codex-home/auth.json"
+
+      - name: Run Codex code review
+        id: codex
+        env:
+          CODEX_HOME: ${{ runner.temp }}/codex-home
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/codex-review-prompt.md" <<'PROMPT'
+          This is a required CI review gate for a PlaidBar pull request.
+
+          Review ONLY the changes introduced by this PR. Focus on serious issues that could affect correctness, privacy, security, local-first boundaries, accessibility, or CI reliability.
+
+          Use these commands for context:
+            git diff --stat "$BASE_SHA...$HEAD_SHA"
+            git diff "$BASE_SHA...$HEAD_SHA"
+
+          Repository-specific rules:
+          - The SwiftUI app must not receive Plaid client secrets or access tokens; Plaid credentials stay inside PlaidBarServer.
+          - No real financial data, account IDs, transaction IDs, transaction exports, screenshots, local databases, logs, or secrets may be committed.
+          - Preserve local-first behavior unless the PR explicitly documents a scoped product change.
+          - Swift 6 strict-concurrency warnings are build blockers.
+          - UI changes must keep meaning available without relying on color alone.
+          - Never print credentials, tokens, auth files, environment variables, or GitHub secrets in your review output.
+
+          Output format:
+          - If there are no blocking P0/P1 issues, say exactly: Codex CI review passed: no blocking issues found.
+          - If there are blocking issues, list each issue with file/line evidence and the user impact.
+          PROMPT
+
+          {
+            echo "Pull request #$PR_NUMBER: $PR_TITLE"
+            echo
+            echo "Pull request body:"
+            echo "----"
+            printf '%s\n' "$PR_BODY"
+            echo "----"
+          } >> "$RUNNER_TEMP/codex-review-prompt.md"
+
+          codex exec --sandbox read-only --cd "$GITHUB_WORKSPACE" "$(cat "$RUNNER_TEMP/codex-review-prompt.md")" | tee "$RUNNER_TEMP/codex-review-output.txt"
+
+          if grep -Eiq '(^|[^a-z])(blocking|p0|p1|security issue|privacy issue|correctness issue)([^a-z]|$)' "$RUNNER_TEMP/codex-review-output.txt" \
+            && ! grep -Fq 'Codex CI review passed: no blocking issues found.' "$RUNNER_TEMP/codex-review-output.txt"; then
+            echo "Codex reported blocking review findings."
+            exit 1
+          fi
+
+      - name: Post Codex review summary
+        if: always()
+        uses: actions/github-script@v8
+        env:
+          CODEX_OUTPUT_PATH: ${{ runner.temp }}/codex-review-output.txt
+        with:
+          script: |
+            const fs = require('fs');
+            const path = process.env.CODEX_OUTPUT_PATH;
+            if (!fs.existsSync(path)) return;
+            const output = fs.readFileSync(path, 'utf8').slice(-60000);
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: `## Codex CI review\n\n${output}`,
+            });
