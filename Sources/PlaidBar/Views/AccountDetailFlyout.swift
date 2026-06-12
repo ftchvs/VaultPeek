@@ -443,7 +443,10 @@ private struct FlyoutChangeRow: View {
     }
 
     private var accessibilityText: String {
-        let direction = delta > 0 ? "up" : delta < 0 ? "down" : "unchanged"
+        if delta == 0 {
+            return "\(title) \(Formatters.currency(total, format: .full)) in the last 30 days, unchanged versus the prior 30 days"
+        }
+        let direction = delta > 0 ? "up" : "down"
         return "\(title) \(Formatters.currency(total, format: .full)) in the last 30 days, \(direction) \(Formatters.currency(abs(delta), format: .full)) versus the prior 30 days"
     }
 }
