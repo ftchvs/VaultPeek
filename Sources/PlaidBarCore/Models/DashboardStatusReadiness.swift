@@ -4,6 +4,18 @@ public enum DashboardStatusReadinessLevel: String, Codable, Sendable {
     case healthy
     case warning
     case blocked
+
+    /// Severity tier of the failure this level represents; `nil` for the
+    /// healthy level. Warnings are advisory (inline recovery next to the
+    /// affected module), blocked levels gate the connection or credential
+    /// path and may use chrome-level alert treatments.
+    public var errorSeverity: ErrorSeverity? {
+        switch self {
+        case .healthy: nil
+        case .warning: .advisory
+        case .blocked: .blocking
+        }
+    }
 }
 
 public enum DashboardStatusReadinessAction: String, Codable, Sendable {
@@ -26,6 +38,12 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
     public let primaryActionTitle: String?
     public let primaryActionIconName: String?
     public let secondaryActions: [DashboardStatusReadinessAction]
+
+    /// Severity tier derived from the readiness level this mapping already
+    /// computed.
+    public var errorSeverity: ErrorSeverity? {
+        level.errorSeverity
+    }
 
     public init(
         level: DashboardStatusReadinessLevel,
