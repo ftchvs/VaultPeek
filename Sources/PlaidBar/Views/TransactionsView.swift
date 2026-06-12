@@ -39,6 +39,7 @@ struct TransactionsView: View {
     private var emptyPresentation: SecondaryContentUnavailableState {
         SecondaryContentUnavailableState.transactions(
             isDemoMode: appState.isDemoMode,
+            isInitialLoad: appState.loadState(for: .transactions).isInitialLoad,
             serverConnected: appState.serverConnected,
             linkedItemCount: appState.statusItemCount,
             accountCount: appState.accounts.count,

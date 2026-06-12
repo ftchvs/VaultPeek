@@ -28,6 +28,9 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
     public let actionTitle: String
     public let actionIconName: String
     public let actionAccessibilityHint: String?
+    /// True while the first fetch is in flight: views render the copy as a
+    /// passive loading state and hide the recovery action.
+    public let isLoading: Bool
 
     public init(
         title: String,
@@ -36,7 +39,8 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
         action: SecondaryContentUnavailableAction,
         actionTitle: String,
         actionIconName: String,
-        actionAccessibilityHint: String? = nil
+        actionAccessibilityHint: String? = nil,
+        isLoading: Bool = false
     ) {
         self.title = title
         self.detail = detail
@@ -45,13 +49,22 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
         self.actionTitle = actionTitle
         self.actionIconName = actionIconName
         self.actionAccessibilityHint = actionAccessibilityHint
+        self.isLoading = isLoading
     }
 
     public static func accounts(
         isDemoMode: Bool,
+        isInitialLoad: Bool = false,
         serverConnected: Bool,
         linkedItemCount: Int
     ) -> SecondaryContentUnavailableState {
+        if !isDemoMode, isInitialLoad {
+            return loadingState(
+                title: "Loading accounts",
+                detail: "Fetching linked account balances from the local VaultPeek server."
+            )
+        }
+
         if !isDemoMode, !serverConnected {
             return serverOfflineState(detail: "Start the VaultPeek companion server, then check the connection before account balances can load.")
         }
@@ -73,10 +86,18 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
 
     public static func credit(
         isDemoMode: Bool,
+        isInitialLoad: Bool = false,
         serverConnected: Bool,
         linkedItemCount: Int,
         accountCount: Int
     ) -> SecondaryContentUnavailableState {
+        if !isDemoMode, isInitialLoad {
+            return loadingState(
+                title: "Loading credit accounts",
+                detail: "Fetching credit accounts and utilization from the local VaultPeek server."
+            )
+        }
+
         if !isDemoMode, !serverConnected {
             return serverOfflineState(detail: "Start the VaultPeek companion server, then check the connection before credit utilization can load.")
         }
@@ -118,6 +139,7 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
 
     public static func transactions(
         isDemoMode: Bool,
+        isInitialLoad: Bool = false,
         serverConnected: Bool,
         linkedItemCount: Int,
         accountCount: Int,
@@ -136,6 +158,13 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
                 actionTitle: "Clear Filters",
                 actionIconName: "xmark.circle",
                 actionAccessibilityHint: "Removes the current search text and filters."
+            )
+        }
+
+        if !isDemoMode, isInitialLoad {
+            return loadingState(
+                title: "Loading transactions",
+                detail: "Syncing recent transaction history from the local VaultPeek server."
             )
         }
 
@@ -188,6 +217,7 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
 
     public static func spendingActivity(
         isDemoMode: Bool,
+        isInitialLoad: Bool = false,
         serverConnected: Bool,
         linkedItemCount: Int,
         accountCount: Int,
@@ -195,6 +225,13 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
         transactionCount: Int,
         errorMessage: String?
     ) -> SecondaryContentUnavailableState {
+        if !isDemoMode, isInitialLoad {
+            return loadingState(
+                title: "Loading spending activity",
+                detail: "Syncing transactions to build spending and cashflow views."
+            )
+        }
+
         if let errorState = recentActionFailure(from: errorMessage) {
             return errorState
         }
@@ -251,6 +288,7 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
 
     public static func recurring(
         isDemoMode: Bool,
+        isInitialLoad: Bool = false,
         serverConnected: Bool,
         linkedItemCount: Int,
         accountCount: Int,
@@ -258,6 +296,13 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
         transactionCount: Int,
         errorMessage: String?
     ) -> SecondaryContentUnavailableState {
+        if !isDemoMode, isInitialLoad {
+            return loadingState(
+                title: "Loading recurring charges",
+                detail: "Syncing transaction history to detect recurring charges."
+            )
+        }
+
         if let errorState = recentActionFailure(from: errorMessage) {
             return errorState
         }
@@ -302,6 +347,19 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
             actionTitle: "Sync Latest Transactions",
             actionIconName: "arrow.triangle.2.circlepath",
             actionAccessibilityHint: "Checks for newer transactions that may complete a recurring pattern."
+        )
+    }
+
+    private static func loadingState(title: String, detail: String) -> SecondaryContentUnavailableState {
+        SecondaryContentUnavailableState(
+            title: title,
+            detail: detail,
+            iconName: "arrow.triangle.2.circlepath",
+            action: .refresh,
+            actionTitle: "Refresh",
+            actionIconName: "arrow.clockwise",
+            actionAccessibilityHint: "Reloads the dashboard data.",
+            isLoading: true
         )
     }
 

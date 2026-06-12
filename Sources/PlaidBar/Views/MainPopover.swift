@@ -159,6 +159,7 @@ struct MainPopover: View {
                         VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
                             DashboardHeader()
                                 .environment(appState)
+                                .loadingRedaction(appState.loadState(for: .summaryCards))
 
                             DashboardChangeReceiptStrip()
                                 .environment(appState)
@@ -199,6 +200,7 @@ struct MainPopover: View {
                             LocalInsightsCard()
                                 .environment(appState)
                         }
+                        .loadingRedaction(appState.loadState(for: .summaryCards))
 
                         if shouldShowLowerStatusReadinessPanel {
                             VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
@@ -243,11 +245,14 @@ struct MainPopover: View {
     }
 
     private var shouldShowStatusReadinessPanel: Bool {
-        selectedFilter == .status || !appState.isSetupComplete || appState.dashboardStatusReadiness.level != .healthy
+        selectedFilter == .status || shouldElevateStatusReadinessPanel
     }
 
     private var shouldElevateStatusReadinessPanel: Bool {
-        !appState.isSetupComplete || appState.dashboardStatusReadiness.level != .healthy
+        // `.loading` stays quiet like `.healthy`: the boot handshake must not
+        // hoist an attention panel over the dashboard before any verdict.
+        let level = appState.dashboardStatusReadiness.level
+        return !appState.isSetupComplete || level == .warning || level == .blocked
     }
 
     private var shouldShowLowerStatusReadinessPanel: Bool {
@@ -604,6 +609,7 @@ private struct BalanceCompositionLegend: View {
 
 private struct BalanceActivityHeatmap: View {
     let transactions: [TransactionDTO]
+    var loadState: DashboardLoadState?
 
     @AppStorage("dashboard.heatmapMode") private var modeRawValue = SpendingHeatmapMode.spending.rawValue
 
@@ -650,9 +656,9 @@ private struct BalanceActivityHeatmap: View {
                 .controlSize(.mini)
                 .frame(width: 116)
 
-                Text(totalLabel(for: layout))
+                Text(isInitialLoad ? "—" : totalLabel(for: layout))
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(totalTint(for: layout))
+                    .foregroundStyle(isInitialLoad ? .secondary : totalTint(for: layout))
                     .monospacedDigit()
                     .lineLimit(1)
             }
@@ -696,6 +702,9 @@ private struct BalanceActivityHeatmap: View {
                 }
             }
             .frame(height: monthLabelHeight + 3 + 7 * 8 + 6 * spacing)
+            // First sync in flight: the empty grid dims so it reads as a
+            // placeholder, not as a year of zero activity.
+            .opacity(isInitialLoad ? 0.45 : 1)
 
             HStack(spacing: 5) {
                 if layout.mode == .spending {
@@ -723,7 +732,7 @@ private struct BalanceActivityHeatmap: View {
 
                 Spacer()
 
-                Text("\(layout.activeDayCount) active days")
+                Text(isInitialLoad ? "Loading activity" : "\(layout.activeDayCount) active days")
                     .microText()
                     .foregroundStyle(.secondary)
             }
@@ -732,8 +741,14 @@ private struct BalanceActivityHeatmap: View {
         .glassSurface(.raised)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(
-            "\(layout.mode.summaryTitle) heatmap for the last 365 days with \(layout.activeDayCount) active days. \(layout.mode.semanticDescription)."
+            isInitialLoad
+                ? (loadState?.loadingAccessibilityLabel ?? "Loading activity heatmap.")
+                : "\(layout.mode.summaryTitle) heatmap for the last 365 days with \(layout.activeDayCount) active days. \(layout.mode.semanticDescription)."
         )
+    }
+
+    private var isInitialLoad: Bool {
+        loadState?.isInitialLoad ?? false
     }
 
     private var modeBinding: Binding<SpendingHeatmapMode> {
@@ -1058,21 +1073,24 @@ private struct DashboardStatusReadinessPanel: View {
     private var icon: String {
         switch readiness.level {
         case .healthy: "checkmark.circle.fill"
+        case .loading: "arrow.triangle.2.circlepath"
         case .warning: "exclamationmark.triangle.fill"
         case .blocked: "xmark.octagon.fill"
         }
     }
 
     private var tint: Color {
+        // Warning/negative tints are reserved for actionable verdicts —
+        // an in-flight first load renders neutral.
         switch readiness.level {
-        case .healthy: .secondary
+        case .healthy, .loading: .secondary
         case .warning: SemanticColors.warning
         case .blocked: SemanticColors.negative
         }
     }
 
     private var readinessNeedsAttention: Bool {
-        readiness.level != .healthy
+        readiness.level == .warning || readiness.level == .blocked
     }
 
     private func perform(_ action: DashboardStatusReadinessAction) {
@@ -1249,7 +1267,10 @@ private struct DashboardOverviewStack: View {
             if let fallbackState {
                 DashboardOverviewFallbackBanner(presentation: fallbackState, onAction: onAddAccount)
             } else {
-                BalanceActivityHeatmap(transactions: transactions)
+                BalanceActivityHeatmap(
+                    transactions: transactions,
+                    loadState: appState.loadState(for: .activityHeatmap)
+                )
             }
 
             VStack(alignment: .leading, spacing: LayoutSpacing.controls) {
@@ -1330,6 +1351,10 @@ private struct AccountsSection: View {
     let onDeselect: () -> Void
     let onAddAccount: () -> Void
 
+    private var accountsLoadState: DashboardLoadState {
+        appState.loadState(for: .accounts)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
@@ -1340,13 +1365,20 @@ private struct AccountsSection: View {
                 Text("\(accounts.count)")
                     .sectionTitle()
                     .foregroundStyle(.secondary)
+                    .opacity(accountsLoadState.showsSkeleton ? 0 : 1)
             }
             .padding(.horizontal, Spacing.compactRowHorizontalPadding)
             .padding(.bottom, Spacing.xs)
 
             if accounts.isEmpty {
-                DashboardEmptyAccountState(filter: filter, onAddAccount: onAddAccount)
-                    .environment(appState)
+                if accountsLoadState.showsSkeleton {
+                    // First fetch in flight: redacted placeholder rows
+                    // instead of offline/empty copy.
+                    DashboardAccountRowSkeletonList(loadState: accountsLoadState)
+                } else {
+                    DashboardEmptyAccountState(filter: filter, onAddAccount: onAddAccount)
+                        .environment(appState)
+                }
             } else {
                 VStack(spacing: 0) {
                     ForEach(accounts) { account in
@@ -1443,6 +1475,7 @@ private struct DashboardEmptyAccountState: View {
         DashboardAccountEmptyState.evaluate(
             filter: filter,
             isDemoMode: appState.usesDemoConnectionPresentation,
+            isInitialLoad: appState.loadState(for: .accounts).isInitialLoad,
             serverConnected: appState.serverConnected,
             credentialsConfigured: appState.serverCredentialsConfigured,
             linkedItemCount: appState.statusItemCount,
@@ -1471,22 +1504,26 @@ private struct DashboardEmptyAccountState: View {
                 }
             }
 
-            HStack(spacing: 8) {
-                if showsAddAccount {
-                    Button(action: onAddAccount) {
-                        Label("Add Account", systemImage: "plus.circle")
+            // Loading is passive: no recovery actions until the first fetch
+            // delivers a verdict the user can act on.
+            if !presentation.isLoading {
+                HStack(spacing: 8) {
+                    if showsAddAccount {
+                        Button(action: onAddAccount) {
+                            Label("Add Account", systemImage: "plus.circle")
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+
+                    Button {
+                        performRecoveryAction()
+                    } label: {
+                        Label(actionTitle, systemImage: actionIcon)
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
                 }
-
-                Button {
-                    performRecoveryAction()
-                } label: {
-                    Label(actionTitle, systemImage: actionIcon)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
             }
         }
         .padding(Spacing.md)
@@ -1510,7 +1547,7 @@ private struct DashboardEmptyAccountState: View {
         switch presentation.tone {
         case .brand:
             SemanticColors.brand
-        case .healthy:
+        case .healthy, .loading:
             .secondary
         case .offline, .secondary:
             .secondary
@@ -1523,7 +1560,7 @@ private struct DashboardEmptyAccountState: View {
         switch presentation.tone {
         case .brand, .warning:
             tint
-        case .healthy, .offline, .secondary:
+        case .healthy, .loading, .offline, .secondary:
             nil
         }
     }

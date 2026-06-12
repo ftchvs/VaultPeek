@@ -25,6 +25,7 @@ public struct AccountActivityEmptyState: Equatable, Sendable {
     public static func evaluate(
         transactionCount: Int,
         isDemoMode: Bool,
+        isInitialLoad: Bool = false,
         serverConnected: Bool,
         connectionLevel: AccountConnectionLevel,
         accountDisplayName: String
@@ -37,6 +38,17 @@ public struct AccountActivityEmptyState: Equatable, Sendable {
                 detail: "\(accountDisplayName) has no sample transactions in the local demo fixture.",
                 iconName: "play.circle",
                 tone: .secondary
+            )
+        }
+
+        // The first sync outranks offline/stale messaging: activity that has
+        // not arrived yet reads as loading, not as a degraded connection.
+        if isInitialLoad {
+            return AccountActivityEmptyState(
+                title: "Loading activity",
+                detail: "Syncing recent transactions for \(accountDisplayName).",
+                iconName: "arrow.triangle.2.circlepath",
+                tone: .loading
             )
         }
 

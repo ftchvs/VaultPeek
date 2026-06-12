@@ -273,6 +273,7 @@ struct AccountDetailFlyout: View {
         AccountActivityEmptyState.evaluate(
             transactionCount: snapshot.transactionCount,
             isDemoMode: appState.usesDemoConnectionPresentation,
+            isInitialLoad: appState.loadState(for: .transactions).isInitialLoad,
             serverConnected: appState.serverConnected,
             connectionLevel: connection.level,
             accountDisplayName: AccountPresentation.displayName(for: account)
@@ -645,7 +646,7 @@ struct AccountActivityEmptyStateView: View {
         switch presentation.tone {
         case .brand:
             SemanticColors.brand
-        case .healthy, .offline, .secondary:
+        case .healthy, .loading, .offline, .secondary:
             .secondary
         case .warning:
             SemanticColors.warning
