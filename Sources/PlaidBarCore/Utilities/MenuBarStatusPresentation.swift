@@ -22,6 +22,7 @@ public struct MenuBarStatusPresentation: Equatable, Sendable {
 
     public static func evaluate(
         isDemoMode: Bool,
+        isInitialLoad: Bool = false,
         isLoading: Bool,
         serverConnected: Bool,
         errorMessage: String?,
@@ -32,6 +33,7 @@ public struct MenuBarStatusPresentation: Equatable, Sendable {
     ) -> MenuBarStatusPresentation {
         let connection = ServerConnectionPresentation.evaluate(
             isDemoMode: isDemoMode,
+            isInitialLoad: isInitialLoad,
             isLoading: isLoading,
             serverConnected: serverConnected,
             errorMessage: errorMessage

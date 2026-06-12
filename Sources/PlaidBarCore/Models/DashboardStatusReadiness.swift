@@ -2,6 +2,7 @@ import Foundation
 
 public enum DashboardStatusReadinessLevel: String, Codable, Sendable {
     case healthy
+    case loading
     case warning
     case blocked
 
@@ -11,7 +12,7 @@ public enum DashboardStatusReadinessLevel: String, Codable, Sendable {
     /// path and may use chrome-level alert treatments.
     public var errorSeverity: ErrorSeverity? {
         switch self {
-        case .healthy: nil
+        case .healthy, .loading: nil
         case .warning: .advisory
         case .blocked: .blocking
         }
@@ -65,6 +66,7 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
 
     public static func evaluate(
         isDemoMode: Bool,
+        isInitialLoad: Bool = false,
         serverConnected: Bool,
         credentialsConfigured: Bool?,
         linkedItemCount: Int,
@@ -86,6 +88,17 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
                 primaryAction: .addAccount,
                 primaryActionTitle: "Connect Bank",
                 secondaryActions: [.openSettings]
+            )
+        }
+
+        // The boot handshake outranks offline/stale verdicts: warning and
+        // blocked tints are reserved for states the user can act on, not for
+        // an in-flight first load.
+        if isInitialLoad {
+            return DashboardStatusReadiness(
+                level: .loading,
+                title: "Loading financial data",
+                detail: "Connecting to the local VaultPeek server and fetching the latest balances and transactions."
             )
         }
 

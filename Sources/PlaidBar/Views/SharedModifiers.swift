@@ -243,11 +243,20 @@ struct SecondaryUnavailableView: View {
             Text(presentation.detail)
                 .multilineTextAlignment(.center)
         } actions: {
-            actionButton
+            // Loading is passive: no recovery action until the first fetch
+            // delivers a verdict the user can act on.
+            if !presentation.isLoading {
+                actionButton
+            }
         }
         .padding()
         .frame(maxWidth: .infinity, minHeight: 180)
         .accessibilityElement(children: .contain)
+        .task(id: presentation.isLoading) {
+            guard presentation.isLoading else { return }
+            await Task.yield()
+            AccessibilityNotification.Announcement("\(presentation.title). \(presentation.detail)").post()
+        }
     }
 
     @ViewBuilder

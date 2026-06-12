@@ -8,6 +8,7 @@ struct AccountsView: View {
     private var emptyPresentation: SecondaryContentUnavailableState {
         SecondaryContentUnavailableState.accounts(
             isDemoMode: appState.isDemoMode,
+            isInitialLoad: appState.loadState(for: .accounts).isInitialLoad,
             serverConnected: appState.serverConnected,
             linkedItemCount: appState.statusItemCount
         )

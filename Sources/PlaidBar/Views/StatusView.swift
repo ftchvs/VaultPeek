@@ -398,6 +398,8 @@ struct StatusView: View {
         switch level {
         case .healthy:
             .accentColor
+        case .loading:
+            .secondary
         case .warning:
             SemanticColors.warning
         case .blocked:

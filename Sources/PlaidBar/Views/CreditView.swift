@@ -15,6 +15,7 @@ struct CreditView: View {
     private var emptyPresentation: SecondaryContentUnavailableState {
         SecondaryContentUnavailableState.credit(
             isDemoMode: appState.isDemoMode,
+            isInitialLoad: appState.loadState(for: .credit).isInitialLoad,
             serverConnected: appState.serverConnected,
             linkedItemCount: appState.statusItemCount,
             accountCount: appState.accounts.count
