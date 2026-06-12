@@ -401,11 +401,9 @@ PlaidBar/                            # repo checkout (repo rename pending)
 │   │   ├── Theme/                   # Design tokens, typography
 │   │   ├── Views/                   # Dashboard popover, setup, settings surfaces
 │   │   │   ├── MainPopover.swift    # Dashboard-first menu bar popover
-│   │   │   ├── AccountsView.swift   # Balance list by account type
-│   │   │   ├── TransactionsView.swift # Searchable grouped list
-│   │   │   ├── SpendingView.swift   # Donut/heatmap/trend/bar charts
-│   │   │   ├── CreditView.swift     # Utilization bars + gauge
-│   │   │   ├── StatusView.swift     # Diagnostics and recovery actions
+│   │   │   ├── DashboardNavBand.swift # Cash/Credit/Savings/Debt/Status filters
+│   │   │   ├── AccountDetailFlyout.swift # Per-account drill-in fly-out
+│   │   │   ├── AttentionQueueView.swift # Degraded-item recovery surface
 │   │   │   ├── SetupView.swift      # Onboarding flow
 │   │   │   └── Charts/             # Chart components
 │   │   ├── Models/                  # Local cache models
