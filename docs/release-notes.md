@@ -4,12 +4,92 @@ This file holds human-written release summaries before they are copied into a
 GitHub release. `CHANGELOG.md` may be generated from repository history, so keep
 curated release messaging here.
 
+## PlaidBar Is Now VaultPeek - Unreleased
+
+PlaidBar has been renamed to **VaultPeek**. Same product, same local-first
+promise: *private finance, one glance away.*
+
+### What Changed
+
+- The app you see is now **VaultPeek**: app bundle (`VaultPeek.app`), menu bar
+  identity, setup/settings copy, DMG (`VaultPeek-<version>.dmg`, volume name
+  `VaultPeek`), and the `vaultpeek-run` launcher.
+- The default local data directory is now `~/.vaultpeek/` (previously
+  `~/.plaidbar/`). `PLAIDBAR_DATA_DIR` still overrides it.
+- Documentation, roadmap, security/privacy/support copy, and release notes use
+  the VaultPeek name.
+
+### What Did Not Change
+
+- **Your financial data stays local.** No cloud backend, no telemetry, no
+  tracking — the rename changes nothing about data handling.
+- **The Plaid integration is unchanged.** Linked items, credentials, sandbox
+  and production modes, and the localhost-only companion server work exactly
+  as before.
+
+### Data Migration (Already Shipped)
+
+Default installs migrate automatically on the first launch after upgrading.
+The migration is a copy, not a move, and it is idempotent:
+
+- Files are copied from `~/.plaidbar/` into `~/.vaultpeek/` only when the
+  destination file does not already exist — newer VaultPeek files are never
+  overwritten.
+- SQLite stores are copied with their `-wal`/`-shm`/`-journal` sidecars as an
+  atomic set; if a VaultPeek copy of a store already exists, the legacy store
+  and its sidecars are preserved rather than copied.
+- Account and transaction caches that embed the storage path are rewritten to
+  the new directory during the copy.
+- `~/.plaidbar/` is left in place as rollback evidence. To roll back
+  temporarily, set `PLAIDBAR_DATA_DIR=~/.plaidbar` for both app and server.
+- After a Reset Local Data action, a reset marker prevents old databases,
+  caches, and pending link sessions from being copied back in from the legacy
+  directory.
+- Plaid access tokens keep the existing Keychain service
+  (`PlaidBar.PlaidAccessToken`) so migrated SQLite `keychain:<item_id>`
+  references keep resolving. Explicit `PLAIDBAR_DATA_DIR` overrides are not
+  migrated.
+
+### IMPORTANT: Upgrading From PlaidBar.app
+
+Installing VaultPeek.app does **not** remove an existing
+`/Applications/PlaidBar.app`. Delete the old PlaidBar.app after installing
+VaultPeek:
+
+- Both apps share the same bundle identifier, so macOS launch behavior
+  (login items, notifications, "Open" routing) is ambiguous while both exist.
+- Both apps' bundled servers bind the same default port `8484`, so running
+  both at once causes port contention and confusing offline states.
+
+### Known Old-Name Compatibility Surfaces
+
+Intentional, kept for compatibility:
+
+- Executables and SwiftPM targets: `plaidbar`, `plaidbar-server`, `PlaidBar`,
+  `PlaidBarServer`, `PlaidBarCore` (staged rename tracked separately).
+- Environment variables and config keys: `PLAIDBAR_SERVER_PORT`,
+  `PLAIDBAR_DATA_DIR`, `PLAIDBAR_MIGRATE_LEGACY_DATABASE`,
+  `PLAIDBAR_SMOKE_PORT`.
+- Keychain service name: `PlaidBar.PlaidAccessToken`.
+- SQLite store filenames: `plaidbar-sandbox.sqlite`,
+  `plaidbar-production.sqlite`.
+- `plaidbar-run` remains a deprecated alias for `vaultpeek-run`.
+- GitHub repository slug `ftchvs/PlaidBar` until the repo rename lands.
+
+### Follow-Ups
+
+- Update the application display name/branding in the Plaid Dashboard so the
+  Plaid Link consent screen shows VaultPeek.
+- Repo rename (`ftchvs/PlaidBar` → VaultPeek) and the in-app GitHub links that
+  depend on it.
+- Staged SwiftPM product/executable rename.
+
 ## Post-1.0 Design and Trust Roadmap - Active
 
 ### Focus
 
-- Keep PlaidBar's public story aligned with the shipped `v1.0.0` formula-only
-  release.
+- Keep VaultPeek's public story aligned with the shipped `v1.0.0` release
+  (published under the former PlaidBar name).
 - Move the dashboard toward a RepoBar-style finance instrument: native material,
   compact rows, a prominent 365-day heatmap, and status-rich selected-account
   details.

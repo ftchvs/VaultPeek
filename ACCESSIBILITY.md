@@ -1,6 +1,6 @@
 # Accessibility
 
-PlaidBar is a native macOS menu bar app. Accessibility work in this repo focuses
+VaultPeek is a native macOS menu bar app. Accessibility work in this repo focuses
 on VoiceOver, keyboard navigation, readable finance data, color-independent
 status, and clear local-server errors.
 
@@ -29,7 +29,7 @@ Please open an accessibility issue if you find:
 - color-only balance, risk, or utilization meaning
 - confusing focus order, loading, alert, or error behavior
 
-Include macOS version, PlaidBar version or commit, VoiceOver/keyboard setup,
+Include macOS version, VaultPeek version or commit, VoiceOver/keyboard setup,
 display settings, and steps to reproduce. Do not include real financial data,
 access tokens, account numbers, or private transaction details.
 

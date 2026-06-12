@@ -1,11 +1,15 @@
 <p align="center">
-  <img src="https://img.icons8.com/sf-regular-filled/96/228BE6/money-bag.png" width="80" alt="PlaidBar icon"/>
+  <img src="https://img.icons8.com/sf-regular-filled/96/228BE6/money-bag.png" width="80" alt="VaultPeek icon"/>
 </p>
 
-<h1 align="center">PlaidBar</h1>
+<h1 align="center">VaultPeek</h1>
 
 <p align="center">
-  <strong>Your bank accounts, credit cards, and spending — always one click away in the macOS menu bar.</strong>
+  <strong>Private finance, one glance away.</strong>
+</p>
+
+<p align="center">
+  Your bank accounts, credit cards, and spending — always one click away in the macOS menu bar.
 </p>
 
 <p align="center">
@@ -17,13 +21,13 @@
 
 ---
 
-PlaidBar is a macOS menu bar dashboard for [Plaid](https://plaid.com) data. It is designed in the spirit of tools like RepoBar and CodexBar: keep the high-signal numbers one click away, stay native to macOS, and avoid a hosted backend.
+VaultPeek (formerly PlaidBar) is a macOS menu bar dashboard for [Plaid](https://plaid.com) data. It is designed in the spirit of tools like RepoBar and CodexBar: keep the high-signal numbers one click away, stay native to macOS, and avoid a hosted backend.
 
 **No cloud. No telemetry. All data stays local.**
 
-## Why PlaidBar?
+## Why VaultPeek?
 
-Personal finance data lives behind bank website logins. The closest thing to a menu bar finance app was [Balance](https://balancemy.money/) — commercial and now defunct. PlaidBar fills that gap as a privacy-first, local-only product.
+Personal finance data lives behind bank website logins. The closest thing to a menu bar finance app was [Balance](https://balancemy.money/) — commercial and now defunct. VaultPeek fills that gap as a privacy-first, local-only product.
 
 - **Menu bar first** — A RepoBar-style popover with a 365-day heatmap, dense finance rows, and fast account drill-down
 - **Glanceable label** — Choose whether the menu bar shows net cash, total cash, credit utilization, recent spend, or icon-only, with a compact health signal on the icon
@@ -50,7 +54,7 @@ Personal finance data lives behind bank website logins. The closest thing to a m
 ### Setup Preflight
 
 <p align="center">
-  <img src="Assets/setup-sandbox-preflight.png" width="420" alt="PlaidBar sandbox setup preflight showing server, mode, credential, storage, and linked item readiness before Plaid Link opens"/>
+  <img src="Assets/setup-sandbox-preflight.png" width="420" alt="VaultPeek sandbox setup preflight showing server, mode, credential, storage, and linked item readiness before Plaid Link opens"/>
 </p>
 
 Sandbox and production setup now show readiness before Plaid Link opens. The app
@@ -61,7 +65,7 @@ browser handoff.
 ### Dashboard
 
 <p align="center">
-  <img src="Assets/dashboard.png" width="420" alt="PlaidBar dashboard popover with net worth, sync status, 365-day spending activity, account rows, and drill-down controls"/>
+  <img src="Assets/dashboard.png" width="420" alt="VaultPeek dashboard popover with net worth, sync status, 365-day spending activity, account rows, and drill-down controls"/>
 </p>
 
 The current app is dashboard-first. The main popover answers the common
@@ -90,7 +94,7 @@ Generate fresh dashboard screenshots with demo data:
 ./Scripts/screenshots.sh
 ```
 
-The screenshot script launches PlaidBar locally, captures the sandbox preflight
+The screenshot script launches VaultPeek locally, captures the sandbox preflight
 screen, each dashboard filter state, and current settings surfaces. It requires
 macOS Screen Recording and Accessibility permission for Terminal.
 The named synthetic stories behind these captures are documented in
@@ -102,7 +106,7 @@ status/recovery state, and reduced-noise composition guidance.
 | Local Data | Accounts |
 |------------|----------|
 | <img src="Assets/settings-local-data.png" width="380" alt="Settings General tab showing local data storage path, reveal, copy, and reset controls"> | <img src="Assets/settings-accounts.png" width="380" alt="Settings Accounts tab showing linked institutions, item health, reconnect, remove, and add account controls"> |
-| Local storage is explicit: users can inspect the resolved path, reveal/copy it, and reset local PlaidBar data with confirmation copy. | Linked institutions are grouped with account counts, balances, item health, reconnect, and destructive removal gates. |
+| Local storage is explicit: users can inspect the resolved path, reveal/copy it, and reset local VaultPeek data with confirmation copy. | Linked institutions are grouped with account counts, balances, item health, reconnect, and destructive removal gates. |
 
 | Notifications |
 |---------------|
@@ -111,7 +115,7 @@ status/recovery state, and reduced-noise composition guidance.
 
 | About |
 |-------|
-| <img src="Assets/settings-about.png" width="380" alt="Settings About tab showing PlaidBar version, update action, support links, privacy, security, roadmap, and release notes"> |
+| <img src="Assets/settings-about.png" width="380" alt="Settings About tab showing VaultPeek version, update action, support links, privacy, security, roadmap, and release notes"> |
 | About doubles as a support hub with links to troubleshooting, privacy, security, roadmap, release notes, updates, and the project repository. |
 
 ## Quick Start
@@ -129,6 +133,13 @@ open .build/VaultPeek-*.dmg
 Then drag **VaultPeek.app** to **Applications** and launch it. On first
 launch, right-click VaultPeek.app and choose **Open** (the build is ad-hoc
 signed; Developer ID notarization is on the roadmap).
+
+> **Upgrading from PlaidBar?** Installing VaultPeek.app does **not** remove an
+> existing `/Applications/PlaidBar.app`. Delete the old app before launching
+> VaultPeek — both builds share the same bundle identifier and local server
+> port (8484), so running both causes launch and port contention. Local data
+> migrates automatically; see
+> [docs/release-notes.md](docs/release-notes.md) for details.
 
 The app starts its bundled companion server automatically — no terminal
 needed. Before Plaid credentials exist the server runs in a *setup state*:
@@ -153,7 +164,7 @@ chmod 600 ~/.vaultpeek/server.conf
 No restart dance required: the app notices the new credentials on its next
 status check (any "check again"/refresh action, or the periodic background
 refresh) and restarts its bundled server with them. Quitting and reopening
-PlaidBar works too.
+VaultPeek works too.
 
 The app also enforces owner-only permissions on `server.conf` and the server
 log at launch. App-managed launches always bind the app's own port, so
@@ -163,7 +174,7 @@ the server agree.
 
 ### Installation
 
-PlaidBar is a proprietary product. Public Homebrew tap distribution has been
+VaultPeek is a proprietary product. Public Homebrew tap distribution has been
 discontinued; signed builds are distributed privately to licensed users. The
 commands below assume an installed build on your `PATH`.
 
@@ -186,6 +197,23 @@ unchanged until the staged SwiftPM product rename lands. Source checkouts also
 include `Scripts/vaultpeek-run` and the deprecated `Scripts/plaidbar-run` alias
 for local sandbox testing, but those helper scripts are not installed by the
 DMG.
+
+### Naming compatibility (PlaidBar → VaultPeek)
+
+VaultPeek is the product name. The PlaidBar name intentionally survives in a
+few technical surfaces for compatibility, and those are not bugs:
+
+| Surface | Still PlaidBar | Why |
+|---------|----------------|-----|
+| SwiftPM targets/products | `PlaidBar`, `PlaidBarServer`, `PlaidBarCore`; executables `plaidbar`, `plaidbar-server` | Staged rename; avoids breaking builds, scripts, and installed binaries at once |
+| Environment variables / config keys | `PLAID_*` plus `PLAIDBAR_SERVER_PORT`, `PLAIDBAR_DATA_DIR`, `PLAIDBAR_MIGRATE_LEGACY_DATABASE`, `PLAIDBAR_SMOKE_PORT` | Existing `server.conf` files and shell setups keep working |
+| Keychain service | `PlaidBar.PlaidAccessToken` | SQLite `keychain:<item_id>` references must keep resolving after the storage migration |
+| SQLite store filenames | `plaidbar-sandbox.sqlite`, `plaidbar-production.sqlite` | Renaming live database files is riskier than keeping them |
+| Legacy data directory | `~/.plaidbar/` | Migration source; left in place as rollback evidence (default is now `~/.vaultpeek/`) |
+| GitHub repository | `github.com/ftchvs/PlaidBar` | Repo rename is tracked separately; links in-app and in docs are correct today |
+
+Rename history and upgrade guidance live in
+[docs/release-notes.md](docs/release-notes.md) and [CHANGELOG.md](CHANGELOG.md).
 
 Run Plaid sandbox mode with the installed server and app:
 
@@ -222,7 +250,7 @@ If you only need static UI screenshots without Plaid credentials, run the app in
 swift run PlaidBar --demo
 ```
 
-### 3. Click the PlaidBar icon in your menu bar
+### 3. Click the VaultPeek icon in your menu bar
 
 First run now asks you to choose a data source:
 
@@ -262,7 +290,7 @@ file override the process environment; explicit CLI flags like `--port` and
 `--sandbox` override both.
 
 If the config file sets `PLAIDBAR_SERVER_PORT` or `PLAIDBAR_DATA_DIR` to a
-non-default value, export the same values before launching PlaidBar so the app
+non-default value, export the same values before launching VaultPeek so the app
 connects to the right port and reads the same local auth token.
 
 ## Data Modes
@@ -304,7 +332,7 @@ status indicators, and screenshots are in [ACCESSIBILITY.md](ACCESSIBILITY.md).
 
 ## Architecture
 
-PlaidBar uses a **two-process architecture** — a SwiftUI menu bar app talks to a local companion server that proxies all Plaid API calls.
+VaultPeek uses a **two-process architecture** — a SwiftUI menu bar app talks to a local companion server that proxies all Plaid API calls.
 
 ```
 ┌─────────────────────────────────────┐
@@ -348,7 +376,7 @@ PlaidBar uses a **two-process architecture** — a SwiftUI menu bar app talks to
 ### Project Structure
 
 ```
-PlaidBar/
+PlaidBar/                            # repo checkout (repo rename pending)
 ├── Sources/
 │   ├── PlaidBar/                    # macOS menu bar app
 │   │   ├── App/                     # @main entry, AppState
@@ -385,7 +413,7 @@ PlaidBar/
 
 ## Plaid API Usage
 
-PlaidBar uses these Plaid endpoints:
+VaultPeek uses these Plaid endpoints:
 
 | Endpoint | Feature | Cost | Frequency |
 |----------|---------|------|-----------|
@@ -399,7 +427,7 @@ Rate limits are well within Plaid's allowances for personal use (~2-4 requests/h
 
 ## Security
 
-| Concern | How PlaidBar handles it |
+| Concern | How VaultPeek handles it |
 |---------|------------------------|
 | Plaid secrets | Read from environment variables at server startup, never embedded in the app binary |
 | Plaid access tokens | Stored in macOS Keychain at runtime when available; SQLite stores `keychain:<item_id>` references |
@@ -409,7 +437,7 @@ Rate limits are well within Plaid's allowances for personal use (~2-4 requests/h
 | Data at rest | macOS encrypted APFS volume |
 | Distribution | Privately-distributed, ad-hoc-signed DMG; notarized app distribution remains post-1.0 until signing is real |
 
-**PlaidBar has no cloud backend, no analytics, no telemetry, and no tracking.** Your financial data never leaves your machine.
+**VaultPeek has no cloud backend, no analytics, no telemetry, and no tracking.** Your financial data never leaves your machine.
 
 Do not share real Plaid credentials, access tokens, account IDs, screenshots with balances, or bank transaction exports in issues, pull requests, or support channels. See [SECURITY.md](SECURITY.md) for responsible disclosure and local data handling notes.
 
@@ -454,7 +482,7 @@ PLAIDBAR_SERVER_PORT=9494 ./Scripts/run.sh --sandbox
 ./Scripts/setup.sh
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for internal development conventions (code style, architecture, build/test gates). PlaidBar is a proprietary product and does not accept public contributions.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for internal development conventions (code style, architecture, build/test gates). VaultPeek is a proprietary product and does not accept public contributions.
 
 See [GOAL.md](GOAL.md) for the RepoBar/CodexBar-style product direction, design principles, and implementation priorities.
 
@@ -469,6 +497,8 @@ Additional project docs:
 - [Long-Term Product Vision](docs/v1.0-roadmap.md)
 - [Release Notes Drafts](docs/release-notes.md)
 - [Changelog](CHANGELOG.md)
+- [Naming Clearance (VaultPeek)](docs/naming-clearance.md)
+- [Icon Review (VaultPeek)](docs/icon-review.md)
 
 ### Agentic Development Loop
 
@@ -511,7 +541,7 @@ when the local app created the Hosted Link session.
 ## Roadmap
 
 The long-term product vision lives in
-[docs/v1.0-roadmap.md](docs/v1.0-roadmap.md). It frames PlaidBar as a
+[docs/v1.0-roadmap.md](docs/v1.0-roadmap.md). It frames VaultPeek as a
 local-first macOS menu bar finance instrument and gives Hermes-style agents a
 stable starting point for deriving small, defensible implementation slices.
 When multiple agents are active, use
