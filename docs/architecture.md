@@ -154,5 +154,6 @@ states if any later step fails.
 - Add a clean architecture diagram to README or docs.
 - Add endpoint-level documentation for request/response DTOs.
 - Add a clean duplicate-instance strategy and document expected behavior.
-- Ship 1.0 as formula-only unless Developer ID signing, notarization, appcast,
-  and clean-machine Gatekeeper checks are completed separately.
+- Ship 1.0 as a privately-distributed, ad-hoc-signed DMG unless Developer ID
+  signing, notarization, a private update channel, and clean-machine Gatekeeper
+  checks are completed separately.

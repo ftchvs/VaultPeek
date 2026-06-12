@@ -1,12 +1,14 @@
 # Release Runbook
 
-PlaidBar 1.0 ships as a source-built Homebrew formula first. A local
-drag-install DMG can be built with `./Scripts/package-dmg.sh`: it wraps a
-self-contained `PlaidBar.app` (app + bundled `PlaidBarServer`, auto-started on
-launch) with an `/Applications` symlink. The DMG is ad-hoc signed; Developer ID
-signing, notarization, cask, and the Sparkle appcast remain deferred until the
-clean-machine Gatekeeper path is real, so first launch needs right-click >
-Open and release notes must say so.
+PlaidBar is proprietary software distributed privately to licensed users. The
+public Homebrew tap has been retired and `Formula/plaidbar.rb` removed.
+
+PlaidBar 1.0 ships as a drag-install DMG built with `./Scripts/package-dmg.sh`:
+it wraps a self-contained `PlaidBar.app` (app + bundled `PlaidBarServer`,
+auto-started on launch) with an `/Applications` symlink. The DMG is currently
+ad-hoc signed; Developer ID signing, notarization, and the Sparkle appcast
+remain deferred until the clean-machine Gatekeeper path is real, so first launch
+needs right-click > Open and release notes must say so.
 
 The bundle ships `AppIcon.icns` (checked by `Scripts/validate-app-bundle.sh`).
 The icon is generated from code — rerun `./Scripts/generate-app-icon.sh` to
@@ -15,16 +17,10 @@ regenerate `Sources/PlaidBar/Resources/AppIcon.icns` after design changes.
 ## Current Release
 
 - Current version: `v1.0.0`
-- 1.0 distribution shape: formula-only SwiftPM executable install
-- GitHub release: tagged from clean `main`
-- Homebrew tap command:
+- 1.0 distribution shape: privately-distributed drag-install DMG
+- GitHub release: tagged from clean `main` (private repo)
 
-```bash
-brew tap ftchvs/plaidbar https://github.com/ftchvs/PlaidBar
-brew install plaidbar
-```
-
-Installed commands:
+Bundled commands (inside `PlaidBar.app`):
 
 ```bash
 plaidbar --demo
@@ -41,7 +37,6 @@ cat version.env
 /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Sources/PlaidBar/Resources/Info.plist
 /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' Sources/PlaidBar/Resources/Info.plist
 sed -n 's/.*appVersion: String = "\([^"]*\)".*/\1/p' Sources/PlaidBarCore/Utilities/Constants.swift
-rg 'tag: "v' Formula/plaidbar.rb
 ```
 
 2. Commit the release-prep changes, then run local release gates from the clean
@@ -57,22 +52,14 @@ The `ci_smoke_client` and `ci_smoke_secret` values are CI-safe dummy values for
 the server startup smoke only. The smoke script does not open Plaid Link or sync
 Plaid data, but it must still report sandbox credentials as configured.
 
-For non-publishing Homebrew verification from a development checkout, avoid
-uninstalling or reinstalling user packages. Use read-only or dry-run checks:
+3. Build and sanity-check the distributable DMG from the release-prep branch:
 
 ```bash
-ruby -c Formula/plaidbar.rb
-HOMEBREW_NO_AUTO_UPDATE=1 brew audit --strict --formula plaidbar
-HOMEBREW_NO_AUTO_UPDATE=1 brew style plaidbar
-HOMEBREW_NO_AUTO_UPDATE=1 brew install --dry-run --build-from-source plaidbar
-HOMEBREW_NO_AUTO_UPDATE=1 brew test plaidbar
+./Scripts/package-dmg.sh
+./Scripts/validate-app-bundle.sh
 ```
 
-If Homebrew reports that `plaidbar` is already installed and up to date during
-the dry run, that is enough for local branch verification. Do a destructive
-reinstall only on a clean release machine or disposable Homebrew environment.
-
-3. Open and merge the release-prep PR only after GitHub CI passes.
+4. Open and merge the release-prep PR only after GitHub CI passes.
 
 ## Publish Checklist
 
@@ -83,37 +70,32 @@ git pull --ff-only origin main
 ./Scripts/release.sh --publish
 ```
 
-Then verify the published install path:
+Then build and verify the distributable DMG on a clean release machine:
 
 ```bash
-brew tap ftchvs/plaidbar https://github.com/ftchvs/PlaidBar
-brew reinstall --build-from-source plaidbar
-plaidbar-server --help
-plaidbar-server --version
-plaidbar-run --help
+./Scripts/package-dmg.sh
+./Scripts/validate-app-bundle.sh
 ```
 
-Run the published install check only on a clean release machine or disposable
-Homebrew environment so it does not disturb a user's existing local install.
+Distribute the resulting DMG privately to licensed users.
 
-## Formula-Only Scope
+## Distribution Scope
 
-The formula installs the SwiftPM-built menu bar executable, local companion
-server, and launcher script:
+The DMG ships a self-contained `PlaidBar.app` bundling the menu bar app, local
+companion server, and launcher:
 
 - `plaidbar`
 - `plaidbar-server`
 - `plaidbar-run`
 
-The formula path is acceptable for 1.0 because PlaidBar is local-first,
-open-source, and still targeted at technical early users who can run a
-source-built macOS utility.
+The ad-hoc-signed DMG is acceptable for 1.0 because PlaidBar is local-first and
+distributed privately to a controlled set of licensed users who can complete the
+first-launch right-click > Open step.
 
-Do not claim notarized app distribution until all of these are complete:
+Do not claim notarized public app distribution until all of these are complete:
 
 - Developer ID signing configured
-- app archive or DMG/ZIP packaging decided
 - notarization and ticket stapling automated
 - Gatekeeper verified on a clean machine
-- Sparkle appcast configured, signed, hosted, and tested
-- Homebrew cask tested separately from the formula
+- Sparkle appcast (or equivalent private update channel) configured, signed,
+  hosted, and tested

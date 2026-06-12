@@ -28,8 +28,6 @@ jobs:
       - name: Packaging checks
         run: |
           bash -n Scripts/*.sh Scripts/plaidbar-run
-          ruby -c Formula/plaidbar.rb
-          brew style Formula/plaidbar.rb
 
       - name: Clear stale SwiftPM binary artifact cache
         run: |
