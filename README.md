@@ -123,7 +123,7 @@ GitHub release once published):
 
 ```bash
 ./Scripts/package-dmg.sh
-open .build/PlaidBar-*.dmg
+open .build/VaultPeek-*.dmg
 ```
 
 Then drag **VaultPeek.app** to **Applications** and launch it. On first
@@ -179,15 +179,21 @@ Available commands after installation:
 |---------|---------|
 | `plaidbar --demo` | Launch the menu bar app with local fixture data |
 | `plaidbar-server --sandbox` | Start the local Plaid companion server in sandbox mode |
-| `plaidbar-run --sandbox` | Start the server and app together for sandbox testing |
-| `plaidbar-server --version` | Print the installed PlaidBar version |
+| `plaidbar-server --version` | Print the installed VaultPeek version |
+
+The `plaidbar` and `plaidbar-server` executable names are intentionally
+unchanged until the staged SwiftPM product rename lands. Source checkouts also
+include `Scripts/vaultpeek-run` and the deprecated `Scripts/plaidbar-run` alias
+for local sandbox testing, but those helper scripts are not installed by the
+DMG.
 
 Run Plaid sandbox mode with the installed server and app:
 
 ```bash
 export PLAID_CLIENT_ID=your_sandbox_client_id
 export PLAID_SECRET=your_sandbox_secret
-plaidbar-run --sandbox
+plaidbar-server --sandbox
+open /Applications/VaultPeek.app
 ```
 
 ### Source build (licensed access only)
@@ -419,7 +425,9 @@ swift build -c release
 # Run installed app bundle commands
 plaidbar --demo
 plaidbar-server --sandbox
-plaidbar-run --sandbox
+
+# Run source-checkout helper scripts
+./Scripts/vaultpeek-run --sandbox   # plaidbar-run remains a deprecated alias
 
 # Run tests
 swift test
@@ -518,8 +526,8 @@ Near-term release priorities:
 - [x] Complete first-run demo/sandbox/production setup QA
 - [x] Add architecture, privacy, troubleshooting, and changelog docs
 - [x] Finish security and local-data audit for 1.0
-- [x] Decide 1.0 packaging shape: formula-only first, notarized app bundle later
-- [x] Verify Homebrew install path and release metadata from clean `main`
+- [x] Decide 1.0 packaging shape: drag-install DMG (Homebrew formula retired)
+- [x] Verify release metadata from clean `main`
 
 Post-1.0 priorities:
 

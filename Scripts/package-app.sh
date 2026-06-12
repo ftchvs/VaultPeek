@@ -19,7 +19,7 @@ else
     BUILD_FLAGS=("--configuration" "$CONFIGURATION")
 fi
 
-echo "Building PlaidBar ($CONFIGURATION)..."
+echo "Building VaultPeek ($CONFIGURATION)..."
 cd "$PROJECT_DIR"
 swift build "${BUILD_FLAGS[@]}" --disable-keychain
 
@@ -59,12 +59,12 @@ codesign --force --deep --sign - "$APP_DIR" >/dev/null
 "$SCRIPT_DIR/validate-app-bundle.sh" "$APP_DIR"
 
 if [ "${PLAIDBAR_PACKAGE_SMOKE_LAUNCH:-0}" = "1" ]; then
-    "$APP_BINARY" --demo >/tmp/plaidbar-package-smoke.log 2>&1 &
+    "$APP_BINARY" --demo >/tmp/vaultpeek-package-smoke.log 2>&1 &
     app_pid=$!
     sleep 2
     if ! kill -0 "$app_pid" 2>/dev/null; then
         echo "Packaged VaultPeek.app exited during smoke launch" >&2
-        cat /tmp/plaidbar-package-smoke.log >&2 || true
+        cat /tmp/vaultpeek-package-smoke.log >&2 || true
         exit 1
     fi
     kill "$app_pid" 2>/dev/null || true

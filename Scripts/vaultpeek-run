@@ -1,11 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-
-cd "$PROJECT_DIR"
-
 SERVER_PID=""
 APP_PID=""
 
@@ -24,11 +19,11 @@ trap cleanup EXIT INT TERM
 
 usage() {
     cat <<'EOF'
-Usage: ./Scripts/run.sh [--sandbox] [--port PORT]
+Usage: vaultpeek-run [--sandbox] [--port PORT]
 
-Builds and starts the VaultPeek server and menu bar app from a source checkout.
-Set PLAID_CLIENT_ID and PLAID_SECRET before running against sandbox or
-production Plaid data.
+Starts the local VaultPeek server and the menu bar app using installed
+commands on PATH. Set PLAID_CLIENT_ID and PLAID_SECRET before running
+against sandbox or production Plaid data.
 
 Options:
   --sandbox       Use Plaid sandbox environment
@@ -86,16 +81,27 @@ if [[ -z "${PLAID_CLIENT_ID:-}" || -z "${PLAID_SECRET:-}" ]]; then
         echo "  export PLAID_SECRET=your_secret"
     fi
     echo ""
-    echo "For screenshot/demo data without Plaid, run: swift run PlaidBar --demo"
+    echo "For screenshot/demo data without Plaid, run: plaidbar --demo"
     exit 1
 fi
 
-echo "Building VaultPeek..."
-swift build 2>&1
+# Executable names remain plaidbar/plaidbar-server until the staged SwiftPM
+# product rename lands; prefer vaultpeek names when an install provides them.
+PLAIDBAR_SERVER_BIN="${PLAIDBAR_SERVER_BIN:-$(command -v vaultpeek-server || command -v plaidbar-server || true)}"
+PLAIDBAR_APP_BIN="${PLAIDBAR_APP_BIN:-$(command -v vaultpeek || command -v plaidbar || true)}"
 
-echo ""
+if [[ -z "$PLAIDBAR_SERVER_BIN" ]]; then
+    echo "Could not find vaultpeek-server or plaidbar-server on PATH." >&2
+    exit 1
+fi
+
+if [[ -z "$PLAIDBAR_APP_BIN" ]]; then
+    echo "Could not find vaultpeek or plaidbar on PATH." >&2
+    exit 1
+fi
+
 echo "Starting VaultPeek server..."
-swift run PlaidBarServer $SANDBOX_FLAG --port "$SERVER_PORT" &
+"$PLAIDBAR_SERVER_BIN" $SANDBOX_FLAG --port "$SERVER_PORT" &
 SERVER_PID=$!
 
 echo "Waiting for server health..."
@@ -111,6 +117,7 @@ for _ in {1..30}; do
 done
 
 curl -fsS "http://127.0.0.1:$SERVER_PORT/health" >/dev/null
+
 DATA_DIR="${PLAIDBAR_DATA_DIR:-$HOME/.vaultpeek}"
 case "$DATA_DIR" in
     "~")
@@ -120,6 +127,7 @@ case "$DATA_DIR" in
         DATA_DIR="$HOME/${DATA_DIR#"~/"}"
         ;;
 esac
+
 AUTH_TOKEN_PATH="$DATA_DIR/auth-token"
 if [[ ! -r "$AUTH_TOKEN_PATH" ]]; then
     echo "Server is healthy, but the local auth token is not readable at:"
@@ -130,22 +138,11 @@ if [[ ! -r "$AUTH_TOKEN_PATH" ]]; then
 fi
 
 AUTH_TOKEN="$(tr -d '\r\n' < "$AUTH_TOKEN_PATH")"
-STATUS_JSON="$(curl -fsS -H "Authorization: Bearer $AUTH_TOKEN" "http://127.0.0.1:$SERVER_PORT/api/status")"
-python3 - "$STATUS_JSON" <<'PY'
-import json
-import sys
-
-status = json.loads(sys.argv[1])
-print(
-    "Server ready: "
-    f"{status.get('environment', 'unknown')} | "
-    f"{status.get('itemCount', 0)} item(s) | "
-    f"credentials {'ready' if status.get('credentialsConfigured') else 'missing'}"
-)
-PY
+curl -fsS -H "Authorization: Bearer $AUTH_TOKEN" "http://127.0.0.1:$SERVER_PORT/api/status" >/dev/null
+echo "Server ready on http://127.0.0.1:$SERVER_PORT"
 
 echo "Starting VaultPeek app..."
-swift run PlaidBar &
+"$PLAIDBAR_APP_BIN" &
 APP_PID=$!
 
 echo ""
