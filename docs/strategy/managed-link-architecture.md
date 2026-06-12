@@ -146,13 +146,14 @@ Hard separation rules:
 | | Option | Verdict |
 |---|---|---|
 | D1 | Ship org `secret` in the local server; data plane stays device→Plaid | **Rejected.** Violates Plaid policy; one extraction = total compromise. |
-| D2 | **Stateless blind proxy** — device sends `{access_token, endpoint, params}`; proxy validates entitlement + endpoint allowlist, injects `client_id`/`secret`, streams Plaid's response back; nothing persisted | **Proposed.** Minimal achievable footprint given D1 is off the table. |
+| D2 | **Stateless blind proxy** — device sends `{managed_item_id, access_token, endpoint, params}`; proxy validates entitlement, endpoint allowlist, and that the token is bound to that registered managed Item before injecting `client_id`/`secret` and streaming Plaid's response back; no request/response payload is persisted | **Proposed.** Minimal achievable footprint given D1 is off the table. |
 | D3 | Broker runs hosted sync jobs and stores results for the app to pull | **Rejected.** This is a hosted financial database — the thing the product promises not to be. |
 | D4 | No managed data plane at all (broker only does link) | **Incoherent.** A managed user with no credentials can link but never fetch; only viable as "defer everything." |
 
 Blind-proxy hard rules (these are the security model, not nice-to-haves):
 
-- **Endpoint allowlist** mirrors exactly what `PlaidClient.swift` calls today: `/transactions/sync`, `/accounts/get`, `/accounts/balance/get`, `/item/remove` (+ recurring/liabilities/investments endpoints if/when tiers include them). Everything else — `/processor/*`, `/transfer/*`, `/identity/*`, sandbox endpoints in prod — is refused.
+- **Endpoint allowlist** mirrors exactly what `PlaidClient.swift` calls today for the user's tier: `/transactions/sync`, `/accounts/get`, `/item/remove` (+ recurring/liabilities/investments endpoints if/when tiers include them). `/accounts/balance/get` is not part of the generic sync allowlist; it requires a specific realtime-balance entitlement, a user-initiated call path, and a tighter quota because it can create per-request Plaid COGS. Everything else — `/processor/*`, `/transfer/*`, `/identity/*`, sandbox endpoints in prod — is refused.
+- **Managed Item binding** is mandatory on every proxy request. The local server sends the broker `managed_item_id` plus the device-held token; the broker verifies the Item belongs to the license/install, checks the Item is active, and validates the token against a short-lived token hash/fingerprint captured during link exchange before proxying. A token that is not tied to one of the caller's registered managed Items is refused, even if the device key and entitlement are otherwise valid.
 - Requests are authenticated with a **device-bound key**: at sign-in the local server generates a keypair, registers the public key with the control plane, and signs proxy requests. A cracked app binary cannot mint entitlements; enforcement lives server-side where it cannot be patched out.
 - Per-user rate limits sized to the app's existing polling cadence (`Constants.swift` refresh intervals) — anomalous volume is throttled and flagged.
 - No request/response body ever written to disk or log. Metadata-only logs, short retention (30 days).

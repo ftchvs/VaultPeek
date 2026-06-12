@@ -87,6 +87,7 @@ An Ed25519-signed JSON document (PASETO v4.public or equivalent), verified local
 {
   "v": 1,
   "license_id": "lic_8f3a…",
+  "install_id": "a1b2…",              // local install/device activation id
   "plan": "plus",                      // "personal" | "plus"
   "subscription_status": "active",     // "trialing" | "active" | "past_due" | "canceled"
   "institution_limit": 8,              // managed connections allowed by plan (D2)
@@ -97,7 +98,9 @@ An Ed25519-signed JSON document (PASETO v4.public or equivalent), verified local
 }
 ```
 
-`active_institution_count` is deliberately **not** in the token: the local server computes it from its own SQLite item store (`tokenStore.itemCount()`, already used by `StatusRoutes.getStatus`, `StatusRoutes.swift:20`) and the broker independently knows only its own managed-connection count. The Entitlement API (the local server's view, §4.4) merges token claims + local count.
+`active_institution_count` is deliberately **not** in the token: the local server computes it from managed-origin Item rows only, not every BYO/local Plaid Item. The existing `tokenStore.itemCount()` shape is too broad until Items carry an origin flag such as `connection_origin = managed | byo`. The broker independently knows only its own managed-connection count. The Entitlement API (the local server's view, §4.4) merges token claims + local managed count.
+
+The local verifier must compare the signed `install_id` claim with the install id generated in §4.1. A copied entitlement file from another Mac is invalid even if its license and TTL are otherwise current.
 
 Why short-TTL tokens instead of embedding subscription expiry: embedded data in signed keys is immutable — poor for renewable subscriptions (Keygen's own offline-licensing guidance). A long-lived license id + periodically refreshed 30-day signed state is the standard resolution.
 
@@ -130,7 +133,7 @@ New authenticated local endpoint `GET /api/entitlement` on `PlaidBarServer` (reg
   "subscription_status": "active",
   "entitlement_state": "entitled",     // local machine state, §6
   "institution_limit": 8,
-  "active_institution_count": 4,       // tokenStore.itemCount()
+  "active_institution_count": 4,       // managed-origin local Item count
   "trial_ends_at": null,
   "features": ["managed_linking", "premium_insights"],
   "token_expires_at": "2026-07-12T00:00:00Z",
@@ -209,7 +212,7 @@ Consensus from indie-mac practice: copy protection primarily punishes paying cus
 | Managed Plaid cleanup (D8) | Managed items are removed via `/item/remove` at period end + 7 days — stops VaultPeek's per-connection Plaid billing; the 7-day window lets an accidental cancellation resubscribe without relinking. **Caveat:** under the managed-link architecture doc's proposed device-custody model (its Variant 1), the broker holds no access tokens and cannot call `/item/remove` itself — removal is driven by the local server on next contact, and devices that never return fall to that doc's orphan runbook (its open question O1: administrative removal without the token). Note Plaid bills full months with no proration, so even the 7-day window can cost one extra Item-month |
 | Local data | Retained indefinitely — it lives in the user's SQLite/Keychain under `~/.plaidbar/`, and we never reach into their machine. Stated explicitly in UX: "Canceling stops live syncing. Your downloaded data stays on your Mac." |
 | Resubscribe after window | New managed links required; local history intact and re-associates by institution |
-| Hard delete request | Broker deletes license record + Stripe customer on request (support flow); local data remains the user's to delete |
+| Hard delete request | Broker first reconciles all managed Items: ask any reachable local server to call `/item/remove`, retain minimal managed-Item tombstones until removal is proven, and run the orphan-removal/support path for devices that never return. Only after managed Item removal is proven or explicitly escalated should the broker delete the license record and Stripe customer. Local data remains the user's to delete |
 
 ## 9. Enforcement points (app + server + broker)
 
@@ -218,7 +221,7 @@ Consensus from indie-mac practice: copy protection primarily punishes paying cus
 | Layer | Location (current code) | Enforces | Authority |
 |-------|------------------------|----------|-----------|
 | **Hosted broker** | new service (companion doc) | Refuses to mint managed link token when license invalid OR managed-connection count ≥ `institution_limit`; refuses entitlement issuance for dead subscriptions | **Authoritative** — survives any client patching |
-| **Local server** | `LinkRoutes.createLinkToken` (`Sources/PlaidBarServer/Routes/LinkRoutes.swift:20`) — today it calls `plaidClient.createLinkToken` unconditionally | Pre-check: verify cached token signature/TTL and `tokenStore.itemCount() < institution_limit` before any network call; structured error otherwise. Also: sync scheduling honors entitlement state | Advisory (defense in depth + good errors; works for BYO consistency if D3 ever changes) |
+| **Local server** | `LinkRoutes.createLinkToken` (`Sources/PlaidBarServer/Routes/LinkRoutes.swift:20`) — today it calls `plaidClient.createLinkToken` unconditionally | Pre-check: verify cached token signature/TTL, verify signed `install_id` matches the local install id, and ensure managed-origin Item count `< institution_limit` before any network call; structured error otherwise. Also: sync scheduling honors entitlement state | Advisory (defense in depth + good errors; works for BYO consistency if D3 ever changes) |
 | **Local server** | new `GET /api/entitlement` (§4.4), alongside `StatusRoutes` | Single source for UI state | n/a |
 | **App** | `AppState` / `MainPopover` / `ServerClient` (`Sources/PlaidBar/…`) | Banners, disabled-with-reason controls, picker flows (§6.3) | Cosmetic only — never the security boundary, same principle as today's "app never sees Plaid secrets" split |
 
