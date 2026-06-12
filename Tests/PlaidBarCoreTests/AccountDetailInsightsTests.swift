@@ -327,4 +327,32 @@ struct AccountDetailInsightsTests {
         #expect(insights.spendTotal == 0)
         #expect(insights.topCategories.isEmpty)
     }
+
+    @Test("maxCategories of zero returns an empty slice list while totals remain")
+    func maxCategoriesZero() {
+        let insights = AccountDetailInsights.compute(
+            transactions: [
+                expense("groceries", amount: 50, date: "2026-06-01", category: .foodAndDrink),
+            ],
+            maxCategories: 0,
+            now: now
+        )
+
+        #expect(insights.spendTotal == 50)
+        #expect(insights.topCategories.isEmpty)
+    }
+
+    @Test("maxReviewItems of zero returns an empty review list")
+    func maxReviewItemsZero() {
+        let insights = AccountDetailInsights.compute(
+            transactions: [
+                expense("large", amount: 900, date: "2026-06-02"),
+                expense("pending", amount: 20, date: "2026-06-03", pending: true),
+            ],
+            maxReviewItems: 0,
+            now: now
+        )
+
+        #expect(insights.reviewItems.isEmpty)
+    }
 }
