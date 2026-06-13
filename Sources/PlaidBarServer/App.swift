@@ -46,6 +46,7 @@ struct PlaidBarServer: AsyncParsableCommand {
 
         // Register migrations
         await fluent.migrations.add(CreateItems())
+        await fluent.migrations.add(AddProviderToItems())
         await fluent.migrations.add(CreateSyncCursors())
         try await fluent.migrate()
         try ServerConfig.enforcePrivateSQLiteStorePermissions(at: serverConfig.databasePath)
