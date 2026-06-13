@@ -1,5 +1,40 @@
 import Foundation
 
+/// The user-selectable healthy/default menu-bar glyph (AND-377). Only the
+/// healthy state varies; the degraded ladder (error/offline/warning/login/stale)
+/// is fixed and never carried by color alone. All styles are monochrome template
+/// SF Symbols available on the macOS deployment target — no custom asset, so they
+/// render natively in light, dark, and increased-contrast menu bars.
+public enum MenuBarIconStyle: String, CaseIterable, Codable, Sendable, Identifiable {
+    /// Classic finance dollar mark (the long-standing default).
+    case classic
+    /// A quiet, non-literal coin/disc mark for a subtler menu-bar presence.
+    case minimal
+    /// A dashboard/insight mark for users who prefer less money imagery.
+    case chart
+
+    public static let defaultValue: MenuBarIconStyle = .classic
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .classic: return "Dollar"
+        case .minimal: return "Minimal"
+        case .chart: return "Chart"
+        }
+    }
+
+    /// SF Symbol used for the healthy/default state only.
+    public var healthySymbolName: String {
+        switch self {
+        case .classic: return "dollarsign.circle"
+        case .minimal: return "centsign.circle"
+        case .chart: return "chart.line.uptrend.xyaxis.circle"
+        }
+    }
+}
+
 /// Pure mapping for the menu-bar status chrome: the attention text shown
 /// next to the glyph and the glyph itself.
 ///
@@ -29,7 +64,8 @@ public struct MenuBarStatusPresentation: Equatable, Sendable {
         erroredItemCount: Int,
         needsLoginItemCount: Int,
         isSyncStale: Bool,
-        hasEverSynced: Bool
+        hasEverSynced: Bool,
+        iconStyle: MenuBarIconStyle = .classic
     ) -> MenuBarStatusPresentation {
         let connection = ServerConnectionPresentation.evaluate(
             isDemoMode: isDemoMode,
@@ -54,7 +90,8 @@ public struct MenuBarStatusPresentation: Equatable, Sendable {
                 connection: connection,
                 erroredItemCount: erroredItemCount,
                 needsLoginItemCount: needsLoginItemCount,
-                isSyncStale: isSyncStale
+                isSyncStale: isSyncStale,
+                iconStyle: iconStyle
             ),
             severity: severity(
                 isDemoMode: isDemoMode,
@@ -96,11 +133,13 @@ public struct MenuBarStatusPresentation: Equatable, Sendable {
         connection: ServerConnectionPresentation,
         erroredItemCount: Int,
         needsLoginItemCount: Int,
-        isSyncStale: Bool
+        isSyncStale: Bool,
+        iconStyle: MenuBarIconStyle
     ) -> String {
         // State is carried by the symbol shape, not color: the menu bar
         // renders template-style monochrome, so degraded states swap the
-        // glyph instead of tinting it.
+        // glyph instead of tinting it. Only the healthy/default glyph below
+        // honors the user's icon-style choice; the degraded ladder is fixed.
         if erroredItemCount > 0 { return "exclamationmark.octagon" }
         if !isDemoMode {
             switch connection.errorSeverity {
@@ -124,7 +163,7 @@ public struct MenuBarStatusPresentation: Equatable, Sendable {
         if needsLoginItemCount > 0 || isSyncStale {
             return "exclamationmark.triangle"
         }
-        return "dollarsign.circle"
+        return iconStyle.healthySymbolName
     }
 
     private static func severity(

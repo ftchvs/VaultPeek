@@ -98,3 +98,31 @@ third-party image dependency.
 - macOS icon-style guidance changes (e.g., broader Liquid Glass icon
   treatments) that make the current flat gradient look dated next to system
   apps.
+
+## Menu Bar Icon Styles (AND-377)
+
+Settings → Menu bar exposes a **Menu bar icon** preference that changes only the
+healthy/default glyph, via `MenuBarIconStyle` (PlaidBarCore). All styles are
+monochrome template SF Symbols so they render natively in light/dark/increased
+contrast and stay non-color-only:
+
+| Style | Healthy glyph |
+|-------|---------------|
+| Dollar (default) | `dollarsign.circle` |
+| Minimal | `centsign.circle` |
+| Chart | `chart.line.uptrend.xyaxis.circle` |
+
+The degraded-state ladder (`exclamationmark.octagon` error, `network.slash`
+offline, `exclamationmark.triangle` warning/login/stale) is fixed and overrides
+the chosen style, so state is always carried by glyph shape + attention text,
+never by the icon style or color.
+
+**Full-color gold coin — intentionally rejected (for now).** A full-color menu
+bar icon was considered and not shipped: macOS menu bar items are template
+images, so a colored glyph would either be templated back to monochrome or, if
+forced via `NSStatusItem`, look non-native and risk contrast failures against
+dynamic menu-bar materials/wallpapers — and it must never be the sole status
+signal. There is no validated 16pt-legible gold-coin asset, and SF Symbol
+monochrome templating is the safe, accessible default. Revisit only with a
+prototyped asset that passes a light/dark/high-contrast/wallpaper legibility
+pass and keeps the degraded glyph + text overrides.
