@@ -119,4 +119,28 @@ struct DemoFixturesTests {
         }
         #expect(abs(total - DemoFixtures.netWorth) < 0.01)
     }
+
+    @Test("Demo account balance histories cover every synthetic account")
+    func accountBalanceHistoriesCoverEveryDemoAccount() {
+        for account in DemoFixtures.accounts {
+            let history = DemoFixtures.accountBalanceHistory(
+                forAccountId: account.id,
+                now: referenceDate
+            )
+
+            #expect(history.count == 60)
+            #expect(history == history.sorted { $0.date < $1.date })
+            #expect(history.last?.date == referenceDate)
+            #expect(abs((history.last?.balance ?? 0) - (account.balances.current ?? account.balances.available ?? 0)) < 0.01)
+        }
+    }
+
+    @Test("Demo account balance histories are deterministic and unknown ids stay empty")
+    func accountBalanceHistoriesAreDeterministic() {
+        let first = DemoFixtures.accountBalanceHistory(forAccountId: "demo_checking", now: referenceDate)
+        let second = DemoFixtures.accountBalanceHistory(forAccountId: "demo_checking", now: referenceDate)
+
+        #expect(first == second)
+        #expect(DemoFixtures.accountBalanceHistory(forAccountId: "accountSecretIdentifier", now: referenceDate).isEmpty)
+    }
 }

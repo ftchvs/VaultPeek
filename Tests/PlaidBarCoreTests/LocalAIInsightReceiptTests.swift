@@ -23,6 +23,7 @@ struct LocalAIInsightReceiptTests {
         #expect(receipt.evidenceChips.map(\.id).contains("transactions"))
         #expect(receipt.evidenceChips.contains { $0.id == "window" && $0.value == "2026-06-05 to 2026-06-11" })
         #expect(receipt.evidenceChips.map(\.id).contains("top-category"))
+        #expect(receipt.evidenceChips.first { $0.id == "top-category" }?.accentCategory == .foodAndDrink)
         #expect(receipt.confidence.contains("Deterministic confidence"))
         #expect(receipt.limitations.contains { $0.contains("raw IDs and Plaid payloads are excluded") })
         #expect(!receipt.headline.contains("accountSecretIdentifier"))

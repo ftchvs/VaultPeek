@@ -63,6 +63,88 @@ struct WealthSummaryPresentationTests {
         #expect(presentation.creditUtilization?.exceedsThreshold == true)
     }
 
+    @Test("Surfaces an available net worth trend from local balance history")
+    func surfacesAvailableNetWorthTrend() {
+        let older = Calendar.current.date(byAdding: .day, value: -6, to: now)!
+        let presentation = makePresentation(
+            balanceHistory: [
+                BalanceSnapshot(date: older, balance: 1_000),
+                BalanceSnapshot(date: now, balance: 1_250),
+            ]
+        )
+
+        guard case let .available(trend) = presentation.netWorthTrend else {
+            Issue.record("Expected available trend")
+            return
+        }
+
+        #expect(trend.delta == 250)
+        #expect(trend.direction == .up)
+        #expect(trend.spanDays == 6)
+        #expect(trend.accessibilitySummary.contains("up $250.00"))
+    }
+
+    @Test("Surfaces insufficient history when local snapshots are unavailable")
+    func surfacesInsufficientNetWorthHistory() {
+        let presentation = makePresentation(balanceHistory: [])
+
+        guard case let .insufficientHistory(pointCount, requiredPointCount) = presentation.netWorthTrend else {
+            Issue.record("Expected insufficient trend history")
+            return
+        }
+
+        #expect(pointCount == 0)
+        #expect(requiredPointCount == 2)
+        #expect(presentation.netWorthTrend.accessibilitySummary.contains("Needs 2 more local balance snapshots"))
+    }
+
+    @Test("Insufficient net worth trend counts only snapshots inside the trend window")
+    func insufficientNetWorthTrendCountsOnlyWindowSnapshots() {
+        let oldFirst = Calendar.current.date(byAdding: .day, value: -130, to: now)!
+        let oldSecond = Calendar.current.date(byAdding: .day, value: -120, to: now)!
+        let recent = Calendar.current.date(byAdding: .day, value: -3, to: now)!
+        let presentation = makePresentation(
+            balanceHistory: [
+                BalanceSnapshot(date: oldFirst, balance: 900),
+                BalanceSnapshot(date: oldSecond, balance: 950),
+                BalanceSnapshot(date: recent, balance: 1_000),
+            ]
+        )
+
+        guard case let .insufficientHistory(pointCount, requiredPointCount) = presentation.netWorthTrend else {
+            Issue.record("Expected insufficient trend history")
+            return
+        }
+
+        #expect(pointCount == 1)
+        #expect(requiredPointCount == 2)
+        #expect(presentation.netWorthTrend.accessibilitySummary.contains("Needs 1 more local balance snapshot"))
+    }
+
+    @Test("Net worth trend summary does not expose account or item identifiers")
+    func netWorthTrendSummaryExcludesIdentifiers() {
+        let older = Calendar.current.date(byAdding: .day, value: -2, to: now)!
+        let presentation = makePresentation(
+            accounts: [
+                AccountDTO(
+                    id: "accountSecretIdentifier",
+                    itemId: "itemSecretIdentifier",
+                    name: "Checking",
+                    type: .depository,
+                    balances: BalanceDTO(current: 1_250)
+                ),
+            ],
+            balanceHistory: [
+                BalanceSnapshot(date: older, balance: 1_000),
+                BalanceSnapshot(date: now, balance: 1_250),
+            ]
+        )
+
+        let summary = presentation.netWorthTrend.accessibilitySummary
+        #expect(!summary.contains("accountSecretIdentifier"))
+        #expect(!summary.contains("itemSecretIdentifier"))
+    }
+
     @Test("Uses existing attention and sync status inputs")
     func derivesAttentionAndSyncHealthFromStatusInputs() {
         let presentation = makePresentation(
@@ -117,7 +199,8 @@ struct WealthSummaryPresentationTests {
         lastSyncRelative: String? = "now",
         statusSyncText: String = "Synced now",
         errorMessage: String? = nil,
-        creditUtilizationThreshold: Double = 30
+        creditUtilizationThreshold: Double = 30,
+        balanceHistory: [BalanceSnapshot] = []
     ) -> WealthSummaryPresentation {
         WealthSummaryPresentation.evaluate(
             accounts: accounts,
@@ -133,6 +216,7 @@ struct WealthSummaryPresentationTests {
             statusSyncText: statusSyncText,
             errorMessage: errorMessage,
             creditUtilizationThreshold: creditUtilizationThreshold,
+            balanceHistory: balanceHistory,
             now: now
         )
     }

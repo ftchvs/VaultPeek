@@ -10,10 +10,14 @@ import SwiftUI
 /// stroke — separation comes from spacing; hairlines are reserved for
 /// emphasized (attention) states.
 enum SurfaceRank {
+    /// Persistent left fly-out panel.
+    case leftPanel
     /// Primary content panels: account list, fly-out, heatmap.
     case raised
     /// Quiet secondary surfaces: metric strips, legends, chips.
     case inset
+    /// Decorative hero emphasis. Never carries finance meaning by itself.
+    case hero(Color)
     /// Attention states only: tinted fill plus hairline.
     case emphasized(Color)
 
@@ -23,26 +27,64 @@ enum SurfaceRank {
         // than over `.regularMaterial` to keep separation and keep `.secondary`
         // text legible over a busy wallpaper.
         switch self {
+        case .leftPanel: AnyShapeStyle(.quaternary.opacity(0.72))
         case .raised: AnyShapeStyle(.quaternary)
         case .inset: AnyShapeStyle(.quaternary.opacity(0.55))
+        case let .hero(tint):
+            AnyShapeStyle(
+                LinearGradient(
+                    colors: [
+                        tint.opacity(SurfaceTokens.heroGlowOpacity),
+                        Color.primary.opacity(0.035),
+                        Color.clear,
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
         case let .emphasized(tint): AnyShapeStyle(tint.opacity(0.12))
         }
     }
 
-    var stroke: Color? {
+    var depth: SurfaceTokens.SurfaceDepth {
         switch self {
-        case .raised, .inset: nil
-        case let .emphasized(tint): tint.opacity(0.16)
+        case .leftPanel:
+            SurfaceTokens.leftPanelDepth
+        case .raised:
+            SurfaceTokens.raisedDepth
+        case .inset:
+            SurfaceTokens.insetDepth
+        case .hero:
+            SurfaceTokens.heroDepth
+        case .emphasized:
+            SurfaceTokens.emphasizedDepth
         }
+    }
+
+    func stroke(multiplier: Double) -> Color {
+        switch self {
+        case let .emphasized(tint):
+            tint.opacity(min(depth.strokeOpacity * multiplier, 0.22))
+        case let .hero(tint):
+            tint.opacity(min(depth.strokeOpacity * multiplier, 0.16))
+        case .leftPanel, .raised, .inset:
+            Color.primary.opacity(min(depth.strokeOpacity * multiplier, 0.16))
+        }
+    }
+
+    func innerStroke(multiplier: Double) -> Color {
+        Color.white.opacity(min(depth.innerStrokeOpacity * multiplier, 0.10))
     }
 }
 
 private struct GlassSurface: ViewModifier {
     let rank: SurfaceRank
     let cornerRadius: CGFloat
+    @AppStorage(PopoverTransparencySetting.storageKey) private var popoverTransparency = PopoverTransparencySetting.defaultValue
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius)
+        let multiplier = PopoverTransparencySetting(value: popoverTransparency).surfaceDepthMultiplier
 
         // Liquid Glass is a macOS 26+ progressive enhancement. Raised/inset
         // ranks carry no underlay fill so the material reads clean, but the
@@ -51,33 +93,40 @@ private struct GlassSurface: ViewModifier {
         #if compiler(>=6.3) && canImport(SwiftUI, _version: 7.0)
             if #available(macOS 26.0, *) {
                 content
-                    .background(emphasizedFill ?? AnyShapeStyle(.clear), in: shape)
+                    .background(liquidGlassFill, in: shape)
                     .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
-                    .overlay {
-                        if let stroke = rank.stroke {
-                            shape.stroke(stroke, lineWidth: 1)
-                        }
-                    }
+                    .overlay { surfaceStroke(shape: shape, multiplier: multiplier) }
+                    .surfaceShadow(rank.depth.shadow, multiplier: multiplier)
             } else {
-                fallback(content: content, shape: shape)
+                fallback(content: content, shape: shape, multiplier: multiplier)
             }
         #else
-            fallback(content: content, shape: shape)
+            fallback(content: content, shape: shape, multiplier: multiplier)
         #endif
     }
 
-    private var emphasizedFill: AnyShapeStyle? {
-        guard case let .emphasized(tint) = rank else { return nil }
-        return AnyShapeStyle(tint.opacity(0.10))
+    private var liquidGlassFill: AnyShapeStyle {
+        switch rank {
+        case .raised, .inset:
+            AnyShapeStyle(.clear)
+        case .leftPanel, .hero, .emphasized:
+            rank.fill
+        }
     }
 
-    private func fallback(content: Content, shape: RoundedRectangle) -> some View {
+    private func fallback(content: Content, shape: RoundedRectangle, multiplier: Double) -> some View {
         content
             .background(rank.fill, in: shape)
+            .overlay { surfaceStroke(shape: shape, multiplier: multiplier) }
+            .surfaceShadow(rank.depth.shadow, multiplier: multiplier)
+    }
+
+    private func surfaceStroke(shape: RoundedRectangle, multiplier: Double) -> some View {
+        shape.stroke(rank.stroke(multiplier: multiplier), lineWidth: 1)
             .overlay {
-                if let stroke = rank.stroke {
-                    shape.stroke(stroke, lineWidth: 1)
-                }
+                shape
+                    .inset(by: 1)
+                    .stroke(rank.innerStroke(multiplier: multiplier), lineWidth: 0.5)
             }
     }
 }
@@ -88,6 +137,25 @@ extension View {
         cornerRadius: CGFloat = Radius.panel
     ) -> some View {
         modifier(GlassSurface(rank: rank, cornerRadius: cornerRadius))
+    }
+
+    func leftPanelSurface() -> some View {
+        glassSurface(.leftPanel, cornerRadius: SurfaceTokens.panelCornerRadius)
+    }
+
+    func heroAccentSurface(tint: Color = SemanticColors.brand) -> some View {
+        glassSurface(.hero(tint), cornerRadius: Radius.panel)
+    }
+}
+
+private extension View {
+    func surfaceShadow(_ shadow: SurfaceTokens.SurfaceShadow?, multiplier: Double) -> some View {
+        self.shadow(
+            color: Color.black.opacity((shadow?.opacity ?? 0) * multiplier),
+            radius: shadow?.radius ?? 0,
+            x: shadow?.x ?? 0,
+            y: shadow?.y ?? 0
+        )
     }
 }
 

@@ -27,4 +27,16 @@ struct PopoverTransparencyTests {
         #expect(lessTransparent.materialOverlayOpacity == 0.32)
         #expect(moreTransparent.materialOverlayOpacity == 0.06)
     }
+
+    @Test("Higher transparency slightly strengthens depth separation")
+    func higherTransparencyStrengthensDepthSeparation() {
+        let lessTransparent = PopoverTransparencySetting(value: 20)
+        let defaultTransparency = PopoverTransparencySetting(value: PopoverTransparencySetting.defaultValue)
+        let moreTransparent = PopoverTransparencySetting(value: 85)
+
+        #expect(lessTransparent.normalizedProgress == 0)
+        #expect(moreTransparent.normalizedProgress == 1)
+        #expect(lessTransparent.surfaceDepthMultiplier < defaultTransparency.surfaceDepthMultiplier)
+        #expect(defaultTransparency.surfaceDepthMultiplier < moreTransparent.surfaceDepthMultiplier)
+    }
 }
