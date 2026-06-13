@@ -51,6 +51,15 @@ struct MainPopover: View {
         return accounts.first { $0.id == selectedAccountId }
     }
 
+    /// The left Wealth Summary rail is showing (vs. the account inspector).
+    /// While it is visible it owns the net-worth hero, so the center dashboard
+    /// drops its duplicate net-worth amount and keeps only a compact trend
+    /// (AND-376). Per the three-column contract the rail becomes always-on,
+    /// at which point this stays true for every non-setup state.
+    private var isWealthSummaryRailVisible: Bool {
+        selectedAccount == nil && !shouldShowSetupScreen
+    }
+
     private var filteredAccounts: [AccountDTO] {
         appState.accounts.filter { selectedFilter.includes($0, appState: appState) }
     }
@@ -189,7 +198,7 @@ struct MainPopover: View {
                     // within a group — spacing is the hierarchy.
                     VStack(alignment: .leading, spacing: Layout.groupSpacing) {
                         VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
-                            DashboardHeader()
+                            DashboardHeader(showsNetWorth: !isWealthSummaryRailVisible)
                                 .environment(appState)
                                 .loadingRedaction(appState.loadState(for: .summaryCards))
 
@@ -308,14 +317,29 @@ struct MainPopover: View {
 private struct DashboardHeader: View {
     @Environment(AppState.self) private var appState
 
+    /// When the left Wealth Summary rail already owns the net-worth hero, the
+    /// center header drops the duplicate amount and shows only a compact
+    /// net-worth trend so the chart cue survives without a second hero
+    /// (AND-376). Defaults to `true` for the swap-model selected-account state,
+    /// where the center is the only place net worth is shown.
+    var showsNetWorth: Bool = true
+
     private var trend: BalanceTrend? {
         BalanceTrend.evaluate(history: appState.balanceHistory)
     }
 
     var body: some View {
-        // One hero per surface: the net worth number is the only large text.
-        // Sync state lives in the footer; the app's own name does not belong
-        // inside its own popover.
+        if showsNetWorth {
+            heroHeader
+        } else {
+            compactTrendHeader
+        }
+    }
+
+    // One hero per surface: the net worth number is the only large text.
+    // Sync state lives in the footer; the app's own name does not belong
+    // inside its own popover.
+    private var heroHeader: some View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: Spacing.xs) {
                 Text("Net Worth")
@@ -332,23 +356,48 @@ private struct DashboardHeader: View {
             Spacer(minLength: Spacing.md)
 
             if let trend {
-                VStack(alignment: .trailing, spacing: Spacing.xxs) {
-                    BalanceTrendChart(trend: trend)
-                        .frame(width: 92, height: 21)
-
-                    Text("\(trend.deltaText) \(trend.spanText)")
-                        .font(.caption2.weight(.medium))
-                        .monospacedDigit()
-                        .foregroundStyle(deltaTint(for: trend.direction))
-                        .lineLimit(1)
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(trend.accessibilitySummary)
-                .help(trend.accessibilitySummary)
+                trendCluster(trend)
             }
         }
         .padding(Spacing.sm)
         .heroAccentSurface()
+    }
+
+    // The left rail owns the net-worth amount, so the center keeps only the
+    // trend chart cue (no duplicate hero number). Renders nothing when there is
+    // no history to chart, so the center column starts cleanly at the change
+    // receipt without an awkward empty gap.
+    @ViewBuilder
+    private var compactTrendHeader: some View {
+        if let trend {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Net Worth Trend")
+                    .sectionTitle()
+                    .foregroundStyle(.secondary)
+
+                Spacer(minLength: Spacing.md)
+
+                trendCluster(trend)
+            }
+            .padding(Spacing.sm)
+            .glassSurface(.inset)
+        }
+    }
+
+    private func trendCluster(_ trend: BalanceTrend) -> some View {
+        VStack(alignment: .trailing, spacing: Spacing.xxs) {
+            BalanceTrendChart(trend: trend)
+                .frame(width: 92, height: 21)
+
+            Text("\(trend.deltaText) \(trend.spanText)")
+                .font(.caption2.weight(.medium))
+                .monospacedDigit()
+                .foregroundStyle(deltaTint(for: trend.direction))
+                .lineLimit(1)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(trend.accessibilitySummary)
+        .help(trend.accessibilitySummary)
     }
 
     private func deltaTint(for direction: BalanceTrend.Direction) -> Color {
