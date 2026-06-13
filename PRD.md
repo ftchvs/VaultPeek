@@ -159,13 +159,14 @@ native RepoBar-style finance instrument before expanding finance scope.
 
 | # | Requirement | Acceptance Criteria |
 |---|-------------|-------------------|
-| P1.1 | Roadmap truth cleanup | **Given** a contributor reads README, PRD, release notes, release docs, and roadmap, **When** they compare release status, **Then** the docs agree that v1.0.0 has shipped and that notarized app/cask/Sparkle appcast distribution remains post-1.0 |
+| P1.1 | Roadmap truth cleanup | **Given** a contributor reads README, PRD, release notes, release docs, and roadmap, **When** they compare release status, **Then** the docs agree that v1.0.0 has shipped and that Developer ID notarization plus Sparkle appcast distribution remains post-1.0 |
 | P1.2 | Native material surface system | **Given** the dashboard renders on macOS 15+, **When** panels, filters, selected rows, and recovery states are visible, **Then** they use shared material/fill/stroke tokens instead of one-off saturated card fills |
 | P1.3 | Liquid Glass readiness | **Given** VaultPeek is built with a macOS 26+ SDK, **When** SwiftUI Liquid Glass APIs are available, **Then** native panel surfaces may opt into `glassEffect` while preserving the macOS 15 material fallback |
 | P1.4 | RepoBar-style dashboard density | **Given** the menu bar popover opens, **When** dashboard content is scanned, **Then** the status strip and 365-day heatmap appear before account rows, with compact filters and selected account detail actions in the same surface |
 | P1.5 | Recovery convergence | **Given** common failures occur, **When** the user views dashboard or settings, **Then** server offline, wrong mode, missing credentials, stale sync, login-required item, empty account data, filtered-zero transactions, and denied notifications each expose one clear recovery action |
-| P1.6 | Local AI activity summaries | **Given** a local AI runtime is configured, **When** the user opens the dashboard or an insights surface, **Then** VaultPeek summarizes financial activity for the last 7 days, last month, and year-over-year windows, including spending, income, balance changes, recurring charges, credit utilization, and notable anomalies without sending data to cloud models |
+| P1.6 | Local insight receipts | **Given** local transactions are available, **When** the user opens the dashboard, **Then** VaultPeek shows a local-only activity receipt with source-row count, time window, top category, recurring estimate, category hints, and disabled/no-runtime copy when no local model runtime is configured; future local model runtimes must not send data to cloud models |
 | P1.7 | Local AI categorization | **Given** synced transactions include Plaid categories, merchant names, raw names, amounts, dates, and account context, **When** local AI categorization is enabled, **Then** VaultPeek suggests smarter expense and income categories with confidence and evidence while preserving raw Plaid data and allowing user correction or fallback to Plaid categories |
+| P1.8 | Local CLI access | **Given** VaultPeekServer is running in a source/developer checkout, **When** a user or local agent runs `plaidbar-cli`, **Then** status, item, balance, transaction, and link commands use the localhost API and local bearer token without reading Plaid Dashboard credentials directly |
 
 ### Future (not committed)
 
@@ -261,5 +262,5 @@ native RepoBar-style finance instrument before expanding finance scope.
 | Filter usage rate | 0% (new feature) | >30% of sessions use ≥1 filter | 90 days post-v0.3 | Local UserDefaults counter (planned) |
 | Notification opt-in rate | 0% (new feature) | >50% of users who open Settings | 90 days post-v0.3 | Local counter: settings_opened / notifications_enabled |
 | Notification delivery latency | N/A | <10s after sync completes | Continuous | Timestamp delta: sync_complete → notification_shown |
-| Test suite size | 86 tests, 100% pass | Maintain 100% pass rate | Continuous | `swift test` in CI |
+| Test suite size | 353 Swift Testing cases, 100% pass | Maintain 100% pass rate | Continuous | `swift test` in CI |
 | Build time (clean) | ~45s M1 | <60s | Per release | GitHub Actions CI timing |

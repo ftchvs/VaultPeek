@@ -45,12 +45,14 @@ User clicks "Refresh"
 Benefits:
 - **Security**: Secrets never in app memory
 - **Restartability**: Server and app restart independently
-- **Extensibility**: Future CLI tools or iOS app can use the same server
+- **Extensibility**: The source-built `plaidbar-cli` uses the same authenticated
+  localhost server without exposing Plaid credentials to terminal clients
 - **Testability**: Server API is testable with `curl`
 
 ### Process Lifecycle
 
-Both processes are started together via `Scripts/run.sh`:
+For source-based sandbox development, both processes can be started together via
+`Scripts/run.sh`:
 
 ```bash
 swift run PlaidBarServer --sandbox &   # Background
@@ -58,7 +60,9 @@ swift run PlaidBar &                    # Background
 wait                                    # Ctrl+C stops both
 ```
 
-In production, the server would run as a LaunchAgent for auto-start at login.
+For app-bundle style launches, PlaidBar can start its bundled companion server
+when needed. Source/developer checkouts can also run the server explicitly with
+`swift run PlaidBarServer`.
 
 ## Target Breakdown
 
@@ -75,6 +79,9 @@ Zero external dependencies. Contains:
 | `LinkResponse.swift` | Link token response + item status models |
 | `SyncResponse.swift` | Transaction sync response (added/modified/removed) |
 | `ServerStatus.swift` | Server health + `PlaidEnvironment` enum |
+| `LocalAIInsights.swift` | Local-only activity receipt and category-hint presentation models |
+| `AttentionQueue.swift` | Prioritized recovery prompts for dashboard/status surfaces |
+| `Dashboard*.swift` | Dashboard status, nav, change, empty, and drill-in presenters |
 | `Formatters.swift` | Currency (full/abbreviated/compact), date, percentage formatting |
 | `Constants.swift` | Ports, intervals, thresholds, keychain keys |
 
@@ -99,13 +106,13 @@ GET  /api/status                → ServerStatus
 GET  /api/items                 → [ItemStatus]
 ```
 
-**Storage (SQLite via Fluent):**
+**Storage (SQLite via Fluent + Keychain where available):**
 
 ```sql
--- items: stores Plaid access tokens
+-- items: stores Plaid item records and token references
 CREATE TABLE items (
-    id TEXT PRIMARY KEY,          -- Plaid item_id
-    access_token TEXT NOT NULL,
+    id TEXT PRIMARY KEY,
+    access_token TEXT NOT NULL,   -- keychain:<item_id> on macOS runtime builds
     institution_id TEXT,
     institution_name TEXT,
     status TEXT NOT NULL,         -- connected | login_required | error
@@ -120,6 +127,11 @@ CREATE TABLE sync_cursors (
     updated_at DATETIME
 );
 ```
+
+On macOS runtime builds with Security framework support, Plaid access-token
+bytes are stored in Keychain and SQLite stores `keychain:<item_id>` references.
+Fallback builds without Keychain support may store token bytes locally in the
+SQLite store; release and security docs call out that boundary explicitly.
 
 **Plaid Client:**
 
@@ -155,10 +167,13 @@ Single `@Observable` state object injected via SwiftUI `@Environment`. No Combin
 MenuBarExtra
 ├── MenuBarLabel (icon + balance text)
 └── MainPopover (dashboard-first surface)
-    ├── SetupView (if !isSetupComplete)
+    ├── SetupView (if setup is incomplete)
+    ├── status strip + latest change receipt
+    ├── 365-day spend/cashflow heatmap
     ├── DashboardNavBand (Cash/Credit/Savings/Debt/Status filters)
-    ├── AttentionQueueView (degraded-item recovery)
-    └── AccountDetailFlyout (per-account drill-in)
+    ├── compact account rows + selected account drill-in / AccountDetailFlyout
+    ├── AttentionQueueView (degraded-item recovery prompts)
+    └── local insight receipt
 ```
 
 **Background Refresh:**
@@ -266,13 +281,19 @@ Unit tests span 3 suites, all using Swift Testing framework:
 | PlaidBarServerTests | Plaid response decoding, config, type conversion |
 | PlaidBarTests | Business logic: net balance, spending aggregation, filtering |
 
-Server integration tests (starting Hummingbird, making HTTP calls) are planned for v0.2.
+Server tests cover config, status contracts, Plaid decoding, auth behavior, and
+route-adjacent reducers. Full end-to-end Plaid sandbox coverage remains a manual
+or smoke-test gate because it depends on external sandbox credentials.
 
 Suite size is not hard-coded in these docs; derive the current count with `swift test list` or a ripgrep over `Tests/` (`rg -n "@Test" Tests/`), which is the source of truth.
 
 ## Future Architecture Considerations
 
-- **LaunchAgent**: Ship a plist for auto-starting the server at login
-- **Webhooks**: Plaid can push updates instead of polling — requires a tunnel or relay service
-- **iOS Companion**: The server API is already REST; an iOS app could connect via Tailscale/local network
-- **Multiple providers**: Abstract the Plaid client behind a protocol to support Teller, MX, etc.
+- **Distribution**: Keep private DMG and source/developer paths stable; add
+  notarization and Sparkle appcast only after signing and Gatekeeper checks are
+  real
+- **Webhooks**: Plaid can push updates instead of polling, but a relay/tunnel
+  would need an explicit privacy review because PlaidBar has no hosted backend
+- **Multiple providers**: Abstract the Plaid client behind a protocol only if it
+  strengthens the local menu-bar instrument instead of becoming a generic
+  provider playground

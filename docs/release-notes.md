@@ -97,8 +97,9 @@ VaultPeek:
 
 Intentional, kept for compatibility:
 
-- Executables and SwiftPM targets: `plaidbar`, `plaidbar-server`, `PlaidBar`,
-  `PlaidBarServer`, `PlaidBarCore` (staged rename tracked separately).
+- SwiftPM targets/products and app-bundle executables: `PlaidBar`,
+  `PlaidBarServer`, `PlaidBarCore`, `plaidbar-cli` (staged rename tracked
+  separately).
 - Environment variables and config keys: `PLAIDBAR_SERVER_PORT`,
   `PLAIDBAR_DATA_DIR`, `PLAIDBAR_MIGRATE_LEGACY_DATABASE`,
   `PLAIDBAR_SMOKE_PORT`.
@@ -130,12 +131,16 @@ Intentional, kept for compatibility:
   macOS 15 material fallback.
 - Continue recovery convergence across dashboard, setup, settings, Plaid item
   health, local server state, notification permissions, and empty data states.
+- Keep source/developer CLI behavior, local insight receipts, the attention
+  queue, and README screenshot expectations documented as part of the public
+  product contract.
 
 ### Verification Targets
 
 - `git diff --check`
 - `swift build --target PlaidBar --skip-update --disable-keychain`
 - `./Scripts/screenshots.sh` after visual changes
+- Peekaboo window/UI validation for regenerated screenshots when available
 - Manual VoiceOver and keyboard checks for dashboard filters, footer actions,
   recovery buttons, and selected account detail surfaces
 

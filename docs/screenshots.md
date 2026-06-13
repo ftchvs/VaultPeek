@@ -37,6 +37,14 @@ The script launches VaultPeek locally and captures:
 - Settings > Notifications
 - Settings > About
 
+The dashboard surface also includes a below-the-fold local insight receipt when
+demo transactions are available. Peekaboo/AX validation should see that receipt
+even when the public screenshot stays focused on the first-glance dashboard
+area. The receipt is intentionally local-only: it shows source-row count,
+window, top category, recurring estimate, category hints, and the
+disabled/no-runtime state when no local AI runtime is configured. It must not
+imply cloud AI processing or send transaction data off-device.
+
 The Status capture uses demo data with `--screenshot-status-recovery`. That
 fixture keeps the regular demo dashboard healthy, while the Status filter shows
 one recovered institution and one institution that needs login/reconnect.
@@ -65,7 +73,7 @@ fixture intent, dashboard story, and expected recovery state.
 
 | Scenario | Primary assets | Review focus |
 |----------|----------------|--------------|
-| `steady-household-overview` | `Assets/dashboard.png` | First-glance cash, credit, savings, debt, sync health, and heatmap context |
+| `steady-household-overview` | `Assets/dashboard.png` | First-glance cash, credit, savings, debt, sync health, and heatmap context; validate below-fold local insight receipt separately |
 | `cash-runway-check` | `Assets/dashboard-cash.png`, `Assets/dashboard-savings.png` | Depository balances, selected-account detail, and quiet healthy status |
 | `credit-pressure-review` | `Assets/dashboard-credit.png`, `Assets/dashboard-debt.png` | Utilization, available credit, owed balances, and non-budgeting debt emphasis |
 | `reconnect-confidence-check` | `Assets/dashboard-status.png` | Login-required item recovery without raw Plaid payloads or real errors |
@@ -108,6 +116,9 @@ when the menu-bar popover is positioned outside the active display bounds.
 - No real personal finance data appears.
 - Empty/degraded states are represented where relevant.
 - `dashboard-status.png` shows the recovery fixture, not a real Plaid error.
+- Peekaboo/AX validation can find local insight receipt text saying
+  local-only/disabled when no local runtime is configured; it must not mention
+  cloud AI fallback.
 - Button labels and status copy match the current app.
 - Settings screenshots show useful controls, not blank tabs.
 - Screenshots do not include unrelated desktop windows or notifications.
@@ -119,6 +130,7 @@ Regenerate screenshots when a change affects:
 - dashboard layout
 - setup/onboarding
 - status/recovery states
+- local insight receipt or attention queue copy
 - settings tabs
 - local data copy
 - notification controls

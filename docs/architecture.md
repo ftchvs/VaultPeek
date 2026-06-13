@@ -14,7 +14,7 @@ executable names below intentionally keep the PlaidBar name; see
 | Module | Responsibility | Must Not Do |
 |--------|----------------|-------------|
 | `PlaidBar` | SwiftUI menu bar app, popover, setup flow, settings, local client calls, notification UX | Store Plaid secrets, call Plaid directly, contain server persistence logic |
-| `PlaidBarCore` | Shared DTOs, formatting, sync reducers, recurring detection, presentation helpers, local data path helpers | Depend on SwiftUI, Hummingbird, or Plaid network clients |
+| `PlaidBarCore` | Shared DTOs, formatting, sync reducers, recurring detection, dashboard presenters, attention queue models, local insight receipt models, local data path helpers | Depend on SwiftUI, Hummingbird, Plaid network clients, or cloud AI SDKs |
 | `PlaidBarServer` | Hummingbird localhost API, Plaid API client, SQLite storage, link flow, token vault, auth middleware | Render UI, depend on app state, expose secrets in status responses |
 
 ## Runtime Topology
@@ -57,6 +57,16 @@ The app talks to the server through `ServerClient`. The server exposes:
 
 `/health` and `/oauth/callback` are public on localhost. `/api/*` requires the
 local bearer token stored in the VaultPeek data directory.
+
+`plaidbar-cli` is a source/developer local client for this same contract. It
+reads the local bearer token, talks to `127.0.0.1`, and prints table or `--json`
+output; it does not read Plaid Dashboard credentials or bypass the companion
+server.
+
+Local insight receipts are intentionally app/core-side presentation artifacts.
+They summarize local transaction rows and can expose disabled/no-runtime state,
+source-row count, windows, top categories, recurring estimates, and category
+hints. They must not add a cloud AI path or send raw transaction data off-device.
 
 ## Configuration
 
@@ -114,8 +124,8 @@ VaultPeek was renamed from PlaidBar at the product level. The following
 surfaces intentionally keep the PlaidBar name and must not be renamed without
 an explicit migration plan:
 
-- SwiftPM targets/products and executables: `PlaidBar`, `PlaidBarServer`,
-  `PlaidBarCore`, `plaidbar`, `plaidbar-server` (staged rename, tracked
+- SwiftPM targets/products and app-bundle executables: `PlaidBar`,
+  `PlaidBarServer`, `PlaidBarCore`, `plaidbar-cli` (staged rename, tracked
   separately).
 - Environment variables and config keys: `PLAIDBAR_SERVER_PORT`,
   `PLAIDBAR_DATA_DIR`, `PLAIDBAR_MIGRATE_LEGACY_DATABASE`,
@@ -179,9 +189,8 @@ states if any later step fails.
 - Make each degraded state actionable: start server, check mode, add account,
   reconnect item, clear filters, or open Settings.
 
-## 1.0 Architecture Debt
+## Architecture Debt
 
-- Add a clean architecture diagram to README or docs.
 - Add endpoint-level documentation for request/response DTOs.
 - Add a clean duplicate-instance strategy and document expected behavior.
 - Ship 1.0 as a privately-distributed, ad-hoc-signed DMG unless Developer ID

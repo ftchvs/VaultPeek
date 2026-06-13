@@ -2,18 +2,12 @@
 
 This guide covers the common problems a new VaultPeek user or contributor
 should be able to solve without reading the source. (VaultPeek was renamed from
-PlaidBar; the `plaidbar`/`plaidbar-server` executable names and `PLAIDBAR_*`
+PlaidBar; SwiftPM targets, app-bundle executable names, and `PLAIDBAR_*`
 environment variables are intentionally unchanged.)
 
 ## Demo Mode Shows No Data
 
-Expected command:
-
-```bash
-plaidbar --demo
-```
-
-or from source:
+Expected source/developer command:
 
 ```bash
 swift run PlaidBar --demo
@@ -101,7 +95,7 @@ data never mix. Each mode starts empty until accounts are linked in that mode.
 
 Checks:
 
-- Start the local server with `plaidbar-server --sandbox` or
+- Start the local server with `swift run PlaidBarServer --sandbox` or
   `./Scripts/run.sh --sandbox`.
 - Confirm the port matches the app configuration.
 - Visit `http://127.0.0.1:8484/health` if using the default port.
@@ -125,6 +119,11 @@ Checks:
   available.
 - Restart both the app and server after changing the data directory.
 - Avoid copying `auth-token` into public logs or issues.
+
+The same local token boundary applies to the source/developer `plaidbar-cli`.
+If CLI commands fail with unauthorized, first verify the server is running and
+that the CLI is using the same `PLAIDBAR_DATA_DIR` as the app/server. Do not
+paste the token value in issues or support logs.
 
 ## Default Storage Did Not Migrate
 
@@ -152,6 +151,20 @@ Recovery checks:
   VaultPeek file is not already present.
 - To roll back temporarily, set `PLAIDBAR_DATA_DIR=~/.plaidbar` before starting
   both the app and server.
+
+## Local Insight Receipt Says Local AI Is Disabled
+
+That is expected when no local model runtime is configured. VaultPeek still
+shows a deterministic local receipt using on-device transaction summaries:
+source-row count, time window, top category, recurring estimate, and category
+hints. It does not fall back to a cloud model.
+
+Checks:
+
+- Confirm the dashboard still renders balances, activity, and account rows.
+- Treat the disabled/no-runtime badge as an availability note, not a sync error.
+- Do not enter cloud AI API keys for private transaction data; local insight
+  work must stay on-device.
 
 ## Accounts Are Linked But Transactions Are Empty
 
@@ -220,6 +233,9 @@ Checks:
 - Terminal has macOS Accessibility permission for UI automation.
 - No other VaultPeek window is blocking the scripted flow.
 - Run from the repository root.
+- If you are validating with Peekaboo, `peekaboo list windows --app PlaidBar`
+  should show the popover/settings window and `mcp_peekaboo_inspect_ui` should
+  expose dashboard text such as `365D SPEND`, filters, and local insight receipt.
 
 Screenshots should use demo or sandbox data only.
 
