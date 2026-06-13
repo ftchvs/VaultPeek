@@ -469,6 +469,19 @@ struct PlaidBarCoreTests {
         #expect(abs(MenuBarSummary.netCash(from: accounts) - 12_449.32) < 0.01)
     }
 
+    @Test("Menu bar summary calculates net worth as the cockpit default")
+    func menuBarSummaryNetWorth() {
+        let accounts = [
+            AccountDTO(id: "1", itemId: "i", name: "Checking", type: .depository, balances: BalanceDTO(available: 8_200)),
+            AccountDTO(id: "2", itemId: "i", name: "Brokerage", type: .investment, balances: BalanceDTO(current: 50_000)),
+            AccountDTO(id: "3", itemId: "i", name: "Visa", type: .credit, balances: BalanceDTO(current: -1_500, limit: 10_000)),
+            AccountDTO(id: "4", itemId: "i", name: "Auto Loan", type: .loan, balances: BalanceDTO(current: -7_250)),
+        ]
+
+        #expect(MenuBarSummary.netWorth(from: accounts) == 49_450)
+        #expect(MenuBarSummaryMode.allCases.first == .netWorth)
+    }
+
     @Test("Menu bar summary total cash uses depository accounts only")
     func menuBarSummaryTotalCash() {
         let accounts = [
@@ -1168,6 +1181,7 @@ struct PlaidBarCoreTests {
             TransactionDTO(id: "1", accountId: "a", amount: 25, date: Formatters.transactionDateString(Date()), name: "Coffee")
         ]
 
+        #expect(!MenuBarSummary.text(mode: .netWorth, accounts: accounts, transactions: transactions, currencyFormat: .compact).isEmpty)
         #expect(!MenuBarSummary.text(mode: .netCash, accounts: accounts, transactions: transactions, currencyFormat: .compact).isEmpty)
         #expect(!MenuBarSummary.text(mode: .totalCash, accounts: accounts, transactions: transactions, currencyFormat: .compact).isEmpty)
         #expect(MenuBarSummary.text(mode: .creditUtilization, accounts: accounts, transactions: transactions, currencyFormat: .compact) == "15%")
