@@ -147,6 +147,9 @@ enum MotionTokens {
 
     static let staticLoadingOpacity = 0.62
     static let loadingPulseOpacity = 0.55
+    /// Scroll-edge depth floor (AND-383): rows/sections fade to this as they reach
+    /// the scroll viewport edge; identity (1.0) when fully visible.
+    static let scrollEdgeFadeOpacity = 0.6
 
     static func animation(_ animation: Animation, reduceMotion: Bool) -> Animation? {
         reduceMotion ? nil : animation

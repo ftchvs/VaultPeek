@@ -146,6 +146,19 @@ extension View {
     func heroAccentSurface(tint: Color = SemanticColors.brand) -> some View {
         glassSurface(.hero(tint), cornerRadius: Radius.panel)
     }
+
+    /// Subtle scroll-edge depth (AND-383): a scrolling row fades as it approaches the
+    /// top/bottom of the scroll viewport and returns to identity when fully visible.
+    /// Render-only (opacity) — zero layout impact, so row heights and the density
+    /// rhythm are unchanged, and there is no horizontal drift on left-aligned content.
+    /// Under Reduce Motion it renders at full opacity throughout (effect disabled).
+    /// Apply to each scrolling row or section — never to pinned headers/footers.
+    func scrollEdgeDepth(reduceMotion: Bool) -> some View {
+        scrollTransition { content, phase in
+            content
+                .opacity(reduceMotion || phase.isIdentity ? 1 : MotionTokens.scrollEdgeFadeOpacity)
+        }
+    }
 }
 
 private extension View {

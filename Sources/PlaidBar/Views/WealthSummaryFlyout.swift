@@ -39,12 +39,15 @@ struct WealthSummaryFlyout: View {
                 VStack(alignment: .leading, spacing: Spacing.lg) {
                     WealthMetricGrid(presentation: presentation)
                         .loadingRedaction(appState.loadState(for: .summaryCards))
+                        .scrollEdgeDepth(reduceMotion: reduceMotion)
 
                     WealthBalanceMixSection(presentation: presentation)
                         .loadingRedaction(appState.loadState(for: .summaryCards))
+                        .scrollEdgeDepth(reduceMotion: reduceMotion)
 
                     WealthCashflowSection(cashflow: presentation.cashflow)
                         .loadingRedaction(appState.loadState(for: .transactions))
+                        .scrollEdgeDepth(reduceMotion: reduceMotion)
 
                     SafeToSpendCard(
                         result: SafeToSpendCalculator.compute(
@@ -56,14 +59,17 @@ struct WealthSummaryFlyout: View {
                         lastUpdatedRelative: appState.lastSyncRelative
                     )
                     .loadingRedaction(appState.loadState(for: .summaryCards))
+                    .scrollEdgeDepth(reduceMotion: reduceMotion)
 
                     WealthCreditSection(
                         summary: presentation.creditUtilization,
                         threshold: appState.creditUtilizationThreshold
                     )
                         .loadingRedaction(appState.loadState(for: .credit))
+                        .scrollEdgeDepth(reduceMotion: reduceMotion)
 
                     WealthAttentionSection(summary: presentation.attention)
+                        .scrollEdgeDepth(reduceMotion: reduceMotion)
 
                     if presentation.accountCount == 0 {
                         Button(action: onAddAccount) {
@@ -71,6 +77,7 @@ struct WealthSummaryFlyout: View {
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
+                        .scrollEdgeDepth(reduceMotion: reduceMotion)
                     }
                 }
                 .padding(Spacing.md)

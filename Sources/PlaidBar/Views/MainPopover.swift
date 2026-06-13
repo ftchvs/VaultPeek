@@ -1280,6 +1280,7 @@ private struct DashboardOverviewFallbackBanner: View {
 
 private struct AccountsSection: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let accounts: [AccountDTO]
     let filter: DashboardAccountFilter
     let selectedAccountId: String?
@@ -1335,6 +1336,7 @@ private struct AccountsSection: View {
                             }
                         )
                         .environment(appState)
+                        .scrollEdgeDepth(reduceMotion: reduceMotion)
                     }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: Radius.panel))
