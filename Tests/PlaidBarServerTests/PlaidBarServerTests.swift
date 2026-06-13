@@ -1,5 +1,8 @@
 import Foundation
+import FluentKit
+import FluentSQLiteDriver
 import Hummingbird
+import HummingbirdFluent
 import HTTPTypes
 import Logging
 import NIOCore
@@ -31,6 +34,67 @@ private let plaidTokenVaultKeychainAvailable: Bool = {
         return false
     }
 }()
+
+private actor HostedLinkStubPlaidClient: PlaidClientProtocol {
+    private let linkTokenGetResponse: PlaidLinkTokenGetResponse
+    private let exchangeResponse: PlaidTokenExchangeResponse
+    private let accountsResponse: PlaidAccountsResponse
+    private var requestedLinkTokens: [String] = []
+    private var exchangedPublicTokens: [String] = []
+    private var requestedAccountAccessTokens: [String] = []
+
+    init(
+        linkTokenGetResponse: PlaidLinkTokenGetResponse,
+        exchangeResponse: PlaidTokenExchangeResponse,
+        accountsResponse: PlaidAccountsResponse
+    ) {
+        self.linkTokenGetResponse = linkTokenGetResponse
+        self.exchangeResponse = exchangeResponse
+        self.accountsResponse = accountsResponse
+    }
+
+    func createLinkToken(
+        userId _: String,
+        completionRedirectUri _: String
+    ) async throws -> PlaidLinkTokenResponse {
+        throw PlaidError.invalidResponse
+    }
+
+    func createUpdateLinkToken(
+        userId _: String,
+        accessToken _: String,
+        completionRedirectUri _: String
+    ) async throws -> PlaidLinkTokenResponse {
+        throw PlaidError.invalidResponse
+    }
+
+    func getLinkToken(_ linkToken: String) async throws -> PlaidLinkTokenGetResponse {
+        requestedLinkTokens.append(linkToken)
+        return linkTokenGetResponse
+    }
+
+    func exchangePublicToken(_ publicToken: String) async throws -> PlaidTokenExchangeResponse {
+        exchangedPublicTokens.append(publicToken)
+        return exchangeResponse
+    }
+
+    func getAccounts(accessToken: String) async throws -> PlaidAccountsResponse {
+        requestedAccountAccessTokens.append(accessToken)
+        return accountsResponse
+    }
+
+    func recordedCalls() -> (
+        linkTokens: [String],
+        publicTokens: [String],
+        accountAccessTokens: [String]
+    ) {
+        (
+            requestedLinkTokens,
+            exchangedPublicTokens,
+            requestedAccountAccessTokens
+        )
+    }
+}
 
 @Suite("PlaidBarServer")
 struct PlaidBarServerTests {
@@ -500,6 +564,31 @@ struct PlaidBarServerTests {
         )
     }
 
+    /// Runs `body` against a TokenStore backed by a temporary SQLite file,
+    /// and always shuts Fluent down so the test does not hold database files.
+    private func withTokenStore(
+        databasePath: String,
+        logger: Logger,
+        _ body: (TokenStore) async throws -> Void
+    ) async throws {
+        let fluent = Fluent(logger: logger)
+        fluent.databases.use(.sqlite(.file(databasePath)), as: .sqlite)
+        await fluent.migrations.add(CreateItems())
+        await fluent.migrations.add(CreateSyncCursors())
+
+        var bodyError: Error?
+        do {
+            try await fluent.migrate()
+            try await body(TokenStore(fluent: fluent, logger: logger))
+        } catch {
+            bodyError = error
+        }
+        try await fluent.shutdown()
+        if let bodyError {
+            throw bodyError
+        }
+    }
+
     @Test func serverDatabasePathIsScopedByPlaidEnvironment() {
         let dataDir = "/tmp/plaidbar-test-data"
 
@@ -914,7 +1003,13 @@ struct PlaidBarServerTests {
               "link_session_id": "session-one",
               "results": {
                 "item_add_results": [
-                  { "public_token": "public-sandbox-one" },
+                  {
+                    "public_token": "public-sandbox-one",
+                    "institution": {
+                      "name": "Example Credit Union",
+                      "institution_id": "ins_example_credit_union"
+                    }
+                  },
                   { "public_token": "public-sandbox-two" }
                 ]
               }
@@ -928,6 +1023,99 @@ struct PlaidBarServerTests {
         let response = try decoder.decode(PlaidLinkTokenGetResponse.self, from: json)
 
         #expect(response.publicTokens == ["public-sandbox-one", "public-sandbox-two"])
+        #expect(response.publicTokenResults.first?.institution?.name == "Example Credit Union")
+        #expect(response.publicTokenResults.first?.institution?.institutionId == "ins_example_credit_union")
+    }
+
+    @Test(
+        "OAuth callback stores Hosted Link institution names",
+        .enabled(if: plaidTokenVaultKeychainAvailable, "macOS Keychain accepts test writes")
+    )
+    func oauthCallbackStoresHostedLinkInstitutionName() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-oauth-callback-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let itemId = "test_item_\(UUID().uuidString)"
+        defer {
+            try? PlaidTokenVault.delete(
+                storedToken: PlaidTokenVault.reference(for: itemId),
+                fallbackItemId: itemId
+            )
+        }
+
+        let linkTokenJSON = """
+        {
+          "link_token": "test-link-token",
+          "link_sessions": [
+            {
+              "link_session_id": "test-link-session",
+              "results": {
+                "item_add_results": [
+                  {
+                    "public_token": "test-public-token",
+                    "institution": {
+                      "name": "Example Credit Union",
+                      "institution_id": "ins_example_credit_union"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+        """.data(using: .utf8)!
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let linkTokenGetResponse = try decoder.decode(PlaidLinkTokenGetResponse.self, from: linkTokenJSON)
+        let accessToken = "test-access-token-\(UUID().uuidString)"
+        let plaidClient = HostedLinkStubPlaidClient(
+            linkTokenGetResponse: linkTokenGetResponse,
+            exchangeResponse: PlaidTokenExchangeResponse(
+                accessToken: accessToken,
+                itemId: itemId,
+                requestId: nil
+            ),
+            accountsResponse: PlaidAccountsResponse(
+                accounts: [],
+                item: PlaidItem(
+                    itemId: itemId,
+                    institutionId: "ins_accounts_fallback",
+                    availableProducts: nil,
+                    billedProducts: nil
+                ),
+                requestId: nil
+            )
+        )
+        let pendingLinkSessions = PendingLinkSessionStore(
+            storageURL: directory.appendingPathComponent("pending-link-sessions.json")
+        )
+        let state = await pendingLinkSessions.issueState()
+        await pendingLinkSessions.save(state: state, linkToken: "test-link-token")
+        let databasePath = directory.appendingPathComponent("plaidbar-test.sqlite").path
+        let logger = Logger(label: "com.ftchvs.plaidbar-server-tests.oauth-callback")
+
+        try await withTokenStore(databasePath: databasePath, logger: logger) { store in
+            let route = OAuthCallbackRoute(
+                plaidClient: plaidClient,
+                tokenStore: store,
+                pendingLinkSessions: pendingLinkSessions
+            )
+            let response = try await route.handleCallback(
+                request: Self.makeRequest(path: "/oauth/callback?state=\(state)"),
+                context: TestRequestContext(source: TestRequestContextSource())
+            )
+            let savedItem = try #require(try await store.getItem(id: itemId))
+            let calls = await plaidClient.recordedCalls()
+
+            #expect(response.status == .ok)
+            #expect(savedItem.institutionName == "Example Credit Union")
+            #expect(savedItem.institutionId == "ins_example_credit_union")
+            #expect(calls.linkTokens == ["test-link-token"])
+            #expect(calls.publicTokens == ["test-public-token"])
+            #expect(calls.accountAccessTokens == [accessToken])
+        }
     }
 
     @Test func linkTokenGetResponseAllowsUpdateModeWithoutPublicToken() throws {

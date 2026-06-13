@@ -4,7 +4,7 @@ import NIOCore
 import PlaidBarCore
 
 struct LinkRoutes: Sendable {
-    let plaidClient: PlaidClient
+    let plaidClient: any PlaidClientProtocol
     let tokenStore: TokenStore
     let pendingLinkSessions: PendingLinkSessionStore
     let config: ServerConfig
@@ -95,7 +95,7 @@ struct LinkRoutes: Sendable {
 // MARK: - OAuth Callback (top-level route, not under /api)
 
 struct OAuthCallbackRoute: Sendable {
-    let plaidClient: PlaidClient
+    let plaidClient: any PlaidClientProtocol
     let tokenStore: TokenStore
     let pendingLinkSessions: PendingLinkSessionStore
 
@@ -121,8 +121,8 @@ struct OAuthCallbackRoute: Sendable {
         }
 
         do {
-            let publicTokens = try await publicTokens(from: request, pendingSession: pendingSession)
-            if publicTokens.isEmpty, let updateItemId = pendingSession.updateItemId {
+            let publicTokenResults = try await publicTokenResults(from: request, pendingSession: pendingSession)
+            if publicTokenResults.isEmpty, let updateItemId = pendingSession.updateItemId {
                 try await tokenStore.updateItemStatus(id: updateItemId, status: ItemConnectionStatus.connected.rawValue)
                 return Response(
                     status: .ok,
@@ -131,7 +131,7 @@ struct OAuthCallbackRoute: Sendable {
                 )
             }
 
-            guard !publicTokens.isEmpty else {
+            guard !publicTokenResults.isEmpty else {
                 return Response(
                     status: .badRequest,
                     headers: [.contentType: "text/html"],
@@ -141,8 +141,8 @@ struct OAuthCallbackRoute: Sendable {
                 )
             }
 
-            for publicToken in publicTokens {
-                try await exchangeAndStore(publicToken: publicToken)
+            for publicTokenResult in publicTokenResults {
+                try await exchangeAndStore(publicTokenResult: publicTokenResult)
             }
 
             return Response(
@@ -161,30 +161,30 @@ struct OAuthCallbackRoute: Sendable {
         }
     }
 
-    private func publicTokens(
+    private func publicTokenResults(
         from request: Request,
         pendingSession: PendingLinkSession
-    ) async throws -> [String] {
+    ) async throws -> [PlaidPublicTokenResult] {
         if let publicToken = request.uri.queryParameters.get("public_token") {
-            return [String(publicToken)]
+            return [PlaidPublicTokenResult(publicToken: String(publicToken), institution: nil)]
         }
 
         let linkSession = try await plaidClient.getLinkToken(pendingSession.linkToken)
-        return linkSession.publicTokens
+        return linkSession.publicTokenResults
     }
 
-    private func exchangeAndStore(publicToken: String) async throws {
-        let exchangeResponse = try await plaidClient.exchangePublicToken(publicToken)
+    private func exchangeAndStore(publicTokenResult: PlaidPublicTokenResult) async throws {
+        let exchangeResponse = try await plaidClient.exchangePublicToken(publicTokenResult.publicToken)
         let accountsResponse = try await plaidClient.getAccounts(
             accessToken: exchangeResponse.accessToken
         )
-        let institutionId = accountsResponse.item?.institutionId
+        let institutionId = publicTokenResult.institution?.institutionId ?? accountsResponse.item?.institutionId
 
         try await tokenStore.saveItem(
             id: exchangeResponse.itemId,
             accessToken: exchangeResponse.accessToken,
             institutionId: institutionId,
-            institutionName: nil
+            institutionName: publicTokenResult.institution?.normalizedName
         )
     }
 
@@ -218,6 +218,14 @@ struct OAuthCallbackRoute: Sendable {
         </body>
         </html>
         """
+    }
+}
+
+private extension PlaidLinkInstitution {
+    var normalizedName: String? {
+        guard let name else { return nil }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }
 
