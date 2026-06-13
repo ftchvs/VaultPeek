@@ -157,6 +157,15 @@ single sync/mode status line. Selecting a row opens the fly-out to the LEFT
 of the dashboard (popover widens 480 → 801pt); Esc, the ✕ button, re-clicking
 the row, or switching filters closes it.
 
+> **Direction change (AND-367/368):** the popover is moving from this **swap**
+> model to a **three-column** model — a permanent left `Wealth Summary` rail, the
+> center dashboard, and the account inspector on the **right** (so inspecting an
+> account no longer hides portfolio context). The binding contract for that work
+> — anatomy, geometry, anchoring, screen-constrained fallback, and
+> selection/keyboard/accessibility behavior — lives in
+> [`docs/three-column-popover-contract.md`](docs/three-column-popover-contract.md).
+> This section will be rewritten to match when AND-367 lands.
+
 | Element | VaultPeek Meaning |
 |---------|------------------|
 | Heatmap header | Daily spending intensity or net cashflow from transactions, switchable in place. Spend mode uses a NEUTRAL Less/More intensity ramp (green means money-in everywhere else in the app); Net mode uses bidirectional Income/Outflow color keys with an explicit legend. |
