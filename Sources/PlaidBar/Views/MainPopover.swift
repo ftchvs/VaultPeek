@@ -432,6 +432,7 @@ struct MainPopover: View {
 
 private struct DashboardChangeReceiptStrip: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var receipt: DashboardChangeReceipt? {
         DashboardChangeReceipt.evaluate(
@@ -461,7 +462,7 @@ private struct DashboardChangeReceiptStrip: View {
                     ForEach(receipt.rows) { row in
                         Text(row.value)
                             .font(.caption2.weight(.semibold))
-                            .monospacedDigit()
+                            .rollingTabularNumber(row.value, reduceMotion: reduceMotion)
                             .lineLimit(1)
                             .help(row.accessibilityText)
                     }
@@ -481,6 +482,7 @@ private struct DashboardChangeReceiptStrip: View {
 
 private struct RecentSpendChip: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         // 7-day spend velocity — the one summary metric the left rail does not
@@ -499,7 +501,7 @@ private struct RecentSpendChip: View {
 
                 Text(Formatters.currency(appState.recentSpend, format: .compact))
                     .font(.caption.weight(.semibold))
-                    .monospacedDigit()
+                    .rollingTabularNumber(Formatters.currency(appState.recentSpend, format: .compact), reduceMotion: reduceMotion)
                     .lineLimit(1)
             }
             .padding(.horizontal, Spacing.sm)
@@ -1564,6 +1566,7 @@ private struct DashboardEmptyAccountState: View {
 
 private struct DashboardAccountRow: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let account: AccountDTO
     let isStatusFilter: Bool
     let isSelected: Bool
@@ -1616,6 +1619,7 @@ private struct DashboardAccountRow: View {
                 // and only once the user's own threshold is crossed.
                 Text(amountText)
                     .dataText()
+                    .rollingTabularNumber(amountText, reduceMotion: reduceMotion)
                     .foregroundStyle(AppearanceTextColors.primary)
                     .lineLimit(1)
 
