@@ -112,6 +112,109 @@ in place, record the step as not verified rather than skipping it silently.
 
 Distribute the resulting DMG privately to licensed users.
 
+## Rollback
+
+Use this when a published release is broken and must be withdrawn. VaultPeek
+distribution today is git/tag/DMG-based: a tag `v<version>`, a GitHub release on
+`ftchvs/PlaidBar`, and a privately distributed `VaultPeek-<version>.dmg`. There
+is no live auto-update channel, so rollback is a manual withdraw-and-redistribute
+of the prior good release. Notarization and Sparkle are deferred
+(`docs/distribution.md`), so the Sparkle step below is N/A until that runbook is
+executed and verified.
+
+Work the steps in order.
+
+### 1. Identify the bad release and the prior good one
+
+- Bad release: tag `v<bad-version>`, its GitHub release on `ftchvs/PlaidBar`, and
+  any distributed `VaultPeek-<bad-version>.dmg` (with its recorded SHA-256).
+- Prior good release: the last `v<good-version>` whose
+  `docs/release-checklist.md` gates passed and whose DMG was clean-install
+  verified.
+
+```bash
+gh release list --repo ftchvs/PlaidBar
+gh release view "v<bad-version>" --repo ftchvs/PlaidBar
+git ls-remote --tags origin "v<bad-version>"
+```
+
+### 2. Stop the bleeding (withdraw the bad release)
+
+Reverse exactly what `./Scripts/release.sh --publish` did (it runs `git tag -a`,
+`git push origin <tag>`, `gh release create ... --generate-notes`).
+
+```bash
+# Delete (or yank) the GitHub release so it stops being offered.
+gh release delete "v<bad-version>" --repo ftchvs/PlaidBar --yes
+
+# Delete the bad tag on origin, then locally.
+git push origin :refs/tags/v<bad-version>
+git tag -d v<bad-version>
+```
+
+If you must keep the bad tag for forensics rather than deleting it, at minimum
+delete the GitHub release so it is not the published artifact. Confirm the prior
+good tag `v<good-version>` is now the effective latest:
+
+```bash
+gh release list --repo ftchvs/PlaidBar   # newest non-prerelease should be v<good-version>
+git ls-remote --tags origin              # v<bad-version> gone from origin
+```
+
+Do not force-push `main`. If bad code reached `main`, land a normal revert PR
+through the usual gates rather than rewriting history.
+
+### 3. Re-distribute the prior good DMG (private channel)
+
+Restore users to `VaultPeek-<good-version>.dmg` through the same private channel
+the bad build went out on. Prefer the previously built, clean-install-verified
+artifact for that version; if it is not retained, rebuild it from the prior good
+tag and re-validate before sending:
+
+```bash
+git checkout v<good-version>
+./Scripts/package-dmg.sh
+./Scripts/validate-app-bundle.sh .build/VaultPeek.app
+shasum -a 256 .build/VaultPeek-<good-version>.dmg   # match the recorded checksum
+```
+
+The build is ad-hoc signed, so the right-click > Open first-launch step still
+applies. Tell users to delete the bad `VaultPeek.app` and reinstall the good one;
+local data in `~/.vaultpeek/` is untouched by a reinstall.
+
+### 4. Sparkle rollback (N/A until Sparkle is live)
+
+Sparkle auto-updates are dormant — `SUPublicEDKey` is a placeholder and no
+appcast feed exists (`docs/distribution.md`). There is no auto-update channel to
+roll back today; redistribution in step 3 is the only mechanism.
+
+When Sparkle is live (after the `docs/distribution.md` signing + notarization +
+appcast runbook is executed and verified): publish an appcast entry that points
+clients back to the last-good **notarized** build so auto-update installs the
+rollback, and remove or supersede the bad version's appcast entry. Until then,
+this step is N/A.
+
+### 5. Communicate
+
+- Record the known-bad version in `docs/release-notes.md`: note `v<bad-version>`
+  as withdrawn, the symptom, and that `v<good-version>` is the supported build.
+- Update user-facing support copy (the `SUPPORT.md` supported-versions line and
+  the in-app support links) so the surfaced "latest" version matches the
+  redistributed good build.
+
+### 6. Verify post-rollback
+
+Re-run the relevant `docs/release-checklist.md` gates against the restored
+`v<good-version>` build before considering the rollback complete:
+
+- Packaging And Distribution: `./Scripts/package-dmg.sh` +
+  `./Scripts/validate-app-bundle.sh` pass; DMG opened and launched on a machine
+  other than the build machine; SHA-256 recorded and matching.
+- Privacy And Security: secret scan, `/api/status` contract test, `/api/*` auth
+  tests pass on the restored build.
+- Confirm `gh release list --repo ftchvs/PlaidBar` shows `v<good-version>` as the
+  effective latest and the bad release/tag are gone.
+
 ## Distribution Scope
 
 The DMG ships a self-contained `VaultPeek.app` bundling the menu bar app and
