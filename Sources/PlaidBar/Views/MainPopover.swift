@@ -13,6 +13,10 @@ struct MainPopover: View {
     @State private var isShowingAccountSetup = false
     @State private var shouldShowSetupRecoveryDashboard = false
     @State private var dashboardContentHeight: CGFloat = 0
+    /// True after the first render. Gates the inspector's trailing slide-in so a
+    /// popover opened with a persisted selection appears directly in three-column
+    /// geometry (no slide on restore); in-session selections still slide (AND-405).
+    @State private var hasAppeared = false
 
     private enum Layout {
         // Column widths and the screen-edge margin are owned by the shared,
@@ -116,6 +120,11 @@ struct MainPopover: View {
             .task {
                 await appState.loadInitialData()
             }
+            .onAppear { hasAppeared = true }
+            // Also self-heals the first-open edge where a persisted selection
+            // doesn't survive the active filter: at mount accounts are empty, so
+            // this fires once when they first populate and clears a now-invalid
+            // id, collapsing the reserved three-column back to two (AND-405).
             .onChange(of: filteredAccounts.map(\.id)) { _, ids in
                 guard !selectedAccountId.isEmpty, !ids.contains(selectedAccountId) else { return }
                 selectedAccountId = ""
@@ -243,8 +252,17 @@ struct MainPopover: View {
             .frame(width: Layout.flyoutWidth)
             .frame(maxHeight: dashboardScrollHeight)
             .leftPanelSurface()
-            .transition(.move(edge: .trailing).combined(with: .opacity))
+            // Slide in only for an in-session selection; a popover opened with a
+            // persisted selection appears directly in three-column (AND-405).
+            .transition(.asymmetric(
+                insertion: inspectorInsertionTransition,
+                removal: .move(edge: .trailing).combined(with: .opacity)
+            ))
         }
+    }
+
+    private var inspectorInsertionTransition: AnyTransition {
+        hasAppeared ? .move(edge: .trailing).combined(with: .opacity) : .identity
     }
 
     private var inspectorLoadingPlaceholder: some View {

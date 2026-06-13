@@ -62,6 +62,9 @@ public enum PopoverGeometry {
         margin: CGFloat = screenEdgeMargin
     ) -> CGFloat {
         let full = width(for: layout)
+        // Guards the degenerate inputs; the headless sentinel is a large *finite*
+        // value (e.g. .greatestFiniteMagnitude), which passes through to a no-op
+        // min() below — `subtracting 2*margin from it stays effectively itself.
         guard availableWidth.isFinite, availableWidth > 0 else { return full }
         let usable = availableWidth - (2 * margin)
         guard usable > 0 else { return full }

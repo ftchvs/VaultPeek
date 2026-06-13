@@ -31,6 +31,14 @@ struct PopoverGeometryTests {
         #expect(PopoverGeometry.fittedWidth(for: .threeColumn, availableWidth: 0) == 1122)
     }
 
+    @Test("Fitted width boundary: exactly fits vs one point too narrow")
+    func fittedWidthBoundary() {
+        // 1122 + 2*12 exactly fits → unchanged.
+        #expect(PopoverGeometry.fittedWidth(for: .threeColumn, availableWidth: 1122 + 24, margin: 12) == 1122)
+        // One point narrower → the cap engages by one point.
+        #expect(PopoverGeometry.fittedWidth(for: .threeColumn, availableWidth: 1122 + 23, margin: 12) == 1121)
+    }
+
     @Test("Fitted width caps the popover to the available screen, leaving room for the center to flex")
     func fittedWidthNarrowScreen() {
         // A scaled 1024-wide display can't fit 1122; cap to 1024 - 2*12 = 1000.
