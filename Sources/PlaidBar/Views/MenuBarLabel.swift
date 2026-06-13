@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MenuBarLabel: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         // State is carried by the symbol shape and attention text, not
@@ -13,6 +14,11 @@ struct MenuBarLabel: View {
         let presentation = appState.menuBarStatusPresentation
         HStack(spacing: Spacing.xs) {
             Image(systemName: presentation.symbolName)
+                // One-shot Apple-native cross-fade when the status glyph
+                // changes; meaning still lives in the symbol shape + text, so
+                // this is purely calm polish. Disabled under Reduce Motion so
+                // the glyph swaps instantly with no animation.
+                .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
             if let attentionText = presentation.attentionText {
                 Text(attentionText)
                     .font(.caption.weight(.medium))
