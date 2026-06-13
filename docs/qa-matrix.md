@@ -38,8 +38,10 @@ local storage, notifications, and distribution.
 | Dashboard filters | All/Cash/Credit/Savings/Debt/Status | Rows and details match selected scope |
 | Dashboard Status | Select Status filter | Readiness panel shows mode, server state, credentials, linked/synced items, last sync, and one primary recovery action |
 | Dashboard stale sync | Last sync is beyond the configured stale window | Status panel shows stale sync and offers Refresh |
+| Attention queue | Trigger stale sync, denied notifications, missing credentials, or login-required fixture | Dashboard surfaces prioritized attention without hiding balances or account rows |
 | Account drill-down | Select account row | Account inspector opens on the RIGHT with balances, status, and actions; the left Wealth Summary rail and center dashboard stay in place (three-column) |
 | Inspector dismissal | Esc, the inspector ✕, re-click the row, or switch filters | Closes only the inspector and returns to the two-column state; focus returns to the row on Esc/✕/re-click |
+| Local insight receipt | Open demo dashboard with transactions | Receipt shows source rows, time window, top category, recurring estimate, local-only badge, and disabled/no-runtime copy when no local AI runtime is configured |
 | Transactions | Apply date/category/account filters | Matching rows update; zero state can clear filters |
 | Recurring | Open recurring view with insufficient history | Empty state explains history requirement |
 | Settings General | Local Data section | Path, reveal/copy, and reset controls are visible |
@@ -184,6 +186,7 @@ tech):
 | Status contract test | Encoded `ServerStatus` contains only release-approved keys |
 | Auth middleware | `/api/*` rejects missing/invalid bearer token |
 | Auth comparison | Bearer token comparison accepts only exact token strings |
+| CLI auth | Source/developer `plaidbar-cli status --json` reads the local bearer token and fails closed without exposing it |
 | Data directory | `~/.vaultpeek/` uses private user permissions where supported |
 | Legacy storage migration | Missing default files copy from `~/.plaidbar/` without overwriting newer `~/.vaultpeek/` files |
 | Auth token | `auth-token` uses private file permissions where supported |
@@ -191,6 +194,7 @@ tech):
 | Sandbox/production | Stores and transaction cache are scoped by environment |
 | Reset copy | UI explains local reset does not guarantee Plaid/bank revocation |
 | Screenshots | Assets contain demo/sandbox/synthetic data only |
+| Local AI boundary | Insight receipts and category hints stay local-only and do not send raw transaction data to cloud AI services |
 
 ## Release Candidate Exit Criteria
 
