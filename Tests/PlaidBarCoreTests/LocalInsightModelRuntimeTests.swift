@@ -28,6 +28,44 @@ struct LocalInsightModelRuntimeTests {
         #expect(LocalInsightModelOutputValidator.validate("Period: Last Month. Totals: expenses are listed.", prompt: prompt) == .rejected(.echoedPrompt))
     }
 
+    @Test("Output validator rejects advice, predictions, and AI self-disclosure")
+    func validatorRejectsProhibitedContent() {
+        let prompt = LocalInsightPromptBuilder.make(from: input())
+
+        // Advice / recommendations
+        #expect(LocalInsightModelOutputValidator.validate(
+            "You should cut back on dining to save money.", prompt: prompt
+        ) == .rejected(.prohibitedContent))
+        // Predictions / forward-looking
+        #expect(LocalInsightModelOutputValidator.validate(
+            "Your dining spending will likely rise next month.", prompt: prompt
+        ) == .rejected(.prohibitedContent))
+        // AI self-disclosure (the prompt forbids mentioning the model)
+        #expect(LocalInsightModelOutputValidator.validate(
+            "As an AI language model, I reviewed your spending and it looks fine.", prompt: prompt
+        ) == .rejected(.prohibitedContent))
+    }
+
+    @Test("Output validator rejects dollar figures absent from the prompt")
+    func validatorRejectsUnverifiedFigures() {
+        let prompt = LocalInsightPromptBuilder.make(from: input())
+
+        // $9,999 never appears in the redaction-safe prompt — a likely invention.
+        #expect(LocalInsightModelOutputValidator.validate(
+            "Dining totaled $9,999 in this window.", prompt: prompt
+        ) == .rejected(.unverifiedFigure))
+    }
+
+    @Test("Output validator accepts factual summaries that reuse prompt figures")
+    func validatorAcceptsPromptDerivedFigures() {
+        let prompt = LocalInsightPromptBuilder.make(from: input())
+        // 420 (expenses) and 3000 (income) are both present in the prompt; the
+        // comma/cents formatting differs but the numeric values match.
+        let output = "Spending reached $420 this month while income came in at $3,000."
+
+        #expect(LocalInsightModelOutputValidator.validate(output, prompt: prompt) == .accepted(output))
+    }
+
     @Test("Runtime falls back when no model is configured")
     func runtimeFallsBackWithoutModel() async {
         let result = await LocalInsightModelRuntime.generateSummary(

@@ -48,6 +48,14 @@ public enum LocalInsightModelOutputRejectionReason: String, Sendable, Hashable {
     case empty
     case echoedPrompt
     case garbage
+    /// Advice, recommendations, predictions, or AI self-disclosure — content the
+    /// system prompt forbids. A local model can ignore instructions, so this is
+    /// enforced rather than trusted.
+    case prohibitedContent
+    /// A currency figure that does not appear in the redaction-safe prompt, i.e.
+    /// a likely invented amount. Finance copy must not surface unverifiable
+    /// numbers.
+    case unverifiedFigure
 }
 
 public enum LocalInsightModelOutputValidationResult: Sendable, Equatable {
@@ -75,6 +83,14 @@ public enum LocalInsightModelOutputValidator {
             return .rejected(.garbage)
         }
 
+        guard !containsProhibitedContent(normalized) else {
+            return .rejected(.prohibitedContent)
+        }
+
+        guard !containsUnverifiedFigure(normalized, prompt: prompt) else {
+            return .rejected(.unverifiedFigure)
+        }
+
         let capped = String(normalized.prefix(max(1, maxCharacters)))
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !capped.isEmpty else {
@@ -82,6 +98,97 @@ public enum LocalInsightModelOutputValidator {
         }
 
         return .accepted(capped)
+    }
+
+    /// Phrases that signal advice, recommendations, predictions, or AI
+    /// self-disclosure. A factual, past-tense spending summary should contain
+    /// none of these; when one appears, fall back to the deterministic summary
+    /// rather than render unsanctioned guidance in a finance surface.
+    private static let prohibitedPhrases = [
+        // Advice / recommendations
+        "you should", "i recommend", "we recommend", "i suggest", "i'd suggest",
+        "i would suggest", "my advice", "i advise", "you might want", "you may want",
+        "consider ", "you could ", "it's advisable", "it is advisable", "make sure to",
+        "cut back", "cut down", "reduce your", "spend less", "save money",
+        "you can save", "to save", "try to ", "you ought to",
+        // Predictions / forward-looking
+        "will likely", "likely to", "you'll likely", "next month", "next week",
+        "expect to", "you can expect", "is expected", "are expected", "going forward",
+        "in the future", "projected", "forecast", "by next", "will probably",
+        "you will spend", "you'll spend", "is going to", "are going to",
+        // AI self-disclosure
+        "as an ai", "as a language model", "i am an ai", "i'm an ai",
+        "language model", "as your assistant", "i cannot provide", "i can't provide",
+    ]
+
+    private static func containsProhibitedContent(_ output: String) -> Bool {
+        let lowercased = output.lowercased()
+        return prohibitedPhrases.contains { lowercased.contains($0) }
+    }
+
+    /// Reject any `$`-denominated figure in the output that is not present in the
+    /// redaction-safe prompt (the only legitimate source of numbers). Catches
+    /// invented amounts; figures are matched by numeric value so cents/comma
+    /// formatting differences do not cause false rejections.
+    private static func containsUnverifiedFigure(
+        _ output: String,
+        prompt: LocalInsightModelPrompt
+    ) -> Bool {
+        let outputValues = currencyValues(in: output)
+        guard !outputValues.isEmpty else { return false }
+
+        let allowed = currencyValues(in: prompt.user).union(currencyValues(in: prompt.system))
+        return outputValues.contains { value in
+            !allowed.contains { abs($0 - value) < 0.5 }
+        }
+    }
+
+    /// Extract the numeric value of every `$`-prefixed amount in `text`
+    /// (`$1,234.56`, `$420`, `$ 12`). Thousands separators are dropped; a
+    /// trailing sentence period is not treated as a decimal point.
+    private static func currencyValues(in text: String) -> Set<Double> {
+        var values: Set<Double> = []
+        let scalars = Array(text.unicodeScalars)
+        var index = 0
+
+        while index < scalars.count {
+            guard scalars[index] == "$" else {
+                index += 1
+                continue
+            }
+
+            var cursor = index + 1
+            if cursor < scalars.count, scalars[cursor] == " " {
+                cursor += 1
+            }
+
+            var digits = ""
+            while cursor < scalars.count {
+                let scalar = scalars[cursor]
+                if scalar.value >= 48, scalar.value <= 57 {
+                    digits.unicodeScalars.append(scalar)
+                    cursor += 1
+                } else if scalar == "," {
+                    cursor += 1
+                } else if scalar == ".",
+                          cursor + 1 < scalars.count,
+                          scalars[cursor + 1].value >= 48, scalars[cursor + 1].value <= 57 {
+                    // Decimal point only when followed by a digit; a period that
+                    // ends a sentence ("$420.") is not part of the number.
+                    digits.unicodeScalars.append(scalar)
+                    cursor += 1
+                } else {
+                    break
+                }
+            }
+
+            if !digits.isEmpty, let value = Double(digits) {
+                values.insert(value)
+            }
+            index = max(cursor, index + 1)
+        }
+
+        return values
     }
 
     private static func normalizedDisplayText(_ output: String) -> String {

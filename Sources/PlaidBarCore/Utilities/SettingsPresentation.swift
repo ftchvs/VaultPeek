@@ -17,6 +17,7 @@ public enum LocalAIAvailabilityPresentation {
         case .available: "cpu.fill"
         case .disabled: "pause.circle.fill"
         case .unavailable: "exclamationmark.triangle.fill"
+        case .checking: "hourglass"
         }
     }
 
@@ -25,6 +26,7 @@ public enum LocalAIAvailabilityPresentation {
         case .available: .positive
         case .disabled: .secondary
         case .unavailable: .warning
+        case .checking: .secondary
         }
     }
 }
