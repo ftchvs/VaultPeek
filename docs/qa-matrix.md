@@ -38,7 +38,8 @@ local storage, notifications, and distribution.
 | Dashboard filters | All/Cash/Credit/Savings/Debt/Status | Rows and details match selected scope |
 | Dashboard Status | Select Status filter | Readiness panel shows mode, server state, credentials, linked/synced items, last sync, and one primary recovery action |
 | Dashboard stale sync | Last sync is beyond the configured stale window | Status panel shows stale sync and offers Refresh |
-| Account drill-down | Select account row | Detail surface shows balances, status, and actions |
+| Account drill-down | Select account row | Account inspector opens on the RIGHT with balances, status, and actions; the left Wealth Summary rail and center dashboard stay in place (three-column) |
+| Inspector dismissal | Esc, the inspector ✕, re-click the row, or switch filters | Closes only the inspector and returns to the two-column state; focus returns to the row on Esc/✕/re-click |
 | Transactions | Apply date/category/account filters | Matching rows update; zero state can clear filters |
 | Recurring | Open recurring view with insufficient history | Empty state explains history requirement |
 | Settings General | Local Data section | Path, reveal/copy, and reset controls are visible |
@@ -94,24 +95,61 @@ the host system setting. Unknown values fall back to the system appearance.
 - Reduce Transparency is a system-wide accessibility setting with no
   supported per-process override, so that half of the matrix cannot be
   captured autonomously. It requires a manual toggle (procedure above).
-- `--render-snapshot` captures the dashboard and one account fly-out. The
+- `--render-snapshot` captures the dashboard and one account inspector. The
   Settings window, setup preflight, and the non-default dashboard filters are
   only reachable through `Scripts/screenshots.sh` (UI automation) or a manual
   pass.
+- Rasterization captures the popover *content view*, not its position relative
+  to the screen, so the leading-edge anchor and screen-edge clamp (AND-370/374)
+  are not visible in a render. Those are covered by the `PopoverGeometry` unit
+  tests (deterministic clamp math, including the too-narrow-display fallback)
+  plus the manual no-jump / near-edge / multi-monitor pass below.
 
-### Matrix status (last pass: 2026-06-12, demo fixtures)
+### Three-column popover (AND-367 / AND-375)
+
+The selected-account state is a three-column popover: a permanent Wealth Summary
+rail (left, 320pt), the center dashboard (480pt), and an account inspector
+(right, 320pt). Widths: setup 480, two-column 801, three-column 1122.
+
+Automated coverage:
+
+- `PopoverGeometryTests` — the 480 / 801 / 1122 width math and the on-screen
+  clamp (fits unchanged, pulled-left near the right edge, leading-edge-wins on a
+  display too narrow for 1122, and a secondary-display origin).
+- `DashboardAccountSelectionTests` — selection survives only while the account is
+  visible; a filter change or a removed account deselects (closes the inspector).
+- The committed renders under `docs/qa/` (`render-dashboard.png` = 801 two-column,
+  `render-flyout.png` = 1122 three-column) in light and dark.
+
+Manual-only (headless rasterization cannot show window position or assistive
+tech):
+
+| Check | Expected Result |
+|-------|-----------------|
+| No-jump on open/close | Selecting an account grows the popover rightward; the Wealth Summary rail does not shift horizontally. Deselecting returns to two columns without a jump |
+| Near a display edge | Opening the inspector with the menu-bar item near the right edge clamps the popover on-screen (shifts left), keeping the rail visible; nothing renders off-screen |
+| Multi-monitor | Opening on a secondary display clamps within that display's visible frame |
+| Keyboard | Esc closes the inspector before the popover; focus returns to the selected row; filter change clears selection without trapping focus |
+| VoiceOver | Selecting a row announces the account opened in the inspector; the inspector reads as a trailing inspector, not replacement left content; selected/unselected row state is spoken |
+| Reduce Transparency | Rail, center, and inspector stay legible in both appearances (manual toggle) |
+
+### Matrix status (last pass: 2026-06-13, demo fixtures)
 
 | Surface | Light | Dark | Light + Reduce Transparency | Dark + Reduce Transparency |
 |---------|-------|------|-----------------------------|----------------------------|
-| Dashboard overview (All) | Pass — headless render | Pass — headless render | Needs human eyes | Needs human eyes |
-| Account fly-out (credit) | Pass — headless render | Pass — headless render | Needs human eyes | Needs human eyes |
-| Account fly-out (savings) | Pass — ad hoc headless render | Not run | Needs human eyes | Needs human eyes |
+| Dashboard, no selection (two-column 801pt) | Pass — headless render | Pass — headless render | Needs human eyes | Needs human eyes |
+| Selected account (three-column 1122pt: rail + dashboard + right inspector) | Pass — headless render | Pass — headless render | Needs human eyes | Needs human eyes |
+| Account inspector (credit, right column) | Pass — headless render | Pass — headless render | Needs human eyes | Needs human eyes |
 | Dashboard filters (Cash/Credit/Savings/Debt/Status) | Code-inspected only (filters reuse the All-state visual system) | Code-inspected only | Needs human eyes | Needs human eyes |
 | Settings (General/Accounts/Notifications/About) | Needs `screenshots.sh` or human eyes | Needs `screenshots.sh` or human eyes | Needs human eyes | Needs human eyes |
 | Setup sandbox preflight | Needs `screenshots.sh` or human eyes | Needs `screenshots.sh` or human eyes | Needs human eyes | Needs human eyes |
 
-2026-06-12 pass notes, recorded from the committed renders under `docs/qa/`:
+2026-06-13 pass notes, recorded from the committed renders under `docs/qa/`:
 
+- The renders now cover the three-column model (AND-367): `render-dashboard.png`
+  is the 801pt two-column state (Wealth Summary rail + center dashboard) and
+  `render-flyout.png` is the 1122pt three-column state with the account inspector
+  on the right — the rail stays visible when an account is selected (AND-375 AC).
 - Both appearances force correctly end to end (header, heatmap, account rows,
   balance mix, insight receipt all follow the forced appearance).
 - The 365-day heatmap shows continuous activity in both appearances — the

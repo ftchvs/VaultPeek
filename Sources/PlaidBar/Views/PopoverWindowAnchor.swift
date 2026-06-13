@@ -1,4 +1,5 @@
 import AppKit
+import PlaidBarCore
 import SwiftUI
 
 /// Pins the popover window's leading (left) edge so the persistent Wealth
@@ -156,20 +157,20 @@ struct PopoverLeadingEdgeAnchor: NSViewRepresentable {
             applyOrigin(clampedOriginX(anchorMinX, width: window.frame.width, in: window), to: window)
         }
 
-        /// Clamp a desired leading-edge X so the popover of the given width stays
-        /// inside the screen's visible frame: pull the trailing edge in if it
-        /// would overflow the right edge, then keep the leading edge on-screen.
-        /// On displays too narrow to fit the full width the leading edge wins
-        /// (applied last) so the Wealth Summary rail stays visible (AND-374).
+        /// Clamp a desired leading-edge X so the popover stays inside the screen's
+        /// visible frame. Delegates to the shared, unit-tested
+        /// `PopoverGeometry.clampedLeadingX` so the on-screen fallback matches the
+        /// geometry the layout reports (AND-374/375).
         private func clampedOriginX(_ leadingX: CGFloat, width: CGFloat, in window: NSWindow) -> CGFloat {
             guard let screen = window.screen ?? NSScreen.main else { return leadingX }
             let visible = screen.visibleFrame
-            var targetX = leadingX
-            let maxOriginX = visible.maxX - screenEdgeMargin - width
-            let minOriginX = visible.minX + screenEdgeMargin
-            if targetX > maxOriginX { targetX = maxOriginX }
-            if targetX < minOriginX { targetX = minOriginX }
-            return targetX
+            return PopoverGeometry.clampedLeadingX(
+                desiredLeadingX: leadingX,
+                width: width,
+                visibleMinX: visible.minX,
+                visibleMaxX: visible.maxX,
+                margin: screenEdgeMargin
+            )
         }
 
         private func applyOrigin(_ targetX: CGFloat, to window: NSWindow) {
