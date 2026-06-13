@@ -148,23 +148,29 @@ Liquid Glass and keep a SwiftUI material/fill fallback.
 filter bar, dense rows, selected row highlight, and chevron-based drill-in. Use
 the RepoBar visual language as inspiration, not as literal GitHub UI.
 
-**Target anatomy:** HStack | optional account-detail fly-out (left, 320pt) |
-dashboard column: net-worth hero (alone — no wordmark, no status strip) |
-change receipt | financial heatmap (`last 365 days`, Spend or Net mode) |
-native segmented filter (`All`, `Cash`, `Credit`, `Savings`, `Debt`,
-`Status`) | account/card rows | summary and balance context | footer with the
-single sync/mode status line. Selecting a row opens the fly-out to the LEFT
-of the dashboard (popover widens 480 → 801pt); Esc, the ✕ button, re-clicking
-the row, or switching filters closes it.
+**Anatomy (three-column, AND-367):** HStack | permanent **Wealth Summary** rail
+(left, 320pt): net-worth hero + trend, assets/debt, balance mix, cashflow,
+credit, attention | center **dashboard** (480pt): change receipt | financial
+heatmap (`last 365 days`, Spend or Net mode) | native segmented filter (`All`,
+`Cash`, `Credit`, `Savings`, `Debt`, `Status`) | account/card rows | local-only
+insight receipt | footer with the single sync/mode status line | optional
+**account inspector** (right, 320pt) when a row is selected. Widths: setup 480pt;
+two-column 801pt (no selection); three-column 1122pt (selected), clamped on-screen
+near a display edge.
 
-> **Direction change (AND-367/368):** the popover is moving from this **swap**
-> model to a **three-column** model — a permanent left `Wealth Summary` rail, the
-> center dashboard, and the account inspector on the **right** (so inspecting an
-> account no longer hides portfolio context). The binding contract for that work
-> — anatomy, geometry, anchoring, screen-constrained fallback, and
-> selection/keyboard/accessibility behavior — lives in
-> [`docs/three-column-popover-contract.md`](docs/three-column-popover-contract.md).
-> This section will be rewritten to match when AND-367 lands.
+The left rail owns the portfolio totals, so the center no longer repeats the
+net-worth hero (AND-376) or the summary cards / balance mix (AND-372). Selecting
+a row opens the inspector on the **right** without hiding the rail or center; the
+left edge stays anchored so the rail does not jump (AND-370). Esc (inspector
+first, then popover), the inspector's ✕, re-clicking the row, or switching
+filters closes the inspector. The binding contract — geometry, anchoring,
+screen-constrained fallback, and selection/keyboard/accessibility behavior —
+lives in
+[`docs/three-column-popover-contract.md`](docs/three-column-popover-contract.md).
+
+> **History:** this replaced an earlier **swap** model where a single left
+> fly-out showed the Wealth Summary *or* the selected account detail (inspecting
+> an account hid portfolio context). See `docs/wealth-summary-visual-polish.md`.
 
 | Element | VaultPeek Meaning |
 |---------|------------------|

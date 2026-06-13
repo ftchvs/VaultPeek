@@ -47,6 +47,14 @@ views only render.
 Layout decision: **swap** (summary ⇄ detail), not stacked. Whether "always
 open" should later become user-toggleable is out of scope.
 
+> **Superseded (AND-367, shipped):** the swap model was replaced by a
+> **three-column** popover — a *permanent* Wealth Summary rail (left), the center
+> dashboard, and the account inspector on the **right** — so inspecting an account
+> no longer hides portfolio context. The Wealth Summary sections above still
+> describe the rail's content; only the swap/placement decision is obsolete. See
+> `DESIGN.md` (RepoBar-Style Finance Overview) and
+> `docs/three-column-popover-contract.md`.
+
 ### AND-338 — Transparency slider
 
 Popover transparency is hardcoded to `.ultraThinMaterial`

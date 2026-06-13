@@ -1,27 +1,40 @@
 import AppKit
 import SwiftUI
 
-/// Pins the popover window's trailing (right) edge while the left fly-out is
-/// open.
+/// Pins the popover window's leading (left) edge so the persistent Wealth
+/// Summary rail and center dashboard stay put while the trailing account
+/// inspector opens, and clamps the widened popover inside the visible screen.
 ///
 /// A window-style `MenuBarExtra` centers its window's `midX` under the status
-/// item regardless of width, so when the fly-out grows the popover
-/// (collapsed → collapsed + fly-out) AppKit re-centers the wider window and
-/// the dashboard column visibly slides sideways. Holding the window's `maxX`
-/// constant across resizes adds the extra width on the leading edge only, so
-/// the dashboard stays put.
-struct PopoverTrailingEdgeAnchor: NSViewRepresentable {
-    /// True while the fly-out is shown (popover is in its widened state).
-    let isExpanded: Bool
-    /// The popover's collapsed (fly-out closed) width. Used to derive the
-    /// trailing-edge anchor even when the popover first opens already widened
-    /// (e.g. a persisted account selection): because the window is centered on
-    /// the status item independent of width, collapsed `maxX == midX + width/2`.
+/// item regardless of width, so when the inspector grows the popover
+/// (two-column → three-column) AppKit re-centers the wider window and the left
+/// rail visibly slides sideways. Holding the window's `minX` constant across
+/// resizes adds the extra width on the trailing edge only, so the left rail and
+/// center stay anchored (AND-370). When the widened popover would extend past
+/// the screen's visible edge it is shifted back on-screen — the leading edge
+/// wins so the Wealth Summary rail always stays visible (AND-374 primary
+/// fallback).
+struct PopoverLeadingEdgeAnchor: NSViewRepresentable {
+    /// True while the trailing account inspector is shown (popover is in its
+    /// widened three-column state).
+    let isInspectorOpen: Bool
+    /// The popover's width with the inspector closed (two-column base). Used to
+    /// derive the leading-edge anchor even when the popover first opens already
+    /// widened (e.g. a persisted account selection): because the window is
+    /// centered on the status item independent of width, collapsed
+    /// `minX == midX - collapsedWidth / 2`.
     let collapsedWidth: CGFloat
+    /// Gap kept between the popover and the screen's visible edges when the
+    /// widened popover is clamped on-screen.
+    let screenEdgeMargin: CGFloat
 
     func makeNSView(context: Context) -> AnchorHostView {
         let view = AnchorHostView()
-        context.coordinator.configure(isExpanded: isExpanded, collapsedWidth: collapsedWidth)
+        context.coordinator.configure(
+            isInspectorOpen: isInspectorOpen,
+            collapsedWidth: collapsedWidth,
+            screenEdgeMargin: screenEdgeMargin
+        )
         view.onMoveToWindow = { [coordinator = context.coordinator] window in
             coordinator.attach(to: window)
         }
@@ -29,7 +42,11 @@ struct PopoverTrailingEdgeAnchor: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: AnchorHostView, context: Context) {
-        context.coordinator.configure(isExpanded: isExpanded, collapsedWidth: collapsedWidth)
+        context.coordinator.configure(
+            isInspectorOpen: isInspectorOpen,
+            collapsedWidth: collapsedWidth,
+            screenEdgeMargin: screenEdgeMargin
+        )
         context.coordinator.attach(to: nsView.window)
     }
 
@@ -54,18 +71,20 @@ struct PopoverTrailingEdgeAnchor: NSViewRepresentable {
 
     @MainActor
     final class Coordinator {
-        private var isExpanded = false
+        private var isInspectorOpen = false
         private var collapsedWidth: CGFloat = 0
+        private var screenEdgeMargin: CGFloat = 0
         private weak var window: NSWindow?
-        /// The popover's right-edge screen position the widened window is
-        /// pinned to. Captured from the collapsed geometry, or derived from the
-        /// centered `midX` when the popover opens already expanded.
-        private var anchorMaxX: CGFloat?
+        /// The popover's left-edge screen position the widened window is pinned
+        /// to. Captured from the collapsed (two-column) geometry, or derived
+        /// from the centered `midX` when the popover opens already expanded.
+        private var anchorMinX: CGFloat?
         private var resizeObserver: NSObjectProtocol?
 
-        func configure(isExpanded: Bool, collapsedWidth: CGFloat) {
-            self.isExpanded = isExpanded
+        func configure(isInspectorOpen: Bool, collapsedWidth: CGFloat, screenEdgeMargin: CGFloat) {
+            self.isInspectorOpen = isInspectorOpen
             self.collapsedWidth = collapsedWidth
+            self.screenEdgeMargin = screenEdgeMargin
         }
 
         func attach(to window: NSWindow?) {
@@ -78,10 +97,15 @@ struct PopoverTrailingEdgeAnchor: NSViewRepresentable {
                     object: window,
                     queue: .main
                 ) { [weak self] _ in
-                    MainActor.assumeIsolated { self?.pinTrailingEdge() }
+                    MainActor.assumeIsolated { self?.pinLeadingEdge() }
                 }
             }
             captureAnchor()
+            // Pin immediately so a popover that opens already widened (a
+            // persisted account selection) lands in the correct three-column
+            // geometry without waiting for a resize event that may never fire
+            // (AND-370). The no-op guard in `pinLeadingEdge` keeps this cheap.
+            pinLeadingEdge()
         }
 
         func detach() {
@@ -92,33 +116,48 @@ struct PopoverTrailingEdgeAnchor: NSViewRepresentable {
             window = nil
         }
 
-        /// Establish the trailing-edge anchor. When collapsed, it is simply the
-        /// current right edge. When the popover opens already expanded, derive
-        /// the collapsed right edge from the centered window: the status item
-        /// fixes `midX`, so collapsed `maxX = midX + collapsedWidth / 2`.
+        /// Establish the leading-edge anchor. When collapsed, it is simply the
+        /// current left edge. When the popover opens already expanded, derive
+        /// the collapsed left edge from the centered window: the status item
+        /// fixes `midX`, so collapsed `minX = midX - collapsedWidth / 2`.
         private func captureAnchor() {
-            guard let window, anchorMaxX == nil else { return }
-            if isExpanded {
+            guard let window, anchorMinX == nil else { return }
+            if isInspectorOpen {
                 guard collapsedWidth > 0 else { return }
-                anchorMaxX = window.frame.midX + collapsedWidth / 2
+                anchorMinX = window.frame.midX - collapsedWidth / 2
             } else {
-                anchorMaxX = window.frame.maxX
+                anchorMinX = window.frame.minX
             }
         }
 
-        private func pinTrailingEdge() {
+        private func pinLeadingEdge() {
             guard let window else { return }
 
-            // Returning to the collapsed width re-establishes the natural
-            // anchor (the status item may move between sessions or displays).
-            guard isExpanded else {
-                anchorMaxX = window.frame.maxX
+            // Returning to the collapsed width re-establishes the natural anchor
+            // (the status item may move between sessions or displays), and keeps
+            // the two-column popover in its natural centered position.
+            guard isInspectorOpen else {
+                anchorMinX = window.frame.minX
                 return
             }
 
-            if anchorMaxX == nil { captureAnchor() }
-            guard let anchorMaxX else { return }
-            let targetX = anchorMaxX - window.frame.width
+            if anchorMinX == nil { captureAnchor() }
+            guard let anchorMinX else { return }
+
+            var targetX = anchorMinX
+            // Clamp the widened popover inside the visible screen: pull the
+            // trailing edge in if it would overflow the right edge, then keep
+            // the leading edge on-screen. On displays too narrow to fit the full
+            // width the leading edge wins (applied last) so the Wealth Summary
+            // rail stays visible (AND-374 primary fallback).
+            if let screen = window.screen ?? NSScreen.main {
+                let visible = screen.visibleFrame
+                let maxOriginX = visible.maxX - screenEdgeMargin - window.frame.width
+                let minOriginX = visible.minX + screenEdgeMargin
+                if targetX > maxOriginX { targetX = maxOriginX }
+                if targetX < minOriginX { targetX = minOriginX }
+            }
+
             guard abs(window.frame.origin.x - targetX) > 0.5 else { return }
             window.setFrameOrigin(NSPoint(x: targetX, y: window.frame.origin.y))
         }

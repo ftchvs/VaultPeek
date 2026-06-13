@@ -1,12 +1,47 @@
 import PlaidBarCore
 import SwiftUI
 
+// MARK: - Account Inspector
+
+/// Presents `AccountDetailFlyout` as the three-column popover's trailing account
+/// inspector (AND-371). The detail surface itself is position-agnostic; this
+/// thin wrapper fixes the inspector framing/semantics so the panel reads as a
+/// right-side inspector rather than left-rail content, scopes the close
+/// affordance to dismissing only the inspector, and announces the selection to
+/// VoiceOver so assistive tech hears that a row revealed detail on the trailing
+/// side rather than that content was replaced (AND-373).
+struct AccountInspector: View {
+    @Environment(AppState.self) private var appState
+    let account: AccountDTO
+    let isStatusFilter: Bool
+    let onClose: () -> Void
+
+    var body: some View {
+        AccountDetailFlyout(
+            account: account,
+            isStatusFilter: isStatusFilter,
+            onClose: onClose
+        )
+        .environment(appState)
+        // Keyed by account id so each distinct selection is announced, after a
+        // yield so the inspector is in the hierarchy before VoiceOver speaks.
+        .task(id: account.id) {
+            await Task.yield()
+            AccessibilityNotification.Announcement(
+                "\(AccountPresentation.displayName(for: account)) details opened in account inspector"
+            ).post()
+        }
+    }
+}
+
 // MARK: - Account Detail Fly-out
 
-/// The contextual account panel that opens to the LEFT of the dashboard when
-/// an account row is selected. One `raised` surface, sections separated by
-/// spacing: metadata header, status, balances, 30-day changes, transactions
-/// to review, top categories, recent activity, and account actions.
+/// The contextual account panel shown in the three-column popover's trailing
+/// inspector when an account row is selected (mounted via `AccountInspector`).
+/// One `raised` surface, sections separated by spacing: metadata header, status,
+/// balances, 30-day changes, transactions to review, top categories, recent
+/// activity, and account actions. The panel is position-agnostic; its placement
+/// and slide-in transition are owned by `MainPopover`.
 struct AccountDetailFlyout: View {
     @Environment(AppState.self) private var appState
     @Environment(\.openSettings) private var openSettings
