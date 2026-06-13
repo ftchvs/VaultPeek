@@ -68,6 +68,8 @@ public struct PopoverTransparencySetting: Sendable, Equatable {
     /// The preset whose value matches the current setting, for highlighting the
     /// active quick-pick. Nil when the value was fine-tuned off a preset.
     public var matchingPreset: Preset? {
-        Preset.allCases.first { abs($0.value - value) < 0.5 }
+        // Slider steps and preset values are whole numbers, so an exact match is
+        // all that's needed; the small epsilon only guards Double comparison.
+        Preset.allCases.first { abs($0.value - value) < 0.01 }
     }
 }

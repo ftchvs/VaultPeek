@@ -130,9 +130,10 @@ struct AppearanceSettingsView: View {
                         .controlSize(.small)
                         .disabled(transparencySetting.value == PopoverTransparencySetting.defaultValue)
                         .help("Reset transparency to the default (\(Int(PopoverTransparencySetting.defaultValue))%)")
+                        .accessibilityHint("Restores transparency to \(Int(PopoverTransparencySetting.defaultValue)) percent")
                     }
                     .accessibilityElement(children: .contain)
-                    .accessibilityLabel("Transparency presets")
+                    .accessibilityLabel("Transparency presets and reset")
 
                     Text("Adjusts the ultra-thin material overlay live. The range is capped to keep balances and status text legible on busy desktops.")
                         .detailText()
@@ -147,14 +148,19 @@ struct AppearanceSettingsView: View {
 
     @ViewBuilder
     private func presetButton(_ preset: PopoverTransparencySetting.Preset) -> some View {
-        let isActive = transparencySetting.matchingPreset == preset
-        Button(preset.title) {
-            popoverTransparency = preset.value
+        // The active preset is filled (prominent) and inactive ones are bordered,
+        // so the current quick-pick reads as selected without relying on tint
+        // alone; VoiceOver also gets the selected trait.
+        if transparencySetting.matchingPreset == preset {
+            Button(preset.title) { popoverTransparency = preset.value }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .accessibilityAddTraits(.isSelected)
+        } else {
+            Button(preset.title) { popoverTransparency = preset.value }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
         }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
-        .tint(isActive ? Color.accentColor : Color.secondary)
-        .accessibilityAddTraits(isActive ? [.isSelected] : [])
     }
 }
 
