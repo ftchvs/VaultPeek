@@ -902,7 +902,11 @@ final class AppState {
             // synthetic 60-day series. Restore persisted real history when it
             // exists so the first real snapshot cannot persist a demo trend.
             loadPersistedBalanceHistory()
-            return
+            // Fall through into the real add-account flow: the demo readiness
+            // card advertises "Connect Bank", so the first click must continue
+            // into the server check + Plaid Link handoff (or surface the precise
+            // server/credential blocker) instead of stranding the user in setup
+            // and requiring a second click.
         }
 
         isLoading = true
