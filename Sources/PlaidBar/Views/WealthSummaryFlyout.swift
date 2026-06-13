@@ -45,6 +45,17 @@ struct WealthSummaryFlyout: View {
                     WealthCashflowSection(cashflow: presentation.cashflow)
                         .loadingRedaction(appState.loadState(for: .transactions))
 
+                    SafeToSpendCard(
+                        result: SafeToSpendCalculator.compute(
+                            accounts: appState.accounts,
+                            recurringTransactions: appState.recurringTransactions,
+                            cashflow: presentation.cashflow,
+                            asOf: Date()
+                        ),
+                        lastUpdatedRelative: appState.lastSyncRelative
+                    )
+                    .loadingRedaction(appState.loadState(for: .summaryCards))
+
                     WealthCreditSection(
                         summary: presentation.creditUtilization,
                         threshold: appState.creditUtilizationThreshold
