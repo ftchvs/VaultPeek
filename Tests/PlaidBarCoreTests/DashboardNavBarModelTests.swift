@@ -230,19 +230,56 @@ struct DashboardNavBarModelTests {
         // Non-status segments never expose the indicator label.
         #expect(degraded.filter { $0.kind != .status }.allSatisfy { $0.statusIndicatorAccessibilityLabel == nil })
 
-        // Multiple degraded accounts -> plural wording.
+        // One degraded *item* that owns three account rows must still announce
+        // a single item needing attention — the indicator counts unique Plaid
+        // items, not matching account rows.
         let healthyItemDegraded = DashboardNavBarModel.items(
             accounts: Self.mixedAccounts,
             degradedItemIds: [Self.healthyItemId]
         )
+        let healthyItemStatus = healthyItemDegraded.first { $0.kind == .status }
+        // The Status filter row count stays account-based (three rows match)...
+        #expect(healthyItemStatus?.count == 3)
+        // ...but the recovery indicator speaks in items: one institution.
+        #expect(healthyItemStatus?.statusIndicatorAccessibilityLabel == "1 item needs attention")
+
+        // Two distinct degraded items -> plural item wording.
+        let twoItemsDegraded = DashboardNavBarModel.items(
+            accounts: Self.mixedAccounts,
+            degradedItemIds: [Self.degradedItemId, Self.healthyItemId]
+        )
         #expect(
-            healthyItemDegraded.first { $0.kind == .status }?.statusIndicatorAccessibilityLabel
-                == "3 items need attention"
+            twoItemsDegraded.first { $0.kind == .status }?.statusIndicatorAccessibilityLabel
+                == "2 items need attention"
         )
 
         // Healthy Status: no indicator label.
         let healthy = DashboardNavBarModel.items(accounts: Self.mixedAccounts)
         #expect(healthy.first { $0.kind == .status }?.statusIndicatorAccessibilityLabel == nil)
+    }
+
+    @Test("Status indicator counts unique degraded items, not matching account rows")
+    func statusIndicatorCountsUniqueDegradedItems() {
+        // One Plaid item exposing checking, savings, and credit — the common
+        // bank shape that previously over-reported as three items.
+        let sharedItemId = "item-shared"
+        let oneItemThreeAccounts = [
+            Self.makeAccount(id: "chk", itemId: sharedItemId, type: .depository, subtype: "checking"),
+            Self.makeAccount(id: "sav", itemId: sharedItemId, type: .depository, subtype: "savings"),
+            Self.makeAccount(id: "cc", itemId: sharedItemId, type: .credit, subtype: "credit card"),
+        ]
+
+        let items = DashboardNavBarModel.items(
+            accounts: oneItemThreeAccounts,
+            degradedItemIds: [sharedItemId]
+        )
+        let status = items.first { $0.kind == .status }
+
+        // Filtering still surfaces all three account rows...
+        #expect(status?.count == 3)
+        // ...while the unique degraded-item count drives the recovery wording.
+        #expect(status?.attentionItemCount == 1)
+        #expect(status?.statusIndicatorAccessibilityLabel == "1 item needs attention")
     }
 
     // MARK: - Summary
