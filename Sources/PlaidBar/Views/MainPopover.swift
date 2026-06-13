@@ -941,6 +941,7 @@ private struct LocalAIStatusPill: View {
         case .available: "cpu.fill"
         case .disabled: "pause.circle.fill"
         case .unavailable: "exclamationmark.triangle.fill"
+        case .checking: "hourglass"
         }
     }
 
@@ -949,6 +950,7 @@ private struct LocalAIStatusPill: View {
         case .available: SemanticColors.positive
         case .disabled: AppearanceTextColors.secondary
         case .unavailable: SemanticColors.warning
+        case .checking: AppearanceTextColors.secondary
         }
     }
 }
