@@ -322,7 +322,7 @@ struct PlaidBarTests {
         #expect(otherNetflix[1].id == "3")
     }
 
-    // MARK: - Spending Delta Calculation (mirrors SpendingView logic)
+    // MARK: - Spending Delta Calculation (SpendingSummary.periodSummary)
 
     @Test("Spending delta calculation")
     func spendingDelta() {
@@ -347,34 +347,6 @@ struct PlaidBarTests {
         #expect(summary.previousTotal == 250)
         #expect(summary.delta == 50)
         #expect(abs(summary.deltaPercent - 20.0) < 0.01)
-    }
-
-    // MARK: - Category Filter Logic (mirrors TransactionsView)
-
-    @Test("Category filter")
-    func categoryFilter() {
-        let transactions = [
-            TransactionDTO(id: "1", accountId: "a", amount: 50, date: "2026-01-15", name: "Food", category: .foodAndDrink),
-            TransactionDTO(id: "2", accountId: "a", amount: 30, date: "2026-01-15", name: "Gas", category: .transportation),
-            TransactionDTO(id: "3", accountId: "a", amount: 20, date: "2026-01-14", name: "Lunch", category: .foodAndDrink),
-        ]
-
-        let foodOnly = transactions.filter { $0.category == .foodAndDrink }
-        #expect(foodOnly.count == 2)
-        #expect(foodOnly.allSatisfy { $0.category == .foodAndDrink })
-    }
-
-    @Test("Combined category and account filter")
-    func combinedFilter() {
-        let transactions = [
-            TransactionDTO(id: "1", accountId: "checking", amount: 50, date: "2026-01-15", name: "Food", category: .foodAndDrink),
-            TransactionDTO(id: "2", accountId: "credit", amount: 30, date: "2026-01-15", name: "Food", category: .foodAndDrink),
-            TransactionDTO(id: "3", accountId: "checking", amount: 20, date: "2026-01-14", name: "Gas", category: .transportation),
-        ]
-
-        let filtered = transactions.filter { $0.category == .foodAndDrink && $0.accountId == "checking" }
-        #expect(filtered.count == 1)
-        #expect(filtered[0].id == "1")
     }
 
     // MARK: - Dashboard Drill-In Surfaces
