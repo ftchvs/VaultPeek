@@ -572,6 +572,9 @@ when the local app created the Hosted Link session.
 | `GET` | `/api/accounts/balances` | Real-time balances |
 | `DELETE` | `/api/accounts/:itemId` | Remove a bank connection |
 | `GET` | `/api/transactions/sync` | Incremental transaction sync |
+| `GET` | `/api/budgets` | List saved category budgets (display-safe monthly limits only) |
+| `PUT` | `/api/budgets/:category` | Upsert a category's monthly limit (body `{ "monthlyLimit": Double }`); income/transfer categories are rejected |
+| `DELETE` | `/api/budgets/:category` | Remove a category's budget |
 
 ## Roadmap
 
