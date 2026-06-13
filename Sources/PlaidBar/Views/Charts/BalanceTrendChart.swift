@@ -14,6 +14,14 @@ struct BalanceTrendChart: View {
 
     var body: some View {
         Chart(trend.points, id: \.date) { snapshot in
+            AreaMark(
+                x: .value("Date", snapshot.date),
+                yStart: .value("Baseline", trend.chartBaseline),
+                yEnd: .value("Net worth", snapshot.balance)
+            )
+            .interpolationMethod(.monotone)
+            .foregroundStyle(areaGradient)
+
             LineMark(
                 x: .value("Date", snapshot.date),
                 y: .value("Net worth", snapshot.balance)
@@ -55,5 +63,16 @@ struct BalanceTrendChart: View {
         case .flat:
             .secondary
         }
+    }
+
+    private var areaGradient: LinearGradient {
+        LinearGradient(
+            colors: [
+                tint.opacity(0.22),
+                tint.opacity(0.035),
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
     }
 }

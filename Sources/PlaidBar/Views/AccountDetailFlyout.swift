@@ -162,17 +162,17 @@ struct AccountDetailFlyout: View {
             DetailValue(
                 title: summary.availableTitle,
                 value: Formatters.currency(summary.availableBalance, format: .compact),
-                tint: .primary
+                tint: AppearanceTextColors.primary
             )
             DetailValue(
                 title: summary.currentTitle,
                 value: Formatters.currency(summary.currentBalance, format: .compact),
-                tint: .primary
+                tint: AppearanceTextColors.primary
             )
 
-            // Utilization stays .primary here — risk severity is carried by
-            // the tinted icon ladder in the row and the Status section, not
-            // by tinting small data text below contrast thresholds.
+            // Utilization stays neutral here — risk severity is carried by the
+            // tinted icon ladder in the row and the Status section, not by
+            // tinting small data text below contrast thresholds.
             if account.balances.utilizationPercent != nil,
                let utilizationText = AccountPresentation.dashboardUtilizationDetailText(
                    for: account,
@@ -182,7 +182,7 @@ struct AccountDetailFlyout: View {
                 DetailValue(
                     title: "Utilization",
                     value: utilizationText,
-                    tint: .primary
+                    tint: AppearanceTextColors.primary
                 )
             }
         }
@@ -485,7 +485,7 @@ private struct CategorySliceRow: View {
             HStack(spacing: Spacing.sm) {
                 Image(systemName: slice.category.iconName)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(tint)
                     .frame(width: Sizing.iconInline)
 
                 Text(slice.category.displayName)
@@ -510,7 +510,7 @@ private struct CategorySliceRow: View {
                     .fill(.quaternary.opacity(0.5))
                     .overlay(alignment: .leading) {
                         Capsule()
-                            .fill(.secondary)
+                            .fill(tint.opacity(0.82))
                             .frame(width: max(proxy.size.width * slice.share, 2))
                     }
             }
@@ -526,6 +526,10 @@ private struct CategorySliceRow: View {
     private var shareText: String {
         "\(Int((slice.share * 100).rounded()))%"
     }
+
+    private var tint: Color {
+        CategoryAccentTokens.color(for: slice.category)
+    }
 }
 
 // MARK: - Shared Detail Components
@@ -533,7 +537,7 @@ private struct CategorySliceRow: View {
 func accountConnectionTint(for level: AccountConnectionLevel) -> Color {
     switch level {
     case .demo, .offline, .healthy, .unknown:
-        .secondary
+        AppearanceTextColors.secondary
     case .stale, .loginRequired:
         SemanticColors.warning
     case .error:
@@ -600,7 +604,9 @@ struct TransactionMiniRow: View {
 
             Text(amountText)
                 .dataText()
-                .foregroundStyle(transaction.isIncome ? SemanticColors.positive : .primary)
+                .foregroundStyle(
+                    transaction.isIncome ? SemanticColors.positive : AppearanceTextColors.primary
+                )
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel)
@@ -666,10 +672,16 @@ struct AccountDrillInActionBar: View {
                     onAction(action)
                 } label: {
                     Label(action.title, systemImage: action.iconName)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(action == .remove ? SemanticColors.negative : AppearanceTextColors.primary)
+                        .padding(.horizontal, Spacing.sm)
+                        .padding(.vertical, Spacing.chipVertical)
+                        .glassSurface(
+                            action == .remove ? .emphasized(SemanticColors.negative) : .inset,
+                            cornerRadius: Radius.control
+                        )
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .tint(action == .remove ? SemanticColors.negative : nil)
+                .buttonStyle(.plain)
                 .accessibilityLabel(action.accessibilityLabel(accountDisplayName: accountDisplayName))
                 .accessibilityHint(action.accessibilityHint)
             }

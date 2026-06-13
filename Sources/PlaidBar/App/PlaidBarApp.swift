@@ -57,9 +57,11 @@ struct PlaidBarApp: App {
         MenuBarExtra {
             MainPopover()
                 .environment(appState)
+                .forcedAppColorScheme(Self.forcedColorScheme)
         } label: {
             MenuBarLabel()
                 .environment(appState)
+                .forcedAppColorScheme(Self.forcedColorScheme)
         }
         .menuBarExtraAccess(isPresented: $appState.isPopoverPresented)
         .menuBarExtraStyle(.window)
@@ -67,6 +69,7 @@ struct PlaidBarApp: App {
         Settings {
             SettingsView(updater: updaterController.updater)
                 .environment(appState)
+                .forcedAppColorScheme(Self.forcedColorScheme)
         }
     }
 
@@ -84,6 +87,19 @@ struct PlaidBarApp: App {
             NSApplication.shared.appearance = NSAppearance(named: .darkAqua)
         default:
             break
+        }
+    }
+
+    private static var forcedColorScheme: ColorScheme? {
+        guard let mode = CommandLineOptions.value(for: "--appearance") else { return nil }
+
+        switch mode.lowercased() {
+        case "light":
+            return .light
+        case "dark":
+            return .dark
+        default:
+            return nil
         }
     }
 
@@ -109,5 +125,23 @@ struct PlaidBarApp: App {
         if let settingsTab = CommandLineOptions.value(for: "--settings-tab") {
             UserDefaults.standard.set(settingsTab.lowercased(), forKey: "settings.selectedTab")
         }
+    }
+}
+
+private struct ForcedAppColorScheme: ViewModifier {
+    let colorScheme: ColorScheme?
+
+    func body(content: Content) -> some View {
+        if let colorScheme {
+            content.environment(\.colorScheme, colorScheme)
+        } else {
+            content
+        }
+    }
+}
+
+private extension View {
+    func forcedAppColorScheme(_ colorScheme: ColorScheme?) -> some View {
+        modifier(ForcedAppColorScheme(colorScheme: colorScheme))
     }
 }

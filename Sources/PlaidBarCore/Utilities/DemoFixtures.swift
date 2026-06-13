@@ -68,6 +68,29 @@ public enum DemoFixtures {
         }
     }
 
+    public static func accountBalanceHistory(
+        forAccountId accountId: String,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> [BalanceSnapshot] {
+        guard let accountIndex = accounts.firstIndex(where: { $0.id == accountId }),
+              let currentBalance = accounts[accountIndex].balances.current ?? accounts[accountIndex].balances.available
+        else {
+            return []
+        }
+
+        let amplitude = max(abs(currentBalance) * 0.045, 120 + (Double(accountIndex) * 35))
+        let direction = accountIndex.isMultiple(of: 2) ? 1.0 : -1.0
+
+        return (0..<60).reversed().map { daysAgo in
+            let date = calendar.date(byAdding: .day, value: -daysAgo, to: now) ?? now
+            let progress = Double(59 - daysAgo) / 59
+            let drift = -direction * amplitude * (1 - progress)
+            let wobble = daysAgo == 0 ? 0 : sin((Double(daysAgo) + Double(accountIndex)) / 5.5) * (amplitude * 0.18)
+            return BalanceSnapshot(date: date, balance: currentBalance + drift + wobble)
+        }
+    }
+
     // MARK: - Explicit recent window
 
     private static func explicitTransactions(now: Date, calendar: Calendar) -> [TransactionDTO] {

@@ -6,6 +6,7 @@ struct MainPopover: View {
     @Environment(AppState.self) private var appState
     @Environment(\.openSettings) private var openSettings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
     @AppStorage("dashboard.accountFilter") private var selectedFilterRawValue = DashboardAccountFilter.all.rawValue
     @AppStorage("dashboard.selectedAccountId") private var selectedAccountId = ""
     @AppStorage(PopoverTransparencySetting.storageKey) private var popoverTransparency = PopoverTransparencySetting.defaultValue
@@ -64,22 +65,21 @@ struct MainPopover: View {
                     // inside the fly-out instead of growing the whole popover
                     // past the intended screen-bounded height.
                     .frame(maxHeight: dashboardScrollHeight)
+                    .leftPanelSurface()
                     .transition(.move(edge: .leading).combined(with: .opacity))
 
                 Divider()
+                    .opacity(0.35)
             }
 
             dashboardColumn
                 .frame(width: Layout.dashboardWidth)
         }
         .frame(width: popoverWidth)
-        // Stronger liquid-glass transparency: the thinnest system material
-        // lets the desktop read through the popover while the persisted
-        // overlay setting enforces a legibility floor.
+        .foregroundStyle(AppearanceTextColors.primary)
+        .environment(\.colorScheme, effectiveColorScheme)
         .background {
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .overlay(Color(nsColor: .windowBackgroundColor).opacity(transparencySetting.materialOverlayOpacity))
+            PopoverMaterialBackground(transparencySetting: transparencySetting)
         }
         // Keep the dashboard stationary when the fly-out opens: pin the
         // window's right edge so the extra width grows leftward instead of
@@ -158,6 +158,18 @@ struct MainPopover: View {
 
     private var transparencySetting: PopoverTransparencySetting {
         PopoverTransparencySetting(value: popoverTransparency)
+    }
+
+    private var effectiveColorScheme: ColorScheme {
+        guard let mode = CommandLineOptions.value(for: "--appearance") else { return colorScheme }
+        switch mode.lowercased() {
+        case "light":
+            return .light
+        case "dark":
+            return .dark
+        default:
+            return colorScheme
+        }
     }
 
     private var dashboardColumn: some View {
@@ -335,6 +347,8 @@ private struct DashboardHeader: View {
                 .help(trend.accessibilitySummary)
             }
         }
+        .padding(Spacing.sm)
+        .heroAccentSurface()
     }
 
     private func deltaTint(for direction: BalanceTrend.Direction) -> Color {
@@ -344,7 +358,7 @@ private struct DashboardHeader: View {
         case .down:
             SemanticColors.negative
         case .flat:
-            .secondary
+            AppearanceTextColors.secondary
         }
     }
 }
@@ -473,7 +487,7 @@ private struct MetricCard: View {
                 .foregroundStyle(.secondary)
             Text(value)
                 .dataText()
-                .foregroundStyle(emphasizesTint ? tint : .primary)
+                .foregroundStyle(emphasizesTint ? tint : AppearanceTextColors.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
             Text(detail)
@@ -492,15 +506,14 @@ private struct MetricCard: View {
 private struct BalanceCompositionStrip: View {
     @Environment(AppState.self) private var appState
 
-    private let segmentSpacing: CGFloat = 2
-
     private var presentation: BalanceCompositionPresentation {
         BalanceCompositionPresentation(accounts: appState.accounts)
     }
 
-    private var activeSegments: [BalanceCompositionSegment] {
+    private var activeSegments: [BalanceCompositionBarSegment] {
         presentation.segments.map { segment in
-            BalanceCompositionSegment(
+            BalanceCompositionBarSegment(
+                id: segment.id,
                 title: segment.title,
                 value: segment.value,
                 share: segment.share,
@@ -537,25 +550,7 @@ private struct BalanceCompositionStrip: View {
                     .foregroundStyle(.secondary)
             }
 
-            GeometryReader { proxy in
-                HStack(spacing: segmentSpacing) {
-                    ForEach(activeSegments) { segment in
-                        RoundedRectangle(cornerRadius: Radius.cell)
-                            .fill(segment.fillColor)
-                            .frame(
-                                width: segmentWidth(
-                                    segment,
-                                    totalWidth: proxy.size.width,
-                                    segmentCount: activeSegments.count
-                                )
-                            )
-                            .accessibilityLabel(
-                                "\(segment.title), \(Formatters.currency(segment.value, format: .compact)), \(segmentPercentText(segment)) of balance mix"
-                            )
-                    }
-                }
-            }
-            .frame(height: 7)
+            AnimatedBalanceCompositionBar(segments: activeSegments, height: 7)
 
             HStack(spacing: Spacing.sm) {
                 ForEach(activeSegments) { segment in
@@ -567,39 +562,10 @@ private struct BalanceCompositionStrip: View {
         .glassSurface(.inset)
         .accessibilityElement(children: .contain)
     }
-
-    private func segmentWidth(
-        _ segment: BalanceCompositionSegment,
-        totalWidth: CGFloat,
-        segmentCount: Int
-    ) -> CGFloat {
-        let gaps = CGFloat(max(segmentCount - 1, 0)) * segmentSpacing
-        let availableWidth = max(totalWidth - gaps, 0)
-        return max(availableWidth * CGFloat(segment.share), 6)
-    }
-
-    private func segmentPercentText(_ segment: BalanceCompositionSegment) -> String {
-        "\(Int((segment.share * 100).rounded()))%"
-    }
-}
-
-private struct BalanceCompositionSegment: Identifiable {
-    let title: String
-    let value: Double
-    let share: Double
-    let tint: Color
-
-    var id: String {
-        title
-    }
-
-    var fillColor: Color {
-        value > 0 ? tint.opacity(0.82) : Color.primary.opacity(0.08)
-    }
 }
 
 private struct BalanceCompositionLegend: View {
-    let segment: BalanceCompositionSegment
+    let segment: BalanceCompositionBarSegment
 
     var body: some View {
         HStack(spacing: 5) {
@@ -675,7 +641,7 @@ private struct BalanceActivityHeatmap: View {
 
                 Text(isInitialLoad ? "—" : totalLabel(for: layout))
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(isInitialLoad ? .secondary : totalTint(for: layout))
+                    .foregroundStyle(isInitialLoad ? AppearanceTextColors.secondary : totalTint(for: layout))
                     .monospacedDigit()
                     .lineLimit(1)
             }
@@ -783,11 +749,11 @@ private struct BalanceActivityHeatmap: View {
     }
 
     private func totalTint(for layout: SpendingHeatmapLayout) -> Color {
-        guard layout.mode == .netCashflow else { return .secondary }
+        guard layout.mode == .netCashflow else { return AppearanceTextColors.primary }
         let displayAmount = SpendingHeatmap.displayCashflowAmount(layout.totalValue)
         if displayAmount > 0 { return SemanticColors.positive }
         if displayAmount < 0 { return SemanticColors.negative }
-        return .secondary
+        return AppearanceTextColors.secondary
     }
 
     private func cashflowText(for value: Double) -> String {
@@ -981,7 +947,7 @@ private struct LocalAIStatusPill: View {
     private var tint: Color {
         switch availability.state {
         case .available: SemanticColors.positive
-        case .disabled: .secondary
+        case .disabled: AppearanceTextColors.secondary
         case .unavailable: SemanticColors.warning
         }
     }
@@ -995,6 +961,7 @@ private struct LocalInsightEvidenceChip: View {
             HStack(spacing: 4) {
                 Image(systemName: chip.systemImage)
                     .font(.caption2.weight(.semibold))
+                    .foregroundStyle(accentTint)
                 Text(chip.label)
                     .lineLimit(1)
             }
@@ -1012,6 +979,11 @@ private struct LocalInsightEvidenceChip: View {
         .padding(.vertical, Spacing.rowVertical)
         .glassSurface(.inset, cornerRadius: Radius.control)
         .help("\(chip.label): \(chip.value)")
+    }
+
+    private var accentTint: Color {
+        guard let category = chip.accentCategory else { return AppearanceTextColors.secondary }
+        return CategoryAccentTokens.color(for: category)
     }
 }
 
@@ -1100,7 +1072,7 @@ private struct DashboardStatusReadinessPanel: View {
         // Warning/negative tints are reserved for actionable verdicts —
         // an in-flight first load renders neutral.
         switch readiness.level {
-        case .healthy, .loading: .secondary
+        case .healthy, .loading: AppearanceTextColors.secondary
         case .warning: SemanticColors.warning
         case .blocked: SemanticColors.negative
         }
@@ -1444,7 +1416,7 @@ private struct AccountRowWithDrilldown: View {
     }
 
     private var accountAccessibilityLabel: String {
-        AccountPresentation.rowAccessibilityLabel(
+        let label = AccountPresentation.rowAccessibilityLabel(
             for: account,
             amountText: AccountPresentation.rowAmountText(for: account),
             connectionLabel: connectionPresentation.rowLabel,
@@ -1452,6 +1424,12 @@ private struct AccountRowWithDrilldown: View {
             isSelected: isSelected,
             utilizationThreshold: appState.creditUtilizationThreshold
         )
+        guard let demoTrend else { return label }
+        return "\(label). \(accountTrendAccessibility(demoTrend))"
+    }
+
+    private var demoTrend: BalanceTrend? {
+        demoAccountTrend(for: account, appState: appState)
     }
 
     private var pendingCount: Int {
@@ -1650,13 +1628,19 @@ private struct DashboardAccountRow: View {
 
             Spacer(minLength: Spacing.compactRowContentSpacing)
 
+            if let demoTrend {
+                BalanceTrendChart(trend: demoTrend)
+                    .frame(width: 54, height: 16)
+                    .accessibilityHidden(true)
+            }
+
             VStack(alignment: .trailing, spacing: Spacing.xs) {
-                // Amounts are data, not verdicts: always .primary. Risk is
+                // Amounts are data, not verdicts: keep them neutral. Risk is
                 // carried by the utilization line below — icon + tint + text,
                 // and only once the user's own threshold is crossed.
                 Text(amountText)
                     .dataText()
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(AppearanceTextColors.primary)
                     .lineLimit(1)
 
                 if let utilization = account.balances.utilizationPercent {
@@ -1676,7 +1660,7 @@ private struct DashboardAccountRow: View {
                         }
                         Text(trailingDetailText)
                             .font(.caption.weight(.medium))
-                            .foregroundStyle(utilizationNeedsAttention ? AnyShapeStyle(.primary) :
+                            .foregroundStyle(utilizationNeedsAttention ? AnyShapeStyle(AppearanceTextColors.primary) :
                                 AnyShapeStyle(.secondary))
                     }
                     .lineLimit(1)
@@ -1766,6 +1750,29 @@ private struct DashboardAccountRow: View {
     private var statusTint: Color {
         accountConnectionTint(for: connectionPresentation.level)
     }
+
+    private var demoTrend: BalanceTrend? {
+        demoAccountTrend(for: account, appState: appState)
+    }
+}
+
+@MainActor
+private func demoAccountTrend(for account: AccountDTO, appState: AppState) -> BalanceTrend? {
+    guard appState.usesDemoConnectionPresentation else { return nil }
+    return BalanceTrend.evaluate(history: DemoFixtures.accountBalanceHistory(forAccountId: account.id))
+}
+
+private func accountTrendAccessibility(_ trend: BalanceTrend) -> String {
+    let change: String
+    switch trend.direction {
+    case .up:
+        change = "up \(Formatters.currency(abs(trend.delta), format: .full))"
+    case .down:
+        change = "down \(Formatters.currency(abs(trend.delta), format: .full))"
+    case .flat:
+        change = "unchanged"
+    }
+    return "Demo account balance trend \(change) over the last \(trend.spanDays) day\(trend.spanDays == 1 ? "" : "s")"
 }
 
 // MARK: - Footer

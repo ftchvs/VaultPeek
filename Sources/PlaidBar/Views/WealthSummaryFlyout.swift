@@ -19,7 +19,8 @@ struct WealthSummaryFlyout: View {
             lastSyncRelative: appState.lastSyncRelative,
             statusSyncText: appState.statusSyncText,
             errorMessage: appState.error,
-            creditUtilizationThreshold: appState.creditUtilizationThreshold
+            creditUtilizationThreshold: appState.creditUtilizationThreshold,
+            balanceHistory: appState.balanceHistory
         )
     }
 
@@ -92,7 +93,11 @@ struct WealthSummaryFlyout: View {
                     .contentTransition(.numericText())
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
+
+                WealthNetWorthTrendBlock(trend: presentation.netWorthTrend)
             }
+            .padding(Spacing.sm)
+            .heroAccentSurface()
         }
     }
 
@@ -100,6 +105,39 @@ struct WealthSummaryFlyout: View {
         let netWorth = Formatters.currency(presentation.netWorth, format: .full)
         let netCashflow = cashflowText(presentation.cashflow.net, format: .full)
         return "Wealth summary. Net worth \(netWorth). 30 day net cashflow \(netCashflow). \(presentation.syncHealth.title). \(presentation.attention.detail)"
+    }
+}
+
+private struct WealthNetWorthTrendBlock: View {
+    let trend: NetWorthTrendPresentation
+
+    var body: some View {
+        switch trend {
+        case let .available(balanceTrend):
+            HStack(alignment: .center, spacing: Spacing.sm) {
+                BalanceTrendChart(trend: balanceTrend)
+                    .frame(height: 38)
+
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text(balanceTrend.deltaText)
+                        .font(.caption.weight(.semibold))
+                        .monospacedDigit()
+                    Text(balanceTrend.spanText)
+                        .microText()
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(balanceTrend.accessibilitySummary)
+            .help(balanceTrend.accessibilitySummary)
+        case let .insufficientHistory(pointCount, requiredPointCount):
+            Label(
+                "Trend pending · \(max(requiredPointCount - pointCount, 0)) more snapshot\(max(requiredPointCount - pointCount, 0) == 1 ? "" : "s")",
+                systemImage: "chart.line.uptrend.xyaxis"
+            )
+            .detailText()
+            .accessibilityLabel(trend.accessibilitySummary)
+        }
     }
 }
 
@@ -170,7 +208,7 @@ private struct WealthMetricGrid: View {
                 value: Formatters.currency(presentation.totalDebt, format: .compact),
                 detail: presentation.totalDebt > 0 ? "Credit and loans" : "No debt synced",
                 systemImage: "creditcard.fill",
-                tint: presentation.totalDebt > 0 ? SemanticColors.creditDebt : .secondary
+                tint: presentation.totalDebt > 0 ? SemanticColors.creditDebt : AppearanceTextColors.secondary
             )
         }
         .accessibilityElement(children: .contain)
@@ -198,7 +236,7 @@ private struct WealthMetricTile: View {
 
             Text(value)
                 .dataText()
-                .foregroundStyle(.primary)
+                .foregroundStyle(AppearanceTextColors.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.78)
 
@@ -219,7 +257,17 @@ private struct WealthMetricTile: View {
 private struct WealthBalanceMixSection: View {
     let presentation: WealthSummaryPresentation
 
-    private let segmentSpacing: CGFloat = 2
+    private var barSegments: [BalanceCompositionBarSegment] {
+        presentation.balanceMix.segments.map { segment in
+            BalanceCompositionBarSegment(
+                id: segment.id,
+                title: segment.title,
+                value: segment.value,
+                share: segment.share,
+                tint: tint(for: segment.id)
+            )
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -230,23 +278,7 @@ private struct WealthBalanceMixSection: View {
                     .detailText()
                     .foregroundStyle(.secondary)
             } else {
-                GeometryReader { proxy in
-                    HStack(spacing: segmentSpacing) {
-                        ForEach(presentation.balanceMix.segments) { segment in
-                            RoundedRectangle(cornerRadius: Radius.cell)
-                                .fill(tint(for: segment.id).opacity(0.82))
-                                .frame(
-                                    width: segmentWidth(
-                                        segment,
-                                        totalWidth: proxy.size.width,
-                                        segmentCount: presentation.balanceMix.segments.count
-                                    )
-                                )
-                                .accessibilityLabel(segmentAccessibility(segment))
-                        }
-                    }
-                }
-                .frame(height: 8)
+                AnimatedBalanceCompositionBar(segments: barSegments)
 
                 VStack(alignment: .leading, spacing: Spacing.xs) {
                     ForEach(presentation.balanceMix.segments) { segment in
@@ -256,16 +288,6 @@ private struct WealthBalanceMixSection: View {
             }
         }
         .accessibilityElement(children: .contain)
-    }
-
-    private func segmentWidth(
-        _ segment: BalanceCompositionPresentation.Segment,
-        totalWidth: CGFloat,
-        segmentCount: Int
-    ) -> CGFloat {
-        let gaps = CGFloat(max(segmentCount - 1, 0)) * segmentSpacing
-        let availableWidth = max(totalWidth - gaps, 0)
-        return max(availableWidth * CGFloat(segment.share), 6)
     }
 
     private func tint(for id: String) -> Color {
@@ -281,10 +303,6 @@ private struct WealthBalanceMixSection: View {
         default:
             Color.secondary.opacity(0.6)
         }
-    }
-
-    private func segmentAccessibility(_ segment: BalanceCompositionPresentation.Segment) -> String {
-        "\(segment.title), \(Formatters.currency(segment.value, format: .full)), \(percentText(segment.share)) of balance mix"
     }
 }
 
@@ -409,11 +427,11 @@ private struct WealthCashflowRow: View {
         case .income:
             return SemanticColors.positive
         case .spending:
-            return .primary
+            return AppearanceTextColors.primary
         case .net:
             if amount > 0 { return SemanticColors.positive }
             if amount < 0 { return SemanticColors.negative }
-            return .secondary
+            return AppearanceTextColors.secondary
         }
     }
 }
@@ -457,7 +475,7 @@ private struct WealthCreditSection: View {
     }
 
     private func tint(_ summary: WealthSummaryPresentation.CreditUtilizationSummary) -> Color {
-        guard summary.exceedsThreshold else { return .secondary }
+        guard summary.exceedsThreshold else { return AppearanceTextColors.secondary }
         return SemanticColors.utilization(for: summary.percent, threshold: threshold)
     }
 }
