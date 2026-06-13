@@ -3,6 +3,7 @@ import SwiftUI
 
 struct WealthSummaryFlyout: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let onAddAccount: () -> Void
 
     private var presentation: WealthSummaryPresentation {
@@ -101,7 +102,7 @@ struct WealthSummaryFlyout: View {
 
                 Text(Formatters.currency(presentation.netWorth, format: .full))
                     .displayBalance()
-                    .contentTransition(.numericText())
+                    .rollingTabularNumber(Formatters.currency(presentation.netWorth, format: .full), reduceMotion: reduceMotion)
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
 
@@ -196,6 +197,7 @@ private struct WealthSyncPill: View {
 }
 
 private struct WealthMetricGrid: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let presentation: WealthSummaryPresentation
 
     private var columns: [GridItem] {
@@ -211,7 +213,8 @@ private struct WealthMetricGrid: View {
                 title: "Assets",
                 value: Formatters.currency(presentation.totalAssets, format: .compact),
                 detail: "\(presentation.accountCount) accounts",
-                systemImage: "building.columns.fill"
+                systemImage: "building.columns.fill",
+                reduceMotion: reduceMotion
             )
 
             WealthMetricTile(
@@ -219,7 +222,8 @@ private struct WealthMetricGrid: View {
                 value: Formatters.currency(presentation.totalDebt, format: .compact),
                 detail: presentation.totalDebt > 0 ? "Credit and loans" : "No debt synced",
                 systemImage: "creditcard.fill",
-                tint: presentation.totalDebt > 0 ? SemanticColors.creditDebt : AppearanceTextColors.secondary
+                tint: presentation.totalDebt > 0 ? SemanticColors.creditDebt : AppearanceTextColors.secondary,
+                reduceMotion: reduceMotion
             )
         }
         .accessibilityElement(children: .contain)
@@ -232,6 +236,7 @@ private struct WealthMetricTile: View {
     let detail: String
     let systemImage: String
     var tint: Color = .secondary
+    var reduceMotion: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
@@ -247,6 +252,7 @@ private struct WealthMetricTile: View {
 
             Text(value)
                 .dataText()
+                .rollingTabularNumber(value, reduceMotion: reduceMotion)
                 .foregroundStyle(AppearanceTextColors.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.78)
@@ -318,6 +324,7 @@ private struct WealthBalanceMixSection: View {
 }
 
 private struct WealthMixLegendRow: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let segment: BalanceCompositionPresentation.Segment
     let tint: Color
 
@@ -337,13 +344,13 @@ private struct WealthMixLegendRow: View {
 
             Text(Formatters.currency(segment.value, format: .compact))
                 .font(.caption.weight(.semibold))
-                .monospacedDigit()
+                .rollingTabularNumber(Formatters.currency(segment.value, format: .compact), reduceMotion: reduceMotion)
                 .lineLimit(1)
 
             Text(percentText(segment.share))
                 .microText()
                 .foregroundStyle(.secondary)
-                .monospacedDigit()
+                .rollingTabularNumber(percentText(segment.share), reduceMotion: reduceMotion)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
@@ -353,6 +360,7 @@ private struct WealthMixLegendRow: View {
 }
 
 private struct WealthCashflowSection: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let cashflow: WealthSummaryPresentation.CashflowSummary
 
     var body: some View {
@@ -366,9 +374,9 @@ private struct WealthCashflowSection: View {
             }
 
             VStack(spacing: Spacing.xs) {
-                WealthCashflowRow(title: "Income", amount: cashflow.income, role: .income)
-                WealthCashflowRow(title: "Spending", amount: cashflow.spending, role: .spending)
-                WealthCashflowRow(title: "Net", amount: cashflow.net, role: .net)
+                WealthCashflowRow(title: "Income", amount: cashflow.income, role: .income, reduceMotion: reduceMotion)
+                WealthCashflowRow(title: "Spending", amount: cashflow.spending, role: .spending, reduceMotion: reduceMotion)
+                WealthCashflowRow(title: "Net", amount: cashflow.net, role: .net, reduceMotion: reduceMotion)
             }
         }
         .accessibilityElement(children: .contain)
@@ -385,6 +393,7 @@ private struct WealthCashflowRow: View {
     let title: String
     let amount: Double
     let role: WealthCashflowRole
+    var reduceMotion: Bool = false
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
@@ -397,7 +406,7 @@ private struct WealthCashflowRow: View {
             Text(amountText)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(tint)
-                .monospacedDigit()
+                .rollingTabularNumber(amountText, reduceMotion: reduceMotion)
                 .lineLimit(1)
         }
         .accessibilityElement(children: .ignore)

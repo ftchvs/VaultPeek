@@ -1,5 +1,25 @@
 import SwiftUI
 
+// MARK: - Rolling Tabular Numerics
+
+/// Centralized numeric-display modifier (AND-378): monospaced (tabular) digits so
+/// decimals align into a column, plus a `.numericText()` content transition that
+/// rolls the figure only when it changes (the value-keyed `.animation` does not run
+/// on first render, so no "slot machine" on open) and is disabled under Reduce
+/// Motion via `MotionTokens.animation` (which returns nil). Pass the exact string
+/// the wrapped `Text` displays as `value`.
+struct RollingTabularNumber: ViewModifier {
+    let value: String
+    let reduceMotion: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .monospacedDigit()
+            .contentTransition(.numericText())
+            .animation(MotionTokens.animation(MotionTokens.standard, reduceMotion: reduceMotion), value: value)
+    }
+}
+
 // MARK: - Type Scale ViewModifiers
 
 /// Level 0 — Display: the one hero number per surface (net worth).
@@ -66,6 +86,12 @@ extension View {
 
     func dataText() -> some View {
         modifier(DataText())
+    }
+
+    /// Monospaced + rolls on value change (never on first appearance; instant under
+    /// Reduce Motion). Pass the rendered string. See `RollingTabularNumber`.
+    func rollingTabularNumber(_ value: String, reduceMotion: Bool) -> some View {
+        modifier(RollingTabularNumber(value: value, reduceMotion: reduceMotion))
     }
 
     func heroBalance() -> some View {
