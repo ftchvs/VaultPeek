@@ -111,7 +111,7 @@ private struct AttentionQueueRowView: View {
                 // the row never resizes. SeverityStatusBadge stays the primary,
                 // color-independent meaning carrier; this motion is decorative
                 // reinforcement only.
-                .symbolEffect(.bounce, options: .nonRepeating, isActive: hasAppeared && bouncesOnAppear)
+                .symbolMotion(.bounceOnce, isActive: hasAppeared && bouncesOnAppear, reduceMotion: reduceMotion)
                 .onAppear { hasAppeared = true }
                 .accessibilityHidden(true)
 
@@ -160,12 +160,12 @@ private struct AttentionQueueRowView: View {
         .accessibilityElement(children: .contain)
     }
 
-    /// Whether the leading status glyph should bounce once when this row view
-    /// appears. False under Reduce Motion or while healthy, so the effect stays
-    /// silent there and never fires when Reduce Motion is toggled on at runtime.
+    /// Whether this row's severity warrants the one-shot bounce when it appears
+    /// (warning/blocked, not healthy). The Reduce Motion gate is applied centrally
+    /// by `symbolMotion(.bounceOnce:reduceMotion:)` (AND-358), so this expresses
+    /// severity intent only.
     private var bouncesOnAppear: Bool {
-        guard !reduceMotion else { return false }
-        return row.severity != .healthy
+        row.severity != .healthy
     }
 
     private var tint: Color {
