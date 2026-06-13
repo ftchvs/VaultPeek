@@ -54,16 +54,6 @@ struct MainPopover: View {
         return accounts.first { $0.id == selectedAccountId }
     }
 
-    /// The left Wealth Summary rail is mounted. Per the three-column contract it
-    /// is always present once setup is complete — selecting an account opens a
-    /// separate trailing inspector rather than swapping the rail — so the rail
-    /// owns the net-worth hero and the portfolio summary, and the center
-    /// dashboard drops those duplicates: the net-worth hero/trend (AND-376) and
-    /// the summary cards + balance mix (AND-372).
-    private var isWealthSummaryRailVisible: Bool {
-        !shouldShowSetupScreen
-    }
-
     /// The trailing account inspector is open (an account is selected and we are
     /// past setup). Drives the third column, the popover width, the leading-edge
     /// anchor, and Esc precedence.
@@ -268,20 +258,11 @@ struct MainPopover: View {
                     // 16pt between concept groups, 8pt between siblings
                     // within a group — spacing is the hierarchy.
                     VStack(alignment: .leading, spacing: Layout.groupSpacing) {
-                        VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
-                            // The rail owns the net-worth hero and its trend, so
-                            // the center leads with the latest-changes receipt
-                            // instead of repeating either (AND-372). The header
-                            // returns only if the rail is ever hidden.
-                            if !isWealthSummaryRailVisible {
-                                DashboardHeader(showsNetWorth: true)
-                                    .environment(appState)
-                                    .loadingRedaction(appState.loadState(for: .summaryCards))
-                            }
-
-                            DashboardChangeReceiptStrip()
-                                .environment(appState)
-                        }
+                        // The rail owns the net-worth hero and its trend, so the
+                        // center leads with the latest-changes receipt instead of
+                        // repeating either (AND-372).
+                        DashboardChangeReceiptStrip()
+                            .environment(appState)
 
                         if shouldElevateStatusReadinessPanel {
                             VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
@@ -309,18 +290,13 @@ struct MainPopover: View {
                         .environment(appState)
 
                         VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
-                            // The left rail owns the portfolio totals and the
-                            // balance mix; the center drops these duplicates
-                            // while the rail is up (AND-372) and keeps only the
-                            // local-only insight receipt, which has no rail
-                            // equivalent.
-                            if !isWealthSummaryRailVisible {
-                                DashboardSummaryCards()
-                                    .environment(appState)
-
-                                BalanceCompositionStrip()
-                                    .environment(appState)
-                            }
+                            // The left rail owns the portfolio totals (assets,
+                            // debt, balance mix, 30-day cashflow), so the center
+                            // drops those duplicates (AND-372) and keeps only what
+                            // the rail does NOT show: the 7-day spend velocity and
+                            // the local-only insight receipt.
+                            RecentSpendChip()
+                                .environment(appState)
 
                             LocalInsightsCard()
                                 .environment(appState)
@@ -396,106 +372,6 @@ struct MainPopover: View {
     }
 }
 
-// MARK: - Dashboard Header
-
-private struct DashboardHeader: View {
-    @Environment(AppState.self) private var appState
-
-    /// When the left Wealth Summary rail already owns the net-worth hero, the
-    /// center header drops the duplicate amount and shows only a compact
-    /// net-worth trend so the chart cue survives without a second hero
-    /// (AND-376). Defaults to `true` for the swap-model selected-account state,
-    /// where the center is the only place net worth is shown.
-    var showsNetWorth: Bool = true
-
-    private var trend: BalanceTrend? {
-        BalanceTrend.evaluate(history: appState.balanceHistory)
-    }
-
-    var body: some View {
-        if showsNetWorth {
-            heroHeader
-        } else {
-            compactTrendHeader
-        }
-    }
-
-    // One hero per surface: the net worth number is the only large text.
-    // Sync state lives in the footer; the app's own name does not belong
-    // inside its own popover.
-    private var heroHeader: some View {
-        HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text("Net Worth")
-                    .sectionTitle()
-                    .foregroundStyle(.secondary)
-
-                Text(Formatters.currency(appState.netBalance, format: .full))
-                    .displayBalance()
-                    .contentTransition(.numericText())
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-
-            Spacer(minLength: Spacing.md)
-
-            if let trend {
-                trendCluster(trend)
-            }
-        }
-        .padding(Spacing.sm)
-        .heroAccentSurface()
-    }
-
-    // The left rail owns the net-worth amount, so the center keeps only the
-    // trend chart cue (no duplicate hero number). Renders nothing when there is
-    // no history to chart, so the center column starts cleanly at the change
-    // receipt without an awkward empty gap.
-    @ViewBuilder
-    private var compactTrendHeader: some View {
-        if let trend {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Net Worth Trend")
-                    .sectionTitle()
-                    .foregroundStyle(.secondary)
-
-                Spacer(minLength: Spacing.md)
-
-                trendCluster(trend)
-            }
-            .padding(Spacing.sm)
-            .glassSurface(.inset)
-        }
-    }
-
-    private func trendCluster(_ trend: BalanceTrend) -> some View {
-        VStack(alignment: .trailing, spacing: Spacing.xxs) {
-            BalanceTrendChart(trend: trend)
-                .frame(width: 92, height: 21)
-
-            Text("\(trend.deltaText) \(trend.spanText)")
-                .font(.caption2.weight(.medium))
-                .monospacedDigit()
-                .foregroundStyle(deltaTint(for: trend.direction))
-                .lineLimit(1)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(trend.accessibilitySummary)
-        .help(trend.accessibilitySummary)
-    }
-
-    private func deltaTint(for direction: BalanceTrend.Direction) -> Color {
-        switch direction {
-        case .up:
-            SemanticColors.positive
-        case .down:
-            SemanticColors.negative
-        case .flat:
-            AppearanceTextColors.secondary
-        }
-    }
-}
-
 private struct DashboardChangeReceiptStrip: View {
     @Environment(AppState.self) private var appState
 
@@ -545,179 +421,36 @@ private struct DashboardChangeReceiptStrip: View {
     }
 }
 
-private struct DashboardSummaryCards: View {
+private struct RecentSpendChip: View {
     @Environment(AppState.self) private var appState
 
     var body: some View {
-        // One metric row. Sync/server status is not a financial metric — it
-        // lives in the footer (healthy) or the attention queue (degraded).
-        HStack(spacing: Spacing.sm) {
-            MetricCard(
-                title: "Cash",
-                value: Formatters.currency(appState.totalCash, format: .compact),
-                detail: "\(appState.depositoryAccounts.count) cash account\(appState.depositoryAccounts.count == 1 ? "" : "s")",
-                tint: .secondary
-            )
-
-            MetricCard(
-                title: "Credit",
-                value: creditValue,
-                detail: creditDetail,
-                tint: SemanticColors.creditDebt,
-                emphasizesTint: shouldEmphasizeCredit
-            )
-
-            MetricCard(
-                title: "7D Spend",
-                value: Formatters.currency(appState.recentSpend, format: .compact),
-                detail: recentSpendDetail,
-                tint: .secondary
-            )
-        }
-    }
-
-    private var creditValue: String {
-        if let utilization = appState.totalCreditUtilization {
-            return Formatters.percent(utilization, decimals: 0)
-        }
-        guard !appState.creditAccounts.isEmpty else { return "No credit" }
-        return Formatters.currency(MenuBarSummary.totalDebt(from: appState.creditAccounts), format: .compact)
-    }
-
-    private var creditDetail: String {
-        let creditCount = appState.creditAccounts.count
-        guard creditCount > 0 else { return "No credit linked" }
-
-        if appState.totalCreditUtilization != nil {
-            return "\(Formatters.currency(MenuBarSummary.totalDebt(from: appState.creditAccounts), format: .compact)) owed"
-        }
-        return "\(creditCount) credit account\(creditCount == 1 ? "" : "s")"
-    }
-
-    private var shouldEmphasizeCredit: Bool {
-        guard let utilization = appState.totalCreditUtilization else {
-            return MenuBarSummary.totalDebt(from: appState.creditAccounts) > 0
-        }
-        return utilization >= appState.creditUtilizationThreshold
-    }
-
-    private var recentSpendDetail: String {
-        appState.recentSpend > 0 ? "Last 7 days" : "No 7D spend"
-    }
-}
-
-private struct MetricCard: View {
-    let title: String
-    let value: String
-    let detail: String
-    let tint: Color
-    var emphasizesTint = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.xs) {
-            Text(title)
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-            Text(value)
-                .dataText()
-                .foregroundStyle(emphasizesTint ? tint : AppearanceTextColors.primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-            Text(detail)
-                .microText()
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, Spacing.sm)
-        .padding(.vertical, Spacing.sm)
-        .glassSurface(emphasizesTint ? .emphasized(tint) : .inset)
-    }
-}
-
-private struct BalanceCompositionStrip: View {
-    @Environment(AppState.self) private var appState
-
-    private var presentation: BalanceCompositionPresentation {
-        BalanceCompositionPresentation(accounts: appState.accounts)
-    }
-
-    private var activeSegments: [BalanceCompositionBarSegment] {
-        presentation.segments.map { segment in
-            BalanceCompositionBarSegment(
-                id: segment.id,
-                title: segment.title,
-                value: segment.value,
-                share: segment.share,
-                tint: tint(for: segment.id)
-            )
-        }
-    }
-
-    private func tint(for id: String) -> Color {
-        switch id {
-        case "cash": Color.secondary.opacity(0.6)
-        case "investments": Color.primary.opacity(0.36)
-        case "credit": SemanticColors.creditDebt
-        case "loans": SemanticColors.warning
-        default: Color.secondary.opacity(0.6)
-        }
-    }
-
-    var body: some View {
-        // Derive the active segments once per render: rebuilding the
-        // presentation re-filters the account list, so computing it here and
-        // threading the result (and its count) through the helpers avoids
-        // re-running that work for every segment in the strip and legend.
-        let activeSegments = activeSegments
-
-        return VStack(alignment: .leading, spacing: Spacing.sm) {
-            HStack {
-                Text("Balance Mix")
-                    .sectionTitle()
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text("\(appState.accountCount) accounts")
-                    .microText()
-                    .foregroundStyle(.secondary)
-            }
-
-            AnimatedBalanceCompositionBar(segments: activeSegments, height: 7)
-
-            HStack(spacing: Spacing.sm) {
-                ForEach(activeSegments) { segment in
-                    BalanceCompositionLegend(segment: segment)
-                }
-            }
-        }
-        .padding(Spacing.sm)
-        .glassSurface(.inset)
-        .accessibilityElement(children: .contain)
-    }
-}
-
-private struct BalanceCompositionLegend: View {
-    let segment: BalanceCompositionBarSegment
-
-    var body: some View {
-        HStack(spacing: 5) {
-            Circle()
-                .fill(segment.tint)
-                .frame(width: 6, height: 6)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(segment.title)
-                    .microText()
+        // 7-day spend velocity — the one summary metric the left rail does not
+        // show (its cashflow section is 30-day). The rail owns cash, credit, and
+        // the balance mix, so the center keeps only this short-window signal.
+        // Renders nothing when there is no recent spend, so the center has no
+        // empty stub.
+        if appState.recentSpend > 0 {
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+                Text("7-DAY SPEND")
+                    .font(.caption2.weight(.medium))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                Text(Formatters.currency(segment.value, format: .compact))
-                    .font(.caption2.weight(.semibold))
+
+                Spacer(minLength: Spacing.sm)
+
+                Text(Formatters.currency(appState.recentSpend, format: .compact))
+                    .font(.caption.weight(.semibold))
                     .monospacedDigit()
                     .lineLimit(1)
-                    .minimumScaleFactor(0.78)
             }
+            .padding(.horizontal, Spacing.sm)
+            .padding(.vertical, Spacing.xs)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.quinary, in: Capsule())
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("7 day spend: \(Formatters.currency(appState.recentSpend, format: .full))")
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -1530,11 +1263,22 @@ private struct AccountsSection: View {
         }
         // Keep focus on the selected row while the inspector is open and return
         // it to that row when the inspector closes, so keyboard users do not
-        // lose context on Esc/close (AND-373).
+        // lose context on Esc/close (AND-373). onChange does not fire on mount,
+        // so a popover reopened with a persisted selection neither re-announces
+        // nor re-homes focus.
         .onChange(of: selectedAccountId) { previous, current in
-            if let current {
+            if let current, let account = accounts.first(where: { $0.id == current }) {
                 focusedAccountId = current
-            } else if let previous {
+                // Announce only on a genuine selection change (not on mount/
+                // restore), so VoiceOver hears the inspector open exactly once.
+                AccessibilityNotification.Announcement(
+                    "\(AccountPresentation.displayName(for: account)) details opened in account inspector"
+                ).post()
+            } else if let previous, accounts.contains(where: { $0.id == previous }) {
+                // Return focus only when the row still exists (Esc/✕/re-click).
+                // If the selection was cleared because the row left the list
+                // (filter change or account removed), leave focus alone rather
+                // than pointing @FocusState at a vanished id (AND-373).
                 focusedAccountId = previous
             }
         }

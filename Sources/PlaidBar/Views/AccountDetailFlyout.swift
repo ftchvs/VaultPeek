@@ -5,11 +5,10 @@ import SwiftUI
 
 /// Presents `AccountDetailFlyout` as the three-column popover's trailing account
 /// inspector (AND-371). The detail surface itself is position-agnostic; this
-/// thin wrapper fixes the inspector framing/semantics so the panel reads as a
-/// right-side inspector rather than left-rail content, scopes the close
-/// affordance to dismissing only the inspector, and announces the selection to
-/// VoiceOver so assistive tech hears that a row revealed detail on the trailing
-/// side rather than that content was replaced (AND-373).
+/// thin wrapper names the trailing-inspector role and scopes the close affordance
+/// to dismissing only the inspector. The VoiceOver "opened" announcement is
+/// driven from the selection change in `MainPopover` (not this view's mount), so
+/// reopening the popover with a persisted selection does not re-announce (AND-373).
 struct AccountInspector: View {
     @Environment(AppState.self) private var appState
     let account: AccountDTO
@@ -23,14 +22,6 @@ struct AccountInspector: View {
             onClose: onClose
         )
         .environment(appState)
-        // Keyed by account id so each distinct selection is announced, after a
-        // yield so the inspector is in the hierarchy before VoiceOver speaks.
-        .task(id: account.id) {
-            await Task.yield()
-            AccessibilityNotification.Announcement(
-                "\(AccountPresentation.displayName(for: account)) details opened in account inspector"
-            ).post()
-        }
     }
 }
 

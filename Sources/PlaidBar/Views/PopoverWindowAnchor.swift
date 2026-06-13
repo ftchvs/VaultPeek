@@ -91,6 +91,12 @@ struct PopoverLeadingEdgeAnchor: NSViewRepresentable {
             guard let window else { return }
             if window !== self.window {
                 detach()
+                // A MenuBarExtra recreates its window between opens; drop the
+                // stale anchor so each fresh window re-derives it from the new
+                // centered geometry (the status item may have moved or the
+                // display changed). Without this a popover that opens already
+                // expanded would pin to the previous session's X.
+                anchorMinX = nil
                 self.window = window
                 resizeObserver = NotificationCenter.default.addObserver(
                     forName: NSWindow.didResizeNotification,
@@ -133,31 +139,40 @@ struct PopoverLeadingEdgeAnchor: NSViewRepresentable {
         private func pinLeadingEdge() {
             guard let window else { return }
 
-            // Returning to the collapsed width re-establishes the natural anchor
-            // (the status item may move between sessions or displays), and keeps
-            // the two-column popover in its natural centered position.
+            // Collapsing back to two columns: re-derive the natural anchor from
+            // the centered window, then hold that leading edge (clamped) for the
+            // collapsed width too. Letting AppKit re-center the narrower window
+            // unmanaged would jump the rail right when the expanded popover had
+            // been clamped left near a display edge (AND-370 no-jump on close).
             guard isInspectorOpen else {
-                anchorMinX = window.frame.minX
+                let naturalLeading = window.frame.midX - collapsedWidth / 2
+                anchorMinX = naturalLeading
+                applyOrigin(clampedOriginX(naturalLeading, width: window.frame.width, in: window), to: window)
                 return
             }
 
             if anchorMinX == nil { captureAnchor() }
             guard let anchorMinX else { return }
+            applyOrigin(clampedOriginX(anchorMinX, width: window.frame.width, in: window), to: window)
+        }
 
-            var targetX = anchorMinX
-            // Clamp the widened popover inside the visible screen: pull the
-            // trailing edge in if it would overflow the right edge, then keep
-            // the leading edge on-screen. On displays too narrow to fit the full
-            // width the leading edge wins (applied last) so the Wealth Summary
-            // rail stays visible (AND-374 primary fallback).
-            if let screen = window.screen ?? NSScreen.main {
-                let visible = screen.visibleFrame
-                let maxOriginX = visible.maxX - screenEdgeMargin - window.frame.width
-                let minOriginX = visible.minX + screenEdgeMargin
-                if targetX > maxOriginX { targetX = maxOriginX }
-                if targetX < minOriginX { targetX = minOriginX }
-            }
+        /// Clamp a desired leading-edge X so the popover of the given width stays
+        /// inside the screen's visible frame: pull the trailing edge in if it
+        /// would overflow the right edge, then keep the leading edge on-screen.
+        /// On displays too narrow to fit the full width the leading edge wins
+        /// (applied last) so the Wealth Summary rail stays visible (AND-374).
+        private func clampedOriginX(_ leadingX: CGFloat, width: CGFloat, in window: NSWindow) -> CGFloat {
+            guard let screen = window.screen ?? NSScreen.main else { return leadingX }
+            let visible = screen.visibleFrame
+            var targetX = leadingX
+            let maxOriginX = visible.maxX - screenEdgeMargin - width
+            let minOriginX = visible.minX + screenEdgeMargin
+            if targetX > maxOriginX { targetX = maxOriginX }
+            if targetX < minOriginX { targetX = minOriginX }
+            return targetX
+        }
 
+        private func applyOrigin(_ targetX: CGFloat, to window: NSWindow) {
             guard abs(window.frame.origin.x - targetX) > 0.5 else { return }
             window.setFrameOrigin(NSPoint(x: targetX, y: window.frame.origin.y))
         }
