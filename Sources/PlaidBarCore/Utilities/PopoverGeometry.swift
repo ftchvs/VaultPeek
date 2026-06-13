@@ -71,6 +71,24 @@ public enum PopoverGeometry {
         return min(full, usable)
     }
 
+    /// Prefer the popover window's actual screen width over a global fallback.
+    ///
+    /// `NSScreen.main` can point at a different display than the menu-bar
+    /// popover window, so callers should pass the active window screen when
+    /// available and use the fallback only before the window attaches.
+    public static func availableWidth(
+        activeScreenWidth: CGFloat?,
+        fallbackScreenWidth: CGFloat?
+    ) -> CGFloat {
+        if let activeScreenWidth, activeScreenWidth.isFinite, activeScreenWidth > 0 {
+            return activeScreenWidth
+        }
+        if let fallbackScreenWidth, fallbackScreenWidth.isFinite, fallbackScreenWidth > 0 {
+            return fallbackScreenWidth
+        }
+        return .greatestFiniteMagnitude
+    }
+
     /// Clamp a desired leading-edge X so a popover of `width` stays within a
     /// screen's visible horizontal span `[visibleMinX, visibleMaxX]`, keeping
     /// `margin` from each edge.
