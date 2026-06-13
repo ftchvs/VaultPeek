@@ -4,6 +4,42 @@ import Testing
 
 @Suite("AttentionQueue Tests")
 struct AttentionQueueTests {
+    @Test("Severity exposes status text and shaped symbols")
+    func severityExposesStatusTextAndSymbols() {
+        #expect(AttentionQueueSeverity.healthy.statusLabel == "Healthy")
+        #expect(AttentionQueueSeverity.healthy.statusSymbolName == "checkmark.circle.fill")
+        #expect(AttentionQueueSeverity.warning.statusLabel == "Needs attention")
+        #expect(AttentionQueueSeverity.warning.statusSymbolName == "exclamationmark.triangle.fill")
+        #expect(AttentionQueueSeverity.blocked.statusLabel == "Blocked")
+        #expect(AttentionQueueSeverity.blocked.statusSymbolName == "xmark.octagon.fill")
+    }
+
+    @Test("Queue row accessibility labels include status text backup")
+    func accessibilityLabelsIncludeStatusTextBackup() {
+        let queue = AttentionQueue.evaluate(
+            isDemoMode: false,
+            serverConnected: false,
+            credentialsConfigured: true,
+            linkedItemCount: 1,
+            accountCount: 1,
+            syncedItemCount: 1,
+            itemStatuses: [
+                ItemStatus(id: "item-login-secret", institutionName: "Example Bank", status: .loginRequired),
+            ],
+            isSyncStale: false,
+            lastSyncRelative: "now",
+            errorMessage: nil
+        )
+
+        #expect(queue.rows.map(\.accessibilityLabel).contains {
+            $0.hasPrefix("Blocked. Server offline.")
+        })
+        #expect(queue.rows.map(\.accessibilityLabel).contains {
+            $0.hasPrefix("Needs attention. Example Bank needs login.")
+        })
+        #expect(queue.rows.allSatisfy { !$0.accessibilityLabel.contains("item-login-secret") })
+    }
+
     @Test("Queue prioritizes blocked recovery before login, stale sync, and healthy rows")
     func orderingPrioritizesBlockedRecovery() {
         let queue = AttentionQueue.evaluate(
