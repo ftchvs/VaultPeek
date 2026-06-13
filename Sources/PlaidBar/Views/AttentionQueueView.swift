@@ -91,7 +91,7 @@ private struct AttentionQueueRowView: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: Spacing.sm) {
-            Image(systemName: iconName)
+            Image(systemName: row.severity.statusSymbolName)
                 .font(.callout.weight(.semibold))
                 .foregroundStyle(tint)
                 .frame(width: 24, height: 24)
@@ -99,16 +99,23 @@ private struct AttentionQueueRowView: View {
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: Spacing.xxs) {
-                Text(row.title)
-                    .font(.caption.weight(.semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.82)
+                HStack(spacing: Spacing.xs) {
+                    SeverityStatusBadge(severity: row.severity, tint: tint)
+
+                    Text(row.title)
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
+                }
 
                 Text(row.detail)
                     .microText()
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(row.accessibilityLabel)
+            .accessibilityHint(row.accessibilityHint ?? "")
 
             Spacer(minLength: Spacing.xs)
 
@@ -133,17 +140,7 @@ private struct AttentionQueueRowView: View {
             fill: AnyShapeStyle(SurfaceTokens.panelFill(emphasisTint: emphasizedTint)),
             stroke: panelStroke
         )
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(row.accessibilityLabel)
-        .accessibilityHint(row.accessibilityHint ?? "")
-    }
-
-    private var iconName: String {
-        switch row.severity {
-        case .healthy: "checkmark.circle.fill"
-        case .warning: "exclamationmark.triangle.fill"
-        case .blocked: "xmark.octagon.fill"
-        }
+        .accessibilityElement(children: .contain)
     }
 
     private var tint: Color {
@@ -160,5 +157,31 @@ private struct AttentionQueueRowView: View {
 
     private var panelStroke: Color {
         row.severity == .healthy ? Color.primary.opacity(0.07) : tint.opacity(0.18)
+    }
+}
+
+private struct SeverityStatusBadge: View {
+    let severity: AttentionQueueSeverity
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: Spacing.xxs) {
+            Image(systemName: severity.statusSymbolName)
+                .font(.caption2.weight(.semibold))
+                .accessibilityHidden(true)
+
+            Text(severity.statusLabel)
+                .font(.caption2.weight(.semibold))
+                .lineLimit(1)
+        }
+        .foregroundStyle(tint)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(tint.opacity(0.11), in: Capsule())
+        .overlay {
+            Capsule()
+                .stroke(tint.opacity(0.22), lineWidth: 1)
+        }
+        .accessibilityHidden(true)
     }
 }

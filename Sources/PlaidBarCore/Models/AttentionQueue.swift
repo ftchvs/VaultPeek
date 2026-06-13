@@ -5,6 +5,24 @@ public enum AttentionQueueSeverity: String, Codable, Sendable {
     case warning
     case blocked
 
+    /// Short visible text that backs up the row's status icon and tint.
+    public var statusLabel: String {
+        switch self {
+        case .healthy: "Healthy"
+        case .warning: "Needs attention"
+        case .blocked: "Blocked"
+        }
+    }
+
+    /// SF Symbol selected for distinct shape, not just tint.
+    public var statusSymbolName: String {
+        switch self {
+        case .healthy: "checkmark.circle.fill"
+        case .warning: "exclamationmark.triangle.fill"
+        case .blocked: "xmark.octagon.fill"
+        }
+    }
+
     /// Severity tier of the failure this row represents; `nil` for healthy
     /// rows, which carry no error. Warnings are advisory (inline recovery),
     /// blocked rows gate the connection or credential path.
@@ -54,7 +72,7 @@ public struct AttentionQueueRow: Equatable, Identifiable, Sendable {
         self.actionTitle = actionTitle ?? action?.defaultTitle
         self.actionIconName = actionIconName ?? action?.defaultIconName
         self.targetItemId = targetItemId
-        self.accessibilityLabel = accessibilityLabel ?? "\(title). \(detail)"
+        self.accessibilityLabel = accessibilityLabel ?? "\(severity.statusLabel). \(title). \(detail)"
         self.accessibilityHint = accessibilityHint
     }
 }
