@@ -18,7 +18,8 @@ actor TokenStore {
         id: String,
         accessToken: String,
         institutionId: String?,
-        institutionName: String?
+        institutionName: String?,
+        providerID: ProviderID = .plaid
     ) async throws {
         let storedAccessToken = try PlaidTokenVault.store(
             accessToken: accessToken,
@@ -28,7 +29,8 @@ actor TokenStore {
             id: id,
             accessToken: storedAccessToken,
             institutionId: institutionId,
-            institutionName: institutionName
+            institutionName: institutionName,
+            providerID: providerID
         )
         try await item.save(on: fluent.db())
     }
@@ -39,6 +41,12 @@ actor TokenStore {
 
     func getAllItems() async throws -> [ItemModel] {
         try await ItemModel.query(on: fluent.db()).all()
+    }
+
+    func getAllItems(providerID: ProviderID) async throws -> [ItemModel] {
+        try await ItemModel.query(on: fluent.db())
+            .filter(\.$provider == providerID.rawValue)
+            .all()
     }
 
     func deleteItem(id: String) async throws {

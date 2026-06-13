@@ -21,6 +21,9 @@ final class ItemModel: Model, @unchecked Sendable {
     @Field(key: "status")
     var status: String
 
+    @OptionalField(key: "provider")
+    var provider: String?
+
     @Timestamp(key: "created_at", on: .create)
     var createdAt: Date?
 
@@ -33,13 +36,19 @@ final class ItemModel: Model, @unchecked Sendable {
         id: String,
         accessToken: String,
         institutionId: String? = nil,
-        institutionName: String? = nil
+        institutionName: String? = nil,
+        providerID: ProviderID = .plaid
     ) {
         self.id = id
         self.accessToken = accessToken
         self.institutionId = institutionId
         self.institutionName = institutionName
         self.status = "connected"
+        self.provider = providerID.rawValue
+    }
+
+    var providerID: ProviderID {
+        ProviderID(rawValue: provider ?? "") ?? .plaid
     }
 }
 
@@ -96,5 +105,25 @@ struct CreateSyncCursors: AsyncMigration {
 
     func revert(on database: Database) async throws {
         try await database.schema("sync_cursors").delete()
+    }
+}
+
+struct AddProviderToItems: AsyncMigration {
+    func prepare(on database: Database) async throws {
+        try await database.schema("items")
+            .field("provider", .string)
+            .update()
+
+        let rows = try await ItemModel.query(on: database).all()
+        for row in rows where row.provider == nil {
+            row.provider = ProviderID.plaid.rawValue
+            try await row.save(on: database)
+        }
+    }
+
+    func revert(on database: Database) async throws {
+        try await database.schema("items")
+            .deleteField("provider")
+            .update()
     }
 }
