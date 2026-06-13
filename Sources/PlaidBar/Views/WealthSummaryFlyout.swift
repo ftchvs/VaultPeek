@@ -1,0 +1,547 @@
+import PlaidBarCore
+import SwiftUI
+
+struct WealthSummaryFlyout: View {
+    @Environment(AppState.self) private var appState
+    let onAddAccount: () -> Void
+
+    private var presentation: WealthSummaryPresentation {
+        WealthSummaryPresentation.evaluate(
+            accounts: appState.accounts,
+            transactions: appState.transactions,
+            isDemoMode: appState.usesDemoConnectionPresentation,
+            serverConnected: appState.serverConnected,
+            credentialsConfigured: appState.serverCredentialsConfigured,
+            linkedItemCount: appState.statusItemCount,
+            syncedItemCount: appState.serverSyncedItemCount ?? 0,
+            itemStatuses: appState.itemStatuses,
+            isSyncStale: appState.isSyncStale,
+            lastSyncRelative: appState.lastSyncRelative,
+            statusSyncText: appState.statusSyncText,
+            errorMessage: appState.error,
+            creditUtilizationThreshold: appState.creditUtilizationThreshold
+        )
+    }
+
+    var body: some View {
+        let presentation = presentation
+
+        VStack(spacing: 0) {
+            header(presentation)
+                .padding(Spacing.md)
+
+            Divider()
+                .opacity(0.4)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: Spacing.lg) {
+                    WealthMetricGrid(presentation: presentation)
+                        .loadingRedaction(appState.loadState(for: .summaryCards))
+
+                    WealthBalanceMixSection(presentation: presentation)
+                        .loadingRedaction(appState.loadState(for: .summaryCards))
+
+                    WealthCashflowSection(cashflow: presentation.cashflow)
+                        .loadingRedaction(appState.loadState(for: .transactions))
+
+                    WealthCreditSection(
+                        summary: presentation.creditUtilization,
+                        threshold: appState.creditUtilizationThreshold
+                    )
+                        .loadingRedaction(appState.loadState(for: .credit))
+
+                    WealthAttentionSection(summary: presentation.attention)
+
+                    if presentation.accountCount == 0 {
+                        Button(action: onAddAccount) {
+                            Label("Connect Bank", systemImage: "plus.circle")
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                }
+                .padding(Spacing.md)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .scrollContentBackground(.hidden)
+        }
+        .frame(maxHeight: .infinity, alignment: .top)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(accessibilitySummary(presentation))
+    }
+
+    private func header(_ presentation: WealthSummaryPresentation) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Wealth Summary")
+                    .font(.headline.weight(.semibold))
+                    .lineLimit(1)
+
+                Spacer(minLength: Spacing.sm)
+
+                WealthSyncPill(summary: presentation.syncHealth)
+            }
+
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                Text("Net worth")
+                    .sectionTitle()
+                    .foregroundStyle(.secondary)
+
+                Text(Formatters.currency(presentation.netWorth, format: .full))
+                    .displayBalance()
+                    .contentTransition(.numericText())
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+            }
+        }
+    }
+
+    private func accessibilitySummary(_ presentation: WealthSummaryPresentation) -> String {
+        let netWorth = Formatters.currency(presentation.netWorth, format: .full)
+        let netCashflow = cashflowText(presentation.cashflow.net, format: .full)
+        return "Wealth summary. Net worth \(netWorth). 30 day net cashflow \(netCashflow). \(presentation.syncHealth.title). \(presentation.attention.detail)"
+    }
+}
+
+private struct WealthSyncPill: View {
+    let summary: WealthSummaryPresentation.SyncHealthSummary
+
+    var body: some View {
+        Label {
+            Text(shortTitle)
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+        } icon: {
+            Image(systemName: summary.iconName)
+        }
+        .font(.caption.weight(.medium))
+        .foregroundStyle(tint)
+        .padding(.horizontal, Spacing.sm)
+        .padding(.vertical, Spacing.chipVertical)
+        .background(.quinary, in: Capsule())
+        .help("\(summary.title). \(summary.detail)")
+        .accessibilityLabel("\(summary.title). \(summary.detail)")
+    }
+
+    private var shortTitle: String {
+        switch summary.severity {
+        case .healthy:
+            summary.title
+        case .warning:
+            "Attention"
+        case .blocked:
+            "Blocked"
+        }
+    }
+
+    private var tint: Color {
+        switch summary.severity {
+        case .healthy:
+            .secondary
+        case .warning:
+            SemanticColors.warning
+        case .blocked:
+            SemanticColors.negative
+        }
+    }
+}
+
+private struct WealthMetricGrid: View {
+    let presentation: WealthSummaryPresentation
+
+    private var columns: [GridItem] {
+        [
+            GridItem(.flexible(minimum: 108), spacing: Spacing.sm),
+            GridItem(.flexible(minimum: 108), spacing: Spacing.sm),
+        ]
+    }
+
+    var body: some View {
+        LazyVGrid(columns: columns, alignment: .leading, spacing: Spacing.sm) {
+            WealthMetricTile(
+                title: "Assets",
+                value: Formatters.currency(presentation.totalAssets, format: .compact),
+                detail: "\(presentation.accountCount) accounts",
+                systemImage: "building.columns.fill"
+            )
+
+            WealthMetricTile(
+                title: "Debt",
+                value: Formatters.currency(presentation.totalDebt, format: .compact),
+                detail: presentation.totalDebt > 0 ? "Credit and loans" : "No debt synced",
+                systemImage: "creditcard.fill",
+                tint: presentation.totalDebt > 0 ? SemanticColors.creditDebt : .secondary
+            )
+        }
+        .accessibilityElement(children: .contain)
+    }
+}
+
+private struct WealthMetricTile: View {
+    let title: String
+    let value: String
+    let detail: String
+    let systemImage: String
+    var tint: Color = .secondary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            HStack(spacing: Spacing.xs) {
+                Image(systemName: systemImage)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(tint)
+                Text(title)
+                    .microText()
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Text(value)
+                .dataText()
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
+
+            Text(detail)
+                .microText()
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Spacing.sm)
+        .glassSurface(.inset, cornerRadius: Radius.control)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(title): \(value). \(detail)")
+    }
+}
+
+private struct WealthBalanceMixSection: View {
+    let presentation: WealthSummaryPresentation
+
+    private let segmentSpacing: CGFloat = 2
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            WealthFlyoutSectionLabel("Balance mix")
+
+            if presentation.balanceMix.segments.isEmpty {
+                Label("No balances loaded", systemImage: "chart.pie")
+                    .detailText()
+                    .foregroundStyle(.secondary)
+            } else {
+                GeometryReader { proxy in
+                    HStack(spacing: segmentSpacing) {
+                        ForEach(presentation.balanceMix.segments) { segment in
+                            RoundedRectangle(cornerRadius: Radius.cell)
+                                .fill(tint(for: segment.id).opacity(0.82))
+                                .frame(
+                                    width: segmentWidth(
+                                        segment,
+                                        totalWidth: proxy.size.width,
+                                        segmentCount: presentation.balanceMix.segments.count
+                                    )
+                                )
+                                .accessibilityLabel(segmentAccessibility(segment))
+                        }
+                    }
+                }
+                .frame(height: 8)
+
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    ForEach(presentation.balanceMix.segments) { segment in
+                        WealthMixLegendRow(segment: segment, tint: tint(for: segment.id))
+                    }
+                }
+            }
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private func segmentWidth(
+        _ segment: BalanceCompositionPresentation.Segment,
+        totalWidth: CGFloat,
+        segmentCount: Int
+    ) -> CGFloat {
+        let gaps = CGFloat(max(segmentCount - 1, 0)) * segmentSpacing
+        let availableWidth = max(totalWidth - gaps, 0)
+        return max(availableWidth * CGFloat(segment.share), 6)
+    }
+
+    private func tint(for id: String) -> Color {
+        switch id {
+        case "cash":
+            Color.secondary.opacity(0.6)
+        case "investments":
+            Color.primary.opacity(0.36)
+        case "credit":
+            SemanticColors.creditDebt
+        case "loans":
+            SemanticColors.warning
+        default:
+            Color.secondary.opacity(0.6)
+        }
+    }
+
+    private func segmentAccessibility(_ segment: BalanceCompositionPresentation.Segment) -> String {
+        "\(segment.title), \(Formatters.currency(segment.value, format: .full)), \(percentText(segment.share)) of balance mix"
+    }
+}
+
+private struct WealthMixLegendRow: View {
+    let segment: BalanceCompositionPresentation.Segment
+    let tint: Color
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+            Circle()
+                .fill(tint)
+                .frame(width: 7, height: 7)
+                .accessibilityHidden(true)
+
+            Text(segment.title)
+                .microText()
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+
+            Spacer(minLength: Spacing.sm)
+
+            Text(Formatters.currency(segment.value, format: .compact))
+                .font(.caption.weight(.semibold))
+                .monospacedDigit()
+                .lineLimit(1)
+
+            Text(percentText(segment.share))
+                .microText()
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            "\(segment.title): \(Formatters.currency(segment.value, format: .full)), \(percentText(segment.share))"
+        )
+    }
+}
+
+private struct WealthCashflowSection: View {
+    let cashflow: WealthSummaryPresentation.CashflowSummary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            HStack {
+                WealthFlyoutSectionLabel("\(cashflow.windowDays)D cashflow")
+                Spacer()
+                Text("\(cashflow.transactionCount) tx")
+                    .microText()
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(spacing: Spacing.xs) {
+                WealthCashflowRow(title: "Income", amount: cashflow.income, role: .income)
+                WealthCashflowRow(title: "Spending", amount: cashflow.spending, role: .spending)
+                WealthCashflowRow(title: "Net", amount: cashflow.net, role: .net)
+            }
+        }
+        .accessibilityElement(children: .contain)
+    }
+}
+
+private enum WealthCashflowRole {
+    case income
+    case spending
+    case net
+}
+
+private struct WealthCashflowRow: View {
+    let title: String
+    let amount: Double
+    let role: WealthCashflowRole
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+            Label(title, systemImage: iconName)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+
+            Spacer(minLength: Spacing.sm)
+
+            Text(amountText)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(tint)
+                .monospacedDigit()
+                .lineLimit(1)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(title): \(accessibilityAmountText)")
+    }
+
+    private var iconName: String {
+        switch role {
+        case .income:
+            "arrow.down.circle.fill"
+        case .spending:
+            "arrow.up.circle.fill"
+        case .net:
+            amount >= 0 ? "plus.circle.fill" : "minus.circle.fill"
+        }
+    }
+
+    private var amountText: String {
+        switch role {
+        case .income, .net:
+            cashflowText(amount, format: .compact)
+        case .spending:
+            Formatters.currency(amount, format: .compact)
+        }
+    }
+
+    private var accessibilityAmountText: String {
+        switch role {
+        case .income, .net:
+            cashflowText(amount, format: .full)
+        case .spending:
+            Formatters.currency(amount, format: .full)
+        }
+    }
+
+    private var tint: Color {
+        switch role {
+        case .income:
+            return SemanticColors.positive
+        case .spending:
+            return .primary
+        case .net:
+            if amount > 0 { return SemanticColors.positive }
+            if amount < 0 { return SemanticColors.negative }
+            return .secondary
+        }
+    }
+}
+
+private struct WealthCreditSection: View {
+    let summary: WealthSummaryPresentation.CreditUtilizationSummary?
+    let threshold: Double
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            WealthFlyoutSectionLabel("Credit")
+
+            if let summary {
+                HStack(alignment: .top, spacing: Spacing.sm) {
+                    Image(systemName: SemanticColors.utilizationIcon(for: summary.percent, threshold: threshold))
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(tint(summary))
+                        .frame(width: Sizing.iconInline, height: Sizing.iconInline)
+
+                    VStack(alignment: .leading, spacing: Spacing.xxs) {
+                        Text("\(Formatters.percent(summary.percent, decimals: 0)) utilization, \(summary.statusLabel.lowercased())")
+                            .font(.caption.weight(.semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.82)
+
+                        Text("\(Formatters.currency(summary.usedCredit, format: .compact)) used of \(Formatters.currency(summary.totalLimit, format: .compact)) limit")
+                            .detailText()
+                            .lineLimit(2)
+                    }
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(
+                    "Credit utilization \(Formatters.percent(summary.percent, decimals: 0)), \(summary.statusLabel). \(Formatters.currency(summary.usedCredit, format: .full)) used of \(Formatters.currency(summary.totalLimit, format: .full)) limit."
+                )
+            } else {
+                Label("No credit utilization available", systemImage: "creditcard")
+                    .detailText()
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func tint(_ summary: WealthSummaryPresentation.CreditUtilizationSummary) -> Color {
+        guard summary.exceedsThreshold else { return .secondary }
+        return SemanticColors.utilization(for: summary.percent, threshold: threshold)
+    }
+}
+
+private struct WealthAttentionSection: View {
+    let summary: WealthSummaryPresentation.AttentionSummary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            WealthFlyoutSectionLabel("Attention")
+
+            HStack(alignment: .top, spacing: Spacing.sm) {
+                Image(systemName: iconName)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: Sizing.iconInline, height: Sizing.iconInline)
+
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    Text(summary.title)
+                        .font(.caption.weight(.semibold))
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text(detailText)
+                        .detailText()
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(summary.title). \(detailText)")
+        }
+    }
+
+    private var detailText: String {
+        guard summary.visibleRowCount > 1 else { return summary.detail }
+        return "\(summary.detail) \(summary.visibleRowCount - 1) more item\(summary.visibleRowCount == 2 ? "" : "s") in Attention."
+    }
+
+    private var iconName: String {
+        switch summary.severity {
+        case .healthy:
+            "checkmark.circle.fill"
+        case .warning:
+            "exclamationmark.triangle.fill"
+        case .blocked:
+            "xmark.octagon.fill"
+        }
+    }
+
+    private var tint: Color {
+        switch summary.severity {
+        case .healthy:
+            .secondary
+        case .warning:
+            SemanticColors.warning
+        case .blocked:
+            SemanticColors.negative
+        }
+    }
+}
+
+private struct WealthFlyoutSectionLabel: View {
+    let title: String
+
+    init(_ title: String) {
+        self.title = title
+    }
+
+    var body: some View {
+        Text(title)
+            .sectionTitle()
+            .foregroundStyle(.secondary)
+    }
+}
+
+private func cashflowText(_ amount: Double, format: CurrencyFormat) -> String {
+    if amount > 0 {
+        return "+\(Formatters.currency(amount, format: format))"
+    }
+    if amount < 0 {
+        return "-\(Formatters.currency(abs(amount), format: format))"
+    }
+    return Formatters.currency(0, format: format)
+}
+
+private func percentText(_ share: Double) -> String {
+    "\(Int((share * 100).rounded()))%"
+}

@@ -56,20 +56,15 @@ struct MainPopover: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
-            if let selectedAccount, !shouldShowSetupScreen {
-                AccountDetailFlyout(
-                    account: selectedAccount,
-                    isStatusFilter: selectedFilter == .status,
-                    onClose: { selectedAccountId = "" }
-                )
-                .environment(appState)
-                .frame(width: Layout.flyoutWidth)
-                // Cap the fly-out to the same screen-bounded height as the
-                // dashboard scroll column so tall detail content scrolls
-                // inside the fly-out instead of growing the whole popover
-                // past the intended screen-bounded height.
-                .frame(maxHeight: dashboardScrollHeight)
-                .transition(.move(edge: .leading).combined(with: .opacity))
+            if !shouldShowSetupScreen {
+                leftFlyout
+                    .frame(width: Layout.flyoutWidth)
+                    // Cap the fly-out to the same screen-bounded height as the
+                    // dashboard scroll column so tall detail content scrolls
+                    // inside the fly-out instead of growing the whole popover
+                    // past the intended screen-bounded height.
+                    .frame(maxHeight: dashboardScrollHeight)
+                    .transition(.move(edge: .leading).combined(with: .opacity))
 
                 Divider()
             }
@@ -91,7 +86,7 @@ struct MainPopover: View {
         // letting AppKit re-center the widened popover under the menu bar item.
         .background {
             PopoverTrailingEdgeAnchor(
-                isExpanded: selectedAccount != nil && !shouldShowSetupScreen,
+                isExpanded: !shouldShowSetupScreen,
                 collapsedWidth: Layout.dashboardWidth
             )
         }
@@ -143,7 +138,22 @@ struct MainPopover: View {
         // Setup renders at the dashboard's width so first run never snaps
         // between window sizes.
         guard !shouldShowSetupScreen else { return Layout.dashboardWidth }
-        return Layout.dashboardWidth + (selectedAccount == nil ? 0 : Layout.flyoutWidth + 1)
+        return Layout.dashboardWidth + Layout.flyoutWidth + 1
+    }
+
+    @ViewBuilder
+    private var leftFlyout: some View {
+        if let selectedAccount {
+            AccountDetailFlyout(
+                account: selectedAccount,
+                isStatusFilter: selectedFilter == .status,
+                onClose: { selectedAccountId = "" }
+            )
+            .environment(appState)
+        } else {
+            WealthSummaryFlyout(onAddAccount: openAccountSetup)
+                .environment(appState)
+        }
     }
 
     private var transparencySetting: PopoverTransparencySetting {
