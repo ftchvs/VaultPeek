@@ -119,7 +119,9 @@ struct PlaidBarApp: App {
         }
     }
 
-    private static var forcedColorScheme: ColorScheme? {
+    /// The color scheme forced by the `--appearance` CLI flag (QA aid), or `nil`
+    /// to follow the system/app preference. Shared with `SnapshotRenderer`.
+    static var forcedColorScheme: ColorScheme? {
         guard let mode = CommandLineOptions.value(for: "--appearance") else { return nil }
 
         switch mode.lowercased() {
