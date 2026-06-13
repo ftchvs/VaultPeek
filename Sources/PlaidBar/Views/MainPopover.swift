@@ -13,6 +13,7 @@ struct MainPopover: View {
     @State private var isShowingAccountSetup = false
     @State private var shouldShowSetupRecoveryDashboard = false
     @State private var dashboardContentHeight: CGFloat = 0
+    @State private var activeScreenVisibleWidth: CGFloat?
     /// True after the first render. Gates the inspector's trailing slide-in so a
     /// popover opened with a persisted selection appears directly in three-column
     /// geometry (no slide on restore); in-session selections still slide (AND-405).
@@ -83,7 +84,10 @@ struct MainPopover: View {
     /// unbounded when there is no screen (headless renders) so the full geometry
     /// is used.
     private var availableScreenWidth: CGFloat {
-        NSScreen.main?.visibleFrame.width ?? .greatestFiniteMagnitude
+        PopoverGeometry.availableWidth(
+            activeScreenWidth: activeScreenVisibleWidth,
+            fallbackScreenWidth: NSScreen.main?.visibleFrame.width
+        )
     }
 
     /// Two-column base width: Wealth Summary rail + divider + dashboard. This is
@@ -161,6 +165,9 @@ struct MainPopover: View {
                     collapsedWidth: twoColumnWidth,
                     screenEdgeMargin: Layout.screenEdgeMargin
                 )
+            }
+            .background {
+                PopoverScreenWidthReader(visibleWidth: $activeScreenVisibleWidth)
             }
             .animation(
                 MotionTokens.animation(MotionTokens.content, reduceMotion: reduceMotion),
