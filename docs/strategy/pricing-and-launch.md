@@ -9,6 +9,9 @@ date: 2026-06-12
 
 > **Design/research document only. Nothing in this doc is implemented, and nothing should be implemented from it until the open decisions in §9 are resolved.** All pricing figures retrieved 2026-06-12 unless noted; third-party Plaid cost figures are **estimates** (Plaid publishes no price list).
 
+Cross-doc implementation approval gates for AND-344 through AND-349 live in
+[`approval-gates.md`](approval-gates.md).
+
 ---
 
 ## 1. Strategy summary (AND-343)
