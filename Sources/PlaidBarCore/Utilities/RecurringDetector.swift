@@ -35,6 +35,11 @@ public enum RecurringDetector {
             guard confidence >= 0.3 else { continue }
 
             let averageAmount = sorted.reduce(0.0) { $0 + $1.displayAmount } / Double(sorted.count)
+            let previousTransactions = sorted.dropLast()
+            let trailingAverageAmount = previousTransactions.isEmpty
+                ? nil
+                : previousTransactions.reduce(0.0) { $0 + $1.displayAmount } / Double(previousTransactions.count)
+            let latestAmount = sorted.last!.displayAmount
             let lastDate = sorted.last!.date
             let nextExpected = computeNextDate(from: lastDate, frequency: frequency)
             let category = sorted.last!.category
@@ -43,6 +48,8 @@ public enum RecurringDetector {
                 merchantName: merchant,
                 frequency: frequency,
                 averageAmount: averageAmount,
+                latestAmount: latestAmount,
+                trailingAverageAmount: trailingAverageAmount,
                 lastDate: lastDate,
                 nextExpectedDate: nextExpected,
                 category: category,
