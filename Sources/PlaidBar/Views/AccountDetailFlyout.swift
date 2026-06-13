@@ -1,12 +1,38 @@
 import PlaidBarCore
 import SwiftUI
 
+// MARK: - Account Inspector
+
+/// Presents `AccountDetailFlyout` as the three-column popover's trailing account
+/// inspector (AND-371). The detail surface itself is position-agnostic; this
+/// thin wrapper names the trailing-inspector role and scopes the close affordance
+/// to dismissing only the inspector. The VoiceOver "opened" announcement is
+/// driven from the selection change in `MainPopover` (not this view's mount), so
+/// reopening the popover with a persisted selection does not re-announce (AND-373).
+struct AccountInspector: View {
+    @Environment(AppState.self) private var appState
+    let account: AccountDTO
+    let isStatusFilter: Bool
+    let onClose: () -> Void
+
+    var body: some View {
+        AccountDetailFlyout(
+            account: account,
+            isStatusFilter: isStatusFilter,
+            onClose: onClose
+        )
+        .environment(appState)
+    }
+}
+
 // MARK: - Account Detail Fly-out
 
-/// The contextual account panel that opens to the LEFT of the dashboard when
-/// an account row is selected. One `raised` surface, sections separated by
-/// spacing: metadata header, status, balances, 30-day changes, transactions
-/// to review, top categories, recent activity, and account actions.
+/// The contextual account panel shown in the three-column popover's trailing
+/// inspector when an account row is selected (mounted via `AccountInspector`).
+/// One `raised` surface, sections separated by spacing: metadata header, status,
+/// balances, 30-day changes, transactions to review, top categories, recent
+/// activity, and account actions. The panel is position-agnostic; its placement
+/// and slide-in transition are owned by `MainPopover`.
 struct AccountDetailFlyout: View {
     @Environment(AppState.self) private var appState
     @Environment(\.openSettings) private var openSettings
