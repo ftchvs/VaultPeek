@@ -835,7 +835,7 @@ private struct LocalInsightsCard: View {
     }
 
     private var availability: LocalAIAvailability {
-        appState.localAIAvailability
+        primarySummary?.availability ?? appState.localAIAvailability
     }
 
     private var primarySummary: LocalAIActivitySummary? {
