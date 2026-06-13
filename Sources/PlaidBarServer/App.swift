@@ -48,11 +48,13 @@ struct PlaidBarServer: AsyncParsableCommand {
         await fluent.migrations.add(CreateItems())
         await fluent.migrations.add(AddProviderToItems())
         await fluent.migrations.add(CreateSyncCursors())
+        await fluent.migrations.add(CreateCategoryBudgets())
         try await fluent.migrate()
         try ServerConfig.enforcePrivateSQLiteStorePermissions(at: serverConfig.databasePath)
 
         let plaidClient = PlaidClient(config: serverConfig)
         let tokenStore = TokenStore(fluent: fluent, logger: logger)
+        let budgetStore = BudgetStore(fluent: fluent)
         do {
             try await tokenStore.pruneOrphanedKeychainTokens()
         } catch {
@@ -91,6 +93,8 @@ struct PlaidBarServer: AsyncParsableCommand {
         TransactionRoutes(plaidClient: plaidClient, tokenStore: tokenStore)
             .register(with: api)
         StatusRoutes(tokenStore: tokenStore, config: serverConfig)
+            .register(with: api)
+        BudgetRoutes(budgetStore: budgetStore)
             .register(with: api)
 
         // OAuth callback (top-level, not under /api)
