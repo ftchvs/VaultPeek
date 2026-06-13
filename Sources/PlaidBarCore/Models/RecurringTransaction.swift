@@ -1,10 +1,16 @@
 import Foundation
 
 public struct RecurringTransaction: Sendable, Identifiable, Hashable {
+    public static let priceIncreaseConfidenceThreshold = 0.6
+    public static let priceIncreaseRelativeThreshold = 0.10
+    public static let priceIncreaseAbsoluteThreshold = 1.0
+
     public let id: String
     public let merchantName: String
     public let frequency: RecurringFrequency
     public let averageAmount: Double
+    public let latestAmount: Double
+    public let trailingAverageAmount: Double?
     public let lastDate: String
     public let nextExpectedDate: String
     public let category: SpendingCategory?
@@ -15,6 +21,8 @@ public struct RecurringTransaction: Sendable, Identifiable, Hashable {
         merchantName: String,
         frequency: RecurringFrequency,
         averageAmount: Double,
+        latestAmount: Double? = nil,
+        trailingAverageAmount: Double? = nil,
         lastDate: String,
         nextExpectedDate: String,
         category: SpendingCategory?,
@@ -25,12 +33,86 @@ public struct RecurringTransaction: Sendable, Identifiable, Hashable {
         self.merchantName = merchantName
         self.frequency = frequency
         self.averageAmount = averageAmount
+        self.latestAmount = latestAmount ?? averageAmount
+        self.trailingAverageAmount = trailingAverageAmount
         self.lastDate = lastDate
         self.nextExpectedDate = nextExpectedDate
         self.category = category
         self.transactionCount = transactionCount
         self.confidence = confidence
     }
+
+    public var priceIncrease: RecurringPriceIncrease? {
+        guard confidence >= Self.priceIncreaseConfidenceThreshold,
+              let trailingAverageAmount,
+              trailingAverageAmount > 0
+        else { return nil }
+
+        let absoluteIncrease = latestAmount - trailingAverageAmount
+        let relativeIncrease = absoluteIncrease / trailingAverageAmount
+        guard absoluteIncrease >= Self.priceIncreaseAbsoluteThreshold,
+              relativeIncrease >= Self.priceIncreaseRelativeThreshold
+        else { return nil }
+
+        return RecurringPriceIncrease(
+            latestAmount: latestAmount,
+            trailingAverageAmount: trailingAverageAmount,
+            absoluteIncrease: absoluteIncrease,
+            relativeIncrease: relativeIncrease
+        )
+    }
+
+    public var hasPriceIncrease: Bool {
+        priceIncrease != nil
+    }
+
+    public func isStale(asOf date: Date, calendar: Calendar = .current) -> Bool {
+        guard let lastChargeDate = Formatters.parseTransactionDate(lastDate) else { return false }
+        let lastChargeStart = calendar.startOfDay(for: lastChargeDate)
+        let asOfStart = calendar.startOfDay(for: date)
+        guard let daysSinceLastCharge = calendar.dateComponents(
+            [.day],
+            from: lastChargeStart,
+            to: asOfStart
+        ).day else { return false }
+
+        return daysSinceLastCharge > frequency.estimatedDays * 2
+    }
+
+    public func isStale(asOf dateString: String, calendar: Calendar = .current) -> Bool {
+        guard let date = Formatters.parseTransactionDate(dateString) else { return false }
+        return isStale(asOf: date, calendar: calendar)
+    }
+
+    public func flags(asOf date: Date, calendar: Calendar = .current) -> Set<RecurringStreamFlag> {
+        var flags: Set<RecurringStreamFlag> = []
+        if hasPriceIncrease {
+            flags.insert(.priceIncrease)
+        }
+        if isStale(asOf: date, calendar: calendar) {
+            flags.insert(.stale)
+        }
+        return flags
+    }
+
+    public func flags(asOf dateString: String, calendar: Calendar = .current) -> Set<RecurringStreamFlag> {
+        guard let date = Formatters.parseTransactionDate(dateString) else {
+            return hasPriceIncrease ? [.priceIncrease] : []
+        }
+        return flags(asOf: date, calendar: calendar)
+    }
+}
+
+public struct RecurringPriceIncrease: Sendable, Hashable {
+    public let latestAmount: Double
+    public let trailingAverageAmount: Double
+    public let absoluteIncrease: Double
+    public let relativeIncrease: Double
+}
+
+public enum RecurringStreamFlag: String, Sendable, Hashable, CaseIterable {
+    case priceIncrease
+    case stale
 }
 
 public enum RecurringFrequency: String, Codable, Sendable, CaseIterable, Hashable {

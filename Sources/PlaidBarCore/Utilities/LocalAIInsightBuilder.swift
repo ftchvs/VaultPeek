@@ -201,7 +201,7 @@ public enum LocalAIInsightInputBuilder {
             )
         }
         let accountSnapshot = accountSnapshot(from: accounts)
-        let recurringSnapshot = recurringSnapshot(from: recurringTransactions)
+        let recurringSnapshot = recurringSnapshot(from: recurringTransactions, asOf: anchorDate, calendar: calendar)
 
         var evidence: [LocalAIInsightEvidence] = [
             LocalAIInsightEvidence(
@@ -266,7 +266,11 @@ public enum LocalAIInsightInputBuilder {
         )
     }
 
-    public static func recurringSnapshot(from recurringTransactions: [RecurringTransaction])
+    public static func recurringSnapshot(
+        from recurringTransactions: [RecurringTransaction],
+        asOf date: Date? = nil,
+        calendar: Calendar = .current
+    )
         -> LocalAIRecurringSnapshot
     {
         let items = recurringTransactions.map { recurring in
@@ -292,7 +296,11 @@ public enum LocalAIInsightInputBuilder {
         .sorted { $0.estimatedMonthlyAmount > $1.estimatedMonthlyAmount }
 
         return LocalAIRecurringSnapshot(
-            estimatedMonthlyTotal: RecurringSummary.estimatedMonthlyTotal(from: recurringTransactions),
+            estimatedMonthlyTotal: RecurringSummary.estimatedMonthlyTotal(
+                from: recurringTransactions,
+                asOf: date,
+                calendar: calendar
+            ),
             items: items
         )
     }
