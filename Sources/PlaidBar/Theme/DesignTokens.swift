@@ -142,6 +142,8 @@ enum MotionTokens {
     static let loadingPulse = Animation.easeInOut(duration: 0.9).repeatForever(autoreverses: true)
     /// Decorative background drift. Always pass through `animation`.
     static let backgroundDrift = Animation.easeInOut(duration: 18).repeatForever(autoreverses: true)
+    /// Once-per-appearance left-to-right reveal for glance charts.
+    static let chartReveal = Animation.easeOut(duration: 0.55)
 
     static let staticLoadingOpacity = 0.62
     static let loadingPulseOpacity = 0.55
