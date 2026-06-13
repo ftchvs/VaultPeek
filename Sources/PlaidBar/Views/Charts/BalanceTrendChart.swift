@@ -42,7 +42,8 @@ struct BalanceTrendChart: View {
                 revealFraction = 1
             }
         }
-        .accessibilityHidden(true)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(trend.accessibilitySummary)
     }
 
     private var tint: Color {
