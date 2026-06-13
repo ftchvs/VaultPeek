@@ -129,9 +129,30 @@ enum MotionTokens {
     static let standard = Animation.easeInOut(duration: 0.2)
     /// Drill-in/fly-out expansion and number transitions.
     static let content = Animation.spring(response: 0.3, dampingFraction: 0.85)
+    /// Refresh spinner movement. Always pass through `animation`.
+    static let refreshSpin = Animation.linear(duration: 0.8).repeatForever(autoreverses: false)
+    /// Refresh spinner settle when loading ends.
+    static let refreshSettle = Animation.linear(duration: 0.3)
+    /// Loading skeleton pulse. Always pass through `animation`.
+    static let loadingPulse = Animation.easeInOut(duration: 0.9).repeatForever(autoreverses: true)
+
+    static let staticLoadingOpacity = 0.62
+    static let loadingPulseOpacity = 0.55
 
     static func animation(_ animation: Animation, reduceMotion: Bool) -> Animation? {
         reduceMotion ? nil : animation
+    }
+
+    static func refreshSymbolName(isLoading: Bool, reduceMotion: Bool) -> String {
+        reduceMotion && isLoading ? "arrow.clockwise.circle.fill" : "arrow.clockwise"
+    }
+
+    static func refreshOpacity(isLoading: Bool, reduceMotion: Bool) -> Double {
+        reduceMotion && isLoading ? staticLoadingOpacity : 1
+    }
+
+    static func loadingOpacity(isDimmed: Bool, reduceMotion: Bool) -> Double {
+        reduceMotion ? 1 : (isDimmed ? loadingPulseOpacity : 1)
     }
 }
 
