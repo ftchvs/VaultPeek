@@ -27,12 +27,12 @@ final class AppState {
 
     // MARK: - State
     var accounts: [AccountDTO] = [] {
-        didSet { _cachedLocalAIActivitySummaries = nil }
+        didSet { invalidateLocalAIActivitySummaries() }
     }
     var transactions: [TransactionDTO] = [] {
         didSet {
             _cachedRecurringTransactions = nil
-            _cachedLocalAIActivitySummaries = nil
+            invalidateLocalAIActivitySummaries()
         }
     }
     var isLoading = false
@@ -162,6 +162,7 @@ final class AppState {
     private let localAIInsightsService = LocalAIInsightsService()
     private let notificationService: any NotificationServiceProtocol
     private var refreshTask: Task<Void, Never>?
+    private var localAISummaryRefreshTask: Task<Void, Never>?
     private var isUpgradingManagedServer = false
     private var isStartingBundledServer = false
     private var lastAttemptedCredentialUpgradeConfig: String?
@@ -626,7 +627,13 @@ final class AppState {
     }
 
     var localAIAvailability: LocalAIAvailability {
-        localAIInsightsService.availability
+        if let generatedAvailability = _cachedLocalAIActivitySummaries?
+            .first(where: { $0.window == .lastMonth })?
+            .availability
+        {
+            return generatedAvailability
+        }
+        return localAIInsightsService.availability
     }
 
     /// Cached local summaries — invalidated via accounts.didSet and transactions.didSet.
@@ -641,6 +648,31 @@ final class AppState {
         )
         _cachedLocalAIActivitySummaries = result
         return result
+    }
+
+    private func invalidateLocalAIActivitySummaries() {
+        _cachedLocalAIActivitySummaries = nil
+        scheduleLocalAIActivitySummaryRefresh()
+    }
+
+    private func scheduleLocalAIActivitySummaryRefresh() {
+        localAISummaryRefreshTask?.cancel()
+
+        let accountSnapshot = accounts
+        let transactionSnapshot = transactions
+        guard !accountSnapshot.isEmpty || !transactionSnapshot.isEmpty else { return }
+
+        let recurringSnapshot = recurringTransactions
+        let service = localAIInsightsService
+        localAISummaryRefreshTask = Task { [accountSnapshot, transactionSnapshot, recurringSnapshot, service] in
+            let generated = await service.generatedActivitySummaries(
+                accounts: accountSnapshot,
+                transactions: transactionSnapshot,
+                recurringTransactions: recurringSnapshot
+            )
+            guard !Task.isCancelled else { return }
+            _cachedLocalAIActivitySummaries = generated
+        }
     }
 
     func transactionsForAccount(_ accountId: String) -> [TransactionDTO] {

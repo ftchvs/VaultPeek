@@ -1,9 +1,11 @@
 import Foundation
 import PlaidBarCore
 
-struct LocalAIInsightsService {
+struct LocalAIInsightsService: Sendable {
     private enum EnvironmentKeys {
         static let localRuntime = "PLAIDBAR_LOCAL_AI_RUNTIME"
+        static let ollamaBaseURL = "PLAIDBAR_OLLAMA_BASE_URL"
+        static let ollamaModel = "PLAIDBAR_LOCAL_AI_MODEL"
     }
 
     private let model: (any LocalInsightModel)?
@@ -13,21 +15,20 @@ struct LocalAIInsightsService {
     init(
         model: (any LocalInsightModel)? = nil,
         environment: [String: String] = ProcessInfo.processInfo.environment,
+        autoDiscoverModel: Bool = true,
         generationConfiguration: LocalInsightModelGenerationConfiguration = .default
     ) {
-        self.model = model
         self.environment = environment
+        self.model = model ?? (autoDiscoverModel ? Self.makeDefaultModel(environment: environment) : nil)
         self.generationConfiguration = generationConfiguration
     }
 
     var availability: LocalAIAvailability {
-        let runtime = environment[EnvironmentKeys.localRuntime]?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard let runtime, !Self.isDisabledRuntimeValue(runtime) else {
+        let runtime = Self.configuredRuntimeName(environment: environment)
+        guard !Self.isDisabledRuntimeValue(runtime) else {
             return LocalAIAvailability(
                 state: .disabled,
-                detail: "No local AI runtime is configured. VaultPeek is using deterministic local summaries and category hints only."
+                detail: "Local AI is disabled. VaultPeek is using deterministic local summaries and category hints only."
             )
         }
 
@@ -35,14 +36,14 @@ struct LocalAIInsightsService {
             return LocalAIAvailability(
                 state: .available,
                 runtimeName: runtime,
-                detail: "Local runtime '\(runtime)' is configured. Summaries run on this Mac with a short timeout, output validation, and deterministic fallback."
+                detail: "Local runtime '\(runtime)' is wired automatically. VaultPeek only talks to localhost, validates output, and falls back to deterministic local summaries."
             )
         }
 
         return LocalAIAvailability(
             state: .unavailable,
             runtimeName: runtime,
-            detail: "Local runtime '\(runtime)' is configured, but this build has no model adapter yet. Deterministic summaries remain active; cloud models are not supported."
+            detail: Self.unavailableConfigurationDetail(runtime: runtime, environment: environment)
         )
     }
 
@@ -123,6 +124,55 @@ struct LocalAIInsightsService {
         return normalized.isEmpty || ["disabled", "off", "false", "none"].contains(normalized)
     }
 
+    private static func configuredRuntimeName(environment: [String: String]) -> String {
+        let runtime = environment[EnvironmentKeys.localRuntime]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let runtime, !runtime.isEmpty else {
+            return "ollama"
+        }
+        return runtime
+    }
+
+    private static func makeDefaultModel(environment: [String: String]) -> (any LocalInsightModel)? {
+        let runtime = configuredRuntimeName(environment: environment)
+        guard !isDisabledRuntimeValue(runtime),
+              ["auto", "ollama"].contains(runtime.lowercased())
+        else {
+            return nil
+        }
+
+        let baseURL = environment[EnvironmentKeys.ollamaBaseURL]
+            .flatMap { URL(string: $0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+            ?? URL(string: "http://127.0.0.1:11434")!
+        guard OllamaLocalInsightModel.isLocalhost(baseURL) else {
+            return nil
+        }
+
+        return OllamaLocalInsightModel(
+            baseURL: baseURL,
+            configuredModelName: environment[EnvironmentKeys.ollamaModel]
+        )
+    }
+
+    private static func unavailableConfigurationDetail(
+        runtime: String,
+        environment: [String: String]
+    ) -> String {
+        let normalizedRuntime = runtime.lowercased()
+        if !["auto", "ollama"].contains(normalizedRuntime) {
+            return "Local runtime '\(runtime)' is configured, but this build only auto-wires local Ollama. Deterministic summaries remain active; cloud models are not supported."
+        }
+
+        if let rawBaseURL = environment[EnvironmentKeys.ollamaBaseURL],
+           let baseURL = URL(string: rawBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)),
+           !OllamaLocalInsightModel.isLocalhost(baseURL)
+        {
+            return "Ollama must be configured on localhost. VaultPeek refused the non-local endpoint and used deterministic summaries without cloud fallback."
+        }
+
+        return "Local Ollama could not be configured. Deterministic summaries remain active; cloud models are not supported."
+    }
+
     private static func summaryAvailability(
         baseAvailability: LocalAIAvailability,
         generationResult: LocalInsightModelGenerationResult
@@ -149,6 +199,12 @@ struct LocalAIInsightsService {
         let reasonText = switch reason {
         case .noModel:
             "has no model adapter"
+        case .runtimeUnavailable:
+            "is not reachable on this Mac"
+        case .noInstalledModel:
+            "has no installed local model"
+        case .unsupportedConfiguration:
+            "is configured with an unsupported local endpoint"
         case .timeout:
             "timed out before producing output"
         case .modelError:

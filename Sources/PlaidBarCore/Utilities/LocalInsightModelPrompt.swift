@@ -30,6 +30,12 @@ public protocol LocalInsightModel: Sendable {
     func summarize(_ prompt: LocalInsightModelPrompt, maxTokens: Int) async throws -> String
 }
 
+public enum LocalInsightModelError: Error, Sendable, Hashable {
+    case runtimeUnavailable
+    case noInstalledModel
+    case unsupportedConfiguration
+}
+
 public enum LocalInsightPromptBuilder {
     /// The hard guardrails the model runs under. Kept terse so a small model
     /// follows them reliably.
