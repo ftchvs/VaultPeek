@@ -11,12 +11,10 @@ struct SettingsPresentationTests {
         #expect(LocalAIAvailabilityPresentation.iconName(for: .available) == "cpu.fill")
         #expect(LocalAIAvailabilityPresentation.iconName(for: .disabled) == "pause.circle.fill")
         #expect(LocalAIAvailabilityPresentation.iconName(for: .unavailable) == "exclamationmark.triangle.fill")
+        #expect(LocalAIAvailabilityPresentation.iconName(for: .checking) == "hourglass")
 
-        let iconNames = [
-            LocalAIAvailabilityPresentation.iconName(for: .available),
-            LocalAIAvailabilityPresentation.iconName(for: .disabled),
-            LocalAIAvailabilityPresentation.iconName(for: .unavailable),
-        ]
+        let iconNames: [String] = [.available, .disabled, .unavailable, .checking]
+            .map(LocalAIAvailabilityPresentation.iconName(for:))
         #expect(Set(iconNames).count == iconNames.count, "States must stay distinguishable without color")
     }
 
@@ -25,6 +23,7 @@ struct SettingsPresentationTests {
         #expect(LocalAIAvailabilityPresentation.tone(for: .available) == .positive)
         #expect(LocalAIAvailabilityPresentation.tone(for: .disabled) == .secondary)
         #expect(LocalAIAvailabilityPresentation.tone(for: .unavailable) == .warning)
+        #expect(LocalAIAvailabilityPresentation.tone(for: .checking) == .secondary)
     }
 
     @Test("Storage detail prefers the server path and abbreviates the home directory")

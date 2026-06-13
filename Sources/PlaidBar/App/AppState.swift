@@ -665,6 +665,18 @@ final class AppState {
         let recurringSnapshot = recurringTransactions
         let service = localAIInsightsService
         localAISummaryRefreshTask = Task { [accountSnapshot, transactionSnapshot, recurringSnapshot, service] in
+            // Debounce: a multi-page transaction sync reassigns `transactions`
+            // once per page, and each assignment cancels and reschedules this
+            // task. Waiting briefly first collapses that burst into a single
+            // generation after the final page lands, instead of starting (and
+            // abandoning) a local model call per page.
+            do {
+                try await Task.sleep(for: .milliseconds(400))
+            } catch {
+                return // cancelled during the debounce window — superseded
+            }
+            guard !Task.isCancelled else { return }
+
             let generated = await service.generatedActivitySummaries(
                 accounts: accountSnapshot,
                 transactions: transactionSnapshot,

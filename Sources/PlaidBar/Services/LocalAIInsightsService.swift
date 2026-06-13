@@ -3,7 +3,7 @@ import PlaidBarCore
 
 struct LocalAIInsightsService: Sendable {
     private enum EnvironmentKeys {
-        static let localRuntime = "PLAIDBAR_LOCAL_AI_RUNTIME"
+        static let localRuntime = LocalAIRuntimeResolution.optInEnvironmentKey
         static let ollamaBaseURL = "PLAIDBAR_OLLAMA_BASE_URL"
         static let ollamaModel = "PLAIDBAR_LOCAL_AI_MODEL"
     }
@@ -24,26 +24,10 @@ struct LocalAIInsightsService: Sendable {
     }
 
     var availability: LocalAIAvailability {
-        let runtime = Self.configuredRuntimeName(environment: environment)
-        guard !Self.isDisabledRuntimeValue(runtime) else {
-            return LocalAIAvailability(
-                state: .disabled,
-                detail: "Local AI is disabled. VaultPeek is using deterministic local summaries and category hints only."
-            )
-        }
-
-        if model != nil {
-            return LocalAIAvailability(
-                state: .available,
-                runtimeName: runtime,
-                detail: "Local runtime '\(runtime)' is wired automatically. VaultPeek only talks to localhost, validates output, and falls back to deterministic local summaries."
-            )
-        }
-
-        return LocalAIAvailability(
-            state: .unavailable,
-            runtimeName: runtime,
-            detail: Self.unavailableConfigurationDetail(runtime: runtime, environment: environment)
+        LocalAIRuntimeResolution.configuredAvailability(
+            rawValue: environment[EnvironmentKeys.localRuntime],
+            hasWiredModel: model != nil,
+            endpointIsLocalhost: Self.endpointIsLocalhost(environment: environment)
         )
     }
 
@@ -88,9 +72,14 @@ struct LocalAIInsightsService: Sendable {
         var summaries: [LocalAIActivitySummary] = []
         summaries.reserveCapacity(inputs.count)
         let currentAvailability = availability
-        let configuredModel = currentAvailability.state == .available ? model : nil
+        let configuredModel = LocalAIRuntimeResolution.usesModel(for: currentAvailability.state) ? model : nil
 
         for input in inputs {
+            // Cooperative cancellation: a multi-page sync reschedules this work
+            // repeatedly. Stop launching model calls once the owning task is
+            // cancelled so a superseded refresh does not keep hitting the runtime.
+            if Task.isCancelled { break }
+
             let fallbackSummary: @Sendable (LocalAIActivitySummaryInput) -> String = { input in
                 Self.summaryText(for: input)
             }
@@ -100,9 +89,10 @@ struct LocalAIInsightsService: Sendable {
                 fallbackSummary: fallbackSummary,
                 configuration: generationConfiguration
             )
-            let summaryAvailability = Self.summaryAvailability(
-                baseAvailability: currentAvailability,
-                generationResult: generated
+            let summaryAvailability = LocalAIRuntimeResolution.resolved(
+                base: currentAvailability,
+                usedModelOutput: generated.usedModelOutput,
+                fallbackReason: generated.fallbackReason
             )
             summaries.append(
                 LocalAIActivitySummary(
@@ -119,25 +109,12 @@ struct LocalAIInsightsService: Sendable {
         return summaries
     }
 
-    private static func isDisabledRuntimeValue(_ rawValue: String) -> Bool {
-        let normalized = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return normalized.isEmpty || ["disabled", "off", "false", "none"].contains(normalized)
-    }
-
-    private static func configuredRuntimeName(environment: [String: String]) -> String {
-        let runtime = environment[EnvironmentKeys.localRuntime]?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let runtime, !runtime.isEmpty else {
-            return "ollama"
-        }
-        return runtime
-    }
-
+    /// Construct the on-device model ONLY when the user has explicitly opted in
+    /// (`PLAIDBAR_LOCAL_AI_RUNTIME=ollama`/`auto`) and the endpoint is localhost.
+    /// An unset variable yields `nil` — no transaction-derived prompt data is
+    /// routed to any process listening on localhost without consent.
     private static func makeDefaultModel(environment: [String: String]) -> (any LocalInsightModel)? {
-        let runtime = configuredRuntimeName(environment: environment)
-        guard !isDisabledRuntimeValue(runtime),
-              ["auto", "ollama"].contains(runtime.lowercased())
-        else {
+        guard LocalAIRuntimeResolution.isOptedIn(rawValue: environment[EnvironmentKeys.localRuntime]) else {
             return nil
         }
 
@@ -154,65 +131,17 @@ struct LocalAIInsightsService: Sendable {
         )
     }
 
-    private static func unavailableConfigurationDetail(
-        runtime: String,
-        environment: [String: String]
-    ) -> String {
-        let normalizedRuntime = runtime.lowercased()
-        if !["auto", "ollama"].contains(normalizedRuntime) {
-            return "Local runtime '\(runtime)' is configured, but this build only auto-wires local Ollama. Deterministic summaries remain active; cloud models are not supported."
-        }
-
-        if let rawBaseURL = environment[EnvironmentKeys.ollamaBaseURL],
-           let baseURL = URL(string: rawBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)),
-           !OllamaLocalInsightModel.isLocalhost(baseURL)
-        {
-            return "Ollama must be configured on localhost. VaultPeek refused the non-local endpoint and used deterministic summaries without cloud fallback."
-        }
-
-        return "Local Ollama could not be configured. Deterministic summaries remain active; cloud models are not supported."
-    }
-
-    private static func summaryAvailability(
-        baseAvailability: LocalAIAvailability,
-        generationResult: LocalInsightModelGenerationResult
-    ) -> LocalAIAvailability {
-        guard baseAvailability.state == .available,
-              generationResult.usedModelOutput == false,
-              let fallbackReason = generationResult.fallbackReason
+    /// Whether a configured custom endpoint (if any) is localhost. A missing or
+    /// unparseable custom endpoint means the default localhost endpoint is used.
+    private static func endpointIsLocalhost(environment: [String: String]) -> Bool {
+        guard let rawBaseURL = environment[EnvironmentKeys.ollamaBaseURL]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !rawBaseURL.isEmpty,
+            let baseURL = URL(string: rawBaseURL)
         else {
-            return baseAvailability
+            return true
         }
-
-        return LocalAIAvailability(
-            state: .unavailable,
-            runtimeName: baseAvailability.runtimeName,
-            detail: fallbackDetail(runtimeName: baseAvailability.runtimeName, reason: fallbackReason)
-        )
-    }
-
-    private static func fallbackDetail(
-        runtimeName: String?,
-        reason: LocalInsightModelFallbackReason
-    ) -> String {
-        let runtime = runtimeName.map { "Local runtime '\($0)'" } ?? "The configured local runtime"
-        let reasonText = switch reason {
-        case .noModel:
-            "has no model adapter"
-        case .runtimeUnavailable:
-            "is not reachable on this Mac"
-        case .noInstalledModel:
-            "has no installed local model"
-        case .unsupportedConfiguration:
-            "is configured with an unsupported local endpoint"
-        case .timeout:
-            "timed out before producing output"
-        case .modelError:
-            "returned an error"
-        case .invalidOutput:
-            "returned invalid output"
-        }
-        return "\(runtime) \(reasonText). VaultPeek used deterministic local summaries and did not call cloud AI."
+        return OllamaLocalInsightModel.isLocalhost(baseURL)
     }
 
     private static func summaryText(for input: LocalAIActivitySummaryInput) -> String {

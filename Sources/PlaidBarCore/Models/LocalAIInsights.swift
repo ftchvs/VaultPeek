@@ -41,12 +41,17 @@ public enum LocalAIAvailabilityState: String, Codable, Sendable, Hashable {
     case available
     case disabled
     case unavailable
+    /// Opted in and statically valid, but on-device liveness (the runtime is
+    /// running with a usable model installed) is not yet confirmed by a real
+    /// call. The UI must not claim availability while in this state.
+    case checking
 
     public var displayName: String {
         switch self {
         case .available: "Available"
         case .disabled: "Disabled"
         case .unavailable: "Unavailable"
+        case .checking: "Checking…"
         }
     }
 }
@@ -354,6 +359,8 @@ public struct LocalAIInsightReceipt: Equatable, Sendable {
 
         if availability.state == .disabled {
             result.append("Local AI is off; this receipt uses deterministic local totals and heuristics.")
+        } else if availability.state == .checking {
+            result.append("Verifying the local runtime; this receipt uses deterministic local totals until a summary is produced on-device.")
         } else if availability.state == .unavailable {
             result.append(availability.detail.isEmpty
                 ? "The configured local runtime is unavailable; VaultPeek does not fall back to cloud AI."
@@ -374,7 +381,7 @@ public struct LocalAIInsightReceipt: Equatable, Sendable {
 
     private static func unavailableState(for availability: LocalAIAvailability) -> String? {
         switch availability.state {
-        case .available:
+        case .available, .checking:
             nil
         case .disabled:
             "No local AI runtime is enabled. Deterministic local receipts remain available when source data exists."
