@@ -216,6 +216,12 @@ private struct SeverityStatusBadge: View {
 // animation manually, run `swift run PlaidBar --demo` and toggle a row into a
 // non-healthy state; with Reduce Motion on, the glyph must stay still while the
 // badge text/icon still distinguishes severity without color.
+//
+// Gated behind `!SWIFT_PACKAGE`: the `#Preview` macro is supplied by Xcode's
+// `PreviewsMacros` plugin, which is absent in plain SwiftPM (`swift build`/
+// `swift test`). Without this guard the whole package fails to compile, taking
+// the test suite down with it (#314).
+#if !SWIFT_PACKAGE
 #Preview("Attention rows") {
     VStack(spacing: Spacing.xs) {
         AttentionQueueRowView(
@@ -245,3 +251,4 @@ private struct SeverityStatusBadge: View {
     .padding()
     .frame(width: 360)
 }
+#endif
