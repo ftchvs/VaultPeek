@@ -12,6 +12,12 @@ public struct DashboardNavBarItem: Identifiable, Equatable, Sendable {
     public let title: String
     /// Number of accounts matching this filter.
     public let count: Int
+    /// Number of unique degraded Plaid Items represented by the matching
+    /// accounts. Nonzero only for `.status`. This is item-scoped, not
+    /// account-scoped: one degraded institution exposing several accounts
+    /// counts once, so recovery messaging never overstates how many
+    /// institutions are broken.
+    public let attentionItemCount: Int
     /// True only for `.status` when at least one account needs attention.
     /// Pair the badge with an icon or text — never color alone.
     public let showsAttentionBadge: Bool
@@ -30,6 +36,7 @@ public struct DashboardNavBarItem: Identifiable, Equatable, Sendable {
         kind: DashboardAccountFilterKind,
         title: String,
         count: Int,
+        attentionItemCount: Int = 0,
         showsAttentionBadge: Bool,
         shortcutOrdinal: Int,
         accessibilityLabel: String,
@@ -38,6 +45,7 @@ public struct DashboardNavBarItem: Identifiable, Equatable, Sendable {
         self.kind = kind
         self.title = title
         self.count = count
+        self.attentionItemCount = attentionItemCount
         self.showsAttentionBadge = showsAttentionBadge
         self.shortcutOrdinal = shortcutOrdinal
         self.accessibilityLabel = accessibilityLabel
@@ -65,7 +73,13 @@ public extension DashboardNavBarItem {
     /// and for a healthy Status segment (no separate indicator is shown then).
     var statusIndicatorAccessibilityLabel: String? {
         guard kind == .status, showsAttentionBadge else { return nil }
-        return "\(count) \(count == 1 ? "item needs" : "items need") attention"
+        // Item-scoped, not row-scoped: a bank that exposes checking, savings,
+        // and credit under one Plaid Item must announce one item, not three.
+        // Fall back to `count` when a direct caller badged the segment without
+        // supplying an item-scoped count, preserving the prior wording for
+        // previews/tests/downstream code that omit `attentionItemCount`.
+        let attention = attentionItemCount > 0 ? attentionItemCount : count
+        return "\(attention) \(attention == 1 ? "item needs" : "items need") attention"
     }
 }
 
@@ -82,6 +96,11 @@ public enum DashboardNavBarModel {
         DashboardAccountFilterKind.allCases.enumerated().map { index, kind in
             let count = accounts.count { kind.includes($0, degradedItemIds: degradedItemIds) }
             let showsAttentionBadge = kind == .status && count > 0
+            // Collapse the matching account rows to the unique Plaid Items they
+            // belong to, so recovery messaging counts institutions, not rows.
+            let attentionItemCount = kind == .status
+                ? Set(accounts.lazy.filter { degradedItemIds.contains($0.itemId) }.map(\.itemId)).count
+                : 0
             var accessibilityValue = "\(count) matching \(accountWord(for: count))"
             if showsAttentionBadge {
                 // VoiceOver cannot see the warning icon; say it.
@@ -91,6 +110,7 @@ public enum DashboardNavBarModel {
                 kind: kind,
                 title: kind.rawValue,
                 count: count,
+                attentionItemCount: attentionItemCount,
                 showsAttentionBadge: showsAttentionBadge,
                 shortcutOrdinal: index + 1,
                 accessibilityLabel: "\(kind.rawValue) account filter",
