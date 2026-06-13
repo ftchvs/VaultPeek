@@ -29,7 +29,7 @@ public enum MenuBarIconStyle: String, CaseIterable, Codable, Sendable, Identifia
     public var healthySymbolName: String {
         switch self {
         case .classic: return "dollarsign.circle"
-        case .minimal: return "circle.circle"
+        case .minimal: return "centsign.circle"
         case .chart: return "chart.line.uptrend.xyaxis.circle"
         }
     }

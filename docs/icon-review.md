@@ -109,7 +109,7 @@ contrast and stay non-color-only:
 | Style | Healthy glyph |
 |-------|---------------|
 | Dollar (default) | `dollarsign.circle` |
-| Minimal | `circle.circle` |
+| Minimal | `centsign.circle` |
 | Chart | `chart.line.uptrend.xyaxis.circle` |
 
 The degraded-state ladder (`exclamationmark.octagon` error, `network.slash`

@@ -21,7 +21,7 @@ struct MenuBarIconStyleTests {
     @Test("Healthy glyph follows the chosen icon style")
     func healthyGlyphVariesByStyle() {
         #expect(healthyDemo(.classic).symbolName == "dollarsign.circle")
-        #expect(healthyDemo(.minimal).symbolName == "circle.circle")
+        #expect(healthyDemo(.minimal).symbolName == "centsign.circle")
         #expect(healthyDemo(.chart).symbolName == "chart.line.uptrend.xyaxis.circle")
         // Healthy never carries a severity (no color-only alert).
         #expect(healthyDemo(.minimal).severity == nil)
@@ -32,7 +32,7 @@ struct MenuBarIconStyleTests {
         #expect(MenuBarIconStyle.allCases.count == 3)
         #expect(MenuBarIconStyle.defaultValue == .classic)
         #expect(MenuBarIconStyle.classic.healthySymbolName == "dollarsign.circle")
-        #expect(MenuBarIconStyle.minimal.healthySymbolName == "circle.circle")
+        #expect(MenuBarIconStyle.minimal.healthySymbolName == "centsign.circle")
         #expect(MenuBarIconStyle.chart.healthySymbolName == "chart.line.uptrend.xyaxis.circle")
         for style in MenuBarIconStyle.allCases {
             #expect(!style.displayName.isEmpty)
@@ -76,6 +76,27 @@ struct MenuBarIconStyleTests {
                 iconStyle: style
             )
             #expect(presentation.symbolName == "network.slash")
+            #expect(presentation.severity != nil)
+            #expect(presentation.symbolName != style.healthySymbolName)
+        }
+    }
+
+    @Test("Needs-login / stale keeps the warning glyph regardless of icon style")
+    func warningLadderIgnoresStyle() {
+        for style in MenuBarIconStyle.allCases {
+            // Server reachable but an item needs login: the third degraded path.
+            let presentation = MenuBarStatusPresentation.evaluate(
+                isDemoMode: false,
+                isLoading: false,
+                serverConnected: true,
+                errorMessage: nil,
+                erroredItemCount: 0,
+                needsLoginItemCount: 1,
+                isSyncStale: false,
+                hasEverSynced: true,
+                iconStyle: style
+            )
+            #expect(presentation.symbolName == "exclamationmark.triangle")
             #expect(presentation.severity != nil)
             #expect(presentation.symbolName != style.healthySymbolName)
         }
