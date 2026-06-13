@@ -90,6 +90,7 @@ private struct AttentionQueueRowView: View {
     let perform: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var hasAppeared = false
 
     var body: some View {
         HStack(alignment: .top, spacing: Spacing.sm) {
@@ -98,15 +99,20 @@ private struct AttentionQueueRowView: View {
                 .foregroundStyle(tint)
                 .frame(width: 24, height: 24)
                 .background(tint.opacity(0.13), in: RoundedRectangle(cornerRadius: 7))
-                // One-shot, non-repeating feedback when a row enters warning or
-                // blocked severity. The bounce fires only when `motionTrigger`
-                // changes (a transition into a non-healthy state); it never loops.
-                // `motionTrigger` is held stable — and thus silent — under Reduce
-                // Motion or while healthy. The discrete SF Symbol effect plays in
-                // place inside the fixed 24x24 frame, so the row never resizes.
-                // SeverityStatusBadge stays the primary, color-independent meaning
-                // carrier; this motion is decorative reinforcement only.
-                .symbolEffect(.bounce, options: .nonRepeating, value: motionTrigger)
+                // One-shot, non-repeating feedback when a warning or blocked row
+                // appears. The attention queue keys rows by id, so a real
+                // healthy→warning/blocked transition *inserts* a new row view
+                // rather than mutating one; `isActive` flips false→true on appear
+                // and fires the bounce exactly once for that insertion. It never
+                // loops. The effect is gated on `bouncesOnAppear`, which is false
+                // under Reduce Motion or while healthy — so it stays silent there,
+                // and toggling Reduce Motion on (true→false) never bounces. The
+                // discrete effect plays in place inside the fixed 24x24 frame, so
+                // the row never resizes. SeverityStatusBadge stays the primary,
+                // color-independent meaning carrier; this motion is decorative
+                // reinforcement only.
+                .symbolEffect(.bounce, options: .nonRepeating, isActive: hasAppeared && bouncesOnAppear)
+                .onAppear { hasAppeared = true }
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: Spacing.xxs) {
@@ -154,17 +160,12 @@ private struct AttentionQueueRowView: View {
         .accessibilityElement(children: .contain)
     }
 
-    /// Drives the leading status glyph's one-shot bounce. Stable (and therefore
-    /// non-animating) under Reduce Motion or when the row is healthy; otherwise
-    /// distinct per non-healthy severity so a transition into `.warning` or
-    /// `.blocked` changes the value exactly once and fires a single bounce.
-    private var motionTrigger: Int {
-        guard !reduceMotion else { return 0 }
-        switch row.severity {
-        case .healthy: return 0
-        case .warning: return 1
-        case .blocked: return 2
-        }
+    /// Whether the leading status glyph should bounce once when this row view
+    /// appears. False under Reduce Motion or while healthy, so the effect stays
+    /// silent there and never fires when Reduce Motion is toggled on at runtime.
+    private var bouncesOnAppear: Bool {
+        guard !reduceMotion else { return false }
+        return row.severity != .healthy
     }
 
     private var tint: Color {
