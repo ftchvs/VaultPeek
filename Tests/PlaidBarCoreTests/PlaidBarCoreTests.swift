@@ -3796,7 +3796,7 @@ struct PlaidBarCoreTests {
         let database = directory.appendingPathComponent("plaidbar.sqlite")
         let sandboxDatabase = directory.appendingPathComponent("plaidbar-sandbox.sqlite")
         let databaseWAL = directory.appendingPathComponent("plaidbar.sqlite-wal")
-        let transactionCache = directory.appendingPathComponent("transactions-sandbox-abc123.json")
+        let transactionCache = directory.appendingPathComponent("transactions-sandbox-0123456789abcdef.json")
         let pendingLinkSessions = directory.appendingPathComponent("pending-link-sessions.json")
         let pendingLinkSessionsBackup = directory.appendingPathComponent("pending-link-sessions.json.backup-20260604")
         let authToken = directory.appendingPathComponent("auth-token")
@@ -3831,7 +3831,7 @@ struct PlaidBarCoreTests {
             "plaidbar-sandbox.sqlite",
             "plaidbar.sqlite",
             "plaidbar.sqlite-wal",
-            "transactions-sandbox-abc123.json",
+            "transactions-sandbox-0123456789abcdef.json",
         ])
         #expect(result.preservedEntries == ["auth-token", "exports", "notes.txt", "server.conf"])
         #expect(result.keychainTokensCleared)
