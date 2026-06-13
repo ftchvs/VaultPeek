@@ -75,7 +75,11 @@ public extension DashboardNavBarItem {
         guard kind == .status, showsAttentionBadge else { return nil }
         // Item-scoped, not row-scoped: a bank that exposes checking, savings,
         // and credit under one Plaid Item must announce one item, not three.
-        return "\(attentionItemCount) \(attentionItemCount == 1 ? "item needs" : "items need") attention"
+        // Fall back to `count` when a direct caller badged the segment without
+        // supplying an item-scoped count, preserving the prior wording for
+        // previews/tests/downstream code that omit `attentionItemCount`.
+        let attention = attentionItemCount > 0 ? attentionItemCount : count
+        return "\(attention) \(attention == 1 ? "item needs" : "items need") attention"
     }
 }
 
