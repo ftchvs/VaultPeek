@@ -64,19 +64,40 @@ private enum SettingsTab: String {
 
 struct AppearanceSettingsView: View {
     @AppStorage(PopoverTransparencySetting.storageKey) private var popoverTransparency = PopoverTransparencySetting.defaultValue
+    @AppStorage(AppAppearanceMode.storageKey) private var appearanceModeRaw = AppAppearanceMode.defaultValue.rawValue
+    @AppStorage(AppContrastPreference.storageKey) private var contrastRaw = AppContrastPreference.defaultValue.rawValue
+    @AppStorage(DecorativeEffectsPreference.storageKey) private var decorativeRaw = DecorativeEffectsPreference.defaultValue.rawValue
+    @AppStorage(AppDensityPreference.storageKey) private var densityRaw = AppDensityPreference.defaultValue.rawValue
+    @Environment(\.colorSchemeContrast) private var systemContrast
 
     private var transparencySetting: PopoverTransparencySetting {
         PopoverTransparencySetting(value: popoverTransparency)
+    }
+
+    private var appearanceMode: AppAppearanceMode { AppAppearanceMode(rawValue: appearanceModeRaw) ?? .followSystem }
+    private var contrastPreference: AppContrastPreference { AppContrastPreference(rawValue: contrastRaw) ?? .followSystem }
+    private var decorativePreference: DecorativeEffectsPreference { DecorativeEffectsPreference(rawValue: decorativeRaw) ?? .followSystem }
+    private var density: AppDensityPreference { AppDensityPreference(rawValue: densityRaw) ?? .comfortable }
+
+    /// Increased contrast applies when the app pref asks for it OR the system
+    /// Increase Contrast accessibility setting is on (system always wins).
+    private var increasedContrast: Bool {
+        contrastPreference.resolvedIncreasedContrast(systemIncreaseContrast: systemContrast == .increased)
     }
 
     var body: some View {
         Form {
             Section("Popover") {
                 // Live preview first: the popover material renders with the
-                // current setting over synthetic labels, so the slider and
-                // presets have immediate, privacy-safe feedback (AND-364).
-                AppearancePreviewCard(setting: transparencySetting)
-                    .padding(.vertical, Spacing.xxs)
+                // current settings over synthetic labels, so transparency,
+                // presets, decorative effects, contrast, and density all have
+                // immediate, privacy-safe feedback (AND-364 / AND-365).
+                AppearancePreviewCard(
+                    setting: transparencySetting,
+                    increasedContrast: increasedContrast,
+                    density: density
+                )
+                .padding(.vertical, Spacing.xxs)
 
                 // Full-width control block: the label/value row sits at the top,
                 // the slider spans the row, and the captions track the slider —
@@ -141,6 +162,44 @@ struct AppearanceSettingsView: View {
                 }
                 .padding(.vertical, Spacing.xxs)
             }
+
+            Section("Display") {
+                Picker("Appearance", selection: Binding(
+                    get: { appearanceMode },
+                    set: { appearanceModeRaw = $0.rawValue }
+                )) {
+                    ForEach(AppAppearanceMode.allCases) { Text($0.title).tag($0) }
+                }
+                .accessibilityValue(appearanceMode.title)
+
+                Picker("Contrast", selection: Binding(
+                    get: { contrastPreference },
+                    set: { contrastRaw = $0.rawValue }
+                )) {
+                    ForEach(AppContrastPreference.allCases) { Text($0.title).tag($0) }
+                }
+                .accessibilityValue(contrastPreference.title)
+
+                Picker("Decorative Effects", selection: Binding(
+                    get: { decorativePreference },
+                    set: { decorativeRaw = $0.rawValue }
+                )) {
+                    ForEach(DecorativeEffectsPreference.allCases) { Text($0.title).tag($0) }
+                }
+                .accessibilityValue(decorativePreference.title)
+
+                Picker("Density", selection: Binding(
+                    get: { density },
+                    set: { densityRaw = $0.rawValue }
+                )) {
+                    ForEach(AppDensityPreference.allCases) { Text($0.title).tag($0) }
+                }
+                .accessibilityValue(density.title)
+
+                Text("Light or Dark force VaultPeek regardless of the system setting. macOS Reduce Motion, Reduce Transparency, and Increase Contrast always take priority, and the --appearance launch flag overrides Appearance here. Density currently adjusts the preview and Appearance chrome; broader per-surface spacing is rolling out separately.")
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .formStyle(.grouped)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -169,9 +228,22 @@ struct AppearanceSettingsView: View {
 /// labels only — never real account names, balances, or data (AND-364).
 private struct AppearancePreviewCard: View {
     let setting: PopoverTransparencySetting
+    var increasedContrast = false
+    var density: AppDensityPreference = .comfortable
+
+    // Density adjusts only the preview's chrome spacing — never content.
+    private var outerPadding: CGFloat { density == .compact ? Spacing.sm : Spacing.md }
+    private var innerSpacing: CGFloat { density == .compact ? Spacing.xs : Spacing.sm }
+
+    // Increased contrast strengthens the card border (a non-semantic surface
+    // cue), never finance colors.
+    private var strokeStyle: AnyShapeStyle {
+        increasedContrast ? AnyShapeStyle(Color.primary.opacity(0.55)) : AnyShapeStyle(.separator)
+    }
+    private var strokeWidth: CGFloat { increasedContrast ? 1.5 : 1 }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
+        VStack(alignment: .leading, spacing: innerSpacing) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Net Worth")
@@ -216,7 +288,7 @@ private struct AppearancePreviewCard: View {
             .padding(Spacing.sm)
             .glassSurface(.inset)
         }
-        .padding(Spacing.md)
+        .padding(outerPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
             PopoverMaterialBackground(transparencySetting: setting)
@@ -224,7 +296,7 @@ private struct AppearancePreviewCard: View {
         .clipShape(RoundedRectangle(cornerRadius: Radius.panel))
         .overlay {
             RoundedRectangle(cornerRadius: Radius.panel)
-                .stroke(.separator, lineWidth: 1)
+                .stroke(strokeStyle, lineWidth: strokeWidth)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
