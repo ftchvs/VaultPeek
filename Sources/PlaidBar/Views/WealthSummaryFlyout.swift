@@ -61,6 +61,19 @@ struct WealthSummaryFlyout: View {
                     .loadingRedaction(appState.loadState(for: .summaryCards))
                     .scrollEdgeDepth(reduceMotion: reduceMotion)
 
+                    // Read-only recurring obligations (AND-400). Built inline
+                    // from the already-cached detector output, mirroring how the
+                    // safe-to-spend card is composed above; self-hides when no
+                    // recurring series are detected.
+                    RecurringObligationsSection(
+                        presentation: RecurringObligationsPresentation.make(
+                            from: appState.recurringTransactions,
+                            asOf: Date()
+                        )
+                    )
+                    .loadingRedaction(appState.loadState(for: .transactions))
+                    .scrollEdgeDepth(reduceMotion: reduceMotion)
+
                     WealthCreditSection(
                         summary: presentation.creditUtilization,
                         threshold: appState.creditUtilizationThreshold
