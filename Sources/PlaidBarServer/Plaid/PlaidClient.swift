@@ -4,7 +4,26 @@ import PlaidBarCore
     import FoundationNetworking
 #endif
 
-actor PlaidClient {
+protocol PlaidClientProtocol: Sendable {
+    func createLinkToken(
+        userId: String,
+        completionRedirectUri: String
+    ) async throws -> PlaidLinkTokenResponse
+
+    func createUpdateLinkToken(
+        userId: String,
+        accessToken: String,
+        completionRedirectUri: String
+    ) async throws -> PlaidLinkTokenResponse
+
+    func getLinkToken(_ linkToken: String) async throws -> PlaidLinkTokenGetResponse
+
+    func exchangePublicToken(_ publicToken: String) async throws -> PlaidTokenExchangeResponse
+
+    func getAccounts(accessToken: String) async throws -> PlaidAccountsResponse
+}
+
+actor PlaidClient: PlaidClientProtocol {
     private let config: ServerConfig
     private let session: URLSession
     private let decoder: JSONDecoder
