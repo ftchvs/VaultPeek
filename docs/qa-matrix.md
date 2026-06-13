@@ -130,6 +130,8 @@ tech):
 | Check | Expected Result |
 |-------|-----------------|
 | No-jump on open/close | Selecting an account grows the popover rightward; the Wealth Summary rail does not shift horizontally. Deselecting returns to two columns without a jump |
+| First open with a persisted selection (AND-405) | With `dashboard.selectedAccountId` set from a prior session, the popover opens directly at the three-column width and the inspector fills in (brief loading placeholder) — it does NOT open two-column and jump to three-column once accounts load |
+| Narrow / scaled display (AND-405) | On a display/zoom where 1122 doesn't fit (e.g. scaled ~1024pt), the popover caps to the screen and the center dashboard flexes/scrolls while the rail + inspector keep 320pt; the inspector ✕ and recovery controls stay on-screen. Extreme zoom (≲ ~1002pt usable) is the documented Tier-2 overlay residual |
 | Near a display edge | Opening the inspector with the menu-bar item near the right edge clamps the popover on-screen (shifts left), keeping the rail visible; nothing renders off-screen |
 | Multi-monitor | Opening on a secondary display clamps within that display's visible frame |
 | Keyboard | Esc closes the inspector before the popover; focus returns to the selected row; filter change clears selection without trapping focus |

@@ -114,9 +114,9 @@ optional, and is layered from least to most disruptive:
 
 | Tier | Trigger | Behavior |
 |------|---------|----------|
-| **0 — Ideal** | `1122 + margin ≤ visibleFrame.width` | Full three columns side by side. |
-| **1 — Clamp + internal scroll** | three-column ideal does not fit, but `summaryRail + dashboard` (the two-column block) plus a usable inspector does | Clamp popover width to `visibleFrame.width − margin`; columns keep their identity and scroll internally. **The left Wealth Summary stays visible.** |
-| **2 — Overlay inspector (last resort)** | even the clamped three-column block cannot show a usable inspector | The inspector overlays the trailing region of the center column as a layer above it; the left Wealth Summary remains visible. This last-resort path **must** be documented in code and be fully keyboard- and VoiceOver-reachable. |
+| **0 — Ideal** | `1122 + 2·margin ≤ visibleFrame.width` | Full three columns side by side. |
+| **1 — Cap + flexible center** *(implemented, AND-405)* | 1122 does not fit, but the rail + a `minDashboardWidth` center + the inspector do (≈ ≥ 1002pt usable, covering scaled displays down to ~1024pt) | `PopoverGeometry.fittedWidth` caps the popover to `visibleFrame.width − 2·margin`; the rail and inspector keep their fixed 320pt and the **center dashboard flexes** (down to `minDashboardWidth` = 340pt) and scrolls internally, so the trailing inspector and its ✕/recovery controls stay on-screen. **The left Wealth Summary stays visible.** |
+| **2 — Overlay inspector (last resort)** | even a `minDashboardWidth` center cannot fit alongside the rail + inspector (extreme accessibility zoom, ≲ 1002pt usable) | The inspector overlays the trailing region of the center column as a layer above it; the left Wealth Summary remains visible. This last-resort path **must** be documented in code and be fully keyboard- and VoiceOver-reachable. *(Not yet implemented; the residual case is documented here and in `docs/qa-matrix.md`.)* |
 
 Constraints that hold in every tier:
 
