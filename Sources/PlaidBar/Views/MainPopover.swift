@@ -21,6 +21,9 @@ struct MainPopover: View {
         /// Vertical breathing room kept below the popover: menu bar,
         /// footer chrome, and a Dock-safe margin.
         static let screenHeightInset: CGFloat = 120
+        /// Gap kept between the widened three-column popover and the screen's
+        /// visible edges when it is clamped on-screen (AND-374 fallback).
+        static let screenEdgeMargin: CGFloat = 12
 
         static let contentHorizontalPadding: CGFloat = 12
         static let contentTopPadding: CGFloat = 8
@@ -51,13 +54,22 @@ struct MainPopover: View {
         return accounts.first { $0.id == selectedAccountId }
     }
 
-    /// The left Wealth Summary rail is showing (vs. the account inspector).
-    /// While it is visible it owns the net-worth hero, so the center dashboard
-    /// drops its duplicate net-worth amount and keeps only a compact trend
-    /// (AND-376). Per the three-column contract the rail becomes always-on,
-    /// at which point this stays true for every non-setup state.
-    private var isWealthSummaryRailVisible: Bool {
-        selectedAccount == nil && !shouldShowSetupScreen
+    /// The trailing account inspector is open (an account is selected and we are
+    /// past setup). Drives the third column, the popover width, the leading-edge
+    /// anchor, and Esc precedence.
+    private var isAccountInspectorOpen: Bool {
+        selectedAccount != nil && !shouldShowSetupScreen
+    }
+
+    /// Two-column base width: Wealth Summary rail + divider + dashboard. This is
+    /// the popover's width with no account selected and the stable block whose
+    /// leading edge the window anchor pins (AND-369/370).
+    private var twoColumnWidth: CGFloat {
+        Layout.flyoutWidth + 1 + Layout.dashboardWidth
+    }
+
+    private func deselectAccount() {
+        selectedAccountId = ""
     }
 
     private var filteredAccounts: [AccountDTO] {
@@ -65,17 +77,90 @@ struct MainPopover: View {
     }
 
     var body: some View {
+        chromedPopover
+            .sheet(
+                isPresented: $isShowingAccountSetup,
+                onDismiss: {
+                    if !appState.isSetupComplete {
+                        shouldShowSetupRecoveryDashboard = true
+                    }
+                }
+            ) {
+                SetupView {
+                    shouldShowSetupRecoveryDashboard = false
+                    isShowingAccountSetup = false
+                }
+                .environment(appState)
+            }
+            .task {
+                await appState.loadInitialData()
+            }
+            .onChange(of: filteredAccounts.map(\.id)) { _, ids in
+                guard !selectedAccountId.isEmpty, !ids.contains(selectedAccountId) else { return }
+                selectedAccountId = ""
+            }
+            .onChange(of: selectedFilterRawValue) { _, _ in
+                selectedAccountId = ""
+            }
+            .onChange(of: appState.isSetupComplete) { _, isComplete in
+                if isComplete {
+                    shouldShowSetupRecoveryDashboard = false
+                }
+            }
+    }
+
+    // The visual chrome is kept on its own opaque property so neither it nor the
+    // lifecycle chain in `body` overflows the single-expression type-checker.
+    private var chromedPopover: some View {
+        popoverColumns
+            .frame(width: popoverWidth)
+            .foregroundStyle(AppearanceTextColors.primary)
+            .environment(\.colorScheme, effectiveColorScheme)
+            .background {
+                PopoverMaterialBackground(transparencySetting: transparencySetting)
+            }
+            // Hold the two-column block's leading edge stable so opening the
+            // trailing inspector grows the popover rightward instead of letting
+            // AppKit re-center the widened window and slide the Wealth Summary
+            // sideways (AND-370). The same anchor clamps the widened popover
+            // inside the visible screen so it never renders off-screen near a
+            // display edge (AND-374 primary fallback).
+            .background {
+                PopoverLeadingEdgeAnchor(
+                    isInspectorOpen: isAccountInspectorOpen,
+                    collapsedWidth: twoColumnWidth,
+                    screenEdgeMargin: Layout.screenEdgeMargin
+                )
+            }
+            .animation(
+                MotionTokens.animation(MotionTokens.content, reduceMotion: reduceMotion),
+                value: selectedAccount?.id
+            )
+            // Esc closes the trailing inspector first; with no inspector open the
+            // handler is nil so the key event falls through and closes the
+            // popover (AND-373).
+            .onExitCommand(perform: exitCommandHandler)
+            .animation(
+                MotionTokens.animation(MotionTokens.standard, reduceMotion: reduceMotion),
+                value: appState.error != nil
+            )
+    }
+
+    /// Esc handler: dismiss the inspector when open, otherwise `nil` so the key
+    /// event falls through and closes the popover (AND-373). Hoisted out of the
+    /// view chain as an explicitly-typed value to keep the type-checker fast.
+    private var exitCommandHandler: (() -> Void)? {
+        guard isAccountInspectorOpen else { return nil }
+        return { deselectAccount() }
+    }
+
+    // Split into per-column helpers so the type-checker can resolve the body in
+    // reasonable time — the full three-column HStack plus modifiers overflows
+    // the single-expression solver.
+    private var popoverColumns: some View {
         HStack(alignment: .top, spacing: 0) {
             if !shouldShowSetupScreen {
-                leftFlyout
-                    .frame(width: Layout.flyoutWidth)
-                    // Cap the fly-out to the same screen-bounded height as the
-                    // dashboard scroll column so tall detail content scrolls
-                    // inside the fly-out instead of growing the whole popover
-                    // past the intended screen-bounded height.
-                    .frame(maxHeight: dashboardScrollHeight)
-                    .leftPanelSurface()
-                    .transition(.move(edge: .leading).combined(with: .opacity))
+                wealthSummaryRail
 
                 Divider()
                     .opacity(0.35)
@@ -83,63 +168,48 @@ struct MainPopover: View {
 
             dashboardColumn
                 .frame(width: Layout.dashboardWidth)
+
+            accountInspectorColumn
         }
-        .frame(width: popoverWidth)
-        .foregroundStyle(AppearanceTextColors.primary)
-        .environment(\.colorScheme, effectiveColorScheme)
-        .background {
-            PopoverMaterialBackground(transparencySetting: transparencySetting)
-        }
-        // Keep the dashboard stationary when the fly-out opens: pin the
-        // window's right edge so the extra width grows leftward instead of
-        // letting AppKit re-center the widened popover under the menu bar item.
-        .background {
-            PopoverTrailingEdgeAnchor(
-                isExpanded: !shouldShowSetupScreen,
-                collapsedWidth: Layout.dashboardWidth
-            )
-        }
-        .animation(
-            MotionTokens.animation(MotionTokens.content, reduceMotion: reduceMotion),
-            value: selectedAccount?.id
-        )
-        // Esc closes the fly-out. The handler is nil when no account is
-        // selected so the key event falls through and closes the popover.
-        .onExitCommand(
-            perform: selectedAccountId.isEmpty ? nil : { selectedAccountId = "" }
-        )
-        .animation(
-            MotionTokens.animation(MotionTokens.standard, reduceMotion: reduceMotion),
-            value: appState.error != nil
-        )
-        .sheet(
-            isPresented: $isShowingAccountSetup,
-            onDismiss: {
-                if !appState.isSetupComplete {
-                    shouldShowSetupRecoveryDashboard = true
-                }
-            }
-        ) {
-            SetupView {
-                shouldShowSetupRecoveryDashboard = false
-                isShowingAccountSetup = false
-            }
+    }
+
+    // LEFT: the Wealth Summary rail is mounted unconditionally once setup is
+    // complete and is never swapped out by account selection (three-column
+    // contract, AND-367/369). A stable id keeps SwiftUI from remounting/flashing
+    // it when the trailing inspector opens or closes.
+    private var wealthSummaryRail: some View {
+        WealthSummaryFlyout(onAddAccount: openAccountSetup)
             .environment(appState)
-        }
-        .task {
-            await appState.loadInitialData()
-        }
-        .onChange(of: filteredAccounts.map(\.id)) { _, ids in
-            guard !selectedAccountId.isEmpty, !ids.contains(selectedAccountId) else { return }
-            selectedAccountId = ""
-        }
-        .onChange(of: selectedFilterRawValue) { _, _ in
-            selectedAccountId = ""
-        }
-        .onChange(of: appState.isSetupComplete) { _, isComplete in
-            if isComplete {
-                shouldShowSetupRecoveryDashboard = false
-            }
+            .id("wealth-summary-rail")
+            .frame(width: Layout.flyoutWidth)
+            // Cap the rail to the same screen-bounded height as the dashboard
+            // scroll column so tall content scrolls inside the rail instead of
+            // growing the whole popover past the screen-bounded height.
+            .frame(maxHeight: dashboardScrollHeight)
+            .leftPanelSurface()
+            .transition(.move(edge: .leading).combined(with: .opacity))
+    }
+
+    // RIGHT: the account inspector opens on the trailing side only when a row is
+    // selected, leaving the left rail and center dashboard in place
+    // (AND-369/371). It slides in from the trailing edge and is independently
+    // dismissible.
+    @ViewBuilder
+    private var accountInspectorColumn: some View {
+        if isAccountInspectorOpen, let selectedAccount {
+            Divider()
+                .opacity(0.35)
+
+            AccountInspector(
+                account: selectedAccount,
+                isStatusFilter: selectedFilter == .status,
+                onClose: deselectAccount
+            )
+            .environment(appState)
+            .frame(width: Layout.flyoutWidth)
+            .frame(maxHeight: dashboardScrollHeight)
+            .leftPanelSurface()
+            .transition(.move(edge: .trailing).combined(with: .opacity))
         }
     }
 
@@ -147,22 +217,13 @@ struct MainPopover: View {
         // Setup renders at the dashboard's width so first run never snaps
         // between window sizes.
         guard !shouldShowSetupScreen else { return Layout.dashboardWidth }
-        return Layout.dashboardWidth + Layout.flyoutWidth + 1
-    }
-
-    @ViewBuilder
-    private var leftFlyout: some View {
-        if let selectedAccount {
-            AccountDetailFlyout(
-                account: selectedAccount,
-                isStatusFilter: selectedFilter == .status,
-                onClose: { selectedAccountId = "" }
-            )
-            .environment(appState)
-        } else {
-            WealthSummaryFlyout(onAddAccount: openAccountSetup)
-                .environment(appState)
-        }
+        // Two-column base (Wealth Summary rail + dashboard) with no selection.
+        guard isAccountInspectorOpen else { return twoColumnWidth }
+        // Three-column: add the divider + trailing account inspector. The true
+        // geometry is reported here (fixed columns must not be clipped); the
+        // window anchor shifts the window on-screen when this exceeds the
+        // available width near a display edge (AND-370/374).
+        return twoColumnWidth + 1 + Layout.flyoutWidth
     }
 
     private var transparencySetting: PopoverTransparencySetting {
@@ -197,14 +258,11 @@ struct MainPopover: View {
                     // 16pt between concept groups, 8pt between siblings
                     // within a group — spacing is the hierarchy.
                     VStack(alignment: .leading, spacing: Layout.groupSpacing) {
-                        VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
-                            DashboardHeader(showsNetWorth: !isWealthSummaryRailVisible)
-                                .environment(appState)
-                                .loadingRedaction(appState.loadState(for: .summaryCards))
-
-                            DashboardChangeReceiptStrip()
-                                .environment(appState)
-                        }
+                        // The rail owns the net-worth hero and its trend, so the
+                        // center leads with the latest-changes receipt instead of
+                        // repeating either (AND-372).
+                        DashboardChangeReceiptStrip()
+                            .environment(appState)
 
                         if shouldElevateStatusReadinessPanel {
                             VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
@@ -232,10 +290,12 @@ struct MainPopover: View {
                         .environment(appState)
 
                         VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
-                            DashboardSummaryCards()
-                                .environment(appState)
-
-                            BalanceCompositionStrip()
+                            // The left rail owns the portfolio totals (assets,
+                            // debt, balance mix, 30-day cashflow), so the center
+                            // drops those duplicates (AND-372) and keeps only what
+                            // the rail does NOT show: the 7-day spend velocity and
+                            // the local-only insight receipt.
+                            RecentSpendChip()
                                 .environment(appState)
 
                             LocalInsightsCard()
@@ -312,106 +372,6 @@ struct MainPopover: View {
     }
 }
 
-// MARK: - Dashboard Header
-
-private struct DashboardHeader: View {
-    @Environment(AppState.self) private var appState
-
-    /// When the left Wealth Summary rail already owns the net-worth hero, the
-    /// center header drops the duplicate amount and shows only a compact
-    /// net-worth trend so the chart cue survives without a second hero
-    /// (AND-376). Defaults to `true` for the swap-model selected-account state,
-    /// where the center is the only place net worth is shown.
-    var showsNetWorth: Bool = true
-
-    private var trend: BalanceTrend? {
-        BalanceTrend.evaluate(history: appState.balanceHistory)
-    }
-
-    var body: some View {
-        if showsNetWorth {
-            heroHeader
-        } else {
-            compactTrendHeader
-        }
-    }
-
-    // One hero per surface: the net worth number is the only large text.
-    // Sync state lives in the footer; the app's own name does not belong
-    // inside its own popover.
-    private var heroHeader: some View {
-        HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text("Net Worth")
-                    .sectionTitle()
-                    .foregroundStyle(.secondary)
-
-                Text(Formatters.currency(appState.netBalance, format: .full))
-                    .displayBalance()
-                    .contentTransition(.numericText())
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-
-            Spacer(minLength: Spacing.md)
-
-            if let trend {
-                trendCluster(trend)
-            }
-        }
-        .padding(Spacing.sm)
-        .heroAccentSurface()
-    }
-
-    // The left rail owns the net-worth amount, so the center keeps only the
-    // trend chart cue (no duplicate hero number). Renders nothing when there is
-    // no history to chart, so the center column starts cleanly at the change
-    // receipt without an awkward empty gap.
-    @ViewBuilder
-    private var compactTrendHeader: some View {
-        if let trend {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Net Worth Trend")
-                    .sectionTitle()
-                    .foregroundStyle(.secondary)
-
-                Spacer(minLength: Spacing.md)
-
-                trendCluster(trend)
-            }
-            .padding(Spacing.sm)
-            .glassSurface(.inset)
-        }
-    }
-
-    private func trendCluster(_ trend: BalanceTrend) -> some View {
-        VStack(alignment: .trailing, spacing: Spacing.xxs) {
-            BalanceTrendChart(trend: trend)
-                .frame(width: 92, height: 21)
-
-            Text("\(trend.deltaText) \(trend.spanText)")
-                .font(.caption2.weight(.medium))
-                .monospacedDigit()
-                .foregroundStyle(deltaTint(for: trend.direction))
-                .lineLimit(1)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(trend.accessibilitySummary)
-        .help(trend.accessibilitySummary)
-    }
-
-    private func deltaTint(for direction: BalanceTrend.Direction) -> Color {
-        switch direction {
-        case .up:
-            SemanticColors.positive
-        case .down:
-            SemanticColors.negative
-        case .flat:
-            AppearanceTextColors.secondary
-        }
-    }
-}
-
 private struct DashboardChangeReceiptStrip: View {
     @Environment(AppState.self) private var appState
 
@@ -461,179 +421,36 @@ private struct DashboardChangeReceiptStrip: View {
     }
 }
 
-private struct DashboardSummaryCards: View {
+private struct RecentSpendChip: View {
     @Environment(AppState.self) private var appState
 
     var body: some View {
-        // One metric row. Sync/server status is not a financial metric — it
-        // lives in the footer (healthy) or the attention queue (degraded).
-        HStack(spacing: Spacing.sm) {
-            MetricCard(
-                title: "Cash",
-                value: Formatters.currency(appState.totalCash, format: .compact),
-                detail: "\(appState.depositoryAccounts.count) cash account\(appState.depositoryAccounts.count == 1 ? "" : "s")",
-                tint: .secondary
-            )
-
-            MetricCard(
-                title: "Credit",
-                value: creditValue,
-                detail: creditDetail,
-                tint: SemanticColors.creditDebt,
-                emphasizesTint: shouldEmphasizeCredit
-            )
-
-            MetricCard(
-                title: "7D Spend",
-                value: Formatters.currency(appState.recentSpend, format: .compact),
-                detail: recentSpendDetail,
-                tint: .secondary
-            )
-        }
-    }
-
-    private var creditValue: String {
-        if let utilization = appState.totalCreditUtilization {
-            return Formatters.percent(utilization, decimals: 0)
-        }
-        guard !appState.creditAccounts.isEmpty else { return "No credit" }
-        return Formatters.currency(MenuBarSummary.totalDebt(from: appState.creditAccounts), format: .compact)
-    }
-
-    private var creditDetail: String {
-        let creditCount = appState.creditAccounts.count
-        guard creditCount > 0 else { return "No credit linked" }
-
-        if appState.totalCreditUtilization != nil {
-            return "\(Formatters.currency(MenuBarSummary.totalDebt(from: appState.creditAccounts), format: .compact)) owed"
-        }
-        return "\(creditCount) credit account\(creditCount == 1 ? "" : "s")"
-    }
-
-    private var shouldEmphasizeCredit: Bool {
-        guard let utilization = appState.totalCreditUtilization else {
-            return MenuBarSummary.totalDebt(from: appState.creditAccounts) > 0
-        }
-        return utilization >= appState.creditUtilizationThreshold
-    }
-
-    private var recentSpendDetail: String {
-        appState.recentSpend > 0 ? "Last 7 days" : "No 7D spend"
-    }
-}
-
-private struct MetricCard: View {
-    let title: String
-    let value: String
-    let detail: String
-    let tint: Color
-    var emphasizesTint = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.xs) {
-            Text(title)
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-            Text(value)
-                .dataText()
-                .foregroundStyle(emphasizesTint ? tint : AppearanceTextColors.primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-            Text(detail)
-                .microText()
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, Spacing.sm)
-        .padding(.vertical, Spacing.sm)
-        .glassSurface(emphasizesTint ? .emphasized(tint) : .inset)
-    }
-}
-
-private struct BalanceCompositionStrip: View {
-    @Environment(AppState.self) private var appState
-
-    private var presentation: BalanceCompositionPresentation {
-        BalanceCompositionPresentation(accounts: appState.accounts)
-    }
-
-    private var activeSegments: [BalanceCompositionBarSegment] {
-        presentation.segments.map { segment in
-            BalanceCompositionBarSegment(
-                id: segment.id,
-                title: segment.title,
-                value: segment.value,
-                share: segment.share,
-                tint: tint(for: segment.id)
-            )
-        }
-    }
-
-    private func tint(for id: String) -> Color {
-        switch id {
-        case "cash": Color.secondary.opacity(0.6)
-        case "investments": Color.primary.opacity(0.36)
-        case "credit": SemanticColors.creditDebt
-        case "loans": SemanticColors.warning
-        default: Color.secondary.opacity(0.6)
-        }
-    }
-
-    var body: some View {
-        // Derive the active segments once per render: rebuilding the
-        // presentation re-filters the account list, so computing it here and
-        // threading the result (and its count) through the helpers avoids
-        // re-running that work for every segment in the strip and legend.
-        let activeSegments = activeSegments
-
-        return VStack(alignment: .leading, spacing: Spacing.sm) {
-            HStack {
-                Text("Balance Mix")
-                    .sectionTitle()
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text("\(appState.accountCount) accounts")
-                    .microText()
-                    .foregroundStyle(.secondary)
-            }
-
-            AnimatedBalanceCompositionBar(segments: activeSegments, height: 7)
-
-            HStack(spacing: Spacing.sm) {
-                ForEach(activeSegments) { segment in
-                    BalanceCompositionLegend(segment: segment)
-                }
-            }
-        }
-        .padding(Spacing.sm)
-        .glassSurface(.inset)
-        .accessibilityElement(children: .contain)
-    }
-}
-
-private struct BalanceCompositionLegend: View {
-    let segment: BalanceCompositionBarSegment
-
-    var body: some View {
-        HStack(spacing: 5) {
-            Circle()
-                .fill(segment.tint)
-                .frame(width: 6, height: 6)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(segment.title)
-                    .microText()
+        // 7-day spend velocity — the one summary metric the left rail does not
+        // show (its cashflow section is 30-day). The rail owns cash, credit, and
+        // the balance mix, so the center keeps only this short-window signal.
+        // Renders nothing when there is no recent spend, so the center has no
+        // empty stub.
+        if appState.recentSpend > 0 {
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+                Text("7-DAY SPEND")
+                    .font(.caption2.weight(.medium))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                Text(Formatters.currency(segment.value, format: .compact))
-                    .font(.caption2.weight(.semibold))
+
+                Spacer(minLength: Spacing.sm)
+
+                Text(Formatters.currency(appState.recentSpend, format: .compact))
+                    .font(.caption.weight(.semibold))
                     .monospacedDigit()
                     .lineLimit(1)
-                    .minimumScaleFactor(0.78)
             }
+            .padding(.horizontal, Spacing.sm)
+            .padding(.vertical, Spacing.xs)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.quinary, in: Capsule())
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("7 day spend: \(Formatters.currency(appState.recentSpend, format: .full))")
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -1390,6 +1207,9 @@ private struct AccountsSection: View {
     let onSelect: (AccountDTO) -> Void
     let onDeselect: () -> Void
     let onAddAccount: () -> Void
+    /// Tracks which account row holds keyboard focus so opening and closing the
+    /// trailing inspector keeps the user's place in the list (AND-373).
+    @FocusState private var focusedAccountId: String?
 
     private var accountsLoadState: DashboardLoadState {
         appState.loadState(for: .accounts)
@@ -1426,6 +1246,7 @@ private struct AccountsSection: View {
                             account: account,
                             isStatusFilter: filter == .status,
                             isSelected: selectedAccountId == account.id,
+                            focusBinding: $focusedAccountId,
                             onSelect: {
                                 if selectedAccountId == account.id {
                                     onDeselect()
@@ -1440,6 +1261,27 @@ private struct AccountsSection: View {
                 .clipShape(RoundedRectangle(cornerRadius: Radius.panel))
             }
         }
+        // Keep focus on the selected row while the inspector is open and return
+        // it to that row when the inspector closes, so keyboard users do not
+        // lose context on Esc/close (AND-373). onChange does not fire on mount,
+        // so a popover reopened with a persisted selection neither re-announces
+        // nor re-homes focus.
+        .onChange(of: selectedAccountId) { previous, current in
+            if let current, let account = accounts.first(where: { $0.id == current }) {
+                focusedAccountId = current
+                // Announce only on a genuine selection change (not on mount/
+                // restore), so VoiceOver hears the inspector open exactly once.
+                AccessibilityNotification.Announcement(
+                    "\(AccountPresentation.displayName(for: account)) details opened in account inspector"
+                ).post()
+            } else if let previous, accounts.contains(where: { $0.id == previous }) {
+                // Return focus only when the row still exists (Esc/✕/re-click).
+                // If the selection was cleared because the row left the list
+                // (filter change or account removed), leave focus alone rather
+                // than pointing @FocusState at a vanished id (AND-373).
+                focusedAccountId = previous
+            }
+        }
     }
 }
 
@@ -1448,16 +1290,18 @@ private struct AccountRowWithDrilldown: View {
     let account: AccountDTO
     let isStatusFilter: Bool
     let isSelected: Bool
+    let focusBinding: FocusState<String?>.Binding
     let onSelect: () -> Void
 
     var body: some View {
-        // Selection opens the AccountDetailFlyout to the left of the
-        // dashboard (mounted by MainPopover), not an inline panel below.
+        // Selection opens the AccountInspector on the trailing side of the
+        // dashboard (mounted by MainPopover), not an inline panel below. The
+        // left rail stays in place; only the right inspector toggles.
         Button(action: onSelect) {
             DashboardAccountRow(account: account, isStatusFilter: isStatusFilter, isSelected: isSelected)
         }
         .buttonStyle(.plain)
-        .focusable(true)
+        .focused(focusBinding, equals: account.id)
         .hoverHighlight()
         .help(drillInPath.pointerHelp)
         .accessibilityElement(children: .ignore)
@@ -1725,9 +1569,11 @@ private struct DashboardAccountRow: View {
                 }
             }
 
-            // The detail panel flies out on the leading side of the
-            // dashboard; chevron.backward flips correctly under RTL.
-            Image(systemName: "chevron.backward")
+            // The account inspector opens on the trailing side of the
+            // dashboard; chevron.forward flips correctly under RTL. The selected
+            // row swaps in a filled chevron so selection is carried by shape,
+            // not color alone (AND-373).
+            Image(systemName: isSelected ? "chevron.forward.circle.fill" : "chevron.forward")
                 .font(.caption.weight(.medium))
                 .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.tertiary))
         }
