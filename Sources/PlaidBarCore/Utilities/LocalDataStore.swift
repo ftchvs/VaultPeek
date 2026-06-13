@@ -296,22 +296,33 @@ public enum LocalDataStore {
     }
 
     private static func isTransactionCacheFilename(_ filename: String) -> Bool {
-        filename == transactionCacheFilename ||
-            (
-                filename.hasPrefix("transactions-") &&
-                    (filename.hasSuffix(".json") || filename.contains(".json.backup-"))
-            )
+        isScopedCacheFilename(filename, legacyFilename: transactionCacheFilename, prefix: "transactions")
     }
 
     private static func isAccountCacheFilename(_ filename: String) -> Bool {
+        isScopedCacheFilename(filename, legacyFilename: accountCacheFilename, prefix: "accounts")
+    }
+
+    /// Matches only VaultPeek-generated cache files: the legacy unscoped name
+    /// (e.g. `transactions.json`), an optional `.json.backup-...` variant of
+    /// either shape, or the scoped `{prefix}-{sandbox|production}-{16hex}.json`
+    /// form the cache writers emit. Unrelated user/export files such as
+    /// `transactions-2026.json` are intentionally not matched, so local data
+    /// reset preserves them.
+    private static func isScopedCacheFilename(
+        _ filename: String,
+        legacyFilename: String,
+        prefix: String
+    ) -> Bool {
         let cacheFilename = normalizedCacheFilename(filename)
-        if cacheFilename == accountCacheFilename { return true }
+        if cacheFilename == legacyFilename { return true }
 
         return [PlaidEnvironment.sandbox.rawValue, PlaidEnvironment.production.rawValue].contains { environment in
-            guard cacheFilename.hasPrefix("accounts-\(environment)-"),
+            let scopedPrefix = "\(prefix)-\(environment)-"
+            guard cacheFilename.hasPrefix(scopedPrefix),
                   cacheFilename.hasSuffix(".json") else { return false }
 
-            let hashStart = cacheFilename.index(cacheFilename.startIndex, offsetBy: "accounts-\(environment)-".count)
+            let hashStart = cacheFilename.index(cacheFilename.startIndex, offsetBy: scopedPrefix.count)
             let hashEnd = cacheFilename.index(cacheFilename.endIndex, offsetBy: -".json".count)
             let hash = cacheFilename[hashStart..<hashEnd]
             return hash.count == 16 && hash.allSatisfy(\.isHexDigit)
