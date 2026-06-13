@@ -159,6 +159,7 @@ final class AppState {
 
     // MARK: - Services
     private let serverClient = ServerClient()
+    private let localDataCache = LocalDataCacheService()
     private let localAIInsightsService = LocalAIInsightsService()
     private let notificationService: any NotificationServiceProtocol
     private var refreshTask: Task<Void, Never>?
@@ -781,11 +782,10 @@ final class AppState {
             accounts = itemStatusesAvailable
                 ? accountsPreservingUnavailableItems(refreshedAccounts)
                 : accountsPreservingCachedAccountsMissingFromRefresh(refreshedAccounts)
-            try LocalDataStore.saveAccounts(
-                accounts,
-                to: activeStorageDirectoryURL,
-                context: transactionCacheContext
-            )
+            let cacheAccounts = accounts
+            let cacheDirectory = activeStorageDirectoryURL
+            let cacheContext = transactionCacheContext
+            try await localDataCache.saveAccounts(cacheAccounts, to: cacheDirectory, context: cacheContext)
             serverItemCount = Set(accounts.map(\.itemId)).count
             serverSyncReady = (serverItemCount ?? 0) > 0
             recordBalanceSnapshot()
@@ -808,11 +808,10 @@ final class AppState {
             accounts = itemStatusesAvailable
                 ? accountsPreservingUnavailableItems(refreshedAccounts)
                 : accountsPreservingCachedAccountsMissingFromRefresh(refreshedAccounts)
-            try LocalDataStore.saveAccounts(
-                accounts,
-                to: activeStorageDirectoryURL,
-                context: transactionCacheContext
-            )
+            let cacheAccounts = accounts
+            let cacheDirectory = activeStorageDirectoryURL
+            let cacheContext = transactionCacheContext
+            try await localDataCache.saveAccounts(cacheAccounts, to: cacheDirectory, context: cacheContext)
             lastSyncDate = Date()
             recordBalanceSnapshot()
         } catch {
@@ -837,10 +836,12 @@ final class AppState {
                 }
                 let response = try await serverClient.syncTransactions()
                 let updatedTransactions = TransactionSyncReducer.applying(response, to: transactions)
-                try LocalDataStore.saveTransactions(
+                let cacheDirectory = activeStorageDirectoryURL
+                let cacheContext = transactionCacheContext
+                try await localDataCache.saveTransactions(
                     updatedTransactions,
-                    to: activeStorageDirectoryURL,
-                    context: transactionCacheContext
+                    to: cacheDirectory,
+                    context: cacheContext
                 )
                 transactions = updatedTransactions
                 try await serverClient.commitSyncCursors(response.pendingCursors)
@@ -1048,15 +1049,15 @@ final class AppState {
                     (transaction.itemId == nil && removedAccountIds.contains(transaction.accountId))
             }
             do {
-                try LocalDataStore.saveAccounts(
-                    accounts,
-                    to: activeStorageDirectoryURL,
-                    context: transactionCacheContext
-                )
-                try LocalDataStore.saveTransactions(
-                    transactions,
-                    to: activeStorageDirectoryURL,
-                    context: transactionCacheContext
+                let cacheAccounts = accounts
+                let cacheTransactions = transactions
+                let cacheDirectory = activeStorageDirectoryURL
+                let cacheContext = transactionCacheContext
+                try await localDataCache.saveAccounts(cacheAccounts, to: cacheDirectory, context: cacheContext)
+                try await localDataCache.saveTransactions(
+                    cacheTransactions,
+                    to: cacheDirectory,
+                    context: cacheContext
                 )
             } catch {
                 self.error = "Local cache failed to save: \(error.localizedDescription)"
@@ -1067,11 +1068,12 @@ final class AppState {
     }
 
     @discardableResult
-    func resetLocalData() throws -> LocalDataResetResult {
+    func resetLocalData() async throws -> LocalDataResetResult {
         stopBackgroundRefresh()
 
         let resetSetupCompletionDefaultsKey = setupCompletionDefaultsKey
-        let result = try LocalDataStore.resetLocalData(at: activeStorageDirectoryURL)
+        let resetDirectory = activeStorageDirectoryURL
+        let result = try await localDataCache.resetLocalData(at: resetDirectory)
 
         accounts = []
         transactions = []
@@ -1158,7 +1160,7 @@ final class AppState {
         // Returning users see cached last-known data immediately: the cache
         // loads before the connectivity check (which can take seconds while
         // a bundled server boots) instead of after it.
-        preloadCachedDataBeforeFirstConnect()
+        await preloadCachedDataBeforeFirstConnect()
         await checkServerConnection()
         if !serverConnected {
             await startBundledServerIfAvailable()
@@ -1170,11 +1172,11 @@ final class AppState {
             // restart the managed server.
             if serverCredentialsConfigured != false {
                 if statusItemCount > 0 {
-                    loadCachedAccounts()
-                    loadCachedTransactions()
+                    await loadCachedAccounts()
+                    await loadCachedTransactions()
                 } else {
-                    clearCachedAccounts()
-                    clearCachedTransactions()
+                    await clearCachedAccounts()
+                    await clearCachedTransactions()
                 }
                 await refreshAccounts()
                 await syncTransactions()
@@ -1282,19 +1284,19 @@ final class AppState {
     /// connectivity check runs. Opportunistic — failures and context
     /// mismatches fall through to the normal post-connect cache path without
     /// surfacing an error during boot.
-    private func preloadCachedDataBeforeFirstConnect() {
+    private func preloadCachedDataBeforeFirstConnect() async {
         guard accounts.isEmpty, transactions.isEmpty,
               let context = persistedTransactionCacheContext(),
               let cacheDirectory = preconnectCacheDirectory(for: context)
         else { return }
 
-        if let cachedAccounts = try? LocalDataStore.loadAccounts(
+        if let cachedAccounts = try? await localDataCache.loadAccounts(
             from: cacheDirectory,
             context: context
         ), !cachedAccounts.isEmpty {
             accounts = cachedAccounts
         }
-        if let cachedTransactions = try? LocalDataStore.loadTransactions(
+        if let cachedTransactions = try? await localDataCache.loadTransactions(
             from: cacheDirectory,
             context: context
         ), !cachedTransactions.isEmpty {
@@ -1391,9 +1393,9 @@ final class AppState {
 
     // MARK: - Balance History
 
-    private func loadCachedAccounts() {
+    private func loadCachedAccounts() async {
         do {
-            accounts = try LocalDataStore.loadAccounts(
+            accounts = try await localDataCache.loadAccounts(
                 from: activeStorageDirectoryURL,
                 context: transactionCacheContext
             )
@@ -1402,10 +1404,10 @@ final class AppState {
         }
     }
 
-    private func clearCachedAccounts() {
+    private func clearCachedAccounts() async {
         accounts = []
         do {
-            try LocalDataStore.saveAccounts(
+            try await localDataCache.saveAccounts(
                 accounts,
                 to: activeStorageDirectoryURL,
                 context: transactionCacheContext
@@ -1415,9 +1417,9 @@ final class AppState {
         }
     }
 
-    private func loadCachedTransactions() {
+    private func loadCachedTransactions() async {
         do {
-            transactions = try LocalDataStore.loadTransactions(
+            transactions = try await localDataCache.loadTransactions(
                 from: activeStorageDirectoryURL,
                 context: transactionCacheContext
             )
@@ -1426,10 +1428,10 @@ final class AppState {
         }
     }
 
-    private func clearCachedTransactions() {
+    private func clearCachedTransactions() async {
         transactions = []
         do {
-            try LocalDataStore.saveTransactions(
+            try await localDataCache.saveTransactions(
                 transactions,
                 to: activeStorageDirectoryURL,
                 context: transactionCacheContext
