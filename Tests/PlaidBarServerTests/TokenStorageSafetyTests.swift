@@ -63,6 +63,8 @@ struct TokenStorageSafetyTests {
 
             let row = try #require(try await store.getItem(id: itemId))
             #expect(row.accessToken == "keychain:\(itemId)")
+            #expect(row.providerID == .plaid)
+            #expect(row.provider == ProviderID.plaid.rawValue)
             #expect(!row.accessToken.contains(rawToken))
             // The vault still resolves the reference back to the raw token.
             #expect(try store.accessToken(for: row) == rawToken)
@@ -95,6 +97,7 @@ struct TokenStorageSafetyTests {
         try await withTokenStore(databasePath: databasePath, logger: logger) { store in
             let restored = try #require(try await store.getItem(id: itemId))
             #expect(restored.accessToken == "keychain:\(itemId)")
+            #expect(restored.providerID == .plaid)
 
             try await store.deleteItem(id: itemId)
             #expect(try await store.getItem(id: itemId) == nil)
@@ -124,6 +127,68 @@ struct TokenStorageSafetyTests {
             storedToken: PlaidTokenVault.reference(for: itemId),
             fallbackItemId: itemId
         )
+    }
+
+    @Test(
+        "Provider-scoped item lookup isolates stored providers",
+        .enabled(if: tokenVaultKeychainAvailable, "macOS Keychain accepts test writes")
+    )
+    func providerScopedItemLookupIsolatesStoredProviders() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-provider-scope-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let plaidItemId = "test_item_plaid_\(UUID().uuidString)"
+        let fixtureItemId = "test_item_fixture_\(UUID().uuidString)"
+        defer {
+            for itemId in [plaidItemId, fixtureItemId] {
+                try? PlaidTokenVault.delete(
+                    storedToken: PlaidTokenVault.reference(for: itemId),
+                    fallbackItemId: itemId
+                )
+            }
+        }
+
+        let databasePath = directory.appendingPathComponent("plaidbar-provider-scope.sqlite").path
+        let logger = Logger(label: "com.ftchvs.plaidbar-server-tests.provider-scope")
+
+        try await withTokenStore(databasePath: databasePath, logger: logger) { store in
+            try await store.saveItem(
+                id: plaidItemId,
+                accessToken: "access-sandbox-\(UUID().uuidString)",
+                institutionId: "ins_plaid",
+                institutionName: "Plaid Test Bank"
+            )
+            try await store.saveItem(
+                id: fixtureItemId,
+                accessToken: "access-sandbox-\(UUID().uuidString)",
+                institutionId: "ins_fixture",
+                institutionName: "Fixture Test Bank",
+                providerID: .fixture
+            )
+
+            let plaidItems = try await store.getAllItems(providerID: .plaid)
+            let fixtureItems = try await store.getAllItems(providerID: .fixture)
+
+            #expect(plaidItems.map(\.id).contains(plaidItemId))
+            #expect(!plaidItems.map(\.id).contains(fixtureItemId))
+            #expect(fixtureItems.map(\.id).contains(fixtureItemId))
+            #expect(!fixtureItems.map(\.id).contains(plaidItemId))
+        }
+    }
+
+    @Test("Missing item provider defaults to Plaid for legacy rows")
+    func missingItemProviderDefaultsToPlaid() {
+        let item = ItemModel(
+            id: "legacy_item",
+            accessToken: "keychain:legacy_item",
+            institutionId: nil,
+            institutionName: nil
+        )
+        item.provider = nil
+
+        #expect(item.providerID == .plaid)
     }
 
     @Test("Server config load keeps the data directory private")
@@ -205,6 +270,7 @@ struct TokenStorageSafetyTests {
         let fluent = Fluent(logger: logger)
         fluent.databases.use(.sqlite(.file(databasePath)), as: .sqlite)
         await fluent.migrations.add(CreateItems())
+        await fluent.migrations.add(AddProviderToItems())
         await fluent.migrations.add(CreateSyncCursors())
 
         var bodyError: Error?
