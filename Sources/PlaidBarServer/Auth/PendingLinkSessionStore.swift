@@ -8,16 +8,20 @@ actor PendingLinkSessionStore {
     private static let filePermissions = 0o600
 
     private let ttl: TimeInterval
+    private let completionLeaseTTL: TimeInterval
     private let storageURL: URL?
     private let now: @Sendable () -> Date
     private var sessions: [String: PendingLinkSession] = [:]
+    private var completionLeases: [String: Date] = [:]
 
     init(
         ttl: TimeInterval = 30 * 60,
+        completionLeaseTTL: TimeInterval = 60,
         storageURL: URL? = nil,
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.ttl = ttl
+        self.completionLeaseTTL = completionLeaseTTL
         self.storageURL = storageURL
         self.now = now
         self.sessions = Self.loadSessions(from: storageURL)
@@ -35,7 +39,37 @@ actor PendingLinkSessionStore {
             updateItemId: updateItemId,
             createdAt: now()
         )
+        completionLeases.removeValue(forKey: state)
         persist()
+    }
+
+    func beginCompletion(state: String) -> PendingLinkSession? {
+        purgeExpired()
+        let currentDate = now()
+        guard let session = sessions[state],
+              currentDate.timeIntervalSince(session.createdAt) <= ttl,
+              completionLeases[state] == nil
+        else {
+            return nil
+        }
+        completionLeases[state] = currentDate
+        return session
+    }
+
+    func markPublicTokenResultStored(state: String) {
+        purgeExpired()
+        guard var session = sessions[state],
+              now().timeIntervalSince(session.createdAt) <= ttl
+        else {
+            return
+        }
+        session.completedPublicTokenResultCount += 1
+        sessions[state] = session
+        persist()
+    }
+
+    func releaseCompletion(state: String) {
+        completionLeases.removeValue(forKey: state)
     }
 
     func consume(state: String) -> PendingLinkSession? {
@@ -45,6 +79,7 @@ actor PendingLinkSessionStore {
         else {
             return nil
         }
+        completionLeases.removeValue(forKey: state)
         persist()
         return session
     }
@@ -53,6 +88,11 @@ actor PendingLinkSessionStore {
         let currentDate = now()
         let activeSessions = sessions.filter { _, session in
             currentDate.timeIntervalSince(session.createdAt) <= ttl
+        }
+        let activeStates = Set(activeSessions.keys)
+        completionLeases = completionLeases.filter { state, startedAt in
+            activeStates.contains(state)
+                && currentDate.timeIntervalSince(startedAt) <= completionLeaseTTL
         }
         guard activeSessions.count != sessions.count else { return }
         sessions = activeSessions
@@ -159,4 +199,28 @@ struct PendingLinkSession: Codable, Sendable {
     let linkToken: String
     let updateItemId: String?
     let createdAt: Date
+    var completedPublicTokenResultCount: Int
+
+    init(
+        linkToken: String,
+        updateItemId: String?,
+        createdAt: Date,
+        completedPublicTokenResultCount: Int = 0
+    ) {
+        self.linkToken = linkToken
+        self.updateItemId = updateItemId
+        self.createdAt = createdAt
+        self.completedPublicTokenResultCount = completedPublicTokenResultCount
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        linkToken = try container.decode(String.self, forKey: .linkToken)
+        updateItemId = try container.decodeIfPresent(String.self, forKey: .updateItemId)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        completedPublicTokenResultCount = try container.decodeIfPresent(
+            Int.self,
+            forKey: .completedPublicTokenResultCount
+        ) ?? 0
+    }
 }

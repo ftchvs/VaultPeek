@@ -108,9 +108,17 @@ struct OAuthCallbackRoute: Sendable {
         request: Request,
         context: some RequestContext
     ) async throws -> Response {
-        guard let stateParam = request.uri.queryParameters.get("state"),
-              let pendingSession = await pendingLinkSessions.consume(state: String(stateParam))
-        else {
+        guard let stateParam = request.uri.queryParameters.get("state") else {
+            return Response(
+                status: .badRequest,
+                headers: [.contentType: "text/html"],
+                body: .init(byteBuffer: ByteBuffer(
+                    string: Self.errorPage("Missing or expired link session state")
+                ))
+            )
+        }
+        let state = String(stateParam)
+        guard let pendingSession = await pendingLinkSessions.beginCompletion(state: state) else {
             return Response(
                 status: .badRequest,
                 headers: [.contentType: "text/html"],
@@ -124,6 +132,7 @@ struct OAuthCallbackRoute: Sendable {
             let publicTokenResults = try await publicTokenResults(from: request, pendingSession: pendingSession)
             if publicTokenResults.isEmpty, let updateItemId = pendingSession.updateItemId {
                 try await tokenStore.updateItemStatus(id: updateItemId, status: ItemConnectionStatus.connected.rawValue)
+                _ = await pendingLinkSessions.consume(state: state)
                 return Response(
                     status: .ok,
                     headers: [.contentType: "text/html"],
@@ -132,6 +141,7 @@ struct OAuthCallbackRoute: Sendable {
             }
 
             guard !publicTokenResults.isEmpty else {
+                await pendingLinkSessions.releaseCompletion(state: state)
                 return Response(
                     status: .badRequest,
                     headers: [.contentType: "text/html"],
@@ -141,9 +151,15 @@ struct OAuthCallbackRoute: Sendable {
                 )
             }
 
-            for publicTokenResult in publicTokenResults {
+            let completedResultCount = min(
+                pendingSession.completedPublicTokenResultCount,
+                publicTokenResults.count
+            )
+            for publicTokenResult in publicTokenResults.dropFirst(completedResultCount) {
                 try await exchangeAndStore(publicTokenResult: publicTokenResult)
+                await pendingLinkSessions.markPublicTokenResultStored(state: state)
             }
+            _ = await pendingLinkSessions.consume(state: state)
 
             return Response(
                 status: .ok,
@@ -151,6 +167,7 @@ struct OAuthCallbackRoute: Sendable {
                 body: .init(byteBuffer: ByteBuffer(string: Self.successPage()))
             )
         } catch {
+            await pendingLinkSessions.releaseCompletion(state: state)
             return Response(
                 status: .internalServerError,
                 headers: [.contentType: "text/html"],
