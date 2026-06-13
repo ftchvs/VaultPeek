@@ -119,7 +119,7 @@ enum SnapshotRenderer {
     /// (the pane is appearance-only). Same headless-material caveat as the
     /// popover: vibrant materials composite against nothing off-screen.
     private static func renderSettingsAppearance(to url: URL) async -> Bool {
-        let scheme = forcedAppearanceScheme()
+        let scheme = PlaidBarApp.forcedColorScheme
         let size = NSSize(width: 560, height: 640)
 
         let root = AppearanceSettingsView()
@@ -146,16 +146,11 @@ enum SnapshotRenderer {
         try? await Task.sleep(for: .milliseconds(800))
         hosting.layoutSubtreeIfNeeded()
 
-        return captureView(hosting, to: url)
-    }
-
-    private static func forcedAppearanceScheme() -> ColorScheme? {
-        guard let mode = CommandLineOptions.value(for: "--appearance") else { return nil }
-        switch mode.lowercased() {
-        case "light": return .light
-        case "dark": return .dark
-        default: return nil
-        }
+        let wrote = captureView(window.contentView ?? hosting, to: url)
+        // Tear the off-screen window down explicitly so adding orderFront later
+        // can never turn this into a real leak.
+        window.close()
+        return wrote
     }
 
     /// Rasterizes any view into a PNG via `cacheDisplay`. Returns `true` on write.
