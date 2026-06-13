@@ -25,4 +25,22 @@ struct PlaidBarCLIServerTests {
         #expect(!PlaidBarCLIServer.isLoopback("http://127.0.0:8484"))
         #expect(!PlaidBarCLIServer.isLoopback("not a url"))
     }
+
+    @Test("Known loopback-allowlist bypass vectors are rejected")
+    func bypassVectorsRejected() {
+        // The classic "@"-in-authority SSRF bypass: the part before "@" is
+        // userinfo, so URLComponents parses the host as the remote — the token
+        // must not be sent there.
+        #expect(!PlaidBarCLIServer.isLoopback("http://127.0.0.1@evil.com"))
+        #expect(!PlaidBarCLIServer.isLoopback("http://localhost@evil.com"))
+        // A loopback label used as a subdomain prefix is not loopback.
+        #expect(!PlaidBarCLIServer.isLoopback("http://127.0.0.1.evil.com:8484"))
+        // Non-decimal / packed IPv4 encodings of 127.0.0.1 are not recognized.
+        #expect(!PlaidBarCLIServer.isLoopback("http://0x7f.0.0.1:8484"))   // hex octet
+        #expect(!PlaidBarCLIServer.isLoopback("http://0177.0.0.1:8484"))   // octal octet
+        #expect(!PlaidBarCLIServer.isLoopback("http://2130706433:8484"))   // packed decimal
+        // IPv4-mapped IPv6 and trailing-dot forms fail safe (rejected, not sent).
+        #expect(!PlaidBarCLIServer.isLoopback("http://[::ffff:127.0.0.1]:8484"))
+        #expect(!PlaidBarCLIServer.isLoopback("http://localhost.:8484"))
+    }
 }
