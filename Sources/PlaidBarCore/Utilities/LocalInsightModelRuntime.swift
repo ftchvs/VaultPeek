@@ -244,22 +244,94 @@ public enum LocalInsightModelRuntime {
         nanoseconds: UInt64,
         operation: @escaping @Sendable () async throws -> T
     ) async throws -> T {
-        try await withThrowingTaskGroup(of: T.self) { group in
-            group.addTask {
-                try await operation()
+        try await withCheckedThrowingContinuation { continuation in
+            let race = LocalInsightModelTimeoutRace(continuation: continuation)
+            let operationTask = Task {
+                do {
+                    let result = try await operation()
+                    race.complete(.success(result))
+                } catch {
+                    race.complete(.failure(error))
+                }
             }
-            group.addTask {
-                try await Task.sleep(nanoseconds: nanoseconds)
-                throw LocalInsightModelTimeoutError()
+            let timeoutTask = Task {
+                do {
+                    try await Task.sleep(nanoseconds: nanoseconds)
+                    race.complete(.failure(LocalInsightModelTimeoutError()))
+                } catch {
+                    race.cancelTimeout()
+                }
             }
-
-            guard let result = try await group.next() else {
-                group.cancelAll()
-                throw LocalInsightModelTimeoutError()
-            }
-            group.cancelAll()
-            return result
+            race.setTasks(operationTask: operationTask, timeoutTask: timeoutTask)
         }
+    }
+}
+
+private final class LocalInsightModelTimeoutRace<T: Sendable>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<T, Error>?
+    private var operationTask: Task<Void, Never>?
+    private var timeoutTask: Task<Void, Never>?
+
+    init(continuation: CheckedContinuation<T, Error>) {
+        self.continuation = continuation
+    }
+
+    func setTasks(operationTask: Task<Void, Never>, timeoutTask: Task<Void, Never>) {
+        var shouldCancel = false
+        lock.lock()
+        if continuation == nil {
+            shouldCancel = true
+        } else {
+            self.operationTask = operationTask
+            self.timeoutTask = timeoutTask
+        }
+        lock.unlock()
+
+        if shouldCancel {
+            operationTask.cancel()
+            timeoutTask.cancel()
+        }
+    }
+
+    func complete(_ result: Result<T, Error>) {
+        let continuationToResume: CheckedContinuation<T, Error>?
+        let operationTaskToCancel: Task<Void, Never>?
+        let timeoutTaskToCancel: Task<Void, Never>?
+
+        lock.lock()
+        continuationToResume = continuation
+        continuation = nil
+        operationTaskToCancel = operationTask
+        timeoutTaskToCancel = timeoutTask
+        operationTask = nil
+        timeoutTask = nil
+        lock.unlock()
+
+        guard let continuationToResume else {
+            return
+        }
+
+        operationTaskToCancel?.cancel()
+        timeoutTaskToCancel?.cancel()
+
+        switch result {
+        case .success(let value):
+            continuationToResume.resume(returning: value)
+        case .failure(let error):
+            continuationToResume.resume(throwing: error)
+        }
+    }
+
+    func cancelTimeout() {
+        let timeoutTaskToCancel: Task<Void, Never>?
+
+        lock.lock()
+        timeoutTaskToCancel = timeoutTask
+        timeoutTask = nil
+        lock.unlock()
+
+        timeoutTaskToCancel?.cancel()
     }
 }
 

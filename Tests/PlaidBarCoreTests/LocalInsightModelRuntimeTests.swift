@@ -105,6 +105,28 @@ struct LocalInsightModelRuntimeTests {
         #expect(result.fallbackReason == .timeout)
     }
 
+    @Test("Runtime timeout returns without waiting for cancellation-ignoring models")
+    func runtimeTimeoutDoesNotWaitForCancellationIgnoringModel() async {
+        let model = CancellationIgnoringLocalInsightModel(
+            output: "Food spending was the largest driver this month.",
+            delaySeconds: 0.2
+        )
+        let startedAt = Date()
+
+        let result = await LocalInsightModelRuntime.generateSummary(
+            input: input(),
+            model: model,
+            fallbackSummary: { _ in "deterministic fallback" },
+            configuration: LocalInsightModelGenerationConfiguration(timeoutNanoseconds: 1_000_000)
+        )
+        let elapsed = Date().timeIntervalSince(startedAt)
+
+        #expect(result.summary == "deterministic fallback")
+        #expect(result.usedModelOutput == false)
+        #expect(result.fallbackReason == .timeout)
+        #expect(elapsed < 0.15)
+    }
+
     private func input() -> LocalAIActivitySummaryInput {
         let current = LocalAIActivityMetrics(
             transactionCount: 4,
@@ -173,6 +195,19 @@ private struct DelayedLocalInsightModel: LocalInsightModel {
 
     func summarize(_ prompt: LocalInsightModelPrompt, maxTokens: Int) async throws -> String {
         try await Task.sleep(nanoseconds: delayNanoseconds)
+        return output
+    }
+}
+
+private struct CancellationIgnoringLocalInsightModel: LocalInsightModel {
+    let output: String
+    let delaySeconds: TimeInterval
+
+    func summarize(_ prompt: LocalInsightModelPrompt, maxTokens: Int) async throws -> String {
+        let deadline = Date().addingTimeInterval(delaySeconds)
+        while Date() < deadline {
+            _ = 1 + 1
+        }
         return output
     }
 }

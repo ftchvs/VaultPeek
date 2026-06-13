@@ -86,6 +86,8 @@ struct LocalAIInsightsService {
 
         var summaries: [LocalAIActivitySummary] = []
         summaries.reserveCapacity(inputs.count)
+        let currentAvailability = availability
+        let configuredModel = currentAvailability.state == .available ? model : nil
 
         for input in inputs {
             let fallbackSummary: @Sendable (LocalAIActivitySummaryInput) -> String = { input in
@@ -93,14 +95,18 @@ struct LocalAIInsightsService {
             }
             let generated = await LocalInsightModelRuntime.generateSummary(
                 input: input,
-                model: model,
+                model: configuredModel,
                 fallbackSummary: fallbackSummary,
                 configuration: generationConfiguration
+            )
+            let summaryAvailability = Self.summaryAvailability(
+                baseAvailability: currentAvailability,
+                generationResult: generated
             )
             summaries.append(
                 LocalAIActivitySummary(
                     window: input.window,
-                    availability: availability,
+                    availability: summaryAvailability,
                     input: input,
                     generatedSummary: generated.summary,
                     generatedBullets: Self.bullets(for: input),
@@ -115,6 +121,42 @@ struct LocalAIInsightsService {
     private static func isDisabledRuntimeValue(_ rawValue: String) -> Bool {
         let normalized = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return normalized.isEmpty || ["disabled", "off", "false", "none"].contains(normalized)
+    }
+
+    private static func summaryAvailability(
+        baseAvailability: LocalAIAvailability,
+        generationResult: LocalInsightModelGenerationResult
+    ) -> LocalAIAvailability {
+        guard baseAvailability.state == .available,
+              generationResult.usedModelOutput == false,
+              let fallbackReason = generationResult.fallbackReason
+        else {
+            return baseAvailability
+        }
+
+        return LocalAIAvailability(
+            state: .unavailable,
+            runtimeName: baseAvailability.runtimeName,
+            detail: fallbackDetail(runtimeName: baseAvailability.runtimeName, reason: fallbackReason)
+        )
+    }
+
+    private static func fallbackDetail(
+        runtimeName: String?,
+        reason: LocalInsightModelFallbackReason
+    ) -> String {
+        let runtime = runtimeName.map { "Local runtime '\($0)'" } ?? "The configured local runtime"
+        let reasonText = switch reason {
+        case .noModel:
+            "has no model adapter"
+        case .timeout:
+            "timed out before producing output"
+        case .modelError:
+            "returned an error"
+        case .invalidOutput:
+            "returned invalid output"
+        }
+        return "\(runtime) \(reasonText). VaultPeek used deterministic local summaries and did not call cloud AI."
     }
 
     private static func summaryText(for input: LocalAIActivitySummaryInput) -> String {
