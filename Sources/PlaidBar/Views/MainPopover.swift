@@ -895,33 +895,52 @@ private struct DashboardStatusReadinessPanel: View {
             StatusMetricGrid()
                 .environment(appState)
 
-            if let primaryAction = readiness.primaryAction {
+            if readiness.primaryAction != nil || !readiness.secondaryActions.isEmpty {
                 HStack(spacing: 8) {
-                    if readinessNeedsAttention {
-                        Button {
-                            perform(primaryAction)
-                        } label: {
-                            Label(
-                                primaryActionLabel(for: primaryAction),
-                                systemImage: readiness.primaryActionIconName ?? primaryAction.defaultIconName
-                            )
+                    if let primaryAction = readiness.primaryAction {
+                        if readinessNeedsAttention {
+                            Button {
+                                perform(primaryAction)
+                            } label: {
+                                Label(
+                                    primaryActionLabel(for: primaryAction),
+                                    systemImage: readiness.primaryActionIconName ?? primaryAction.defaultIconName
+                                )
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                            .tint(tint)
+                            .disabled(appState.isLoading)
+                        } else {
+                            Button {
+                                perform(primaryAction)
+                            } label: {
+                                Label(
+                                    primaryActionLabel(for: primaryAction),
+                                    systemImage: readiness.primaryActionIconName ?? primaryAction.defaultIconName
+                                )
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .disabled(appState.isLoading)
                         }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.small)
-                        .tint(tint)
-                        .disabled(appState.isLoading)
-                    } else {
+                    }
+
+                    // Modeled recovery fallbacks (e.g. in-app Settings when the
+                    // primary action opens System Settings). Routed through the
+                    // same perform(_:) so the panel matches the readiness
+                    // presentation contract (#322).
+                    ForEach(readiness.secondaryActions, id: \.self) { action in
                         Button {
-                            perform(primaryAction)
+                            perform(action)
                         } label: {
-                            Label(
-                                primaryActionLabel(for: primaryAction),
-                                systemImage: readiness.primaryActionIconName ?? primaryAction.defaultIconName
-                            )
+                            Label(action.defaultTitle, systemImage: action.defaultIconName)
+                                .lineLimit(1)
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
                         .disabled(appState.isLoading)
+                        .accessibilityLabel(action.defaultTitle)
                     }
                 }
             }
