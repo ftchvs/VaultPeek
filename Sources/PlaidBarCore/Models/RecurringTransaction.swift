@@ -113,6 +113,30 @@ public struct RecurringPriceIncrease: Sendable, Hashable {
 public enum RecurringStreamFlag: String, Sendable, Hashable, CaseIterable {
     case priceIncrease
     case stale
+
+    /// Short badge text. Paired with `iconName` so the flag never reads through
+    /// color alone (ACCESSIBILITY.md).
+    public var label: String {
+        switch self {
+        case .priceIncrease: "Price up"
+        case .stale: "Missing"
+        }
+    }
+
+    public var iconName: String {
+        switch self {
+        case .priceIncrease: "arrow.up.right"
+        case .stale: "calendar.badge.exclamationmark"
+        }
+    }
+
+    /// Longer phrasing for VoiceOver / accessibility labels.
+    public var accessibilityDescription: String {
+        switch self {
+        case .priceIncrease: "price increased"
+        case .stale: "expected charge missing"
+        }
+    }
 }
 
 public enum RecurringFrequency: String, Codable, Sendable, CaseIterable, Hashable {
