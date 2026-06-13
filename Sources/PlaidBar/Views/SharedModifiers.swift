@@ -263,6 +263,41 @@ extension View {
     }
 }
 
+// MARK: - Symbol Motion (shared, Reduce Motion-aware)
+
+/// The status/state SF Symbol-motion patterns used across VaultPeek
+/// (refresh/sync, attention severity, menu-bar status swaps). Centralizes the
+/// native symbol APIs behind one Reduce Motion gate so future icon animation
+/// uses a single pattern instead of scattered per-call logic (AND-358). Meaning
+/// always survives motion loss via the symbol's shape/state — these effects are
+/// decorative reinforcement only.
+enum SymbolMotion {
+    /// Cross-fade between glyphs when the symbol name changes.
+    case replace
+    /// A single, non-repeating discrete effect when the view appears/activates.
+    case bounceOnce
+    /// A continuous effect that loops while active (e.g. an in-progress spinner).
+    case rotateContinuously
+}
+
+extension View {
+    /// Apply a `SymbolMotion` pattern, disabled under Reduce Motion (the symbol's
+    /// shape/state still conveys meaning). `isActive` gates the discrete and
+    /// continuous effects; it is ignored by `.replace`, which keys off the symbol
+    /// name change. Reduce Motion is gated here so call sites pass only intent.
+    @ViewBuilder
+    func symbolMotion(_ motion: SymbolMotion, isActive: Bool = true, reduceMotion: Bool) -> some View {
+        switch motion {
+        case .replace:
+            contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
+        case .bounceOnce:
+            symbolEffect(.bounce, options: .nonRepeating, isActive: isActive && !reduceMotion)
+        case .rotateContinuously:
+            symbolEffect(.rotate, options: .repeat(.continuous), isActive: isActive && !reduceMotion)
+        }
+    }
+}
+
 // MARK: - Refresh Icon (native continuous symbol effect)
 
 struct RefreshIcon: View {
@@ -275,11 +310,7 @@ struct RefreshIcon: View {
         // symbol helpers swap in the filled static glyph at a dimmed opacity and
         // the effect is gated inactive, so loading reads without any movement.
         Image(systemName: MotionTokens.refreshSymbolName(isLoading: isLoading, reduceMotion: reduceMotion))
-            .symbolEffect(
-                .rotate,
-                options: .repeat(.continuous),
-                isActive: isLoading && !reduceMotion
-            )
+            .symbolMotion(.rotateContinuously, isActive: isLoading, reduceMotion: reduceMotion)
             .opacity(MotionTokens.refreshOpacity(isLoading: isLoading, reduceMotion: reduceMotion))
             .accessibilityLabel(isLoading ? "Refreshing" : "Refresh")
             .accessibilityValue(isLoading ? "In progress" : "Ready")
