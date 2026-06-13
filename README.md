@@ -39,6 +39,8 @@ Personal finance data lives behind bank website logins. The closest thing to a m
 - **Credit Utilization** — Progress bars with configurable warning thresholds and gauge
 - **Smart Notifications** — Alerts for large transactions, low balances, and high credit utilization
 - **Balance History** — Sparkline showing net balance trend over time
+- **Local Insight Receipt** — Optional, local-only activity summary with source-row counts, time window, top category, recurring estimate, and explicit no-cloud fallback when no local AI runtime is configured
+- **Attention Queue** — Prioritized recovery prompts keep setup, server, notification, stale-sync, and item-login work visible without hiding the dashboard
 - **Diagnostics** — Popover status strip plus a dashboard readiness panel for server health, credential state, synced item count, active local data path, item recovery, and settings handoff
 - **Keyboard Shortcuts** — Cmd+R to refresh and Cmd+N to add an account
 - **Settings Persistence** — Preferences saved across launches
@@ -70,8 +72,11 @@ browser handoff.
 
 The current app is dashboard-first. The main popover answers the common
 questions first: cash on hand, credit exposure, savings, debt, sync health, and
-the last year of spending activity. Filtered states keep the same visual system
-while focusing the account list and drill-down controls.
+the last year of spending activity. The same dashboard surface also owns
+below-the-fold local-only activity insight receipts and priority attention
+prompts without sending private transactions to a cloud model. Filtered states
+keep the same visual system while focusing the account list and drill-down
+controls.
 
 | Overview | Cash |
 |----------|------|
@@ -85,8 +90,8 @@ while focusing the account list and drill-down controls.
 
 | Debt | Status |
 |------|--------|
-| <img src="Assets/dashboard-debt.png" width="380" alt="Dashboard debt filter showing debt-oriented accounts and selected credit account detail"> | <img src="Assets/dashboard-status.png" width="380" alt="Dashboard status filter showing linked item health, server sync state, synced item count, and recovery actions"> |
-| Debt view emphasizes owed balances and high-utilization cards so risk is visible at a glance. | Status view now acts as a compact recovery surface for server state, credentials, synced items, active local data path, stale sync, item login, reconnect, refresh, and settings handoff. |
+| <img src="Assets/dashboard-debt.png" width="380" alt="Dashboard debt filter showing debt-oriented accounts and selected credit account detail"> | <img src="Assets/dashboard-status.png" width="380" alt="Dashboard status filter showing linked item health, server sync state, synced item count, attention queue, and recovery actions"> |
+| Debt view emphasizes owed balances and high-utilization cards so risk is visible at a glance. | Status view acts as a compact recovery surface for server state, credentials, synced items, active local data path, stale sync, item login, prioritized attention prompts, reconnect, refresh, and settings handoff. |
 
 Generate fresh dashboard screenshots with demo data:
 
@@ -176,32 +181,33 @@ the server agree.
 
 VaultPeek is a proprietary product. Public Homebrew tap distribution has been
 discontinued; signed builds are distributed privately to licensed users. The
-commands below assume an installed build on your `PATH`.
+drag-install DMG installs `VaultPeek.app`; source/developer command examples
+below assume you are running from a checkout.
 
 Run local demo data without Plaid credentials:
 
 ```bash
-plaidbar --demo
+swift run PlaidBar --demo
 ```
 
-Available commands after installation:
+Available source/developer commands:
 
 | Command | Purpose |
 |---------|---------|
-| `plaidbar --demo` | Launch the menu bar app with local fixture data |
-| `plaidbar-cli status --json` | Query the running local server with agent-friendly JSON output |
-| `plaidbar-cli item list` | List linked Plaid Items stored by PlaidBarServer |
-| `plaidbar-cli balance` | Fetch current balances through PlaidBarServer |
-| `plaidbar-cli transactions list --count 5` | Fetch recent transaction updates through PlaidBarServer |
-| `plaidbar-cli link --no-open --json` | Create a Hosted Link URL without opening a browser |
-| `plaidbar-server --sandbox` | Start the local Plaid companion server in sandbox mode |
-| `plaidbar-server --version` | Print the installed VaultPeek version |
+| `swift run PlaidBar --demo` | Launch the menu bar app with local fixture data |
+| `swift run plaidbar-cli status --json` | Query the running local server with agent-friendly JSON output |
+| `swift run plaidbar-cli item list` | List linked Plaid Items stored by PlaidBarServer |
+| `swift run plaidbar-cli balance` | Fetch current balances through PlaidBarServer |
+| `swift run plaidbar-cli transactions list --count 5` | Fetch recent transaction updates through PlaidBarServer |
+| `swift run plaidbar-cli link --no-open --json` | Create a Hosted Link URL without opening a browser |
+| `swift run PlaidBarServer --sandbox` | Start the local Plaid companion server in sandbox mode |
+| `swift run PlaidBarServer --version` | Print the installed VaultPeek version |
 
-The `plaidbar` and `plaidbar-server` executable names are intentionally
-unchanged until the staged SwiftPM product rename lands. Source checkouts also
-include `Scripts/vaultpeek-run` and the deprecated `Scripts/plaidbar-run` alias
-for local sandbox testing, but those helper scripts are not installed by the
-DMG.
+The `PlaidBar`, `PlaidBarServer`, and `plaidbar-cli` SwiftPM product names are
+intentionally unchanged until the staged product rename lands. Source checkouts
+also include `Scripts/vaultpeek-run` and the deprecated `Scripts/plaidbar-run`
+alias for local sandbox testing, but those helper scripts are not installed by
+the DMG.
 
 ### Naming compatibility (PlaidBar → VaultPeek)
 
@@ -210,7 +216,7 @@ few technical surfaces for compatibility, and those are not bugs:
 
 | Surface | Still PlaidBar | Why |
 |---------|----------------|-----|
-| SwiftPM targets/products | `PlaidBar`, `PlaidBarServer`, `PlaidBarCore`; executables `plaidbar`, `plaidbar-server` | Staged rename; avoids breaking builds, scripts, and installed binaries at once |
+| SwiftPM targets/products | `PlaidBar`, `PlaidBarServer`, `PlaidBarCore`, `plaidbar-cli`; app-bundle executables `PlaidBar`, `PlaidBarServer` | Staged rename; avoids breaking builds, scripts, and bundled server launches at once |
 | Environment variables / config keys | `PLAID_*` plus `PLAIDBAR_SERVER_PORT`, `PLAIDBAR_DATA_DIR`, `PLAIDBAR_MIGRATE_LEGACY_DATABASE`, `PLAIDBAR_SMOKE_PORT` | Existing `server.conf` files and shell setups keep working |
 | Keychain service | `PlaidBar.PlaidAccessToken` | SQLite `keychain:<item_id>` references must keep resolving after the storage migration |
 | SQLite store filenames | `plaidbar-sandbox.sqlite`, `plaidbar-production.sqlite` | Renaming live database files is riskier than keeping them |
@@ -220,15 +226,19 @@ few technical surfaces for compatibility, and those are not bugs:
 Rename history and upgrade guidance live in
 [docs/release-notes.md](docs/release-notes.md) and [CHANGELOG.md](CHANGELOG.md).
 
-`plaidbar-cli` follows the official Plaid CLI's terminal/agent conventions where they fit VaultPeek: table output by default, `--json` for structured stdout, diagnostics on stderr, and local-server bearer auth from `~/.vaultpeek/auth-token` or `$PLAIDBAR_DATA_DIR/auth-token`. It does not read Plaid Dashboard credentials directly; Plaid secrets and access tokens stay in `PlaidBarServer`.
+In source/developer builds, `plaidbar-cli` follows the official Plaid CLI's
+terminal/agent conventions where they fit VaultPeek: table output by default,
+`--json` for structured stdout, diagnostics on stderr, and local-server bearer
+auth from `~/.vaultpeek/auth-token` or `$PLAIDBAR_DATA_DIR/auth-token`. It does
+not read Plaid Dashboard credentials directly; Plaid secrets and access tokens
+stay in `PlaidBarServer`.
 
-Run Plaid sandbox mode with the installed server and app:
+Run Plaid sandbox mode from a source checkout:
 
 ```bash
 export PLAID_CLIENT_ID=your_sandbox_client_id
 export PLAID_SECRET=your_sandbox_secret
-plaidbar-server --sandbox
-open /Applications/VaultPeek.app
+./Scripts/run.sh --sandbox
 ```
 
 ### Source build (licensed access only)
@@ -384,7 +394,8 @@ VaultPeek uses a **two-process architecture** — a SwiftUI menu bar app talks t
 2. Stores item records in local SQLite and Plaid access-token bytes in macOS Keychain when available
 3. Binds to `127.0.0.1` only — no LAN or cloud exposure
 4. Can be restarted independently of the UI
-5. Opens the door for future CLI tools or iOS companion
+5. Powers the source-built `plaidbar-cli` while keeping terminal access behind the
+   same local auth and server boundaries
 
 ### Technology Stack
 
@@ -423,8 +434,8 @@ PlaidBar/                            # repo checkout (repo rename pending)
 │   │   ├── Storage/                 # Fluent models + migrations
 │   │   └── Config/                  # Server configuration
 │   └── PlaidBarCore/                # Shared library
-│       ├── Models/                  # DTOs (Account, Transaction, etc.)
-│       └── Utilities/               # Currency formatters, constants
+│       ├── Models/                  # DTOs, dashboard presenters, local AI receipts
+│       └── Utilities/               # Currency formatters, constants, reducers
 ├── Tests/                           # Swift Testing suites for all 3 targets
 ├── Scripts/                         # build.sh, run.sh, screenshots.sh
 ├── Assets/                          # README screenshots
@@ -474,9 +485,9 @@ swift build
 # Build release
 swift build -c release
 
-# Run installed app bundle commands
-plaidbar --demo
-plaidbar-server --sandbox
+# Run source/developer commands
+swift run PlaidBar --demo
+swift run PlaidBarServer --sandbox
 
 # Run source-checkout helper scripts
 ./Scripts/vaultpeek-run --sandbox   # plaidbar-run remains a deprecated alias
