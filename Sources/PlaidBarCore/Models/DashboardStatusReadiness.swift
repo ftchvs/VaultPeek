@@ -129,6 +129,20 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
             )
         }
 
+        // A sandbox/production mismatch outranks item reconnect guidance:
+        // reconnecting an institution cannot succeed against the wrong Plaid
+        // environment, so this must be checked before degraded item counts.
+        // Mirrors AttentionQueue, which ranks the mode-mismatch row above item
+        // reconnect rows for the same dashboard status domain.
+        if let modeMismatch = serverModeMismatchError(from: errorMessage) {
+            return DashboardStatusReadiness(
+                level: .blocked,
+                title: modeMismatch.title,
+                detail: modeMismatch.detail,
+                primaryAction: .checkServer
+            )
+        }
+
         if erroredItemCount > 0 {
             return DashboardStatusReadiness(
                 level: .blocked,
@@ -152,15 +166,6 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
                 ),
                 detail: "One or more institutions need an updated login before sync can stay healthy.",
                 primaryAction: .reconnect
-            )
-        }
-
-        if let modeMismatch = serverModeMismatchError(from: errorMessage) {
-            return DashboardStatusReadiness(
-                level: .blocked,
-                title: modeMismatch.title,
-                detail: modeMismatch.detail,
-                primaryAction: .checkServer
             )
         }
 

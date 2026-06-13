@@ -2373,6 +2373,30 @@ struct PlaidBarCoreTests {
         #expect(readiness.secondaryActions.isEmpty)
     }
 
+    @Test("Dashboard status readiness ranks server mode mismatch above item reconnect")
+    func dashboardStatusReadinessRanksModeMismatchAboveItemReconnect() {
+        // A mode mismatch with a concurrent degraded item must surface the
+        // server fix, not an item reconnect CTA — reconnecting cannot succeed
+        // against the wrong Plaid environment. Mirrors AttentionQueue ordering.
+        let readiness = DashboardStatusReadiness.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 1,
+            accountCount: 1,
+            syncedItemCount: 0,
+            needsLoginItemCount: 1,
+            erroredItemCount: 1,
+            isSyncStale: true,
+            lastSyncRelative: nil,
+            errorMessage: "Server is running in production, not sandbox. Restart with ./Scripts/run.sh --sandbox."
+        )
+
+        #expect(readiness.level == .blocked)
+        #expect(readiness.title == "Server mode mismatch")
+        #expect(readiness.primaryAction == .checkServer)
+    }
+
     @Test("Notification permission presentation gives denied state one settings action")
     func notificationPermissionPresentationDeniedAction() {
         let presentation = NotificationPermissionPresentation.evaluate(kind: .denied)
