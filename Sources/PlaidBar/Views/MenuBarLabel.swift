@@ -17,8 +17,8 @@ struct MenuBarLabel: View {
                 // One-shot Apple-native cross-fade when the status glyph
                 // changes; meaning still lives in the symbol shape + text, so
                 // this is purely calm polish. Disabled under Reduce Motion so
-                // the glyph swaps instantly with no animation.
-                .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
+                // the glyph swaps instantly with no animation (AND-358 helper).
+                .symbolMotion(.replace, reduceMotion: reduceMotion)
             if let attentionText = presentation.attentionText {
                 Text(attentionText)
                     .font(.caption.weight(.medium))
