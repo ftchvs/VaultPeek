@@ -1,6 +1,6 @@
 # Screenshots
 
-PlaidBar screenshots are part of the product contract. They should show the
+VaultPeek screenshots are part of the product contract. They should show the
 current design system, realistic states, and public-safe data.
 
 ## Public-Safe Rule
@@ -23,7 +23,7 @@ From the repository root:
 ./Scripts/screenshots.sh
 ```
 
-The script launches PlaidBar locally and captures:
+The script launches VaultPeek locally and captures:
 
 - sandbox setup preflight
 - dashboard overview
