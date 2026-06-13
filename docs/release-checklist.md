@@ -101,5 +101,8 @@ the (not yet performed) signing and notarization runbook.
 - [ ] `otto-openclaw-merge-gate` is green on the release-prep PR.
 - [ ] Publish runs only from clean, up-to-date `main`:
   `./Scripts/release.sh --publish`.
+- [ ] Rollback path is documented and the prior good tag/DMG is known
+  (`docs/release.md` -> Rollback): the last clean `v<version>` and its verified
+  `VaultPeek-<version>.dmg` checksum are identified before publishing.
 - [ ] After publishing, the progress ledger and backlog checklist record the
   completed task IDs.
