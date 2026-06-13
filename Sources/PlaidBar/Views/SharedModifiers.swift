@@ -203,30 +203,53 @@ struct RefreshIcon: View {
     @State private var rotation: Double = 0
 
     var body: some View {
-        // Under Reduce Motion the infinite spin is replaced by a static
-        // dimmed state — loading is still visible, nothing moves.
-        Image(systemName: "arrow.clockwise")
-            .rotationEffect(.degrees(rotation))
-            .opacity(reduceMotion && isLoading ? 0.5 : 1)
+        // Under Reduce Motion the infinite spin is replaced by a filled static
+        // symbol plus accessibility value, so loading does not depend on motion.
+        Image(systemName: MotionTokens.refreshSymbolName(isLoading: isLoading, reduceMotion: reduceMotion))
+            .rotationEffect(.degrees(reduceMotion ? 0 : rotation))
+            .opacity(MotionTokens.refreshOpacity(isLoading: isLoading, reduceMotion: reduceMotion))
+            .accessibilityLabel(isLoading ? "Refreshing" : "Refresh")
+            .accessibilityValue(isLoading ? "In progress" : "Ready")
             .onChange(of: isLoading) { _, loading in
-                guard !reduceMotion else { return }
                 if loading {
-                    withAnimation(.linear(duration: 0.8).repeatForever(autoreverses: false)) {
-                        rotation = 360
-                    }
+                    startSpinIfAllowed()
                 } else {
-                    withAnimation(.linear(duration: 0.3)) {
-                        rotation = 0
-                    }
+                    stopSpin(animated: true)
+                }
+            }
+            .onChange(of: reduceMotion) { _, shouldReduceMotion in
+                if shouldReduceMotion {
+                    stopSpin(animated: false)
+                } else if isLoading {
+                    startSpinIfAllowed()
                 }
             }
             .onAppear {
-                if isLoading, !reduceMotion {
-                    withAnimation(.linear(duration: 0.8).repeatForever(autoreverses: false)) {
-                        rotation = 360
-                    }
-                }
+                guard isLoading else { return }
+                startSpinIfAllowed()
             }
+    }
+
+    private func startSpinIfAllowed() {
+        guard !reduceMotion else {
+            stopSpin(animated: false)
+            return
+        }
+
+        rotation = 0
+        withAnimation(MotionTokens.animation(MotionTokens.refreshSpin, reduceMotion: reduceMotion)) {
+            rotation = 360
+        }
+    }
+
+    private func stopSpin(animated: Bool) {
+        let animation = animated
+            ? MotionTokens.animation(MotionTokens.refreshSettle, reduceMotion: reduceMotion)
+            : nil
+
+        withAnimation(animation) {
+            rotation = 0
+        }
     }
 }
 
