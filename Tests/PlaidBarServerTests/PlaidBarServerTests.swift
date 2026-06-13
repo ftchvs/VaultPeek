@@ -823,6 +823,36 @@ struct PlaidBarServerTests {
         #expect(result.preservedEntries.contains("accounts-2026.json"))
     }
 
+    @Test func transactionCacheIsRemovedButUnrelatedExportPreservedDuringLocalDataReset() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-transaction-cache-reset-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let context = TransactionCacheContext(
+            environment: .sandbox,
+            storagePath: directory.appendingPathComponent("plaidbar-sandbox.sqlite").path
+        )
+        // A user/export file that merely looks transaction-shaped must survive
+        // reset, just like the unrelated accounts-2026.json export above.
+        let unrelatedExport = directory.appendingPathComponent("transactions-2026.json")
+        try Data("user export".utf8).write(to: unrelatedExport)
+        try LocalDataStore.saveTransactions(
+            [TransactionDTO(id: "tx-old", accountId: "checking", amount: 12, date: "2026-01-01", name: "Coffee")],
+            to: directory,
+            context: context
+        )
+
+        let result = try LocalDataStore.resetLocalData(
+            at: directory,
+            resetKeychainTokens: false
+        )
+
+        #expect(try LocalDataStore.loadTransactions(from: directory, context: context).isEmpty)
+        #expect(FileManager.default.fileExists(atPath: unrelatedExport.path))
+        #expect(result.preservedEntries.contains("transactions-2026.json"))
+    }
+
     @Test func serverCanCopyLegacyDatabaseAfterWrongEnvironmentCreatedEmptyDatabase() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("plaidbar-config-\(UUID().uuidString)", isDirectory: true)
