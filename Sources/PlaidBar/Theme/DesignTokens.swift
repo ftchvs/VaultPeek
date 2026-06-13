@@ -194,7 +194,6 @@ enum SurfaceTokens {
     static let emphasizedStrokeOpacity = 0.16
 
     static let popoverTextureOpacity = 0.12
-    static let popoverTextureReduceTransparencyOpacity = 0.03
 
     static let leftPanelDepth = SurfaceDepth(
         strokeOpacity: 0.11,
