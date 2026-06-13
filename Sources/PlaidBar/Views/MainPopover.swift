@@ -377,6 +377,13 @@ struct MainPopover: View {
                     .padding(.horizontal, Layout.contentHorizontalPadding)
                     .padding(.top, Layout.contentTopPadding)
                     .padding(.bottom, Layout.contentBottomPadding)
+                    // The dashboard's coexisting glass surfaces (heatmap, status
+                    // readiness panel, insights card + chips, overview cards)
+                    // share one GlassEffectContainer sampling region on macOS 26;
+                    // passthrough on macOS 15 (AND-381). Merge radius =
+                    // SurfaceTokens.glassMergeRadius (small), so only adjacent
+                    // glass fuses — distant cards in this tall column stay distinct.
+                    .glassGroup()
                     .onGeometryChange(for: CGFloat.self) { proxy in
                         proxy.size.height
                     } action: { height in

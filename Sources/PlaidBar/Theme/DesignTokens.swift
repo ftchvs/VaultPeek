@@ -187,6 +187,11 @@ enum SurfaceTokens {
     static let popoverCornerRadius: CGFloat = 12
     static let panelCornerRadius: CGFloat = 7
     static let compactCornerRadius: CGFloat = 6
+    /// Glass merge radius for `GlassEffectContainer` (AND-381): the proximity
+    /// under which adjacent Liquid Glass shapes fuse into one sampling blob.
+    /// Deliberately small so only genuinely-adjacent glass merges — this is a
+    /// merge radius, not layout spacing.
+    static let glassMergeRadius: CGFloat = 8
 
     static let panelFillOpacity = 0.022
     static let insetFillOpacity = 0.045

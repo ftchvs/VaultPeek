@@ -91,6 +91,11 @@ struct AccountDetailFlyout: View {
                 }
                 .padding(Spacing.md)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                // Group the inspector's coexisting glass surfaces (inset/
+                // emphasized action chips) into one GlassEffectContainer sampling
+                // region on macOS 26; passthrough on macOS 15 (AND-381).
+                // Merge radius = SurfaceTokens.glassMergeRadius.
+                .glassGroup()
             }
             .scrollContentBackground(.hidden)
         }
