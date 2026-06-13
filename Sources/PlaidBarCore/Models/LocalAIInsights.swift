@@ -346,7 +346,9 @@ public struct LocalAIInsightReceipt: Equatable, Sendable {
         if availability.state == .disabled {
             result.append("Local AI is off; this receipt uses deterministic local totals and heuristics.")
         } else if availability.state == .unavailable {
-            result.append("The configured local runtime is unavailable; VaultPeek does not fall back to cloud AI.")
+            result.append(availability.detail.isEmpty
+                ? "The configured local runtime is unavailable; VaultPeek does not fall back to cloud AI."
+                : availability.detail)
         }
 
         if input.current.transactionCount == 0 {

@@ -6,21 +6,43 @@ struct LocalAIInsightsService {
         static let localRuntime = "PLAIDBAR_LOCAL_AI_RUNTIME"
     }
 
+    private let model: (any LocalInsightModel)?
+    private let environment: [String: String]
+    private let generationConfiguration: LocalInsightModelGenerationConfiguration
+
+    init(
+        model: (any LocalInsightModel)? = nil,
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        generationConfiguration: LocalInsightModelGenerationConfiguration = .default
+    ) {
+        self.model = model
+        self.environment = environment
+        self.generationConfiguration = generationConfiguration
+    }
+
     var availability: LocalAIAvailability {
-        let runtime = ProcessInfo.processInfo.environment[EnvironmentKeys.localRuntime]?
+        let runtime = environment[EnvironmentKeys.localRuntime]?
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard let runtime, !runtime.isEmpty, runtime.lowercased() != "disabled" else {
+        guard let runtime, !Self.isDisabledRuntimeValue(runtime) else {
             return LocalAIAvailability(
                 state: .disabled,
                 detail: "No local AI runtime is configured. VaultPeek is using deterministic local summaries and category hints only."
             )
         }
 
+        if model != nil {
+            return LocalAIAvailability(
+                state: .available,
+                runtimeName: runtime,
+                detail: "Local runtime '\(runtime)' is configured. Summaries run on this Mac with a short timeout, output validation, and deterministic fallback."
+            )
+        }
+
         return LocalAIAvailability(
             state: .unavailable,
             runtimeName: runtime,
-            detail: "Local runtime '\(runtime)' is configured, but this build has no model adapter yet. Cloud models are not supported."
+            detail: "Local runtime '\(runtime)' is configured, but this build has no model adapter yet. Deterministic summaries remain active; cloud models are not supported."
         )
     }
 
@@ -42,21 +64,109 @@ struct LocalAIInsightsService {
                 window: input.window,
                 availability: availability,
                 input: input,
-                generatedSummary: summaryText(for: input),
-                generatedBullets: bullets(for: input),
+                generatedSummary: Self.summaryText(for: input),
+                generatedBullets: Self.bullets(for: input),
                 evidence: input.evidence
             )
         }
     }
 
-    private func summaryText(for input: LocalAIActivitySummaryInput) -> String {
+    func generatedActivitySummaries(
+        accounts: [AccountDTO],
+        transactions: [TransactionDTO],
+        recurringTransactions: [RecurringTransaction],
+        anchorDate: Date = Date()
+    ) async -> [LocalAIActivitySummary] {
+        let inputs = LocalAIInsightInputBuilder.buildInputs(
+            accounts: accounts,
+            transactions: transactions,
+            recurringTransactions: recurringTransactions,
+            anchorDate: anchorDate
+        )
+
+        var summaries: [LocalAIActivitySummary] = []
+        summaries.reserveCapacity(inputs.count)
+        let currentAvailability = availability
+        let configuredModel = currentAvailability.state == .available ? model : nil
+
+        for input in inputs {
+            let fallbackSummary: @Sendable (LocalAIActivitySummaryInput) -> String = { input in
+                Self.summaryText(for: input)
+            }
+            let generated = await LocalInsightModelRuntime.generateSummary(
+                input: input,
+                model: configuredModel,
+                fallbackSummary: fallbackSummary,
+                configuration: generationConfiguration
+            )
+            let summaryAvailability = Self.summaryAvailability(
+                baseAvailability: currentAvailability,
+                generationResult: generated
+            )
+            summaries.append(
+                LocalAIActivitySummary(
+                    window: input.window,
+                    availability: summaryAvailability,
+                    input: input,
+                    generatedSummary: generated.summary,
+                    generatedBullets: Self.bullets(for: input),
+                    evidence: input.evidence
+                )
+            )
+        }
+
+        return summaries
+    }
+
+    private static func isDisabledRuntimeValue(_ rawValue: String) -> Bool {
+        let normalized = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalized.isEmpty || ["disabled", "off", "false", "none"].contains(normalized)
+    }
+
+    private static func summaryAvailability(
+        baseAvailability: LocalAIAvailability,
+        generationResult: LocalInsightModelGenerationResult
+    ) -> LocalAIAvailability {
+        guard baseAvailability.state == .available,
+              generationResult.usedModelOutput == false,
+              let fallbackReason = generationResult.fallbackReason
+        else {
+            return baseAvailability
+        }
+
+        return LocalAIAvailability(
+            state: .unavailable,
+            runtimeName: baseAvailability.runtimeName,
+            detail: fallbackDetail(runtimeName: baseAvailability.runtimeName, reason: fallbackReason)
+        )
+    }
+
+    private static func fallbackDetail(
+        runtimeName: String?,
+        reason: LocalInsightModelFallbackReason
+    ) -> String {
+        let runtime = runtimeName.map { "Local runtime '\($0)'" } ?? "The configured local runtime"
+        let reasonText = switch reason {
+        case .noModel:
+            "has no model adapter"
+        case .timeout:
+            "timed out before producing output"
+        case .modelError:
+            "returned an error"
+        case .invalidOutput:
+            "returned invalid output"
+        }
+        return "\(runtime) \(reasonText). VaultPeek used deterministic local summaries and did not call cloud AI."
+    }
+
+    private static func summaryText(for input: LocalAIActivitySummaryInput) -> String {
         let expenseText = Formatters.currency(input.current.expenseTotal, format: .compact)
         let incomeText = Formatters.currency(input.current.incomeTotal, format: .compact)
         let netText = signedCurrency(input.current.netCashflow)
         return "\(input.window.displayName): \(expenseText) expenses, \(incomeText) income, \(netText) net cashflow."
     }
 
-    private func bullets(for input: LocalAIActivitySummaryInput) -> [String] {
+    private static func bullets(for input: LocalAIActivitySummaryInput) -> [String] {
         var bullets: [String] = []
 
         if let topCategory = input.current.categoryTotals.first {
@@ -100,7 +210,7 @@ struct LocalAIInsightsService {
         return Array(bullets.prefix(4))
     }
 
-    private func signedCurrency(_ amount: Double) -> String {
+    private static func signedCurrency(_ amount: Double) -> String {
         let prefix = amount > 0 ? "+" : amount < 0 ? "-" : ""
         return "\(prefix)\(Formatters.currency(abs(amount), format: .compact))"
     }

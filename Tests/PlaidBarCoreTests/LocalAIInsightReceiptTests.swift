@@ -72,6 +72,30 @@ struct LocalAIInsightReceiptTests {
         #expect(receipt.reversibleActionCopy.contains("No insight action is available yet"))
     }
 
+    @Test("Receipt surfaces configured runtime fallback details")
+    func receiptSurfacesConfiguredRuntimeFallbackDetails() {
+        let fallbackAvailability = LocalAIAvailability(
+            state: .unavailable,
+            runtimeName: "local-runtime",
+            detail: "Local runtime 'local-runtime' timed out before producing output. VaultPeek used deterministic local summaries and did not call cloud AI."
+        )
+        let input = makeInput(transactionCount: 2, includeCategorySuggestion: false)
+        let summary = LocalAIActivitySummary(
+            window: .last7days,
+            availability: fallbackAvailability,
+            input: input,
+            generatedSummary: "Last 7D: deterministic fallback summary.",
+            generatedBullets: [],
+            evidence: input.evidence
+        )
+
+        let receipt = LocalAIInsightReceipt.make(summary: summary, availability: fallbackAvailability)
+
+        #expect(receipt.confidence.contains("Deterministic confidence"))
+        #expect(receipt.limitations.contains { $0.contains("timed out before producing output") })
+        #expect(receipt.limitations.contains { $0.contains("did not call cloud AI") })
+    }
+
     @Test("Receipt makes category hint action reversible and non-mutating")
     func receiptExplainsReversibleCategoryHintAction() {
         let input = makeInput(transactionCount: 1, includeCategorySuggestion: true)
