@@ -10,6 +10,7 @@ final class AppState {
     private enum Keys {
         static let showBalanceInMenuBar = "showBalanceInMenuBar"
         static let menuBarSummaryMode = "menuBarSummaryMode"
+        static let menuBarIconStyle = "menuBarIconStyle"
         static let balanceFormat = "balanceFormat"
         static let creditUtilizationThreshold = "creditUtilizationThreshold"
         static let refreshInterval = "refreshInterval"
@@ -81,6 +82,12 @@ final class AppState {
         didSet {
             guard menuBarSummaryMode != oldValue else { return }
             UserDefaults.standard.set(menuBarSummaryMode.rawValue, forKey: Keys.menuBarSummaryMode)
+        }
+    }
+    var menuBarIconStyle: MenuBarIconStyle = .classic {
+        didSet {
+            guard menuBarIconStyle != oldValue else { return }
+            UserDefaults.standard.set(menuBarIconStyle.rawValue, forKey: Keys.menuBarIconStyle)
         }
     }
     var balanceFormat: CurrencyFormat = .abbreviated {
@@ -188,6 +195,10 @@ final class AppState {
         } else if defaults.object(forKey: Keys.showBalanceInMenuBar) != nil,
                   !defaults.bool(forKey: Keys.showBalanceInMenuBar) {
             menuBarSummaryMode = .iconOnly
+        }
+        if let style = defaults.string(forKey: Keys.menuBarIconStyle),
+           let iconStyle = MenuBarIconStyle(rawValue: style) {
+            menuBarIconStyle = iconStyle
         }
         if let format = defaults.string(forKey: Keys.balanceFormat),
            let f = CurrencyFormat(rawValue: format) {
@@ -314,7 +325,8 @@ final class AppState {
             erroredItemCount: erroredItemCount,
             needsLoginItemCount: needsLoginItemCount,
             isSyncStale: isSyncStale,
-            hasEverSynced: lastSyncDate != nil
+            hasEverSynced: lastSyncDate != nil,
+            iconStyle: menuBarIconStyle
         )
     }
 

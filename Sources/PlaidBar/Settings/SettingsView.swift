@@ -322,6 +322,14 @@ struct GeneralSettingsView: View {
                     }
                 }
 
+                // The icon style changes only the healthy/default glyph; degraded
+                // states keep their distinct glyph ladder. Works with Icon only.
+                Picker("Menu bar icon", selection: $state.menuBarIconStyle) {
+                    ForEach(MenuBarIconStyle.allCases) { style in
+                        Label(style.displayName, systemImage: style.healthySymbolName).tag(style)
+                    }
+                }
+
                 Picker("Balance format", selection: $state.balanceFormat) {
                     Text("$12,450.32").tag(CurrencyFormat.full)
                     Text("$12.4K").tag(CurrencyFormat.abbreviated)
