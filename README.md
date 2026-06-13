@@ -220,7 +220,7 @@ few technical surfaces for compatibility, and those are not bugs:
 Rename history and upgrade guidance live in
 [docs/release-notes.md](docs/release-notes.md) and [CHANGELOG.md](CHANGELOG.md).
 
-`plaidbar-cli` follows the official Plaid CLI's terminal/agent conventions where they fit PlaidBar: table output by default, `--json` for structured stdout, diagnostics on stderr, and local-server bearer auth from `~/.plaidbar/auth-token`. It does not read Plaid Dashboard credentials directly; Plaid secrets and access tokens stay in `PlaidBarServer`.
+`plaidbar-cli` follows the official Plaid CLI's terminal/agent conventions where they fit VaultPeek: table output by default, `--json` for structured stdout, diagnostics on stderr, and local-server bearer auth from `~/.vaultpeek/auth-token` or `$PLAIDBAR_DATA_DIR/auth-token`. It does not read Plaid Dashboard credentials directly; Plaid secrets and access tokens stay in `PlaidBarServer`.
 
 Run Plaid sandbox mode with the installed server and app:
 
@@ -534,7 +534,7 @@ production-readiness work:
 ```
 
 The entrypoint lives in [`commands/goal.md`](commands/goal.md) and delegates to
-[`commands/plaidbar-prod-loop.md`](commands/plaidbar-prod-loop.md) for the full
+[`commands/vaultpeek-prod-loop.md`](commands/vaultpeek-prod-loop.md) for the full
 multi-hour loop. It is designed for focused production-readiness work around
 the menu bar dashboard, trust, onboarding, local data controls, diagnostics,
 and empty/error states.

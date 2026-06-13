@@ -1,11 +1,11 @@
 # Autonomous Loop Backlog
 
-This backlog is the source of truth for 100+ autonomous PlaidBar
+This backlog is the source of truth for 100+ autonomous VaultPeek
 production-readiness iterations. Each task is intended to be independently
 reviewable. A PR slice may contain one task or a small contiguous group from
 the same section when the diff remains easy to review.
 
-Use this backlog with `commands/goal.md`, `commands/plaidbar-prod-loop.md`,
+Use this backlog with `commands/goal.md`, `commands/vaultpeek-prod-loop.md`,
 and `docs/autonomous-roadmap.md`.
 
 ## Selection Rules
@@ -35,7 +35,7 @@ and `docs/autonomous-roadmap.md`.
 - Security changes do not expose Plaid secrets, access tokens, public tokens,
   local bearer tokens, account IDs, item IDs, balances, or transactions through
   status, logs, screenshots, or public docs.
-- Privacy docs remain true: PlaidBar has no hosted backend, analytics,
+- Privacy docs remain true: VaultPeek has no hosted backend, analytics,
   telemetry, tracking, cloud sync, or cloud dashboard.
 - Verification evidence is recorded in the commit, PR body, or final report.
 
@@ -173,7 +173,7 @@ and `docs/autonomous-roadmap.md`.
   OAuth callback behavior.
 - [ ] T064: Document any endpoint contract changes before adding new status
   fields.
-- [ ] T065: Add a secret-scan pattern only when it catches a real PlaidBar risk.
+- [ ] T065: Add a secret-scan pattern only when it catches a real VaultPeek risk.
 
 ### PR-014: Logs, Fixtures, And Screenshot Safety
 

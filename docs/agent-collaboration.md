@@ -1,14 +1,15 @@
 # Agent Collaboration Protocol
 
-PlaidBar can be advanced by more than one local agent on the shared Mac mini.
+VaultPeek (formerly PlaidBar) can be advanced by more than one local agent on
+the shared Mac mini.
 Use this protocol to keep autonomous work fast without creating branch,
 worktree, or merge collisions.
 
 ## Roles
 
-- Hermes is the primary builder loop for autonomous PlaidBar implementation.
+- Hermes is the primary builder loop for autonomous VaultPeek implementation.
 - Otto is the operator/reviewer/merge steward.
-- Felipe is out of the loop by default for scoped PlaidBar production-readiness
+- Felipe is out of the loop by default for scoped VaultPeek production-readiness
   work unless a decision exceeds the boundaries below.
 
 ## Coordination Channels
@@ -21,14 +22,16 @@ as the only source of truth for a branch.
      and any limitations in the PR body.
    - The reviewer records final gate decisions, skipped-check rationale, and
      merge notes in PR comments.
-2. **Linear PlaidBar project** is the human-facing status channel.
+2. **Linear VaultPeek project** (formerly the PlaidBar project) is the
+   human-facing status channel.
    - Use it for material operating-model changes, larger milestones, and
      cross-agent process updates.
    - Do not require Felipe to approve routine PRs once this protocol's gates
      pass.
 3. **Repo docs** are the durable policy channel.
    - `docs/agent-collaboration.md` defines the live collaboration protocol.
-   - `commands/plaidbar-prod-loop.md` defines the builder loop entrypoint.
+   - `commands/vaultpeek-prod-loop.md` defines the builder loop entrypoint
+     (`commands/plaidbar-prod-loop.md` remains as a deprecated pointer).
 4. **Local coordination state** is the optional machine channel.
    - Agents may write uncommitted local state under `.agent-state/` or `/tmp`
      to record active branch/worktree ownership.
@@ -39,7 +42,9 @@ as the only source of truth for a branch.
 
 - Hermes should work from its own builder-owned checkout or temporary worktree,
   such as `/Users/otto/.openclaw/workspace/repos/PlaidBar` when launched via
-  the Codex CLI examples in `commands/plaidbar-prod-loop.md`.
+  the Codex CLI examples in `commands/vaultpeek-prod-loop.md`. Local checkout
+  paths keep the `PlaidBar` directory name until the GitHub repo rename lands;
+  update them when the checkout moves.
 - Otto should review and fix from a separate operator-owned checkout or worktree,
   such as `/private/tmp/PlaidBar-otto` for this scheduled loop.
 - Do not mutate another agent's active worktree.
@@ -51,7 +56,7 @@ as the only source of truth for a branch.
 Before editing, pushing, commenting, or merging, the acting agent should:
 
 1. Check open PRs and identify the branch/head SHA for the slice.
-2. Check the local process list or active session surface for PlaidBar work on
+2. Check the local process list or active session surface for VaultPeek work on
    the same branch/worktree.
 3. Use a separate checkout/worktree when reviewing another agent's branch.
 4. Re-read the PR head SHA immediately before merge.
@@ -63,7 +68,7 @@ coordination note instead of pushing over it.
 
 ## Autonomous Merge Gates
 
-Otto may merge PlaidBar PRs without asking Felipe when all of these are true:
+Otto may merge VaultPeek PRs without asking Felipe when all of these are true:
 
 - PR is not draft.
 - GitHub branch protection reports these checks as green on the latest PR head:
@@ -137,7 +142,7 @@ Otto's review should check:
 Hermes can keep producing small PRs. Otto can review, fix if needed, comment,
 wait for green checks, and merge. Felipe should only be pulled in for product
 direction changes, destructive actions, external integrations, ambiguous
-privacy/security decisions, or work outside PlaidBar's scoped autonomy.
+privacy/security decisions, or work outside VaultPeek's scoped autonomy.
 
 ## Channel Escalation Rules
 

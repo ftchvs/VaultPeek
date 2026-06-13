@@ -1,17 +1,19 @@
-# PlaidBar Autonomous Roadmap
+# VaultPeek Autonomous Roadmap
 
-This roadmap guides the recurring local agent loop that keeps PlaidBar aligned
+This roadmap guides the recurring local agent loop that keeps VaultPeek
+(formerly PlaidBar) aligned
 with its local-first menu bar finance vision. It complements `GOAL.md`,
-`commands/goal.md`, `commands/plaidbar-prod-loop.md`, the concrete backlog in
+`commands/goal.md`, `commands/vaultpeek-prod-loop.md`, the concrete backlog in
 `docs/autonomous-loop-backlog.md`, and the long-term product brief in
 `docs/v1.0-roadmap.md`.
 
 ## Operating Contract
 
 - Work locally for implementation and verification.
-- Felipe granted scoped PlaidBar approval on 2026-05-30 to push branches, open
-  PRs, and merge to remote `main` after green local and GitHub checks. Use that
-  approval only for focused PlaidBar work with a safe final diff review.
+- Felipe granted scoped approval on 2026-05-30 (under the product's former
+  PlaidBar name; it carries over to VaultPeek) to push branches, open PRs, and
+  merge to remote `main` after green local and GitHub checks. Use that
+  approval only for focused VaultPeek work with a safe final diff review.
 - Do not publish releases or post externally outside normal GitHub PR/merge
   workflow without Felipe's explicit approval.
 - Keep each loop to one reviewable production-readiness slice.
@@ -20,7 +22,7 @@ with its local-first menu bar finance vision. It complements `GOAL.md`,
   surface change, server/API change, storage change, or docs/governance change.
 - Prefer fixes that make the 1.0 promise more true: local-first trust,
   reliable onboarding, clear recovery, and dense native finance UX.
-- Preserve the privacy boundary: no PlaidBar-hosted backend, telemetry, cloud
+- Preserve the privacy boundary: no VaultPeek-hosted backend, telemetry, cloud
   sync, multi-user accounts, or cloud AI over private transaction data.
 - Keep optional local AI local-only, off by default, explainable, reversible,
   and non-blocking when no local model runtime is configured.
@@ -31,10 +33,10 @@ with its local-first menu bar finance vision. It complements `GOAL.md`,
 ## Loop Cadence
 
 The OpenClaw cron job `d6eb6833-969a-4436-af06-0fd0f1bd94e2` runs an isolated
-PlaidBar production-readiness loop every four hours. Each run should:
+VaultPeek production-readiness loop every four hours. Each run should:
 
 1. Inspect `git status --short --branch` and recent commits.
-2. Read `GOAL.md`, `commands/plaidbar-prod-loop.md`,
+2. Read `GOAL.md`, `commands/vaultpeek-prod-loop.md`,
    `docs/autonomous-loop-backlog.md`, this file, and the touched area.
 3. Pick the highest-leverage unfinished task ID from the backlog.
 4. Implement the smallest coherent change; combine adjacent task IDs only when
@@ -49,7 +51,8 @@ PlaidBar production-readiness loop every four hours. Each run should:
 
 ## Codex CLI And Parallel Agents
 
-- `commands/plaidbar-prod-loop.md` is the canonical Codex CLI prompt.
+- `commands/vaultpeek-prod-loop.md` is the canonical Codex CLI prompt
+  (`commands/plaidbar-prod-loop.md` remains as a deprecated pointer).
 - Use one primary editor agent for all writes, commits, PR updates, and merge
   decisions.
 - Use optional read-only parallel agents for design, security/privacy, QA, or
@@ -61,7 +64,7 @@ PlaidBar production-readiness loop every four hours. Each run should:
 ## PR, Check, Review, And Merge Loop
 
 Use this loop only when the current run is inside the 2026-05-30 scoped
-PlaidBar approval. If approval scope, product safety, or security impact is
+approval. If approval scope, product safety, or security impact is
 unclear, stop and ask Felipe.
 
 1. Push only the focused branch for the completed task or PR slice.
@@ -84,7 +87,7 @@ unclear, stop and ask Felipe.
 - `swift build --target PlaidBar --skip-update --disable-keychain`
 - `swift build --target PlaidBarServer --skip-update --disable-keychain` when
   server, shared DTO, or package code changes
-- Secret scan from `commands/plaidbar-prod-loop.md`
+- Secret scan from `commands/vaultpeek-prod-loop.md`
 
 Use `swift test --skip-update --disable-keychain` when the local Swift toolchain
 supports the `Testing` module. As of 2026-06-10 the local toolchain builds and

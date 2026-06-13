@@ -1,6 +1,6 @@
 ---
 name: review
-description: Review PlaidBar PRs and local changes for production-readiness risks.
+description: Review VaultPeek PRs and local changes for production-readiness risks.
 ---
 
 # Review

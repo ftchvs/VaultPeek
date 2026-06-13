@@ -27,7 +27,7 @@
   ],
   "channels": {
     "handoff": "GitHub PR body and comments",
-    "humanStatus": "Linear PlaidBar project updates",
+    "humanStatus": "Linear VaultPeek project updates",
     "policy": "docs/agent-collaboration.md",
     "localState": ".agent-state/ or /tmp, never committed"
   }
