@@ -89,6 +89,8 @@ private struct AttentionQueueRowView: View {
     let isDisabled: Bool
     let perform: () -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         HStack(alignment: .top, spacing: Spacing.sm) {
             Image(systemName: row.severity.statusSymbolName)
@@ -96,6 +98,15 @@ private struct AttentionQueueRowView: View {
                 .foregroundStyle(tint)
                 .frame(width: 24, height: 24)
                 .background(tint.opacity(0.13), in: RoundedRectangle(cornerRadius: 7))
+                // One-shot, non-repeating feedback when a row enters warning or
+                // blocked severity. The bounce fires only when `motionTrigger`
+                // changes (a transition into a non-healthy state); it never loops.
+                // `motionTrigger` is held stable — and thus silent — under Reduce
+                // Motion or while healthy. The discrete SF Symbol effect plays in
+                // place inside the fixed 24x24 frame, so the row never resizes.
+                // SeverityStatusBadge stays the primary, color-independent meaning
+                // carrier; this motion is decorative reinforcement only.
+                .symbolEffect(.bounce, options: .nonRepeating, value: motionTrigger)
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: Spacing.xxs) {
@@ -143,6 +154,19 @@ private struct AttentionQueueRowView: View {
         .accessibilityElement(children: .contain)
     }
 
+    /// Drives the leading status glyph's one-shot bounce. Stable (and therefore
+    /// non-animating) under Reduce Motion or when the row is healthy; otherwise
+    /// distinct per non-healthy severity so a transition into `.warning` or
+    /// `.blocked` changes the value exactly once and fires a single bounce.
+    private var motionTrigger: Int {
+        guard !reduceMotion else { return 0 }
+        switch row.severity {
+        case .healthy: return 0
+        case .warning: return 1
+        case .blocked: return 2
+        }
+    }
+
     private var tint: Color {
         switch row.severity {
         case .healthy: .secondary
@@ -184,4 +208,39 @@ private struct SeverityStatusBadge: View {
         }
         .accessibilityHidden(true)
     }
+}
+
+// Synthetic rows only — no Plaid data. Exercises the warning and blocked status
+// glyphs that drive the one-shot bounce (AND-360). To verify the transition
+// animation manually, run `swift run PlaidBar --demo` and toggle a row into a
+// non-healthy state; with Reduce Motion on, the glyph must stay still while the
+// badge text/icon still distinguishes severity without color.
+#Preview("Attention rows") {
+    VStack(spacing: Spacing.xs) {
+        AttentionQueueRowView(
+            row: AttentionQueueRow(
+                id: "preview-warning",
+                severity: .warning,
+                title: "Sync is stale",
+                detail: "Last update was a while ago. Refresh to pull the latest balances.",
+                action: .refresh,
+                accessibilityHint: "Refreshes the dashboard."
+            ),
+            isDisabled: false
+        ) {}
+
+        AttentionQueueRowView(
+            row: AttentionQueueRow(
+                id: "preview-blocked",
+                severity: .blocked,
+                title: "Server offline",
+                detail: "Start the VaultPeek companion server, then check the connection.",
+                action: .checkServer,
+                accessibilityHint: "Checks the local VaultPeek companion server connection."
+            ),
+            isDisabled: false
+        ) {}
+    }
+    .padding()
+    .frame(width: 360)
 }
