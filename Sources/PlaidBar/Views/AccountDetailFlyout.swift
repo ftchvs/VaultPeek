@@ -68,19 +68,26 @@ struct AccountDetailFlyout: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.lg) {
                     statusSection(connection: connection, summary: summary)
+                        .scrollEdgeDepth(reduceMotion: reduceMotion)
                     balancesSection(summary: summary)
+                        .scrollEdgeDepth(reduceMotion: reduceMotion)
                     changesSection(insights: insights)
+                        .scrollEdgeDepth(reduceMotion: reduceMotion)
                     if !insights.reviewItems.isEmpty {
                         reviewSection(insights: insights)
+                            .scrollEdgeDepth(reduceMotion: reduceMotion)
                     }
                     if !insights.topCategories.isEmpty {
                         categoriesSection(insights: insights)
+                            .scrollEdgeDepth(reduceMotion: reduceMotion)
                     }
                     activitySection(
                         recent: recent,
                         emptyState: emptyState(snapshot: snapshot, connection: connection)
                     )
+                    .scrollEdgeDepth(reduceMotion: reduceMotion)
                     actionsSection(summary: summary)
+                        .scrollEdgeDepth(reduceMotion: reduceMotion)
                 }
                 .padding(Spacing.md)
                 .frame(maxWidth: .infinity, alignment: .leading)
