@@ -618,7 +618,7 @@ final class AppState {
 
     /// Monthly equivalent of all recurring charges (normalizes weekly/annual to monthly)
     var estimatedMonthlyRecurring: Double {
-        RecurringSummary.estimatedMonthlyTotal(from: recurringTransactions)
+        RecurringSummary.estimatedMonthlyTotal(from: recurringTransactions, asOf: Date())
     }
 
     var localAIAvailability: LocalAIAvailability {
