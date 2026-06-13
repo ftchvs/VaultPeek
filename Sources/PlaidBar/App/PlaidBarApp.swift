@@ -98,6 +98,7 @@ struct PlaidBarApp: App {
             SettingsView(updater: updaterController.updater)
                 .environment(appState)
                 .forcedAppColorScheme(Self.forcedColorScheme)
+                .appliesAppAppearance()
         }
     }
 
@@ -193,7 +194,7 @@ private struct AppAppearanceApplier: ViewModifier {
             .onChange(of: modeRaw) { _, _ in apply() }
     }
 
-    private func apply() {
+    @MainActor private func apply() {
         guard CommandLineOptions.value(for: "--appearance") == nil else { return }
         switch AppAppearanceMode(rawValue: modeRaw) ?? .followSystem {
         case .followSystem: NSApplication.shared.appearance = nil

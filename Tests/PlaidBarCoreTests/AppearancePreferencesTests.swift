@@ -64,6 +64,14 @@ struct AppearancePreferencesTests {
         #expect(off == ResolvedDecorativeEffects(allowsMotion: false, allowsTexture: false))
     }
 
+    @Test("On with both system reduce flags set still suppresses both (system wins)")
+    func decorativeOnHonorsBothSystemFlags() {
+        let both = DecorativeEffectsPreference.on.resolved(
+            systemReduceMotion: true, systemReduceTransparency: true
+        )
+        #expect(both == ResolvedDecorativeEffects(allowsMotion: false, allowsTexture: false))
+    }
+
     // MARK: Defaults
 
     @Test("Defaults are the conservative, system-following options")
