@@ -73,12 +73,42 @@ struct LocalAIInsightReceiptTests {
         #expect(receipt.reversibleActionCopy.contains("No insight action is available yet"))
     }
 
+    @Test("Receipt explains configured but unverified local runtime")
+    func receiptExplainsConfiguredButUnverifiedLocalRuntime() {
+        let availability = LocalAIRuntimeResolution.configuredAvailability(
+            rawValue: "ollama",
+            hasWiredModel: true,
+            endpointIsLocalhost: true
+        )
+        let input = makeInput(transactionCount: 2, includeCategorySuggestion: false)
+        let summary = LocalAIActivitySummary(
+            window: .last7days,
+            availability: availability,
+            input: input,
+            generatedSummary: "Last 7D: deterministic fallback summary.",
+            generatedBullets: [],
+            evidence: input.evidence
+        )
+
+        let receipt = LocalAIInsightReceipt.make(summary: summary, availability: availability)
+
+        #expect(receipt.confidence.contains("Deterministic confidence"))
+        #expect(receipt.limitations.contains { $0.contains("Verifying the local runtime") })
+        #expect(receipt.unavailableState == nil)
+        #expect(receipt.accessibilitySummary.contains("Checking"))
+    }
+
     @Test("Receipt surfaces configured runtime fallback details")
     func receiptSurfacesConfiguredRuntimeFallbackDetails() {
-        let fallbackAvailability = LocalAIAvailability(
-            state: .unavailable,
-            runtimeName: "local-runtime",
-            detail: "Local runtime 'local-runtime' timed out before producing output. VaultPeek used deterministic local summaries and did not call cloud AI."
+        let base = LocalAIRuntimeResolution.configuredAvailability(
+            rawValue: "ollama",
+            hasWiredModel: true,
+            endpointIsLocalhost: true
+        )
+        let fallbackAvailability = LocalAIRuntimeResolution.resolved(
+            base: base,
+            usedModelOutput: false,
+            fallbackReason: .timeout
         )
         let input = makeInput(transactionCount: 2, includeCategorySuggestion: false)
         let summary = LocalAIActivitySummary(

@@ -26,6 +26,61 @@ struct SettingsPresentationTests {
         #expect(LocalAIAvailabilityPresentation.tone(for: .checking) == .secondary)
     }
 
+    @Test("Configured but unverified local AI is not presented as available")
+    func configuredButUnverifiedLocalAIIsNotPresentedAsAvailable() {
+        let availability = LocalAIRuntimeResolution.configuredAvailability(
+            rawValue: "ollama",
+            hasWiredModel: true,
+            endpointIsLocalhost: true
+        )
+
+        #expect(availability.state == .checking)
+        #expect(availability.runtimeName == "ollama")
+        #expect(availability.detail.contains("Verifying local runtime"))
+        #expect(LocalAIAvailabilityPresentation.iconName(for: availability.state) == "hourglass")
+        #expect(LocalAIAvailabilityPresentation.tone(for: availability.state) == .secondary)
+    }
+
+    @Test("Verified local AI uses the positive available presentation")
+    func verifiedLocalAIUsesAvailablePresentation() {
+        let base = LocalAIRuntimeResolution.configuredAvailability(
+            rawValue: "ollama",
+            hasWiredModel: true,
+            endpointIsLocalhost: true
+        )
+        let availability = LocalAIRuntimeResolution.resolved(
+            base: base,
+            usedModelOutput: true,
+            fallbackReason: nil
+        )
+
+        #expect(availability.state == .available)
+        #expect(availability.runtimeName == "ollama")
+        #expect(availability.detail.contains("produced this summary on-device"))
+        #expect(LocalAIAvailabilityPresentation.iconName(for: availability.state) == "cpu.fill")
+        #expect(LocalAIAvailabilityPresentation.tone(for: availability.state) == .positive)
+    }
+
+    @Test("Local AI fallback remains unavailable after generation failure")
+    func localAIFallbackAfterGenerationFailureIsUnavailable() {
+        let base = LocalAIRuntimeResolution.configuredAvailability(
+            rawValue: "ollama",
+            hasWiredModel: true,
+            endpointIsLocalhost: true
+        )
+        let availability = LocalAIRuntimeResolution.resolved(
+            base: base,
+            usedModelOutput: false,
+            fallbackReason: .runtimeUnavailable
+        )
+
+        #expect(availability.state == .unavailable)
+        #expect(availability.runtimeName == "ollama")
+        #expect(availability.detail.contains("is not reachable on this Mac"))
+        #expect(availability.detail.contains("did not call cloud AI"))
+        #expect(LocalAIAvailabilityPresentation.tone(for: availability.state) == .warning)
+    }
+
     @Test("Storage detail prefers the server path and abbreviates the home directory")
     func storageDetailPrefersServerPath() {
         let detail = LocalDataResetPresentation.storageDetail(
