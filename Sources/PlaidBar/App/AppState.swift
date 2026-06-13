@@ -77,7 +77,7 @@ final class AppState {
     var notificationPermissionState: NotificationPermissionState = .notDetermined
 
     // MARK: - Settings (persisted to UserDefaults)
-    var menuBarSummaryMode: MenuBarSummaryMode = .netCash {
+    var menuBarSummaryMode: MenuBarSummaryMode = .netWorth {
         didSet {
             guard menuBarSummaryMode != oldValue else { return }
             UserDefaults.standard.set(menuBarSummaryMode.rawValue, forKey: Keys.menuBarSummaryMode)
@@ -323,6 +323,8 @@ final class AppState {
     var menuBarHelpText: String {
         let status = "Status: \(diagnosticsSummary)"
         switch menuBarSummaryMode {
+        case .netWorth:
+            return "VaultPeek - Net worth: \(menuBarText). \(status)"
         case .netCash:
             return "VaultPeek - Net cash: \(menuBarText). \(status)"
         case .totalCash:
@@ -339,6 +341,8 @@ final class AppState {
     var menuBarAccessibilityLabel: String {
         let status = "Status \(diagnosticsSummary)"
         switch menuBarSummaryMode {
+        case .netWorth:
+            return "VaultPeek net worth \(menuBarText). \(status)"
         case .netCash:
             return "VaultPeek net cash \(menuBarText). \(status)"
         case .totalCash:
