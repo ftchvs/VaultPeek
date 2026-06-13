@@ -1,6 +1,7 @@
 import Foundation
 
 public enum MenuBarSummaryMode: String, CaseIterable, Codable, Sendable {
+    case netWorth
     case netCash
     case totalCash
     case creditUtilization
@@ -9,6 +10,7 @@ public enum MenuBarSummaryMode: String, CaseIterable, Codable, Sendable {
 
     public var displayName: String {
         switch self {
+        case .netWorth: return "Net worth"
         case .netCash: return "Net cash"
         case .totalCash: return "Total cash"
         case .creditUtilization: return "Credit utilization"
@@ -19,6 +21,10 @@ public enum MenuBarSummaryMode: String, CaseIterable, Codable, Sendable {
 }
 
 public enum MenuBarSummary {
+    public static func netWorth(from accounts: [AccountDTO]) -> Double {
+        netCash(from: accounts)
+    }
+
     public static func netCash(from accounts: [AccountDTO]) -> Double {
         accounts.reduce(0) { total, account in
             switch account.type {
@@ -154,6 +160,9 @@ public enum MenuBarSummary {
         isInitialLoad: Bool = false
     ) -> String {
         switch mode {
+        case .netWorth:
+            guard !accounts.isEmpty else { return PlaidBarConstants.appName }
+            return Formatters.currency(netWorth(from: accounts), format: currencyFormat)
         case .netCash:
             guard !accounts.isEmpty else { return PlaidBarConstants.appName }
             return Formatters.currency(netCash(from: accounts), format: currencyFormat)
