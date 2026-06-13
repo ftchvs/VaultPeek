@@ -8,6 +8,7 @@ import SwiftUI
 struct PlaidBarApp: App {
     @State private var appState: AppState
     private let updaterController: SPUStandardUpdaterController
+    private let statusItemContextMenuController = StatusItemContextMenuController()
 
     init() {
         Self.applyForcedAppearance()
@@ -61,7 +62,11 @@ struct PlaidBarApp: App {
             MenuBarLabel()
                 .environment(appState)
         }
-        .menuBarExtraAccess(isPresented: $appState.isPopoverPresented)
+        .menuBarExtraAccess(isPresented: $appState.isPopoverPresented) { statusItem in
+            statusItemContextMenuController.configure(statusItem: statusItem) {
+                appState.isPopoverPresented = false
+            }
+        }
         .menuBarExtraStyle(.window)
 
         Settings {
