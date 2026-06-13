@@ -72,42 +72,47 @@ struct AppearanceSettingsView: View {
     var body: some View {
         Form {
             Section("Popover") {
-                LabeledContent("Transparency") {
-                    VStack(alignment: .leading, spacing: Spacing.xs) {
-                        HStack(alignment: .center, spacing: Spacing.sm) {
-                            Slider(
-                                value: Binding(
-                                    get: { transparencySetting.value },
-                                    set: { popoverTransparency = PopoverTransparencySetting(value: $0).value }
-                                ),
-                                in: PopoverTransparencySetting.minimumValue...PopoverTransparencySetting.maximumValue,
-                                step: 1
-                            )
-                            .labelsHidden()
-                            .frame(minWidth: 220, idealWidth: 280, maxWidth: 320)
-                            .accessibilityLabel("Popover transparency")
-                            .accessibilityValue("\(transparencySetting.displayPercent) percent transparent")
+                // Full-width control block: the label/value row sits at the top,
+                // the slider spans the row, and the captions track the slider —
+                // so nothing clips at the minimum settings window width and
+                // "Transparency" anchors to the top instead of floating against a
+                // width-constrained LabeledContent trailing column. (AND-363)
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+                        Text("Transparency")
 
-                            Text("\(transparencySetting.displayPercent)%")
-                                .monospacedDigit()
-                                .foregroundStyle(.secondary)
-                                .frame(width: 38, alignment: .trailing)
-                        }
+                        Spacer(minLength: Spacing.md)
 
-                        HStack {
-                            Text("More solid")
-                            Spacer()
-                            Text("More glass")
-                        }
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(minWidth: 220, idealWidth: 280, maxWidth: 320)
-
-                        Text("Adjusts the ultra-thin material overlay live. The range is capped to keep balances and status text legible on busy desktops.")
-                            .detailText()
-                            .fixedSize(horizontal: false, vertical: true)
+                        Text("\(transparencySetting.displayPercent)%")
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
                     }
+
+                    Slider(
+                        value: Binding(
+                            get: { transparencySetting.value },
+                            set: { popoverTransparency = PopoverTransparencySetting(value: $0).value }
+                        ),
+                        in: PopoverTransparencySetting.minimumValue...PopoverTransparencySetting.maximumValue,
+                        step: 1
+                    )
+                    .labelsHidden()
+                    .accessibilityLabel("Popover transparency")
+                    .accessibilityValue("\(transparencySetting.displayPercent) percent transparent")
+
+                    HStack {
+                        Text("More solid")
+                        Spacer()
+                        Text("More glass")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                    Text("Adjusts the ultra-thin material overlay live. The range is capped to keep balances and status text legible on busy desktops.")
+                        .detailText()
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+                .padding(.vertical, Spacing.xxs)
             }
         }
         .formStyle(.grouped)
