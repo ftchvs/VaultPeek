@@ -1,3 +1,4 @@
+import Foundation
 @testable import PlaidBarCore
 import Testing
 
@@ -27,10 +28,10 @@ struct SubscriptionPlanTests {
         }
     }
 
-    @Test("ItemOrigin encodes to its stable raw values")
+    @Test("ItemOrigin encodes to the planned connection_origin wire values")
     func itemOriginRawValues() {
         #expect(ItemOrigin.managed.rawValue == "managed")
-        #expect(ItemOrigin.bringYourOwn.rawValue == "bringYourOwn")
+        #expect(ItemOrigin.bringYourOwn.rawValue == "byo")
     }
 }
 

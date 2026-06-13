@@ -158,31 +158,29 @@ struct SetupView: View {
                     icon: "eye.slash",
                     text: "Today VaultPeek runs fully on your Mac — no cloud backend, "
                         + "analytics, or telemetry. A managed cloud bridge for bank linking "
-                        + "is planned but isn't available yet; your financial data would still "
-                        + "stay on your Mac dashboard."
+                        + "is planned but isn't available yet; even then your financial data "
+                        + "would never be stored off your Mac, though it would transit a "
+                        + "VaultPeek proxy. Today's connections use your own Plaid keys."
                 )
             }
             .padding(Spacing.md)
             .frame(maxWidth: .infinity, alignment: .leading)
             .glassSurface(.inset)
 
-            // Plan preview + usage shell. Production is the managed-plan preview
-            // surface; sandbox/BYO stays free and shows the usage count without a
-            // limit. Nothing here enforces a limit or charges money (AND-350).
+            // Plan preview + usage shell. Production shows the managed-plan
+            // *preview* picker, but today's production path is still BYO Plaid
+            // keys, which `docs/strategy/subscription-entitlements.md` (§D3) keeps
+            // fully ungated. So the usage meter uses a nil limit (count-only, no
+            // cap, no upgrade CTA) until real managed origin + entitlements exist.
+            // The count reflects all linked institutions (`statusItemCount`), not
+            // only currently-healthy ones, so an item needing reauth still counts.
             if environment == .production {
                 PlanSelectionShell(selectedPlan: selectedPlan)
-                InstitutionUsageWidget(
-                    usage: InstitutionUsage(
-                        connectedCount: appState.connectedItemCount,
-                        plan: selectedPlan.wrappedValue
-                    )
-                )
-            } else {
-                InstitutionUsageWidget(
-                    usage: InstitutionUsage(connectedCount: appState.connectedItemCount, limit: nil),
-                    showsUpgradeWhenAtLimit: false
-                )
             }
+            InstitutionUsageWidget(
+                usage: InstitutionUsage(connectedCount: appState.statusItemCount, limit: nil),
+                showsUpgradeWhenAtLimit: false
+            )
 
             OnboardingPreflightPanel(environment: environment)
                 .environment(appState)

@@ -67,9 +67,13 @@ public enum SubscriptionPlan: String, CaseIterable, Sendable, Codable, Identifia
 /// change**. It is intentionally not wired into any existing DTO decoding here;
 /// if a DTO ever carries it, the field must be optional with a default so
 /// existing server JSON keeps decoding.
+///
+/// The wire values match the planned `connection_origin = managed | byo` flag in
+/// `docs/strategy/subscription-entitlements.md` so a future DTO/storage adoption
+/// stays compatible with the documented entitlement and managed-count logic.
 public enum ItemOrigin: String, Sendable, Codable {
     case managed
-    case bringYourOwn
+    case bringYourOwn = "byo"
 }
 
 /// Pure, testable description of "how many institutions are connected versus the
