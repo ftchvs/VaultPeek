@@ -18,6 +18,12 @@ public enum PopoverGeometry {
     /// Default gap kept between the widened popover and the screen's visible
     /// edges when it is clamped on-screen.
     public static let screenEdgeMargin: CGFloat = 12
+    /// The minimum width the flexible center dashboard keeps when the popover is
+    /// capped on a narrow/scaled display. The rail and inspector stay fixed at
+    /// `railWidth`, so the center absorbs the difference down to this floor. Set
+    /// so a scaled 1024-wide display (center ≈ 358pt) still fits the full
+    /// three-column layout without overflow (AND-405).
+    public static let minDashboardWidth: CGFloat = 340
 
     /// The three popover layout states and their column composition.
     public enum Layout: Sendable, CaseIterable {
@@ -39,6 +45,30 @@ public enum PopoverGeometry {
         case .threeColumn:
             railWidth + dividerWidth + dashboardWidth + dividerWidth + railWidth
         }
+    }
+
+    /// The popover's content width capped to fit the available screen width.
+    ///
+    /// When the full layout width exceeds the available width (minus a margin on
+    /// each side), the popover is capped so it never renders off-screen — the
+    /// rail and inspector keep their fixed widths and the center dashboard flexes
+    /// to absorb the difference (down to `minDashboardWidth`), keeping the
+    /// trailing inspector and its close control on-screen on narrow/scaled
+    /// displays (AND-405). Pass a very large `availableWidth` (e.g. headless,
+    /// where no screen exists) to get the full, uncapped width.
+    public static func fittedWidth(
+        for layout: Layout,
+        availableWidth: CGFloat,
+        margin: CGFloat = screenEdgeMargin
+    ) -> CGFloat {
+        let full = width(for: layout)
+        // Guards the degenerate inputs; the headless sentinel is a large *finite*
+        // value (e.g. .greatestFiniteMagnitude), which passes through to a no-op
+        // min() below — `subtracting 2*margin from it stays effectively itself.
+        guard availableWidth.isFinite, availableWidth > 0 else { return full }
+        let usable = availableWidth - (2 * margin)
+        guard usable > 0 else { return full }
+        return min(full, usable)
     }
 
     /// Clamp a desired leading-edge X so a popover of `width` stays within a
