@@ -1600,9 +1600,13 @@ private struct DashboardAccountRow: View {
 
             Spacer(minLength: Spacing.compactRowContentSpacing)
 
-            if let demoTrend {
-                BalanceTrendChart(trend: demoTrend)
-                    .frame(width: 54, height: 16)
+            // Inline per-account sparkline (AND-379), ahead of the chevron.
+            // Decorative: the row announces the balance and the trailing delta
+            // carries direction in text, so this is hidden from VoiceOver and
+            // never the sole cue. Rows with insufficient history render nothing
+            // and keep identical height and rhythm.
+            if let accountSparkline {
+                AccountRowSparkline(series: accountSparkline)
                     .accessibilityHidden(true)
             }
 
@@ -1725,15 +1729,30 @@ private struct DashboardAccountRow: View {
         accountConnectionTint(for: connectionPresentation.level)
     }
 
-    private var demoTrend: BalanceTrend? {
-        demoAccountTrend(for: account, appState: appState)
+    private var accountSparkline: AccountSparkline.Series? {
+        accountSparklineSeries(for: account, appState: appState)
     }
 }
 
 @MainActor
+private func accountSparklineSeries(for account: AccountDTO, appState: AppState) -> AccountSparkline.Series? {
+    AccountSparkline.evaluate(history: accountBalanceHistory(for: account, appState: appState))
+}
+
+@MainActor
 private func demoAccountTrend(for account: AccountDTO, appState: AppState) -> BalanceTrend? {
-    guard appState.usesDemoConnectionPresentation else { return nil }
-    return BalanceTrend.evaluate(history: DemoFixtures.accountBalanceHistory(forAccountId: account.id))
+    BalanceTrend.evaluate(history: accountBalanceHistory(for: account, appState: appState))
+}
+
+/// Per-account balance history source. Real builds do not record per-account
+/// history yet (`AppState.balanceHistory` is aggregate net worth only), so the
+/// row sparkline is sourced from deterministic demo fixtures in demo mode and
+/// is intentionally absent otherwise — degrading to no line rather than a
+/// misleading one.
+@MainActor
+private func accountBalanceHistory(for account: AccountDTO, appState: AppState) -> [BalanceSnapshot] {
+    guard appState.usesDemoConnectionPresentation else { return [] }
+    return DemoFixtures.accountBalanceHistory(forAccountId: account.id)
 }
 
 private func accountTrendAccessibility(_ trend: BalanceTrend) -> String {
