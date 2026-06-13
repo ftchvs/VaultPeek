@@ -39,13 +39,35 @@ private struct SkeletonPulse: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .opacity(isDimmed ? 0.55 : 1)
+            .opacity(MotionTokens.loadingOpacity(isDimmed: isDimmed, reduceMotion: reduceMotion))
             .onAppear {
-                guard !reduceMotion else { return }
-                withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
-                    isDimmed = true
+                startPulseIfAllowed()
+            }
+            .onChange(of: reduceMotion) { _, shouldReduceMotion in
+                if shouldReduceMotion {
+                    stopPulse()
+                } else {
+                    startPulseIfAllowed()
                 }
             }
+    }
+
+    private func startPulseIfAllowed() {
+        guard !reduceMotion else {
+            stopPulse()
+            return
+        }
+
+        isDimmed = false
+        withAnimation(MotionTokens.animation(MotionTokens.loadingPulse, reduceMotion: reduceMotion)) {
+            isDimmed = true
+        }
+    }
+
+    private func stopPulse() {
+        withAnimation(nil) {
+            isDimmed = false
+        }
     }
 }
 
