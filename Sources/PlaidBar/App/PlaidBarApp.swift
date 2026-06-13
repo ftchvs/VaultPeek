@@ -7,6 +7,7 @@ import SwiftUI
 @main
 struct PlaidBarApp: App {
     @State private var appState: AppState
+    @Environment(\.openSettings) private var openSettings
     private let updaterController: SPUStandardUpdaterController
     private let statusItemContextMenuController = StatusItemContextMenuController()
 
@@ -63,9 +64,30 @@ struct PlaidBarApp: App {
                 .environment(appState)
         }
         .menuBarExtraAccess(isPresented: $appState.isPopoverPresented) { statusItem in
-            statusItemContextMenuController.configure(statusItem: statusItem) {
-                appState.isPopoverPresented = false
-            }
+            statusItemContextMenuController.configure(
+                statusItem: statusItem,
+                actions: StatusItemContextMenuActions(
+                    showDashboard: {
+                        appState.isPopoverPresented = true
+                    },
+                    refreshDashboard: {
+                        Task { await appState.refreshDashboard() }
+                    },
+                    openSettings: {
+                        SettingsWindowActivationRestorer.shared.open(openSettings: openSettings)
+                    },
+                    checkForUpdates: {
+                        updaterController.updater.checkForUpdates()
+                    },
+                    showAbout: {
+                        NSApplication.shared.orderFrontStandardAboutPanel(nil)
+                        NSApplication.shared.activate(ignoringOtherApps: true)
+                    },
+                    dismissPopover: {
+                        appState.isPopoverPresented = false
+                    }
+                )
+            )
         }
         .menuBarExtraStyle(.window)
 
