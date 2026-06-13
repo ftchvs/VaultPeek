@@ -63,6 +63,13 @@ enum SnapshotRenderer {
             failureCount += 1
         }
 
+        // Settings → Appearance pane (AND-366), forced to the requested appearance.
+        if !(await renderSettingsAppearance(
+            to: directoryURL.appendingPathComponent("render-settings-appearance.png")
+        )) {
+            failureCount += 1
+        }
+
         return failureCount
     }
 
@@ -99,12 +106,66 @@ enum SnapshotRenderer {
             return false
         }
 
-        guard let bitmap = contentView.bitmapImageRepForCachingDisplay(in: contentView.bounds) else {
+        return captureView(contentView, to: url)
+    }
+
+    // MARK: - Settings → Appearance (AND-366)
+
+    /// Renders the Settings → Appearance pane (`AppearanceSettingsView`) into an
+    /// off-screen hosting window and rasterizes it, forced to the requested
+    /// appearance. This covers the transparency slider, the live preview +
+    /// presets (AND-364), and the Display section pickers (AND-365) at the
+    /// minimum settings width — no Screen Recording permission, no real data
+    /// (the pane is appearance-only). Same headless-material caveat as the
+    /// popover: vibrant materials composite against nothing off-screen.
+    private static func renderSettingsAppearance(to url: URL) async -> Bool {
+        let scheme = forcedAppearanceScheme()
+        let size = NSSize(width: 560, height: 640)
+
+        let root = AppearanceSettingsView()
+            .environment(\.colorScheme, scheme ?? .light)
+            .frame(width: size.width, height: size.height, alignment: .topLeading)
+
+        let hosting = NSHostingView(rootView: root)
+        hosting.frame = NSRect(origin: .zero, size: size)
+
+        let window = NSWindow(
+            contentRect: NSRect(origin: .zero, size: size),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        if let scheme {
+            window.appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
+        }
+        window.contentView = hosting
+        hosting.layoutSubtreeIfNeeded()
+        window.displayIfNeeded()
+
+        // Give SwiftUI a beat to commit the hosted hierarchy before rasterizing.
+        try? await Task.sleep(for: .milliseconds(800))
+        hosting.layoutSubtreeIfNeeded()
+
+        return captureView(hosting, to: url)
+    }
+
+    private static func forcedAppearanceScheme() -> ColorScheme? {
+        guard let mode = CommandLineOptions.value(for: "--appearance") else { return nil }
+        switch mode.lowercased() {
+        case "light": return .light
+        case "dark": return .dark
+        default: return nil
+        }
+    }
+
+    /// Rasterizes any view into a PNG via `cacheDisplay`. Returns `true` on write.
+    private static func captureView(_ view: NSView, to url: URL) -> Bool {
+        guard let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else {
             print("snapshot: could not create bitmap for \(url.lastPathComponent)")
             return false
         }
 
-        contentView.cacheDisplay(in: contentView.bounds, to: bitmap)
+        view.cacheDisplay(in: view.bounds, to: bitmap)
 
         guard let data = bitmap.representation(using: .png, properties: [:]) else {
             print("snapshot: PNG encoding failed for \(url.lastPathComponent)")
