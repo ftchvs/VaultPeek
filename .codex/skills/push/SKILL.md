@@ -1,12 +1,12 @@
 ---
 name: push
-description: Publish a PlaidBar branch, open/update a PR, and merge only through the safe gate.
+description: Publish a VaultPeek branch, open/update a PR, and merge only through the safe gate.
 ---
 
 # Push
 
 Use only after Felipe explicitly approves pushing/opening a PR, or when the run
-is clearly covered by the scoped PlaidBar approval recorded in
+is clearly covered by the scoped VaultPeek approval recorded in
 `docs/autonomous-roadmap.md`.
 
 1. Confirm the branch and latest validation.

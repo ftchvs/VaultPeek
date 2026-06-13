@@ -1,22 +1,25 @@
 ---
-name: plaidbar-production-loop
-description: Keep PlaidBar moving through multi-hour production-readiness improvement loops.
+name: vaultpeek-production-loop
+description: Keep VaultPeek moving through multi-hour production-readiness improvement loops.
 ---
 
-# PlaidBar Production Loop
+# VaultPeek Production Loop
 
-Use this skill when Felipe asks to keep improving PlaidBar, make it production
+> Formerly `plaidbar-production-loop`. SwiftPM targets, executables, and
+> `PLAIDBAR_*` environment variables intentionally keep the PlaidBar name.
+
+Use this skill when Felipe asks to keep improving VaultPeek, make it production
 ready, or run the repo-local `/goal` command.
 
 ## Goal
 
-PlaidBar should become a local-first macOS menu bar dashboard for Plaid data:
+VaultPeek should become a local-first macOS menu bar dashboard for Plaid data:
 RepoBar/CodexBar for personal finance. Favor a dense, trustworthy, heatmap-first
 menu-bar instrument over new feature breadth.
 
 ## Rules
 
-- Work locally by default. Use the scoped PlaidBar approval recorded in
+- Work locally by default. Use the scoped VaultPeek approval recorded in
   `docs/autonomous-roadmap.md` for push, PR creation, and merge only when the
   current task is clearly inside that scope.
 - Merge only after local gates pass, GitHub checks are green, review feedback is
@@ -65,7 +68,7 @@ When no focus is supplied, implement the RepoBar-style finance dashboard:
 
 After that, continue with trust-first local data controls:
 
-- show `~/.plaidbar/` in Settings,
+- show the local data directory (default `~/.vaultpeek/`) in Settings,
 - add copy/reveal actions if practical,
 - add confirmation-gated reset/delete local data,
 - explain what local reset does and does not remove.

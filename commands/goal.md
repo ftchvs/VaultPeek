@@ -1,16 +1,16 @@
 ---
-description: Continue PlaidBar production-readiness work through the autonomous backlog.
+description: Continue VaultPeek production-readiness work through the autonomous backlog.
 argument-hint: "[focus area] [--hours=2-4] [--no-commit]"
 ---
 
 # /goal
 
-Run the PlaidBar production-readiness loop for a multi-hour work session or
+Run the VaultPeek production-readiness loop for a multi-hour work session or
 one reviewable autonomous backlog task.
 
 Default goal:
 
-> Advance the next safe PlaidBar production-readiness task while preserving the
+> Advance the next safe VaultPeek production-readiness task while preserving the
 > local-first privacy contract, minimalist modern macOS design, and honest
 > security boundaries.
 
@@ -26,7 +26,7 @@ Default goal:
 This command intentionally delegates the detailed operating loop to:
 
 ```text
-commands/plaidbar-prod-loop.md
+commands/vaultpeek-prod-loop.md
 docs/autonomous-loop-backlog.md
 docs/autonomous-roadmap.md
 ```
@@ -41,7 +41,7 @@ combine adjacent tasks only when the resulting PR remains easy to review.
    color, compact native controls, no marketing chrome.
 2. Security and safety: token/storage invariants, status redaction, auth
    behavior, logs, screenshots, and destructive-action confirmations.
-3. Local-first privacy: no PlaidBar backend, telemetry, cloud sync, multi-user
+3. Local-first privacy: no VaultPeek backend, telemetry, cloud sync, multi-user
    state, or cloud AI over transaction data.
 4. Plaid setup reliability: demo, sandbox, production preflight, reconnect,
    degraded item handling, and status diagnostics.
@@ -52,7 +52,7 @@ combine adjacent tasks only when the resulting PR remains easy to review.
 
 ## RepoBar Design Reference
 
-Study RepoBar before changing PlaidBar's primary UI:
+Study RepoBar before changing VaultPeek's primary UI:
 
 - `https://repobar.app`
 - `https://github.com/steipete/RepoBar`
@@ -79,7 +79,7 @@ Stop and report when:
 - a product/security decision needs Felipe.
 
 Interactive `/goal` defaults to local work. Push, open PRs, or merge only when
-the current run is explicitly operating under the scoped PlaidBar approval
+the current run is explicitly operating under the scoped VaultPeek approval
 documented in `docs/autonomous-roadmap.md`, all local and GitHub checks are
 green, and the safe PR loop says the diff is mergeable. If approval scope or
 safety is unclear, stop with a handoff instead of merging.
