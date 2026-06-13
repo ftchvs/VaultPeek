@@ -528,11 +528,21 @@ private struct BalanceActivityHeatmap: View {
     var loadState: DashboardLoadState?
 
     @AppStorage("dashboard.heatmapMode") private var modeRawValue = SpendingHeatmapMode.spending.rawValue
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Day key (yyyy-MM-dd) of the selected cell, or nil when none is selected.
+    /// Persists until another cell is chosen or focus moves (AND-380).
+    @State private var selectedDay: String?
+    /// Mirrors keyboard focus so arrow keys can move it across the grid.
+    @FocusState private var focusedDay: String?
 
     private let calendar = Calendar.current
     private let spacing: CGFloat = 2
     private let monthLabelHeight: CGFloat = 10
     private let monthLabelWidth: CGFloat = 22
+    /// Caption row reserves this height so showing/hiding the focused-day
+    /// summary never shifts the layout below the grid.
+    private let captionRowHeight: CGFloat = 14
 
     private var mode: SpendingHeatmapMode {
         SpendingHeatmapMode(rawValue: modeRawValue) ?? .spending
@@ -594,15 +604,22 @@ private struct BalanceActivityHeatmap: View {
                     }
 
                     HStack(alignment: .top, spacing: spacing) {
-                        ForEach(Array(layout.weekColumns.enumerated()), id: \.offset) { _, week in
+                        ForEach(Array(layout.weekColumns.enumerated()), id: \.offset) { columnIndex, week in
                             VStack(spacing: spacing) {
-                                ForEach(Array(week.enumerated()), id: \.offset) { _, day in
+                                ForEach(Array(week.enumerated()), id: \.offset) { rowIndex, day in
                                     if let day {
                                         BalanceHeatmapCell(
                                             day: day,
                                             peakValue: layout.peakValue,
                                             mode: layout.mode,
-                                            size: cell
+                                            size: cell,
+                                            isSelected: selectedDay == day.date,
+                                            focusBinding: $focusedDay,
+                                            reduceMotion: reduceMotion,
+                                            onSelect: { toggleSelection(day.date) },
+                                            onMove: { direction in
+                                                moveFocus(direction, from: (columnIndex, rowIndex), in: layout)
+                                            }
                                         )
                                     } else {
                                         RoundedRectangle(cornerRadius: Radius.cell)
@@ -621,6 +638,12 @@ private struct BalanceActivityHeatmap: View {
             // First sync in flight: the empty grid dims so it reads as a
             // placeholder, not as a year of zero activity.
             .opacity(isInitialLoad ? 0.45 : 1)
+
+            // Fixed-height caption: the focused day when a cell is selected,
+            // otherwise a hint — so selecting never shifts the layout (AND-380).
+            focusedDayCaption(for: layout)
+                .frame(height: captionRowHeight, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             HStack(spacing: 5) {
                 if layout.mode == .spending {
@@ -655,12 +678,95 @@ private struct BalanceActivityHeatmap: View {
         }
         .padding(Spacing.sm)
         .glassSurface(.raised)
+        // Drop a selection that no longer maps to a day in the current range
+        // (e.g. after a sync rolls the window forward), so the caption never
+        // shows a stale date and the ring never points at a vanished cell.
+        // Keyed on the last day — correct for the fixed end-at-today 365-day
+        // window (the end always advances); broaden the key (e.g. days.count)
+        // if the window ever becomes configurable from the front.
+        .onChange(of: layout.days.last?.date) {
+            if let selectedDay, !layout.days.contains(where: { $0.date == selectedDay }) {
+                self.selectedDay = nil
+            }
+        }
+        // Keep selection following keyboard focus so VoiceOver/arrow users hear
+        // the same day the caption shows. Intentional consequence: tabbing back
+        // into the grid re-selects the last-focused cell (focus implies
+        // selection here).
+        .onChange(of: focusedDay) { _, current in
+            if let current { selectedDay = current }
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(
             isInitialLoad
                 ? (loadState?.loadingAccessibilityLabel ?? "Loading activity heatmap.")
-                : "\(layout.mode.summaryTitle) heatmap for the last 365 days with \(layout.activeDayCount) active days. \(layout.mode.semanticDescription)."
+                : "\(layout.mode.summaryTitle) heatmap for the last 365 days with \(layout.activeDayCount) active days. \(layout.mode.semanticDescription). Select a day to see its detail."
         )
+    }
+
+    @ViewBuilder
+    private func focusedDayCaption(for layout: SpendingHeatmapLayout) -> some View {
+        if let summary = SpendingHeatmap.focusedDaySummary(for: selectedDay, in: layout), !isInitialLoad {
+            HStack(spacing: 4) {
+                Image(systemName: "calendar")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Text(summary.captionText)
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(AppearanceTextColors.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(summary.accessibilityLabel)
+        } else {
+            Text("Select a day for its detail")
+                .microText()
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+    }
+
+    private func toggleSelection(_ day: String) {
+        withAnimation(MotionTokens.animation(MotionTokens.micro, reduceMotion: reduceMotion)) {
+            selectedDay = (selectedDay == day) ? nil : day
+        }
+        // Deselect correctness depends on the activated cell already holding
+        // focus: re-tapping a selected cell clears `selectedDay`, and this
+        // assignment is then a no-op (focus was already on `day`), so
+        // `.onChange(of: focusedDay)` does not fire and the selection stays
+        // cleared. Keep this LAST — focusing a different cell before clearing
+        // would resurrect the selection via the focus→selection sync below.
+        focusedDay = day
+    }
+
+    /// Arrow-key navigation across the padded week grid. Columns are weeks,
+    /// rows are weekdays; movement skips nil padding cells and stays in bounds
+    /// (no wraparound — predictable for keyboard users).
+    private func moveFocus(
+        _ direction: MoveCommandDirection,
+        from origin: (column: Int, row: Int),
+        in layout: SpendingHeatmapLayout
+    ) {
+        let columns = layout.weekColumns
+        guard !columns.isEmpty else { return }
+
+        var column = origin.column
+        var row = origin.row
+        for _ in 0 ..< (columns.count * 7) {
+            switch direction {
+            case .up: row -= 1
+            case .down: row += 1
+            case .left: column -= 1
+            case .right: column += 1
+            @unknown default: return
+            }
+            guard column >= 0, column < columns.count, row >= 0, row < 7 else { return }
+            if let day = columns[column][row] {
+                focusedDay = day.date
+                return
+            }
+        }
     }
 
     private var isInitialLoad: Bool {
@@ -717,13 +823,35 @@ private struct BalanceHeatmapCell: View {
     let peakValue: Double
     let mode: SpendingHeatmapMode
     let size: CGFloat
+    var isSelected: Bool = false
+    var focusBinding: FocusState<String?>.Binding
+    var reduceMotion: Bool = false
+    var onSelect: () -> Void = {}
+    var onMove: (MoveCommandDirection) -> Void = { _ in }
 
     var body: some View {
-        RoundedRectangle(cornerRadius: Radius.cell)
-            .fill(Self.fillColor(intensity: intensity, value: day.value, mode: mode))
-            .frame(width: size, height: size)
-            .help(helpText)
-            .accessibilityLabel(helpText)
+        Button(action: onSelect) {
+            RoundedRectangle(cornerRadius: Radius.cell)
+                .fill(Self.fillColor(intensity: intensity, value: day.value, mode: mode))
+                .frame(width: size, height: size)
+        }
+        .buttonStyle(.plain)
+        .focused(focusBinding, equals: day.date)
+        // Non-color highlight: a ring/stroke that reads in both appearances and
+        // does not depend on the fill hue (AND-380).
+        .overlay {
+            if isSelected {
+                RoundedRectangle(cornerRadius: Radius.cell)
+                    .strokeBorder(AppearanceTextColors.primary, lineWidth: 1.5)
+                    .frame(width: size + 2, height: size + 2)
+            }
+        }
+        // Space/Return select via the Button; arrows move focus across the grid.
+        .onMoveCommand(perform: onMove)
+        .animation(MotionTokens.animation(MotionTokens.micro, reduceMotion: reduceMotion), value: isSelected)
+        .help(helpText)
+        .accessibilityLabel(helpText)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 
     private var intensity: Double {
@@ -731,15 +859,7 @@ private struct BalanceHeatmapCell: View {
     }
 
     private var helpText: String {
-        let amount: String
-        if mode == .netCashflow {
-            let displayAmount = SpendingHeatmap.displayCashflowAmount(day.value)
-            let prefix = displayAmount > 0 ? "+" : displayAmount < 0 ? "-" : ""
-            amount = "\(prefix)\(Formatters.currency(abs(displayAmount), format: .full))"
-        } else {
-            amount = Formatters.currency(day.value, format: .full)
-        }
-        return "\(Formatters.displayTransactionDate(day.date)): \(amount) across \(day.transactionCount) transaction\(day.transactionCount == 1 ? "" : "s")"
+        SpendingHeatmap.cellLabel(for: day, mode: mode)
     }
 
     static func fillColor(intensity: Double, value: Double, mode: SpendingHeatmapMode) -> Color {

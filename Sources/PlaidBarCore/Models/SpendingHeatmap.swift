@@ -76,6 +76,36 @@ public struct SpendingHeatmapEmptyPresentation: Sendable, Hashable {
     }
 }
 
+/// Presentation for the heatmap's focused-day caption (AND-380). The same
+/// composition backs the per-cell `.help()` / VoiceOver label and the inline
+/// caption shown when a cell is selected, so both stay in lockstep.
+public struct SpendingHeatmapFocusSummary: Sendable, Hashable {
+    /// Localized day, e.g. "Jan 1, 2026".
+    public let dateText: String
+    /// Signed amount in the active mode, e.g. "$120.00" or "+$300.00".
+    public let amountText: String
+    /// Transaction count phrase, e.g. "3 transactions" / "1 transaction".
+    public let transactionText: String
+    /// Compact caption shown inline next to the date.
+    public let captionText: String
+    /// Full sentence for the cell's accessibility label / pointer help.
+    public let accessibilityLabel: String
+
+    public init(
+        dateText: String,
+        amountText: String,
+        transactionText: String,
+        captionText: String,
+        accessibilityLabel: String
+    ) {
+        self.dateText = dateText
+        self.amountText = amountText
+        self.transactionText = transactionText
+        self.captionText = captionText
+        self.accessibilityLabel = accessibilityLabel
+    }
+}
+
 public struct SpendingHeatmapMonthMarker: Identifiable, Sendable, Hashable {
     public let id: String
     public let weekIndex: Int
@@ -222,6 +252,56 @@ public enum SpendingHeatmap {
     public static func cellIntensity(for day: SpendingHeatmapDay, peakValue: Double) -> Double {
         guard day.transactionCount > 0, peakValue > 0 else { return 0 }
         return min(max(abs(day.value) / peakValue, 0), 1)
+    }
+
+    /// Signed, mode-aware amount string for a single day (e.g. "$120.00" for
+    /// spend, "+$300.00" / "-$75.00" for net cashflow). Single source of truth
+    /// for both the cell label and the focused-day caption.
+    public static func amountText(for day: SpendingHeatmapDay, mode: SpendingHeatmapMode) -> String {
+        switch mode {
+        case .spending:
+            return Formatters.currency(day.value, format: .full)
+        case .netCashflow:
+            let displayAmount = displayCashflowAmount(day.value)
+            let prefix = displayAmount > 0 ? "+" : displayAmount < 0 ? "-" : ""
+            return "\(prefix)\(Formatters.currency(abs(displayAmount), format: .full))"
+        }
+    }
+
+    /// Transaction-count phrase with correct pluralization.
+    public static func transactionText(for day: SpendingHeatmapDay) -> String {
+        "\(day.transactionCount) transaction\(day.transactionCount == 1 ? "" : "s")"
+    }
+
+    /// Full cell label / pointer-help sentence for a single day.
+    public static func cellLabel(for day: SpendingHeatmapDay, mode: SpendingHeatmapMode) -> String {
+        "\(Formatters.displayTransactionDate(day.date)): \(amountText(for: day, mode: mode)) across \(transactionText(for: day))"
+    }
+
+    /// Summary for the focused-day caption. Returns `nil` when nothing is
+    /// selected (the caller shows the range total instead) or when the selected
+    /// day key is not present in the layout (stale selection after a data or
+    /// range change). Reuses the layout's already-derived `days`.
+    public static func focusedDaySummary(
+        for selectedDay: String?,
+        in layout: SpendingHeatmapLayout
+    ) -> SpendingHeatmapFocusSummary? {
+        guard let selectedDay,
+              let day = layout.days.first(where: { $0.date == selectedDay })
+        else {
+            return nil
+        }
+
+        let dateText = Formatters.displayTransactionDate(day.date)
+        let amount = amountText(for: day, mode: layout.mode)
+        let count = transactionText(for: day)
+        return SpendingHeatmapFocusSummary(
+            dateText: dateText,
+            amountText: amount,
+            transactionText: count,
+            captionText: "\(dateText) · \(amount) · \(count)",
+            accessibilityLabel: cellLabel(for: day, mode: layout.mode)
+        )
     }
 
     public static func days(
