@@ -33,6 +33,39 @@ VaultPeek does not include:
 - multi-user accounts
 - cloud dashboards
 
+## Managed Bank Linking (Planned — Not Yet Available)
+
+VaultPeek's roadmap includes an optional **managed cloud bridge** for bank
+linking: instead of bringing your own Plaid keys, a hosted VaultPeek service
+would broker the bank connection on your behalf. In the planned design (see
+`docs/strategy/managed-link-architecture.md`), the boundary is **"never stored,"
+not "never transits."** The broker would hold only your identity, entitlement,
+and an item registry; your financial data (accounts, balances, transactions)
+would still live only on your Mac dashboard. But because Plaid requires
+VaultPeek's production credentials, managed-mode data-plane responses would
+**transit a hosted VaultPeek stateless proxy** (transit-only, in memory, never
+persisted and never logged) on the way to your Mac. So managed mode would break
+the "no data ever leaves a VaultPeek server" promise while preserving the "no
+financial data is ever stored off your Mac" promise. The exact wording will be
+finalized — and approved — before any managed surface ships.
+
+This managed mode does not exist today. As of this writing:
+
+- There is no VaultPeek cloud backend, no managed broker, and no billing.
+- The app's plan picker is a **preview** of proposed tiers; selecting a plan
+  changes nothing, charges nothing, and grants no access.
+- Every connection today is **bring-your-own (BYO)** Plaid keys (or demo data).
+  BYO/demo modes are intended to stay free and to use **no VaultPeek-hosted
+  service** — but BYO still talks to Plaid directly from your local server (see
+  "What Leaves Your Mac" above); it is not "local-only" in the sense that real
+  bank data never leaves your Mac.
+
+When and if managed linking ships, this document, `README.md`, and
+`SECURITY.md` will state exactly what the bridge touches, what transits it, what
+is never stored there, and what happens on cancellation — before any managed
+surface is enabled. Until then, treat any "managed plan" copy in the app as a
+forward-looking preview, not a description of current behavior.
+
 ## Local Data
 
 By default, VaultPeek stores local data under:
