@@ -46,7 +46,7 @@ struct BalanceTrendChart: View {
                 return
             }
             revealFraction = 0
-            withAnimation(.easeOut(duration: 0.55).delay(0.1)) {
+            withAnimation(MotionTokens.chartReveal.delay(0.1)) {
                 revealFraction = 1
             }
         }
