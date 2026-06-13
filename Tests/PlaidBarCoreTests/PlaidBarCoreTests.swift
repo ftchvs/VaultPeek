@@ -2026,6 +2026,9 @@ struct PlaidBarCoreTests {
         #expect(readiness.primaryAction == .addAccount)
         #expect(readiness.primaryActionTitle == "Connect Bank")
         #expect(readiness.primaryActionIconName == "plus.circle")
+        // The demo state offers an in-app Settings fallback the status panel
+        // must surface alongside the primary action (#322).
+        #expect(readiness.secondaryActions == [.openSettings])
     }
 
     @Test("Dashboard status readiness blocks on offline server")
