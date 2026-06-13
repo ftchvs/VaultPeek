@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-PlaidBar is a local-first macOS menu bar dashboard for [Plaid](https://plaid.com) financial data. No cloud backend, no telemetry — all data stays on the user's machine. The product north star is RepoBar/CodexBar-style density: high-signal numbers one click away in a native macOS popover.
+VaultPeek (formerly PlaidBar) is a local-first macOS menu bar dashboard for [Plaid](https://plaid.com) financial data. SwiftPM targets, executables, `PLAIDBAR_*` environment variables, the Keychain service name, and legacy `~/.plaidbar/` paths intentionally keep the PlaidBar name; see the naming-compatibility table in `README.md`. No cloud backend, no telemetry — all data stays on the user's machine. The product north star is RepoBar/CodexBar-style density: high-signal numbers one click away in a native macOS popover.
 
 ## Commands
 
@@ -92,4 +92,4 @@ Localhost endpoints. `/health` and `/oauth/callback` are open; `/api/*` requires
 
 `README.md` (most complete), `ARCHITECTURE.md` + `docs/architecture.md`, `DESIGN.md`, `GOAL.md`, `PRD.md`, `SECURITY.md`, `ACCESSIBILITY.md`, `docs/troubleshooting.md`, `docs/qa-matrix.md`, `docs/v1.0-roadmap.md`.
 
-`commands/goal.md` (`/goal`) and `.codex/skills/` contain a repo-local agentic production-readiness loop. `docs/agent-collaboration.md` defines multi-agent channel rules (PRs for handoff, Linear for status, repo docs for durable policy).
+`commands/goal.md` (`/goal`), `commands/vaultpeek-prod-loop.md`, and `.codex/skills/` contain a repo-local agentic production-readiness loop. `docs/agent-collaboration.md` defines multi-agent channel rules (PRs for handoff, Linear for status, repo docs for durable policy).
