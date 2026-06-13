@@ -836,6 +836,13 @@ final class AppState {
                 }
                 let response = try await serverClient.syncTransactions()
                 let updatedTransactions = TransactionSyncReducer.applying(response, to: transactions)
+                // Assign before awaiting the cache write so a concurrent
+                // reentrant mutation (e.g. removeAccount filtering
+                // `transactions`) cannot be clobbered by the resumed sync
+                // overwriting it with a value reduced from the pre-suspension
+                // array. The cursor is still committed only after the cache
+                // write succeeds, preserving local-first durability.
+                transactions = updatedTransactions
                 let cacheDirectory = activeStorageDirectoryURL
                 let cacheContext = transactionCacheContext
                 try await localDataCache.saveTransactions(
@@ -843,7 +850,6 @@ final class AppState {
                     to: cacheDirectory,
                     context: cacheContext
                 )
-                transactions = updatedTransactions
                 try await serverClient.commitSyncCursors(response.pendingCursors)
                 hasMore = response.hasMore
             }
