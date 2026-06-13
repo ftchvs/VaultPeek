@@ -69,8 +69,8 @@ covered and how.
 ### How to run
 
 ```bash
-# Headless light/dark renders (no Screen Recording permission needed).
-# Writes docs/qa/appearance-{light,dark}/render-{dashboard,flyout}.png.
+# Headless light/dark renders (no Screen Recording permission needed). Writes
+# docs/qa/appearance-{light,dark}/render-{dashboard,flyout,settings-appearance}.png.
 ./Scripts/qa-appearance-matrix.sh
 
 # Reduce Transparency half: toggle System Settings > Accessibility >
@@ -95,9 +95,12 @@ the host system setting. Unknown values fall back to the system appearance.
 - Reduce Transparency is a system-wide accessibility setting with no
   supported per-process override, so that half of the matrix cannot be
   captured autonomously. It requires a manual toggle (procedure above).
-- `--render-snapshot` captures the dashboard and one account inspector. The
-  Settings window, setup preflight, and the non-default dashboard filters are
-  only reachable through `Scripts/screenshots.sh` (UI automation) or a manual
+- `--render-snapshot` captures the dashboard, one account inspector, and the
+  Settings → Appearance pane (the latter rendered into an off-screen hosting
+  window — `render-settings-appearance.png`, AND-366). The other Settings tabs
+  (General/Accounts/Notifications/About), setup preflight, and the non-default
+  dashboard filters are only reachable through `Scripts/screenshots.sh` (UI
+  automation) or a manual
   pass.
 - Rasterization captures the popover *content view*, not its position relative
   to the screen, so the leading-edge anchor and screen-edge clamp (AND-370/374)
@@ -141,6 +144,7 @@ tech):
 | Selected account (three-column 1122pt: rail + dashboard + right inspector) | Pass — headless render | Pass — headless render | Needs human eyes | Needs human eyes |
 | Account inspector (credit, right column) | Pass — headless render | Pass — headless render | Needs human eyes | Needs human eyes |
 | Dashboard filters (Cash/Credit/Savings/Debt/Status) | Code-inspected only (filters reuse the All-state visual system) | Code-inspected only | Needs human eyes | Needs human eyes |
+| Settings → Appearance (transparency + preview/presets + Display section) | Pass — headless render | Pass — headless render | Needs human eyes | Needs human eyes |
 | Settings (General/Accounts/Notifications/About) | Needs `screenshots.sh` or human eyes | Needs `screenshots.sh` or human eyes | Needs human eyes | Needs human eyes |
 | Setup sandbox preflight | Needs `screenshots.sh` or human eyes | Needs `screenshots.sh` or human eyes | Needs human eyes | Needs human eyes |
 
@@ -150,6 +154,13 @@ tech):
   is the 801pt two-column state (Wealth Summary rail + center dashboard) and
   `render-flyout.png` is the 1122pt three-column state with the account inspector
   on the right — the rail stays visible when an account is selected (AND-375 AC).
+- `render-settings-appearance.png` covers Settings → Appearance at the 560pt
+  minimum width (AND-366): the transparency slider, the live preview + Solid/
+  Balanced/Glass presets (AND-364), and the Display section pickers — Appearance,
+  Contrast, Decorative Effects, Density (AND-365). Both appearances confirm top
+  anchoring, slider/label readability, and no text overlap at the minimum width.
+  The preview card's vibrant material composites against nothing off-screen (same
+  caveat as the popover); Reduce Transparency for this pane stays a manual check.
 - Both appearances force correctly end to end (header, heatmap, account rows,
   balance mix, insight receipt all follow the forced appearance).
 - The 365-day heatmap shows continuous activity in both appearances — the
