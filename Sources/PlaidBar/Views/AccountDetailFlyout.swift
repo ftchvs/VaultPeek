@@ -36,6 +36,7 @@ struct AccountInspector: View {
 struct AccountDetailFlyout: View {
     @Environment(AppState.self) private var appState
     @Environment(\.openSettings) private var openSettings
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let account: AccountDTO
     let isStatusFilter: Bool
     let onClose: () -> Void
@@ -188,12 +189,14 @@ struct AccountDetailFlyout: View {
             DetailValue(
                 title: summary.availableTitle,
                 value: Formatters.currency(summary.availableBalance, format: .compact),
-                tint: AppearanceTextColors.primary
+                tint: AppearanceTextColors.primary,
+                reduceMotion: reduceMotion
             )
             DetailValue(
                 title: summary.currentTitle,
                 value: Formatters.currency(summary.currentBalance, format: .compact),
-                tint: AppearanceTextColors.primary
+                tint: AppearanceTextColors.primary,
+                reduceMotion: reduceMotion
             )
 
             // Utilization stays neutral here — risk severity is carried by the
@@ -208,7 +211,8 @@ struct AccountDetailFlyout: View {
                 DetailValue(
                     title: "Utilization",
                     value: utilizationText,
-                    tint: AppearanceTextColors.primary
+                    tint: AppearanceTextColors.primary,
+                    reduceMotion: reduceMotion
                 )
             }
         }
@@ -423,6 +427,7 @@ private struct FlyoutSectionLabel: View {
 // MARK: - Change Row
 
 private struct FlyoutChangeRow: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let title: String
     let total: Double
     let delta: Double
@@ -437,6 +442,7 @@ private struct FlyoutChangeRow: View {
 
             Text(Formatters.currency(total, format: .compact))
                 .dataText()
+                .rollingTabularNumber(Formatters.currency(total, format: .compact), reduceMotion: reduceMotion)
 
             Spacer(minLength: Spacing.xs)
 
@@ -504,6 +510,7 @@ private struct ReviewReasonChip: View {
 // MARK: - Category Slice Row
 
 private struct CategorySliceRow: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let slice: AccountDetailInsights.CategorySlice
 
     var body: some View {
@@ -522,12 +529,12 @@ private struct CategorySliceRow: View {
 
                 Text(Formatters.currency(slice.total, format: .compact))
                     .font(.caption.weight(.semibold))
-                    .monospacedDigit()
+                    .rollingTabularNumber(Formatters.currency(slice.total, format: .compact), reduceMotion: reduceMotion)
 
                 Text(shareText)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                    .monospacedDigit()
+                    .rollingTabularNumber(shareText, reduceMotion: reduceMotion)
                     .frame(width: 34, alignment: .trailing)
             }
 
@@ -593,6 +600,7 @@ struct DetailValue: View {
     let title: String
     let value: String
     let tint: Color
+    var reduceMotion: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
@@ -601,6 +609,7 @@ struct DetailValue: View {
                 .foregroundStyle(.secondary)
             Text(value)
                 .dataText()
+                .rollingTabularNumber(value, reduceMotion: reduceMotion)
                 .foregroundStyle(tint)
         }
         .accessibilityElement(children: .ignore)
@@ -609,6 +618,7 @@ struct DetailValue: View {
 }
 
 struct TransactionMiniRow: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let transaction: TransactionDTO
 
     var body: some View {
@@ -630,6 +640,7 @@ struct TransactionMiniRow: View {
 
             Text(amountText)
                 .dataText()
+                .rollingTabularNumber(amountText, reduceMotion: reduceMotion)
                 .foregroundStyle(
                     transaction.isIncome ? SemanticColors.positive : AppearanceTextColors.primary
                 )
