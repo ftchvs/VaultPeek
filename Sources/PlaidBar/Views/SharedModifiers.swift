@@ -263,61 +263,26 @@ extension View {
     }
 }
 
-// MARK: - Refresh Icon (smooth spin via repeatForever)
+// MARK: - Refresh Icon (native continuous symbol effect)
 
 struct RefreshIcon: View {
     let isLoading: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var rotation: Double = 0
 
     var body: some View {
-        // Under Reduce Motion the infinite spin is replaced by a filled static
-        // symbol plus accessibility value, so loading does not depend on motion.
+        // The active refresh state is driven by a native SF Symbol effect that
+        // loops continuously while `isLoading` is true. Under Reduce Motion the
+        // symbol helpers swap in the filled static glyph at a dimmed opacity and
+        // the effect is gated inactive, so loading reads without any movement.
         Image(systemName: MotionTokens.refreshSymbolName(isLoading: isLoading, reduceMotion: reduceMotion))
-            .rotationEffect(.degrees(reduceMotion ? 0 : rotation))
+            .symbolEffect(
+                .rotate,
+                options: .repeat(.continuous),
+                isActive: isLoading && !reduceMotion
+            )
             .opacity(MotionTokens.refreshOpacity(isLoading: isLoading, reduceMotion: reduceMotion))
             .accessibilityLabel(isLoading ? "Refreshing" : "Refresh")
             .accessibilityValue(isLoading ? "In progress" : "Ready")
-            .onChange(of: isLoading) { _, loading in
-                if loading {
-                    startSpinIfAllowed()
-                } else {
-                    stopSpin(animated: true)
-                }
-            }
-            .onChange(of: reduceMotion) { _, shouldReduceMotion in
-                if shouldReduceMotion {
-                    stopSpin(animated: false)
-                } else if isLoading {
-                    startSpinIfAllowed()
-                }
-            }
-            .onAppear {
-                guard isLoading else { return }
-                startSpinIfAllowed()
-            }
-    }
-
-    private func startSpinIfAllowed() {
-        guard !reduceMotion else {
-            stopSpin(animated: false)
-            return
-        }
-
-        rotation = 0
-        withAnimation(MotionTokens.animation(MotionTokens.refreshSpin, reduceMotion: reduceMotion)) {
-            rotation = 360
-        }
-    }
-
-    private func stopSpin(animated: Bool) {
-        let animation = animated
-            ? MotionTokens.animation(MotionTokens.refreshSettle, reduceMotion: reduceMotion)
-            : nil
-
-        withAnimation(animation) {
-            rotation = 0
-        }
     }
 }
 
