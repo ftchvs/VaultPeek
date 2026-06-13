@@ -574,6 +574,7 @@ struct PlaidBarServerTests {
         let fluent = Fluent(logger: logger)
         fluent.databases.use(.sqlite(.file(databasePath)), as: .sqlite)
         await fluent.migrations.add(CreateItems())
+        await fluent.migrations.add(AddProviderToItems())
         await fluent.migrations.add(CreateSyncCursors())
 
         var bodyError: Error?
