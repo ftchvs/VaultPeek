@@ -7,7 +7,7 @@ enum SemanticColors {
 
     /// Money received — paycheck deposits, refunds, Venmo inflows.
     /// Used in transaction rows and Income vs Expense chart bars.
-    static let income = Color.green
+    static let income = Color(nsColor: .systemGreen)
 
     /// Default text color for outgoing transactions
     /// (uses `.primary` to follow system appearance).
@@ -15,54 +15,54 @@ enum SemanticColors {
 
     /// Outstanding credit card balance shown in account rows
     /// and credit utilization display.
-    static let creditDebt = Color.red
+    static let creditDebt = Color(nsColor: .systemRed)
 
     /// Available/spendable balance in depository account rows.
-    static let available = Color.green
+    static let available = Color(nsColor: .systemGreen)
 
     // MARK: - Status Indicators
 
     /// General caution indicator — credit utilization at or above the
     /// user's warning threshold (icon tint), stale sync badge.
-    static let warning = Color.orange
+    static let warning = Color(nsColor: .systemOrange)
 
     /// Favorable delta — spending decreased vs. prior period, balance increased.
-    static let positive = Color.green
+    static let positive = Color(nsColor: .systemGreen)
 
     /// Unfavorable delta — spending increased vs. prior period,
     /// "Remove" destructive actions.
-    static let negative = Color.red
+    static let negative = Color(nsColor: .systemRed)
 
     /// Uncommitted transactions that haven't cleared yet.
-    static let pending = Color.orange
+    static let pending = Color(nsColor: .systemOrange)
 
     // MARK: - Charts
 
     /// Balance history mini-chart and spending trend line/area fill.
-    static let sparkline = Color.blue
+    static let sparkline = Color(nsColor: .systemBlue)
 
     // MARK: - Brand Identity
 
     /// Primary app accent — hero icons, step dots, active controls.
-    static let brand = Color.blue
+    static let brand = Color(nsColor: .systemBlue)
 
     /// Secondary accent — sandbox mode icon, complementary highlights.
-    static let brandSecondary = Color.orange
+    static let brandSecondary = Color(nsColor: .systemOrange)
 
     // MARK: - Recurring
 
     /// Detected recurring charges badge and recurring transaction section header.
-    static let recurring = Color.indigo
+    static let recurring = Color(nsColor: .systemIndigo)
 
     /// Utilization thresholds. Yellow is excluded from the ramp: yellow text
     /// at caption size falls below 4.5:1 contrast in both appearances, so the
     /// 30-75% band shares orange and the icon ladder (below) carries the
     /// severity distinction.
     static func utilization(for percent: Double, threshold: Double = 30) -> Color {
-        guard percent >= threshold else { return .green }
+        guard percent >= threshold else { return Color(nsColor: .systemGreen) }
         switch percent {
-        case ..<75: return .orange
-        default: return .red
+        case ..<75: return Color(nsColor: .systemOrange)
+        default: return Color(nsColor: .systemRed)
         }
     }
 
@@ -73,6 +73,11 @@ enum SemanticColors {
         if percent < 75 { return "exclamationmark.triangle.fill" }
         return "xmark.octagon"
     }
+}
+
+enum AppearanceTextColors {
+    static let primary = Color(nsColor: .labelColor)
+    static let secondary = Color(nsColor: .secondaryLabelColor)
 }
 
 // MARK: - Spacing (8pt grid)
@@ -135,6 +140,8 @@ enum MotionTokens {
     static let refreshSettle = Animation.linear(duration: 0.3)
     /// Loading skeleton pulse. Always pass through `animation`.
     static let loadingPulse = Animation.easeInOut(duration: 0.9).repeatForever(autoreverses: true)
+    /// Decorative background drift. Always pass through `animation`.
+    static let backgroundDrift = Animation.easeInOut(duration: 18).repeatForever(autoreverses: true)
 
     static let staticLoadingOpacity = 0.62
     static let loadingPulseOpacity = 0.55
@@ -159,6 +166,19 @@ enum MotionTokens {
 // MARK: - Native Surfaces
 
 enum SurfaceTokens {
+    struct SurfaceShadow: Sendable, Equatable {
+        let opacity: Double
+        let radius: CGFloat
+        let x: CGFloat
+        let y: CGFloat
+    }
+
+    struct SurfaceDepth: Sendable, Equatable {
+        let strokeOpacity: Double
+        let innerStrokeOpacity: Double
+        let shadow: SurfaceShadow?
+    }
+
     static let popoverCornerRadius: CGFloat = 12
     static let panelCornerRadius: CGFloat = 7
     static let compactCornerRadius: CGFloat = 6
@@ -170,6 +190,37 @@ enum SurfaceTokens {
 
     static let panelStrokeOpacity = 0.075
     static let emphasizedStrokeOpacity = 0.16
+
+    static let popoverTextureOpacity = 0.12
+    static let popoverTextureReduceTransparencyOpacity = 0.03
+
+    static let leftPanelDepth = SurfaceDepth(
+        strokeOpacity: 0.11,
+        innerStrokeOpacity: 0.045,
+        shadow: SurfaceShadow(opacity: 0.16, radius: 14, x: 0, y: 8)
+    )
+    static let raisedDepth = SurfaceDepth(
+        strokeOpacity: 0.08,
+        innerStrokeOpacity: 0.035,
+        shadow: SurfaceShadow(opacity: 0.11, radius: 10, x: 0, y: 5)
+    )
+    static let insetDepth = SurfaceDepth(
+        strokeOpacity: 0.055,
+        innerStrokeOpacity: 0.025,
+        shadow: SurfaceShadow(opacity: 0.055, radius: 5, x: 0, y: 2)
+    )
+    static let heroDepth = SurfaceDepth(
+        strokeOpacity: 0.10,
+        innerStrokeOpacity: 0.055,
+        shadow: SurfaceShadow(opacity: 0.12, radius: 12, x: 0, y: 6)
+    )
+    static let emphasizedDepth = SurfaceDepth(
+        strokeOpacity: emphasizedStrokeOpacity,
+        innerStrokeOpacity: 0.045,
+        shadow: SurfaceShadow(opacity: 0.08, radius: 8, x: 0, y: 4)
+    )
+
+    static let heroGlowOpacity = 0.10
 
     /// Liquid Glass is a progressive enhancement on macOS 26+.
     /// macOS 15 users keep the same layout with SwiftUI material/fill fallback.

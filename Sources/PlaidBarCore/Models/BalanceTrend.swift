@@ -4,17 +4,23 @@ import Foundation
 /// header sparkline: trend direction, signed delta, and the honest day span
 /// the data actually covers (which can be shorter than the requested window
 /// while history is still accumulating).
-public struct BalanceTrend: Sendable {
-    public enum Direction: Sendable {
+public struct BalanceTrend: Sendable, Equatable {
+    public enum Direction: Sendable, Equatable {
         case up
         case down
         case flat
     }
 
+    public static let requiredPointCount = 2
+
     public let direction: Direction
     public let delta: Double
     public let spanDays: Int
     public let points: [BalanceSnapshot]
+
+    public var chartBaseline: Double {
+        points.map(\.balance).min() ?? 0
+    }
 
     /// Signed compact delta, e.g. "+$1.2K", "-$420".
     public var deltaText: String {
@@ -60,7 +66,7 @@ public struct BalanceTrend: Sendable {
             .filter { $0.date >= windowStart && $0.date <= now }
             .sorted { $0.date < $1.date }
 
-        guard let first = points.first, let last = points.last, points.count >= 2 else {
+        guard let first = points.first, let last = points.last, points.count >= requiredPointCount else {
             return nil
         }
 

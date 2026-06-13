@@ -92,6 +92,7 @@ public struct WealthSummaryPresentation: Sendable, Equatable {
     public let totalAssets: Double
     public let totalDebt: Double
     public let balanceMix: BalanceCompositionPresentation
+    public let netWorthTrend: NetWorthTrendPresentation
     public let cashflow: CashflowSummary
     public let creditUtilization: CreditUtilizationSummary?
     public let attention: AttentionSummary
@@ -104,6 +105,10 @@ public struct WealthSummaryPresentation: Sendable, Equatable {
         totalAssets: Double,
         totalDebt: Double,
         balanceMix: BalanceCompositionPresentation,
+        netWorthTrend: NetWorthTrendPresentation = .insufficientHistory(
+            pointCount: 0,
+            requiredPointCount: BalanceTrend.requiredPointCount
+        ),
         cashflow: CashflowSummary,
         creditUtilization: CreditUtilizationSummary?,
         attention: AttentionSummary,
@@ -115,6 +120,7 @@ public struct WealthSummaryPresentation: Sendable, Equatable {
         self.totalAssets = totalAssets
         self.totalDebt = totalDebt
         self.balanceMix = balanceMix
+        self.netWorthTrend = netWorthTrend
         self.cashflow = cashflow
         self.creditUtilization = creditUtilization
         self.attention = attention
@@ -135,6 +141,7 @@ public struct WealthSummaryPresentation: Sendable, Equatable {
         statusSyncText: String,
         errorMessage: String?,
         creditUtilizationThreshold: Double = PlaidBarConstants.creditUtilizationWarningThreshold,
+        balanceHistory: [BalanceSnapshot] = [],
         windowDays: Int = 30,
         now: Date = Date(),
         calendar: Calendar = .current
@@ -160,6 +167,11 @@ public struct WealthSummaryPresentation: Sendable, Equatable {
             totalAssets: totalAssets(from: accounts),
             totalDebt: MenuBarSummary.totalDebt(from: accounts),
             balanceMix: BalanceCompositionPresentation(accounts: accounts),
+            netWorthTrend: NetWorthTrendPresentation.evaluate(
+                history: balanceHistory,
+                now: now,
+                calendar: calendar
+            ),
             cashflow: cashflowSummary(
                 from: transactions,
                 windowDays: windowDays,

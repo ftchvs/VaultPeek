@@ -171,12 +171,20 @@ public struct LocalAIInsightReceipt: Equatable, Sendable {
         public let label: String
         public let value: String
         public let systemImage: String
+        public let accentCategory: SpendingCategory?
 
-        public init(id: String, label: String, value: String, systemImage: String) {
+        public init(
+            id: String,
+            label: String,
+            value: String,
+            systemImage: String,
+            accentCategory: SpendingCategory? = nil
+        ) {
             self.id = id
             self.label = label
             self.value = value
             self.systemImage = systemImage
+            self.accentCategory = accentCategory
         }
     }
 
@@ -244,7 +252,8 @@ public struct LocalAIInsightReceipt: Equatable, Sendable {
                 id: "top-category",
                 label: "Top category",
                 value: topCategory.category.displayName,
-                systemImage: topCategory.category.iconName
+                systemImage: topCategory.category.iconName,
+                accentCategory: topCategory.category
             ))
         }
 
