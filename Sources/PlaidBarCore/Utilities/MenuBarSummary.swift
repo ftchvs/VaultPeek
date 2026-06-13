@@ -85,6 +85,31 @@ public enum MenuBarSummary {
         }
     }
 
+    public static func monthToDateSpend(
+        from transactions: [TransactionDTO],
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> Double {
+        let currentDay = calendar.startOfDay(for: now)
+        let components = calendar.dateComponents([.year, .month], from: currentDay)
+        let startDate = calendar.date(from: components) ?? currentDay
+        let startKey = transactionDateKey(for: startDate, calendar: calendar)
+        let endKey = transactionDateKey(for: currentDay, calendar: calendar)
+
+        return transactions.reduce(0) { total, transaction in
+            guard !transaction.isIncome,
+                  transaction.category != .transfer,
+                  transaction.category != .transferOut,
+                  Formatters.isCanonicalTransactionDateKey(transaction.date),
+                  transaction.date >= startKey,
+                  transaction.date <= endKey
+            else {
+                return total
+            }
+            return total + transaction.displayAmount
+        }
+    }
+
     private static func transactionDateKey(for date: Date, calendar: Calendar) -> String {
         let components = calendar.dateComponents([.year, .month, .day], from: date)
         guard let year = components.year,
