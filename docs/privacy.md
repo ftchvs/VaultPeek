@@ -33,6 +33,29 @@ VaultPeek does not include:
 - multi-user accounts
 - cloud dashboards
 
+## Managed Bank Linking (Planned — Not Yet Available)
+
+VaultPeek's roadmap includes an optional **managed cloud bridge** for bank
+linking: instead of bringing your own Plaid keys, a hosted VaultPeek service
+would broker the bank connection on your behalf. The intended boundary is that
+this bridge handles *linking* only — your financial data (accounts, balances,
+transactions) would still live on your Mac dashboard, the same local-first
+contract this document describes.
+
+This managed mode does not exist today. As of this writing:
+
+- There is no VaultPeek cloud backend, no managed broker, and no billing.
+- The app's plan picker is a **preview** of proposed tiers; selecting a plan
+  changes nothing, charges nothing, and grants no access.
+- Every connection today is **bring-your-own (BYO)** Plaid keys (or demo data),
+  and BYO/demo modes are intended to remain fully local-only and free.
+
+When and if managed linking ships, this document, `README.md`, and
+`SECURITY.md` will state exactly what the bridge touches, what transits it, what
+is never stored there, and what happens on cancellation — before any managed
+surface is enabled. Until then, treat any "managed plan" copy in the app as a
+forward-looking preview, not a description of current behavior.
+
 ## Local Data
 
 By default, VaultPeek stores local data under:

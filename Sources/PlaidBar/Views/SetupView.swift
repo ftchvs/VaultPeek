@@ -8,7 +8,17 @@ struct SetupView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var setupMode: SetupMode = .choose
+    // Locally-remembered plan preference. UI-only: it grants no entitlement and
+    // gates nothing. Managed billing/enforcement is deferred (AND-350 scope).
+    @AppStorage(SubscriptionPlan.storageKey) private var selectedPlanRawValue = SubscriptionPlan.defaultPlan.rawValue
     var onComplete: (() -> Void)?
+
+    private var selectedPlan: Binding<SubscriptionPlan> {
+        Binding(
+            get: { SubscriptionPlan(rawValue: selectedPlanRawValue) ?? .personal },
+            set: { selectedPlanRawValue = $0.rawValue }
+        )
+    }
 
     enum SetupMode: Sendable, Equatable {
         case choose
@@ -146,12 +156,33 @@ struct SetupView: View {
                 )
                 StorageDisclosureRow(
                     icon: "eye.slash",
-                    text: "No VaultPeek cloud backend, analytics, or telemetry."
+                    text: "Today VaultPeek runs fully on your Mac — no cloud backend, "
+                        + "analytics, or telemetry. A managed cloud bridge for bank linking "
+                        + "is planned but isn't available yet; your financial data would still "
+                        + "stay on your Mac dashboard."
                 )
             }
             .padding(Spacing.md)
             .frame(maxWidth: .infinity, alignment: .leading)
             .glassSurface(.inset)
+
+            // Plan preview + usage shell. Production is the managed-plan preview
+            // surface; sandbox/BYO stays free and shows the usage count without a
+            // limit. Nothing here enforces a limit or charges money (AND-350).
+            if environment == .production {
+                PlanSelectionShell(selectedPlan: selectedPlan)
+                InstitutionUsageWidget(
+                    usage: InstitutionUsage(
+                        connectedCount: appState.connectedItemCount,
+                        plan: selectedPlan.wrappedValue
+                    )
+                )
+            } else {
+                InstitutionUsageWidget(
+                    usage: InstitutionUsage(connectedCount: appState.connectedItemCount, limit: nil),
+                    showsUpgradeWhenAtLimit: false
+                )
+            }
 
             OnboardingPreflightPanel(environment: environment)
                 .environment(appState)
