@@ -38,6 +38,32 @@ public enum PlaidBarCLIEndpoint: Sendable, Equatable {
     }
 }
 
+/// Safety checks for the CLI's `--server` target. The CLI attaches the local
+/// API bearer token (the local secret) to every request, so it must only ever
+/// talk to a loopback address — otherwise a non-loopback `--server` would leak
+/// the token to a remote endpoint (AND-404).
+public enum PlaidBarCLIServer {
+    /// Whether `urlString`'s host is a loopback address the local bearer token
+    /// may be sent to: `localhost`, IPv6 `::1`, or any IPv4 in `127.0.0.0/8`.
+    public static func isLoopback(_ urlString: String) -> Bool {
+        guard var host = URLComponents(string: urlString)?.host?.lowercased() else {
+            return false
+        }
+        // IPv6 literals come back bracketed (e.g. "[::1]"); compare on the inner address.
+        if host.hasPrefix("["), host.hasSuffix("]") {
+            host = String(host.dropFirst().dropLast())
+        }
+        if host == "localhost" || host == "::1" { return true }
+        // IPv4 loopback range 127.0.0.0/8 — require four numeric octets so a
+        // hostname like "127.evil.com" is not mistaken for a loopback IP.
+        let octets = host.split(separator: ".", omittingEmptySubsequences: false)
+        if octets.count == 4, octets.first == "127", octets.allSatisfy({ UInt8($0) != nil }) {
+            return true
+        }
+        return false
+    }
+}
+
 public enum PlaidBarCLITableFormatter {
     public static func status(_ status: ServerStatus) -> String {
         rows([
