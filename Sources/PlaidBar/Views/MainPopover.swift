@@ -15,15 +15,18 @@ struct MainPopover: View {
     @State private var dashboardContentHeight: CGFloat = 0
 
     private enum Layout {
-        static let dashboardWidth: CGFloat = 480
-        static let flyoutWidth: CGFloat = 320
+        // Column widths and the screen-edge margin are owned by the shared,
+        // unit-tested PopoverGeometry so the SwiftUI frames, the popover width
+        // math, and the AppKit window anchor stay in lockstep (AND-375).
+        static let dashboardWidth = PopoverGeometry.dashboardWidth
+        static let flyoutWidth = PopoverGeometry.railWidth
         static let dashboardMinHeight: CGFloat = 460
         /// Vertical breathing room kept below the popover: menu bar,
         /// footer chrome, and a Dock-safe margin.
         static let screenHeightInset: CGFloat = 120
         /// Gap kept between the widened three-column popover and the screen's
         /// visible edges when it is clamped on-screen (AND-374 fallback).
-        static let screenEdgeMargin: CGFloat = 12
+        static let screenEdgeMargin = PopoverGeometry.screenEdgeMargin
 
         static let contentHorizontalPadding: CGFloat = 12
         static let contentTopPadding: CGFloat = 8
@@ -50,8 +53,13 @@ struct MainPopover: View {
 
     private var selectedAccount: AccountDTO? {
         let accounts = filteredAccounts
-        guard !selectedAccountId.isEmpty else { return nil }
-        return accounts.first { $0.id == selectedAccountId }
+        // A selection survives only while the account is still visible; a filter
+        // change or a removed/synced-away account deselects it (AND-373/375).
+        guard let id = DashboardAccountSelection.resolvedSelectedId(
+            selectedAccountId,
+            visibleAccountIds: accounts.map(\.id)
+        ) else { return nil }
+        return accounts.first { $0.id == id }
     }
 
     /// The trailing account inspector is open (an account is selected and we are
@@ -65,7 +73,7 @@ struct MainPopover: View {
     /// the popover's width with no account selected and the stable block whose
     /// leading edge the window anchor pins (AND-369/370).
     private var twoColumnWidth: CGFloat {
-        Layout.flyoutWidth + 1 + Layout.dashboardWidth
+        PopoverGeometry.width(for: .twoColumn)
     }
 
     private func deselectAccount() {
@@ -214,16 +222,12 @@ struct MainPopover: View {
     }
 
     private var popoverWidth: CGFloat {
-        // Setup renders at the dashboard's width so first run never snaps
-        // between window sizes.
-        guard !shouldShowSetupScreen else { return Layout.dashboardWidth }
-        // Two-column base (Wealth Summary rail + dashboard) with no selection.
-        guard isAccountInspectorOpen else { return twoColumnWidth }
-        // Three-column: add the divider + trailing account inspector. The true
-        // geometry is reported here (fixed columns must not be clipped); the
-        // window anchor shifts the window on-screen when this exceeds the
-        // available width near a display edge (AND-370/374).
-        return twoColumnWidth + 1 + Layout.flyoutWidth
+        // The true geometry is reported here (fixed columns must not be clipped);
+        // the window anchor shifts the window on-screen when the three-column
+        // width exceeds the available width near a display edge (AND-370/374).
+        // Setup renders at the dashboard width so first run never snaps sizes.
+        guard !shouldShowSetupScreen else { return PopoverGeometry.width(for: .setup) }
+        return PopoverGeometry.width(for: isAccountInspectorOpen ? .threeColumn : .twoColumn)
     }
 
     private var transparencySetting: PopoverTransparencySetting {
