@@ -60,6 +60,7 @@ struct PlaidBarApp: App {
             MainPopover()
                 .environment(appState)
                 .forcedAppColorScheme(Self.forcedColorScheme)
+                .appliesAppAppearance()
         } label: {
             MenuBarLabel()
                 .environment(appState)
@@ -156,19 +157,58 @@ struct PlaidBarApp: App {
 }
 
 private struct ForcedAppColorScheme: ViewModifier {
-    let colorScheme: ColorScheme?
+    /// The `--appearance` CLI override; when non-nil it wins over the stored
+    /// app appearance-mode preference (AND-365).
+    let cliOverride: ColorScheme?
+    @AppStorage(AppAppearanceMode.storageKey) private var modeRaw = AppAppearanceMode.defaultValue.rawValue
+
+    private var effectiveScheme: ColorScheme? {
+        if let cliOverride { return cliOverride }
+        switch AppAppearanceMode(rawValue: modeRaw) ?? .followSystem {
+        case .followSystem: return nil
+        case .light: return .light
+        case .dark: return .dark
+        }
+    }
 
     func body(content: Content) -> some View {
-        if let colorScheme {
-            content.environment(\.colorScheme, colorScheme)
+        if let effectiveScheme {
+            content.environment(\.colorScheme, effectiveScheme)
         } else {
             content
         }
     }
 }
 
+/// Applies the stored appearance-mode preference to `NSApplication.appearance`
+/// so window chrome (e.g. the Settings titlebar) follows the choice too, not
+/// just SwiftUI content. The `--appearance` CLI override wins: when it is set,
+/// `applyForcedAppearance()` already pinned the app appearance, so this no-ops.
+private struct AppAppearanceApplier: ViewModifier {
+    @AppStorage(AppAppearanceMode.storageKey) private var modeRaw = AppAppearanceMode.defaultValue.rawValue
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear { apply() }
+            .onChange(of: modeRaw) { _, _ in apply() }
+    }
+
+    private func apply() {
+        guard CommandLineOptions.value(for: "--appearance") == nil else { return }
+        switch AppAppearanceMode(rawValue: modeRaw) ?? .followSystem {
+        case .followSystem: NSApplication.shared.appearance = nil
+        case .light: NSApplication.shared.appearance = NSAppearance(named: .aqua)
+        case .dark: NSApplication.shared.appearance = NSAppearance(named: .darkAqua)
+        }
+    }
+}
+
 private extension View {
-    func forcedAppColorScheme(_ colorScheme: ColorScheme?) -> some View {
-        modifier(ForcedAppColorScheme(colorScheme: colorScheme))
+    func forcedAppColorScheme(_ cliOverride: ColorScheme?) -> some View {
+        modifier(ForcedAppColorScheme(cliOverride: cliOverride))
+    }
+
+    func appliesAppAppearance() -> some View {
+        modifier(AppAppearanceApplier())
     }
 }

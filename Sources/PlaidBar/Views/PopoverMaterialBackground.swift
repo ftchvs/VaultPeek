@@ -7,15 +7,26 @@ struct PopoverMaterialBackground: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @AppStorage(DecorativeEffectsPreference.storageKey) private var decorativeRaw = DecorativeEffectsPreference.defaultValue.rawValue
+
+    /// The decorative mesh texture is optional: the "Reduced" preference, system
+    /// Reduce Transparency, or system Reduce Motion all suppress it or its drift
+    /// (AND-365 closes AND-342's always-on texture). System settings win.
+    private var effects: ResolvedDecorativeEffects {
+        (DecorativeEffectsPreference(rawValue: decorativeRaw) ?? .followSystem)
+            .resolved(systemReduceMotion: reduceMotion, systemReduceTransparency: reduceTransparency)
+    }
 
     var body: some View {
+        let effects = effects
+
         ZStack {
-            PopoverMeshTexture(
-                opacity: reduceTransparency
-                    ? SurfaceTokens.popoverTextureReduceTransparencyOpacity
-                    : SurfaceTokens.popoverTextureOpacity,
-                reduceMotion: reduceMotion
-            )
+            if effects.allowsTexture {
+                PopoverMeshTexture(
+                    opacity: SurfaceTokens.popoverTextureOpacity,
+                    reduceMotion: !effects.allowsMotion
+                )
+            }
 
             Rectangle()
                 .fill(.ultraThinMaterial)
