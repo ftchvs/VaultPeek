@@ -46,10 +46,10 @@ struct SettingsView: View {
         .frame(
             minWidth: 560,
             idealWidth: 620,
-            maxWidth: .infinity,
+            maxWidth: 720,
             minHeight: 480,
             idealHeight: 560,
-            maxHeight: .infinity
+            maxHeight: 640
         )
     }
 }
@@ -72,38 +72,46 @@ struct AppearanceSettingsView: View {
     var body: some View {
         Form {
             Section("Popover") {
-                VStack(alignment: .leading, spacing: Spacing.sm) {
-                    HStack {
-                        Text("Transparency")
-                        Spacer()
-                        Text("\(transparencySetting.displayPercent)%")
-                            .monospacedDigit()
-                            .foregroundStyle(.secondary)
-                    }
+                LabeledContent("Transparency") {
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        HStack(alignment: .center, spacing: Spacing.sm) {
+                            Slider(
+                                value: Binding(
+                                    get: { transparencySetting.value },
+                                    set: { popoverTransparency = PopoverTransparencySetting(value: $0).value }
+                                ),
+                                in: PopoverTransparencySetting.minimumValue...PopoverTransparencySetting.maximumValue,
+                                step: 1
+                            )
+                            .labelsHidden()
+                            .frame(minWidth: 220, idealWidth: 280, maxWidth: 320)
+                            .accessibilityLabel("Popover transparency")
+                            .accessibilityValue("\(transparencySetting.displayPercent) percent transparent")
 
-                    Slider(
-                        value: Binding(
-                            get: { transparencySetting.value },
-                            set: { popoverTransparency = PopoverTransparencySetting(value: $0).value }
-                        ),
-                        in: PopoverTransparencySetting.minimumValue...PopoverTransparencySetting.maximumValue,
-                        step: 1
-                    ) {
-                        Text("Popover transparency")
-                    } minimumValueLabel: {
-                        Text("More solid")
-                    } maximumValueLabel: {
-                        Text("More glass")
-                    }
-                    .accessibilityValue("\(transparencySetting.displayPercent) percent transparent")
+                            Text("\(transparencySetting.displayPercent)%")
+                                .monospacedDigit()
+                                .foregroundStyle(.secondary)
+                                .frame(width: 38, alignment: .trailing)
+                        }
 
-                    Text("Adjusts the ultra-thin material overlay live. The range is capped to keep balances and status text legible on busy desktops.")
-                        .detailText()
-                        .fixedSize(horizontal: false, vertical: true)
+                        HStack {
+                            Text("More solid")
+                            Spacer()
+                            Text("More glass")
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(minWidth: 220, idealWidth: 280, maxWidth: 320)
+
+                        Text("Adjusts the ultra-thin material overlay live. The range is capped to keep balances and status text legible on busy desktops.")
+                            .detailText()
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
         }
-        .padding(.top, Spacing.sm)
+        .formStyle(.grouped)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 

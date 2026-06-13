@@ -10,7 +10,7 @@ public struct LocalInsightModelGenerationConfiguration: Sendable, Equatable {
     public init(
         maxTokens: Int = 96,
         maxOutputCharacters: Int = 320,
-        timeoutNanoseconds: UInt64 = 1_500_000_000
+        timeoutNanoseconds: UInt64 = 8_000_000_000
     ) {
         self.maxTokens = max(1, maxTokens)
         self.maxOutputCharacters = max(80, maxOutputCharacters)
@@ -20,6 +20,9 @@ public struct LocalInsightModelGenerationConfiguration: Sendable, Equatable {
 
 public enum LocalInsightModelFallbackReason: String, Sendable, Hashable {
     case noModel
+    case runtimeUnavailable
+    case noInstalledModel
+    case unsupportedConfiguration
     case timeout
     case modelError
     case invalidOutput
@@ -212,6 +215,12 @@ public enum LocalInsightModelRuntime {
                 usedModelOutput: false,
                 fallbackReason: .timeout
             )
+        } catch let error as LocalInsightModelError {
+            return LocalInsightModelGenerationResult(
+                summary: fallback,
+                usedModelOutput: false,
+                fallbackReason: error.fallbackReason
+            )
         } catch {
             return LocalInsightModelGenerationResult(
                 summary: fallback,
@@ -336,3 +345,16 @@ private final class LocalInsightModelTimeoutRace<T: Sendable>: @unchecked Sendab
 }
 
 private struct LocalInsightModelTimeoutError: Error {}
+
+private extension LocalInsightModelError {
+    var fallbackReason: LocalInsightModelFallbackReason {
+        switch self {
+        case .runtimeUnavailable:
+            .runtimeUnavailable
+        case .noInstalledModel:
+            .noInstalledModel
+        case .unsupportedConfiguration:
+            .unsupportedConfiguration
+        }
+    }
+}

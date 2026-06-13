@@ -86,6 +86,21 @@ struct LocalInsightModelRuntimeTests {
         #expect(result.fallbackReason == .modelError)
     }
 
+    @Test("Runtime preserves local model availability errors")
+    func runtimePreservesLocalModelAvailabilityErrors() async {
+        let model = StubLocalInsightModel(result: .failure(LocalInsightModelError.runtimeUnavailable))
+
+        let result = await LocalInsightModelRuntime.generateSummary(
+            input: input(),
+            model: model,
+            fallbackSummary: { _ in "deterministic fallback" }
+        )
+
+        #expect(result.summary == "deterministic fallback")
+        #expect(result.usedModelOutput == false)
+        #expect(result.fallbackReason == .runtimeUnavailable)
+    }
+
     @Test("Runtime falls back when model exceeds timeout")
     func runtimeFallsBackForTimeout() async {
         let model = DelayedLocalInsightModel(
