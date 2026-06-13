@@ -37,4 +37,37 @@ public struct PopoverTransparencySetting: Sendable, Equatable {
         let opacity = 0.32 - (progress * 0.26)
         return (opacity * 100).rounded() / 100
     }
+
+    /// Named quick-pick presets spanning the legible transparency range. They map
+    /// to the anchor values (most opaque / recommended default / most glass) so
+    /// the Appearance preset row stays in sync with the slider.
+    public enum Preset: String, CaseIterable, Sendable, Identifiable {
+        case solid
+        case balanced
+        case glass
+
+        public var id: String { rawValue }
+
+        public var title: String {
+            switch self {
+            case .solid: "Solid"
+            case .balanced: "Balanced"
+            case .glass: "Glass"
+            }
+        }
+
+        public var value: Double {
+            switch self {
+            case .solid: PopoverTransparencySetting.minimumValue
+            case .balanced: PopoverTransparencySetting.defaultValue
+            case .glass: PopoverTransparencySetting.maximumValue
+            }
+        }
+    }
+
+    /// The preset whose value matches the current setting, for highlighting the
+    /// active quick-pick. Nil when the value was fine-tuned off a preset.
+    public var matchingPreset: Preset? {
+        Preset.allCases.first { abs($0.value - value) < 0.5 }
+    }
 }

@@ -72,6 +72,12 @@ struct AppearanceSettingsView: View {
     var body: some View {
         Form {
             Section("Popover") {
+                // Live preview first: the popover material renders with the
+                // current setting over synthetic labels, so the slider and
+                // presets have immediate, privacy-safe feedback (AND-364).
+                AppearancePreviewCard(setting: transparencySetting)
+                    .padding(.vertical, Spacing.xxs)
+
                 // Full-width control block: the label/value row sits at the top,
                 // the slider spans the row, and the captions track the slider —
                 // so nothing clips at the minimum settings window width and
@@ -108,6 +114,26 @@ struct AppearanceSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
+                    // Quick-pick presets map to the anchor values; the active one
+                    // is filled. Reset returns to the recommended default.
+                    HStack(spacing: Spacing.sm) {
+                        ForEach(PopoverTransparencySetting.Preset.allCases) { preset in
+                            presetButton(preset)
+                        }
+
+                        Spacer(minLength: Spacing.sm)
+
+                        Button("Reset") {
+                            popoverTransparency = PopoverTransparencySetting.defaultValue
+                        }
+                        .buttonStyle(.borderless)
+                        .controlSize(.small)
+                        .disabled(transparencySetting.value == PopoverTransparencySetting.defaultValue)
+                        .help("Reset transparency to the default (\(Int(PopoverTransparencySetting.defaultValue))%)")
+                    }
+                    .accessibilityElement(children: .contain)
+                    .accessibilityLabel("Transparency presets")
+
                     Text("Adjusts the ultra-thin material overlay live. The range is capped to keep balances and status text legible on busy desktops.")
                         .detailText()
                         .fixedSize(horizontal: false, vertical: true)
@@ -117,6 +143,87 @@ struct AppearanceSettingsView: View {
         }
         .formStyle(.grouped)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    @ViewBuilder
+    private func presetButton(_ preset: PopoverTransparencySetting.Preset) -> some View {
+        let isActive = transparencySetting.matchingPreset == preset
+        Button(preset.title) {
+            popoverTransparency = preset.value
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .tint(isActive ? Color.accentColor : Color.secondary)
+        .accessibilityAddTraits(isActive ? [.isSelected] : [])
+    }
+}
+
+/// Privacy-safe live preview of the popover material at the current transparency.
+/// Reuses the real `PopoverMaterialBackground` and surface tokens over synthetic
+/// labels only — never real account names, balances, or data (AND-364).
+private struct AppearancePreviewCard: View {
+    let setting: PopoverTransparencySetting
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Net Worth")
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.secondary)
+                    Text("$12,345")
+                        .font(.title3.weight(.semibold))
+                        .monospacedDigit()
+                }
+
+                Spacer(minLength: Spacing.sm)
+
+                Label("Synced", systemImage: "checkmark.circle.fill")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, Spacing.sm)
+                    .padding(.vertical, Spacing.chipVertical)
+                    .background(.quinary, in: Capsule())
+            }
+
+            HStack(spacing: Spacing.sm) {
+                Image(systemName: "building.columns.fill")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 22, height: 22)
+                    .background(.quinary, in: RoundedRectangle(cornerRadius: Radius.control))
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Sample Checking")
+                        .font(.callout.weight(.medium))
+                    Text("Preview only")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: Spacing.sm)
+
+                Text("$4,200.00")
+                    .font(.callout.weight(.medium))
+                    .monospacedDigit()
+            }
+            .padding(Spacing.sm)
+            .glassSurface(.inset)
+        }
+        .padding(Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            PopoverMaterialBackground(transparencySetting: setting)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: Radius.panel))
+        .overlay {
+            RoundedRectangle(cornerRadius: Radius.panel)
+                .stroke(.separator, lineWidth: 1)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            "Live preview of the popover at \(setting.displayPercent) percent transparency, with sample data only."
+        )
     }
 }
 
