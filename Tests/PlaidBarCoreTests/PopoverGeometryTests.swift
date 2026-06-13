@@ -50,6 +50,17 @@ struct PopoverGeometryTests {
         #expect(capped - sideColumns >= PopoverGeometry.minDashboardWidth)
     }
 
+    @Test("Available width prefers the active popover screen over the primary-screen fallback")
+    func availableWidthPrefersActiveScreen() {
+        #expect(PopoverGeometry.availableWidth(activeScreenWidth: 1024, fallbackScreenWidth: 1680) == 1024)
+        #expect(PopoverGeometry.availableWidth(activeScreenWidth: nil, fallbackScreenWidth: 1680) == 1680)
+        #expect(PopoverGeometry.availableWidth(activeScreenWidth: 0, fallbackScreenWidth: 1680) == 1680)
+        #expect(
+            PopoverGeometry.availableWidth(activeScreenWidth: nil, fallbackScreenWidth: nil)
+                == .greatestFiniteMagnitude
+        )
+    }
+
     @Test("A popover that already fits is not moved")
     func clampLeavesFittingPopover() {
         // 1122 popover at x=200 on a 1680-wide display fits with room to spare.

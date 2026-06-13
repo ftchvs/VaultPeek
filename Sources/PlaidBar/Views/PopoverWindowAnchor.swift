@@ -179,3 +179,107 @@ struct PopoverLeadingEdgeAnchor: NSViewRepresentable {
         }
     }
 }
+
+/// Reports the screen that actually owns the popover window back into SwiftUI
+/// layout. This keeps the content width cap aligned with the AppKit clamp in
+/// `PopoverLeadingEdgeAnchor`; `NSScreen.main` can be a wider primary display
+/// while the menu-bar popover is opening on a narrower secondary display.
+struct PopoverScreenWidthReader: NSViewRepresentable {
+    @Binding var visibleWidth: CGFloat?
+
+    func makeNSView(context: Context) -> ScreenWidthHostView {
+        let view = ScreenWidthHostView()
+        view.onMoveToWindow = { [coordinator = context.coordinator] window in
+            coordinator.attach(to: window)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: ScreenWidthHostView, context: Context) {
+        context.coordinator.configure(visibleWidth: $visibleWidth)
+        context.coordinator.attach(to: nsView.window)
+    }
+
+    static func dismantleNSView(_ nsView: ScreenWidthHostView, coordinator: Coordinator) {
+        coordinator.detach()
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(visibleWidth: $visibleWidth)
+    }
+
+    final class ScreenWidthHostView: NSView {
+        var onMoveToWindow: ((NSWindow?) -> Void)?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            onMoveToWindow?(window)
+        }
+    }
+
+    @MainActor
+    final class Coordinator {
+        private var visibleWidth: Binding<CGFloat?>
+        private weak var window: NSWindow?
+        private var screenObserver: NSObjectProtocol?
+        private var screenParametersObserver: NSObjectProtocol?
+
+        init(visibleWidth: Binding<CGFloat?>) {
+            self.visibleWidth = visibleWidth
+        }
+
+        func configure(visibleWidth: Binding<CGFloat?>) {
+            self.visibleWidth = visibleWidth
+        }
+
+        func attach(to window: NSWindow?) {
+            guard let window else {
+                detach()
+                publish(nil)
+                return
+            }
+
+            if window !== self.window {
+                detach()
+                self.window = window
+                screenObserver = NotificationCenter.default.addObserver(
+                    forName: NSWindow.didChangeScreenNotification,
+                    object: window,
+                    queue: .main
+                ) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.publishCurrentWidth() }
+                }
+                screenParametersObserver = NotificationCenter.default.addObserver(
+                    forName: NSApplication.didChangeScreenParametersNotification,
+                    object: nil,
+                    queue: .main
+                ) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.publishCurrentWidth() }
+                }
+            }
+
+            publishCurrentWidth()
+        }
+
+        func detach() {
+            if let screenObserver {
+                NotificationCenter.default.removeObserver(screenObserver)
+                self.screenObserver = nil
+            }
+            if let screenParametersObserver {
+                NotificationCenter.default.removeObserver(screenParametersObserver)
+                self.screenParametersObserver = nil
+            }
+            window = nil
+        }
+
+        private func publishCurrentWidth() {
+            publish(window?.screen?.visibleFrame.width)
+        }
+
+        private func publish(_ width: CGFloat?) {
+            guard visibleWidth.wrappedValue != width else { return }
+            visibleWidth.wrappedValue = width
+        }
+    }
+}
