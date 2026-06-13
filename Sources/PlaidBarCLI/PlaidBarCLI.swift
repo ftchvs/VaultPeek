@@ -105,9 +105,6 @@ struct TransactionsList: AsyncParsableCommand {
     @Option(name: .long, help: "Restrict sync to one Plaid item ID.")
     var item: String?
 
-    @Flag(name: .long, help: "Commit returned sync cursors after a successful sync.")
-    var commit = false
-
     func run() async throws {
         let client = PlaidBarCLIHTTPClient(options: options)
         let response = try await fetchSync(client: client, item: item)
@@ -115,21 +112,14 @@ struct TransactionsList: AsyncParsableCommand {
         if options.json {
             try PlaidBarCLIOutput.write(response, json: true) { "" }
         } else {
-            // When committing, show every returned change so advancing the
-            // server cursor cannot hide transactions behind the table --count
-            // limit; otherwise honor the requested row cap.
-            let rowCount = commit ? transactions.count : count
-            print(PlaidBarCLITableFormatter.transactions(transactions, count: rowCount))
+            print(PlaidBarCLITableFormatter.transactions(transactions, count: count))
             if response.hasMore {
-                PlaidBarCLIOutput.writeError("More transactions are available; run again to continue syncing.")
+                PlaidBarCLIOutput.writeError("More transactions are available; open VaultPeek to sync them.")
             }
-            if !response.pendingCursors.isEmpty && !commit {
-                PlaidBarCLIOutput.writeError("Sync cursors were not committed. Re-run with --commit after reviewing results.")
+            if !response.pendingCursors.isEmpty {
+                PlaidBarCLIOutput.writeError(readOnlyCursorNote)
             }
         }
-        // Commit only after output succeeds, so a broken pipe or failed write
-        // never advances the cursor past transactions the user has not seen.
-        try await commitSyncIfRequested(client: client, response: response, commit: commit)
     }
 }
 
@@ -141,9 +131,6 @@ struct TransactionsSync: AsyncParsableCommand {
     @Option(name: .long, help: "Restrict sync to one Plaid item ID.")
     var item: String?
 
-    @Flag(name: .long, help: "Commit returned sync cursors after a successful sync.")
-    var commit = false
-
     func run() async throws {
         let client = PlaidBarCLIHTTPClient(options: options)
         let response = try await fetchSync(client: client, item: item)
@@ -152,15 +139,21 @@ struct TransactionsSync: AsyncParsableCommand {
             return PlaidBarCLITableFormatter.transactions(transactions, count: transactions.count)
         }
         if response.hasMore {
-            PlaidBarCLIOutput.writeError("More transactions are available; run again to continue syncing.")
+            PlaidBarCLIOutput.writeError("More transactions are available; open VaultPeek to sync them.")
         }
-        if !response.pendingCursors.isEmpty && !commit {
-            PlaidBarCLIOutput.writeError("Sync cursors were not committed. Re-run with --commit after reviewing results.")
+        if !response.pendingCursors.isEmpty {
+            PlaidBarCLIOutput.writeError(readOnlyCursorNote)
         }
-        // Commit only after the full response has been written to stdout.
-        try await commitSyncIfRequested(client: client, response: response, commit: commit)
     }
 }
+
+/// The CLI is a read-only diagnostic mirror: it fetches transactions from the
+/// server's sync endpoint but does NOT persist them. Only VaultPeek stores
+/// fetched transactions and advances the sync cursor, so the CLI must never
+/// commit cursors — doing so would advance the shared cursor past transactions
+/// the app has not stored, and the app's next sync would skip them (AND-404).
+private let readOnlyCursorNote =
+    "Read-only preview: VaultPeek stores these updates and advances the sync cursor when you open it. The CLI does not commit cursors."
 
 struct Link: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
@@ -197,15 +190,6 @@ private func fetchSync(
     try await client.get(.transactionsSync(itemId: item))
 }
 
-private func commitSyncIfRequested(
-    client: PlaidBarCLIHTTPClient,
-    response: SyncResponse,
-    commit: Bool
-) async throws {
-    guard commit, !response.pendingCursors.isEmpty else { return }
-    try await client.post(.commitCursors, body: SyncCursorCommitRequest(cursors: response.pendingCursors))
-}
-
 struct PlaidBarCLIHTTPClient: Sendable {
     let options: PlaidBarCLIOptions
 
@@ -222,14 +206,6 @@ struct PlaidBarCLIHTTPClient: Sendable {
         return try await decode(request)
     }
 
-    func post<T: Encodable & Sendable>(_ endpoint: PlaidBarCLIEndpoint, body: T) async throws {
-        var request = try request(endpoint: endpoint)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(body)
-        _ = try await PlaidBarURLSession.shared.data(for: request)
-    }
-
     private func request(endpoint: PlaidBarCLIEndpoint) throws -> URLRequest {
         // Tolerate a trailing slash on --server (e.g. http://127.0.0.1:8484/)
         // so it does not collapse into a double-slashed /api path the server
@@ -239,6 +215,11 @@ struct PlaidBarCLIHTTPClient: Sendable {
             : options.server
         guard let url = URL(string: base + endpoint.path) else {
             throw PlaidBarCLIError.invalidServerURL(options.server)
+        }
+        // Never attach the local bearer token (the local API secret) to a
+        // non-loopback server: that would leak it to a remote endpoint (AND-404).
+        guard PlaidBarCLIServer.isLoopback(base) else {
+            throw PlaidBarCLIError.nonLoopbackServer(options.server)
         }
         let token = try String(contentsOfFile: options.authTokenPath, encoding: .utf8)
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -323,6 +304,7 @@ enum PlaidBarCLIOutput {
 
 enum PlaidBarCLIError: Error, CustomStringConvertible, LocalizedError {
     case invalidServerURL(String)
+    case nonLoopbackServer(String)
     case missingAuthToken(String)
     case requestFailed(String)
 
@@ -330,6 +312,8 @@ enum PlaidBarCLIError: Error, CustomStringConvertible, LocalizedError {
         switch self {
         case .invalidServerURL(let value):
             "Invalid PlaidBar server URL: \(value)"
+        case .nonLoopbackServer(let value):
+            "Refusing to send the local auth token to a non-loopback server: \(value). PlaidBarServer binds to 127.0.0.1; use a loopback --server URL."
         case .missingAuthToken(let path):
             "PlaidBar auth token is missing at \(path). Start PlaidBarServer first."
         case .requestFailed(let message):
