@@ -8,7 +8,17 @@ struct SetupView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var setupMode: SetupMode = .choose
+    // Locally-remembered plan preference. UI-only: it grants no entitlement and
+    // gates nothing. Managed billing/enforcement is deferred (AND-350 scope).
+    @AppStorage(SubscriptionPlan.storageKey) private var selectedPlanRawValue = SubscriptionPlan.defaultPlan.rawValue
     var onComplete: (() -> Void)?
+
+    private var selectedPlan: Binding<SubscriptionPlan> {
+        Binding(
+            get: { SubscriptionPlan(rawValue: selectedPlanRawValue) ?? .personal },
+            set: { selectedPlanRawValue = $0.rawValue }
+        )
+    }
 
     enum SetupMode: Sendable, Equatable {
         case choose
@@ -146,12 +156,31 @@ struct SetupView: View {
                 )
                 StorageDisclosureRow(
                     icon: "eye.slash",
-                    text: "No VaultPeek cloud backend, analytics, or telemetry."
+                    text: "Today VaultPeek runs fully on your Mac — no cloud backend, "
+                        + "analytics, or telemetry. A managed cloud bridge for bank linking "
+                        + "is planned but isn't available yet; even then your financial data "
+                        + "would never be stored off your Mac, though it would transit a "
+                        + "VaultPeek proxy. Today's connections use your own Plaid keys."
                 )
             }
             .padding(Spacing.md)
             .frame(maxWidth: .infinity, alignment: .leading)
             .glassSurface(.inset)
+
+            // Plan preview + usage shell. Production shows the managed-plan
+            // *preview* picker, but today's production path is still BYO Plaid
+            // keys, which `docs/strategy/subscription-entitlements.md` (§D3) keeps
+            // fully ungated. So the usage meter uses a nil limit (count-only, no
+            // cap, no upgrade CTA) until real managed origin + entitlements exist.
+            // The count reflects all linked institutions (`statusItemCount`), not
+            // only currently-healthy ones, so an item needing reauth still counts.
+            if environment == .production {
+                PlanSelectionShell(selectedPlan: selectedPlan)
+            }
+            InstitutionUsageWidget(
+                usage: InstitutionUsage(connectedCount: appState.statusItemCount, limit: nil),
+                showsUpgradeWhenAtLimit: false
+            )
 
             OnboardingPreflightPanel(environment: environment)
                 .environment(appState)
