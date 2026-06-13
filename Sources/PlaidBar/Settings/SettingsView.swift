@@ -248,7 +248,7 @@ struct GeneralSettingsView: View {
         .toggleStyle(.switch)
         .alert("Reset Local Data?", isPresented: $isShowingResetConfirmation) {
             Button("Reset Local Data", role: .destructive) {
-                resetLocalData()
+                Task { await resetLocalData() }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -285,9 +285,9 @@ struct GeneralSettingsView: View {
         NSPasteboard.general.setString(appState.activeStorageDirectoryURL.path, forType: .string)
     }
 
-    private func resetLocalData() {
+    private func resetLocalData() async {
         do {
-            let result = try appState.resetLocalData()
+            let result = try await appState.resetLocalData()
             resetResultMessage = LocalDataResetPresentation.successMessage(for: result)
         } catch {
             resetErrorMessage = error.localizedDescription

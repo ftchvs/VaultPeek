@@ -24,6 +24,27 @@ private struct TestRequestContext: RequestContext {
     }
 }
 
+private final class ManualDateClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: Date
+
+    init(_ value: Date) {
+        self.value = value
+    }
+
+    func now() -> Date {
+        lock.lock()
+        defer { lock.unlock() }
+        return value
+    }
+
+    func advance(by interval: TimeInterval) {
+        lock.lock()
+        value = value.addingTimeInterval(interval)
+        lock.unlock()
+    }
+}
+
 private let plaidTokenVaultKeychainAvailable: Bool = {
     let itemId = "test_keychain_probe_\(UUID().uuidString)"
     do {
@@ -931,12 +952,12 @@ struct PlaidBarServerTests {
     }
 
     @Test func pendingLinkSessionExpires() async {
-        var currentDate = Date(timeIntervalSince1970: 1000)
-        let store = PendingLinkSessionStore(ttl: 60) { currentDate }
+        let clock = ManualDateClock(Date(timeIntervalSince1970: 1000))
+        let store = PendingLinkSessionStore(ttl: 60, now: { @Sendable in clock.now() })
         let state = await store.issueState()
         await store.save(state: state, linkToken: "link-token")
 
-        currentDate = currentDate.addingTimeInterval(61)
+        clock.advance(by: 61)
 
         let expired = await store.consume(state: state)
         #expect(expired == nil)
