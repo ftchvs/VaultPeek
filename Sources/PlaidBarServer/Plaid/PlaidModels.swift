@@ -101,19 +101,43 @@ struct PlaidLinkTokenGetResponse: Decodable, Sendable {
     let results: PlaidLinkResults?
 
     var publicTokens: [String] {
+        publicTokenResults.map(\.publicToken)
+    }
+
+    var publicTokenResults: [PlaidPublicTokenResult] {
         let sessionTokens = linkSessions?
             .flatMap { $0.results?.itemAddResults ?? [] }
-            .map(\.publicToken) ?? []
+            .map(PlaidPublicTokenResult.init) ?? []
         if !sessionTokens.isEmpty {
             return sessionTokens
         }
         if let itemAddResults = results?.itemAddResults, !itemAddResults.isEmpty {
-            return itemAddResults.map(\.publicToken)
+            return itemAddResults.map(PlaidPublicTokenResult.init)
         }
         if let publicToken = onSuccess?.publicToken {
-            return [publicToken]
+            return [
+                PlaidPublicTokenResult(
+                    publicToken: publicToken,
+                    institution: onSuccess?.metadata?.institution
+                ),
+            ]
         }
         return []
+    }
+}
+
+struct PlaidPublicTokenResult: Sendable {
+    let publicToken: String
+    let institution: PlaidLinkInstitution?
+
+    init(publicToken: String, institution: PlaidLinkInstitution?) {
+        self.publicToken = publicToken
+        self.institution = institution
+    }
+
+    init(itemAddResult: PlaidLinkItemAddResult) {
+        publicToken = itemAddResult.publicToken
+        institution = itemAddResult.institution
     }
 }
 
