@@ -64,6 +64,13 @@ final class DetachedDashboardCoordinator {
         return true
     }
 
+    /// Open the floating window WITHOUT persisting the detached intent — for the
+    /// `--detach` QA/screenshot launch flag, which must not leave a durable
+    /// `dashboard.detached` preference behind (parity with `--show-popover`).
+    func presentForLaunchOverride(appState: AppState, forcedColorScheme: ColorScheme?, reduceMotion: Bool) {
+        present(appState: appState, forcedColorScheme: forcedColorScheme, reduceMotion: reduceMotion)
+    }
+
     // MARK: - Private
 
     private func present(appState: AppState, forcedColorScheme: ColorScheme?, reduceMotion: Bool) {

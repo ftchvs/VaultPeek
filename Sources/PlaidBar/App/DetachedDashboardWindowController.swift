@@ -2,19 +2,25 @@ import AppKit
 import PlaidBarCore
 import SwiftUI
 
-/// Hosts the dashboard (`MainPopover`) in a floating, draggable desktop window
-/// so the user can pull it off the menu bar and move it anywhere (AND-384).
+/// Hosts the dashboard (`MainPopover`) in a real, draggable, resizable desktop
+/// window so the user can pull it off the menu bar and move it anywhere (AND-384).
 ///
-/// The window is a non-activating `NSPanel` at `.floating` level: it survives
-/// app-switches (it does not vanish on focus loss the way the menu-bar popover
-/// does), shows across Spaces, and is movable by dragging anywhere on its
-/// surface (`isMovableByWindowBackground`). It hosts the *same* `MainPopover`
-/// view bound to the *same* `AppState`, so there is no duplicate data, sync
-/// timer, or server client — only a second presentation surface.
+/// The window is a managed `NSWindow` (titled, closable, miniaturizable,
+/// resizable) at the normal window level with the default (Managed) collection
+/// behavior, so it drags, resizes, minimizes, tiles, and participates in Mission
+/// Control / Spaces / Stage Manager like any first-class app window — *not* a
+/// floating utility palette. It is movable by dragging anywhere on its surface
+/// (`isMovableByWindowBackground`) and translucent (a behind-window
+/// `NSVisualEffectView` backdrop over a non-opaque, clear window) so the desktop
+/// shows through. It hosts the *same* `MainPopover` view bound to the *same*
+/// `AppState`, so there is no duplicate data, sync timer, or server client — only
+/// a second presentation surface.
 ///
 /// Frame (origin + size) is persisted by AppKit via `frameAutosaveName`, so the
 /// window reopens where the user left it. Open/closed intent is persisted
-/// separately by `AppState.isDashboardDetached`.
+/// separately by `AppState.isDashboardDetached`. Window appearance is left to
+/// inherit the single `NSApp.appearance` owner (pinned only for the `--appearance`
+/// QA override) so flipping Light/Dark updates the window live.
 ///
 /// `@MainActor`-isolated; all AppKit window mutation happens on the main actor,
 /// which keeps it correct under `-strict-concurrency=complete`.
@@ -27,7 +33,7 @@ final class DetachedDashboardWindowController: NSObject, NSWindowDelegate {
     /// the owner so the controller does not reach back into app state policy.
     private let onRedock: @MainActor () -> Void
 
-    private var panel: NSPanel?
+    private var panel: NSWindow?
     private var hostingController: NSHostingController<AnyView>?
     /// Monotonic counter bumped on every `show`/`raise`. A pending hide
     /// fade-out captures the value at the time it started and only orders the
@@ -35,8 +41,9 @@ final class DetachedDashboardWindowController: NSObject, NSWindowDelegate {
     /// while a hide animation is in flight cannot order out the freshly-shown
     /// panel (which would leave `isDashboardDetached == true` with no window).
     private var presentationGeneration = 0
-    /// Observes `dashboard.selectedAccountId` so the panel's real resize floor
-    /// (`contentMinSize`) tracks whether the trailing inspector is showing.
+    /// Observes `UserDefaults.didChangeNotification` so the window picks up live
+    /// changes to the "keep on top" preference (and re-asserts its resize floor)
+    /// without a re-dock.
     ///
     /// No `deinit` removal: this controller is owned by the app scene's
     /// process-lifetime `DetachedDashboardCoordinator`, so it is never
@@ -45,6 +52,10 @@ final class DetachedDashboardWindowController: NSObject, NSWindowDelegate {
     /// captures `self` weakly, so even an orphaned observation is a harmless
     /// no-op.
     private var selectionObserver: NSObjectProtocol?
+    /// True while this window holds a `.regular` activation request with the shared
+    /// `AppActivationPolicyCoordinator` (managed mode only). Tracked so show/raise
+    /// request exactly once and re-dock releases exactly once.
+    private var holdsRegularRequest = false
 
     init(
         appState: AppState,
@@ -78,6 +89,10 @@ final class DetachedDashboardWindowController: NSObject, NSWindowDelegate {
         // Make sure the resize floor reflects the current inspector state before
         // the window appears (a launch-restore could already have a selection).
         updateContentMinSize()
+        // Become a regular app while the window is up so it comes to the front
+        // and is reachable from the Dock / ⌘-Tab; restored to the prior policy
+        // (menu-bar-only `.accessory`) on re-dock.
+        elevateActivationPolicyForWindow()
 
         if panel.isVisible {
             raise()
@@ -89,10 +104,10 @@ final class DetachedDashboardWindowController: NSObject, NSWindowDelegate {
         // layout move, so it never shifts the dashboard.
         if reduceMotion {
             panel.alphaValue = 1
-            panel.orderFrontRegardless()
+            bringWindowForward(panel)
         } else {
             panel.alphaValue = 0
-            panel.orderFrontRegardless()
+            bringWindowForward(panel)
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = 0.18
                 context.allowsImplicitAnimation = true
@@ -108,6 +123,7 @@ final class DetachedDashboardWindowController: NSObject, NSWindowDelegate {
 
         if reduceMotion {
             panel.orderOut(nil)
+            restoreActivationPolicy()
         } else {
             // Capture the generation this hide belongs to; if a `show`/`raise`
             // bumps it before the fade completes, the panel was re-presented and
@@ -126,6 +142,9 @@ final class DetachedDashboardWindowController: NSObject, NSWindowDelegate {
                     }
                     panel?.orderOut(nil)
                     panel?.alphaValue = 1
+                    // The window is actually gone now — return the app to its
+                    // prior (menu-bar-only) activation policy.
+                    self.restoreActivationPolicy()
                 }
             }
         }
@@ -139,8 +158,61 @@ final class DetachedDashboardWindowController: NSObject, NSWindowDelegate {
         // A raise also supersedes an in-flight hide.
         presentationGeneration += 1
         panel.alphaValue = 1
-        panel.orderFrontRegardless()
-        panel.makeKey()
+        bringWindowForward(panel)
+    }
+
+    // MARK: - Activation policy & window level
+
+    /// Whether the user wants the floating dashboard to stay above other windows
+    /// (a non-activating glance HUD) instead of behaving as a normal managed
+    /// window. Read from UserDefaults so the SettingsView `@AppStorage` toggle and
+    /// the window stay in sync via the defaults-change observer.
+    private var keepDashboardOnTop: Bool {
+        UserDefaults.standard.bool(forKey: DetachedDashboardPreferences.keepOnTopStorageKey)
+    }
+
+    /// Apply the window level + Spaces behavior for the current "keep on top"
+    /// preference: a floating, all-Spaces glance HUD when on; a managed normal
+    /// window (one Space, default collection behavior) when off.
+    private func applyWindowLevelBehavior(to panel: NSWindow) {
+        if keepDashboardOnTop {
+            panel.level = .floating
+            panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .moveToActiveSpace]
+        } else {
+            panel.level = .normal
+            panel.collectionBehavior = []
+        }
+    }
+
+    /// Order the window in. In "keep on top" mode it floats above without stealing
+    /// focus from the active app (a glance HUD); otherwise it becomes a regular,
+    /// frontmost app window with Dock / ⌘-Tab presence.
+    private func bringWindowForward(_ panel: NSWindow) {
+        if keepDashboardOnTop {
+            panel.orderFrontRegardless()
+        } else {
+            elevateActivationPolicyForWindow()
+            NSApplication.shared.activate(ignoringOtherApps: true)
+            panel.makeKeyAndOrderFront(nil)
+        }
+    }
+
+    /// Request `.regular` (front + Dock presence) for the window via the shared,
+    /// refcounted coordinator. Idempotent: holds at most one request so it does
+    /// not double-count or fight the Settings window's own elevation.
+    private func elevateActivationPolicyForWindow() {
+        guard !holdsRegularRequest else { return }
+        holdsRegularRequest = true
+        AppActivationPolicyCoordinator.shared.requestRegular()
+    }
+
+    /// Release this window's `.regular` request. The coordinator returns the app
+    /// to menu-bar-only `.accessory` only when no other surface (e.g. Settings)
+    /// still needs `.regular`. No-op when this window held no request (glance mode).
+    private func restoreActivationPolicy() {
+        guard holdsRegularRequest else { return }
+        holdsRegularRequest = false
+        AppActivationPolicyCoordinator.shared.releaseRegular()
     }
 
     // MARK: - Resize floor
@@ -152,14 +224,16 @@ final class DetachedDashboardWindowController: NSObject, NSWindowDelegate {
     /// (982pt) layout and clip the inspector when an account is selected.
     private func updateContentMinSize() {
         guard let panel else { return }
-        let inspectorOpen = !Self.selectedAccountId().isEmpty
-        let minWidth = DetachedDashboardPreferences.minContentWidth(isInspectorOpen: inspectorOpen)
+        // The inspector column is always present (three-column-always), so the
+        // resize floor always reserves it — the window can never be sized narrower
+        // than the full three-column layout and clip the empty inspector.
+        let minWidth = DetachedDashboardPreferences.minContentWidth(isInspectorOpen: true)
         panel.contentMinSize = CGSize(
             width: minWidth,
             height: DetachedDashboardPreferences.minContentHeight
         )
-        // If the user had already shrunk the window below the new floor, grow it
-        // so the inspector is not clipped the instant it opens.
+        // If a restored or pre-existing frame is below the new floor, grow it so
+        // the inspector is not clipped.
         if panel.frame.width < minWidth {
             var frame = panel.frame
             // Grow rightward from the existing origin (keeps the left edge put).
@@ -168,45 +242,51 @@ final class DetachedDashboardWindowController: NSObject, NSWindowDelegate {
         }
     }
 
-    private static func selectedAccountId() -> String {
-        UserDefaults.standard.string(forKey: "dashboard.selectedAccountId") ?? ""
-    }
-
     // MARK: - Panel construction
 
-    private func makePanel() -> NSPanel {
+    private func makePanel() -> NSWindow {
         let size = DetachedDashboardPreferences.defaultContentSize
 
-        let panel = NSPanel(
+        // A real, managed desktop window — deliberately NOT an NSPanel. An
+        // NSPanel at `.floating` level with `.utilityWindow`/`.nonactivatingPanel`
+        // is a floating palette: it sits above every app, shows on all Spaces,
+        // can't minimize, and is invisible to Mission Control / Stage Manager /
+        // window tiling — exactly what made the dashboard "feel stuck to the menu
+        // bar." A titled, miniaturizable, resizable `NSWindow` at the normal level
+        // with the default (Managed) collection behavior drags, resizes,
+        // minimizes, tiles, and lives on one Space like a first-class window.
+        let panel = NSWindow(
             contentRect: NSRect(origin: .zero, size: size),
-            // .nonactivatingPanel keeps the rest of the app from losing focus
-            // when the window comes forward; titled/closable/resizable give it
-            // standard window chrome (drag, close, resize handles).
-            styleMask: [.titled, .closable, .resizable, .nonactivatingPanel, .utilityWindow],
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
 
         panel.title = DetachedDashboardPreferences.windowTitle
-        // Float above ordinary windows but below modal panels, so the dashboard
-        // stays glanceable over other apps the way the popover does.
-        panel.level = .floating
         // Drag the whole surface — the dashboard has no title-bar-only grab area,
         // so the user can move it by grabbing anywhere not interactive (AND-384).
         panel.isMovableByWindowBackground = true
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
-        panel.becomesKeyOnlyIfNeeded = true
+        // Chrome-light look: keep the traffic lights but let the dashboard content
+        // run to the top edge (the AppKit equivalent of
+        // `.windowStyle(.hiddenTitleBar)`).
         panel.titlebarAppearsTransparent = true
         panel.titleVisibility = .hidden
-        panel.isFloatingPanel = true
-        // Show on every Space and stay up in full-screen apps, so the dashboard
-        // is reachable from wherever the user is working.
-        panel.collectionBehavior = [
-            .canJoinAllSpaces,
-            .fullScreenAuxiliary,
-            .moveToActiveSpace,
-        ]
+        // Window level + Spaces behavior follow the "keep on top" preference:
+        // a managed normal window by default, or a floating glance HUD when the
+        // user opts in. Applied here and re-applied live when the toggle changes.
+        applyWindowLevelBehavior(to: panel)
+
+        // True translucency: an opaque window fully paints its rect, so the
+        // material/glass had only the window's own solid backing to sample and
+        // rendered flat/gray. A non-opaque, clear window plus the behind-window
+        // `NSVisualEffectView` backdrop (added below) lets the desktop show
+        // through with a real frosted blur (AND-384).
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
+
         panel.contentMinSize = DetachedDashboardPreferences.minContentSize
         panel.delegate = self
 
@@ -222,28 +302,47 @@ final class DetachedDashboardWindowController: NSObject, NSWindowDelegate {
                 queue: .main
             ) { [weak self] _ in
                 MainActor.assumeIsolated {
-                    self?.updateContentMinSize()
+                    guard let self else { return }
+                    self.updateContentMinSize()
+                    // Pick up live changes to the "keep on top" toggle so the
+                    // window's level / Spaces behavior updates without a re-dock.
+                    if let panel = self.panel {
+                        self.applyWindowLevelBehavior(to: panel)
+                    }
                 }
             }
         }
 
-        // Appearance for the window chrome. The CLI `--appearance` override
-        // wins; otherwise honor the stored app appearance preference so a
-        // detached window restored at launch (created from the menu-bar label,
-        // before any `.appliesAppAppearance()` scene mounts) follows the user's
-        // Light/Dark setting instead of defaulting to the system appearance.
-        // `.followSystem` leaves `panel.appearance` nil so AppKit follows the
-        // system, matching the rest of the app.
-        if let scheme = Self.effectiveColorScheme(forcedColorScheme: forcedColorScheme) {
-            panel.appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
+        // Leave `panel.appearance == nil` so the window inherits the single
+        // `NSApp.appearance` owner live — flipping Light/Dark in Settings updates
+        // the detached window while it is open. Pin explicitly ONLY for the
+        // `--appearance` CLI QA override, which `AppAppearance.applyToNSApp`
+        // deliberately leaves off `NSApp.appearance`.
+        if let forcedColorScheme {
+            panel.appearance = NSAppearance(named: forcedColorScheme == .dark ? .darkAqua : .aqua)
         }
 
-        // No `.preferredContentSize`: the dashboard fills the resizable panel
-        // (maxWidth/maxHeight: .infinity) and the panel's frame drives the
-        // hosting view, so dragging the resize handle resizes the content rather
-        // than SwiftUI's intrinsic size fighting the user's chosen frame.
+        // Behind-window vibrancy backdrop: `.behindWindow` samples the desktop
+        // (the only blending mode that yields real translucency) and `.active`
+        // keeps the blur even when this window is not key. The hosted SwiftUI
+        // fills it edge-to-edge; while detached, `MainPopover` renders a clear
+        // root background so this backdrop *is* the translucent surface rather
+        // than an opaque material painted over an opaque window.
+        let backdrop = NSVisualEffectView()
+        backdrop.material = .underWindowBackground
+        backdrop.blendingMode = .behindWindow
+        backdrop.state = .active
+
         let hosting = NSHostingController(rootView: makeRootView())
-        panel.contentViewController = hosting
+        hosting.view.translatesAutoresizingMaskIntoConstraints = false
+        backdrop.addSubview(hosting.view)
+        NSLayoutConstraint.activate([
+            hosting.view.leadingAnchor.constraint(equalTo: backdrop.leadingAnchor),
+            hosting.view.trailingAnchor.constraint(equalTo: backdrop.trailingAnchor),
+            hosting.view.topAnchor.constraint(equalTo: backdrop.topAnchor),
+            hosting.view.bottomAnchor.constraint(equalTo: backdrop.bottomAnchor),
+        ])
+        panel.contentView = backdrop
         self.hostingController = hosting
 
         // Restore the persisted frame (origin + size) if one exists; otherwise
@@ -269,28 +368,15 @@ final class DetachedDashboardWindowController: NSObject, NSWindowDelegate {
                 .environment(\.dashboardPresentation, .detached(redock: { [weak self] in
                     self?.onRedock()
                 }))
-                // Same precedence as the panel chrome: CLI override, else the
-                // stored Light/Dark preference, else follow the system.
-                .forcedDetachedColorScheme(Self.effectiveColorScheme(forcedColorScheme: forcedColorScheme))
+                // Pin the SwiftUI color scheme ONLY for the `--appearance` CLI QA
+                // override; otherwise leave it unset so the content inherits the
+                // window's live (NSApp-driven) appearance and follows Light/Dark
+                // changes made while the window is open.
+                .forcedDetachedColorScheme(forcedColorScheme)
                 // The panel owns its own width via resize; let the dashboard fill
                 // it rather than imposing the popover's screen-anchored width math.
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         )
-    }
-
-    /// The color scheme to pin the detached window to: the CLI `--appearance`
-    /// override if present, otherwise the stored app appearance preference
-    /// (`AppAppearanceMode`), otherwise `nil` to follow the system. Resolving the
-    /// stored preference here is what lets a launch-restored detached window
-    /// honor Light/Dark before any `.appliesAppAppearance()` scene has mounted.
-    static func effectiveColorScheme(forcedColorScheme: ColorScheme?) -> ColorScheme? {
-        if let forcedColorScheme { return forcedColorScheme }
-        let raw = UserDefaults.standard.string(forKey: AppAppearanceMode.storageKey)
-        switch AppAppearanceMode(rawValue: raw ?? "") ?? .followSystem {
-        case .followSystem: return nil
-        case .light: return .light
-        case .dark: return .dark
-        }
     }
 
     // MARK: - NSWindowDelegate
