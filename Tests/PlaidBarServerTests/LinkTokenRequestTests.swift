@@ -135,19 +135,22 @@ struct LinkErrorSurfacingTests {
         #expect(unknown.contains("try connecting again"))
     }
 
-    @Test("Unrecognized but enum-shaped code degrades to a generic message carrying only the code")
-    func unrecognizedCodeIsGeneric() {
+    @Test("An unknown code — even enum-shaped — collapses to PLAID_ERROR, never echoed")
+    func unknownCodeCollapsesToPlaidError() {
+        // Only allowlisted codes are surfaced. An enum-shaped but unmapped code
+        // (which a sandbox/proxy could fabricate from an account/request token)
+        // must NOT reach the app as a raw identifier.
         let message = LinkRoutes.linkErrorMessage(
             errorType: "SOME_NEW_TYPE",
             errorCode: "SOME_UNMAPPED_CODE"
         )
-
-        // The bounded code identifier is preserved; no provider prose is invented.
-        #expect(message.contains("SOME_UNMAPPED_CODE"))
+        #expect(message.contains("PLAID_ERROR"))
+        #expect(!message.contains("SOME_UNMAPPED_CODE"))
+        #expect(!message.contains("SOME_NEW_TYPE"))
         #expect(message.contains("try connecting again"))
     }
 
-    @Test("A non-identifier-shaped code is collapsed to PLAID_ERROR, never echoed")
+    @Test("Non-identifier-shaped codes are collapsed to PLAID_ERROR, never echoed")
     func nonIdentifierCodeIsSanitized() {
         // A misbehaving sandbox/proxy could return prose, request data, or an
         // over-long string in error_code/error_type. None of it may reach the app.
@@ -159,16 +162,11 @@ struct LinkErrorSurfacingTests {
         #expect(!prose.contains("request_id"))
         #expect(!prose.contains("http://"))
 
-        // Lowercase / mixed-case is not Plaid's enum shape → collapsed too.
-        let mixed = LinkRoutes.linkErrorMessage(errorType: "SomethingWeird", errorCode: nil)
-        #expect(mixed.contains("PLAID_ERROR"))
-
-        // An absurdly long all-caps token is rejected by the length bound.
-        let tooLong = LinkRoutes.linkErrorMessage(
-            errorType: nil,
-            errorCode: String(repeating: "A", count: 200)
-        )
-        #expect(tooLong.contains("PLAID_ERROR"))
+        // A numeric/uppercase token that happens to be enum-shaped is still not
+        // allowlisted → collapsed, so no raw provider identifier leaks.
+        let tokenLike = LinkRoutes.linkErrorMessage(errorType: nil, errorCode: "REQ_9F3A1B2C")
+        #expect(tokenLike.contains("PLAID_ERROR"))
+        #expect(!tokenLike.contains("REQ_9F3A1B2C"))
     }
 
     @Test("Raw Plaid error_message is never echoed into the surfaced text")

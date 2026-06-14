@@ -124,28 +124,26 @@ struct LinkRoutes: Sendable {
         errorType: String?,
         errorCode: String?
     ) -> String {
-        // Sanitize the identifier before it can reach the app: a known code maps
-        // to curated guidance; an *unknown but enum-shaped* code is carried as-is
-        // (it is a bounded `A–Z 0–9 _` token, safe to show); anything else —
-        // prose, request data, an over-long or oddly-charactered string a
-        // misbehaving sandbox/proxy might return — is collapsed to `PLAID_ERROR`
-        // so no raw provider payload can leak through this path (AGENTS.md).
-        let code = sanitizedErrorIdentifier(errorCode) ?? sanitizedErrorIdentifier(errorType) ?? "PLAID_ERROR"
-        if let description = knownLinkErrorDescriptions[code] {
-            return "Plaid Link error (\(code)): \(description)"
+        // ONLY allowlisted codes are ever surfaced. The identifier reaches the
+        // app (AppState.error via ServerClient), so even an enum-shaped but
+        // unknown code is NOT echoed — a misbehaving sandbox/proxy could put a
+        // numeric/uppercase account or request token into error_code/error_type
+        // that happens to pass a shape check, which would still move a raw
+        // provider identifier into the SwiftUI app (AGENTS.md). Anything not in
+        // `knownLinkErrorDescriptions` collapses to the generic PLAID_ERROR.
+        if let code = allowlistedErrorCode(errorCode) ?? allowlistedErrorCode(errorType) {
+            return "Plaid Link error (\(code)): \(knownLinkErrorDescriptions[code]!)"
         }
-        return "Plaid Link error (\(code)). Please try connecting again, or check the "
-            + "VaultPeek companion server logs for details."
+        return "Plaid Link error (PLAID_ERROR). Please try connecting again, or check "
+            + "the VaultPeek companion server logs for details."
     }
 
-    /// Returns the identifier only when it matches Plaid's stable enum shape
-    /// (uppercase letters, digits, underscores; bounded length). Returns `nil`
-    /// for anything that does not look like an error-code identifier, so the
-    /// caller falls back to a generic label rather than echoing provider text.
-    private static func sanitizedErrorIdentifier(_ value: String?) -> String? {
-        guard let value, !value.isEmpty, value.count <= 64 else { return nil }
-        let allowed = Set("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_")
-        guard value.allSatisfy({ allowed.contains($0) }) else { return nil }
+    /// Returns the identifier only when it is a curated, allowlisted Plaid Link
+    /// error code. Returns `nil` for anything else — unknown codes, prose, or
+    /// provider tokens — so the caller surfaces the generic label instead of
+    /// echoing a raw provider identifier into the app.
+    private static func allowlistedErrorCode(_ value: String?) -> String? {
+        guard let value, knownLinkErrorDescriptions[value] != nil else { return nil }
         return value
     }
 

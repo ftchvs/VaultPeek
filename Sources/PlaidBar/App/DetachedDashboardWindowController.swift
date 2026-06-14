@@ -227,8 +227,15 @@ final class DetachedDashboardWindowController: NSObject, NSWindowDelegate {
             }
         }
 
-        if let forcedColorScheme {
-            panel.appearance = NSAppearance(named: forcedColorScheme == .dark ? .darkAqua : .aqua)
+        // Appearance for the window chrome. The CLI `--appearance` override
+        // wins; otherwise honor the stored app appearance preference so a
+        // detached window restored at launch (created from the menu-bar label,
+        // before any `.appliesAppAppearance()` scene mounts) follows the user's
+        // Light/Dark setting instead of defaulting to the system appearance.
+        // `.followSystem` leaves `panel.appearance` nil so AppKit follows the
+        // system, matching the rest of the app.
+        if let scheme = Self.effectiveColorScheme(forcedColorScheme: forcedColorScheme) {
+            panel.appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
         }
 
         // No `.preferredContentSize`: the dashboard fills the resizable panel
@@ -262,11 +269,28 @@ final class DetachedDashboardWindowController: NSObject, NSWindowDelegate {
                 .environment(\.dashboardPresentation, .detached(redock: { [weak self] in
                     self?.onRedock()
                 }))
-                .forcedDetachedColorScheme(forcedColorScheme)
+                // Same precedence as the panel chrome: CLI override, else the
+                // stored Light/Dark preference, else follow the system.
+                .forcedDetachedColorScheme(Self.effectiveColorScheme(forcedColorScheme: forcedColorScheme))
                 // The panel owns its own width via resize; let the dashboard fill
                 // it rather than imposing the popover's screen-anchored width math.
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         )
+    }
+
+    /// The color scheme to pin the detached window to: the CLI `--appearance`
+    /// override if present, otherwise the stored app appearance preference
+    /// (`AppAppearanceMode`), otherwise `nil` to follow the system. Resolving the
+    /// stored preference here is what lets a launch-restored detached window
+    /// honor Light/Dark before any `.appliesAppAppearance()` scene has mounted.
+    static func effectiveColorScheme(forcedColorScheme: ColorScheme?) -> ColorScheme? {
+        if let forcedColorScheme { return forcedColorScheme }
+        let raw = UserDefaults.standard.string(forKey: AppAppearanceMode.storageKey)
+        switch AppAppearanceMode(rawValue: raw ?? "") ?? .followSystem {
+        case .followSystem: return nil
+        case .light: return .light
+        case .dark: return .dark
+        }
     }
 
     // MARK: - NSWindowDelegate
