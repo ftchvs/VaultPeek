@@ -306,3 +306,37 @@ run `codex login` locally, then
 
 To reauthorize the **Claude** review gate, regenerate its OAuth token with
 `claude setup-token` and update the `CLAUDE_CODE_OAUTH_TOKEN` secret.
+
+## Claude Code Main Run Fails Before Any Step Is Recorded
+
+Symptom: the `Claude Code / claude` job fails within a few seconds on an
+`@claude`-triggered issue, comment, or review event, but GitHub records no step
+summaries and the job log endpoint returns a missing log blob.
+
+This is not evidence of a VaultPeek app regression. The on-demand Claude Code
+workflow is an automation entrypoint around `anthropics/claude-code-action@v1`;
+it does not build the app or exercise Plaid-backed code unless Claude starts and
+chooses to run those commands. If the job has no steps and no retrievable log,
+the failure happened before the action produced runner output. Classify it as a
+Claude Code app/config or GitHub Actions startup failure unless a re-run
+produces concrete app/test output.
+
+Investigation record for `Claude Code - main` run `27491473578` on commit
+`4d1d7ad6b0ddbbc57fc84459783dc69e034cf46c`:
+
+- GitHub Actions job `81257350113` was `completed` with conclusion `failure`.
+- GitHub returned no step summaries for the job.
+- Fetching the job log returned `BlobNotFound`, so no runner log was available
+  to diagnose repo code.
+- The referenced commit was an empty workflow-add commit relative to its parent
+  in this checkout, and all checked-in workflow YAML files parsed locally.
+
+Next checks:
+
+1. Re-run the failed job from GitHub Actions. If it passes, treat the original
+   signal as transient automation/storage failure.
+2. If it fails again before steps appear, refresh `CLAUDE_CODE_OAUTH_TOKEN` with
+   `claude setup-token` and confirm the repository secret is present.
+3. If a re-run reaches the `Run Claude Code` step and logs a specific workflow,
+   permission, or app/test failure, patch that smallest failing path instead of
+   treating the original no-log run as a product regression.
