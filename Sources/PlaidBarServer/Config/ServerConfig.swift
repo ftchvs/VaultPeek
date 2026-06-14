@@ -22,6 +22,17 @@ struct ServerConfig: Sendable {
     let redirectUri: String
     let authToken: String
 
+    /// Deployment posture. `load` resolves it from config/env, defaulting to
+    /// `.local` (today's BYO-keys behavior). `.hostedBridge` is inert
+    /// foundation — see `DeploymentMode`. Declared without a stored default so
+    /// it stays part of the implicit memberwise initializer; `load` is the only
+    /// construction site and always supplies it.
+    let deployment: DeploymentMode
+
+    /// Placeholder hosted-bridge config. `.unconfigured` in `.local` mode and
+    /// until the bridge is provisioned. Nothing dials these endpoints yet.
+    let remoteBridge: RemoteBridgeConfig
+
     var dataDirectoryPath: String {
         URL(fileURLWithPath: databasePath)
             .deletingLastPathComponent()
@@ -102,6 +113,13 @@ struct ServerConfig: Sendable {
 
         let resolvedPort = portOverride ?? PlaidBarConstants.serverPort(environment: environmentValues)
 
+        // Deployment seam: read from config/env, defaulting to `.local` so
+        // today's BYO-keys behavior is byte-for-byte unchanged. `.hostedBridge`
+        // is inert foundation; the bridge placeholder holds no live endpoints
+        // until the owner provisions them (see consumer-production-checklist.md).
+        let deployment = DeploymentMode.resolved(from: environmentValues)
+        let remoteBridge = RemoteBridgeConfig.resolved(from: environmentValues)
+
         return ServerConfig(
             port: resolvedPort,
             plaidEnvironment: environment,
@@ -116,7 +134,9 @@ struct ServerConfig: Sendable {
                 .appendingPathComponent(pendingLinkSessionsFilename)
                 .path,
             redirectUri: "http://localhost:\(resolvedPort)/oauth/callback",
-            authToken: authToken
+            authToken: authToken,
+            deployment: deployment,
+            remoteBridge: remoteBridge
         )
     }
 

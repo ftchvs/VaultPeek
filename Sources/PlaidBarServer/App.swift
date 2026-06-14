@@ -77,6 +77,11 @@ struct PlaidBarServer: AsyncParsableCommand {
         // API routes
         let api = router.group("api")
         api.add(middleware: APITokenMiddleware(authToken: serverConfig.authToken))
+        // Entitlement seam (foundation only): enforces nothing today — always
+        // allows — and is a no-op in `.local` mode. Placed between auth and
+        // setup-state so the gated consumer (Hosted Link) track has a fixed
+        // place to add Stripe-backed checks without re-threading the router.
+        api.add(middleware: EntitlementMiddleware(deployment: serverConfig.deployment))
         api.add(middleware: SetupStateMiddleware(
             credentialDiagnosis: serverConfig.credentialDiagnosis,
             plaidEnvironment: serverConfig.plaidEnvironment

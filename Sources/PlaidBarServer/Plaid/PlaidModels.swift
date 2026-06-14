@@ -10,7 +10,12 @@ struct PlaidLinkTokenRequest: Encodable, Sendable {
     let products: [String]?
     let countryCodes: [String]
     let language: String
-    let redirectUri: String
+    /// Top-level OAuth `redirect_uri`. Deliberately omitted (left `nil`) for the
+    /// Hosted Link flow: Hosted Link uses `hosted_link.completion_redirect_uri`
+    /// instead, and sending both makes Plaid reject the request with
+    /// `INVALID_FIELD` ("OAuth redirect URI must be configured in the developer
+    /// dashboard"). The synthesized encoder omits this key entirely when `nil`.
+    let redirectUri: String?
     let hostedLink: PlaidHostedLink?
     let accessToken: String?
 
@@ -22,7 +27,7 @@ struct PlaidLinkTokenRequest: Encodable, Sendable {
         products: [String]? = nil,
         countryCodes: [String],
         language: String,
-        redirectUri: String,
+        redirectUri: String? = nil,
         hostedLink: PlaidHostedLink? = nil,
         accessToken: String? = nil
     ) {
