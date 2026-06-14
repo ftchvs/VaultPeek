@@ -15,6 +15,14 @@ public enum DetachedDashboardPreferences {
     /// durable intent; `AppState.isDashboardDetached` mirrors it at runtime.
     public static let detachedStorageKey = "dashboard.detached"
 
+    /// `@AppStorage` key for "keep the floating dashboard window on top". When
+    /// true the detached window floats above other windows on every Space and is
+    /// non-activating (a glance HUD that does not steal focus — the original
+    /// AND-384 glance behavior). When false (default) it is a normal managed
+    /// window that lives on one Space and participates in Mission Control /
+    /// Stage Manager / tiling.
+    public static let keepOnTopStorageKey = "dashboard.keepOnTop"
+
     /// Resolves the detached intent to apply at launch from the persisted value.
     ///
     /// A headless snapshot render must ignore any persisted intent: on a host/CI
@@ -39,11 +47,11 @@ public enum DetachedDashboardPreferences {
     public static let windowTitle = "VaultPeek Dashboard"
 
     /// Default content width of the floating panel before any persisted frame is
-    /// restored: the popover's two-column base (rail + divider + dashboard), so
-    /// the detached window opens at the same width the popover uses with no
-    /// account selected.
+    /// restored: the full three-column width (rail + dashboard + the
+    /// always-present inspector), so a freshly detached window opens wide enough
+    /// to show all three columns without clipping the inspector.
     public static var defaultContentWidth: CGFloat {
-        PopoverGeometry.width(for: .twoColumn)
+        PopoverGeometry.width(for: .threeColumn)
     }
 
     /// Default content height of the floating panel before any persisted frame is
@@ -54,10 +62,11 @@ public enum DetachedDashboardPreferences {
     }
 
     /// Minimum content width the floating panel may be resized to: the
-    /// two-column minimum (fixed rail + the flexible center's floor), so the
-    /// Wealth Summary rail and a usable dashboard always stay legible.
+    /// three-column minimum (fixed rail + the flexible center's floor + the
+    /// always-present inspector), so the rail, a usable dashboard, AND the
+    /// inspector always stay legible.
     public static var minContentWidth: CGFloat {
-        minContentWidth(isInspectorOpen: false)
+        minContentWidth(isInspectorOpen: true)
     }
 
     /// Minimum content width the floating panel may be resized to for the current

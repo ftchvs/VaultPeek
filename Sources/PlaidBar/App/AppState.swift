@@ -200,6 +200,16 @@ final class AppState {
         if isSetupComplete {
             persistSetupCompletion(true)
         }
+        // Demo loads its fixtures synchronously HERE — before `MainPopover`'s
+        // first paint — so the popover opens directly in the populated dashboard
+        // at its settled width. Demo never persists setup completion
+        // (`persistSetupCompletion` no-ops in demo), so deferring this to
+        // `loadInitialData()` (a post-paint `.task`) made frame 1 render the
+        // 480pt setup screen and then resize to the 801pt dashboard, which read
+        // as a flicker/redraw on open. Production stays deferred to `.task`.
+        if CommandLine.arguments.contains("--demo") {
+            loadDemoData()
+        }
     }
 
     private func loadSettings() {
@@ -1204,7 +1214,12 @@ final class AppState {
 
         if CommandLine.arguments.contains("--demo") {
             isDemoMode = true
-            loadDemoData()
+            // `init` already loaded the demo fixtures synchronously so the
+            // popover opens settled (no setup→dashboard width jump). Reload only
+            // if something bypassed init — e.g. a test constructing this state
+            // and calling `loadInitialData()` directly — so we never re-assign
+            // identical fixtures (which would churn derived caches) on open.
+            if accounts.isEmpty { loadDemoData() }
             return
         }
         // Returning users see cached last-known data immediately: the cache

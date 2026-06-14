@@ -2,6 +2,7 @@ import AppKit
 
 struct StatusItemContextMenuActions {
     let showDashboard: @MainActor () -> Void
+    let openInWindow: @MainActor () -> Void
     let refreshDashboard: @MainActor () -> Void
     let openSettings: @MainActor () -> Void
     let checkForUpdates: @MainActor () -> Void
@@ -50,6 +51,7 @@ final class StatusItemContextMenuController: NSObject, NSMenuDelegate {
         menu.delegate = self
 
         menu.addActionItem("Open VaultPeek", action: #selector(showDashboard), target: self)
+        menu.addActionItem("Open in Window", action: #selector(openInWindow), target: self)
         menu.addActionItem("Refresh Dashboard", action: #selector(refreshDashboard), target: self)
         menu.addItem(.separator())
         menu.addActionItem("Settings...", action: #selector(openSettings), target: self)
@@ -70,6 +72,10 @@ final class StatusItemContextMenuController: NSObject, NSMenuDelegate {
 
     @objc private func showDashboard() {
         actions?.showDashboard()
+    }
+
+    @objc private func openInWindow() {
+        actions?.openInWindow()
     }
 
     @objc private func refreshDashboard() {

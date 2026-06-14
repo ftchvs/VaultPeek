@@ -307,6 +307,7 @@ private struct AppearancePreviewCard: View {
 
 struct GeneralSettingsView: View {
     @Environment(AppState.self) private var appState
+    @AppStorage(DetachedDashboardPreferences.keepOnTopStorageKey) private var keepDashboardOnTop = false
     @State private var isShowingResetConfirmation = false
     @State private var resetResultMessage: String?
     @State private var resetErrorMessage: String?
@@ -373,6 +374,16 @@ struct GeneralSettingsView: View {
                 // the in-dashboard pin/dock control.
                 Toggle("Keep dashboard in a floating window", isOn: $state.isDashboardDetached)
                 Text("Detaches the dashboard from the menu bar into a movable desktop window that stays open when you switch apps. Click the menu bar item to bring it back to the front; dock it again from the window or this toggle.")
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
+
+                // AND-384 glance mode: when on, the floating window floats above
+                // other apps on every Space and does not steal focus — the
+                // original "monitor at a glance while you work" behavior — as an
+                // explicit opt-in rather than the default.
+                Toggle("Keep the floating window on top", isOn: $keepDashboardOnTop)
+                    .disabled(!state.isDashboardDetached)
+                Text("Floats the window above other windows on every Space without taking focus from the app you're working in. Off (default): it behaves like a normal window — one Space, normal order, and visible in Mission Control and the Dock.")
                     .detailText()
                     .fixedSize(horizontal: false, vertical: true)
             }
