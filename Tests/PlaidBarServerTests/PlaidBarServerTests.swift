@@ -957,6 +957,48 @@ struct PlaidBarServerTests {
         #expect(!TransactionRoutes.shouldFailSync(attemptedItemCount: 3, successfulItemCount: 3))
     }
 
+    @Test func transactionSyncRejectsUnknownExplicitItemFilter() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-sync-item-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let configURL = directory.appendingPathComponent("plaidbar.conf")
+        try """
+        PLAID_CLIENT_ID=test-client
+        PLAID_SECRET=test-secret
+        PLAID_ENV=sandbox
+        PLAIDBAR_DATA_DIR=\(directory.appendingPathComponent("data").path)
+        """.write(to: configURL, atomically: true, encoding: .utf8)
+        let config = try ServerConfig.load(from: configURL.path)
+        let plaidClient = PlaidClient(config: config)
+
+        let databasePath = directory.appendingPathComponent("plaidbar-test.sqlite").path
+        let logger = Logger(label: "com.ftchvs.plaidbar-server-tests.sync-item")
+
+        try await withTokenStore(databasePath: databasePath, logger: logger) { store in
+            let route = TransactionRoutes(plaidClient: plaidClient, tokenStore: store)
+
+            // An explicit filter for an unknown item id is a 404, not a silent
+            // 200 empty sync that looks like a clean no-op. The Plaid client is
+            // never reached because the guard throws first.
+            let unknownError = await #expect(throws: HTTPError.self) {
+                _ = try await route.syncTransactions(
+                    request: Self.makeRequest(path: "/api/transactions/sync?item_id=does-not-exist"),
+                    context: TestRequestContext(source: TestRequestContextSource())
+                )
+            }
+            #expect(unknownError?.status == .notFound)
+
+            // The unfiltered path against an empty store stays a successful empty sync.
+            let response = try await route.syncTransactions(
+                request: Self.makeRequest(path: "/api/transactions/sync"),
+                context: TestRequestContext(source: TestRequestContextSource())
+            )
+            #expect(response.status == .ok)
+        }
+    }
+
     @Test func linkResponseCodable() throws {
         let response = LinkResponse(linkToken: "token_123", linkUrl: "https://example.com/link")
         let data = try JSONEncoder().encode(response)
