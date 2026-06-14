@@ -11,6 +11,8 @@ struct ServerConfig: Sendable {
     static let legacyDatabaseFilename = "plaidbar.sqlite"
     static let legacyMigrationEnvironmentVariable = "PLAIDBAR_MIGRATE_LEGACY_DATABASE"
     static let pendingLinkSessionsFilename = "pending-link-sessions.json"
+    // Shared with LocalDataStore so the reset boundary clears this exact file.
+    static let linkClientUserIdFilename = LocalDataStore.linkClientUserIdFilename
     private static let sqliteSidecarSuffixes = ["-wal", "-shm", "-journal"]
 
     let port: Int
@@ -21,6 +23,8 @@ struct ServerConfig: Sendable {
     let pendingLinkSessionsPath: String
     let redirectUri: String
     let authToken: String
+    let linkClientUserId: String
+    let link: PlaidLinkConfiguration
 
     /// Deployment posture. `load` resolves it from config/env, defaulting to
     /// `.local` (today's BYO-keys behavior). `.hostedBridge` is inert
@@ -79,7 +83,12 @@ struct ServerConfig: Sendable {
         // The standalone `--config` path consumes a server.conf that may hold
         // PLAID_CLIENT_ID/PLAID_SECRET; tighten it to owner-only the same way
         // app-managed launches do (ServerProcessService.enforcePrivatePermissions).
+        // This must run before any further validation that can throw (e.g. Link
+        // config resolution), otherwise an invalid setting could abort startup
+        // and leave a secret-bearing server.conf at its original loose mode.
         tightenConfigFilePermissions(at: configPath)
+
+        let link = try PlaidLinkConfiguration.resolved(from: environmentValues)
 
         if environmentValues[LocalDataStore.dataDirectoryEnvironmentVariable]?.trimmedNonEmpty == nil {
             try LocalDataStore.migrateLegacyDefaultStorageIfNeeded()
@@ -110,6 +119,7 @@ struct ServerConfig: Sendable {
             in: URL(fileURLWithPath: dataDir, isDirectory: true)
         )
         let authToken = try loadOrCreateAuthToken(at: authTokenURL)
+        let linkClientUserId = try loadOrCreateLinkClientUserId(in: dataDir)
 
         let resolvedPort = portOverride ?? PlaidBarConstants.serverPort(environment: environmentValues)
 
@@ -135,6 +145,8 @@ struct ServerConfig: Sendable {
                 .path,
             redirectUri: "http://localhost:\(resolvedPort)/oauth/callback",
             authToken: authToken,
+            linkClientUserId: linkClientUserId,
+            link: link,
             deployment: deployment,
             remoteBridge: remoteBridge
         )
@@ -149,15 +161,20 @@ struct ServerConfig: Sendable {
     }
 
     private static func generateAuthToken() -> String {
-        var bytes = [UInt8](repeating: 0, count: 32)
+        authTokenString(randomBytes: secureRandomBytes(count: 32))
+    }
+
+    private static func secureRandomBytes(count: Int) -> [UInt8] {
+        var bytes = [UInt8](repeating: 0, count: count)
         #if canImport(Security)
         if SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess {
-            return authTokenString(randomBytes: bytes)
+            return bytes
         }
         #endif
 
-        return "\(UUID().uuidString)\(UUID().uuidString)"
+        let fallback = "\(UUID().uuidString)\(UUID().uuidString)"
             .replacingOccurrences(of: "-", with: "")
+        return Array(fallback.utf8.prefix(count))
     }
 
     private static func loadOrCreateAuthToken(at url: URL) throws -> String {
@@ -175,6 +192,33 @@ struct ServerConfig: Sendable {
         let generated = generateAuthToken()
         try writePrivateTextFile(generated, to: url)
         return generated
+    }
+
+    private static func loadOrCreateLinkClientUserId(in dataDir: String) throws -> String {
+        let url = URL(fileURLWithPath: dataDir, isDirectory: true)
+            .appendingPathComponent(linkClientUserIdFilename)
+        if let existing = try? String(contentsOf: url, encoding: .utf8)
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            isValidStoredLinkClientUserId(existing)
+        {
+            try FileManager.default.setAttributes(
+                [.posixPermissions: 0o600],
+                ofItemAtPath: url.path
+            )
+            return existing
+        }
+
+        let generated = "vaultpeek-install-\(authTokenString(randomBytes: secureRandomBytes(count: 32)))"
+        try writePrivateTextFile(generated, to: url)
+        return generated
+    }
+
+    static func isValidStoredLinkClientUserId(_ value: String) -> Bool {
+        value.hasPrefix("vaultpeek-install-")
+            && value.count == "vaultpeek-install-".count + 43
+            && value.allSatisfy { character in
+                character.isLetter || character.isNumber || character == "-" || character == "_"
+            }
     }
 
     private static func writePrivateTextFile(_ value: String, to url: URL) throws {

@@ -35,6 +35,13 @@ Use GitHub private vulnerability reporting if available, or contact the reposito
 ## Security Model
 
 - VaultPeek has no hosted backend, analytics, telemetry, or tracking.
+- Optional managed bank linking is planned but not shipped. Before it ships, the
+  consent, audit, and escalation boundary in
+  `docs/strategy/managed-link-consent-operations.md` must be approved: support
+  helpers may guide users through VaultPeek screens, but must never ask for,
+  receive, type, store, or audit-log bank credentials, MFA codes, Plaid tokens,
+  raw account identifiers, balances, transactions, local databases, logs, or
+  screenshots containing real financial data.
 - The companion server should bind to `127.0.0.1` only.
 - Plaid secrets and access tokens must not be embedded in the app binary.
 - The local server keeps Plaid item records in environment-scoped SQLite files under `~/.vaultpeek/`

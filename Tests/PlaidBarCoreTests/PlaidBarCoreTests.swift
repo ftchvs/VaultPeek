@@ -3809,6 +3809,7 @@ struct PlaidBarCoreTests {
         let transactionCache = directory.appendingPathComponent("transactions-sandbox-0123456789abcdef.json")
         let pendingLinkSessions = directory.appendingPathComponent("pending-link-sessions.json")
         let pendingLinkSessionsBackup = directory.appendingPathComponent("pending-link-sessions.json.backup-20260604")
+        let linkClientUserId = directory.appendingPathComponent("link-client-user-id")
         let authToken = directory.appendingPathComponent("auth-token")
         let serverConfig = directory.appendingPathComponent("server.conf")
         let unrelatedFile = directory.appendingPathComponent("notes.txt")
@@ -3821,6 +3822,7 @@ struct PlaidBarCoreTests {
         try "cache".write(to: transactionCache, atomically: true, encoding: .utf8)
         try "sessions".write(to: pendingLinkSessions, atomically: true, encoding: .utf8)
         try "old sessions".write(to: pendingLinkSessionsBackup, atomically: true, encoding: .utf8)
+        try "vaultpeek-install-abc".write(to: linkClientUserId, atomically: true, encoding: .utf8)
         try "token".write(to: authToken, atomically: true, encoding: .utf8)
         try "PLAID_ENV=sandbox".write(to: serverConfig, atomically: true, encoding: .utf8)
         try "keep me".write(to: unrelatedFile, atomically: true, encoding: .utf8)
@@ -3836,6 +3838,7 @@ struct PlaidBarCoreTests {
 
         #expect(result.directoryPath == directory.path)
         #expect(result.removedEntries == [
+            "link-client-user-id",
             "pending-link-sessions.json",
             "pending-link-sessions.json.backup-20260604",
             "plaidbar-sandbox.sqlite",

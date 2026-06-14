@@ -232,18 +232,21 @@ sequenceDiagram
 
 ## 6. Institution limits per tier (AND-350)
 
+AND-392 locks the plan matrix in `entitlement-matrix.md`; the table below keeps
+the managed-link enforcement mechanics and COGS rationale aligned to that
+matrix.
+
 Enforcement is **server-side at link-session creation** (step 3 in 5.5) — the only place it cannot be bypassed by a patched client. The client-side meter is UX, not security.
 
-| Tier | Live institutions (Items) | Price (proposed — companion pricing doc owns these numbers) | Plaid COGS at estimate rates¹ | Notes |
+| Tier | Live institutions (Items) | Price | Plaid COGS at estimate rates¹ | Notes |
 |---|---|---|---|---|
-| Demo / Free | 0 live (demo fixtures only) | $0 | $0 | Existing demo mode, zero provider cost (AND-350 AC) |
-| BYO-keys | Unlimited (user's own Plaid account; Trial plan = 10 free Items, retrieved 2026-06-12) | $0 — free forever (pricing doc D6 default) | $0 to VaultPeek | The verbatim-local-first mode; stays available indefinitely |
-| Personal (managed) | 3 | $79/yr or $9/mo — **proposed, not final** | ~$0.90–$4.50/mo | Worst case (3 Items × $1.50 PAYG estimate = $4.50) consumes ~50–70% of net revenue — committed Plaid rates are a launch prerequisite |
-| Plus (managed) | 8 | $129/yr early-access or $15/mo (→ $149/yr later) — **proposed, not final** | ~$2.40–$12.00/mo | Underwater at the 8-cap on PAYG estimates (pricing doc §5.3); the extra-institution add-on (est. $24/yr each, pricing doc D8) is the pressure valve, not bigger caps |
+| Free | 0 managed live institutions | $0 | $0 | Demo fixtures and BYO-keys mode only. BYO uses the user's own Plaid account and remains outside VaultPeek managed entitlements. |
+| Plus | 8 managed live institutions | $15/month or $129/year early-access | ~$2.40–$12.00/mo | Underwater at the 8-cap on PAYG estimates; committed provider rates or lower actual item mix remain launch prerequisites. |
+| Managed | Written quote; defaults to 8 unless the order says otherwise | Custom; starts from Plus | Scales with written cap | White-glove support tier, not unlimited provider usage. |
 
 ¹ Plaid publishes no prices. Transactions is a **per-Item monthly subscription that bills even with zero API calls** (official, retrieved 2026-06-12). Third-party estimates put it at **~$0.30–$0.60/Item/mo (committed, Vendr) to ~$1.50/Item/mo (PAYG, Monetizely)** — all **estimates, retrieved 2026-06-12**; a sales quote is go/no-go gate G2.
 
-Mechanics: `items_limit` comes from the Stripe-subscription→entitlement mapping; `items_used` counts registry items in non-removed status. Removing an institution frees a slot immediately (and stops its meter). Limit reached → `402 limit_reached` → upgrade sheet (Section 7).
+Mechanics: `items_limit` comes from the Stripe-subscription→entitlement mapping; `items_used` counts registry items in non-removed status. Removing an institution frees a slot immediately (and stops its meter). Limit reached → `402 limit_reached` → upgrade sheet (Section 7). Downgrades and grace states follow `entitlement-matrix.md`.
 
 ---
 
@@ -257,7 +260,7 @@ flowchart TD
     B -->|"Try the demo"| DEMO["Demo mode<br/>fixtures, zero Plaid calls<br/>(unchanged)"]
     B -->|"Connect my banks"| C["Sign in<br/>passkey / magic link"]
     B -->|"Advanced: my own Plaid keys"| BYO["Existing sandbox/production<br/>BYO flow (unchanged)"]
-    C --> D["Choose plan<br/>Personal (3 institutions) / Plus (8)<br/>Stripe Checkout in browser"]
+    C --> D["Choose plan<br/>Free (0 managed) / Plus (8) / Managed (quote)<br/>Stripe Checkout or owner quote in browser"]
     D --> E["Privacy explainer<br/>(Section 11 copy, must scroll/ack)"]
     E --> F["Connect first institution<br/>Hosted Link (flow 5.5)"]
     F --> G["Dashboard<br/>meter: '1 of 3 institutions connected'"]
