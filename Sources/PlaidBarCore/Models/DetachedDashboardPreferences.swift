@@ -15,6 +15,14 @@ public enum DetachedDashboardPreferences {
     /// durable intent; `AppState.isDashboardDetached` mirrors it at runtime.
     public static let detachedStorageKey = "dashboard.detached"
 
+    /// `@AppStorage` key for "keep the floating dashboard window on top". When
+    /// true the detached window floats above other windows on every Space and is
+    /// non-activating (a glance HUD that does not steal focus — the original
+    /// AND-384 glance behavior). When false (default) it is a normal managed
+    /// window that lives on one Space and participates in Mission Control /
+    /// Stage Manager / tiling.
+    public static let keepOnTopStorageKey = "dashboard.keepOnTop"
+
     /// Resolves the detached intent to apply at launch from the persisted value.
     ///
     /// A headless snapshot render must ignore any persisted intent: on a host/CI

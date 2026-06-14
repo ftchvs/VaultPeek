@@ -105,21 +105,16 @@ final class DetachedDashboardWindowController: NSObject, NSWindowDelegate {
         // layout move, so it never shifts the dashboard.
         if reduceMotion {
             panel.alphaValue = 1
-            panel.makeKeyAndOrderFront(nil)
+            bringWindowForward(panel)
         } else {
             panel.alphaValue = 0
-            panel.makeKeyAndOrderFront(nil)
+            bringWindowForward(panel)
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = 0.18
                 context.allowsImplicitAnimation = true
                 panel.animator().alphaValue = 1
             }
         }
-        // Force the window to the front. `ignoringOtherApps: true` matches the
-        // proven `SettingsWindowActivationRestorer` path; the cooperative
-        // `activate()` does not steal focus, so the window would otherwise open
-        // behind the active app.
-        NSApplication.shared.activate(ignoringOtherApps: true)
     }
 
     /// Hides the floating dashboard without tearing it down, so the next `show`
@@ -164,12 +159,44 @@ final class DetachedDashboardWindowController: NSObject, NSWindowDelegate {
         // A raise also supersedes an in-flight hide.
         presentationGeneration += 1
         panel.alphaValue = 1
-        elevateActivationPolicyForWindow()
-        NSApplication.shared.activate(ignoringOtherApps: true)
-        panel.makeKeyAndOrderFront(nil)
+        bringWindowForward(panel)
     }
 
-    // MARK: - Activation policy
+    // MARK: - Activation policy & window level
+
+    /// Whether the user wants the floating dashboard to stay above other windows
+    /// (a non-activating glance HUD) instead of behaving as a normal managed
+    /// window. Read from UserDefaults so the SettingsView `@AppStorage` toggle and
+    /// the window stay in sync via the defaults-change observer.
+    private var keepDashboardOnTop: Bool {
+        UserDefaults.standard.bool(forKey: DetachedDashboardPreferences.keepOnTopStorageKey)
+    }
+
+    /// Apply the window level + Spaces behavior for the current "keep on top"
+    /// preference: a floating, all-Spaces glance HUD when on; a managed normal
+    /// window (one Space, default collection behavior) when off.
+    private func applyWindowLevelBehavior(to panel: NSWindow) {
+        if keepDashboardOnTop {
+            panel.level = .floating
+            panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .moveToActiveSpace]
+        } else {
+            panel.level = .normal
+            panel.collectionBehavior = []
+        }
+    }
+
+    /// Order the window in. In "keep on top" mode it floats above without stealing
+    /// focus from the active app (a glance HUD); otherwise it becomes a regular,
+    /// frontmost app window with Dock / ⌘-Tab presence.
+    private func bringWindowForward(_ panel: NSWindow) {
+        if keepDashboardOnTop {
+            panel.orderFrontRegardless()
+        } else {
+            elevateActivationPolicyForWindow()
+            NSApplication.shared.activate(ignoringOtherApps: true)
+            panel.makeKeyAndOrderFront(nil)
+        }
+    }
 
     /// Flip the app to `.regular` while the detached window is on screen, saving
     /// the prior policy once so re-dock can restore it. A normal window from an
@@ -255,10 +282,10 @@ final class DetachedDashboardWindowController: NSObject, NSWindowDelegate {
         // `.windowStyle(.hiddenTitleBar)`).
         panel.titlebarAppearsTransparent = true
         panel.titleVisibility = .hidden
-        // Leave `level` at `.normal` and `collectionBehavior` at its default
-        // (Managed): the window lives on one Space in normal z-order and
-        // Mission-Controls / Stage-Manages / tiles normally. A non-normal level or
-        // `.canJoinAllSpaces` is what made the old panel behave like a HUD.
+        // Window level + Spaces behavior follow the "keep on top" preference:
+        // a managed normal window by default, or a floating glance HUD when the
+        // user opts in. Applied here and re-applied live when the toggle changes.
+        applyWindowLevelBehavior(to: panel)
 
         // True translucency: an opaque window fully paints its rect, so the
         // material/glass had only the window's own solid backing to sample and
@@ -284,7 +311,13 @@ final class DetachedDashboardWindowController: NSObject, NSWindowDelegate {
                 queue: .main
             ) { [weak self] _ in
                 MainActor.assumeIsolated {
-                    self?.updateContentMinSize()
+                    guard let self else { return }
+                    self.updateContentMinSize()
+                    // Pick up live changes to the "keep on top" toggle so the
+                    // window's level / Spaces behavior updates without a re-dock.
+                    if let panel = self.panel {
+                        self.applyWindowLevelBehavior(to: panel)
+                    }
                 }
             }
         }
