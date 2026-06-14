@@ -169,6 +169,24 @@ struct MainPopover: View {
                     shouldShowSetupRecoveryDashboard = false
                 }
             }
+            .onChange(of: appState.weeklyReviewNavigation) { _, target in
+                guard let target else { return }
+                handleWeeklyReviewNavigation(target)
+                appState.weeklyReviewNavigation = nil
+            }
+    }
+
+    private func handleWeeklyReviewNavigation(_ target: WeeklyReviewNavigationTarget) {
+        switch target {
+        case .recurring:
+            openRecurringInspector()
+        case .reviewInbox, .safeToSpend:
+            // The review inbox and safe-to-spend cards are inline sections in
+            // this same popover; closing any open inspector returns the user to
+            // the dashboard column where those sections are visible.
+            closeRecurringInspector()
+            selectedAccountId = ""
+        }
     }
 
     // The visual chrome is kept on its own opaque property so neither it nor the
@@ -413,6 +431,9 @@ struct MainPopover: View {
                         // center leads with the latest-changes receipt instead of
                         // repeating either (AND-372).
                         DashboardChangeReceiptStrip()
+                            .environment(appState)
+
+                        WeeklyReviewCard()
                             .environment(appState)
 
                         ReviewInboxView()
