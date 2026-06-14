@@ -50,12 +50,17 @@ public enum SubscriptionPlan: String, CaseIterable, Sendable, Codable, Identifia
 
     /// Short forward-looking tagline. Deliberately framed as a preview so copy
     /// never implies billing or a managed backend exists today.
+    ///
+    /// Final public pricing is gated behind `docs/strategy/approval-gates.md`
+    /// (AND-349, "Pricing bundles and launch copy") and must not appear in any
+    /// shipping app surface before that gate passes, so this preview copy states
+    /// the managed institution cap only — never a dollar amount.
     public var priceDescription: String {
         switch self {
         case .free:
             "Preview · demo and BYO keys"
         case .plus:
-            "Preview · $15/mo or $129/yr · up to 8 institutions"
+            "Preview · up to 8 institutions"
         }
     }
 }
