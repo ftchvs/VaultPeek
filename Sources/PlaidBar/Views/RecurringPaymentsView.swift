@@ -3,6 +3,7 @@ import SwiftUI
 
 struct RecurringPaymentsView: View {
     let presentation: RecurringPaymentsSurfacePresentation
+    var loadState: DashboardLoadState?
     let onClose: () -> Void
 
     var body: some View {
@@ -13,7 +14,19 @@ struct RecurringPaymentsView: View {
                 .opacity(0.4)
 
             if presentation.isEmpty {
-                emptyState
+                // Honor load phase before declaring "nothing recurring": an
+                // empty rows list during loading/offline/error should not read
+                // as a confident "no recurring payments detected".
+                switch loadState?.phase {
+                case .loading:
+                    loadingState
+                case .offline:
+                    offlineState
+                case .error:
+                    errorState
+                default:
+                    emptyState
+                }
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: Spacing.md) {
@@ -89,6 +102,37 @@ struct RecurringPaymentsView: View {
             Label(presentation.emptyTitle, systemImage: "calendar.badge.clock")
         } description: {
             Text(presentation.emptyDetail)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(Spacing.md)
+    }
+
+    private var loadingState: some View {
+        ContentUnavailableView {
+            Label(DashboardLoadSurface.recurring.loadingTitle, systemImage: "calendar.badge.clock")
+        } description: {
+            Text(DashboardLoadSurface.recurring.loadingDetail)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(Spacing.md)
+        .accessibilityLabel(loadState?.loadingAccessibilityLabel ?? DashboardLoadSurface.recurring.loadingTitle)
+    }
+
+    private var offlineState: some View {
+        ContentUnavailableView {
+            Label("Recurring charges unavailable", systemImage: "wifi.slash")
+        } description: {
+            Text("VaultPeek can't reach the local server, so recurring charges aren't available yet. Reconnect to refresh.")
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(Spacing.md)
+    }
+
+    private var errorState: some View {
+        ContentUnavailableView {
+            Label("Recurring charges unavailable", systemImage: "exclamationmark.triangle")
+        } description: {
+            Text("The last refresh didn't finish, so recurring charges aren't available yet. Refresh to try again.")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(Spacing.md)

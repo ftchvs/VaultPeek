@@ -316,6 +316,7 @@ struct MainPopover: View {
                             from: appState.recurringTransactions,
                             asOf: Date()
                         ),
+                        loadState: appState.loadState(for: .recurring),
                         onClose: closeRecurringInspector
                     )
                 } else if !selectedAccountId.isEmpty {
