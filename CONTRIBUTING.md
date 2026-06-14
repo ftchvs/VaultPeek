@@ -54,11 +54,13 @@ Configuration files: `.swiftformat` and `.swiftlint.yml` in the repo root.
 ### Optional: pre-push gate
 
 `Scripts/pre-push-gate.sh` is a local backstop that, before a push leaves your
-machine, (1) scans each outgoing commit's patch for Plaid tokens / secrets /
-bearer tokens — using the exact refs git supplies on the pre-push hook's stdin,
-so a secret added then removed within the pushed range is still caught — and
-(2) runs the Swift 6 strict-concurrency build (the CI gate that most often
-fails). It is a heuristic, not a replacement for a dedicated scanner.
+machine, (1) scans every outgoing commit's patch for Plaid tokens / secrets /
+bearer tokens — using the exact refs git supplies on the pre-push hook's stdin
+(including merge side-branch commits, and secrets added then removed within the
+pushed range), failing closed if a range can't be read — and (2) runs the
+Swift 6 strict-concurrency build (the CI gate that most often fails) when the
+pushed ref is the current checkout. It is a heuristic, not a replacement for a
+dedicated scanner.
 
 ```bash
 # Wire it up as a native git hook (one time):
