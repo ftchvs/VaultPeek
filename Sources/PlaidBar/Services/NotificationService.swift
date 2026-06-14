@@ -151,7 +151,7 @@ final class NotificationService: NotificationServiceProtocol {
         for tx in large {
             let didSchedule = await sendNotification(
                 title: "Large Transaction",
-                body: "\(tx.displayName): \(Formatters.currency(tx.displayAmount, format: .full))",
+                body: "A transaction crossed your configured review threshold. Open VaultPeek to review it privately.",
                 identifier: NotifKey.largeTx(tx.id)
             )
             guard didSchedule else { continue }
@@ -185,7 +185,7 @@ final class NotificationService: NotificationServiceProtocol {
             guard !notifiedAccountIds.contains(key) else { continue }
             let didSchedule = await sendNotification(
                 title: "Low Balance",
-                body: "\(account.name): \(Formatters.currency(account.balances.effectiveBalance, format: .full))",
+                body: "A depository account is below your configured threshold. Open VaultPeek to review it privately.",
                 identifier: NotifKey.lowBalance(account.id)
             )
             if didSchedule {
@@ -209,10 +209,9 @@ final class NotificationService: NotificationServiceProtocol {
         for account in highUtil {
             let key = NotifKey.dedupUtil(account.id)
             guard !notifiedAccountIds.contains(key) else { continue }
-            let util = account.balances.utilizationPercent ?? 0
             let didSchedule = await sendNotification(
                 title: "High Credit Utilization",
-                body: "\(account.name): \(Formatters.percent(util)) used",
+                body: "A credit account is above your configured utilization threshold. Open VaultPeek to review it privately.",
                 identifier: NotifKey.highUtil(account.id)
             )
             if didSchedule {
