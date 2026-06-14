@@ -30,6 +30,7 @@ let package = Package(
     products: [
         .executable(name: "PlaidBar", targets: ["PlaidBar"]),
         .executable(name: "PlaidBarServer", targets: ["PlaidBarServer"]),
+        .executable(name: "PlaidBarWidgetExtension", targets: ["PlaidBarWidgetExtension"]),
         .executable(name: "plaidbar-cli", targets: ["PlaidBarCLI"]),
         .library(name: "PlaidBarCore", targets: ["PlaidBarCore"]),
     ],
@@ -60,6 +61,20 @@ let package = Package(
                 "Resources/AppIcon.icns",
                 "Resources/Info.plist",
                 "Resources/PlaidBar.entitlements",
+            ],
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+
+        // MARK: - PlaidBar Widget Extension (WidgetKit/App Intents)
+        .executableTarget(
+            name: "PlaidBarWidgetExtension",
+            dependencies: [
+                "PlaidBarCore",
+            ],
+            path: "Sources/PlaidBarWidgetExtension",
+            exclude: [
+                "Resources/Info.plist",
+                "Resources/PlaidBarWidgetExtension.entitlements",
             ],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),

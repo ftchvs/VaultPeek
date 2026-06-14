@@ -1,6 +1,7 @@
 import SwiftUI
 import PlaidBarCore
 import Combine
+import WidgetKit
 @preconcurrency import UserNotifications
 
 @Observable
@@ -1195,6 +1196,7 @@ final class AppState {
     func refreshDashboard() async {
         if refreshDemoDataIfNeeded() { return }
 
+        if await consumePendingGlanceCommand() { return }
         await checkServerConnection()
         // Setup state (credentials missing) cannot refresh anything from
         // Plaid; the status surfaces guide the user instead of surfacing a
@@ -1308,6 +1310,9 @@ final class AppState {
             } catch {
                 self.error = "Local cache failed to save: \(error.localizedDescription)"
             }
+            // Refresh (or clear, when the last institution is gone) the widget
+            // snapshot so it never shows balances for just-removed accounts.
+            writeGlanceSnapshot()
         } catch {
             self.error = error.localizedDescription
         }
@@ -1345,6 +1350,7 @@ final class AppState {
 
         balanceHistory = []
         UserDefaults.standard.removeObject(forKey: Keys.balanceHistory)
+        clearGlanceSnapshot()
         UserDefaults.standard.removeObject(forKey: Keys.lastTransactionCacheContext)
         UserDefaults.standard.removeObject(forKey: Keys.weeklyReviewState)
         UserDefaults.standard.removeObject(forKey: Keys.weeklyReviewPreviousSafeToSpend)
@@ -1475,6 +1481,7 @@ final class AppState {
             if accounts.isEmpty { loadDemoData() }
             return
         }
+        _ = await consumePendingGlanceCommand()
         // Returning users see cached last-known data immediately: the cache
         // loads before the connectivity check (which can take seconds while
         // a bundled server boots) instead of after it.
@@ -2004,6 +2011,60 @@ final class AppState {
         if let data = try? JSONEncoder().encode(balanceHistory) {
             UserDefaults.standard.set(data, forKey: Keys.balanceHistory)
         }
+        writeGlanceSnapshot()
+    }
+
+    private func writeGlanceSnapshot(updatedAt: Date = Date()) {
+        // With no accounts (e.g. the user just disconnected their last
+        // institution), clear the app-group snapshot instead of leaving the
+        // previous balances on disk — otherwise the widget would keep showing
+        // removed-account net worth until a later reset or successful write.
+        guard !accounts.isEmpty else {
+            clearGlanceSnapshot()
+            WidgetCenter.shared.reloadTimelines(ofKind: "PlaidBarGlanceWidget")
+            return
+        }
+        let snapshot = GlanceSnapshot.make(
+            netWorth: netBalance,
+            balanceHistory: balanceHistory,
+            updatedAt: updatedAt,
+            isDemo: isDemoMode
+        )
+        if (try? GlanceSnapshotStore.save(snapshot)) != nil {
+            WidgetCenter.shared.reloadTimelines(ofKind: "PlaidBarGlanceWidget")
+        }
+    }
+
+    private func clearGlanceSnapshot() {
+        try? GlanceSnapshotStore.clear()
+    }
+
+    @discardableResult
+    private func consumePendingGlanceCommand() async -> Bool {
+        guard let request = try? GlanceSnapshotStore.consumeCommand() else { return false }
+        switch request.command {
+        case .refreshBalances:
+            await refreshDashboardFromGlanceCommand(requestedAt: request.requestedAt)
+        }
+        return true
+    }
+
+    private func refreshDashboardFromGlanceCommand(requestedAt: Date) async {
+        guard !isDemoMode else {
+            loadDemoData()
+            return
+        }
+
+        await checkServerConnection()
+        guard serverConnected, serverCredentialsConfigured != false else {
+            // The refresh could not reach the server, so no balances were
+            // fetched. Do not stamp the snapshot as freshly updated at the click
+            // time — that would present stale data as current. Leave the
+            // last-success snapshot (and its real timestamp) in place.
+            return
+        }
+        await refreshAccounts()
+        await syncTransactions()
     }
 
     private func loadPersistedWeeklyReviewState() {
@@ -2082,6 +2143,7 @@ final class AppState {
             ItemStatus(id: "demo_amex_item", institutionName: "American Express", status: .connected, lastSync: Date()),
         ]
         lastSyncDate = isDemoStatusRecoveryScenario ? recoveredSync : Date()
+        writeGlanceSnapshot(updatedAt: lastSyncDate ?? Date())
     }
 
     // MARK: - Transaction Review
