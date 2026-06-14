@@ -15,7 +15,7 @@ struct SetupView: View {
 
     private var selectedPlan: Binding<SubscriptionPlan> {
         Binding(
-            get: { SubscriptionPlan(rawValue: selectedPlanRawValue) ?? .personal },
+            get: { SubscriptionPlan(rawValue: selectedPlanRawValue) ?? .free },
             set: { selectedPlanRawValue = $0.rawValue }
         )
     }

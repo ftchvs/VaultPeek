@@ -79,6 +79,15 @@ public enum WeeklyReviewItemKind: String, Sendable, Hashable, CaseIterable {
     case connectionHealth
 }
 
+/// In-popover surface a weekly-review action should navigate to. The popover
+/// observes this so review-checklist buttons open a real destination instead of
+/// silently doing nothing.
+public enum WeeklyReviewNavigationTarget: String, Sendable, Hashable {
+    case reviewInbox
+    case recurring
+    case safeToSpend
+}
+
 public enum WeeklyReviewAction: String, Sendable, Hashable {
     case openReviewInbox
     case inspectCategory
@@ -231,6 +240,7 @@ public enum WeeklyReviewBuilder {
             transactions: transactions,
             trustedIds: transactionState.trustedTransactionIds,
             since: state.lastCompletedAt,
+            asOf: date,
             calendar: calendar
         )
         let items = reviewItems(
@@ -244,11 +254,20 @@ public enum WeeklyReviewBuilder {
             asOf: date,
             calendar: calendar
         )
-        let activeItems = items.filter { !state.dismissedItemIds.contains($0.id) }
+        // Item ids are fixed by kind, so completions/dismissals from a prior
+        // weekly cycle must not carry into a new one — otherwise a fresh pending
+        // transaction or upcoming bill a week later would render as already
+        // reviewed ("Nothing needs review"). Once a new cycle is due after the
+        // last completion, ignore the previous cycle's resolved ids.
+        let isNewCycle = state.lastCompletedAt != nil && isDue
+        let completedItemIds = isNewCycle ? Set<String>() : state.completedItemIds
+        let dismissedItemIds = isNewCycle ? Set<String>() : state.dismissedItemIds
+
+        let activeItems = items.filter { !dismissedItemIds.contains($0.id) }
         let completedCount = activeItems.reduce(0) { total, item in
-            total + (state.completedItemIds.contains(item.id) ? 1 : 0)
+            total + (completedItemIds.contains(item.id) ? 1 : 0)
         }
-        let unresolvedItems = activeItems.filter { !state.completedItemIds.contains($0.id) }
+        let unresolvedItems = activeItems.filter { !completedItemIds.contains($0.id) }
         let outcome = outcome(for: unresolvedItems)
 
         return WeeklyReviewPresentation(
@@ -347,17 +366,21 @@ public enum WeeklyReviewBuilder {
 
         let unhealthyItems = itemStatuses.filter { $0.status != .connected }.count
         if unhealthyItems > 0 || isSyncStale {
+            // A login-required item needs the reconnect/update-link flow, not
+            // another refresh — treat it as reconnectable alongside errors so
+            // the checklist action can actually recover it.
+            let needsReconnect = itemStatuses.contains { $0.status == .error || $0.status == .loginRequired }
             let blocked = itemStatuses.contains { $0.status == .error }
             items.append(WeeklyReviewItem(
                 id: "weekly-review.connection-health",
                 kind: .connectionHealth,
                 severity: blocked ? .blocked : .warning,
-                title: blocked ? "Connection needs attention" : "Connection freshness changed",
+                title: needsReconnect ? "Connection needs attention" : "Connection freshness changed",
                 detail: unhealthyItems > 0
                     ? "\(unhealthyItems) linked item\(unhealthyItems == 1 ? "" : "s") need a check."
                     : "Refresh local data before trusting this review.",
-                action: blocked ? .reconnectAccount : .refreshData,
-                accessibilityHint: blocked ? "Reconnects the affected institution." : "Refreshes local data."
+                action: needsReconnect ? .reconnectAccount : .refreshData,
+                accessibilityHint: needsReconnect ? "Reconnects the affected institution." : "Refreshes local data."
             ))
         }
 
@@ -368,12 +391,22 @@ public enum WeeklyReviewBuilder {
         transactions: [TransactionDTO],
         trustedIds: Set<String>,
         since lastCompletedAt: Date?,
+        asOf date: Date,
         calendar: Calendar
     ) -> Int {
-        guard let lastCompletedAt else { return trustedIds.count }
-        let lastCompletedDay = Formatters.transactionDateString(calendar.startOfDay(for: lastCompletedAt))
+        // Before any review baseline exists, counting every trusted id as
+        // "reviewed this week" would surface months of history as this week's
+        // progress. Bound the first-run count to the current 7-day window.
+        let sinceDay: String
+        if let lastCompletedAt {
+            sinceDay = Formatters.transactionDateString(calendar.startOfDay(for: lastCompletedAt))
+        } else if let weekStart = calendar.date(byAdding: .day, value: -7, to: calendar.startOfDay(for: date)) {
+            sinceDay = Formatters.transactionDateString(weekStart)
+        } else {
+            return 0
+        }
         return transactions.reduce(0) { count, transaction in
-            guard trustedIds.contains(transaction.id), transaction.date >= lastCompletedDay else {
+            guard trustedIds.contains(transaction.id), transaction.date >= sinceDay else {
                 return count
             }
             return count + 1

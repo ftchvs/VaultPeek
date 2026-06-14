@@ -1,7 +1,7 @@
 ---
 title: VaultPeek Consumer Experience Roadmap — Feature Design Specs
 status: proposed
-linear: [AND-351, AND-352, AND-353, AND-354, AND-355]
+linear: [AND-351, AND-352, AND-353, AND-354, AND-355, AND-392]
 date: 2026-06-12
 ---
 
@@ -28,17 +28,21 @@ Two things in this roadmap cannot be fully local:
 
 Every feature section below has a **Local-first compliance** subsection stating whether it touches either hosted component.
 
-### 0.3 Tier mapping (proposal, not final pricing)
+### 0.3 Tier mapping
 
-Competitive band (all retrieved 2026-06-12): Lunch Money floor $60/yr, Copilot $95/yr, Monarch Core $99.99/yr, Monarch Plus ceiling $199/yr. VaultPeek working tiers (proposed in the pricing doc, which owns these numbers — not final): **Personal** $79/yr or $9/mo (managed linking, up to 3 institutions) and **Plus** $129/yr early-access or $15/mo (up to 8 institutions; → $149/yr once premium features mature). BYO-keys mode stays free outside the tier table; whether Plus features are gated for BYO users is an open decision (entitlements doc D3, default: BYO ungated).
+AND-392 owns the canonical Free / Plus / Managed matrix:
+`entitlement-matrix.md`. Feature specs below use that matrix for limits and
+pricing. Free includes demo fixtures and BYO-keys mode; Plus is $15/month or
+$129/year early-access with up to 8 managed institutions; Managed is a custom
+written quote starting from Plus. BYO-keys mode stays free and ungated.
 
-| Feature | Personal | Plus |
+| Feature | Free | Plus / Managed |
 |---|---|---|
-| AND-351 first-run snapshot | Yes | Yes |
-| AND-352 menu bar cockpit | Yes | Yes |
-| AND-353 alerts | Core triggers | Advanced rules |
-| AND-354 recurring view | Basic view | Review controls (later) |
-| AND-355 monthly review | — | Yes |
+| AND-351 first-run snapshot | Demo/BYO | Managed live data |
+| AND-352 menu bar cockpit | Demo/BYO | Managed live data |
+| AND-353 alerts | Core local triggers | Advanced rules when built |
+| AND-354 recurring view | Basic local view | Review controls when built |
+| AND-355 monthly review | Not promised | Plus/Managed when built |
 
 ---
 

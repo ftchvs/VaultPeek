@@ -77,7 +77,13 @@ public enum LocalDataStore {
     public static let serverConfigFilename = "server.conf"
     public static let accountCacheFilename = "accounts.json"
     public static let transactionCacheFilename = "transactions.json"
+    public static let transactionReviewMetadataFilename = "transaction-review-metadata.json"
+    public static let transactionRulesFilename = "transaction-rules.json"
     public static let pendingLinkSessionsFilename = "pending-link-sessions.json"
+    /// Stable, non-PII install-scoped Plaid `client_user_id`. Cleared on local
+    /// reset so a fresh bank-link after reset does not reuse the pre-reset Plaid
+    /// dashboard/log identity (the reset boundary clears local Plaid state).
+    public static let linkClientUserIdFilename = "link-client-user-id"
     public static let legacyMigrationResetMarkerFilename = ".legacy-migration-reset"
     /// Preserve the existing Keychain service while moving local files so
     /// SQLite `keychain:<item_id>` references continue to resolve.
@@ -221,7 +227,10 @@ public enum LocalDataStore {
 
         if isAccountCacheFilename(filename) ||
             isTransactionCacheFilename(filename) ||
-            isPendingLinkSessionsFilename(filename) {
+            isTransactionReviewMetadataFilename(filename) ||
+            isTransactionRulesFilename(filename) ||
+            isPendingLinkSessionsFilename(filename) ||
+            filename == linkClientUserIdFilename {
             return true
         }
 
@@ -268,9 +277,12 @@ public enum LocalDataStore {
         filename == legacyMigrationResetMarkerFilename ||
             resetPreservedFilenames.contains(filename) ||
             filename == ServerAutoLaunchPlan.logFilename ||
+            isTransactionReviewMetadataFilename(filename) ||
+            isTransactionRulesFilename(filename) ||
             isAccountCacheFilename(filename) ||
             isTransactionCacheFilename(filename) ||
             isPendingLinkSessionsFilename(filename) ||
+            filename == linkClientUserIdFilename ||
             plaidBarDatabaseFilenames.contains { databaseFilename in
                 filename == databaseFilename ||
                     sqliteSidecarSuffixes.contains { filename == databaseFilename + $0 } ||
@@ -384,6 +396,20 @@ public enum LocalDataStore {
         in directory: URL = storageDirectoryURL()
     ) -> URL {
         directory.appendingPathComponent(authTokenFilename)
+    }
+
+    public static func transactionReviewMetadataURL(
+        in directory: URL = storageDirectoryURL(),
+        context: TransactionCacheContext? = nil
+    ) -> URL {
+        directory.appendingPathComponent(transactionReviewMetadataFilename(for: context))
+    }
+
+    public static func transactionRulesURL(
+        in directory: URL = storageDirectoryURL(),
+        context: TransactionCacheContext? = nil
+    ) -> URL {
+        directory.appendingPathComponent(transactionRulesFilename(for: context))
     }
 
     public static func prepareStorageDirectory(
@@ -637,6 +663,30 @@ public enum LocalDataStore {
         return cache.accounts
     }
 
+    public static func loadTransactionReviewMetadata(
+        from directory: URL = storageDirectoryURL(),
+        context: TransactionCacheContext? = nil,
+        fileManager: FileManager = .default
+    ) throws -> [TransactionReviewMetadata] {
+        let url = transactionReviewMetadataURL(in: directory, context: context)
+        guard fileManager.fileExists(atPath: url.path) else { return [] }
+
+        let data = try Data(contentsOf: url)
+        return try JSONDecoder().decode([TransactionReviewMetadata].self, from: data)
+    }
+
+    public static func loadTransactionRules(
+        from directory: URL = storageDirectoryURL(),
+        context: TransactionCacheContext? = nil,
+        fileManager: FileManager = .default
+    ) throws -> [TransactionRule] {
+        let url = transactionRulesURL(in: directory, context: context)
+        guard fileManager.fileExists(atPath: url.path) else { return [] }
+
+        let data = try Data(contentsOf: url)
+        return try JSONDecoder().decode([TransactionRule].self, from: data)
+    }
+
     public static func saveTransactions(
         _ transactions: [TransactionDTO],
         to directory: URL = storageDirectoryURL(),
@@ -667,6 +717,34 @@ public enum LocalDataStore {
         try setPrivateCacheFilePermissions(url, fileManager: fileManager)
     }
 
+    public static func saveTransactionReviewMetadata(
+        _ metadata: [TransactionReviewMetadata],
+        to directory: URL = storageDirectoryURL(),
+        context: TransactionCacheContext? = nil,
+        fileManager: FileManager = .default
+    ) throws {
+        try ensurePrivateDirectory(directory, fileManager: fileManager)
+
+        let url = transactionReviewMetadataURL(in: directory, context: context)
+        let data = try JSONEncoder().encode(metadata.sorted { $0.id < $1.id })
+        try writePrivateCacheFile(data, to: url, fileManager: fileManager)
+        try setPrivateCacheFilePermissions(url, fileManager: fileManager)
+    }
+
+    public static func saveTransactionRules(
+        _ rules: [TransactionRule],
+        to directory: URL = storageDirectoryURL(),
+        context: TransactionCacheContext? = nil,
+        fileManager: FileManager = .default
+    ) throws {
+        try ensurePrivateDirectory(directory, fileManager: fileManager)
+
+        let url = transactionRulesURL(in: directory, context: context)
+        let data = try JSONEncoder().encode(rules.sorted { $0.createdAt < $1.createdAt })
+        try writePrivateCacheFile(data, to: url, fileManager: fileManager)
+        try setPrivateCacheFilePermissions(url, fileManager: fileManager)
+    }
+
     private static func accountCacheFilename(for context: TransactionCacheContext?) -> String {
         guard let context else { return accountCacheFilename }
 
@@ -679,6 +757,42 @@ public enum LocalDataStore {
 
         let key = "\(context.environment.rawValue)|\(context.storagePath)"
         return "transactions-\(context.environment.rawValue)-\(stableHashHex(key)).json"
+    }
+
+    // Review metadata and merchant rules are scoped to the active cache context
+    // the same way account/transaction caches are, so switching environment or
+    // storage directory cannot load sandbox review state for production data.
+    static let transactionReviewMetadataScopedPrefix = "transaction-review-metadata"
+    static let transactionRulesScopedPrefix = "transaction-rules"
+
+    private static func transactionReviewMetadataFilename(for context: TransactionCacheContext?) -> String {
+        guard let context else { return transactionReviewMetadataFilename }
+
+        let key = "\(context.environment.rawValue)|\(context.storagePath)"
+        return "\(transactionReviewMetadataScopedPrefix)-\(context.environment.rawValue)-\(stableHashHex(key)).json"
+    }
+
+    private static func transactionRulesFilename(for context: TransactionCacheContext?) -> String {
+        guard let context else { return transactionRulesFilename }
+
+        let key = "\(context.environment.rawValue)|\(context.storagePath)"
+        return "\(transactionRulesScopedPrefix)-\(context.environment.rawValue)-\(stableHashHex(key)).json"
+    }
+
+    private static func isTransactionReviewMetadataFilename(_ filename: String) -> Bool {
+        isScopedCacheFilename(
+            filename,
+            legacyFilename: transactionReviewMetadataFilename,
+            prefix: transactionReviewMetadataScopedPrefix
+        )
+    }
+
+    private static func isTransactionRulesFilename(_ filename: String) -> Bool {
+        isScopedCacheFilename(
+            filename,
+            legacyFilename: transactionRulesFilename,
+            prefix: transactionRulesScopedPrefix
+        )
     }
 
     private static func stableHashHex(_ value: String) -> String {

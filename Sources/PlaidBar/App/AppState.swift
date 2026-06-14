@@ -23,8 +23,13 @@ final class AppState {
         static let notifyHighUtilization = "notifyHighUtilization"
         static let weeklyReviewState = "weeklyReview.state"
         static let weeklyReviewPreviousSafeToSpend = "weeklyReview.previousSafeToSpend"
+        static let notifyRecurringChargeDetected = "notifyRecurringChargeDetected"
+        static let notifyRecurringChargeChanged = "notifyRecurringChargeChanged"
+        static let notifyRecurringChargeDueSoon = "notifyRecurringChargeDueSoon"
+        static let notifyBrokenConnection = "notifyBrokenConnection"
         static let setupCompletedOnce = "setup.completedOnce"
         static let setupCompletedContextPrefix = "setup.completedOnce.context"
+        static let firstRunSnapshotDismissedContextPrefix = "firstRunSnapshot.dismissed.context"
         static let lastTransactionCacheContext = "cache.lastTransactionCacheContext"
         static let dashboardDetached = DetachedDashboardPreferences.detachedStorageKey
     }
@@ -39,6 +44,8 @@ final class AppState {
             invalidateLocalAIActivitySummaries()
         }
     }
+    var transactionReviewMetadata: [TransactionReviewMetadata] = []
+    var transactionRules: [TransactionRule] = []
     var isLoading = false
     /// True from launch until the first `loadInitialData()` pass completes.
     /// While booting, data surfaces render loading/skeleton states instead
@@ -77,6 +84,12 @@ final class AppState {
         didSet {
             guard oldValue != isSetupComplete else { return }
             persistSetupCompletion(isSetupComplete)
+        }
+    }
+    var isFirstRunSnapshotDismissed = false {
+        didSet {
+            guard oldValue != isFirstRunSnapshotDismissed else { return }
+            persistFirstRunSnapshotDismissal(isFirstRunSnapshotDismissed)
         }
     }
     var serverConnected = false
@@ -174,6 +187,30 @@ final class AppState {
             UserDefaults.standard.set(notifyHighUtilization, forKey: Keys.notifyHighUtilization)
         }
     }
+    var notifyRecurringChargeDetected: Bool = true {
+        didSet {
+            guard notifyRecurringChargeDetected != oldValue else { return }
+            UserDefaults.standard.set(notifyRecurringChargeDetected, forKey: Keys.notifyRecurringChargeDetected)
+        }
+    }
+    var notifyRecurringChargeChanged: Bool = true {
+        didSet {
+            guard notifyRecurringChargeChanged != oldValue else { return }
+            UserDefaults.standard.set(notifyRecurringChargeChanged, forKey: Keys.notifyRecurringChargeChanged)
+        }
+    }
+    var notifyRecurringChargeDueSoon: Bool = true {
+        didSet {
+            guard notifyRecurringChargeDueSoon != oldValue else { return }
+            UserDefaults.standard.set(notifyRecurringChargeDueSoon, forKey: Keys.notifyRecurringChargeDueSoon)
+        }
+    }
+    var notifyBrokenConnection: Bool = true {
+        didSet {
+            guard notifyBrokenConnection != oldValue else { return }
+            UserDefaults.standard.set(notifyBrokenConnection, forKey: Keys.notifyBrokenConnection)
+        }
+    }
 
     var launchAtLogin: Bool = false {
         didSet {
@@ -194,6 +231,7 @@ final class AppState {
     private let notificationService: any NotificationServiceProtocol
     private var refreshTask: Task<Void, Never>?
     private var localAISummaryRefreshTask: Task<Void, Never>?
+    private var reviewUndoStack: [(metadata: [TransactionReviewMetadata], rules: [TransactionRule])] = []
     private var isUpgradingManagedServer = false
     private var isStartingBundledServer = false
     private var lastAttemptedCredentialUpgradeConfig: String?
@@ -205,6 +243,7 @@ final class AppState {
         self.notificationService = notificationService ?? NotificationService.shared
         loadSettings()
         isSetupComplete = storedSetupCompletion()
+        isFirstRunSnapshotDismissed = storedFirstRunSnapshotDismissal()
         if isSetupComplete {
             persistSetupCompletion(true)
         }
@@ -263,6 +302,18 @@ final class AppState {
         }
         if defaults.object(forKey: Keys.notifyHighUtilization) != nil {
             notifyHighUtilization = defaults.bool(forKey: Keys.notifyHighUtilization)
+        }
+        if defaults.object(forKey: Keys.notifyRecurringChargeDetected) != nil {
+            notifyRecurringChargeDetected = defaults.bool(forKey: Keys.notifyRecurringChargeDetected)
+        }
+        if defaults.object(forKey: Keys.notifyRecurringChargeChanged) != nil {
+            notifyRecurringChargeChanged = defaults.bool(forKey: Keys.notifyRecurringChargeChanged)
+        }
+        if defaults.object(forKey: Keys.notifyRecurringChargeDueSoon) != nil {
+            notifyRecurringChargeDueSoon = defaults.bool(forKey: Keys.notifyRecurringChargeDueSoon)
+        }
+        if defaults.object(forKey: Keys.notifyBrokenConnection) != nil {
+            notifyBrokenConnection = defaults.bool(forKey: Keys.notifyBrokenConnection)
         }
         // Balance history
         loadPersistedBalanceHistory()
@@ -373,49 +424,72 @@ final class AppState {
             needsLoginItemCount: needsLoginItemCount,
             isSyncStale: isSyncStale,
             hasEverSynced: lastSyncDate != nil,
+            financialAttentionText: firstMenuBarAttentionText,
             iconStyle: menuBarIconStyle
         )
+    }
+
+    /// First attention row that actually carries menu-bar text. A higher-priority
+    /// row without menu-bar text (e.g. an advisory recent-error) must not
+    /// suppress a lower Cash/Credit/Spend badge.
+    private var firstMenuBarAttentionText: String? {
+        attentionQueue.rows.compactMap(\.menuBarAttentionText).first
     }
 
     var menuBarAttentionText: String? {
         menuBarStatusPresentation.attentionText ?? weeklyReviewPresentation.menuBarPrompt
     }
 
+    var menuBarReviewText: String? {
+        guard transactionReviewCount > 0 else { return nil }
+        return "\(transactionReviewCount) review"
+    }
+
     var menuBarHelpText: String {
+        let reviewText = transactionReviewCount > 0
+            ? " \(transactionReviewCount) transaction\(transactionReviewCount == 1 ? "" : "s") need review."
+            : ""
         let status = "Status: \(diagnosticsSummary)"
         let review = weeklyReviewPresentation.menuBarPrompt.map { " Weekly review: \($0)." } ?? ""
         switch menuBarSummaryMode {
         case .netWorth:
-            return "VaultPeek - Net worth: \(menuBarText). \(status)\(review)"
+            return "VaultPeek - Net worth: \(menuBarText).\(reviewText) \(status)\(review)"
         case .netCash:
-            return "VaultPeek - Net cash: \(menuBarText). \(status)\(review)"
+            return "VaultPeek - Net cash: \(menuBarText).\(reviewText) \(status)\(review)"
         case .totalCash:
-            return "VaultPeek - Total cash: \(menuBarText). \(status)\(review)"
+            return "VaultPeek - Total cash: \(menuBarText).\(reviewText) \(status)\(review)"
         case .creditUtilization:
-            return "VaultPeek - Credit utilization: \(menuBarText). \(status)\(review)"
+            return "VaultPeek - Credit utilization: \(menuBarText).\(reviewText) \(status)\(review)"
         case .recentSpend:
-            return "VaultPeek - Recent spend: \(menuBarText). \(status)\(review)"
+            return "VaultPeek - Recent spend: \(menuBarText).\(reviewText) \(status)\(review)"
         case .iconOnly:
-            return "VaultPeek. \(status)\(review)"
+            return "VaultPeek.\(reviewText) \(status)\(review)"
         }
     }
 
     var menuBarAccessibilityLabel: String {
-        let status = "Status \(diagnosticsSummary)"
+        let reviewText = transactionReviewCount > 0
+            ? "\(transactionReviewCount) transaction\(transactionReviewCount == 1 ? "" : "s") need review. "
+            : ""
+        // diagnosticsSummary stays "healthy" for finance warnings, so fold the
+        // visible finance badge (Cash/Credit/Spend) into the spoken status to
+        // keep VoiceOver in sync with the badge sighted users see.
+        let attention = menuBarAttentionText.map { ". Attention \($0)" } ?? ""
+        let status = "Status \(diagnosticsSummary)\(attention)"
         let review = weeklyReviewPresentation.menuBarPrompt.map { " Weekly review \($0)." } ?? ""
         switch menuBarSummaryMode {
         case .netWorth:
-            return "VaultPeek net worth \(menuBarText). \(status)\(review)"
+            return "VaultPeek net worth \(menuBarText). \(reviewText)\(status)\(review)"
         case .netCash:
-            return "VaultPeek net cash \(menuBarText). \(status)\(review)"
+            return "VaultPeek net cash \(menuBarText). \(reviewText)\(status)\(review)"
         case .totalCash:
-            return "VaultPeek total cash \(menuBarText). \(status)\(review)"
+            return "VaultPeek total cash \(menuBarText). \(reviewText)\(status)\(review)"
         case .creditUtilization:
-            return "VaultPeek credit utilization \(menuBarText). \(status)\(review)"
+            return "VaultPeek credit utilization \(menuBarText). \(reviewText)\(status)\(review)"
         case .recentSpend:
-            return "VaultPeek recent spend \(menuBarText). \(status)\(review)"
+            return "VaultPeek recent spend \(menuBarText). \(reviewText)\(status)\(review)"
         case .iconOnly:
-            return "VaultPeek. \(status)\(review)"
+            return "VaultPeek. \(reviewText)\(status)\(review)"
         }
     }
 
@@ -581,6 +655,18 @@ final class AppState {
         )
     }
 
+    var firstRunSnapshotPresentation: FirstRunSnapshotPresentation? {
+        FirstRunSnapshotPresentation.evaluate(
+            accounts: accounts,
+            transactions: transactions,
+            completionState: firstRunCompletionState,
+            isDismissed: isFirstRunSnapshotDismissed,
+            isInitialLoad: isBootLoadInFlight,
+            isDemoMode: isDemoMode,
+            largeTransactionThreshold: largeTransactionThreshold
+        )
+    }
+
     var dashboardStatusReadiness: DashboardStatusReadiness {
         DashboardStatusReadiness.evaluate(
             isDemoMode: isDemoMode && !isDemoStatusRecoveryScenario,
@@ -611,7 +697,12 @@ final class AppState {
             itemStatuses: itemStatuses,
             isSyncStale: isSyncStale,
             lastSyncRelative: lastSyncRelative,
-            errorMessage: error
+            errorMessage: error,
+            accounts: accounts,
+            transactions: transactions,
+            lowCashThreshold: lowBalanceThreshold,
+            largeTransactionThreshold: largeTransactionThreshold,
+            creditUtilizationThreshold: creditUtilizationThreshold
         )
     }
 
@@ -672,6 +763,20 @@ final class AppState {
         let defaults = UserDefaults.standard
         guard defaults.object(forKey: Keys.weeklyReviewPreviousSafeToSpend) != nil else { return nil }
         return defaults.double(forKey: Keys.weeklyReviewPreviousSafeToSpend)
+    }
+
+    var transactionReviewInboxSnapshot: TransactionReviewInboxSnapshot {
+        TransactionReviewInbox.evaluate(
+            transactions: transactions,
+            metadata: transactionReviewMetadata,
+            rules: transactionRules,
+            recurring: recurringTransactions,
+            now: Date()
+        )
+    }
+
+    var transactionReviewCount: Int {
+        transactionReviewInboxSnapshot.totalCount
     }
 
     var notificationPermissionPresentation: NotificationPermissionPresentation {
@@ -841,6 +946,7 @@ final class AppState {
             lastSyncDate = status.lastSync
             persistTransactionCacheContext()
             refreshSetupCompletionForActiveContext()
+            refreshFirstRunSnapshotDismissalForActiveContext()
             updateSetupCompletion()
             if !(await refreshItemStatuses()) {
                 itemStatuses = []
@@ -963,6 +1069,7 @@ final class AppState {
                 // array. The cursor is still committed only after the cache
                 // write succeeds, preserving local-first durability.
                 transactions = updatedTransactions
+                seedReviewMetadataForNewTransactions(updatedTransactions)
                 let cacheDirectory = activeStorageDirectoryURL
                 let cacheContext = transactionCacheContext
                 try await localDataCache.saveTransactions(
@@ -1005,6 +1112,8 @@ final class AppState {
             // counts would otherwise linger on the real dashboard.
             accounts = []
             transactions = []
+            transactionReviewMetadata = []
+            transactionRules = []
             itemStatuses = []
             // loadDemoData() replaced the in-memory balance history with a
             // synthetic 60-day series. Restore persisted real history when it
@@ -1178,6 +1287,9 @@ final class AppState {
                 transaction.itemId == removedItemId ||
                     (transaction.itemId == nil && removedAccountIds.contains(transaction.accountId))
             }
+            transactionReviewMetadata.removeAll { metadata in
+                !transactions.contains { $0.id == metadata.id }
+            }
             do {
                 let cacheAccounts = accounts
                 let cacheTransactions = transactions
@@ -1189,6 +1301,7 @@ final class AppState {
                     to: cacheDirectory,
                     context: cacheContext
                 )
+                persistReviewStorage()
             } catch {
                 self.error = "Local cache failed to save: \(error.localizedDescription)"
             }
@@ -1207,6 +1320,11 @@ final class AppState {
 
         accounts = []
         transactions = []
+        transactionReviewMetadata = []
+        transactionRules = []
+        // Drop undo history too: a post-reset Undo must not restore pre-reset
+        // review metadata/rules (old transaction ids, merchants, amounts).
+        reviewUndoStack = []
         itemStatuses = []
         serverItemCount = 0
         serverCredentialsConfigured = nil
@@ -1214,7 +1332,9 @@ final class AppState {
         serverSyncedItemCount = nil
         lastSyncDate = nil
         UserDefaults.standard.set(false, forKey: resetSetupCompletionDefaultsKey)
+        UserDefaults.standard.removeObject(forKey: firstRunSnapshotDismissalDefaultsKey)
         isSetupComplete = false
+        isFirstRunSnapshotDismissed = false
         serverStoragePath = nil
         isDemoMode = false
         isDemoStatusRecoveryScenario = false
@@ -1248,6 +1368,12 @@ final class AppState {
             largeTransaction: notifyLargeTransaction,
             lowBalance: notifyLowBalance,
             highUtilization: notifyHighUtilization,
+            recurringChargeDetected: notifyRecurringChargeDetected,
+            recurringChargeChanged: notifyRecurringChargeChanged,
+            recurringChargeDueSoon: notifyRecurringChargeDueSoon,
+            staleSync: notifyBrokenConnection,
+            loginRequired: notifyBrokenConnection,
+            itemError: notifyBrokenConnection,
             largeTransactionThreshold: largeTransactionThreshold,
             lowBalanceThreshold: lowBalanceThreshold,
             creditUtilizationThreshold: creditUtilizationThreshold
@@ -1255,6 +1381,9 @@ final class AppState {
         await notificationService.evaluateTriggers(
             transactions: transactions,
             accounts: accounts,
+            recurringTransactions: recurringTransactions,
+            itemStatuses: itemStatuses,
+            isSyncStale: isSyncStale,
             config: config
         )
     }
@@ -1281,14 +1410,23 @@ final class AppState {
         UserDefaults.standard.set(currentSafeToSpendAmount(), forKey: Keys.weeklyReviewPreviousSafeToSpend)
     }
 
+    /// Set when a weekly-review action targets a surface that opens elsewhere
+    /// (e.g. the review inbox or recurring inspector in MainPopover). The view
+    /// observes this and performs the navigation, then clears it.
+    var weeklyReviewNavigation: WeeklyReviewNavigationTarget?
+
     func performWeeklyReviewAction(_ item: WeeklyReviewItem) {
         switch item.action {
         case .openReviewInbox:
-            error = "Transaction review inbox is required before weekly review can approve transactions."
+            // The transaction review inbox (AND-399) is available now, so route
+            // the user to it rather than reporting it as missing.
+            weeklyReviewNavigation = .reviewInbox
         case .inspectCategory:
             error = "Category budget drill-in is not available in this slice yet."
-        case .reviewRecurring, .inspectSafeToSpend:
-            break
+        case .reviewRecurring:
+            weeklyReviewNavigation = .recurring
+        case .inspectSafeToSpend:
+            weeklyReviewNavigation = .safeToSpend
         case .reconnectAccount:
             guard let itemId = ItemRecoveryTarget.itemId(from: itemStatuses) else {
                 Task { await refreshDashboard() }
@@ -1298,6 +1436,10 @@ final class AppState {
         case .refreshData:
             Task { await refreshDashboard() }
         }
+    }
+
+    func dismissFirstRunSnapshot() {
+        isFirstRunSnapshotDismissed = true
     }
 
     func notificationPermissionStatus() async -> NotificationPermissionState {
@@ -1355,6 +1497,12 @@ final class AppState {
                 await syncTransactions()
             }
             startBackgroundRefresh()
+        } else {
+            // Offline cold start: the background refresh loop (the usual caller
+            // of evaluateNotifications) never starts, so evaluate once here so a
+            // stale-sync / broken-connection alert can still fire for cached or
+            // never-synced state booted without a reachable local server.
+            await evaluateNotifications()
         }
     }
 
@@ -1474,6 +1622,18 @@ final class AppState {
             context: context
         ), !cachedTransactions.isEmpty {
             transactions = cachedTransactions
+        }
+        if let cachedMetadata = try? await localDataCache.loadTransactionReviewMetadata(
+            from: cacheDirectory,
+            context: context
+        ) {
+            transactionReviewMetadata = cachedMetadata
+        }
+        if let cachedRules = try? await localDataCache.loadTransactionRules(
+            from: cacheDirectory,
+            context: context
+        ) {
+            transactionRules = cachedRules
         }
     }
 
@@ -1596,6 +1756,7 @@ final class AppState {
                 from: activeStorageDirectoryURL,
                 context: transactionCacheContext
             )
+            await loadTransactionReviewStorage()
         } catch {
             self.error = "Transaction cache failed to load: \(error.localizedDescription)"
         }
@@ -1609,8 +1770,36 @@ final class AppState {
                 to: activeStorageDirectoryURL,
                 context: transactionCacheContext
             )
+            transactionReviewMetadata = []
+            transactionRules = []
+            try await localDataCache.saveTransactionReviewMetadata(
+                [],
+                to: activeStorageDirectoryURL,
+                context: transactionCacheContext
+            )
+            try await localDataCache.saveTransactionRules(
+                [],
+                to: activeStorageDirectoryURL,
+                context: transactionCacheContext
+            )
         } catch {
             self.error = "Transaction cache failed to clear: \(error.localizedDescription)"
+        }
+    }
+
+    private func loadTransactionReviewStorage() async {
+        do {
+            transactionReviewMetadata = try await localDataCache.loadTransactionReviewMetadata(
+                from: activeStorageDirectoryURL,
+                context: transactionCacheContext
+            )
+            transactionRules = try await localDataCache.loadTransactionRules(
+                from: activeStorageDirectoryURL,
+                context: transactionCacheContext
+            )
+            seedReviewMetadataForNewTransactions(transactions)
+        } catch {
+            self.error = "Review inbox storage failed to load: \(error.localizedDescription)"
         }
     }
 
@@ -1683,6 +1872,13 @@ final class AppState {
         }
     }
 
+    private func refreshFirstRunSnapshotDismissalForActiveContext() {
+        let storedValue = storedFirstRunSnapshotDismissal()
+        if isFirstRunSnapshotDismissed != storedValue {
+            isFirstRunSnapshotDismissed = storedValue
+        }
+    }
+
     private func storedSetupCompletion() -> Bool {
         let defaults = UserDefaults.standard
         if let scopedValue = defaults.object(forKey: setupCompletionDefaultsKey) as? Bool {
@@ -1701,11 +1897,30 @@ final class AppState {
         UserDefaults.standard.set(isComplete, forKey: setupCompletionDefaultsKey)
     }
 
+    private func storedFirstRunSnapshotDismissal() -> Bool {
+        UserDefaults.standard.bool(forKey: firstRunSnapshotDismissalDefaultsKey)
+    }
+
+    private func persistFirstRunSnapshotDismissal(_ isDismissed: Bool) {
+        if isDismissed {
+            UserDefaults.standard.set(true, forKey: firstRunSnapshotDismissalDefaultsKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: firstRunSnapshotDismissalDefaultsKey)
+        }
+    }
+
     private var setupCompletionDefaultsKey: String {
         let environment = setupCompletionEnvironment.rawValue
         let path = activeStorageDirectoryURL.standardizedFileURL.path
         let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? path
         return "\(Keys.setupCompletedContextPrefix).\(environment).\(encodedPath)"
+    }
+
+    private var firstRunSnapshotDismissalDefaultsKey: String {
+        let environment = setupCompletionEnvironment.rawValue
+        let path = activeStorageDirectoryURL.standardizedFileURL.path
+        let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? path
+        return "\(Keys.firstRunSnapshotDismissedContextPrefix).\(environment).\(encodedPath)"
     }
 
     private var setupCompletionEnvironment: PlaidEnvironment {
@@ -1841,6 +2056,8 @@ final class AppState {
         // stay testable. See DemoFixtures and DemoFixturesTests.
         accounts = DemoFixtures.accounts
         transactions = DemoFixtures.transactions()
+        transactionReviewMetadata = []
+        transactionRules = []
         balanceHistory = DemoFixtures.balanceHistory()
 
         isSetupComplete = true
@@ -1862,6 +2079,166 @@ final class AppState {
             ItemStatus(id: "demo_amex_item", institutionName: "American Express", status: .connected, lastSync: Date()),
         ]
         lastSyncDate = isDemoStatusRecoveryScenario ? recoveredSync : Date()
+    }
+
+    // MARK: - Transaction Review
+
+    func approveReviewItem(_ id: String) {
+        updateReviewMetadata(id: id) { metadata, transaction in
+            metadata.status = .reviewed
+            metadata.reviewedAt = Date()
+            metadata.reviewReasonCodes = []
+            metadata.lastSeenAmount = transaction.amount
+            metadata.lastSeenName = transaction.name
+            metadata.lastSeenPending = transaction.pending
+        }
+    }
+
+    func ignoreReviewItem(_ id: String) {
+        updateReviewMetadata(id: id) { metadata, transaction in
+            metadata.status = .ignored
+            metadata.reviewedAt = Date()
+            metadata.lastSeenAmount = transaction.amount
+            metadata.lastSeenName = transaction.name
+            metadata.lastSeenPending = transaction.pending
+        }
+    }
+
+    func updateReviewCategory(_ id: String, category: SpendingCategory) {
+        updateReviewMetadata(id: id) { metadata, transaction in
+            metadata.status = .reviewed
+            metadata.userCategory = category
+            metadata.reviewedAt = Date()
+            metadata.reviewReasonCodes = []
+            metadata.lastSeenAmount = transaction.amount
+            metadata.lastSeenName = transaction.name
+            metadata.lastSeenPending = transaction.pending
+        }
+    }
+
+    func renameReviewMerchant(_ id: String, merchantName: String) {
+        let trimmed = merchantName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        updateReviewMetadata(id: id) { metadata, transaction in
+            metadata.status = .reviewed
+            metadata.userMerchantName = trimmed
+            metadata.reviewedAt = Date()
+            metadata.reviewReasonCodes = []
+            metadata.lastSeenAmount = transaction.amount
+            metadata.lastSeenName = transaction.name
+            metadata.lastSeenPending = transaction.pending
+        }
+    }
+
+    func markReviewItemTransfer(_ id: String, isTransfer: Bool = true) {
+        updateReviewMetadata(id: id) { metadata, transaction in
+            metadata.status = .reviewed
+            metadata.isTransferOverride = isTransfer
+            metadata.excludedFromBudgets = isTransfer
+            metadata.reviewedAt = Date()
+            metadata.reviewReasonCodes = []
+            metadata.lastSeenAmount = transaction.amount
+            metadata.lastSeenName = transaction.name
+            metadata.lastSeenPending = transaction.pending
+        }
+    }
+
+    func createRule(
+        from item: TransactionReviewItem,
+        category: SpendingCategory? = nil,
+        markTransfer: Bool? = nil
+    ) {
+        let matcher = item.effectiveMerchantName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !matcher.isEmpty else { return }
+        let resolvedTransfer = markTransfer ?? (item.reasonCodes.contains(.possibleTransfer) ? true : item.isTransfer)
+        pushReviewUndoState()
+        transactionRules.append(TransactionRule(
+            matchMerchantContains: matcher,
+            matchOriginalNameContains: nil,
+            category: category ?? item.effectiveCategory,
+            merchantName: item.effectiveMerchantName,
+            isTransfer: resolvedTransfer ? true : nil,
+            excludedFromBudgets: (resolvedTransfer || item.excludedFromBudgets) ? true : nil
+        ))
+        approveReviewItemWithoutUndo(item.id)
+        persistReviewStorage()
+    }
+
+    func undoLastReviewAction() {
+        guard let previous = reviewUndoStack.popLast() else { return }
+        transactionReviewMetadata = previous.metadata
+        transactionRules = previous.rules
+        persistReviewStorage()
+    }
+
+    private func updateReviewMetadata(
+        id: String,
+        mutate: (inout TransactionReviewMetadata, TransactionDTO) -> Void
+    ) {
+        guard let transaction = transactions.first(where: { $0.id == id }) else { return }
+        pushReviewUndoState()
+        var byId = Dictionary(uniqueKeysWithValues: transactionReviewMetadata.map { ($0.id, $0) })
+        var metadata = byId[id] ?? TransactionReviewMetadata(id: id)
+        mutate(&metadata, transaction)
+        byId[id] = metadata
+        transactionReviewMetadata = byId.values.sorted { $0.id < $1.id }
+        persistReviewStorage()
+    }
+
+    private func approveReviewItemWithoutUndo(_ id: String) {
+        guard let transaction = transactions.first(where: { $0.id == id }) else { return }
+        var byId = Dictionary(uniqueKeysWithValues: transactionReviewMetadata.map { ($0.id, $0) })
+        var metadata = byId[id] ?? TransactionReviewMetadata(id: id)
+        metadata.status = .reviewed
+        metadata.reviewedAt = Date()
+        metadata.reviewReasonCodes = []
+        metadata.lastSeenAmount = transaction.amount
+        metadata.lastSeenName = transaction.name
+        metadata.lastSeenPending = transaction.pending
+        byId[id] = metadata
+        transactionReviewMetadata = byId.values.sorted { $0.id < $1.id }
+    }
+
+    private func seedReviewMetadataForNewTransactions(_ transactions: [TransactionDTO]) {
+        var byId = Dictionary(uniqueKeysWithValues: transactionReviewMetadata.map { ($0.id, $0) })
+        var changed = false
+        for transaction in transactions where byId[transaction.id] == nil {
+            byId[transaction.id] = TransactionReviewMetadata(
+                id: transaction.id,
+                lastSeenAmount: transaction.amount,
+                lastSeenName: transaction.name,
+                lastSeenPending: transaction.pending
+            )
+            changed = true
+        }
+        guard changed else { return }
+        transactionReviewMetadata = byId.values.sorted { $0.id < $1.id }
+        persistReviewStorage()
+    }
+
+    private func pushReviewUndoState() {
+        reviewUndoStack.append((transactionReviewMetadata, transactionRules))
+        if reviewUndoStack.count > 20 {
+            reviewUndoStack.removeFirst(reviewUndoStack.count - 20)
+        }
+    }
+
+    private func persistReviewStorage() {
+        let metadata = transactionReviewMetadata
+        let rules = transactionRules
+        let cacheDirectory = activeStorageDirectoryURL
+        let cacheContext = transactionCacheContext
+        let cache = localDataCache
+        Task {
+            do {
+                try await cache.saveTransactionReviewMetadata(metadata, to: cacheDirectory, context: cacheContext)
+                try await cache.saveTransactionRules(rules, to: cacheDirectory, context: cacheContext)
+            } catch {
+                await MainActor.run {
+                    self.error = "Review inbox storage failed to save: \(error.localizedDescription)"
+                }
+            }
+        }
     }
 
 }

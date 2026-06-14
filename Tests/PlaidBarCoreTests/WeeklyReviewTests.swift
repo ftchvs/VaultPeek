@@ -82,10 +82,12 @@ struct WeeklyReviewTests {
         #expect(presentation.menuBarPrompt == "6 items to review")
     }
 
-    @Test("Completing all derived items yields positive empty state")
+    @Test("Completing all derived items in the current cycle yields positive empty state")
     func completedItemsYieldLooksGood() {
+        // Completed two days ago: still inside the current weekly cycle (not yet
+        // due again), so the completion counts toward this cycle.
         let state = WeeklyReviewState(
-            lastCompletedAt: daysAgo(8),
+            lastCompletedAt: daysAgo(2),
             completedItemIds: ["weekly-review.transactions"]
         )
 
@@ -106,7 +108,34 @@ struct WeeklyReviewTests {
         #expect(presentation.completedCount == 1)
         #expect(presentation.totalCount == 1)
         #expect(presentation.remainingCount == 0)
-        #expect(presentation.menuBarPrompt == "Weekly review due")
+    }
+
+    @Test("Completions from a prior cycle do not suppress a new cycle's items")
+    func priorCycleCompletionsDoNotCarryOver() {
+        // Completed 8 days ago: the weekly review is due again, so last cycle's
+        // completion must not mark this cycle's fresh transaction item as done.
+        let state = WeeklyReviewState(
+            lastCompletedAt: daysAgo(8),
+            completedItemIds: ["weekly-review.transactions"]
+        )
+
+        let presentation = WeeklyReviewBuilder.evaluate(
+            state: state,
+            transactionState: WeeklyReviewTransactionState(
+                trustedTransactionIds: [],
+                unreviewedTransactionIds: ["tx-unreviewed"]
+            ),
+            transactions: [],
+            recurringTransactions: [],
+            safeToSpend: safeToSpend(amount: 500),
+            asOf: now,
+            calendar: calendar
+        )
+
+        #expect(presentation.outcome == .reviewItems)
+        #expect(presentation.completedCount == 0)
+        #expect(presentation.totalCount == 1)
+        #expect(presentation.remainingCount == 1)
     }
 
     @Test("Notification copy is privacy preserving by default")

@@ -24,6 +24,12 @@ struct MenuBarLabel: View {
                     .font(.caption.weight(.medium))
                     .lineLimit(1)
             }
+            if presentation.attentionText == nil,
+               let reviewText = appState.menuBarReviewText {
+                Text(reviewText)
+                    .font(.caption.weight(.medium))
+                    .lineLimit(1)
+            }
             if !appState.menuBarText.isEmpty {
                 Text(appState.menuBarText)
                     .monospacedDigit()
