@@ -391,6 +391,13 @@ struct MainPopover: View {
                         DashboardChangeReceiptStrip()
                             .environment(appState)
 
+                        if let presentation = appState.firstRunSnapshotPresentation {
+                            FirstRunSnapshotView(
+                                presentation: presentation,
+                                onDismiss: appState.dismissFirstRunSnapshot
+                            )
+                        }
+
                         if shouldElevateStatusReadinessPanel {
                             VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
                                 AttentionQueueView(title: "Attention", onAddAccount: openAccountSetup)

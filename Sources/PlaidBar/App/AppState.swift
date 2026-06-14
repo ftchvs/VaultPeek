@@ -27,6 +27,7 @@ final class AppState {
         static let notifyBrokenConnection = "notifyBrokenConnection"
         static let setupCompletedOnce = "setup.completedOnce"
         static let setupCompletedContextPrefix = "setup.completedOnce.context"
+        static let firstRunSnapshotDismissedContextPrefix = "firstRunSnapshot.dismissed.context"
         static let lastTransactionCacheContext = "cache.lastTransactionCacheContext"
         static let dashboardDetached = DetachedDashboardPreferences.detachedStorageKey
     }
@@ -79,6 +80,12 @@ final class AppState {
         didSet {
             guard oldValue != isSetupComplete else { return }
             persistSetupCompletion(isSetupComplete)
+        }
+    }
+    var isFirstRunSnapshotDismissed = false {
+        didSet {
+            guard oldValue != isFirstRunSnapshotDismissed else { return }
+            persistFirstRunSnapshotDismissal(isFirstRunSnapshotDismissed)
         }
     }
     var serverConnected = false
@@ -225,6 +232,7 @@ final class AppState {
         self.notificationService = notificationService ?? NotificationService.shared
         loadSettings()
         isSetupComplete = storedSetupCompletion()
+        isFirstRunSnapshotDismissed = storedFirstRunSnapshotDismissal()
         if isSetupComplete {
             persistSetupCompletion(true)
         }
@@ -404,8 +412,16 @@ final class AppState {
             needsLoginItemCount: needsLoginItemCount,
             isSyncStale: isSyncStale,
             hasEverSynced: lastSyncDate != nil,
+            financialAttentionText: firstMenuBarAttentionText,
             iconStyle: menuBarIconStyle
         )
+    }
+
+    /// First attention row that actually carries menu-bar text. A higher-priority
+    /// row without menu-bar text (e.g. an advisory recent-error) must not
+    /// suppress a lower Cash/Credit/Spend badge.
+    private var firstMenuBarAttentionText: String? {
+        attentionQueue.rows.compactMap(\.menuBarAttentionText).first
     }
 
     var menuBarAttentionText: String? {
@@ -431,7 +447,11 @@ final class AppState {
     }
 
     var menuBarAccessibilityLabel: String {
-        let status = "Status \(diagnosticsSummary)"
+        // diagnosticsSummary stays "healthy" for finance warnings, so fold the
+        // visible finance badge (Cash/Credit/Spend) into the spoken status to
+        // keep VoiceOver in sync with the badge sighted users see.
+        let attention = menuBarAttentionText.map { ". Attention \($0)" } ?? ""
+        let status = "Status \(diagnosticsSummary)\(attention)"
         switch menuBarSummaryMode {
         case .netWorth:
             return "VaultPeek net worth \(menuBarText). \(status)"
@@ -610,6 +630,18 @@ final class AppState {
         )
     }
 
+    var firstRunSnapshotPresentation: FirstRunSnapshotPresentation? {
+        FirstRunSnapshotPresentation.evaluate(
+            accounts: accounts,
+            transactions: transactions,
+            completionState: firstRunCompletionState,
+            isDismissed: isFirstRunSnapshotDismissed,
+            isInitialLoad: isBootLoadInFlight,
+            isDemoMode: isDemoMode,
+            largeTransactionThreshold: largeTransactionThreshold
+        )
+    }
+
     var dashboardStatusReadiness: DashboardStatusReadiness {
         DashboardStatusReadiness.evaluate(
             isDemoMode: isDemoMode && !isDemoStatusRecoveryScenario,
@@ -640,7 +672,12 @@ final class AppState {
             itemStatuses: itemStatuses,
             isSyncStale: isSyncStale,
             lastSyncRelative: lastSyncRelative,
-            errorMessage: error
+            errorMessage: error,
+            accounts: accounts,
+            transactions: transactions,
+            lowCashThreshold: lowBalanceThreshold,
+            largeTransactionThreshold: largeTransactionThreshold,
+            creditUtilizationThreshold: creditUtilizationThreshold
         )
     }
 
@@ -811,6 +848,7 @@ final class AppState {
             lastSyncDate = status.lastSync
             persistTransactionCacheContext()
             refreshSetupCompletionForActiveContext()
+            refreshFirstRunSnapshotDismissalForActiveContext()
             updateSetupCompletion()
             if !(await refreshItemStatuses()) {
                 itemStatuses = []
@@ -1184,7 +1222,9 @@ final class AppState {
         serverSyncedItemCount = nil
         lastSyncDate = nil
         UserDefaults.standard.set(false, forKey: resetSetupCompletionDefaultsKey)
+        UserDefaults.standard.removeObject(forKey: firstRunSnapshotDismissalDefaultsKey)
         isSetupComplete = false
+        isFirstRunSnapshotDismissed = false
         serverStoragePath = nil
         isDemoMode = false
         isDemoStatusRecoveryScenario = false
@@ -1239,6 +1279,10 @@ final class AppState {
         let granted = await notificationService.requestPermission()
         notificationPermissionState = await notificationService.checkPermissionStatus()
         return granted
+    }
+
+    func dismissFirstRunSnapshot() {
+        isFirstRunSnapshotDismissed = true
     }
 
     func notificationPermissionStatus() async -> NotificationPermissionState {
@@ -1624,6 +1668,13 @@ final class AppState {
         }
     }
 
+    private func refreshFirstRunSnapshotDismissalForActiveContext() {
+        let storedValue = storedFirstRunSnapshotDismissal()
+        if isFirstRunSnapshotDismissed != storedValue {
+            isFirstRunSnapshotDismissed = storedValue
+        }
+    }
+
     private func storedSetupCompletion() -> Bool {
         let defaults = UserDefaults.standard
         if let scopedValue = defaults.object(forKey: setupCompletionDefaultsKey) as? Bool {
@@ -1642,11 +1693,30 @@ final class AppState {
         UserDefaults.standard.set(isComplete, forKey: setupCompletionDefaultsKey)
     }
 
+    private func storedFirstRunSnapshotDismissal() -> Bool {
+        UserDefaults.standard.bool(forKey: firstRunSnapshotDismissalDefaultsKey)
+    }
+
+    private func persistFirstRunSnapshotDismissal(_ isDismissed: Bool) {
+        if isDismissed {
+            UserDefaults.standard.set(true, forKey: firstRunSnapshotDismissalDefaultsKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: firstRunSnapshotDismissalDefaultsKey)
+        }
+    }
+
     private var setupCompletionDefaultsKey: String {
         let environment = setupCompletionEnvironment.rawValue
         let path = activeStorageDirectoryURL.standardizedFileURL.path
         let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? path
         return "\(Keys.setupCompletedContextPrefix).\(environment).\(encodedPath)"
+    }
+
+    private var firstRunSnapshotDismissalDefaultsKey: String {
+        let environment = setupCompletionEnvironment.rawValue
+        let path = activeStorageDirectoryURL.standardizedFileURL.path
+        let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? path
+        return "\(Keys.firstRunSnapshotDismissedContextPrefix).\(environment).\(encodedPath)"
     }
 
     private var setupCompletionEnvironment: PlaidEnvironment {
