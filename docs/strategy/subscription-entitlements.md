@@ -1,11 +1,18 @@
 ---
 title: Stripe Subscription Entitlements & Institution Limits
-status: proposed
-linear: [AND-348]
+status: superseded
+linear: [AND-348, AND-392]
 date: 2026-06-12
 ---
 
 # Stripe Subscription Entitlements & Institution Limits — Design
+
+> **Superseded for plan packaging by AND-392.** Use
+> [`entitlement-matrix.md`](entitlement-matrix.md) as the canonical Free / Plus
+> / Managed matrix for prices, limits, grace states, downgrade behavior, and
+> support copy. This earlier document remains useful for the proposed Stripe
+> signer architecture and local entitlement API shape, but its Personal/Plus
+> packaging and open decision list are no longer the plan source of truth.
 
 **Design doc only. No implementation.** Linear AND-348 is titled "Implement Stripe subscription entitlements and institution limits"; this document is the design that must be approved *before* any implementation starts. Its acceptance criteria are treated as the spec this design must satisfy (traceability table in §10). All code references below are to the current tree (`Sources/`), read 2026-06-12. All third-party pricing figures were retrieved 2026-06-12; figures marked **(est.)** come from third-party comparisons, not vendor invoices. Proposed numbers (limits, windows, prices) are **proposals**, not commitments.
 
