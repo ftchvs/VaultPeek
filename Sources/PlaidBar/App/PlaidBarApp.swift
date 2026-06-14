@@ -119,8 +119,11 @@ struct PlaidBarApp: App {
                 // While detached, a status-item click sets isPopoverPresented
                 // true; intercept it on the always-mounted label, snap it back to
                 // false, and raise the floating window instead of the popover.
+                // A `--detach` launch override also has a visible detached window
+                // but intentionally leaves the persisted detached preference off,
+                // so include window visibility in the intercept.
                 .onChange(of: appState.isPopoverPresented) { _, isPresented in
-                    guard isPresented, appState.isDashboardDetached else { return }
+                    guard isPresented, appState.isDashboardDetached || detachedDashboard.isWindowVisible else { return }
                     appState.isPopoverPresented = false
                     detachedDashboard.handleMenuBarActivation(
                         appState: appState,
