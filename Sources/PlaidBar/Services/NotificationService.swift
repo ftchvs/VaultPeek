@@ -10,6 +10,9 @@ protocol NotificationServiceProtocol {
     func evaluateTriggers(
         transactions: [TransactionDTO],
         accounts: [AccountDTO],
+        recurringTransactions: [RecurringTransaction],
+        itemStatuses: [ItemStatus],
+        isSyncStale: Bool,
         config: NotificationTriggers
     ) async
 }
@@ -51,8 +54,9 @@ enum NotificationPermissionState {
 final class NotificationService: NotificationServiceProtocol {
     static let shared = NotificationService()
 
-    private static let notifiedTxKey = "notifiedTransactionIds"
-    private static let notifiedAccountKey = "notifiedAccountIds"
+    private static let deliveredDedupKeysKey = "deliveredNotificationDedupKeys"
+    private static let legacyNotifiedTxKey = "notifiedTransactionIds"
+    private static let legacyNotifiedAccountKey = "notifiedAccountIds"
     private static var hasNotificationIdentity: Bool {
         guard let identifier = Bundle.main.bundleIdentifier ??
             (Bundle.main.object(forInfoDictionaryKey: "CFBundleIdentifier") as? String)
@@ -63,43 +67,31 @@ final class NotificationService: NotificationServiceProtocol {
         return !identifier.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// Ordered array for LRU cap (most recent at end)
-    private var notifiedTransactionIds: [String]
-    private var notifiedTransactionIdSet: Set<String>
-    private var notifiedAccountIds: Set<String>
+    /// Ordered array for LRU cap (most recent at end).
+    private var deliveredDedupKeys: [String]
+    private var deliveredDedupKeySet: Set<String>
 
     private init() {
         let defaults = UserDefaults.standard
-        let txIds = defaults.stringArray(forKey: Self.notifiedTxKey) ?? []
-        notifiedTransactionIds = txIds
-        notifiedTransactionIdSet = Set(txIds)
-        notifiedAccountIds = Set(defaults.stringArray(forKey: Self.notifiedAccountKey) ?? [])
+        let keys = defaults.stringArray(forKey: Self.deliveredDedupKeysKey)
+            ?? Self.migratedLegacyDedupKeys(from: defaults)
+        deliveredDedupKeys = keys
+        deliveredDedupKeySet = Set(keys)
     }
 
     private func persistNotifiedIds() {
         let defaults = UserDefaults.standard
-        defaults.set(notifiedTransactionIds, forKey: Self.notifiedTxKey)
-        defaults.set(Array(notifiedAccountIds), forKey: Self.notifiedAccountKey)
+        defaults.set(deliveredDedupKeys, forKey: Self.deliveredDedupKeysKey)
     }
 
     func resetDeduplicationState() {
-        notifiedTransactionIds = []
-        notifiedTransactionIdSet = []
-        notifiedAccountIds = []
+        deliveredDedupKeys = []
+        deliveredDedupKeySet = []
 
         let defaults = UserDefaults.standard
-        defaults.removeObject(forKey: Self.notifiedTxKey)
-        defaults.removeObject(forKey: Self.notifiedAccountKey)
-    }
-
-    // MARK: - Notification Key Helpers
-
-    private enum NotifKey {
-        static func largeTx(_ id: String) -> String { "large-tx-\(id)" }
-        static func lowBalance(_ id: String) -> String { "low-balance-\(id)" }
-        static func highUtil(_ id: String) -> String { "high-util-\(id)" }
-        static func dedupLow(_ id: String) -> String { "low-\(id)" }
-        static func dedupUtil(_ id: String) -> String { "util-\(id)" }
+        defaults.removeObject(forKey: Self.deliveredDedupKeysKey)
+        defaults.removeObject(forKey: Self.legacyNotifiedTxKey)
+        defaults.removeObject(forKey: Self.legacyNotifiedAccountKey)
     }
 
     // MARK: - Permissions
@@ -127,105 +119,45 @@ final class NotificationService: NotificationServiceProtocol {
     func evaluateTriggers(
         transactions: [TransactionDTO],
         accounts: [AccountDTO],
+        recurringTransactions: [RecurringTransaction],
+        itemStatuses: [ItemStatus],
+        isSyncStale: Bool,
         config: NotificationTriggers
     ) async {
-        if config.largeTransaction {
-            await checkLargeTransactions(transactions: transactions, threshold: config.largeTransactionThreshold)
-        }
-        if config.lowBalance {
-            await checkLowBalance(accounts: accounts, threshold: config.lowBalanceThreshold)
-        }
-        if config.highUtilization {
-            await checkHighUtilization(accounts: accounts, threshold: config.creditUtilizationThreshold)
-        }
-        persistNotifiedIds()
-    }
-
-    private func checkLargeTransactions(transactions: [TransactionDTO], threshold: Double) async {
-        let large = NotificationTriggerSelection.largeTransactions(
-            from: transactions,
-            threshold: threshold,
-            excluding: notifiedTransactionIdSet
+        let evaluation = NotificationTriggerSelection.evaluate(
+            transactions: transactions,
+            accounts: accounts,
+            recurringTransactions: recurringTransactions,
+            itemStatuses: itemStatuses,
+            isSyncStale: isSyncStale,
+            config: config,
+            deliveredDedupKeys: deliveredDedupKeySet
         )
 
-        for tx in large {
+        for resolvedKey in evaluation.resolvedDedupKeys {
+            deliveredDedupKeySet.remove(resolvedKey)
+            deliveredDedupKeys.removeAll { $0 == resolvedKey }
+        }
+
+        for decision in evaluation.decisions {
             let didSchedule = await sendNotification(
-                title: "Large Transaction",
-                body: "\(tx.displayName): \(Formatters.currency(tx.displayAmount, format: .full))",
-                identifier: NotifKey.largeTx(tx.id)
+                title: decision.title,
+                body: decision.body,
+                identifier: decision.dedupKey
             )
             guard didSchedule else { continue }
-            notifiedTransactionIds.append(tx.id)
-            notifiedTransactionIdSet.insert(tx.id)
+            deliveredDedupKeys.append(decision.dedupKey)
+            deliveredDedupKeySet.insert(decision.dedupKey)
         }
 
-        // LRU cap: drop oldest entries first
-        if notifiedTransactionIds.count > 500 {
-            let excess = notifiedTransactionIds.count - 500
-            let removed = notifiedTransactionIds.prefix(excess)
-            notifiedTransactionIds.removeFirst(excess)
-            for id in removed { notifiedTransactionIdSet.remove(id) }
+        if deliveredDedupKeys.count > 1_000 {
+            let excess = deliveredDedupKeys.count - 1_000
+            let removed = deliveredDedupKeys.prefix(excess)
+            deliveredDedupKeys.removeFirst(excess)
+            for key in removed { deliveredDedupKeySet.remove(key) }
         }
-    }
 
-    private func checkLowBalance(accounts: [AccountDTO], threshold: Double) async {
-        let lowAccounts = NotificationTriggerSelection.lowBalanceAccounts(
-            from: accounts,
-            threshold: threshold
-        )
-
-        clearResolvedDedup(
-            activeIds: Set(lowAccounts.map(\.id)),
-            allIds: Set(accounts.filter { $0.type == .depository }.map(\.id)),
-            keyPrefix: NotifKey.dedupLow
-        )
-
-        for account in lowAccounts {
-            let key = NotifKey.dedupLow(account.id)
-            guard !notifiedAccountIds.contains(key) else { continue }
-            let didSchedule = await sendNotification(
-                title: "Low Balance",
-                body: "\(account.name): \(Formatters.currency(account.balances.effectiveBalance, format: .full))",
-                identifier: NotifKey.lowBalance(account.id)
-            )
-            if didSchedule {
-                notifiedAccountIds.insert(key)
-            }
-        }
-    }
-
-    private func checkHighUtilization(accounts: [AccountDTO], threshold: Double) async {
-        let highUtil = NotificationTriggerSelection.highUtilizationAccounts(
-            from: accounts,
-            threshold: threshold
-        )
-
-        clearResolvedDedup(
-            activeIds: Set(highUtil.map(\.id)),
-            allIds: Set(accounts.filter { $0.type == .credit }.map(\.id)),
-            keyPrefix: NotifKey.dedupUtil
-        )
-
-        for account in highUtil {
-            let key = NotifKey.dedupUtil(account.id)
-            guard !notifiedAccountIds.contains(key) else { continue }
-            let util = account.balances.utilizationPercent ?? 0
-            let didSchedule = await sendNotification(
-                title: "High Credit Utilization",
-                body: "\(account.name): \(Formatters.percent(util)) used",
-                identifier: NotifKey.highUtil(account.id)
-            )
-            if didSchedule {
-                notifiedAccountIds.insert(key)
-            }
-        }
-    }
-
-    /// Remove dedup entries for accounts whose condition resolved
-    private func clearResolvedDedup(activeIds: Set<String>, allIds: Set<String>, keyPrefix: (String) -> String) {
-        for id in allIds where !activeIds.contains(id) {
-            notifiedAccountIds.remove(keyPrefix(id))
-        }
+        persistNotifiedIds()
     }
 
     private func sendNotification(title: String, body: String, identifier: String) async -> Bool {
@@ -243,5 +175,36 @@ final class NotificationService: NotificationServiceProtocol {
         } catch {
             return false
         }
+    }
+
+    private static func migratedLegacyDedupKeys(from defaults: UserDefaults) -> [String] {
+        var keys: [String] = []
+        var keySet = Set<String>()
+
+        func append(_ key: String) {
+            guard keySet.insert(key).inserted else { return }
+            keys.append(key)
+        }
+
+        for transactionID in defaults.stringArray(forKey: legacyNotifiedTxKey) ?? [] {
+            append(NotificationTriggerSelection.dedupKey(kind: .largeTransaction, sourceID: transactionID))
+        }
+
+        for legacyAccountKey in defaults.stringArray(forKey: legacyNotifiedAccountKey) ?? [] {
+            if legacyAccountKey.hasPrefix("low-") {
+                let accountID = String(legacyAccountKey.dropFirst("low-".count))
+                append(NotificationTriggerSelection.dedupKey(kind: .lowBalance, sourceID: accountID))
+            } else if legacyAccountKey.hasPrefix("util-") {
+                let accountID = String(legacyAccountKey.dropFirst("util-".count))
+                append(NotificationTriggerSelection.dedupKey(kind: .highUtilization, sourceID: accountID))
+            }
+        }
+
+        if !keys.isEmpty {
+            defaults.set(keys, forKey: deliveredDedupKeysKey)
+        }
+        defaults.removeObject(forKey: legacyNotifiedTxKey)
+        defaults.removeObject(forKey: legacyNotifiedAccountKey)
+        return keys
     }
 }
