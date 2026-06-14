@@ -133,6 +133,58 @@ struct TransactionReviewInboxTests {
         #expect(snapshot.totalCount == 0)
     }
 
+    @Test("A matching rule does not hide a high-priority spike")
+    func ruleMatchDoesNotSuppressHighPrioritySignal() {
+        let transactions = [
+            tx(id: "old-1", amount: 20, date: "2026-05-01", category: .foodAndDrink, merchantName: "Coffee Shop"),
+            tx(id: "old-2", amount: 22, date: "2026-05-08", category: .foodAndDrink, merchantName: "Coffee Shop"),
+            tx(id: "old-3", amount: 21, date: "2026-05-15", category: .foodAndDrink, merchantName: "Coffee Shop"),
+            tx(id: "spike", amount: 400, date: "2026-06-01", category: .foodAndDrink, merchantName: "Coffee Shop"),
+        ]
+        // A rule normalizes routine Coffee Shop charges, but a large spike must
+        // still surface for review rather than being hidden by the rule.
+        let rule = TransactionRule(
+            matchMerchantContains: "Coffee Shop",
+            category: .foodAndDrink,
+            merchantName: "Coffee Shop"
+        )
+
+        let snapshot = evaluate(transactions, rules: [rule])
+
+        let spike = snapshot.items.first { $0.id == "spike" }
+        #expect(spike != nil)
+        #expect(spike?.reasonCodes.contains(.unusualAmount) == true)
+        // Routine same-merchant charges that only match the rule stay suppressed.
+        #expect(snapshot.items.contains { $0.id == "old-1" } == false)
+    }
+
+    @Test("Review storage is scoped to the cache context")
+    func reviewStorageScopedToCacheContext() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let directory = root.appendingPathComponent(".vaultpeek", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let sandboxContext = TransactionCacheContext(environment: .sandbox, storagePath: directory.path)
+        let productionContext = TransactionCacheContext(environment: .production, storagePath: directory.path)
+
+        let sandboxMetadata = [TransactionReviewMetadata(id: "sandbox-txn", status: .reviewed)]
+        let sandboxRules = [
+            TransactionRule(matchMerchantContains: "Sandbox Only", category: .shopping, merchantName: "Sandbox Only"),
+        ]
+
+        try LocalDataStore.saveTransactionReviewMetadata(sandboxMetadata, to: directory, context: sandboxContext)
+        try LocalDataStore.saveTransactionRules(sandboxRules, to: directory, context: sandboxContext)
+
+        // Production context must not see sandbox review state.
+        #expect(try LocalDataStore.loadTransactionReviewMetadata(from: directory, context: productionContext).isEmpty)
+        #expect(try LocalDataStore.loadTransactionRules(from: directory, context: productionContext).isEmpty)
+        // Sandbox context reads back its own state.
+        #expect(try LocalDataStore.loadTransactionReviewMetadata(from: directory, context: sandboxContext) == sandboxMetadata)
+        #expect(try LocalDataStore.loadTransactionRules(from: directory, context: sandboxContext) == sandboxRules)
+    }
+
     @Test("Review metadata and rules persist as private local files")
     func reviewStoragePersistsPrivately() throws {
         let root = URL(fileURLWithPath: NSTemporaryDirectory())

@@ -183,14 +183,8 @@ public enum TransactionReviewInbox {
 
         let items = transactions.compactMap { transaction -> TransactionReviewItem? in
             let metadata = metadataById[transaction.id]
-            if metadata?.status == .reviewed || metadata?.status == .ignored {
-                return nil
-            }
-
+            let isAlreadyResolved = metadata?.status == .reviewed || metadata?.status == .ignored
             let matchedRules = rules.filter { $0.matches(transaction) }
-            if !matchedRules.isEmpty {
-                return nil
-            }
 
             let effectiveCategory = metadata?.userCategory ?? transaction.category
             let effectiveMerchant = trimmedNonEmpty(metadata?.userMerchantName)
@@ -230,6 +224,14 @@ public enum TransactionReviewInbox {
                 return $0.priority < $1.priority
             }
             guard !orderedReasons.isEmpty else { return nil }
+
+            // A matched rule applies its normalized fields, and an already
+            // reviewed/ignored item is settled — but neither should hide a
+            // high-priority signal (large spike, recurring change, posted-pending
+            // change, possible transfer). Surface those; suppress the rest.
+            if isAlreadyResolved || !matchedRules.isEmpty {
+                guard orderedReasons.contains(where: \.isHighPriority) else { return nil }
+            }
 
             return TransactionReviewItem(
                 transaction: transaction,

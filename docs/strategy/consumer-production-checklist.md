@@ -1,7 +1,7 @@
 ---
 title: Consumer Plaid Integration — Production Readiness Checklist
 status: owner-gated
-linear: [AND-347, AND-348, AND-349, AND-350]
+linear: [AND-347, AND-348, AND-349, AND-350, AND-392]
 date: 2026-06-13
 ---
 
@@ -20,7 +20,8 @@ infrastructure, and live billing. **Do not let an agent perform any step here.**
 
 Design source of truth, do not duplicate it here:
 `docs/strategy/managed-link-architecture.md` (broker + blind proxy),
-`docs/strategy/subscription-entitlements.md` (Stripe + Ed25519 entitlements, D1–D10),
+`docs/strategy/entitlement-matrix.md` (Free / Plus / Managed matrix),
+`docs/strategy/subscription-entitlements.md` (Stripe + Ed25519 signer shape),
 `docs/strategy/approval-gates.md` (what must be approved before code).
 
 ---
@@ -59,11 +60,14 @@ approval record:
    managed financial data *transits* VaultPeek's stateless proxy but is *never
    stored* there; access tokens stay on the device (Variant 1, architecture doc
    §5.3).
-3. **Stripe entitlements decisions D1–D10 (AND-348)** — in particular D1 (Stripe
-   + DIY Ed25519 signer), D3 (BYO stays ungated), D4 (30-day TTL / 14-day grace),
-   D8 (cancellation retention + 7-day reconnect), D10 (rename timing).
-4. **Pricing + privacy copy (AND-349 + cross-doc)** — Personal/Plus caps and
-   prices, BYO-free promise, amended `SECURITY.md` / `docs/privacy.md` wording.
+3. **Entitlement matrix (AND-392)** — Free = 0 managed institutions, Plus =
+   $15/month or $129/year with 8 managed institutions, Managed = custom written
+   quote with Plus as the default cap unless the order says otherwise.
+4. **Stripe entitlements decisions (AND-348)** — in particular D1 (Stripe + DIY
+   Ed25519 signer), D3 (BYO stays ungated), and D10 (rename timing). Use
+   AND-392 for grace, cancellation, downgrade, and limit semantics.
+5. **Pricing + privacy copy (AND-349 + cross-doc)** — align with the AND-392
+   matrix, BYO-free promise, amended `SECURITY.md` / `docs/privacy.md` wording.
 
 ---
 
@@ -115,8 +119,9 @@ approval record:
 
 ## Phase 3 — Stripe billing + entitlement signer (owner-only; live money)
 
-14. **Create Stripe products/prices** for Personal and Plus (no unlimited, no
-    lifetime — AND-349). Decide tax posture (Stripe Tax vs MoR — D9).
+14. **Create Stripe products/prices** for Free / Plus / Managed as specified in
+    `entitlement-matrix.md` (no unlimited, no lifetime). Decide tax posture
+    (Stripe Tax vs MoR — D9).
 15. **Wire Stripe Checkout** (browser-based sign-in + purchase; the app polls for
     the entitlement to land — architecture doc §7, "plan-before-link").
 16. **Wire the Stripe webhook receiver** in the control plane with **signature
