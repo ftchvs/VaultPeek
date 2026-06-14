@@ -29,6 +29,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 APP_DIR="$PROJECT_DIR/.build/VaultPeek.app"
 ENTITLEMENTS="$PROJECT_DIR/Sources/PlaidBar/Resources/PlaidBar.entitlements"
+WIDGET_APPEX="$APP_DIR/Contents/PlugIns/PlaidBarWidgetExtension.appex"
+WIDGET_ENTITLEMENTS="$PROJECT_DIR/Sources/PlaidBarWidgetExtension/Resources/PlaidBarWidgetExtension.entitlements"
 STAGING_DIR="$PROJECT_DIR/.build/notarize-staging"
 
 cd "$PROJECT_DIR"
@@ -103,6 +105,16 @@ codesign --force --options runtime --timestamp \
 codesign --force --options runtime --timestamp \
     --sign "$PLAIDBAR_SIGNING_IDENTITY" \
     "$APP_DIR/Contents/MacOS/PlaidBarServer"
+# The widget extension is a nested code bundle that package-app.sh only ad-hoc
+# signs. Re-sign it with the Developer ID identity, hardened runtime, and its
+# own entitlements BEFORE the outer app — otherwise the notarized bundle ships
+# a nested .appex with only the ad-hoc signature, which fails notarization /
+# Gatekeeper and leaves the widget undiscoverable (AND-385 Codex review).
+if [ -e "$WIDGET_APPEX" ]; then
+    codesign --force --options runtime --timestamp \
+        --entitlements "$WIDGET_ENTITLEMENTS" \
+        --sign "$PLAIDBAR_SIGNING_IDENTITY" "$WIDGET_APPEX"
+fi
 codesign --force --options runtime --timestamp \
     --entitlements "$ENTITLEMENTS" \
     --sign "$PLAIDBAR_SIGNING_IDENTITY" "$APP_DIR"
