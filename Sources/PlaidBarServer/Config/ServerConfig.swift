@@ -11,7 +11,8 @@ struct ServerConfig: Sendable {
     static let legacyDatabaseFilename = "plaidbar.sqlite"
     static let legacyMigrationEnvironmentVariable = "PLAIDBAR_MIGRATE_LEGACY_DATABASE"
     static let pendingLinkSessionsFilename = "pending-link-sessions.json"
-    static let linkClientUserIdFilename = "link-client-user-id"
+    // Shared with LocalDataStore so the reset boundary clears this exact file.
+    static let linkClientUserIdFilename = LocalDataStore.linkClientUserIdFilename
     private static let sqliteSidecarSuffixes = ["-wal", "-shm", "-journal"]
 
     let port: Int
@@ -78,12 +79,16 @@ struct ServerConfig: Sendable {
         }
 
         let environmentValues = try resolvedEnvironment(from: configPath)
-        let link = try PlaidLinkConfiguration.resolved(from: environmentValues)
 
         // The standalone `--config` path consumes a server.conf that may hold
         // PLAID_CLIENT_ID/PLAID_SECRET; tighten it to owner-only the same way
         // app-managed launches do (ServerProcessService.enforcePrivatePermissions).
+        // This must run before any further validation that can throw (e.g. Link
+        // config resolution), otherwise an invalid setting could abort startup
+        // and leave a secret-bearing server.conf at its original loose mode.
         tightenConfigFilePermissions(at: configPath)
+
+        let link = try PlaidLinkConfiguration.resolved(from: environmentValues)
 
         if environmentValues[LocalDataStore.dataDirectoryEnvironmentVariable]?.trimmedNonEmpty == nil {
             try LocalDataStore.migrateLegacyDefaultStorageIfNeeded()

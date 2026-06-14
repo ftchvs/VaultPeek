@@ -139,6 +139,12 @@ struct LinkTokenRequestTests {
         #expect(throws: PlaidLinkConfigurationError.self) {
             _ = try PlaidLinkConfiguration.resolved(from: ["PLAID_HOSTED_LINK_LIFETIME_SECONDS": "0"])
         }
+        // The refresh path always calls /transactions/sync, so a product list
+        // that omits transactions must be rejected up front rather than linking
+        // Items that error on every sync.
+        #expect(throws: PlaidLinkConfigurationError.self) {
+            _ = try PlaidLinkConfiguration.resolved(from: ["PLAID_LINK_PRODUCTS": "auth"])
+        }
     }
 
     @Test("Stable install client_user_id is non-PII and does not embed secrets")

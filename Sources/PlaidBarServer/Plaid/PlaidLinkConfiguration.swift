@@ -116,6 +116,15 @@ struct PlaidLinkConfiguration: Equatable, Sendable {
                 "Unsupported Plaid products: \(unsupported.joined(separator: ", "))"
             )
         }
+        // The refresh path unconditionally calls /transactions/sync, so an Item
+        // linked without the transactions product would error on every sync and
+        // surface as a broken dashboard. Require it rather than silently linking
+        // Items the app cannot use.
+        guard products.contains("transactions") else {
+            throw PlaidLinkConfigurationError.invalidProducts(
+                "products must include \"transactions\"; VaultPeek syncs transactions for every linked Item"
+            )
+        }
     }
 
     private func validateCountryCodes() throws {
