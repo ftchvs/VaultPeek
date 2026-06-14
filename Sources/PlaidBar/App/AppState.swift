@@ -21,6 +21,10 @@ final class AppState {
         static let notifyLargeTransaction = "notifyLargeTransaction"
         static let notifyLowBalance = "notifyLowBalance"
         static let notifyHighUtilization = "notifyHighUtilization"
+        static let notifyRecurringChargeDetected = "notifyRecurringChargeDetected"
+        static let notifyRecurringChargeChanged = "notifyRecurringChargeChanged"
+        static let notifyRecurringChargeDueSoon = "notifyRecurringChargeDueSoon"
+        static let notifyBrokenConnection = "notifyBrokenConnection"
         static let setupCompletedOnce = "setup.completedOnce"
         static let setupCompletedContextPrefix = "setup.completedOnce.context"
         static let lastTransactionCacheContext = "cache.lastTransactionCacheContext"
@@ -166,6 +170,30 @@ final class AppState {
             UserDefaults.standard.set(notifyHighUtilization, forKey: Keys.notifyHighUtilization)
         }
     }
+    var notifyRecurringChargeDetected: Bool = true {
+        didSet {
+            guard notifyRecurringChargeDetected != oldValue else { return }
+            UserDefaults.standard.set(notifyRecurringChargeDetected, forKey: Keys.notifyRecurringChargeDetected)
+        }
+    }
+    var notifyRecurringChargeChanged: Bool = true {
+        didSet {
+            guard notifyRecurringChargeChanged != oldValue else { return }
+            UserDefaults.standard.set(notifyRecurringChargeChanged, forKey: Keys.notifyRecurringChargeChanged)
+        }
+    }
+    var notifyRecurringChargeDueSoon: Bool = true {
+        didSet {
+            guard notifyRecurringChargeDueSoon != oldValue else { return }
+            UserDefaults.standard.set(notifyRecurringChargeDueSoon, forKey: Keys.notifyRecurringChargeDueSoon)
+        }
+    }
+    var notifyBrokenConnection: Bool = true {
+        didSet {
+            guard notifyBrokenConnection != oldValue else { return }
+            UserDefaults.standard.set(notifyBrokenConnection, forKey: Keys.notifyBrokenConnection)
+        }
+    }
 
     var launchAtLogin: Bool = false {
         didSet {
@@ -255,6 +283,18 @@ final class AppState {
         }
         if defaults.object(forKey: Keys.notifyHighUtilization) != nil {
             notifyHighUtilization = defaults.bool(forKey: Keys.notifyHighUtilization)
+        }
+        if defaults.object(forKey: Keys.notifyRecurringChargeDetected) != nil {
+            notifyRecurringChargeDetected = defaults.bool(forKey: Keys.notifyRecurringChargeDetected)
+        }
+        if defaults.object(forKey: Keys.notifyRecurringChargeChanged) != nil {
+            notifyRecurringChargeChanged = defaults.bool(forKey: Keys.notifyRecurringChargeChanged)
+        }
+        if defaults.object(forKey: Keys.notifyRecurringChargeDueSoon) != nil {
+            notifyRecurringChargeDueSoon = defaults.bool(forKey: Keys.notifyRecurringChargeDueSoon)
+        }
+        if defaults.object(forKey: Keys.notifyBrokenConnection) != nil {
+            notifyBrokenConnection = defaults.bool(forKey: Keys.notifyBrokenConnection)
         }
         // Balance history
         loadPersistedBalanceHistory()
@@ -1175,6 +1215,12 @@ final class AppState {
             largeTransaction: notifyLargeTransaction,
             lowBalance: notifyLowBalance,
             highUtilization: notifyHighUtilization,
+            recurringChargeDetected: notifyRecurringChargeDetected,
+            recurringChargeChanged: notifyRecurringChargeChanged,
+            recurringChargeDueSoon: notifyRecurringChargeDueSoon,
+            staleSync: notifyBrokenConnection,
+            loginRequired: notifyBrokenConnection,
+            itemError: notifyBrokenConnection,
             largeTransactionThreshold: largeTransactionThreshold,
             lowBalanceThreshold: lowBalanceThreshold,
             creditUtilizationThreshold: creditUtilizationThreshold
@@ -1182,6 +1228,9 @@ final class AppState {
         await notificationService.evaluateTriggers(
             transactions: transactions,
             accounts: accounts,
+            recurringTransactions: recurringTransactions,
+            itemStatuses: itemStatuses,
+            isSyncStale: isSyncStale,
             config: config
         )
     }

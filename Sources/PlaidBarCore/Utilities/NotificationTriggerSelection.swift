@@ -5,33 +5,45 @@ public struct NotificationTriggers: Sendable {
     public var largeTransaction: Bool
     public var lowBalance: Bool
     public var highUtilization: Bool
+    public var recurringChargeDetected: Bool
+    public var recurringChargeChanged: Bool
+    public var recurringChargeDueSoon: Bool
     public var staleSync: Bool
     public var loginRequired: Bool
     public var itemError: Bool
     public var largeTransactionThreshold: Double
     public var lowBalanceThreshold: Double
     public var creditUtilizationThreshold: Double
+    public var recurringDueSoonDays: Int
 
     public init(
         largeTransaction: Bool = true,
         lowBalance: Bool = true,
         highUtilization: Bool = true,
+        recurringChargeDetected: Bool = true,
+        recurringChargeChanged: Bool = true,
+        recurringChargeDueSoon: Bool = true,
         staleSync: Bool = true,
         loginRequired: Bool = true,
         itemError: Bool = true,
         largeTransactionThreshold: Double = 500,
         lowBalanceThreshold: Double = 100,
-        creditUtilizationThreshold: Double = 30
+        creditUtilizationThreshold: Double = 30,
+        recurringDueSoonDays: Int = 3
     ) {
         self.largeTransaction = largeTransaction
         self.lowBalance = lowBalance
         self.highUtilization = highUtilization
+        self.recurringChargeDetected = recurringChargeDetected
+        self.recurringChargeChanged = recurringChargeChanged
+        self.recurringChargeDueSoon = recurringChargeDueSoon
         self.staleSync = staleSync
         self.loginRequired = loginRequired
         self.itemError = itemError
         self.largeTransactionThreshold = largeTransactionThreshold
         self.lowBalanceThreshold = lowBalanceThreshold
         self.creditUtilizationThreshold = creditUtilizationThreshold
+        self.recurringDueSoonDays = recurringDueSoonDays
     }
 }
 
@@ -42,12 +54,16 @@ public enum NotificationTriggerKind: String, Codable, CaseIterable, Sendable {
     case highUtilization = "high-utilization"
     case lowBalance = "low-balance"
     case largeTransaction = "large-transaction"
+    case recurringChargeDetected = "recurring-charge-detected"
+    case recurringChargeChanged = "recurring-charge-changed"
+    case recurringChargeDueSoon = "recurring-charge-due-soon"
 
     public var clearsWhenResolved: Bool {
         switch self {
-        case .itemError, .loginRequired, .syncStale, .highUtilization, .lowBalance:
+        case .itemError, .loginRequired, .syncStale, .highUtilization, .lowBalance,
+             .recurringChargeChanged, .recurringChargeDueSoon:
             true
-        case .largeTransaction:
+        case .largeTransaction, .recurringChargeDetected:
             false
         }
     }
@@ -103,8 +119,11 @@ public enum NotificationTriggerSelection {
     public static func evaluate(
         transactions: [TransactionDTO] = [],
         accounts: [AccountDTO] = [],
+        recurringTransactions: [RecurringTransaction] = [],
         itemStatuses: [ItemStatus] = [],
         isSyncStale: Bool = false,
+        now: Date = Date(),
+        calendar: Calendar = .current,
         config: NotificationTriggers = NotificationTriggers(),
         deliveredDedupKeys: Set<String> = []
     ) -> NotificationTriggerEvaluation {
@@ -144,6 +163,29 @@ public enum NotificationTriggerSelection {
         if config.lowBalance {
             for account in lowBalanceAccounts(from: accounts, threshold: config.lowBalanceThreshold) {
                 append(lowBalanceDecision(for: account))
+            }
+        }
+
+        if config.recurringChargeChanged {
+            for recurring in changedRecurringCharges(from: recurringTransactions) {
+                append(recurringChargeChangedDecision(for: recurring))
+            }
+        }
+
+        if config.recurringChargeDueSoon {
+            for recurring in dueSoonRecurringCharges(
+                from: recurringTransactions,
+                withinDays: config.recurringDueSoonDays,
+                now: now,
+                calendar: calendar
+            ) {
+                append(recurringChargeDueSoonDecision(for: recurring))
+            }
+        }
+
+        if config.recurringChargeDetected {
+            for recurring in detectedRecurringCharges(from: recurringTransactions) {
+                append(recurringChargeDetectedDecision(for: recurring))
             }
         }
 
@@ -210,6 +252,41 @@ public enum NotificationTriggerSelection {
         }
     }
 
+    public static func detectedRecurringCharges(
+        from recurringTransactions: [RecurringTransaction],
+        minimumConfidence: Double = RecurringTransaction.priceIncreaseConfidenceThreshold
+    ) -> [RecurringTransaction] {
+        recurringTransactions.filter { $0.confidence >= minimumConfidence }
+    }
+
+    public static func changedRecurringCharges(
+        from recurringTransactions: [RecurringTransaction]
+    ) -> [RecurringTransaction] {
+        recurringTransactions.filter(\.hasPriceIncrease)
+    }
+
+    public static func dueSoonRecurringCharges(
+        from recurringTransactions: [RecurringTransaction],
+        withinDays: Int,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> [RecurringTransaction] {
+        guard withinDays >= 0 else { return [] }
+        let today = calendar.startOfDay(for: now)
+        guard let windowEnd = calendar.date(byAdding: .day, value: withinDays, to: today) else {
+            return []
+        }
+
+        return recurringTransactions.filter { recurring in
+            guard recurring.confidence >= RecurringTransaction.priceIncreaseConfidenceThreshold,
+                  let dueDate = Formatters.parseTransactionDate(recurring.nextExpectedDate)
+            else { return false }
+
+            let dueStart = calendar.startOfDay(for: dueDate)
+            return dueStart >= today && dueStart <= windowEnd
+        }
+    }
+
     private static func itemErrorDecision(for item: ItemStatus) -> NotificationTriggerDecision {
         NotificationTriggerDecision(
             kind: .itemError,
@@ -266,6 +343,42 @@ public enum NotificationTriggerSelection {
             dedupKey: dedupKey(kind: .largeTransaction, sourceID: transaction.id),
             title: "Large transaction alert",
             body: "A local transaction crossed your configured threshold.",
+            severity: .informational
+        )
+    }
+
+    private static func recurringChargeDetectedDecision(
+        for recurring: RecurringTransaction
+    ) -> NotificationTriggerDecision {
+        NotificationTriggerDecision(
+            kind: .recurringChargeDetected,
+            dedupKey: dedupKey(kind: .recurringChargeDetected, sourceID: recurring.id),
+            title: "Recurring charge detected",
+            body: "VaultPeek found a repeated local charge pattern.",
+            severity: .informational
+        )
+    }
+
+    private static func recurringChargeChangedDecision(
+        for recurring: RecurringTransaction
+    ) -> NotificationTriggerDecision {
+        NotificationTriggerDecision(
+            kind: .recurringChargeChanged,
+            dedupKey: dedupKey(kind: .recurringChargeChanged, sourceID: recurring.id),
+            title: "Recurring charge changed",
+            body: "A recurring charge appears higher than its recent pattern.",
+            severity: .warning
+        )
+    }
+
+    private static func recurringChargeDueSoonDecision(
+        for recurring: RecurringTransaction
+    ) -> NotificationTriggerDecision {
+        NotificationTriggerDecision(
+            kind: .recurringChargeDueSoon,
+            dedupKey: dedupKey(kind: .recurringChargeDueSoon, sourceID: recurring.id),
+            title: "Recurring charge due soon",
+            body: "An inferred recurring charge is expected soon.",
             severity: .informational
         )
     }
