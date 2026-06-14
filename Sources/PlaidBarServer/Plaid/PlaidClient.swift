@@ -65,7 +65,9 @@ actor PlaidClient: PlaidClientProtocol {
             products: ["transactions"],
             countryCodes: ["US"],
             language: "en",
-            redirectUri: config.redirectUri,
+            // No top-level redirect_uri: this is a Hosted Link flow, which
+            // routes the OAuth return through hosted_link.completion_redirect_uri.
+            // Sending redirect_uri too makes Plaid reject with INVALID_FIELD.
             hostedLink: .init(
                 completionRedirectUri: completionRedirectUri,
                 urlLifetimeSeconds: 30 * 60
@@ -86,7 +88,9 @@ actor PlaidClient: PlaidClientProtocol {
             user: .init(clientUserId: userId),
             countryCodes: ["US"],
             language: "en",
-            redirectUri: config.redirectUri,
+            // No top-level redirect_uri: Hosted Link update mode also returns
+            // through hosted_link.completion_redirect_uri. Sending redirect_uri
+            // too makes Plaid reject with INVALID_FIELD.
             hostedLink: .init(
                 completionRedirectUri: completionRedirectUri,
                 urlLifetimeSeconds: 30 * 60

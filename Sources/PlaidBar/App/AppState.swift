@@ -24,6 +24,7 @@ final class AppState {
         static let setupCompletedOnce = "setup.completedOnce"
         static let setupCompletedContextPrefix = "setup.completedOnce.context"
         static let lastTransactionCacheContext = "cache.lastTransactionCacheContext"
+        static let dashboardDetached = DetachedDashboardPreferences.detachedStorageKey
     }
 
     // MARK: - State
@@ -51,6 +52,20 @@ final class AppState {
         }
     }
     var isPopoverPresented = false
+
+    /// When true, the dashboard lives in a floating desktop window instead of
+    /// the menu-bar popover (AND-384). Persisted so the window reopens on the
+    /// next launch. While detached, a click on the menu-bar item raises the
+    /// floating window rather than opening the popover; re-docking flips this
+    /// back to false and the popover resumes. Mirrors the `dashboard.detached`
+    /// `@AppStorage` key the Settings toggle writes, so the toggle and the
+    /// in-dashboard pin/re-dock controls stay in sync.
+    var isDashboardDetached = false {
+        didSet {
+            guard isDashboardDetached != oldValue else { return }
+            UserDefaults.standard.set(isDashboardDetached, forKey: Keys.dashboardDetached)
+        }
+    }
 
     /// Persisted across launches so configured installs boot straight into
     /// the dashboard instead of flashing first-run onboarding until the
@@ -235,6 +250,10 @@ final class AppState {
         loadPersistedBalanceHistory()
         // Launch at login
         launchAtLogin = LaunchService.isEnabled
+        // Detached-dashboard intent (AND-384)
+        if defaults.object(forKey: Keys.dashboardDetached) != nil {
+            isDashboardDetached = defaults.bool(forKey: Keys.dashboardDetached)
+        }
     }
 
     // MARK: - Computed

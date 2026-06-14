@@ -364,6 +364,17 @@ struct GeneralSettingsView: View {
                 .help("Credit cards above this utilization threshold show warning colors")
 
                 Toggle("Launch at login", isOn: $state.launchAtLogin)
+
+                // AND-384: pop the dashboard out of the menu bar into a
+                // floating desktop window the user can drag anywhere and that
+                // survives app-switches. Bound to AppState (single source of
+                // truth, persisted to the dashboard.detached key), so toggling
+                // here opens/closes the floating window and stays in sync with
+                // the in-dashboard pin/dock control.
+                Toggle("Keep dashboard in a floating window", isOn: $state.isDashboardDetached)
+                Text("Detaches the dashboard from the menu bar into a movable desktop window that stays open when you switch apps. Click the menu bar item to bring it back to the front; dock it again from the window or this toggle.")
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Section("Local AI") {

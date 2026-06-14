@@ -7,7 +7,11 @@ import SwiftUI
 @main
 struct PlaidBarApp: App {
     @State private var appState: AppState
+    /// Owns the floating desktop-window dashboard (AND-384). `@State` so it
+    /// persists across `body` recomputes for the process lifetime.
+    @State private var detachedDashboard = DetachedDashboardCoordinator()
     @Environment(\.openSettings) private var openSettings
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let updaterController: SPUStandardUpdaterController
     private let statusItemContextMenuController = StatusItemContextMenuController()
 
@@ -59,8 +63,43 @@ struct PlaidBarApp: App {
         MenuBarExtra {
             MainPopover()
                 .environment(appState)
+                .environment(\.dashboardPresentation, .popover(detach: {
+                    detachedDashboard.detach(
+                        appState: appState,
+                        forcedColorScheme: Self.forcedColorScheme,
+                        reduceMotion: reduceMotion
+                    )
+                }))
                 .forcedAppColorScheme(Self.forcedColorScheme)
                 .appliesAppAppearance()
+                // Restore a window that was open at last quit, and keep the
+                // floating window in lockstep with the persisted/toggled flag.
+                .task {
+                    detachedDashboard.sync(
+                        appState: appState,
+                        forcedColorScheme: Self.forcedColorScheme,
+                        reduceMotion: reduceMotion
+                    )
+                }
+                .onChange(of: appState.isDashboardDetached) { _, _ in
+                    detachedDashboard.sync(
+                        appState: appState,
+                        forcedColorScheme: Self.forcedColorScheme,
+                        reduceMotion: reduceMotion
+                    )
+                }
+                // While detached, a status-item click sets isPopoverPresented
+                // true; intercept it, snap it back to false, and raise the
+                // floating window instead of opening the popover (AND-384).
+                .onChange(of: appState.isPopoverPresented) { _, isPresented in
+                    guard isPresented, appState.isDashboardDetached else { return }
+                    appState.isPopoverPresented = false
+                    detachedDashboard.handleMenuBarActivation(
+                        appState: appState,
+                        forcedColorScheme: Self.forcedColorScheme,
+                        reduceMotion: reduceMotion
+                    )
+                }
         } label: {
             MenuBarLabel()
                 .environment(appState)
@@ -71,6 +110,15 @@ struct PlaidBarApp: App {
                 statusItem: statusItem,
                 actions: StatusItemContextMenuActions(
                     showDashboard: {
+                        // "Open VaultPeek" raises the floating window when
+                        // detached; otherwise it opens the popover (AND-384).
+                        if detachedDashboard.handleMenuBarActivation(
+                            appState: appState,
+                            forcedColorScheme: Self.forcedColorScheme,
+                            reduceMotion: reduceMotion
+                        ) {
+                            return
+                        }
                         appState.isPopoverPresented = true
                     },
                     refreshDashboard: {

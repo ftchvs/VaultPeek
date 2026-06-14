@@ -23,10 +23,12 @@ struct LinkRoutes: Sendable {
     ) async throws -> Response {
         let userId = "plaidbar-user-\(UUID().uuidString.prefix(8))"
         let state = await pendingLinkSessions.issueState()
-        let plaidResponse = try await plaidClient.createLinkToken(
-            userId: userId,
-            completionRedirectUri: callbackURL(state: state)
-        )
+        let plaidResponse = try await Self.mappingPlaidError {
+            try await plaidClient.createLinkToken(
+                userId: userId,
+                completionRedirectUri: callbackURL(state: state)
+            )
+        }
 
         guard let linkUrl = plaidResponse.hostedLinkUrl else {
             throw HTTPError(.internalServerError, message: "Plaid did not return a hosted Link URL")
@@ -57,11 +59,13 @@ struct LinkRoutes: Sendable {
 
         let userId = "plaidbar-user-\(UUID().uuidString.prefix(8))"
         let state = await pendingLinkSessions.issueState()
-        let plaidResponse = try await plaidClient.createUpdateLinkToken(
-            userId: userId,
-            accessToken: accessToken,
-            completionRedirectUri: callbackURL(state: state)
-        )
+        let plaidResponse = try await Self.mappingPlaidError {
+            try await plaidClient.createUpdateLinkToken(
+                userId: userId,
+                accessToken: accessToken,
+                completionRedirectUri: callbackURL(state: state)
+            )
+        }
 
         guard let linkUrl = plaidResponse.hostedLinkUrl else {
             throw HTTPError(.internalServerError, message: "Plaid did not return a hosted Link URL")
@@ -79,6 +83,44 @@ struct LinkRoutes: Sendable {
             headers: [.contentType: "application/json"],
             body: .init(byteBuffer: ByteBuffer(data: data))
         )
+    }
+
+    /// Runs a Plaid Link call and translates `PlaidError.apiError` into an
+    /// actionable `HTTPError` so the client sees the Plaid error code/message
+    /// instead of an opaque, empty-bodied 500. `credentialsNotConfigured` is
+    /// rethrown unchanged so the setup-state middleware can map it to a 503
+    /// with credential guidance.
+    private static func mappingPlaidError<T: Sendable>(
+        _ body: () async throws -> T
+    ) async throws -> T {
+        do {
+            return try await body()
+        } catch let error as PlaidError {
+            switch error {
+            case .credentialsNotConfigured:
+                throw error
+            case let .apiError(_, errorType, errorCode, errorMessage):
+                throw HTTPError(.badGateway, message: linkErrorMessage(
+                    errorType: errorType,
+                    errorCode: errorCode,
+                    errorMessage: errorMessage
+                ))
+            case .invalidResponse:
+                throw HTTPError(.badGateway, message: "Plaid returned an invalid response")
+            }
+        }
+    }
+
+    /// Builds an operator-readable Plaid error string. Only carries Plaid's own
+    /// `error_code`/`error_message`/`error_type` — never the request body, which
+    /// contains the Plaid `client_secret` and any access token.
+    static func linkErrorMessage(
+        errorType: String?,
+        errorCode: String?,
+        errorMessage: String
+    ) -> String {
+        let code = errorCode ?? errorType ?? "PLAID_ERROR"
+        return "Plaid: \(code) \(errorMessage)"
     }
 
     private func callbackURL(state: String) -> String {

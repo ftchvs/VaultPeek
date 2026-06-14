@@ -7,6 +7,10 @@ struct MainPopover: View {
     @Environment(\.openSettings) private var openSettings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
+    /// Whether this dashboard is hosted in the menu-bar popover or a floating
+    /// desktop window (AND-384). Detached, the host window owns width/height, so
+    /// the popover's fixed-width frame and screen-edge anchor are skipped.
+    @Environment(\.dashboardPresentation) private var dashboardPresentation
     @AppStorage("dashboard.accountFilter") private var selectedFilterRawValue = DashboardAccountFilter.all.rawValue
     @AppStorage("dashboard.selectedAccountId") private var selectedAccountId = ""
     @AppStorage(PopoverTransparencySetting.storageKey) private var popoverTransparency = PopoverTransparencySetting.defaultValue
@@ -50,6 +54,13 @@ struct MainPopover: View {
         let screenCap = NSScreen.main.map { $0.visibleFrame.height - Layout.screenHeightInset } ?? fallback
         let contentCap = dashboardContentHeight > 0 ? dashboardContentHeight : screenCap
         return max(Layout.dashboardMinHeight, min(screenCap, contentCap))
+    }
+
+    /// Max height for the side columns (rail / inspector). In the popover this is
+    /// the screen-bounded scroll height so tall content scrolls inside a column;
+    /// in the detached window (AND-384) the columns fill the resizable panel.
+    private var columnMaxHeight: CGFloat {
+        dashboardPresentation.isDetached ? .infinity : dashboardScrollHeight
     }
 
     private var selectedFilter: DashboardAccountFilter {
@@ -146,29 +157,24 @@ struct MainPopover: View {
     // The visual chrome is kept on its own opaque property so neither it nor the
     // lifecycle chain in `body` overflows the single-expression type-checker.
     private var chromedPopover: some View {
-        popoverColumns
-            .frame(width: popoverWidth)
+        sizedColumns
             .foregroundStyle(AppearanceTextColors.primary)
             .environment(\.colorScheme, effectiveColorScheme)
             .background {
                 PopoverMaterialBackground(transparencySetting: transparencySetting)
             }
-            // Hold the two-column block's leading edge stable so opening the
-            // trailing inspector grows the popover rightward instead of letting
-            // AppKit re-center the widened window and slide the Wealth Summary
-            // sideways (AND-370). The same anchor clamps the widened popover
-            // inside the visible screen so it never renders off-screen near a
-            // display edge (AND-374 primary fallback).
-            .background {
-                PopoverLeadingEdgeAnchor(
-                    isInspectorOpen: isAccountInspectorOpen,
-                    collapsedWidth: twoColumnWidth,
-                    screenEdgeMargin: Layout.screenEdgeMargin
-                )
-            }
-            .background {
-                PopoverScreenWidthReader(visibleWidth: $activeScreenVisibleWidth)
-            }
+            // The screen-edge anchor and width reader only apply to the menu-bar
+            // popover window (which AppKit re-centers under the status item). The
+            // detached desktop window owns its own resizable geometry, so they
+            // are skipped there (AND-384) and the popover behavior (AND-370/374)
+            // is unchanged.
+            .modifier(PopoverWindowGeometryModifier(
+                isDetached: dashboardPresentation.isDetached,
+                isInspectorOpen: isAccountInspectorOpen,
+                collapsedWidth: twoColumnWidth,
+                screenEdgeMargin: Layout.screenEdgeMargin,
+                activeScreenVisibleWidth: $activeScreenVisibleWidth
+            ))
             .animation(
                 MotionTokens.animation(MotionTokens.content, reduceMotion: reduceMotion),
                 value: selectedAccount?.id
@@ -181,6 +187,26 @@ struct MainPopover: View {
                 MotionTokens.animation(MotionTokens.standard, reduceMotion: reduceMotion),
                 value: appState.error != nil
             )
+    }
+
+    /// Width handling differs by host (AND-384): the menu-bar popover pins to the
+    /// computed `popoverWidth` (screen-anchored, fixed); the floating window fills
+    /// its resizable frame down to a usable minimum so the user can size it.
+    @ViewBuilder
+    private var sizedColumns: some View {
+        if dashboardPresentation.isDetached {
+            popoverColumns
+                .frame(
+                    minWidth: shouldShowSetupScreen
+                        ? PopoverGeometry.width(for: .setup)
+                        : PopoverGeometry.minDashboardWidth + Layout.flyoutWidth + PopoverGeometry.dividerWidth,
+                    maxWidth: .infinity,
+                    alignment: .topLeading
+                )
+        } else {
+            popoverColumns
+                .frame(width: popoverWidth)
+        }
     }
 
     /// Esc handler: dismiss the inspector when open, otherwise `nil` so the key
@@ -225,8 +251,9 @@ struct MainPopover: View {
             .frame(width: Layout.flyoutWidth)
             // Cap the rail to the same screen-bounded height as the dashboard
             // scroll column so tall content scrolls inside the rail instead of
-            // growing the whole popover past the screen-bounded height.
-            .frame(maxHeight: dashboardScrollHeight)
+            // growing the whole popover past the screen-bounded height. In the
+            // detached window the panel owns the height, so the rail fills it.
+            .frame(maxHeight: columnMaxHeight)
             .leftPanelSurface()
             .transition(.move(edge: .leading).combined(with: .opacity))
     }
@@ -257,7 +284,7 @@ struct MainPopover: View {
                 }
             }
             .frame(width: Layout.flyoutWidth)
-            .frame(maxHeight: dashboardScrollHeight)
+            .frame(maxHeight: columnMaxHeight)
             .leftPanelSurface()
             // Slide in only for an in-session selection; a popover opened with a
             // persisted selection appears directly in three-column (AND-405).
@@ -399,7 +426,10 @@ struct MainPopover: View {
                 }
                 .scrollContentBackground(.hidden)
                 .frame(maxWidth: .infinity)
-                .frame(height: dashboardScrollHeight)
+                .modifier(DashboardScrollHeightModifier(
+                    isDetached: dashboardPresentation.isDetached,
+                    fixedHeight: dashboardScrollHeight
+                ))
 
                 Divider()
 
@@ -1912,6 +1942,7 @@ private func accountTrendAccessibility(_ trend: BalanceTrend) -> String {
 
 private struct DashboardFooter: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.dashboardPresentation) private var dashboardPresentation
     let settingsActivation: SettingsWindowActivationRestorer
     let openSettings: OpenSettingsAction
     let onAddAccount: () -> Void
@@ -1938,6 +1969,8 @@ private struct DashboardFooter: View {
 
             Spacer()
 
+            detachControl
+
             Button {
                 Task { await appState.refreshDashboard() }
             } label: {
@@ -1963,6 +1996,34 @@ private struct DashboardFooter: View {
         }
         .padding(.horizontal, Spacing.md)
         .padding(.vertical, Spacing.xs)
+    }
+
+    /// Detach / re-dock affordance (AND-384). In popover mode it pops the
+    /// dashboard out into a floating desktop window the user can drag anywhere;
+    /// in the floating window it docks back to the menu-bar popover. The glyph
+    /// (macwindow vs. pin.slash) and label carry the meaning, never color.
+    @ViewBuilder
+    private var detachControl: some View {
+        switch dashboardPresentation {
+        case let .popover(detach):
+            Button(action: detach) {
+                Image(systemName: "macwindow")
+                    .foregroundStyle(.secondary)
+                    .frame(minWidth: Sizing.hitTargetMin, minHeight: Sizing.hitTargetMin)
+            }
+            .buttonStyle(.borderless)
+            .help("Open dashboard in a floating window")
+            .accessibilityLabel("Detach dashboard into a floating window")
+        case let .detached(redock):
+            Button(action: redock) {
+                Image(systemName: "pin.slash")
+                    .foregroundStyle(.secondary)
+                    .frame(minWidth: Sizing.hitTargetMin, minHeight: Sizing.hitTargetMin)
+            }
+            .buttonStyle(.borderless)
+            .help("Dock dashboard back to the menu bar")
+            .accessibilityLabel("Dock dashboard back to the menu bar")
+        }
     }
 
     private var statusLineText: String {
@@ -2086,6 +2147,54 @@ final class SettingsWindowActivationRestorer {
         guard let discoveryObserver else { return }
         NotificationCenter.default.removeObserver(discoveryObserver)
         self.discoveryObserver = nil
+    }
+}
+
+/// Applies the menu-bar popover's AppKit window geometry — the leading-edge
+/// anchor (AND-370/374) and the active-screen width reader (AND-405) — only when
+/// the dashboard is hosted in the popover. In the detached desktop window
+/// (AND-384) the host `NSPanel` owns its resizable geometry, so these are no-ops
+/// there and the popover behavior is untouched.
+private struct PopoverWindowGeometryModifier: ViewModifier {
+    let isDetached: Bool
+    let isInspectorOpen: Bool
+    let collapsedWidth: CGFloat
+    let screenEdgeMargin: CGFloat
+    @Binding var activeScreenVisibleWidth: CGFloat?
+
+    func body(content: Content) -> some View {
+        if isDetached {
+            content
+        } else {
+            content
+                .background {
+                    PopoverLeadingEdgeAnchor(
+                        isInspectorOpen: isInspectorOpen,
+                        collapsedWidth: collapsedWidth,
+                        screenEdgeMargin: screenEdgeMargin
+                    )
+                }
+                .background {
+                    PopoverScreenWidthReader(visibleWidth: $activeScreenVisibleWidth)
+                }
+        }
+    }
+}
+
+/// Heights for the center scroll column differ by host (AND-384). The menu-bar
+/// popover pins the scroll view to a fixed, screen-bounded height so the popover
+/// window sizes to it; the detached desktop window fills its resizable frame
+/// (with a sensible floor) so dragging the window taller shows more content.
+private struct DashboardScrollHeightModifier: ViewModifier {
+    let isDetached: Bool
+    let fixedHeight: CGFloat
+
+    func body(content: Content) -> some View {
+        if isDetached {
+            content.frame(maxHeight: .infinity)
+        } else {
+            content.frame(height: fixedHeight)
+        }
     }
 }
 
