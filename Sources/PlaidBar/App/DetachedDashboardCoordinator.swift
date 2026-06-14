@@ -52,6 +52,12 @@ final class DetachedDashboardCoordinator {
         if appState.isDashboardDetached {
             present(appState: appState, forcedColorScheme: forcedColorScheme, reduceMotion: reduceMotion)
         } else {
+            // Docking (e.g. the user turning off "Keep dashboard in a floating
+            // window" in Settings, which flips isDashboardDetached and calls
+            // sync) must also retire a `--detach` launch override. Otherwise the
+            // window hides but a later menu-bar click would reopen it via the
+            // still-active override, diverging from the Settings state.
+            nonPersistedLaunchOverrideActive = false
             controller?.hide(reduceMotion: reduceMotion)
         }
     }
