@@ -42,6 +42,8 @@ final class AppState {
             invalidateLocalAIActivitySummaries()
         }
     }
+    var transactionReviewMetadata: [TransactionReviewMetadata] = []
+    var transactionRules: [TransactionRule] = []
     var isLoading = false
     /// True from launch until the first `loadInitialData()` pass completes.
     /// While booting, data surfaces render loading/skeleton states instead
@@ -221,6 +223,7 @@ final class AppState {
     private let notificationService: any NotificationServiceProtocol
     private var refreshTask: Task<Void, Never>?
     private var localAISummaryRefreshTask: Task<Void, Never>?
+    private var reviewUndoStack: [(metadata: [TransactionReviewMetadata], rules: [TransactionRule])] = []
     private var isUpgradingManagedServer = false
     private var isStartingBundledServer = false
     private var lastAttemptedCredentialUpgradeConfig: String?
@@ -428,25 +431,36 @@ final class AppState {
         menuBarStatusPresentation.attentionText
     }
 
+    var menuBarReviewText: String? {
+        guard transactionReviewCount > 0 else { return nil }
+        return "\(transactionReviewCount) review"
+    }
+
     var menuBarHelpText: String {
+        let reviewText = transactionReviewCount > 0
+            ? " \(transactionReviewCount) transaction\(transactionReviewCount == 1 ? "" : "s") need review."
+            : ""
         let status = "Status: \(diagnosticsSummary)"
         switch menuBarSummaryMode {
         case .netWorth:
-            return "VaultPeek - Net worth: \(menuBarText). \(status)"
+            return "VaultPeek - Net worth: \(menuBarText).\(reviewText) \(status)"
         case .netCash:
-            return "VaultPeek - Net cash: \(menuBarText). \(status)"
+            return "VaultPeek - Net cash: \(menuBarText).\(reviewText) \(status)"
         case .totalCash:
-            return "VaultPeek - Total cash: \(menuBarText). \(status)"
+            return "VaultPeek - Total cash: \(menuBarText).\(reviewText) \(status)"
         case .creditUtilization:
-            return "VaultPeek - Credit utilization: \(menuBarText). \(status)"
+            return "VaultPeek - Credit utilization: \(menuBarText).\(reviewText) \(status)"
         case .recentSpend:
-            return "VaultPeek - Recent spend: \(menuBarText). \(status)"
+            return "VaultPeek - Recent spend: \(menuBarText).\(reviewText) \(status)"
         case .iconOnly:
-            return "VaultPeek. \(status)"
+            return "VaultPeek.\(reviewText) \(status)"
         }
     }
 
     var menuBarAccessibilityLabel: String {
+        let reviewText = transactionReviewCount > 0
+            ? "\(transactionReviewCount) transaction\(transactionReviewCount == 1 ? "" : "s") need review. "
+            : ""
         // diagnosticsSummary stays "healthy" for finance warnings, so fold the
         // visible finance badge (Cash/Credit/Spend) into the spoken status to
         // keep VoiceOver in sync with the badge sighted users see.
@@ -454,17 +468,17 @@ final class AppState {
         let status = "Status \(diagnosticsSummary)\(attention)"
         switch menuBarSummaryMode {
         case .netWorth:
-            return "VaultPeek net worth \(menuBarText). \(status)"
+            return "VaultPeek net worth \(menuBarText). \(reviewText)\(status)"
         case .netCash:
-            return "VaultPeek net cash \(menuBarText). \(status)"
+            return "VaultPeek net cash \(menuBarText). \(reviewText)\(status)"
         case .totalCash:
-            return "VaultPeek total cash \(menuBarText). \(status)"
+            return "VaultPeek total cash \(menuBarText). \(reviewText)\(status)"
         case .creditUtilization:
-            return "VaultPeek credit utilization \(menuBarText). \(status)"
+            return "VaultPeek credit utilization \(menuBarText). \(reviewText)\(status)"
         case .recentSpend:
-            return "VaultPeek recent spend \(menuBarText). \(status)"
+            return "VaultPeek recent spend \(menuBarText). \(reviewText)\(status)"
         case .iconOnly:
-            return "VaultPeek. \(status)"
+            return "VaultPeek. \(reviewText)\(status)"
         }
     }
 
@@ -679,6 +693,20 @@ final class AppState {
             largeTransactionThreshold: largeTransactionThreshold,
             creditUtilizationThreshold: creditUtilizationThreshold
         )
+    }
+
+    var transactionReviewInboxSnapshot: TransactionReviewInboxSnapshot {
+        TransactionReviewInbox.evaluate(
+            transactions: transactions,
+            metadata: transactionReviewMetadata,
+            rules: transactionRules,
+            recurring: recurringTransactions,
+            now: Date()
+        )
+    }
+
+    var transactionReviewCount: Int {
+        transactionReviewInboxSnapshot.totalCount
     }
 
     var notificationPermissionPresentation: NotificationPermissionPresentation {
@@ -971,6 +999,7 @@ final class AppState {
                 // array. The cursor is still committed only after the cache
                 // write succeeds, preserving local-first durability.
                 transactions = updatedTransactions
+                seedReviewMetadataForNewTransactions(updatedTransactions)
                 let cacheDirectory = activeStorageDirectoryURL
                 let cacheContext = transactionCacheContext
                 try await localDataCache.saveTransactions(
@@ -1013,6 +1042,8 @@ final class AppState {
             // counts would otherwise linger on the real dashboard.
             accounts = []
             transactions = []
+            transactionReviewMetadata = []
+            transactionRules = []
             itemStatuses = []
             // loadDemoData() replaced the in-memory balance history with a
             // synthetic 60-day series. Restore persisted real history when it
@@ -1186,6 +1217,9 @@ final class AppState {
                 transaction.itemId == removedItemId ||
                     (transaction.itemId == nil && removedAccountIds.contains(transaction.accountId))
             }
+            transactionReviewMetadata.removeAll { metadata in
+                !transactions.contains { $0.id == metadata.id }
+            }
             do {
                 let cacheAccounts = accounts
                 let cacheTransactions = transactions
@@ -1197,6 +1231,7 @@ final class AppState {
                     to: cacheDirectory,
                     context: cacheContext
                 )
+                persistReviewStorage()
             } catch {
                 self.error = "Local cache failed to save: \(error.localizedDescription)"
             }
@@ -1215,6 +1250,11 @@ final class AppState {
 
         accounts = []
         transactions = []
+        transactionReviewMetadata = []
+        transactionRules = []
+        // Drop undo history too: a post-reset Undo must not restore pre-reset
+        // review metadata/rules (old transaction ids, merchants, amounts).
+        reviewUndoStack = []
         itemStatuses = []
         serverItemCount = 0
         serverCredentialsConfigured = nil
@@ -1466,6 +1506,18 @@ final class AppState {
         ), !cachedTransactions.isEmpty {
             transactions = cachedTransactions
         }
+        if let cachedMetadata = try? await localDataCache.loadTransactionReviewMetadata(
+            from: cacheDirectory,
+            context: context
+        ) {
+            transactionReviewMetadata = cachedMetadata
+        }
+        if let cachedRules = try? await localDataCache.loadTransactionRules(
+            from: cacheDirectory,
+            context: context
+        ) {
+            transactionRules = cachedRules
+        }
     }
 
     private func preconnectCacheDirectory(for context: TransactionCacheContext) -> URL? {
@@ -1587,6 +1639,7 @@ final class AppState {
                 from: activeStorageDirectoryURL,
                 context: transactionCacheContext
             )
+            await loadTransactionReviewStorage()
         } catch {
             self.error = "Transaction cache failed to load: \(error.localizedDescription)"
         }
@@ -1600,8 +1653,36 @@ final class AppState {
                 to: activeStorageDirectoryURL,
                 context: transactionCacheContext
             )
+            transactionReviewMetadata = []
+            transactionRules = []
+            try await localDataCache.saveTransactionReviewMetadata(
+                [],
+                to: activeStorageDirectoryURL,
+                context: transactionCacheContext
+            )
+            try await localDataCache.saveTransactionRules(
+                [],
+                to: activeStorageDirectoryURL,
+                context: transactionCacheContext
+            )
         } catch {
             self.error = "Transaction cache failed to clear: \(error.localizedDescription)"
+        }
+    }
+
+    private func loadTransactionReviewStorage() async {
+        do {
+            transactionReviewMetadata = try await localDataCache.loadTransactionReviewMetadata(
+                from: activeStorageDirectoryURL,
+                context: transactionCacheContext
+            )
+            transactionRules = try await localDataCache.loadTransactionRules(
+                from: activeStorageDirectoryURL,
+                context: transactionCacheContext
+            )
+            seedReviewMetadataForNewTransactions(transactions)
+        } catch {
+            self.error = "Review inbox storage failed to load: \(error.localizedDescription)"
         }
     }
 
@@ -1818,6 +1899,8 @@ final class AppState {
         // stay testable. See DemoFixtures and DemoFixturesTests.
         accounts = DemoFixtures.accounts
         transactions = DemoFixtures.transactions()
+        transactionReviewMetadata = []
+        transactionRules = []
         balanceHistory = DemoFixtures.balanceHistory()
 
         isSetupComplete = true
@@ -1839,6 +1922,166 @@ final class AppState {
             ItemStatus(id: "demo_amex_item", institutionName: "American Express", status: .connected, lastSync: Date()),
         ]
         lastSyncDate = isDemoStatusRecoveryScenario ? recoveredSync : Date()
+    }
+
+    // MARK: - Transaction Review
+
+    func approveReviewItem(_ id: String) {
+        updateReviewMetadata(id: id) { metadata, transaction in
+            metadata.status = .reviewed
+            metadata.reviewedAt = Date()
+            metadata.reviewReasonCodes = []
+            metadata.lastSeenAmount = transaction.amount
+            metadata.lastSeenName = transaction.name
+            metadata.lastSeenPending = transaction.pending
+        }
+    }
+
+    func ignoreReviewItem(_ id: String) {
+        updateReviewMetadata(id: id) { metadata, transaction in
+            metadata.status = .ignored
+            metadata.reviewedAt = Date()
+            metadata.lastSeenAmount = transaction.amount
+            metadata.lastSeenName = transaction.name
+            metadata.lastSeenPending = transaction.pending
+        }
+    }
+
+    func updateReviewCategory(_ id: String, category: SpendingCategory) {
+        updateReviewMetadata(id: id) { metadata, transaction in
+            metadata.status = .reviewed
+            metadata.userCategory = category
+            metadata.reviewedAt = Date()
+            metadata.reviewReasonCodes = []
+            metadata.lastSeenAmount = transaction.amount
+            metadata.lastSeenName = transaction.name
+            metadata.lastSeenPending = transaction.pending
+        }
+    }
+
+    func renameReviewMerchant(_ id: String, merchantName: String) {
+        let trimmed = merchantName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        updateReviewMetadata(id: id) { metadata, transaction in
+            metadata.status = .reviewed
+            metadata.userMerchantName = trimmed
+            metadata.reviewedAt = Date()
+            metadata.reviewReasonCodes = []
+            metadata.lastSeenAmount = transaction.amount
+            metadata.lastSeenName = transaction.name
+            metadata.lastSeenPending = transaction.pending
+        }
+    }
+
+    func markReviewItemTransfer(_ id: String, isTransfer: Bool = true) {
+        updateReviewMetadata(id: id) { metadata, transaction in
+            metadata.status = .reviewed
+            metadata.isTransferOverride = isTransfer
+            metadata.excludedFromBudgets = isTransfer
+            metadata.reviewedAt = Date()
+            metadata.reviewReasonCodes = []
+            metadata.lastSeenAmount = transaction.amount
+            metadata.lastSeenName = transaction.name
+            metadata.lastSeenPending = transaction.pending
+        }
+    }
+
+    func createRule(
+        from item: TransactionReviewItem,
+        category: SpendingCategory? = nil,
+        markTransfer: Bool? = nil
+    ) {
+        let matcher = item.effectiveMerchantName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !matcher.isEmpty else { return }
+        let resolvedTransfer = markTransfer ?? (item.reasonCodes.contains(.possibleTransfer) ? true : item.isTransfer)
+        pushReviewUndoState()
+        transactionRules.append(TransactionRule(
+            matchMerchantContains: matcher,
+            matchOriginalNameContains: nil,
+            category: category ?? item.effectiveCategory,
+            merchantName: item.effectiveMerchantName,
+            isTransfer: resolvedTransfer ? true : nil,
+            excludedFromBudgets: (resolvedTransfer || item.excludedFromBudgets) ? true : nil
+        ))
+        approveReviewItemWithoutUndo(item.id)
+        persistReviewStorage()
+    }
+
+    func undoLastReviewAction() {
+        guard let previous = reviewUndoStack.popLast() else { return }
+        transactionReviewMetadata = previous.metadata
+        transactionRules = previous.rules
+        persistReviewStorage()
+    }
+
+    private func updateReviewMetadata(
+        id: String,
+        mutate: (inout TransactionReviewMetadata, TransactionDTO) -> Void
+    ) {
+        guard let transaction = transactions.first(where: { $0.id == id }) else { return }
+        pushReviewUndoState()
+        var byId = Dictionary(uniqueKeysWithValues: transactionReviewMetadata.map { ($0.id, $0) })
+        var metadata = byId[id] ?? TransactionReviewMetadata(id: id)
+        mutate(&metadata, transaction)
+        byId[id] = metadata
+        transactionReviewMetadata = byId.values.sorted { $0.id < $1.id }
+        persistReviewStorage()
+    }
+
+    private func approveReviewItemWithoutUndo(_ id: String) {
+        guard let transaction = transactions.first(where: { $0.id == id }) else { return }
+        var byId = Dictionary(uniqueKeysWithValues: transactionReviewMetadata.map { ($0.id, $0) })
+        var metadata = byId[id] ?? TransactionReviewMetadata(id: id)
+        metadata.status = .reviewed
+        metadata.reviewedAt = Date()
+        metadata.reviewReasonCodes = []
+        metadata.lastSeenAmount = transaction.amount
+        metadata.lastSeenName = transaction.name
+        metadata.lastSeenPending = transaction.pending
+        byId[id] = metadata
+        transactionReviewMetadata = byId.values.sorted { $0.id < $1.id }
+    }
+
+    private func seedReviewMetadataForNewTransactions(_ transactions: [TransactionDTO]) {
+        var byId = Dictionary(uniqueKeysWithValues: transactionReviewMetadata.map { ($0.id, $0) })
+        var changed = false
+        for transaction in transactions where byId[transaction.id] == nil {
+            byId[transaction.id] = TransactionReviewMetadata(
+                id: transaction.id,
+                lastSeenAmount: transaction.amount,
+                lastSeenName: transaction.name,
+                lastSeenPending: transaction.pending
+            )
+            changed = true
+        }
+        guard changed else { return }
+        transactionReviewMetadata = byId.values.sorted { $0.id < $1.id }
+        persistReviewStorage()
+    }
+
+    private func pushReviewUndoState() {
+        reviewUndoStack.append((transactionReviewMetadata, transactionRules))
+        if reviewUndoStack.count > 20 {
+            reviewUndoStack.removeFirst(reviewUndoStack.count - 20)
+        }
+    }
+
+    private func persistReviewStorage() {
+        let metadata = transactionReviewMetadata
+        let rules = transactionRules
+        let cacheDirectory = activeStorageDirectoryURL
+        let cacheContext = transactionCacheContext
+        let cache = localDataCache
+        Task {
+            do {
+                try await cache.saveTransactionReviewMetadata(metadata, to: cacheDirectory, context: cacheContext)
+                try await cache.saveTransactionRules(rules, to: cacheDirectory, context: cacheContext)
+            } catch {
+                await MainActor.run {
+                    self.error = "Review inbox storage failed to save: \(error.localizedDescription)"
+                }
+            }
+        }
     }
 
 }

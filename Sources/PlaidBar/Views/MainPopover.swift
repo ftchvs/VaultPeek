@@ -415,6 +415,9 @@ struct MainPopover: View {
                         DashboardChangeReceiptStrip()
                             .environment(appState)
 
+                        ReviewInboxView()
+                            .environment(appState)
+
                         if let presentation = appState.firstRunSnapshotPresentation {
                             FirstRunSnapshotView(
                                 presentation: presentation,
