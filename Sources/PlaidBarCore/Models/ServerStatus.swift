@@ -4,6 +4,8 @@ import Foundation
 ///
 /// Contract: readiness metadata only. Do not add secrets, account IDs,
 /// balances, transactions, Plaid tokens, or raw provider payloads here.
+/// `itemStatuses` is an opt-in coalesced snapshot using the same safe item
+/// health fields exposed by `/api/items`.
 public struct ServerStatus: Codable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case version
@@ -14,6 +16,7 @@ public struct ServerStatus: Codable, Sendable {
         case storagePath
         case syncReady
         case syncedItemCount
+        case itemStatuses
     }
 
     public let version: String
@@ -24,6 +27,7 @@ public struct ServerStatus: Codable, Sendable {
     public let storagePath: String
     public let syncReady: Bool
     public let syncedItemCount: Int
+    public let itemStatuses: [ItemStatus]?
 
     public init(
         version: String,
@@ -33,7 +37,8 @@ public struct ServerStatus: Codable, Sendable {
         credentialsConfigured: Bool = true,
         storagePath: String = LocalDataStore.displayPath,
         syncReady: Bool? = nil,
-        syncedItemCount: Int? = nil
+        syncedItemCount: Int? = nil,
+        itemStatuses: [ItemStatus]? = nil
     ) {
         self.version = version
         self.environment = environment
@@ -43,6 +48,7 @@ public struct ServerStatus: Codable, Sendable {
         self.storagePath = storagePath
         self.syncReady = syncReady ?? (itemCount > 0)
         self.syncedItemCount = syncedItemCount ?? (lastSync == nil ? 0 : itemCount)
+        self.itemStatuses = itemStatuses
     }
 
     public init(from decoder: Decoder) throws {
@@ -55,6 +61,7 @@ public struct ServerStatus: Codable, Sendable {
         let storagePath = try container.decodeIfPresent(String.self, forKey: .storagePath)
         let syncReady = try container.decodeIfPresent(Bool.self, forKey: .syncReady)
         let syncedItemCount = try container.decodeIfPresent(Int.self, forKey: .syncedItemCount)
+        let itemStatuses = try container.decodeIfPresent([ItemStatus].self, forKey: .itemStatuses)
 
         self.init(
             version: version,
@@ -64,7 +71,8 @@ public struct ServerStatus: Codable, Sendable {
             credentialsConfigured: credentialsConfigured ?? true,
             storagePath: storagePath ?? LocalDataStore.displayPath,
             syncReady: syncReady,
-            syncedItemCount: syncedItemCount
+            syncedItemCount: syncedItemCount,
+            itemStatuses: itemStatuses
         )
     }
 }

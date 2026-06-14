@@ -17,20 +17,7 @@ struct StatusRoutes: Sendable {
         request: Request,
         context: some RequestContext
     ) async throws -> Response {
-        let itemCount = try await tokenStore.itemCount()
-        let lastSync = try await tokenStore.lastSyncDate()
-        let syncedItemCount = try await tokenStore.syncedItemCount()
-
-        let status = ServerStatus(
-            version: PlaidBarConstants.appVersion,
-            environment: config.plaidEnvironment,
-            itemCount: itemCount,
-            lastSync: lastSync,
-            credentialsConfigured: config.credentialsConfigured,
-            storagePath: config.dataDirectoryPath,
-            syncReady: itemCount > 0,
-            syncedItemCount: syncedItemCount
-        )
+        let status = try await statusSnapshot(includeItems: Self.includesItems(request))
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -42,20 +29,31 @@ struct StatusRoutes: Sendable {
         )
     }
 
+    func statusSnapshot(includeItems: Bool) async throws -> ServerStatus {
+        let itemCount = try await tokenStore.itemCount()
+        let lastSync = try await tokenStore.lastSyncDate()
+        let syncedItemCount = try await tokenStore.syncedItemCount()
+        let itemStatuses = includeItems ? try await safeItemStatuses() : nil
+
+        return ServerStatus(
+            version: PlaidBarConstants.appVersion,
+            environment: config.plaidEnvironment,
+            itemCount: itemCount,
+            lastSync: lastSync,
+            credentialsConfigured: config.credentialsConfigured,
+            storagePath: config.dataDirectoryPath,
+            syncReady: itemCount > 0,
+            syncedItemCount: syncedItemCount,
+            itemStatuses: itemStatuses
+        )
+    }
+
     @Sendable
     func listItems(
         request: Request,
         context: some RequestContext
     ) async throws -> Response {
-        let items = try await tokenStore.getAllItems()
-        let dtos = items.map { item in
-            ItemStatus(
-                id: item.id ?? "",
-                institutionName: item.institutionName,
-                status: ItemConnectionStatus(rawValue: item.status) ?? .error,
-                lastSync: item.updatedAt
-            )
-        }
+        let dtos = try await safeItemStatuses()
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -65,5 +63,29 @@ struct StatusRoutes: Sendable {
             headers: [.contentType: "application/json"],
             body: .init(byteBuffer: ByteBuffer(data: data))
         )
+    }
+
+    private func safeItemStatuses() async throws -> [ItemStatus] {
+        let items = try await tokenStore.getAllItems()
+        return items.map(Self.safeItemStatus)
+    }
+
+    private static func safeItemStatus(from item: ItemModel) -> ItemStatus {
+        ItemStatus(
+            id: item.id ?? "",
+            institutionName: item.institutionName,
+            status: ItemConnectionStatus(rawValue: item.status) ?? .error,
+            lastSync: item.updatedAt
+        )
+    }
+
+    static func includesItems(_ request: Request) -> Bool {
+        guard let include = request.uri.queryParameters.get("include") else {
+            return false
+        }
+        return include
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+            .contains("items")
     }
 }

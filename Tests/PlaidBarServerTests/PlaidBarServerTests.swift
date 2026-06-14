@@ -305,6 +305,110 @@ struct PlaidBarServerTests {
         }
     }
 
+    @Test(
+        "Status include items returns safe item readiness snapshot",
+        .enabled(if: plaidTokenVaultKeychainAvailable, "macOS Keychain accepts test writes")
+    )
+    func statusIncludeItemsReturnsSafeItemReadinessSnapshot() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-status-items-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let loginItemId = "test_item_login_\(UUID().uuidString)"
+        let errorItemId = "test_item_error_\(UUID().uuidString)"
+        defer {
+            for itemId in [loginItemId, errorItemId] {
+                try? PlaidTokenVault.delete(
+                    storedToken: PlaidTokenVault.reference(for: itemId),
+                    fallbackItemId: itemId
+                )
+            }
+        }
+
+        let databasePath = directory.appendingPathComponent("plaidbar-status-items.sqlite").path
+        let logger = Logger(label: "com.ftchvs.plaidbar-server-tests.status-items")
+        let config = try setupStateConfig(in: directory)
+        try await withTokenStore(databasePath: databasePath, logger: logger) { store in
+            try await store.saveItem(
+                id: loginItemId,
+                accessToken: "access-sandbox-\(UUID().uuidString)",
+                institutionId: "ins_login",
+                institutionName: "Example Bank"
+            )
+            try await store.saveItem(
+                id: errorItemId,
+                accessToken: "access-sandbox-\(UUID().uuidString)",
+                institutionId: "ins_error",
+                institutionName: "Credit Union"
+            )
+            try await store.updateItemStatus(id: loginItemId, status: ItemConnectionStatus.loginRequired.rawValue)
+            try await store.updateItemStatus(id: errorItemId, status: ItemConnectionStatus.error.rawValue)
+
+            let routes = StatusRoutes(
+                tokenStore: store,
+                config: config
+            )
+            let includeItemsRequest = Self.makeRequest(path: "/api/status?include=items")
+            let status = try await routes.statusSnapshot(
+                includeItems: StatusRoutes.includesItems(includeItemsRequest)
+            )
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let payload = try #require(String(data: encoder.encode(status), encoding: .utf8))
+
+            #expect(StatusRoutes.includesItems(includeItemsRequest))
+            #expect(status.credentialsConfigured == false)
+            #expect(status.itemCount == 2)
+            #expect(status.syncReady)
+            #expect(status.itemStatuses?.count == 2)
+            #expect(
+                (status.itemStatuses?.map(\.status.rawValue).sorted() ?? []) ==
+                    [
+                        ItemConnectionStatus.error.rawValue,
+                        ItemConnectionStatus.loginRequired.rawValue,
+                    ]
+            )
+            #expect(Set(status.itemStatuses?.compactMap(\.institutionName) ?? []) == ["Example Bank", "Credit Union"])
+            #expect(!payload.contains("access-sandbox-"))
+            #expect(!payload.contains("access_token"))
+            #expect(!payload.contains("institutionId"))
+            #expect(!payload.contains("institution_id"))
+            #expect(!payload.contains("transaction"))
+            #expect(!payload.contains("balance"))
+        }
+    }
+
+    @Test("Status omits item readiness snapshot by default")
+    func statusOmitsItemReadinessSnapshotByDefault() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-status-default-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let databasePath = directory.appendingPathComponent("plaidbar-status-default.sqlite").path
+        let logger = Logger(label: "com.ftchvs.plaidbar-server-tests.status-default")
+        let config = try setupStateConfig(in: directory)
+        try await withTokenStore(databasePath: databasePath, logger: logger) { store in
+            let routes = StatusRoutes(
+                tokenStore: store,
+                config: config
+            )
+            let defaultStatusRequest = Self.makeRequest(path: "/api/status")
+            let status = try await routes.statusSnapshot(
+                includeItems: StatusRoutes.includesItems(defaultStatusRequest)
+            )
+            let object = try #require(
+                JSONSerialization.jsonObject(with: JSONEncoder().encode(status)) as? [String: Any]
+            )
+
+            #expect(!StatusRoutes.includesItems(defaultStatusRequest))
+            #expect(status.itemCount == 0)
+            #expect(status.itemStatuses == nil)
+            #expect(object["itemStatuses"] == nil)
+        }
+    }
+
     @Test func serverConfigLoadsExplicitConfigFile() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("plaidbar-config-\(UUID().uuidString)", isDirectory: true)
@@ -615,6 +719,18 @@ struct PlaidBarServerTests {
             head: HTTPRequest(method: .get, scheme: nil, authority: nil, path: path, headerFields: headers),
             body: RequestBody(buffer: ByteBuffer())
         )
+    }
+
+    private func setupStateConfig(in directory: URL) throws -> ServerConfig {
+        let dataDirectory = directory.appendingPathComponent("data", isDirectory: true)
+        let configURL = directory.appendingPathComponent("plaidbar.conf")
+        try """
+        PLAID_CLIENT_ID=
+        PLAID_SECRET=
+        PLAID_ENV=sandbox
+        PLAIDBAR_DATA_DIR=\(dataDirectory.path)
+        """.write(to: configURL, atomically: true, encoding: .utf8)
+        return try ServerConfig.load(from: configURL.path)
     }
 
     /// Runs `body` against a TokenStore backed by a temporary SQLite file,

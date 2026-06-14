@@ -1195,11 +1195,15 @@ struct PlaidBarCoreTests {
         let itemId = "item with/slash?and&symbols"
 
         let syncURL = try #require(ServerEndpoint.transactionSyncURL(baseURL: baseURL, itemId: itemId))
+        let statusURL = try #require(ServerEndpoint.statusURL(baseURL: baseURL))
+        let coalescedStatusURL = try #require(ServerEndpoint.statusURL(baseURL: baseURL, includeItems: true))
         let cursorCommitURL = try #require(ServerEndpoint.transactionCursorCommitURL(baseURL: baseURL))
         let updateURL = try #require(ServerEndpoint.updateLinkTokenURL(baseURL: baseURL, itemId: itemId))
         let removeURL = try #require(ServerEndpoint.removeItemURL(baseURL: baseURL, itemId: itemId))
 
         #expect(syncURL.absoluteString == "http://127.0.0.1:8484/api/transactions/sync?item_id=item%20with%2Fslash%3Fand%26symbols")
+        #expect(statusURL.absoluteString == "http://127.0.0.1:8484/api/status")
+        #expect(coalescedStatusURL.absoluteString == "http://127.0.0.1:8484/api/status?include=items")
         #expect(cursorCommitURL.absoluteString == "http://127.0.0.1:8484/api/transactions/sync/cursors")
         #expect(updateURL.absoluteString == "http://127.0.0.1:8484/api/link/update/item%20with%2Fslash%3Fand%26symbols")
         #expect(removeURL.absoluteString == "http://127.0.0.1:8484/api/accounts/item%20with%2Fslash%3Fand%26symbols")
@@ -1671,6 +1675,41 @@ struct PlaidBarCoreTests {
         #expect(decoded.syncedItemCount == 0)
     }
 
+    @Test("ServerStatus can include item readiness snapshot")
+    func serverStatusCanIncludeItemReadinessSnapshot() throws {
+        let lastSync = Date(timeIntervalSince1970: 1_800_000_010)
+        let status = ServerStatus(
+            version: "0.1.0",
+            environment: .sandbox,
+            itemCount: 2,
+            credentialsConfigured: true,
+            syncReady: true,
+            syncedItemCount: 1,
+            itemStatuses: [
+                ItemStatus(id: "item-login", institutionName: "Example Bank", status: .loginRequired, lastSync: lastSync),
+                ItemStatus(id: "item-error", institutionName: "Credit Union", status: .error),
+            ]
+        )
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(status)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(ServerStatus.self, from: data)
+
+        #expect(decoded.itemStatuses?.count == 2)
+        #expect(
+            decoded.itemStatuses?.map(\.status.rawValue) ==
+                [
+                    ItemConnectionStatus.loginRequired.rawValue,
+                    ItemConnectionStatus.error.rawValue,
+                ]
+        )
+        #expect(decoded.itemStatuses?.first?.institutionName == "Example Bank")
+        #expect(decoded.itemStatuses?.first?.lastSync != nil)
+    }
+
     @Test("ServerStatus decodes legacy payload without synced item count")
     func serverStatusLegacyPayload() throws {
         let json = """
@@ -1688,6 +1727,7 @@ struct PlaidBarCoreTests {
 
         #expect(decoded.itemCount == 2)
         #expect(decoded.syncedItemCount == 0)
+        #expect(decoded.itemStatuses == nil)
     }
 
     // MARK: - Balance History Reducer Tests
