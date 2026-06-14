@@ -21,6 +21,15 @@ protocol PlaidClientProtocol: Sendable {
     func exchangePublicToken(_ publicToken: String) async throws -> PlaidTokenExchangeResponse
 
     func getAccounts(accessToken: String) async throws -> PlaidAccountsResponse
+
+    func getBalances(accessToken: String) async throws -> PlaidAccountsResponse
+
+    func syncTransactions(
+        accessToken: String,
+        cursor: String?
+    ) async throws -> PlaidTransactionsSyncResponse
+
+    func removeItem(accessToken: String) async throws
 }
 
 actor PlaidClient: PlaidClientProtocol {

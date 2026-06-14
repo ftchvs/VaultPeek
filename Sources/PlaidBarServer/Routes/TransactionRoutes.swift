@@ -4,8 +4,9 @@ import NIOCore
 import PlaidBarCore
 
 struct TransactionRoutes: Sendable {
-    let plaidClient: PlaidClient
+    let plaidClient: any PlaidClientProtocol
     let tokenStore: TokenStore
+    var maxConcurrentItemRefreshes = AccountRoutes.defaultMaxConcurrentItemRefreshes
 
     func register(with group: RouterGroup<some RequestContext>) {
         group.group("transactions")
@@ -22,75 +23,36 @@ struct TransactionRoutes: Sendable {
         let items: [ItemModel]
 
         if let itemIdParam {
-            // An explicit item filter for an id we don't have is a caller error
-            // (typo or stale id), not an empty no-op sync. Surface it as a 404 so
-            // the app/CLI can distinguish a bad filter from a clean sync with no
-            // updates. The unfiltered path below stays a successful empty sync.
             let itemId = String(itemIdParam)
-            guard let item = try await tokenStore.getItem(id: itemId) else {
-                throw HTTPError(.notFound, message: "Plaid item not found")
+            if let item = try await tokenStore.getItem(id: itemId) {
+                items = [item]
+            } else {
+                items = []
             }
-            items = [item]
         } else {
-            items = try await tokenStore.getAllItems()
+            items = AccountRoutes.deterministicItems(try await tokenStore.getAllItems())
         }
 
-        var allAdded: [TransactionDTO] = []
-        var allModified: [TransactionDTO] = []
-        var allRemoved: [String] = []
-        var hasMore = false
-        var latestCursor: String?
-        var pendingCursors: [String: String] = [:]
-        var attemptedItemCount = 0
-        var successfulItemCount = 0
-
-        for item in items {
-            guard let itemId = item.id else { continue }
-            attemptedItemCount += 1
-
-            let cursor = try await tokenStore.getSyncCursor(itemId: itemId)
-            let response: PlaidTransactionsSyncResponse
-            do {
-                let accessToken = try tokenStore.accessToken(for: item)
-                response = try await plaidClient.syncTransactions(
-                    accessToken: accessToken,
-                    cursor: cursor
-                )
-                try await tokenStore.updateItemStatus(id: itemId, status: ItemConnectionStatus.connected.rawValue)
-                successfulItemCount += 1
-            } catch PlaidError.credentialsNotConfigured {
-                // Setup state affects every item identically: surface the 503
-                // credential guidance instead of marking items errored.
-                throw PlaidError.credentialsNotConfigured
-            } catch {
-                try await tokenStore.updateItemStatus(id: itemId, status: itemStatus(for: error).rawValue)
-                continue
-            }
-
-            allAdded.append(contentsOf: response.added.map { Self.toDTO($0, itemId: itemId) })
-            allModified.append(contentsOf: response.modified.map { Self.toDTO($0, itemId: itemId) })
-            allRemoved.append(contentsOf: response.removed.map(\.transactionId))
-
-            if !response.nextCursor.isEmpty {
-                latestCursor = response.nextCursor
-                pendingCursors[itemId] = response.nextCursor
-            }
-
-            if response.hasMore {
-                hasMore = true
-            }
-        }
+        let results = try await syncItems(items)
+        let attemptedItemCount = results.filter(\.attempted).count
+        let successfulItemCount = results.filter(\.succeeded).count
 
         if Self.shouldFailSync(attemptedItemCount: attemptedItemCount, successfulItemCount: successfulItemCount) {
             throw HTTPError(.badGateway, message: "Plaid transaction sync failed for every linked item")
         }
 
+        let successfulResults = results.filter(\.succeeded)
+        let pendingCursors = successfulResults.reduce(into: [String: String]()) { cursors, result in
+            guard let nextCursor = result.nextCursor, !nextCursor.isEmpty else { return }
+            cursors[result.itemId] = nextCursor
+        }
+
         let syncResponse = SyncResponse(
-            added: allAdded,
-            modified: allModified,
-            removed: allRemoved,
-            hasMore: hasMore,
-            nextCursor: latestCursor,
+            added: successfulResults.flatMap(\.added),
+            modified: successfulResults.flatMap(\.modified),
+            removed: successfulResults.flatMap(\.removed),
+            hasMore: successfulResults.contains(where: \.hasMore),
+            nextCursor: successfulResults.last(where: { ($0.nextCursor?.isEmpty == false) })?.nextCursor,
             pendingCursors: pendingCursors
         )
 
@@ -130,6 +92,70 @@ struct TransactionRoutes: Sendable {
     static func normalizedCommittableCursor(_ cursor: String) -> String? {
         let trimmed = cursor.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private struct ItemSyncResult: Sendable {
+        let itemId: String
+        let attempted: Bool
+        let succeeded: Bool
+        let added: [TransactionDTO]
+        let modified: [TransactionDTO]
+        let removed: [String]
+        let hasMore: Bool
+        let nextCursor: String?
+
+        static let skipped = ItemSyncResult(
+            itemId: "",
+            attempted: false,
+            succeeded: false,
+            added: [],
+            modified: [],
+            removed: [],
+            hasMore: false,
+            nextCursor: nil
+        )
+    }
+
+    private func syncItems(_ items: [ItemModel]) async throws -> [ItemSyncResult] {
+        try await BoundedConcurrency.map(items, limit: maxConcurrentItemRefreshes) { item in
+            guard let itemId = item.id else { return .skipped }
+
+            do {
+                let cursor = try await tokenStore.getSyncCursor(itemId: itemId)
+                let accessToken = try tokenStore.accessToken(for: item)
+                let response = try await plaidClient.syncTransactions(
+                    accessToken: accessToken,
+                    cursor: cursor
+                )
+                try await tokenStore.updateItemStatus(id: itemId, status: ItemConnectionStatus.connected.rawValue)
+                return ItemSyncResult(
+                    itemId: itemId,
+                    attempted: true,
+                    succeeded: true,
+                    added: response.added.map { Self.toDTO($0, itemId: itemId) },
+                    modified: response.modified.map { Self.toDTO($0, itemId: itemId) },
+                    removed: response.removed.map(\.transactionId),
+                    hasMore: response.hasMore,
+                    nextCursor: response.nextCursor.isEmpty ? nil : response.nextCursor
+                )
+            } catch PlaidError.credentialsNotConfigured {
+                // Setup state affects every item identically: surface the 503
+                // credential guidance instead of marking items errored.
+                throw PlaidError.credentialsNotConfigured
+            } catch {
+                try await tokenStore.updateItemStatus(id: itemId, status: itemStatus(for: error).rawValue)
+                return ItemSyncResult(
+                    itemId: itemId,
+                    attempted: true,
+                    succeeded: false,
+                    added: [],
+                    modified: [],
+                    removed: [],
+                    hasMore: false,
+                    nextCursor: nil
+                )
+            }
+        }
     }
 
     private static func toDTO(_ plaidTx: PlaidTransaction, itemId: String) -> TransactionDTO {
