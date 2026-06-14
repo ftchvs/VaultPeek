@@ -41,8 +41,9 @@ final class DetachedDashboardWindowController: NSObject, NSWindowDelegate {
     /// while a hide animation is in flight cannot order out the freshly-shown
     /// panel (which would leave `isDashboardDetached == true` with no window).
     private var presentationGeneration = 0
-    /// Observes `dashboard.selectedAccountId` so the panel's real resize floor
-    /// (`contentMinSize`) tracks whether the trailing inspector is showing.
+    /// Observes `UserDefaults.didChangeNotification` so the window picks up live
+    /// changes to the "keep on top" preference (and re-asserts its resize floor)
+    /// without a re-dock.
     ///
     /// No `deinit` removal: this controller is owned by the app scene's
     /// process-lifetime `DetachedDashboardCoordinator`, so it is never
@@ -51,12 +52,10 @@ final class DetachedDashboardWindowController: NSObject, NSWindowDelegate {
     /// captures `self` weakly, so even an orphaned observation is a harmless
     /// no-op.
     private var selectionObserver: NSObjectProtocol?
-    /// The app's activation policy before the detached window was first shown. A
-    /// menu-bar app runs `.accessory`; while the floating dashboard is open we flip
-    /// to `.regular` so the window comes to the front and gains a Dock / ⌘-Tab
-    /// presence (a normal window from an `.accessory` app otherwise opens *behind*
-    /// the active app). Restored on re-dock so the app returns to menu-bar-only.
-    private var activationPolicyBeforeDetach: NSApplication.ActivationPolicy?
+    /// True while this window holds a `.regular` activation request with the shared
+    /// `AppActivationPolicyCoordinator` (managed mode only). Tracked so show/raise
+    /// request exactly once and re-dock releases exactly once.
+    private var holdsRegularRequest = false
 
     init(
         appState: AppState,
@@ -198,28 +197,22 @@ final class DetachedDashboardWindowController: NSObject, NSWindowDelegate {
         }
     }
 
-    /// Flip the app to `.regular` while the detached window is on screen, saving
-    /// the prior policy once so re-dock can restore it. A normal window from an
-    /// `.accessory` (menu-bar) app otherwise opens behind the active app and never
-    /// takes focus. Idempotent.
+    /// Request `.regular` (front + Dock presence) for the window via the shared,
+    /// refcounted coordinator. Idempotent: holds at most one request so it does
+    /// not double-count or fight the Settings window's own elevation.
     private func elevateActivationPolicyForWindow() {
-        if activationPolicyBeforeDetach == nil {
-            activationPolicyBeforeDetach = NSApp.activationPolicy()
-        }
-        if NSApp.activationPolicy() != .regular {
-            NSApp.setActivationPolicy(.regular)
-        }
+        guard !holdsRegularRequest else { return }
+        holdsRegularRequest = true
+        AppActivationPolicyCoordinator.shared.requestRegular()
     }
 
-    /// Restore the activation policy captured before the window was shown
-    /// (menu-bar `.accessory`), so closing the window returns the app to
-    /// menu-bar-only. No-op when nothing was captured.
+    /// Release this window's `.regular` request. The coordinator returns the app
+    /// to menu-bar-only `.accessory` only when no other surface (e.g. Settings)
+    /// still needs `.regular`. No-op when this window held no request (glance mode).
     private func restoreActivationPolicy() {
-        guard let prior = activationPolicyBeforeDetach else { return }
-        activationPolicyBeforeDetach = nil
-        if NSApp.activationPolicy() != prior {
-            NSApp.setActivationPolicy(prior)
-        }
+        guard holdsRegularRequest else { return }
+        holdsRegularRequest = false
+        AppActivationPolicyCoordinator.shared.releaseRegular()
     }
 
     // MARK: - Resize floor
@@ -231,24 +224,22 @@ final class DetachedDashboardWindowController: NSObject, NSWindowDelegate {
     /// (982pt) layout and clip the inspector when an account is selected.
     private func updateContentMinSize() {
         guard let panel else { return }
-        let inspectorOpen = !Self.selectedAccountId().isEmpty
-        let minWidth = DetachedDashboardPreferences.minContentWidth(isInspectorOpen: inspectorOpen)
+        // The inspector column is always present (three-column-always), so the
+        // resize floor always reserves it — the window can never be sized narrower
+        // than the full three-column layout and clip the empty inspector.
+        let minWidth = DetachedDashboardPreferences.minContentWidth(isInspectorOpen: true)
         panel.contentMinSize = CGSize(
             width: minWidth,
             height: DetachedDashboardPreferences.minContentHeight
         )
-        // If the user had already shrunk the window below the new floor, grow it
-        // so the inspector is not clipped the instant it opens.
+        // If a restored or pre-existing frame is below the new floor, grow it so
+        // the inspector is not clipped.
         if panel.frame.width < minWidth {
             var frame = panel.frame
             // Grow rightward from the existing origin (keeps the left edge put).
             frame.size.width = minWidth
             panel.setFrame(frame, display: true, animate: false)
         }
-    }
-
-    private static func selectedAccountId() -> String {
-        UserDefaults.standard.string(forKey: "dashboard.selectedAccountId") ?? ""
     }
 
     // MARK: - Panel construction

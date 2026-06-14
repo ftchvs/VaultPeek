@@ -22,12 +22,6 @@ struct PlaidBarApp: App {
 
         let state = AppState()
         _appState = State(initialValue: state)
-        // QA/screenshot aid: "--detach" opens the floating desktop window at
-        // launch (parallel to "--show-popover"), so the detached window can be
-        // exercised and captured without driving the menu-bar UI by hand.
-        if CommandLine.arguments.contains("--detach") {
-            state.isDashboardDetached = true
-        }
         updaterController = SPUStandardUpdaterController(
             startingUpdater: false,
             updaterDelegate: nil,
@@ -110,6 +104,17 @@ struct PlaidBarApp: App {
                         forcedColorScheme: Self.forcedColorScheme,
                         reduceMotion: reduceMotion
                     )
+                    // QA/screenshot aid: "--detach" opens the floating window at
+                    // launch (parallel to "--show-popover") WITHOUT persisting the
+                    // detached intent, so a QA run never leaves a durable
+                    // `dashboard.detached` preference behind.
+                    if CommandLine.arguments.contains("--detach") {
+                        detachedDashboard.presentForLaunchOverride(
+                            appState: appState,
+                            forcedColorScheme: Self.forcedColorScheme,
+                            reduceMotion: reduceMotion
+                        )
+                    }
                 }
                 // While detached, a status-item click sets isPopoverPresented
                 // true; intercept it on the always-mounted label, snap it back to

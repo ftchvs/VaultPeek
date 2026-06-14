@@ -2081,17 +2081,18 @@ final class SettingsWindowActivationRestorer {
 
     private var closeObserver: NSObjectProtocol?
     private var discoveryObserver: NSObjectProtocol?
-    private var previousActivationPolicy: NSApplication.ActivationPolicy?
+    /// True while Settings holds a `.regular` request with the shared coordinator,
+    /// so opening Settings twice does not double-count and closing releases once.
+    private var holdsRegularRequest = false
 
     func open(openSettings: OpenSettingsAction) {
         let app = NSApplication.shared
-        if previousActivationPolicy == nil {
-            previousActivationPolicy = app.activationPolicy()
-        }
-
         removeDiscoveryObserver()
-        if app.activationPolicy() != .regular {
-            app.setActivationPolicy(.regular)
+        // Elevate via the shared, refcounted coordinator (not a private save) so
+        // Settings and the detached dashboard cannot strand the app in `.regular`.
+        if !holdsRegularRequest {
+            holdsRegularRequest = true
+            AppActivationPolicyCoordinator.shared.requestRegular()
         }
 
         openSettings()
@@ -2150,9 +2151,10 @@ final class SettingsWindowActivationRestorer {
     }
 
     private func restoreActivationPolicy() {
-        let app = NSApplication.shared
-        app.setActivationPolicy(previousActivationPolicy ?? .accessory)
-        previousActivationPolicy = nil
+        if holdsRegularRequest {
+            holdsRegularRequest = false
+            AppActivationPolicyCoordinator.shared.releaseRegular()
+        }
         removeCloseObserver()
         removeDiscoveryObserver()
     }
