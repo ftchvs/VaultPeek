@@ -26,23 +26,21 @@ struct LinkTokenRequestTests {
 
     @Test("Create link-token body omits redirect_uri but keeps hosted_link")
     func createLinkTokenBodyOmitsRedirectURI() throws {
-        // Mirrors PlaidClient.createLinkToken: nil redirectUri, hosted_link set.
-        let request = PlaidLinkTokenRequest(
+        let config = try PlaidLinkConfiguration.resolved(from: [:])
+        let request = try config.createRequest(
             clientId: "test-client",
             secret: "test-secret",
-            clientName: "VaultPeek",
-            user: .init(clientUserId: "plaidbar-user-test"),
-            products: ["transactions"],
-            countryCodes: ["US"],
-            language: "en",
-            hostedLink: .init(
-                completionRedirectUri: "http://localhost:8484/oauth/callback?state=abc",
-                urlLifetimeSeconds: 1800
-            )
+            clientUserId: "vaultpeek-install-test",
+            completionRedirectURI: "http://localhost:8484/oauth/callback?state=abc"
         )
 
         let json = try encodedRequest(request)
 
+        #expect(json["client_name"] as? String == "VaultPeek")
+        #expect(json["products"] as? [String] == ["transactions"])
+        #expect(json["country_codes"] as? [String] == ["US"])
+        #expect(json["language"] as? String == "en")
+        #expect(json["webhook"] == nil)
         // The OAuth redirect_uri must be omitted from the JSON entirely.
         #expect(json["redirect_uri"] == nil)
         #expect(!json.keys.contains("redirect_uri"))
@@ -54,31 +52,127 @@ struct LinkTokenRequestTests {
                 == "http://localhost:8484/oauth/callback?state=abc"
         )
         #expect(hostedLink["url_lifetime_seconds"] as? Int == 1800)
+        #expect(hostedLink["is_mobile_app"] == nil)
     }
 
     @Test("Update link-token body omits redirect_uri and includes access_token")
     func updateLinkTokenBodyOmitsRedirectURI() throws {
-        // Mirrors PlaidClient.createUpdateLinkToken: nil redirectUri, access_token set.
-        let request = PlaidLinkTokenRequest(
+        let config = try PlaidLinkConfiguration.resolved(from: [:])
+        let request = try config.updateRequest(
             clientId: "test-client",
             secret: "test-secret",
-            clientName: "VaultPeek",
-            user: .init(clientUserId: "plaidbar-user-test"),
-            countryCodes: ["US"],
-            language: "en",
-            hostedLink: .init(
-                completionRedirectUri: "http://localhost:8484/oauth/callback?state=def",
-                urlLifetimeSeconds: 1800
-            ),
-            accessToken: "access-sandbox-token"
+            clientUserId: "vaultpeek-install-test",
+            accessToken: "access-sandbox-token",
+            completionRedirectURI: "http://localhost:8484/oauth/callback?state=def"
         )
 
         let json = try encodedRequest(request)
 
         #expect(json["redirect_uri"] == nil)
         #expect(!json.keys.contains("redirect_uri"))
+        #expect(json["products"] == nil)
         #expect(json["access_token"] as? String == "access-sandbox-token")
         #expect(json["hosted_link"] != nil)
+    }
+
+    @Test("Managed/native config sets webhook redirect and mobile Hosted Link flags")
+    func managedNativeConfigBuildsHostedLinkOptions() throws {
+        let config = try PlaidLinkConfiguration.resolved(from: [
+            "PLAID_LINK_PRODUCTS": "transactions, liabilities",
+            "PLAID_LINK_COUNTRY_CODES": "US,CA",
+            "PLAID_LINK_LANGUAGE": "fr",
+            "PLAID_LINK_WEBHOOK_URL": "https://vaultpeek.example/webhooks/plaid-link",
+            "PLAID_LINK_REDIRECT_URI": "https://vaultpeek.example/oauth/plaid",
+            "PLAID_HOSTED_LINK_LIFETIME_SECONDS": "900",
+            "PLAID_HOSTED_LINK_IS_MOBILE_APP": "true",
+        ])
+        let request = try config.createRequest(
+            clientId: "test-client",
+            secret: "test-secret",
+            clientUserId: "vaultpeek-install-test",
+            completionRedirectURI: "vaultpeek://hosted-link-complete"
+        )
+
+        let json = try encodedRequest(request)
+        #expect(json["products"] as? [String] == ["transactions", "liabilities"])
+        #expect(json["country_codes"] as? [String] == ["US", "CA"])
+        #expect(json["language"] as? String == "fr")
+        #expect(json["webhook"] as? String == "https://vaultpeek.example/webhooks/plaid-link")
+        #expect(json["redirect_uri"] as? String == "https://vaultpeek.example/oauth/plaid")
+
+        let hostedLink = try #require(json["hosted_link"] as? [String: Any])
+        #expect(hostedLink["completion_redirect_uri"] as? String == "vaultpeek://hosted-link-complete")
+        #expect(hostedLink["url_lifetime_seconds"] as? Int == 900)
+        #expect(hostedLink["is_mobile_app"] as? Bool == true)
+    }
+
+    @Test("Link configuration rejects unsupported values before calling Plaid")
+    func linkConfigurationValidation() {
+        #expect(throws: PlaidLinkConfigurationError.self) {
+            _ = try PlaidLinkConfiguration(
+                clientName: "This Name Is Far Too Long For Plaid Link",
+                products: ["transactions"],
+                countryCodes: ["US"],
+                language: "en",
+                webhookURL: nil,
+                redirectURI: nil,
+                hostedLinkLifetimeSeconds: 1800,
+                hostedLinkIsMobileApp: false
+            ).createRequest(
+                clientId: "test-client",
+                secret: "test-secret",
+                clientUserId: "vaultpeek-install-test",
+                completionRedirectURI: "http://localhost:8484/oauth/callback"
+            )
+        }
+        #expect(throws: PlaidLinkConfigurationError.self) {
+            _ = try PlaidLinkConfiguration.resolved(
+                from: ["PLAID_LINK_PRODUCTS": "transactions,not_a_product"]
+            )
+        }
+        #expect(throws: PlaidLinkConfigurationError.self) {
+            _ = try PlaidLinkConfiguration.resolved(from: ["PLAID_LINK_COUNTRY_CODES": "US,ZZ"])
+        }
+        #expect(throws: PlaidLinkConfigurationError.self) {
+            _ = try PlaidLinkConfiguration.resolved(from: ["PLAID_LINK_LANGUAGE": "xx"])
+        }
+        #expect(throws: PlaidLinkConfigurationError.self) {
+            _ = try PlaidLinkConfiguration.resolved(from: ["PLAID_HOSTED_LINK_LIFETIME_SECONDS": "0"])
+        }
+    }
+
+    @Test("Stable install client_user_id is non-PII and does not embed secrets")
+    func stableInstallClientUserIdIsSafe() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-link-id-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let configURL = directory.appendingPathComponent("server.conf")
+        let dataDirectory = directory.appendingPathComponent("data", isDirectory: true)
+        try """
+        PLAID_CLIENT_ID=client-secret-shaped-value
+        PLAID_SECRET=secret-shaped-value
+        PLAID_ENV=sandbox
+        PLAIDBAR_DATA_DIR=\(dataDirectory.path)
+        """.write(to: configURL, atomically: true, encoding: .utf8)
+
+        let first = try ServerConfig.load(from: configURL.path)
+        let second = try ServerConfig.load(from: configURL.path)
+
+        #expect(first.linkClientUserId == second.linkClientUserId)
+        #expect(ServerConfig.isValidStoredLinkClientUserId(first.linkClientUserId))
+        #expect(!first.linkClientUserId.contains("client-secret-shaped-value"))
+        #expect(!first.linkClientUserId.contains("secret-shaped-value"))
+        #expect(!first.linkClientUserId.contains("access-"))
+        #expect(!first.linkClientUserId.contains("public-"))
+        #expect(!first.linkClientUserId.contains("account"))
+        #expect(!first.linkClientUserId.contains("@"))
+        #expect(!first.linkClientUserId.contains("+1"))
+
+        let storedURL = dataDirectory.appendingPathComponent(ServerConfig.linkClientUserIdFilename)
+        #expect(try String(contentsOf: storedURL, encoding: .utf8) == first.linkClientUserId)
+        #expect(try posixPermissions(at: storedURL) == 0o600)
     }
 
     @Test("Explicit redirectUri still encodes (non-Hosted-Link callers)")
@@ -98,6 +192,11 @@ struct LinkTokenRequestTests {
 
         let json = try encodedRequest(request)
         #expect(json["redirect_uri"] as? String == "http://localhost:8484/oauth/callback")
+    }
+
+    private func posixPermissions(at url: URL) throws -> Int {
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        return (attributes[.posixPermissions] as? NSNumber)?.intValue ?? -1
     }
 }
 

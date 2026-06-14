@@ -22,11 +22,10 @@ struct LinkRoutes: Sendable {
         request: Request,
         context: some RequestContext
     ) async throws -> Response {
-        let userId = "plaidbar-user-\(UUID().uuidString.prefix(8))"
         let state = await pendingLinkSessions.issueState()
         let plaidResponse = try await Self.mappingPlaidError {
             try await plaidClient.createLinkToken(
-                userId: userId,
+                clientUserId: config.linkClientUserId,
                 completionRedirectUri: callbackURL(state: state)
             )
         }
@@ -58,11 +57,10 @@ struct LinkRoutes: Sendable {
         }
         let accessToken = try tokenStore.accessToken(for: item)
 
-        let userId = "plaidbar-user-\(UUID().uuidString.prefix(8))"
         let state = await pendingLinkSessions.issueState()
         let plaidResponse = try await Self.mappingPlaidError {
             try await plaidClient.createUpdateLinkToken(
-                userId: userId,
+                clientUserId: config.linkClientUserId,
                 accessToken: accessToken,
                 completionRedirectUri: callbackURL(state: state)
             )
