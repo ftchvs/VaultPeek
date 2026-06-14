@@ -6,25 +6,42 @@ import WidgetKit
 private struct GlanceEntry: TimelineEntry {
     let date: Date
     let snapshot: GlanceSnapshot
+    /// True when no real snapshot exists yet (first install, post-reset, or a
+    /// failed app-group read). The view shows a setup/unavailable state instead
+    /// of a misleading "$0 · Updated now".
+    var isUnavailable = false
 }
 
 private struct GlanceTimelineProvider: TimelineProvider {
     func placeholder(in context: Context) -> GlanceEntry {
-        GlanceEntry(date: Date(), snapshot: .placeholder())
+        GlanceEntry(date: Date(), snapshot: .placeholder(), isUnavailable: true)
     }
 
     func getSnapshot(in context: Context, completion: @escaping (GlanceEntry) -> Void) {
-        completion(entry())
+        // Preview/gallery contexts (Add Widget) must not render the user's real
+        // net worth before the widget is placed — use the redacted placeholder.
+        if context.isPreview {
+            completion(GlanceEntry(date: Date(), snapshot: .placeholder(), isUnavailable: true))
+        } else {
+            completion(entry())
+        }
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<GlanceEntry>) -> Void) {
         let current = entry()
-        let nextRefresh = Calendar.current.date(byAdding: .minute, value: 15, to: current.date) ?? current.date
+        // Schedule the next reload relative to now, not the snapshot's
+        // last-success time — otherwise a snapshot older than 15 minutes yields
+        // an already-past refresh date and WidgetKit throttles/loops.
+        let nextRefresh = Calendar.current.date(byAdding: .minute, value: 15, to: Date()) ?? Date().addingTimeInterval(900)
         completion(Timeline(entries: [current], policy: .after(nextRefresh)))
     }
 
     private func entry() -> GlanceEntry {
-        let snapshot = (try? GlanceSnapshotStore.load()) ?? .placeholder()
+        // Distinguish "no snapshot yet" from a real zero balance so the widget
+        // shows a setup state rather than a misleading "$0 · Updated now".
+        guard let snapshot = try? GlanceSnapshotStore.load() else {
+            return GlanceEntry(date: Date(), snapshot: .placeholder(), isUnavailable: true)
+        }
         return GlanceEntry(date: snapshot.updatedAt, snapshot: snapshot)
     }
 }
@@ -49,6 +66,38 @@ private struct GlanceWidgetView: View {
     let entry: GlanceEntry
 
     var body: some View {
+        if entry.isUnavailable {
+            unavailableState
+        } else {
+            dataState
+        }
+    }
+
+    private var unavailableState: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "lock.shield")
+                    .imageScale(.small)
+                Text("VaultPeek")
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            Spacer(minLength: 0)
+            Text("Open VaultPeek")
+                .font(.callout.weight(.semibold))
+                .lineLimit(1)
+            Text("Connect an account to see your net worth here.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("VaultPeek. Open the app and connect an account to see your net worth.")
+    }
+
+    private var dataState: some View {
         VStack(alignment: .leading, spacing: family == .systemSmall ? 8 : 10) {
             HStack(spacing: 6) {
                 Image(systemName: "lock.shield")
