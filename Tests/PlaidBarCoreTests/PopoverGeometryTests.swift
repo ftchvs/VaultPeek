@@ -19,6 +19,22 @@ struct PopoverGeometryTests {
         #expect(delta == PopoverGeometry.dividerWidth + PopoverGeometry.railWidth)
     }
 
+    @Test("Detached minimum width grows by an inspector column when one is open")
+    func detachedMinContentWidthIncludesInspector() {
+        // Two-column floor: rail + divider + the flexible dashboard's floor.
+        let docked = PopoverGeometry.detachedMinContentWidth(isInspectorOpen: false)
+        #expect(docked == PopoverGeometry.railWidth
+            + PopoverGeometry.dividerWidth
+            + PopoverGeometry.minDashboardWidth)
+
+        // Opening the inspector adds exactly a divider + a fixed-width rail, so
+        // the resizable window's floor reserves room for the inspector instead
+        // of clipping it (AND-384/405).
+        let withInspector = PopoverGeometry.detachedMinContentWidth(isInspectorOpen: true)
+        #expect(withInspector - docked == PopoverGeometry.dividerWidth + PopoverGeometry.railWidth)
+        #expect(withInspector == 982)
+    }
+
     @Test("Fitted width passes the full width through on a wide / headless screen")
     func fittedWidthWideScreen() {
         // Comfortably wider than 1122 → unchanged.

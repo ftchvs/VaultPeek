@@ -250,10 +250,19 @@ final class AppState {
         loadPersistedBalanceHistory()
         // Launch at login
         launchAtLogin = LaunchService.isEnabled
-        // Detached-dashboard intent (AND-384)
-        if defaults.object(forKey: Keys.dashboardDetached) != nil {
-            isDashboardDetached = defaults.bool(forKey: Keys.dashboardDetached)
-        }
+        // Detached-dashboard intent (AND-384). A headless snapshot render
+        // ignores the persisted intent so the popover-capture path stays
+        // deterministic regardless of host/CI defaults — otherwise a stale
+        // `dashboard.detached = true` would spawn the floating window and
+        // intercept the renderer's popover open. The stored value is left
+        // untouched (no write-back) so the real user preference survives.
+        let storedDetached = defaults.object(forKey: Keys.dashboardDetached) != nil
+            ? defaults.bool(forKey: Keys.dashboardDetached)
+            : nil
+        isDashboardDetached = DetachedDashboardPreferences.resolvedDetachedIntent(
+            storedValue: storedDetached,
+            isRenderingSnapshot: CommandLineOptions.isRenderingSnapshot()
+        )
     }
 
     // MARK: - Computed

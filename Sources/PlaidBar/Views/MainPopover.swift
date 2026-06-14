@@ -199,7 +199,10 @@ struct MainPopover: View {
                 .frame(
                     minWidth: shouldShowSetupScreen
                         ? PopoverGeometry.width(for: .setup)
-                        : PopoverGeometry.minDashboardWidth + Layout.flyoutWidth + PopoverGeometry.dividerWidth,
+                        // Include the inspector column in the floor so selecting
+                        // an account near the minimum width does not clip the
+                        // inspector off the resizable window (AND-384/405).
+                        : PopoverGeometry.detachedMinContentWidth(isInspectorOpen: isAccountInspectorOpen),
                     maxWidth: .infinity,
                     alignment: .topLeading
                 )

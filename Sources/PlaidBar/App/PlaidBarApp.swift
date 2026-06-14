@@ -72,8 +72,32 @@ struct PlaidBarApp: App {
                 }))
                 .forcedAppColorScheme(Self.forcedColorScheme)
                 .appliesAppAppearance()
-                // Restore a window that was open at last quit, and keep the
-                // floating window in lockstep with the persisted/toggled flag.
+                // While detached, a status-item click sets isPopoverPresented
+                // true; intercept it, snap it back to false, and raise the
+                // floating window instead of opening the popover (AND-384). This
+                // observer belongs on the popover content because it reacts to
+                // the popover being presented.
+                .onChange(of: appState.isPopoverPresented) { _, isPresented in
+                    guard isPresented, appState.isDashboardDetached else { return }
+                    appState.isPopoverPresented = false
+                    detachedDashboard.handleMenuBarActivation(
+                        appState: appState,
+                        forcedColorScheme: Self.forcedColorScheme,
+                        reduceMotion: reduceMotion
+                    )
+                }
+        } label: {
+            MenuBarLabel()
+                .environment(appState)
+                .forcedAppColorScheme(Self.forcedColorScheme)
+                // The menu-bar label is the only scene content that is mounted
+                // for the whole app lifetime — `MainPopover` is mounted lazily,
+                // only while the popover/menu-extra window is presented, and
+                // `Settings` likewise. So the floating-window restore-at-launch
+                // and the persisted/toggled-intent sync live here: otherwise a
+                // saved `dashboard.detached = true` would not reopen the window
+                // until the user first opened the popover, and a Settings-only
+                // toggle would not take effect until then either (AND-384).
                 .task {
                     detachedDashboard.sync(
                         appState: appState,
@@ -88,22 +112,6 @@ struct PlaidBarApp: App {
                         reduceMotion: reduceMotion
                     )
                 }
-                // While detached, a status-item click sets isPopoverPresented
-                // true; intercept it, snap it back to false, and raise the
-                // floating window instead of opening the popover (AND-384).
-                .onChange(of: appState.isPopoverPresented) { _, isPresented in
-                    guard isPresented, appState.isDashboardDetached else { return }
-                    appState.isPopoverPresented = false
-                    detachedDashboard.handleMenuBarActivation(
-                        appState: appState,
-                        forcedColorScheme: Self.forcedColorScheme,
-                        reduceMotion: reduceMotion
-                    )
-                }
-        } label: {
-            MenuBarLabel()
-                .environment(appState)
-                .forcedAppColorScheme(Self.forcedColorScheme)
         }
         .menuBarExtraAccess(isPresented: $appState.isPopoverPresented) { statusItem in
             statusItemContextMenuController.configure(

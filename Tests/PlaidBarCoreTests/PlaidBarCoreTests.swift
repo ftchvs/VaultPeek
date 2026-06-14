@@ -3308,6 +3308,16 @@ struct PlaidBarCoreTests {
         #expect(CommandLineOptions.value(for: "--settings-tab", in: ["PlaidBar", "--settings-tab"]) == nil)
     }
 
+    @Test("Snapshot render is detected by the --render-snapshot flag")
+    func commandLineOptionsDetectSnapshotRender() {
+        #expect(CommandLineOptions.isRenderingSnapshot(["PlaidBar", "--demo", "--render-snapshot", "/tmp/out"]))
+        // Presence alone is enough — the directory value follows the flag.
+        #expect(CommandLineOptions.isRenderingSnapshot(["PlaidBar", "--render-snapshot"]))
+        // A normal app launch never opts in.
+        #expect(!CommandLineOptions.isRenderingSnapshot(["PlaidBar", "--demo"]))
+        #expect(!CommandLineOptions.isRenderingSnapshot(["PlaidBar"]))
+    }
+
     // MARK: - RecurringTransaction Model Tests
 
     @Test("RecurringTransaction identity by merchantName")

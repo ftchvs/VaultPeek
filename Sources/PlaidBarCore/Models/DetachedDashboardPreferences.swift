@@ -15,6 +15,20 @@ public enum DetachedDashboardPreferences {
     /// durable intent; `AppState.isDashboardDetached` mirrors it at runtime.
     public static let detachedStorageKey = "dashboard.detached"
 
+    /// Resolves the detached intent to apply at launch from the persisted value.
+    ///
+    /// A headless snapshot render must ignore any persisted intent: on a host/CI
+    /// machine where `dashboard.detached = true`, honoring it would spawn the
+    /// floating window *and* make the scene intercept the renderer's
+    /// `isPopoverPresented = true` (snapping it back to false), so the popover
+    /// never opens and the wrong window — or none — is captured. Returns `false`
+    /// during a snapshot render regardless of the stored value; otherwise returns
+    /// the stored value, defaulting to `false` when unset.
+    public static func resolvedDetachedIntent(storedValue: Bool?, isRenderingSnapshot: Bool) -> Bool {
+        guard !isRenderingSnapshot else { return false }
+        return storedValue ?? false
+    }
+
     /// `frameAutosaveName` for the floating panel. AppKit persists the panel's
     /// origin and size under this name in the standard user defaults, so the
     /// window reopens where the user last left it across launches.

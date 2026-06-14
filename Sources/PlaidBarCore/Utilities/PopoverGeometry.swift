@@ -47,6 +47,22 @@ public enum PopoverGeometry {
         }
     }
 
+    /// The minimum content width for the detached floating dashboard window
+    /// (AND-384). Unlike the menu-bar popover — which AppKit pins to a computed
+    /// width — the floating window is user-resizable, so this is the floor below
+    /// which the columns would clip.
+    ///
+    /// The center dashboard may shrink to `minDashboardWidth`, but the rail and,
+    /// when present, the trailing account inspector keep their fixed `railWidth`.
+    /// When the inspector is open it must be included: otherwise the floor stays
+    /// at the two-column size and selecting an account near the minimum width
+    /// overflows the inspector off the resizable window (it cannot grow itself).
+    public static func detachedMinContentWidth(isInspectorOpen: Bool) -> CGFloat {
+        let twoColumn = railWidth + dividerWidth + minDashboardWidth
+        guard isInspectorOpen else { return twoColumn }
+        return twoColumn + dividerWidth + railWidth
+    }
+
     /// The popover's content width capped to fit the available screen width.
     ///
     /// When the full layout width exceeds the available width (minus a margin on

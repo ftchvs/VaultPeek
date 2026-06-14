@@ -45,4 +45,23 @@ struct DetachedDashboardPreferencesTests {
         #expect(DetachedDashboardPreferences.minContentWidth <= DetachedDashboardPreferences.defaultContentWidth)
         #expect(DetachedDashboardPreferences.minContentHeight <= DetachedDashboardPreferences.defaultContentHeight)
     }
+
+    @Test("Outside a snapshot render, the persisted detach intent is honored")
+    func resolvedDetachedIntentHonorsStoredValue() {
+        // Normal launches mirror exactly what the Settings toggle persisted,
+        // defaulting to docked when the key has never been written.
+        #expect(DetachedDashboardPreferences.resolvedDetachedIntent(storedValue: true, isRenderingSnapshot: false))
+        #expect(!DetachedDashboardPreferences.resolvedDetachedIntent(storedValue: false, isRenderingSnapshot: false))
+        #expect(!DetachedDashboardPreferences.resolvedDetachedIntent(storedValue: nil, isRenderingSnapshot: false))
+    }
+
+    @Test("A snapshot render always resolves to docked, ignoring host defaults")
+    func resolvedDetachedIntentForcesDockedDuringSnapshot() {
+        // The renderer captures the popover; a host/CI machine with
+        // `dashboard.detached = true` must not spawn the floating window or
+        // intercept the popover-open path. False wins regardless of stored value.
+        #expect(!DetachedDashboardPreferences.resolvedDetachedIntent(storedValue: true, isRenderingSnapshot: true))
+        #expect(!DetachedDashboardPreferences.resolvedDetachedIntent(storedValue: false, isRenderingSnapshot: true))
+        #expect(!DetachedDashboardPreferences.resolvedDetachedIntent(storedValue: nil, isRenderingSnapshot: true))
+    }
 }

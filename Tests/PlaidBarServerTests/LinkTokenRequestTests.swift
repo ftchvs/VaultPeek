@@ -102,50 +102,69 @@ struct LinkTokenRequestTests {
 }
 
 /// Plaid API errors from the Link flow must surface an actionable, secret-free
-/// message instead of a bare HTTP 500.
+/// message instead of a bare HTTP 500 — and without echoing Plaid's raw,
+/// provider-controlled `error_message` into the SwiftUI app (see `AGENTS.md`).
 @Suite("Link error surfacing")
 struct LinkErrorSurfacingTests {
-    @Test("Error message carries Plaid error_code and error_message")
-    func errorMessageCarriesCodeAndMessage() {
+    @Test("Known error code maps to a curated local description, not Plaid's prose")
+    func knownCodeMapsToLocalDescription() {
         let message = LinkRoutes.linkErrorMessage(
             errorType: "INVALID_REQUEST",
-            errorCode: "INVALID_FIELD",
-            errorMessage: "OAuth redirect URI must be configured in the developer dashboard."
+            errorCode: "INVALID_FIELD"
         )
 
-        #expect(message == "Plaid: INVALID_FIELD OAuth redirect URI must be configured in the developer dashboard.")
+        // Carries the stable code identifier and locally-authored guidance.
+        #expect(message.contains("INVALID_FIELD"))
+        #expect(message.contains("redirect URI is registered in the Plaid dashboard"))
+        #expect(message.hasPrefix("Plaid Link error (INVALID_FIELD):"))
     }
 
-    @Test("Error message falls back to error_type then a stable label")
-    func errorMessageFallsBack() {
-        #expect(
-            LinkRoutes.linkErrorMessage(
-                errorType: "RATE_LIMIT_EXCEEDED",
-                errorCode: nil,
-                errorMessage: "Too many requests."
-            ) == "Plaid: RATE_LIMIT_EXCEEDED Too many requests."
+    @Test("Error code falls back to error_type, then a stable label")
+    func errorCodeFallsBack() {
+        // error_code nil → uses error_type, which is itself an allowlisted key.
+        let rateLimited = LinkRoutes.linkErrorMessage(
+            errorType: "RATE_LIMIT_EXCEEDED",
+            errorCode: nil
         )
+        #expect(rateLimited.hasPrefix("Plaid Link error (RATE_LIMIT_EXCEEDED):"))
+        #expect(rateLimited.contains("rate-limiting"))
 
-        #expect(
-            LinkRoutes.linkErrorMessage(
-                errorType: nil,
-                errorCode: nil,
-                errorMessage: "Unknown error"
-            ) == "Plaid: PLAID_ERROR Unknown error"
-        )
+        // Both nil → stable PLAID_ERROR label, generic guidance, no provider text.
+        let unknown = LinkRoutes.linkErrorMessage(errorType: nil, errorCode: nil)
+        #expect(unknown.contains("PLAID_ERROR"))
+        #expect(unknown.contains("try connecting again"))
     }
 
-    @Test("Error message never leaks credential values")
-    func errorMessageNeverLeaksCredentials() {
-        let secret = "super-secret-\(UUID().uuidString)"
+    @Test("Unrecognized code degrades to a generic message carrying only the code")
+    func unrecognizedCodeIsGeneric() {
         let message = LinkRoutes.linkErrorMessage(
-            errorType: "INVALID_REQUEST",
-            errorCode: "INVALID_API_KEYS",
-            errorMessage: "Invalid client_id or secret provided."
+            errorType: "SOME_NEW_TYPE",
+            errorCode: "SOME_UNMAPPED_CODE"
         )
 
-        // The helper only ever echoes Plaid's own code/message, never the
-        // request body, so a configured secret can never appear here.
-        #expect(!message.contains(secret))
+        // The bounded code identifier is preserved; no provider prose is invented.
+        #expect(message.contains("SOME_UNMAPPED_CODE"))
+        #expect(message.contains("try connecting again"))
+    }
+
+    @Test("Raw Plaid error_message is never echoed into the surfaced text")
+    func rawProviderMessageIsNeverEchoed() {
+        // Even when Plaid would supply detailed prose for a known code, the
+        // helper no longer accepts or forwards that field — the signature only
+        // takes the stable code/type. Construct messages for several codes and
+        // assert none contain hallmark provider-prose fragments or credential
+        // hints that historically appeared in Plaid's free-form error_message.
+        let leakedFragments = [
+            "client_id",
+            "secret",
+            "Invalid client_id or secret provided",
+            "request_id",
+        ]
+        for code in ["INVALID_API_KEYS", "INVALID_FIELD", "RATE_LIMIT_EXCEEDED"] {
+            let message = LinkRoutes.linkErrorMessage(errorType: "INVALID_REQUEST", errorCode: code)
+            for fragment in leakedFragments {
+                #expect(!message.contains(fragment), "Leaked provider fragment '\(fragment)' for code \(code)")
+            }
+        }
     }
 }
