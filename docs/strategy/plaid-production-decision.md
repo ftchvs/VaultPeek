@@ -36,15 +36,19 @@ intact for launch.
 ### 1. Can first users connect real banks?
 
 Yes — through **bring-your-own-keys (BYO) mode**, which already ships. A user
-who has their own Plaid credentials (sandbox, development, or their own
-Plaid-approved production credentials) links real institutions directly; the
+who has their own Plaid credentials (sandbox or Plaid-approved production
+credentials) links real institutions directly; the
 Plaid relationship is theirs, and account data plus access tokens stay on their
 Mac (`Sources/PlaidBarServer/` → `127.0.0.1:8484` → Plaid, never transiting
-VaultPeek).
+VaultPeek. VaultPeek stores Plaid access tokens locally and includes the token on
+Plaid API requests as required by Plaid flow.
 
 No — VaultPeek does **not** offer *managed* (turnkey, no-keys-needed) live
 banking at launch. That path needs a hosted link-token broker and VaultPeek's
 own Plaid production approval, both deferred.
+
+OAuth note: BYO users may still need a Plaid app-level redirect URI for some
+institutions depending on their OAuth requirements.
 
 ### 2. Under what plan?
 

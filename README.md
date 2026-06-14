@@ -134,7 +134,8 @@ know exactly what you are trying before you install.
 - The full menu bar dashboard on **demo data** (`swift run PlaidBar --demo`) — no
   account, no bank, no signup.
 - **Bring-your-own-Plaid-keys**: connect real or sandbox banks with your own
-  Plaid credentials. Account data and access tokens stay on your Mac.
+  Plaid credentials. Account data and access tokens stay stored locally on your
+  Mac.
 
 **What is deferred (not in this beta)**
 
@@ -150,8 +151,9 @@ know exactly what you are trying before you install.
 
 Nothing, except the bank calls you make yourself. VaultPeek runs no servers of
 its own, collects no telemetry, and has no hosted backend. In BYO-keys mode the
-only network traffic is from your Mac directly to Plaid using your credentials;
-in demo mode there are no network calls at all.
+only network traffic is from your Mac directly to Plaid using your credentials.
+In pure demo mode there are no Plaid or external network calls; local AI runtime
+features can still call localhost services if configured.
 
 The full launch scope and the rationale for every deferral live in the
 [MVP launch decision log](docs/mvp-launch-decision-log.md). Support and recovery
