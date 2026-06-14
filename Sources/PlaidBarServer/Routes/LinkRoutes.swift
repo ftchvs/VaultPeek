@@ -1,5 +1,6 @@
-import Hummingbird
+import CryptoKit
 import Foundation
+import Hummingbird
 import NIOCore
 import PlaidBarCore
 
@@ -151,13 +152,26 @@ struct OAuthCallbackRoute: Sendable {
                 )
             }
 
-            let completedResultCount = min(
-                pendingSession.completedPublicTokenResultCount,
-                publicTokenResults.count
-            )
-            for publicTokenResult in publicTokenResults.dropFirst(completedResultCount) {
-                try await exchangeAndStore(publicTokenResult: publicTokenResult)
-                await pendingLinkSessions.markPublicTokenResultStored(state: state)
+            for publicTokenResult in publicTokenResults {
+                let identity = Self.resultIdentity(for: publicTokenResult)
+                // Skip results already consumed on a prior attempt — keyed by a
+                // stable identity, so reordered multi-item retries still skip the
+                // right ones (not by ordinal position).
+                if pendingSession.completedResultIdentities.contains(identity) {
+                    continue
+                }
+                try await exchangeAndStore(
+                    publicTokenResult: publicTokenResult,
+                    onPublicTokenExchanged: {
+                        // Mark consumed the instant the single-use public token is
+                        // exchanged — BEFORE the fallible getAccounts/saveItem
+                        // steps. If those later fail, the retry will not replay
+                        // this now-spent token (which Plaid rejects, producing
+                        // endless 500s and a lost access token); it is skipped
+                        // instead. This is the post-exchange handoff barrier.
+                        await pendingLinkSessions.markResultCompleted(state: state, identity: identity)
+                    }
+                )
             }
             _ = await pendingLinkSessions.consume(state: state)
 
@@ -190,8 +204,14 @@ struct OAuthCallbackRoute: Sendable {
         return linkSession.publicTokenResults
     }
 
-    private func exchangeAndStore(publicTokenResult: PlaidPublicTokenResult) async throws {
+    private func exchangeAndStore(
+        publicTokenResult: PlaidPublicTokenResult,
+        onPublicTokenExchanged: () async -> Void
+    ) async throws {
         let exchangeResponse = try await plaidClient.exchangePublicToken(publicTokenResult.publicToken)
+        // The public token is now spent and cannot be replayed; record the
+        // handoff before the remaining (fallible, retryable-in-isolation) steps.
+        await onPublicTokenExchanged()
         let accountsResponse = try await plaidClient.getAccounts(
             accessToken: exchangeResponse.accessToken
         )
@@ -203,6 +223,20 @@ struct OAuthCallbackRoute: Sendable {
             institutionId: institutionId,
             institutionName: publicTokenResult.institution?.normalizedName
         )
+    }
+
+    /// A stable, token-free identity for a Link result, used to skip results
+    /// already consumed on a prior callback attempt. The public token is
+    /// single-use and unique per result, so its SHA-256 is a perfect fingerprint
+    /// — and hashing keeps the raw token out of the pending-session store, which
+    /// holds no Plaid tokens. Falls back to the institution id when no public
+    /// token is present (update-mode results carry none).
+    static func resultIdentity(for result: PlaidPublicTokenResult) -> String {
+        let seed = result.publicToken.isEmpty
+            ? "institution:\(result.institution?.institutionId ?? "unknown")"
+            : "public-token:\(result.publicToken)"
+        let digest = SHA256.hash(data: Data(seed.utf8))
+        return digest.map { String(format: "%02x", $0) }.joined()
     }
 
     // MARK: - HTML Pages

@@ -67,6 +67,7 @@ private actor HostedLinkStubPlaidClient: PlaidClientProtocol {
     private let accountsResponse: PlaidAccountsResponse
     private var exchangeFailuresRemaining: Int
     private var exchangeFailuresByPublicToken: [String: Int]
+    private var accountsFailuresRemaining: Int
     private var requestedLinkTokens: [String] = []
     private var exchangedPublicTokens: [String] = []
     private var requestedAccountAccessTokens: [String] = []
@@ -77,7 +78,8 @@ private actor HostedLinkStubPlaidClient: PlaidClientProtocol {
         accountsResponse: PlaidAccountsResponse,
         exchangeFailuresBeforeSuccess: Int = 0,
         exchangeFailuresByPublicToken: [String: Int] = [:],
-        exchangeResponsesByPublicToken: [String: PlaidTokenExchangeResponse] = [:]
+        exchangeResponsesByPublicToken: [String: PlaidTokenExchangeResponse] = [:],
+        accountsFailuresBeforeSuccess: Int = 0
     ) {
         self.linkTokenGetResponse = linkTokenGetResponse
         self.exchangeResponse = exchangeResponse
@@ -85,6 +87,7 @@ private actor HostedLinkStubPlaidClient: PlaidClientProtocol {
         self.accountsResponse = accountsResponse
         self.exchangeFailuresRemaining = exchangeFailuresBeforeSuccess
         self.exchangeFailuresByPublicToken = exchangeFailuresByPublicToken
+        self.accountsFailuresRemaining = accountsFailuresBeforeSuccess
     }
 
     func createLinkToken(
@@ -123,6 +126,13 @@ private actor HostedLinkStubPlaidClient: PlaidClientProtocol {
 
     func getAccounts(accessToken: String) async throws -> PlaidAccountsResponse {
         requestedAccountAccessTokens.append(accessToken)
+        // Simulates a failure AFTER the public token was already exchanged, to
+        // exercise the post-exchange handoff barrier: the spent token must not
+        // be replayed on retry.
+        if accountsFailuresRemaining > 0 {
+            accountsFailuresRemaining -= 1
+            throw HostedLinkStubError.transientExchangeFailure
+        }
         return accountsResponse
     }
 
@@ -1015,6 +1025,64 @@ struct PlaidBarServerTests {
         #expect(expired == nil)
     }
 
+    @Test("A completion lease holds single-flight even past the lease TTL until released")
+    func completionLeaseHoldsUntilReleased() async {
+        let clock = ManualDateClock(Date(timeIntervalSince1970: 1000))
+        let store = PendingLinkSessionStore(
+            ttl: 30 * 60,
+            completionLeaseTTL: 60,
+            now: { @Sendable in clock.now() }
+        )
+        let state = await store.issueState()
+        await store.save(state: state, linkToken: "link-token")
+
+        // First handler takes the lease.
+        let first = await store.beginCompletion(state: state)
+        #expect(first != nil)
+
+        // A concurrent retry within the lease window is refused (single-flight).
+        let concurrent = await store.beginCompletion(state: state)
+        #expect(concurrent == nil)
+
+        // The bug fix: advancing time past completionLeaseTTL while the original
+        // handler is STILL running must not let purgeExpired drop the lease and
+        // admit a second handler. Any intervening store call triggers a purge;
+        // markResultCompleted is one such call.
+        clock.advance(by: 30)
+        await store.markResultCompleted(state: state, identity: "result-a")
+        // Still within the 60s lease window → retry still refused even though a
+        // purge just ran.
+        let stillHeld = await store.beginCompletion(state: state)
+        #expect(stillHeld == nil)
+
+        // Only an explicit release returns the session to a retryable state.
+        await store.releaseCompletion(state: state)
+        let afterRelease = await store.beginCompletion(state: state)
+        #expect(afterRelease != nil)
+    }
+
+    @Test("A presumed-dead lease is reclaimable once it is older than the lease TTL")
+    func completionLeaseReclaimableWhenStale() async {
+        let clock = ManualDateClock(Date(timeIntervalSince1970: 1000))
+        let store = PendingLinkSessionStore(
+            ttl: 30 * 60,
+            completionLeaseTTL: 60,
+            now: { @Sendable in clock.now() }
+        )
+        let state = await store.issueState()
+        await store.save(state: state, linkToken: "link-token")
+
+        let first = await store.beginCompletion(state: state)
+        #expect(first != nil)
+
+        // No release (handler presumed dead). Past the lease TTL, a fresh handler
+        // may reclaim the lease so the user is not blocked forever — bounded
+        // recovery without dropping a still-fresh in-flight lease.
+        clock.advance(by: 61)
+        let reclaimed = await store.beginCompletion(state: state)
+        #expect(reclaimed != nil)
+    }
+
     @Test func pendingLinkSessionSurvivesStoreRecreation() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("plaidbar-link-session-\(UUID().uuidString)", isDirectory: true)
@@ -1425,6 +1493,104 @@ struct PlaidBarServerTests {
                 secondPublicToken,
             ])
             #expect(calls.accountAccessTokens == [firstAccessToken, secondAccessToken])
+        }
+    }
+
+    @Test(
+        "OAuth callback never replays a public token consumed before a post-exchange failure",
+        .enabled(if: plaidTokenVaultKeychainAvailable, "macOS Keychain accepts test writes")
+    )
+    func oauthCallbackDoesNotReplayConsumedPublicTokenAfterPostExchangeFailure() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-oauth-postexchange-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let itemId = "synthetic_item_\(UUID().uuidString)"
+        defer {
+            try? PlaidTokenVault.delete(
+                storedToken: PlaidTokenVault.reference(for: itemId),
+                fallbackItemId: itemId
+            )
+        }
+
+        let linkToken = "synthetic-link-token"
+        let publicToken = "synthetic-public-token"
+        let accessToken = "synthetic-access-token-\(UUID().uuidString)"
+        let linkTokenGetResponse = PlaidLinkTokenGetResponse(
+            linkToken: linkToken,
+            linkSessions: [
+                PlaidLinkSession(
+                    linkSessionId: "synthetic-link-session",
+                    results: PlaidLinkResults(
+                        itemAddResults: [
+                            PlaidLinkItemAddResult(
+                                publicToken: publicToken,
+                                institution: PlaidLinkInstitution(
+                                    name: "Example Credit Union",
+                                    institutionId: "ins_example_credit_union"
+                                )
+                            ),
+                        ]
+                    )
+                ),
+            ],
+            onSuccess: nil,
+            results: nil
+        )
+        // Exchange SUCCEEDS on the first attempt; the failure is in the
+        // post-exchange getAccounts step, so the public token is already spent.
+        let plaidClient = HostedLinkStubPlaidClient(
+            linkTokenGetResponse: linkTokenGetResponse,
+            exchangeResponse: PlaidTokenExchangeResponse(
+                accessToken: accessToken,
+                itemId: itemId,
+                requestId: nil
+            ),
+            accountsResponse: PlaidAccountsResponse(
+                accounts: [],
+                item: PlaidItem(
+                    itemId: itemId,
+                    institutionId: "ins_accounts_fallback",
+                    availableProducts: nil,
+                    billedProducts: nil
+                ),
+                requestId: nil
+            ),
+            accountsFailuresBeforeSuccess: 1
+        )
+        let pendingLinkSessions = PendingLinkSessionStore(
+            storageURL: directory.appendingPathComponent("pending-link-sessions.json")
+        )
+        let state = await pendingLinkSessions.issueState()
+        await pendingLinkSessions.save(state: state, linkToken: linkToken)
+        let databasePath = directory.appendingPathComponent("plaidbar-test.sqlite").path
+        let logger = Logger(label: "com.ftchvs.plaidbar-server-tests.oauth-postexchange")
+
+        try await withTokenStore(databasePath: databasePath, logger: logger) { store in
+            let route = OAuthCallbackRoute(
+                plaidClient: plaidClient,
+                tokenStore: store,
+                pendingLinkSessions: pendingLinkSessions
+            )
+            let request = Self.makeRequest(path: "/oauth/callback?state=\(state)")
+
+            let failedResponse = try await route.handleCallback(
+                request: request,
+                context: TestRequestContext(source: TestRequestContextSource())
+            )
+            let retryResponse = try await route.handleCallback(
+                request: request,
+                context: TestRequestContext(source: TestRequestContextSource())
+            )
+            let calls = await plaidClient.recordedCalls()
+
+            // First attempt fails in getAccounts (post-exchange).
+            #expect(failedResponse.status == .internalServerError)
+            // Retry must NOT replay the now-spent public token — it is skipped by
+            // identity, so the callback completes without a second exchange call.
+            #expect(retryResponse.status == .ok)
+            #expect(calls.publicTokens == [publicToken]) // exchanged exactly once
         }
     }
 

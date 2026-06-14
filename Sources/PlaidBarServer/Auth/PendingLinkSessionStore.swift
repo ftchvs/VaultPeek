@@ -47,23 +47,36 @@ actor PendingLinkSessionStore {
         purgeExpired()
         let currentDate = now()
         guard let session = sessions[state],
-              currentDate.timeIntervalSince(session.createdAt) <= ttl,
-              completionLeases[state] == nil
+              currentDate.timeIntervalSince(session.createdAt) <= ttl
         else {
+            return nil
+        }
+        // A live lease means another handler is mid-flight: refuse, preserving
+        // single-flight. The lease is reclaimable only once it is older than
+        // `completionLeaseTTL`, i.e. the original handler is presumed dead (it
+        // would otherwise have called releaseCompletion/consume). This bounds
+        // recovery without dropping a fresh in-flight lease — unlike purging by
+        // TTL, which could race a still-running handler.
+        if let leaseStartedAt = completionLeases[state],
+           currentDate.timeIntervalSince(leaseStartedAt) <= completionLeaseTTL {
             return nil
         }
         completionLeases[state] = currentDate
         return session
     }
 
-    func markPublicTokenResultStored(state: String) {
+    /// Records that the result with this stable `identity` has been consumed
+    /// (its single-use Plaid public token exchanged), so a retry never replays
+    /// it. `identity` is a token-free fingerprint (see `resultIdentity`), never
+    /// the raw public token — pending-session storage holds no Plaid tokens.
+    func markResultCompleted(state: String, identity: String) {
         purgeExpired()
         guard var session = sessions[state],
               now().timeIntervalSince(session.createdAt) <= ttl
         else {
             return
         }
-        session.completedPublicTokenResultCount += 1
+        session.completedResultIdentities.insert(identity)
         sessions[state] = session
         persist()
     }
@@ -90,9 +103,16 @@ actor PendingLinkSessionStore {
             currentDate.timeIntervalSince(session.createdAt) <= ttl
         }
         let activeStates = Set(activeSessions.keys)
-        completionLeases = completionLeases.filter { state, startedAt in
+        // A completion lease lives as long as its session: it is cleared only by
+        // `releaseCompletion`/`consume`, or when the session itself expires by
+        // the (much longer) session TTL. The short `completionLeaseTTL` is NOT a
+        // purge trigger — expiring a lease while the original handler is still
+        // doing Plaid/Keychain/SQLite work would let a concurrent retry pass the
+        // single-flight guard and double-process the same Hosted Link results.
+        // It survives only as a clamp in `beginCompletion` for a presumed-dead
+        // handler (process restart loses in-memory leases anyway).
+        completionLeases = completionLeases.filter { state, _ in
             activeStates.contains(state)
-                && currentDate.timeIntervalSince(startedAt) <= completionLeaseTTL
         }
         guard activeSessions.count != sessions.count else { return }
         sessions = activeSessions
@@ -199,18 +219,22 @@ struct PendingLinkSession: Codable, Sendable {
     let linkToken: String
     let updateItemId: String?
     let createdAt: Date
-    var completedPublicTokenResultCount: Int
+    /// Stable, token-free identities of results already consumed (their
+    /// single-use public token exchanged). Tracking by identity — not an ordinal
+    /// count — means a retry skips exactly the already-stored results even if
+    /// Plaid returns the multi-item results in a different order.
+    var completedResultIdentities: Set<String>
 
     init(
         linkToken: String,
         updateItemId: String?,
         createdAt: Date,
-        completedPublicTokenResultCount: Int = 0
+        completedResultIdentities: Set<String> = []
     ) {
         self.linkToken = linkToken
         self.updateItemId = updateItemId
         self.createdAt = createdAt
-        self.completedPublicTokenResultCount = completedPublicTokenResultCount
+        self.completedResultIdentities = completedResultIdentities
     }
 
     init(from decoder: Decoder) throws {
@@ -218,9 +242,14 @@ struct PendingLinkSession: Codable, Sendable {
         linkToken = try container.decode(String.self, forKey: .linkToken)
         updateItemId = try container.decodeIfPresent(String.self, forKey: .updateItemId)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
-        completedPublicTokenResultCount = try container.decodeIfPresent(
-            Int.self,
-            forKey: .completedPublicTokenResultCount
-        ) ?? 0
+        // Backward compatible: sessions persisted by an earlier build carry no
+        // identity set (and the legacy ordinal count is intentionally dropped —
+        // an in-flight migration at most re-attempts a still-pending result,
+        // which is safe because a genuinely consumed token re-exchange fails
+        // closed rather than duplicating).
+        completedResultIdentities = try container.decodeIfPresent(
+            Set<String>.self,
+            forKey: .completedResultIdentities
+        ) ?? []
     }
 }
