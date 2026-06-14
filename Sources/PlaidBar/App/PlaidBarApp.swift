@@ -7,7 +7,11 @@ import SwiftUI
 @main
 struct PlaidBarApp: App {
     @State private var appState: AppState
+    /// Owns the floating desktop-window dashboard (AND-384). `@State` so it
+    /// persists across `body` recomputes for the process lifetime.
+    @State private var detachedDashboard = DetachedDashboardCoordinator()
     @Environment(\.openSettings) private var openSettings
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let updaterController: SPUStandardUpdaterController
     private let statusItemContextMenuController = StatusItemContextMenuController()
 
@@ -59,18 +63,73 @@ struct PlaidBarApp: App {
         MenuBarExtra {
             MainPopover()
                 .environment(appState)
+                .environment(\.dashboardPresentation, .popover(detach: {
+                    detachedDashboard.detach(
+                        appState: appState,
+                        forcedColorScheme: Self.forcedColorScheme,
+                        reduceMotion: reduceMotion
+                    )
+                }))
                 .forcedAppColorScheme(Self.forcedColorScheme)
                 .appliesAppAppearance()
         } label: {
             MenuBarLabel()
                 .environment(appState)
                 .forcedAppColorScheme(Self.forcedColorScheme)
+                // The menu-bar label is the only scene content that is mounted
+                // for the whole app lifetime — `MainPopover` is mounted lazily,
+                // only while the popover/menu-extra window is presented, and
+                // `Settings` likewise. So the floating-window restore-at-launch,
+                // the persisted/toggled-intent sync, AND the click interceptor
+                // all live here: otherwise a saved `dashboard.detached = true`
+                // would not reopen the window until the user first opened the
+                // popover, a Settings-only toggle would not take effect until
+                // then, and — critically — a status-item click while detached
+                // (before the popover ever mounted) would set
+                // `isPopoverPresented = true` with no observer installed yet, so
+                // SwiftUI would open the popover instead of raising the floating
+                // window (AND-384).
+                .task {
+                    detachedDashboard.sync(
+                        appState: appState,
+                        forcedColorScheme: Self.forcedColorScheme,
+                        reduceMotion: reduceMotion
+                    )
+                }
+                // While detached, a status-item click sets isPopoverPresented
+                // true; intercept it on the always-mounted label, snap it back to
+                // false, and raise the floating window instead of the popover.
+                .onChange(of: appState.isPopoverPresented) { _, isPresented in
+                    guard isPresented, appState.isDashboardDetached else { return }
+                    appState.isPopoverPresented = false
+                    detachedDashboard.handleMenuBarActivation(
+                        appState: appState,
+                        forcedColorScheme: Self.forcedColorScheme,
+                        reduceMotion: reduceMotion
+                    )
+                }
+                .onChange(of: appState.isDashboardDetached) { _, _ in
+                    detachedDashboard.sync(
+                        appState: appState,
+                        forcedColorScheme: Self.forcedColorScheme,
+                        reduceMotion: reduceMotion
+                    )
+                }
         }
         .menuBarExtraAccess(isPresented: $appState.isPopoverPresented) { statusItem in
             statusItemContextMenuController.configure(
                 statusItem: statusItem,
                 actions: StatusItemContextMenuActions(
                     showDashboard: {
+                        // "Open VaultPeek" raises the floating window when
+                        // detached; otherwise it opens the popover (AND-384).
+                        if detachedDashboard.handleMenuBarActivation(
+                            appState: appState,
+                            forcedColorScheme: Self.forcedColorScheme,
+                            reduceMotion: reduceMotion
+                        ) {
+                            return
+                        }
                         appState.isPopoverPresented = true
                     },
                     refreshDashboard: {

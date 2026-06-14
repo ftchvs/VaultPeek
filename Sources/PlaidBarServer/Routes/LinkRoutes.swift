@@ -23,10 +23,12 @@ struct LinkRoutes: Sendable {
     ) async throws -> Response {
         let userId = "plaidbar-user-\(UUID().uuidString.prefix(8))"
         let state = await pendingLinkSessions.issueState()
-        let plaidResponse = try await plaidClient.createLinkToken(
-            userId: userId,
-            completionRedirectUri: callbackURL(state: state)
-        )
+        let plaidResponse = try await Self.mappingPlaidError {
+            try await plaidClient.createLinkToken(
+                userId: userId,
+                completionRedirectUri: callbackURL(state: state)
+            )
+        }
 
         guard let linkUrl = plaidResponse.hostedLinkUrl else {
             throw HTTPError(.internalServerError, message: "Plaid did not return a hosted Link URL")
@@ -57,11 +59,13 @@ struct LinkRoutes: Sendable {
 
         let userId = "plaidbar-user-\(UUID().uuidString.prefix(8))"
         let state = await pendingLinkSessions.issueState()
-        let plaidResponse = try await plaidClient.createUpdateLinkToken(
-            userId: userId,
-            accessToken: accessToken,
-            completionRedirectUri: callbackURL(state: state)
-        )
+        let plaidResponse = try await Self.mappingPlaidError {
+            try await plaidClient.createUpdateLinkToken(
+                userId: userId,
+                accessToken: accessToken,
+                completionRedirectUri: callbackURL(state: state)
+            )
+        }
 
         guard let linkUrl = plaidResponse.hostedLinkUrl else {
             throw HTTPError(.internalServerError, message: "Plaid did not return a hosted Link URL")
@@ -80,6 +84,92 @@ struct LinkRoutes: Sendable {
             body: .init(byteBuffer: ByteBuffer(data: data))
         )
     }
+
+    /// Runs a Plaid Link call and translates `PlaidError.apiError` into an
+    /// actionable `HTTPError` so the client sees the Plaid error code/message
+    /// instead of an opaque, empty-bodied 500. `credentialsNotConfigured` is
+    /// rethrown unchanged so the setup-state middleware can map it to a 503
+    /// with credential guidance.
+    private static func mappingPlaidError<T: Sendable>(
+        _ body: () async throws -> T
+    ) async throws -> T {
+        do {
+            return try await body()
+        } catch let error as PlaidError {
+            switch error {
+            case .credentialsNotConfigured:
+                throw error
+            case let .apiError(_, errorType, errorCode, _):
+                throw HTTPError(.badGateway, message: linkErrorMessage(
+                    errorType: errorType,
+                    errorCode: errorCode
+                ))
+            case .invalidResponse:
+                throw HTTPError(.badGateway, message: "Plaid returned an invalid response")
+            }
+        }
+    }
+
+    /// Builds an actionable, app-safe Link error string from Plaid's *stable*
+    /// `error_code`/`error_type` enum identifiers only.
+    ///
+    /// Plaid's free-form `error_message` is deliberately NOT echoed: `AGENTS.md`
+    /// treats moving raw provider payloads into the SwiftUI app as high priority,
+    /// and that field is provider-controlled text that can carry request/provider
+    /// detail beyond the local diagnosis (this string reaches `AppState.error`
+    /// via `ServerClient`). Instead, known codes map to a curated local
+    /// description, and anything unrecognized degrades to a generic message that
+    /// still carries only the bounded code identifier — never provider prose.
+    static func linkErrorMessage(
+        errorType: String?,
+        errorCode: String?
+    ) -> String {
+        // ONLY allowlisted codes are ever surfaced. The identifier reaches the
+        // app (AppState.error via ServerClient), so even an enum-shaped but
+        // unknown code is NOT echoed — a misbehaving sandbox/proxy could put a
+        // numeric/uppercase account or request token into error_code/error_type
+        // that happens to pass a shape check, which would still move a raw
+        // provider identifier into the SwiftUI app (AGENTS.md). Anything not in
+        // `knownLinkErrorDescriptions` collapses to the generic PLAID_ERROR.
+        if let code = allowlistedErrorCode(errorCode) ?? allowlistedErrorCode(errorType) {
+            return "Plaid Link error (\(code)): \(knownLinkErrorDescriptions[code]!)"
+        }
+        return "Plaid Link error (PLAID_ERROR). Please try connecting again, or check "
+            + "the VaultPeek companion server logs for details."
+    }
+
+    /// Returns the identifier only when it is a curated, allowlisted Plaid Link
+    /// error code. Returns `nil` for anything else — unknown codes, prose, or
+    /// provider tokens — so the caller surfaces the generic label instead of
+    /// echoing a raw provider identifier into the app.
+    private static func allowlistedErrorCode(_ value: String?) -> String? {
+        guard let value, knownLinkErrorDescriptions[value] != nil else { return nil }
+        return value
+    }
+
+    /// Allowlist of Plaid Link `error_code`/`error_type` identifiers mapped to
+    /// locally-authored, secret-free guidance. Keys are Plaid's documented enum
+    /// values; values never contain provider-supplied free text.
+    private static let knownLinkErrorDescriptions: [String: String] = [
+        "INVALID_FIELD":
+            "A Link request field was rejected by Plaid. If this is an OAuth flow, "
+            + "confirm the redirect URI is registered in the Plaid dashboard.",
+        "INVALID_API_KEYS":
+            "Plaid rejected the configured credentials. Verify PLAID_CLIENT_ID and "
+            + "PLAID_SECRET in the VaultPeek companion server config.",
+        "INVALID_REQUEST":
+            "Plaid rejected the Link request. Please try connecting again.",
+        "RATE_LIMIT_EXCEEDED":
+            "Plaid is rate-limiting requests. Please wait a moment and try again.",
+        "INSTITUTION_DOWN":
+            "The selected institution is temporarily unavailable. Please try again later.",
+        "INSTITUTION_NOT_RESPONDING":
+            "The selected institution is not responding. Please try again later.",
+        "INTERNAL_SERVER_ERROR":
+            "Plaid reported a temporary internal error. Please try again shortly.",
+        "PLANNED_MAINTENANCE":
+            "Plaid is undergoing planned maintenance. Please try again later.",
+    ]
 
     private func callbackURL(state: String) -> String {
         guard var components = URLComponents(string: config.redirectUri) else {
