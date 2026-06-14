@@ -5,6 +5,7 @@ struct WealthSummaryFlyout: View {
     @Environment(AppState.self) private var appState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let onAddAccount: () -> Void
+    var onOpenSubscriptions: (() -> Void)?
 
     private var presentation: WealthSummaryPresentation {
         WealthSummaryPresentation.evaluate(
@@ -71,7 +72,8 @@ struct WealthSummaryFlyout: View {
                         presentation: RecurringObligationsPresentation.make(
                             from: appState.recurringTransactions,
                             asOf: Date()
-                        )
+                        ),
+                        onOpenSubscriptions: onOpenSubscriptions
                     )
                     .loadingRedaction(appState.loadState(for: .transactions))
                     .scrollEdgeDepth(reduceMotion: reduceMotion)
