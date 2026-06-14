@@ -100,6 +100,7 @@ final class AppState {
     var serverStoragePath: String?
     var serverSyncReady: Bool?
     var serverSyncedItemCount: Int?
+    var billingSubscription: BillingSubscription?
     var itemStatuses: [ItemStatus] = []
     var isDemoMode = false
     var isDemoStatusRecoveryScenario = false
@@ -943,6 +944,7 @@ final class AppState {
             serverStoragePath = status.storagePath
             serverSyncReady = status.syncReady
             serverSyncedItemCount = status.syncedItemCount
+            billingSubscription = status.billingSubscription
             lastSyncDate = status.lastSync
             persistTransactionCacheContext()
             refreshSetupCompletionForActiveContext()
@@ -962,6 +964,7 @@ final class AppState {
             serverStoragePath = nil
             serverSyncReady = nil
             serverSyncedItemCount = nil
+            billingSubscription = nil
             itemStatuses = []
             switch error {
             case ServerClientError.serverNotRunning:
