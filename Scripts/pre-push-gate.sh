@@ -71,10 +71,13 @@ scan_diff() {
                 if (!is_placeholder(val)) return "plaid-token"
             }
 
-            # Secret/client-id assignments, incl. snake_case and camelCase
-            # (plaid_secret / plaidSecret / clientSecret / client_id) — the
-            # camelCase spellings were previously missed.
-            if (match(lc, /(plaid_?secret|plaid_?client_?id|client_?secret|client_?id)[ "'"'"']*[:=][ "'"'"']*[a-z0-9_-]{20,}/)) {
+            # Secret/client-id assignments: snake_case, camelCase, AND the
+            # official Plaid hyphenated header / bare body-field spellings — so
+            # plaid_secret / plaidSecret / PLAID-SECRET: / client_secret /
+            # bare "secret": / "client_secret": are all caught. The key is
+            # word-bounded so "mysecret" / "secretsManager" do not trip the bare
+            # "secret" form, and the value must be 20+ unbroken chars.
+            if (match(lc, /(^|[^a-z0-9_])(plaid[_-]?secret|plaid[_-]?client[_-]?id|client[_-]?secret|client[_-]?id|secret)[ "'"'"']*[:=][ "'"'"']*[a-z0-9_-]{20,}/)) {
                 # Isolate ONLY the captured value (the run after the separator),
                 # not the rest of the line — otherwise a trailing comment like
                 # "// not a sample" would smuggle a placeholder word into the
@@ -126,8 +129,10 @@ run_selftest() {
 +Authorization: Bearer ${bearer}
 +let plaidSecret = \"${hex}\"
 +let clientSecret = \"${hex}\" // not a sample
-+PLAID_SECRET=${word_bearing}"
-    positive_count=6
++PLAID_SECRET=${word_bearing}
++PLAID-SECRET: ${hex}
++\"secret\": \"${hex}\""
+    positive_count=8
     # Things that must NOT be flagged (placeholders / CI fakes / prose).
     negatives='+PLAID_SECRET: ci_smoke_secret
 +let demo = "access-sandbox-00000000-0000-0000-0000-000000000000"
@@ -185,7 +190,11 @@ cd "$repo_root"
 # from a stale clone) must propagate so the caller can FAIL CLOSED rather than
 # read it as an empty/clean finding set.
 emit_range_patches() {
-    git log -p --no-color -U0 "$@"
+    # -m shows each merge commit's diff against its parents, so a secret added
+    # ONLY during conflict resolution (present in the merge commit but in
+    # neither parent) is still scanned. Non-merge commits are unaffected. The
+    # 2-way per-parent diffs stay in the standard format scan_diff parses.
+    git log -p -m --no-color -U0 "$@"
 }
 
 # Resolve the list of ranges (each an array of git-rev args) to scan.
@@ -202,6 +211,7 @@ ZERO_OID="0000000000000000000000000000000000000000"
 # Each element is a NUL-free, space-joined git-rev argument list. We re-split on
 # spaces at scan time (the only tokens are oids and `--not --remotes` flags).
 ranges=()
+range_tips=()   # local OID for ranges[i] — used for the local-only fail-closed retry
 pushed_tips=()
 stdin_had_refs=0
 stdin_refs=""
@@ -218,6 +228,7 @@ if [[ -n "$stdin_refs" ]]; then
             continue
         fi
         pushed_tips+=("$local_oid")
+        range_tips+=("$local_oid")
         if [[ "$remote_oid" == "$ZERO_OID" ]]; then
             # New remote ref: scan every commit reachable from local that is not
             # already on any other remote ref (avoids re-scanning all history).
@@ -241,6 +252,7 @@ if [[ ${#ranges[@]} -eq 0 && "$stdin_had_refs" -eq 0 ]]; then
         range="origin/main..HEAD"
     fi
     ranges+=("$range")
+    range_tips+=("HEAD")
 fi
 
 if [[ ${#ranges[@]} -eq 0 ]]; then
@@ -257,20 +269,22 @@ findings=""
 # Guard the expansion: under `set -u`, "${ranges[@]}" on an empty array is an
 # unbound-variable error in older bash (e.g. macOS's bash 3.2). A delete-only
 # push legitimately leaves `ranges` empty.
-for range in ${ranges[@]+"${ranges[@]}"}; do
+for i in "${!ranges[@]}"; do
+    range="${ranges[$i]}"
+    range_tip="${range_tips[$i]}"   # the pushed (local) OID for this range
     # $range carries oids and possibly `--not --remotes`; deliberate splitting.
     # shellcheck disable=SC2086
     set -- $range
     # Capture patches and the git exit status separately. A git failure (e.g. a
     # remote object missing from a stale clone on a force-push) must FAIL CLOSED:
-    # we retry with a local-only range when possible, else block the push rather
-    # than treat an unreadable range as clean.
+    # we retry with a LOCAL-ONLY range built from the pushed tip, else block the
+    # push rather than treat an unreadable range as clean.
     if ! patches="$(emit_range_patches "$@" 2>/dev/null)"; then
-        # Retry with the local tip alone, excluding everything already on a
-        # remote we DO have — depends only on local objects.
-        local_tip="$1"
-        # shellcheck disable=SC2086
-        if ! patches="$(git log -p --no-color -U0 "$local_tip" --not --remotes 2>/dev/null)"; then
+        # Retry the pushed tip alone, excluding everything already on a remote we
+        # DO have — depends only on local objects. NOTE: use $range_tip, not $1:
+        # for an existing-ref "remote..local" range, $1 is the whole unreadable
+        # range string, so retrying with it would just fail again.
+        if ! patches="$(emit_range_patches "$range_tip" --not --remotes 2>/dev/null)"; then
             findings+="  [range: $range]"$'\n'"  UNREADABLE: could not compute the push range (failing closed)."$'\n'
             continue
         fi
@@ -308,19 +322,35 @@ fi
 # truth for the pushed ref, rather than asserting a false green.
 if [[ "${#pushed_tips[@]}" -gt 0 ]]; then
     head_oid="$(git rev-parse HEAD 2>/dev/null || echo)"
-    builds_pushed_ref=0
+    # Require EVERY pushed tip to be the current HEAD. A mixed push such as
+    # `git push origin HEAD other-branch` must NOT be validated by building only
+    # the current checkout: other-branch points at a different tree the build
+    # never sees. If any tip differs, skip and let CI validate the pushed refs.
+    all_tips_are_head=1
     for tip in "${pushed_tips[@]}"; do
-        if [[ "$tip" == "$head_oid" ]]; then
-            builds_pushed_ref=1
+        if [[ "$tip" != "$head_oid" ]]; then
+            all_tips_are_head=0
             break
         fi
     done
-    if [[ "$builds_pushed_ref" -eq 0 ]]; then
-        echo "pre-push-gate: pushed ref is not the current checkout — skipping the" >&2
-        echo "  strict build (it would build the wrong tree). CI must validate the" >&2
-        echo "  pushed ref. Secret scan above already covered the pushed commits." >&2
+    if [[ "$all_tips_are_head" -eq 0 ]]; then
+        echo "pre-push-gate: a pushed ref is not the current checkout — skipping the" >&2
+        echo "  strict build (it would only validate the current tree). CI must" >&2
+        echo "  validate the pushed ref(s). Secret scan above covered all pushed commits." >&2
         exit 0
     fi
+fi
+
+# The build validates the WORKING TREE on disk, not the exact pushed commit. In
+# a hook run, if tracked files differ from HEAD an uncommitted local fix could
+# mask a strict-concurrency failure in the commit actually being pushed and yield
+# a false "passed". Skip in that case (untracked files don't affect the build);
+# a manual run still builds whatever is checked out, which is the intent.
+if [[ "$stdin_had_refs" -eq 1 ]] && ! git diff --quiet HEAD -- 2>/dev/null; then
+    echo "pre-push-gate: working tree has uncommitted changes vs HEAD — skipping the" >&2
+    echo "  strict build (it would not reflect the exact pushed commit). Commit or" >&2
+    echo "  stash to run it locally; CI validates the pushed commit either way." >&2
+    exit 0
 fi
 
 echo "pre-push-gate: strict-concurrency build (incremental)..." >&2
