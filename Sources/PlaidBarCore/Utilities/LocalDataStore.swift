@@ -78,6 +78,10 @@ public enum LocalDataStore {
     public static let accountCacheFilename = "accounts.json"
     public static let transactionCacheFilename = "transactions.json"
     public static let pendingLinkSessionsFilename = "pending-link-sessions.json"
+    /// Stable, non-PII install-scoped Plaid `client_user_id`. Cleared on local
+    /// reset so a fresh bank-link after reset does not reuse the pre-reset Plaid
+    /// dashboard/log identity (the reset boundary clears local Plaid state).
+    public static let linkClientUserIdFilename = "link-client-user-id"
     public static let legacyMigrationResetMarkerFilename = ".legacy-migration-reset"
     /// Preserve the existing Keychain service while moving local files so
     /// SQLite `keychain:<item_id>` references continue to resolve.
@@ -221,7 +225,8 @@ public enum LocalDataStore {
 
         if isAccountCacheFilename(filename) ||
             isTransactionCacheFilename(filename) ||
-            isPendingLinkSessionsFilename(filename) {
+            isPendingLinkSessionsFilename(filename) ||
+            filename == linkClientUserIdFilename {
             return true
         }
 

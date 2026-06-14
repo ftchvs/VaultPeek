@@ -22,6 +22,8 @@ struct WealthSummaryFlyout: View {
             statusSyncText: appState.statusSyncText,
             errorMessage: appState.error,
             creditUtilizationThreshold: appState.creditUtilizationThreshold,
+            lowCashThreshold: appState.lowBalanceThreshold,
+            largeTransactionThreshold: appState.largeTransactionThreshold,
             balanceHistory: appState.balanceHistory
         )
     }
