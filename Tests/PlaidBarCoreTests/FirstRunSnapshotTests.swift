@@ -30,6 +30,9 @@ struct FirstRunSnapshotTests {
         )
 
         #expect(snapshot.accountCount == 4)
+        // Only the depository account contributes to cashAvailable; the cash
+        // tile must not imply all four accounts hold cash.
+        #expect(snapshot.cashAccountCount == 1)
         #expect(snapshot.transactionCount == 8)
         #expect(snapshot.netWorth == 49_450)
         #expect(snapshot.cashAvailable == 8_200)
@@ -44,6 +47,26 @@ struct FirstRunSnapshotTests {
         #expect(snapshot.largeTransactions.allSatisfy { !$0.id.contains("internal") })
         #expect(snapshot.accessibilitySummary.contains("Net worth $49,450.00"))
         #expect(snapshot.accessibilitySummary.contains("3 recent large transactions"))
+    }
+
+    @Test("Large transactions get unique ids even when date, name, and amount collide")
+    func largeTransactionsHaveUniqueIdentities() {
+        let snapshot = FirstRunSnapshot.evaluate(
+            accounts: [
+                AccountDTO(id: "checking", itemId: "item-a", name: "Checking", type: .depository, balances: BalanceDTO(available: 10_000)),
+            ],
+            transactions: [
+                expense("a-internal", amount: 800, date: "2026-06-10", name: "Furniture"),
+                expense("b-internal", amount: 800, date: "2026-06-10", name: "Furniture"),
+            ],
+            completionState: readyCompletion(transactionCount: 2),
+            now: now
+        )
+
+        let ids = snapshot.largeTransactions.map(\.id)
+        #expect(ids.count == 2)
+        #expect(Set(ids).count == ids.count)
+        #expect(snapshot.largeTransactions.allSatisfy { !$0.id.contains("internal") })
     }
 
     @Test("Handles no credit and no liabilities")

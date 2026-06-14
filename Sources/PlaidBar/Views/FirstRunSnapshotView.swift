@@ -17,9 +17,9 @@ struct FirstRunSnapshotView: View {
                 SnapshotMetricTile(
                     title: "Cash Available",
                     value: Formatters.currency(snapshot.cashAvailable, format: .compact),
-                    detail: "\(snapshot.accountCount) account\(snapshot.accountCount == 1 ? "" : "s") connected",
+                    detail: "\(snapshot.cashAccountCount) cash account\(snapshot.cashAccountCount == 1 ? "" : "s")",
                     icon: "banknote",
-                    accessibilityLabel: "Cash available \(Formatters.currency(snapshot.cashAvailable, format: .full)) across \(snapshot.accountCount) account\(snapshot.accountCount == 1 ? "" : "s")."
+                    accessibilityLabel: "Cash available \(Formatters.currency(snapshot.cashAvailable, format: .full)) across \(snapshot.cashAccountCount) cash account\(snapshot.cashAccountCount == 1 ? "" : "s")."
                 )
 
                 SnapshotMetricTile(
