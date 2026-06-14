@@ -23,6 +23,7 @@ final class AppState {
         static let notifyHighUtilization = "notifyHighUtilization"
         static let setupCompletedOnce = "setup.completedOnce"
         static let setupCompletedContextPrefix = "setup.completedOnce.context"
+        static let firstRunSnapshotDismissedContextPrefix = "firstRunSnapshot.dismissed.context"
         static let lastTransactionCacheContext = "cache.lastTransactionCacheContext"
         static let dashboardDetached = DetachedDashboardPreferences.detachedStorageKey
     }
@@ -75,6 +76,12 @@ final class AppState {
         didSet {
             guard oldValue != isSetupComplete else { return }
             persistSetupCompletion(isSetupComplete)
+        }
+    }
+    var isFirstRunSnapshotDismissed = false {
+        didSet {
+            guard oldValue != isFirstRunSnapshotDismissed else { return }
+            persistFirstRunSnapshotDismissal(isFirstRunSnapshotDismissed)
         }
     }
     var serverConnected = false
@@ -197,6 +204,7 @@ final class AppState {
         self.notificationService = notificationService ?? NotificationService.shared
         loadSettings()
         isSetupComplete = storedSetupCompletion()
+        isFirstRunSnapshotDismissed = storedFirstRunSnapshotDismissal()
         if isSetupComplete {
             persistSetupCompletion(true)
         }
@@ -570,6 +578,18 @@ final class AppState {
         )
     }
 
+    var firstRunSnapshotPresentation: FirstRunSnapshotPresentation? {
+        FirstRunSnapshotPresentation.evaluate(
+            accounts: accounts,
+            transactions: transactions,
+            completionState: firstRunCompletionState,
+            isDismissed: isFirstRunSnapshotDismissed,
+            isInitialLoad: isBootLoadInFlight,
+            isDemoMode: isDemoMode,
+            largeTransactionThreshold: largeTransactionThreshold
+        )
+    }
+
     var dashboardStatusReadiness: DashboardStatusReadiness {
         DashboardStatusReadiness.evaluate(
             isDemoMode: isDemoMode && !isDemoStatusRecoveryScenario,
@@ -771,6 +791,7 @@ final class AppState {
             lastSyncDate = status.lastSync
             persistTransactionCacheContext()
             refreshSetupCompletionForActiveContext()
+            refreshFirstRunSnapshotDismissalForActiveContext()
             updateSetupCompletion()
             if !(await refreshItemStatuses()) {
                 itemStatuses = []
@@ -1144,7 +1165,9 @@ final class AppState {
         serverSyncedItemCount = nil
         lastSyncDate = nil
         UserDefaults.standard.set(false, forKey: resetSetupCompletionDefaultsKey)
+        UserDefaults.standard.removeObject(forKey: firstRunSnapshotDismissalDefaultsKey)
         isSetupComplete = false
+        isFirstRunSnapshotDismissed = false
         serverStoragePath = nil
         isDemoMode = false
         isDemoStatusRecoveryScenario = false
@@ -1190,6 +1213,10 @@ final class AppState {
         let granted = await notificationService.requestPermission()
         notificationPermissionState = await notificationService.checkPermissionStatus()
         return granted
+    }
+
+    func dismissFirstRunSnapshot() {
+        isFirstRunSnapshotDismissed = true
     }
 
     func notificationPermissionStatus() async -> NotificationPermissionState {
@@ -1575,6 +1602,13 @@ final class AppState {
         }
     }
 
+    private func refreshFirstRunSnapshotDismissalForActiveContext() {
+        let storedValue = storedFirstRunSnapshotDismissal()
+        if isFirstRunSnapshotDismissed != storedValue {
+            isFirstRunSnapshotDismissed = storedValue
+        }
+    }
+
     private func storedSetupCompletion() -> Bool {
         let defaults = UserDefaults.standard
         if let scopedValue = defaults.object(forKey: setupCompletionDefaultsKey) as? Bool {
@@ -1593,11 +1627,30 @@ final class AppState {
         UserDefaults.standard.set(isComplete, forKey: setupCompletionDefaultsKey)
     }
 
+    private func storedFirstRunSnapshotDismissal() -> Bool {
+        UserDefaults.standard.bool(forKey: firstRunSnapshotDismissalDefaultsKey)
+    }
+
+    private func persistFirstRunSnapshotDismissal(_ isDismissed: Bool) {
+        if isDismissed {
+            UserDefaults.standard.set(true, forKey: firstRunSnapshotDismissalDefaultsKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: firstRunSnapshotDismissalDefaultsKey)
+        }
+    }
+
     private var setupCompletionDefaultsKey: String {
         let environment = setupCompletionEnvironment.rawValue
         let path = activeStorageDirectoryURL.standardizedFileURL.path
         let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? path
         return "\(Keys.setupCompletedContextPrefix).\(environment).\(encodedPath)"
+    }
+
+    private var firstRunSnapshotDismissalDefaultsKey: String {
+        let environment = setupCompletionEnvironment.rawValue
+        let path = activeStorageDirectoryURL.standardizedFileURL.path
+        let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? path
+        return "\(Keys.firstRunSnapshotDismissedContextPrefix).\(environment).\(encodedPath)"
     }
 
     private var setupCompletionEnvironment: PlaidEnvironment {
