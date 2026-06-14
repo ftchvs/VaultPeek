@@ -191,7 +191,7 @@ public struct WealthSummaryPresentation: Sendable, Equatable {
             ),
             attention: attention,
             syncHealth: syncHealthSummary(
-                from: attention,
+                from: attentionQueue,
                 isDemoMode: isDemoMode,
                 statusSyncText: statusSyncText
             )
@@ -285,11 +285,17 @@ public struct WealthSummaryPresentation: Sendable, Equatable {
     }
 
     private static func syncHealthSummary(
-        from attention: AttentionSummary,
+        from queue: AttentionQueue,
         isDemoMode: Bool,
         statusSyncText: String
     ) -> SyncHealthSummary {
-        guard attention.severity != .healthy else {
+        // Sync health reflects sync/connection state only. Finance warnings
+        // (low cash, high utilization, unusual spend) are surfaced through the
+        // attention queue, not the sync-health pill, so an otherwise-fresh sync
+        // with a finance warning still reports as healthy here.
+        let syncRow = queue.rows.first { !$0.isFinancialAttention && $0.severity != .healthy }
+
+        guard let syncRow else {
             return SyncHealthSummary(
                 severity: .healthy,
                 title: isDemoMode ? "Demo data ready" : "Sync healthy",
@@ -300,11 +306,11 @@ public struct WealthSummaryPresentation: Sendable, Equatable {
         }
 
         return SyncHealthSummary(
-            severity: attention.severity,
-            title: attention.title,
-            detail: attention.detail,
+            severity: syncRow.severity,
+            title: syncRow.title,
+            detail: syncRow.detail,
             statusText: statusSyncText,
-            iconName: attention.severity == .blocked ? "xmark.octagon.fill" : "exclamationmark.triangle.fill"
+            iconName: syncRow.severity == .blocked ? "xmark.octagon.fill" : "exclamationmark.triangle.fill"
         )
     }
 }

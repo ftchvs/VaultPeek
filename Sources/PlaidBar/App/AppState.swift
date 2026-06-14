@@ -372,9 +372,16 @@ final class AppState {
             needsLoginItemCount: needsLoginItemCount,
             isSyncStale: isSyncStale,
             hasEverSynced: lastSyncDate != nil,
-            financialAttentionText: attentionQueue.rows.first?.menuBarAttentionText,
+            financialAttentionText: firstMenuBarAttentionText,
             iconStyle: menuBarIconStyle
         )
+    }
+
+    /// First attention row that actually carries menu-bar text. A higher-priority
+    /// row without menu-bar text (e.g. an advisory recent-error) must not
+    /// suppress a lower Cash/Credit/Spend badge.
+    private var firstMenuBarAttentionText: String? {
+        attentionQueue.rows.compactMap(\.menuBarAttentionText).first
     }
 
     var menuBarAttentionText: String? {
@@ -400,7 +407,11 @@ final class AppState {
     }
 
     var menuBarAccessibilityLabel: String {
-        let status = "Status \(diagnosticsSummary)"
+        // diagnosticsSummary stays "healthy" for finance warnings, so fold the
+        // visible finance badge (Cash/Credit/Spend) into the spoken status to
+        // keep VoiceOver in sync with the badge sighted users see.
+        let attention = menuBarAttentionText.map { ". Attention \($0)" } ?? ""
+        let status = "Status \(diagnosticsSummary)\(attention)"
         switch menuBarSummaryMode {
         case .netWorth:
             return "VaultPeek net worth \(menuBarText). \(status)"

@@ -48,9 +48,19 @@ public struct AttentionQueueRow: Equatable, Identifiable, Sendable {
     public let accessibilityLabel: String
     public let accessibilityHint: String?
 
+    /// Id prefix for financial cockpit rows (low cash, high utilization,
+    /// unusual spend). Used to keep these out of sync-health treatment.
+    public static let financialAttentionIDPrefix = "financial-"
+
     /// Severity tier derived from the row's existing severity state.
     public var errorSeverity: ErrorSeverity? {
         severity.errorSeverity
+    }
+
+    /// `true` when this row is a financial cockpit warning rather than a
+    /// sync/connection state. Sync-health UI should ignore these rows.
+    public var isFinancialAttention: Bool {
+        id.hasPrefix(Self.financialAttentionIDPrefix)
     }
 
     public init(
@@ -112,7 +122,9 @@ public struct AttentionQueue: Equatable, Sendable {
         transactions: [TransactionDTO] = [],
         lowCashThreshold: Double = 100,
         largeTransactionThreshold: Double = 500,
-        creditUtilizationThreshold: Double = PlaidBarConstants.creditUtilizationWarningThreshold
+        creditUtilizationThreshold: Double = PlaidBarConstants.creditUtilizationWarningThreshold,
+        now: Date = Date(),
+        calendar: Calendar = .current
     ) -> AttentionQueue {
         if isDemoMode {
             return AttentionQueue(rows: [healthyDemoRow])
@@ -217,13 +229,20 @@ public struct AttentionQueue: Equatable, Sendable {
             ))
         }
 
-        if credentialsReady, serverConnected, linkedItemCount > 0, accountCount > 0, syncedItemCount > 0 {
+        // Only evaluate aggregate finance warnings once every linked item has
+        // completed its first sync. With a partially-synced set, balances and
+        // transactions from the unsynced item are absent, so aggregate
+        // cash/utilization/spend could fire on incomplete data.
+        if credentialsReady, serverConnected, linkedItemCount > 0, accountCount > 0,
+           syncedItemCount >= linkedItemCount {
             rows.append(contentsOf: financialAttentionRows(
                 accounts: accounts,
                 transactions: transactions,
                 lowCashThreshold: lowCashThreshold,
                 largeTransactionThreshold: largeTransactionThreshold,
-                creditUtilizationThreshold: creditUtilizationThreshold
+                creditUtilizationThreshold: creditUtilizationThreshold,
+                now: now,
+                calendar: calendar
             ))
         }
 
@@ -289,23 +308,34 @@ public struct AttentionQueue: Equatable, Sendable {
         }
     }
 
+    /// Sliding window for "recent spending changed". A large transaction older
+    /// than this no longer keeps the Spend attention state active.
+    static let unusualSpendingWindowDays = 7
+
     private static func financialAttentionRows(
         accounts: [AccountDTO],
         transactions: [TransactionDTO],
         lowCashThreshold: Double,
         largeTransactionThreshold: Double,
-        creditUtilizationThreshold: Double
+        creditUtilizationThreshold: Double,
+        now: Date,
+        calendar: Calendar
     ) -> [AttentionQueueRow] {
         var rows: [AttentionQueueRow] = []
 
-        let cashAccounts = accounts.filter { $0.type == .depository }
-        let totalCash = MenuBarSummary.totalCash(from: accounts)
-        if !cashAccounts.isEmpty, totalCash < lowCashThreshold {
+        // Low cash is per-account: a single checking account below the threshold
+        // is a low-cash signal even if a savings account holds enough, matching
+        // NotificationTriggerSelection.lowBalanceAccounts.
+        let lowCashAccounts = NotificationTriggerSelection.lowBalanceAccounts(
+            from: accounts,
+            threshold: lowCashThreshold
+        )
+        if !lowCashAccounts.isEmpty {
             rows.append(AttentionQueueRow(
                 id: "financial-low-cash",
                 severity: .warning,
                 title: "Cash buffer is low",
-                detail: "Depository cash is below your local attention threshold. Review cash accounts before upcoming payments.",
+                detail: "A cash account is below your local attention threshold. Review cash accounts before upcoming payments.",
                 menuBarAttentionText: "Cash",
                 action: .refresh,
                 actionTitle: "Refresh Data",
@@ -327,10 +357,25 @@ public struct AttentionQueue: Equatable, Sendable {
             ))
         }
 
+        // Only count large transactions inside the recent window so a one-time
+        // months-old purchase does not keep the Spend badge active indefinitely.
+        let windowStart = calendar.date(
+            byAdding: .day,
+            value: -unusualSpendingWindowDays,
+            to: calendar.startOfDay(for: now)
+        )
         let unusualSpendCount = NotificationTriggerSelection.largeTransactions(
             from: transactions,
             threshold: largeTransactionThreshold
-        ).count
+        )
+        .filter { transaction in
+            guard let windowStart,
+                  let date = Formatters.parseTransactionDate(transaction.date)
+            else { return false }
+            let day = calendar.startOfDay(for: date)
+            return day >= windowStart && day <= calendar.startOfDay(for: now)
+        }
+        .count
         if unusualSpendCount > 0 {
             rows.append(AttentionQueueRow(
                 id: "financial-unusual-spending",
