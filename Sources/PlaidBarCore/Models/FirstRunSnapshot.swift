@@ -27,6 +27,10 @@ public struct FirstRunSnapshot: Equatable, Sendable {
     }
 
     public let accountCount: Int
+    /// Number of depository accounts that contribute to `cashAvailable`. The
+    /// cash figure sums only depository balances, so reporting the total
+    /// `accountCount` next to it would overstate how many accounts hold cash.
+    public let cashAccountCount: Int
     public let transactionCount: Int
     public let netWorth: Double
     public let cashAvailable: Double
@@ -41,6 +45,7 @@ public struct FirstRunSnapshot: Equatable, Sendable {
 
     public init(
         accountCount: Int,
+        cashAccountCount: Int = 0,
         transactionCount: Int,
         netWorth: Double,
         cashAvailable: Double,
@@ -54,6 +59,7 @@ public struct FirstRunSnapshot: Equatable, Sendable {
         accessibilitySummary: String
     ) {
         self.accountCount = accountCount
+        self.cashAccountCount = cashAccountCount
         self.transactionCount = transactionCount
         self.netWorth = netWorth
         self.cashAvailable = cashAvailable
@@ -95,6 +101,7 @@ public struct FirstRunSnapshot: Equatable, Sendable {
 
         return FirstRunSnapshot(
             accountCount: accounts.count,
+            cashAccountCount: accounts.filter { $0.type == .depository }.count,
             transactionCount: transactions.count,
             netWorth: netWorth,
             cashAvailable: cashAvailable,
@@ -151,9 +158,14 @@ public struct FirstRunSnapshot: Equatable, Sendable {
             return $0.displayName < $1.displayName
         }
         .prefix(3)
-        .map { transaction in
+        .enumerated()
+        .map { offset, transaction in
             LargeTransaction(
-                id: displaySafeLargeTransactionID(for: transaction),
+                // Two large transactions can share date + name + amount, which
+                // would collide on identity and make SwiftUI ForEach diffing
+                // undefined. The sorted-occurrence index disambiguates while
+                // keeping the id display-safe (no account/transaction ids).
+                id: displaySafeLargeTransactionID(for: transaction, occurrence: offset),
                 displayName: transaction.displayName,
                 amount: transaction.displayAmount,
                 date: transaction.date
@@ -161,9 +173,12 @@ public struct FirstRunSnapshot: Equatable, Sendable {
         })
     }
 
-    private static func displaySafeLargeTransactionID(for transaction: TransactionDTO) -> String {
+    private static func displaySafeLargeTransactionID(
+        for transaction: TransactionDTO,
+        occurrence: Int
+    ) -> String {
         let amountCents = Int((transaction.displayAmount * 100).rounded())
-        return "\(transaction.date)-\(transaction.displayName)-\(amountCents)"
+        return "\(transaction.date)-\(transaction.displayName)-\(amountCents)-\(occurrence)"
     }
 
     private static func accessibilitySummary(
@@ -204,5 +219,76 @@ public struct FirstRunSnapshot: Equatable, Sendable {
         }
 
         return parts.joined(separator: " ")
+    }
+}
+
+public struct FirstRunSnapshotPresentation: Equatable, Sendable {
+    public let snapshot: FirstRunSnapshot
+    public let title: String
+    public let subtitle: String
+    public let primaryAccessibilityLabel: String
+    public let dismissalAccessibilityHint: String
+
+    public init(
+        snapshot: FirstRunSnapshot,
+        title: String,
+        subtitle: String,
+        primaryAccessibilityLabel: String,
+        dismissalAccessibilityHint: String
+    ) {
+        self.snapshot = snapshot
+        self.title = title
+        self.subtitle = subtitle
+        self.primaryAccessibilityLabel = primaryAccessibilityLabel
+        self.dismissalAccessibilityHint = dismissalAccessibilityHint
+    }
+
+    public static func evaluate(
+        accounts: [AccountDTO],
+        transactions: [TransactionDTO],
+        completionState: FirstRunCompletionState,
+        isDismissed: Bool,
+        isInitialLoad: Bool,
+        isDemoMode: Bool,
+        largeTransactionThreshold: Double = 500,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> FirstRunSnapshotPresentation? {
+        guard !isDismissed,
+              !isInitialLoad,
+              !isDemoMode,
+              completionState.isReady,
+              completionState.step == .ready,
+              !accounts.isEmpty
+        else {
+            return nil
+        }
+
+        let snapshot = FirstRunSnapshot.evaluate(
+            accounts: accounts,
+            transactions: transactions,
+            completionState: completionState,
+            largeTransactionThreshold: largeTransactionThreshold,
+            now: now,
+            calendar: calendar
+        )
+        return FirstRunSnapshotPresentation(
+            snapshot: snapshot,
+            title: "First Snapshot",
+            subtitle: subtitle(for: snapshot),
+            primaryAccessibilityLabel: snapshot.accessibilitySummary,
+            dismissalAccessibilityHint: "Dismisses this first-run snapshot and keeps it hidden on future launches."
+        )
+    }
+
+    private static func subtitle(for snapshot: FirstRunSnapshot) -> String {
+        switch snapshot.transactionState {
+        case .ready:
+            return "Your local account and transaction sync is ready."
+        case .syncing:
+            return "Accounts are ready; transaction history is still syncing."
+        case .empty:
+            return "Accounts are ready; no transaction rows are available yet."
+        }
     }
 }
