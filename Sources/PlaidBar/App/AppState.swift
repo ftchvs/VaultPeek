@@ -98,6 +98,7 @@ final class AppState {
     var lastSyncDate: Date?
     var balanceHistory: [BalanceSnapshot] = []
     var notificationPermissionState: NotificationPermissionState = .notDetermined
+    @ObservationIgnored private var performanceTrace = PerformanceTrace()
 
     // MARK: - Settings (persisted to UserDefaults)
     var menuBarSummaryMode: MenuBarSummaryMode = .netWorth {
@@ -687,8 +688,18 @@ final class AppState {
 
     var recurringTransactions: [RecurringTransaction] {
         if let cached = _cachedRecurringTransactions { return cached }
+        let start = performanceStart()
         let result = RecurringDetector.detect(from: transactions)
         _cachedRecurringTransactions = result
+        recordPerformance(
+            .derivedSummaryRecompute,
+            startedAt: start,
+            counts: [
+                .transactionTotalCount: transactions.count,
+                .recurringCount: result.count,
+            ],
+            outcome: .success
+        )
         return result
     }
 
@@ -712,12 +723,23 @@ final class AppState {
 
     var localAIActivitySummaries: [LocalAIActivitySummary] {
         if let cached = _cachedLocalAIActivitySummaries { return cached }
+        let start = performanceStart()
         let result = localAIInsightsService.activitySummaries(
             accounts: accounts,
             transactions: transactions,
             recurringTransactions: recurringTransactions
         )
         _cachedLocalAIActivitySummaries = result
+        recordPerformance(
+            .derivedSummaryRecompute,
+            startedAt: start,
+            counts: [
+                .accountCount: accounts.count,
+                .transactionTotalCount: transactions.count,
+                .activitySummaryCount: result.count,
+            ],
+            outcome: .success
+        )
         return result
     }
 
@@ -777,8 +799,15 @@ final class AppState {
     // MARK: - Actions
 
     func checkServerConnection() async {
+        let statusStart = performanceStart()
         do {
             let status = try await serverClient.getStatus()
+            recordPerformance(
+                .statusFetch,
+                startedAt: statusStart,
+                counts: [.itemCount: status.itemCount],
+                outcome: .success
+            )
             serverConnected = true
             error = nil
             serverEnvironment = status.environment
@@ -799,6 +828,7 @@ final class AppState {
             }
             await upgradeManagedServerIfCredentialsArrived()
         } catch {
+            recordPerformance(.statusFetch, startedAt: statusStart, outcome: .failure)
             serverConnected = false
             serverEnvironment = nil
             serverVersion = nil
@@ -845,6 +875,7 @@ final class AppState {
     func refreshAccounts() async {
         if refreshDemoDataIfNeeded() { return }
 
+        let refreshStart = performanceStart()
         isLoading = true
         error = nil
         do {
@@ -856,14 +887,21 @@ final class AppState {
             let cacheAccounts = accounts
             let cacheDirectory = activeStorageDirectoryURL
             let cacheContext = transactionCacheContext
-            try await localDataCache.saveAccounts(cacheAccounts, to: cacheDirectory, context: cacheContext)
+            try await saveAccountsToCacheWithPerformance(cacheAccounts, to: cacheDirectory, context: cacheContext)
             serverItemCount = Set(accounts.map(\.itemId)).count
             serverSyncReady = (serverItemCount ?? 0) > 0
             recordBalanceSnapshot()
             updateSetupCompletion()
+            recordPerformance(
+                .accountsRefresh,
+                startedAt: refreshStart,
+                counts: [.accountCount: accounts.count],
+                outcome: .success
+            )
         } catch {
             await refreshItemStatuses()
             self.error = error.localizedDescription
+            recordPerformance(.accountsRefresh, startedAt: refreshStart, outcome: .failure)
         }
         isLoading = false
     }
@@ -871,6 +909,7 @@ final class AppState {
     func refreshBalances() async {
         if refreshDemoDataIfNeeded() { return }
 
+        let refreshStart = performanceStart()
         isLoading = true
         error = nil
         do {
@@ -882,12 +921,19 @@ final class AppState {
             let cacheAccounts = accounts
             let cacheDirectory = activeStorageDirectoryURL
             let cacheContext = transactionCacheContext
-            try await localDataCache.saveAccounts(cacheAccounts, to: cacheDirectory, context: cacheContext)
+            try await saveAccountsToCacheWithPerformance(cacheAccounts, to: cacheDirectory, context: cacheContext)
             lastSyncDate = Date()
             recordBalanceSnapshot()
+            recordPerformance(
+                .balancesRefresh,
+                startedAt: refreshStart,
+                counts: [.accountCount: accounts.count],
+                outcome: .success
+            )
         } catch {
             await refreshItemStatuses()
             self.error = error.localizedDescription
+            recordPerformance(.balancesRefresh, startedAt: refreshStart, outcome: .failure)
         }
         isLoading = false
     }
@@ -895,9 +941,13 @@ final class AppState {
     func syncTransactions() async {
         if refreshDemoDataIfNeeded() { return }
 
+        let syncStart = performanceStart()
+        var pageCount = 0
+        var addedCount = 0
+        var modifiedCount = 0
+        var removedCount = 0
         do {
             var hasMore = true
-            var pageCount = 0
             while hasMore {
                 pageCount += 1
                 guard pageCount <= PlaidBarConstants.maxTransactionSyncPages else {
@@ -906,6 +956,9 @@ final class AppState {
                     )
                 }
                 let response = try await serverClient.syncTransactions()
+                addedCount += response.added.count
+                modifiedCount += response.modified.count
+                removedCount += response.removed.count
                 let updatedTransactions = TransactionSyncReducer.applying(response, to: transactions)
                 // Assign before awaiting the cache write so a concurrent
                 // reentrant mutation (e.g. removeAccount filtering
@@ -916,7 +969,7 @@ final class AppState {
                 transactions = updatedTransactions
                 let cacheDirectory = activeStorageDirectoryURL
                 let cacheContext = transactionCacheContext
-                try await localDataCache.saveTransactions(
+                try await saveTransactionsToCacheWithPerformance(
                     updatedTransactions,
                     to: cacheDirectory,
                     context: cacheContext
@@ -928,9 +981,32 @@ final class AppState {
             serverSyncedItemCount = statusItemCount
             await refreshItemStatuses()
             updateSetupCompletion()
+            recordPerformance(
+                .transactionSync,
+                startedAt: syncStart,
+                counts: [
+                    .pageCount: pageCount,
+                    .transactionAddedCount: addedCount,
+                    .transactionModifiedCount: modifiedCount,
+                    .transactionRemovedCount: removedCount,
+                    .transactionTotalCount: transactions.count,
+                ],
+                outcome: .success
+            )
         } catch {
             await refreshItemStatuses()
             self.error = error.localizedDescription
+            recordPerformance(
+                .transactionSync,
+                startedAt: syncStart,
+                counts: [
+                    .pageCount: pageCount,
+                    .transactionAddedCount: addedCount,
+                    .transactionModifiedCount: modifiedCount,
+                    .transactionRemovedCount: removedCount,
+                ],
+                outcome: .failure
+            )
         }
     }
 
@@ -1034,6 +1110,7 @@ final class AppState {
     func refreshDashboard() async {
         if refreshDemoDataIfNeeded() { return }
 
+        let dashboardStart = performanceStart()
         await checkServerConnection()
         // Setup state (credentials missing) cannot refresh anything from
         // Plaid; the status surfaces guide the user instead of surfacing a
@@ -1042,6 +1119,16 @@ final class AppState {
             await refreshAccounts()
             await syncTransactions()
         }
+        recordPerformance(
+            .dashboardRefresh,
+            startedAt: dashboardStart,
+            counts: [
+                .accountCount: accounts.count,
+                .transactionTotalCount: transactions.count,
+                .itemCount: statusItemCount,
+            ],
+            outcome: error == nil ? .success : .failure
+        )
     }
 
     func connectForOnboarding(expectedEnvironment: PlaidEnvironment) async -> Bool {
@@ -1134,8 +1221,8 @@ final class AppState {
                 let cacheTransactions = transactions
                 let cacheDirectory = activeStorageDirectoryURL
                 let cacheContext = transactionCacheContext
-                try await localDataCache.saveAccounts(cacheAccounts, to: cacheDirectory, context: cacheContext)
-                try await localDataCache.saveTransactions(
+                try await saveAccountsToCacheWithPerformance(cacheAccounts, to: cacheDirectory, context: cacheContext)
+                try await saveTransactionsToCacheWithPerformance(
                     cacheTransactions,
                     to: cacheDirectory,
                     context: cacheContext
@@ -1382,13 +1469,13 @@ final class AppState {
               let cacheDirectory = preconnectCacheDirectory(for: context)
         else { return }
 
-        if let cachedAccounts = try? await localDataCache.loadAccounts(
+        if let cachedAccounts = try? await loadAccountsFromCacheWithPerformance(
             from: cacheDirectory,
             context: context
         ), !cachedAccounts.isEmpty {
             accounts = cachedAccounts
         }
-        if let cachedTransactions = try? await localDataCache.loadTransactions(
+        if let cachedTransactions = try? await loadTransactionsFromCacheWithPerformance(
             from: cacheDirectory,
             context: context
         ), !cachedTransactions.isEmpty {
@@ -1487,7 +1574,7 @@ final class AppState {
 
     private func loadCachedAccounts() async {
         do {
-            accounts = try await localDataCache.loadAccounts(
+            accounts = try await loadAccountsFromCacheWithPerformance(
                 from: activeStorageDirectoryURL,
                 context: transactionCacheContext
             )
@@ -1499,7 +1586,7 @@ final class AppState {
     private func clearCachedAccounts() async {
         accounts = []
         do {
-            try await localDataCache.saveAccounts(
+            try await saveAccountsToCacheWithPerformance(
                 accounts,
                 to: activeStorageDirectoryURL,
                 context: transactionCacheContext
@@ -1511,7 +1598,7 @@ final class AppState {
 
     private func loadCachedTransactions() async {
         do {
-            transactions = try await localDataCache.loadTransactions(
+            transactions = try await loadTransactionsFromCacheWithPerformance(
                 from: activeStorageDirectoryURL,
                 context: transactionCacheContext
             )
@@ -1523,7 +1610,7 @@ final class AppState {
     private func clearCachedTransactions() async {
         transactions = []
         do {
-            try await localDataCache.saveTransactions(
+            try await saveTransactionsToCacheWithPerformance(
                 transactions,
                 to: activeStorageDirectoryURL,
                 context: transactionCacheContext
@@ -1543,12 +1630,150 @@ final class AppState {
 
     @discardableResult
     private func refreshItemStatuses() async -> Bool {
+        let itemsStart = performanceStart()
         do {
-            applyItemStatuses(try await serverClient.getItems())
+            let statuses = try await serverClient.getItems()
+            applyItemStatuses(statuses)
+            recordPerformance(
+                .itemsFetch,
+                startedAt: itemsStart,
+                counts: [.itemCount: statuses.count],
+                outcome: .success
+            )
             return true
         } catch {
+            recordPerformance(.itemsFetch, startedAt: itemsStart, outcome: .failure)
             return false
         }
+    }
+
+    private func loadAccountsFromCacheWithPerformance(
+        from directory: URL,
+        context: TransactionCacheContext?
+    ) async throws -> [AccountDTO] {
+        let start = performanceStart()
+        do {
+            let cachedAccounts = try await localDataCache.loadAccounts(from: directory, context: context)
+            recordPerformance(
+                .localCacheLoad,
+                startedAt: start,
+                counts: [.cacheRecordCount: cachedAccounts.count, .accountCount: cachedAccounts.count],
+                outcome: .success
+            )
+            return cachedAccounts
+        } catch {
+            recordPerformance(.localCacheLoad, startedAt: start, outcome: .failure)
+            throw error
+        }
+    }
+
+    private func saveAccountsToCacheWithPerformance(
+        _ accounts: [AccountDTO],
+        to directory: URL,
+        context: TransactionCacheContext?
+    ) async throws {
+        let start = performanceStart()
+        do {
+            try await localDataCache.saveAccounts(accounts, to: directory, context: context)
+            recordPerformance(
+                .localCacheSave,
+                startedAt: start,
+                counts: [.cacheRecordCount: accounts.count, .accountCount: accounts.count],
+                outcome: .success
+            )
+        } catch {
+            recordPerformance(.localCacheSave, startedAt: start, outcome: .failure)
+            throw error
+        }
+    }
+
+    private func loadTransactionsFromCacheWithPerformance(
+        from directory: URL,
+        context: TransactionCacheContext?
+    ) async throws -> [TransactionDTO] {
+        let start = performanceStart()
+        do {
+            let cachedTransactions = try await localDataCache.loadTransactions(from: directory, context: context)
+            recordPerformance(
+                .localCacheLoad,
+                startedAt: start,
+                counts: [
+                    .cacheRecordCount: cachedTransactions.count,
+                    .transactionTotalCount: cachedTransactions.count,
+                ],
+                outcome: .success
+            )
+            return cachedTransactions
+        } catch {
+            recordPerformance(.localCacheLoad, startedAt: start, outcome: .failure)
+            throw error
+        }
+    }
+
+    private func saveTransactionsToCacheWithPerformance(
+        _ transactions: [TransactionDTO],
+        to directory: URL,
+        context: TransactionCacheContext?
+    ) async throws {
+        let start = performanceStart()
+        do {
+            try await localDataCache.saveTransactions(transactions, to: directory, context: context)
+            recordPerformance(
+                .localCacheSave,
+                startedAt: start,
+                counts: [
+                    .cacheRecordCount: transactions.count,
+                    .transactionTotalCount: transactions.count,
+                ],
+                outcome: .success
+            )
+        } catch {
+            recordPerformance(.localCacheSave, startedAt: start, outcome: .failure)
+            throw error
+        }
+    }
+
+    var performanceSnapshot: PerformanceSnapshot {
+        performanceTrace.snapshot()
+    }
+
+    func clearPerformanceTrace() {
+        performanceTrace.clear()
+    }
+
+    private func performanceStart() -> UInt64 {
+        DispatchTime.now().uptimeNanoseconds
+    }
+
+    private func recordPerformance(
+        _ operation: PerformanceOperation,
+        startedAt start: UInt64,
+        counts: [PerformanceCountKey: Int] = [:],
+        outcome: PerformanceOutcome
+    ) {
+        let end = DispatchTime.now().uptimeNanoseconds
+        performanceTrace.record(
+            operation,
+            durationNanoseconds: end >= start ? end - start : 0,
+            counts: counts,
+            outcome: outcome
+        )
+        emitPerformanceTraceIfRequested()
+    }
+
+    /// Local-only performance capture: run the app with `PLAIDBAR_PERF_TRACE=1`
+    /// or `--perf-trace` to print the in-memory trace snapshot to stdout. The
+    /// snapshot schema only contains operation names, coarse durations, counts,
+    /// and outcomes; it has no fields for Plaid IDs, tokens, balances, payloads,
+    /// merchant names, or storage paths.
+    private func emitPerformanceTraceIfRequested() {
+        let environmentFlag = ProcessInfo.processInfo.environment["PLAIDBAR_PERF_TRACE"] == "1"
+        guard environmentFlag || CommandLine.arguments.contains("--perf-trace"),
+              let data = try? JSONEncoder().encode(performanceTrace.snapshot()),
+              let json = String(data: data, encoding: .utf8)
+        else { return }
+
+        print("PlaidBar performance trace: \(json)")
     }
 
     private func applyItemStatuses(_ statuses: [ItemStatus]) {
