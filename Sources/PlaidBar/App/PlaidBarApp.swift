@@ -135,6 +135,17 @@ struct PlaidBarApp: App {
                         reduceMotion: reduceMotion
                     )
                 }
+                .onOpenURL { url in
+                    guard url.scheme == "vaultpeek" else { return }
+                    if detachedDashboard.handleMenuBarActivation(
+                        appState: appState,
+                        forcedColorScheme: Self.forcedColorScheme,
+                        reduceMotion: reduceMotion
+                    ) {
+                        return
+                    }
+                    appState.isPopoverPresented = true
+                }
         }
         .menuBarExtraAccess(isPresented: $appState.isPopoverPresented) { statusItem in
             statusItemContextMenuController.configure(
