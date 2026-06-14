@@ -1,5 +1,6 @@
-import Hummingbird
+import CryptoKit
 import Foundation
+import Hummingbird
 import NIOCore
 import PlaidBarCore
 
@@ -198,9 +199,17 @@ struct OAuthCallbackRoute: Sendable {
         request: Request,
         context: some RequestContext
     ) async throws -> Response {
-        guard let stateParam = request.uri.queryParameters.get("state"),
-              let pendingSession = await pendingLinkSessions.consume(state: String(stateParam))
-        else {
+        guard let stateParam = request.uri.queryParameters.get("state") else {
+            return Response(
+                status: .badRequest,
+                headers: [.contentType: "text/html"],
+                body: .init(byteBuffer: ByteBuffer(
+                    string: Self.errorPage("Missing or expired link session state")
+                ))
+            )
+        }
+        let state = String(stateParam)
+        guard let pendingSession = await pendingLinkSessions.beginCompletion(state: state) else {
             return Response(
                 status: .badRequest,
                 headers: [.contentType: "text/html"],
@@ -214,6 +223,7 @@ struct OAuthCallbackRoute: Sendable {
             let publicTokenResults = try await publicTokenResults(from: request, pendingSession: pendingSession)
             if publicTokenResults.isEmpty, let updateItemId = pendingSession.updateItemId {
                 try await tokenStore.updateItemStatus(id: updateItemId, status: ItemConnectionStatus.connected.rawValue)
+                _ = await pendingLinkSessions.consume(state: state)
                 return Response(
                     status: .ok,
                     headers: [.contentType: "text/html"],
@@ -222,6 +232,7 @@ struct OAuthCallbackRoute: Sendable {
             }
 
             guard !publicTokenResults.isEmpty else {
+                await pendingLinkSessions.releaseCompletion(state: state)
                 return Response(
                     status: .badRequest,
                     headers: [.contentType: "text/html"],
@@ -231,16 +242,56 @@ struct OAuthCallbackRoute: Sendable {
                 )
             }
 
+            var unrecoverableItemCount = 0
             for publicTokenResult in publicTokenResults {
-                try await exchangeAndStore(publicTokenResult: publicTokenResult)
-            }
+                let identity = Self.resultIdentity(for: publicTokenResult)
+                // Skip results already finalized on a prior attempt — keyed by a
+                // stable identity, so reordered multi-item retries skip the right
+                // ones (not by ordinal position). "Finalized" means either stored
+                // OR irrecoverably spent (see below); both must never be replayed.
+                if pendingSession.completedResultIdentities.contains(identity) {
+                    continue
+                }
 
+                let outcome = await storeResult(publicTokenResult: publicTokenResult)
+                switch outcome {
+                case .stored:
+                    // Fully persisted — mark finalized so a retry skips it.
+                    await pendingLinkSessions.markResultCompleted(state: state, identity: identity)
+                case .notExchanged:
+                    // The public token was NOT consumed (exchange itself failed),
+                    // so it is still replayable. Release the session and surface
+                    // an error; the user (or an auto-retry) can try again.
+                    await pendingLinkSessions.releaseCompletion(state: state)
+                    return Self.errorResponse("Connecting your account failed. Please try again.")
+                case .spentButNotStored:
+                    // Exchange SUCCEEDED but the item could not be stored: the
+                    // single-use token is spent and the access token is lost.
+                    // Mark finalized so the dead token is never replayed (no
+                    // endless 500s), but count it so we do NOT report success —
+                    // the user must re-link this institution.
+                    await pendingLinkSessions.markResultCompleted(state: state, identity: identity)
+                    unrecoverableItemCount += 1
+                }
+            }
+            _ = await pendingLinkSessions.consume(state: state)
+
+            if unrecoverableItemCount > 0 {
+                // Honest outcome: do not show "Connected" when an item was lost.
+                return Self.errorResponse(
+                    "Some accounts could not be finished connecting. Please re-link "
+                        + "them from VaultPeek."
+                )
+            }
             return Response(
                 status: .ok,
                 headers: [.contentType: "text/html"],
                 body: .init(byteBuffer: ByteBuffer(string: Self.successPage()))
             )
         } catch {
+            // A failure outside the per-result loop (e.g. /link/token/get) leaves
+            // nothing consumed, so the session stays retryable.
+            await pendingLinkSessions.releaseCompletion(state: state)
             return Response(
                 status: .internalServerError,
                 headers: [.contentType: "text/html"],
@@ -249,6 +300,27 @@ struct OAuthCallbackRoute: Sendable {
                 ))
             )
         }
+    }
+
+    /// The outcome of attempting to exchange + store a single Link result, which
+    /// determines both whether the result may be retried and what the user sees.
+    private enum StoreResultOutcome {
+        /// Exchanged and persisted locally; safe to mark finalized.
+        case stored
+        /// The public-token exchange itself failed; the token is unspent and the
+        /// result is still replayable.
+        case notExchanged
+        /// Exchange succeeded but the item could not be persisted; the token is
+        /// spent and lost. Never replay, but report failure to the user.
+        case spentButNotStored
+    }
+
+    private static func errorResponse(_ message: String) -> Response {
+        Response(
+            status: .internalServerError,
+            headers: [.contentType: "text/html"],
+            body: .init(byteBuffer: ByteBuffer(string: errorPage(message)))
+        )
     }
 
     private func publicTokenResults(
@@ -263,19 +335,57 @@ struct OAuthCallbackRoute: Sendable {
         return linkSession.publicTokenResults
     }
 
-    private func exchangeAndStore(publicTokenResult: PlaidPublicTokenResult) async throws {
-        let exchangeResponse = try await plaidClient.exchangePublicToken(publicTokenResult.publicToken)
-        let accountsResponse = try await plaidClient.getAccounts(
-            accessToken: exchangeResponse.accessToken
-        )
-        let institutionId = publicTokenResult.institution?.institutionId ?? accountsResponse.item?.institutionId
+    /// Exchanges the result's public token and persists the item, returning an
+    /// outcome that captures exactly how far it got. Crucially it distinguishes a
+    /// pre-exchange failure (token unspent → retryable) from a post-exchange
+    /// failure (token spent → not retryable, must report failure), so the caller
+    /// never both consumes a token AND tells the user the account connected.
+    private func storeResult(publicTokenResult: PlaidPublicTokenResult) async -> StoreResultOutcome {
+        let exchangeResponse: PlaidTokenExchangeResponse
+        do {
+            exchangeResponse = try await plaidClient.exchangePublicToken(publicTokenResult.publicToken)
+        } catch {
+            // The single-use public token was not consumed — still replayable.
+            return .notExchanged
+        }
 
-        try await tokenStore.saveItem(
-            id: exchangeResponse.itemId,
-            accessToken: exchangeResponse.accessToken,
-            institutionId: institutionId,
-            institutionName: publicTokenResult.institution?.normalizedName
-        )
+        // From here the token is SPENT. Any failure means the item is
+        // unrecoverable, so we always return `.spentButNotStored` rather than
+        // throwing back into a path that could replay the token.
+
+        // getAccounts only enriches institution metadata; a failure here must NOT
+        // lose the item, since we already hold the access token. Fall back to the
+        // result's own institution id (best-effort) and still persist.
+        let accountsItemInstitutionId = try? await plaidClient.getAccounts(
+            accessToken: exchangeResponse.accessToken
+        ).item?.institutionId
+        let institutionId = publicTokenResult.institution?.institutionId ?? accountsItemInstitutionId
+
+        do {
+            try await tokenStore.saveItem(
+                id: exchangeResponse.itemId,
+                accessToken: exchangeResponse.accessToken,
+                institutionId: institutionId,
+                institutionName: publicTokenResult.institution?.normalizedName
+            )
+        } catch {
+            return .spentButNotStored
+        }
+        return .stored
+    }
+
+    /// A stable, token-free identity for a Link result, used to skip results
+    /// already consumed on a prior callback attempt. The public token is
+    /// single-use and unique per result, so its SHA-256 is a perfect fingerprint
+    /// — and hashing keeps the raw token out of the pending-session store, which
+    /// holds no Plaid tokens. Falls back to the institution id when no public
+    /// token is present (update-mode results carry none).
+    static func resultIdentity(for result: PlaidPublicTokenResult) -> String {
+        let seed = result.publicToken.isEmpty
+            ? "institution:\(result.institution?.institutionId ?? "unknown")"
+            : "public-token:\(result.publicToken)"
+        let digest = SHA256.hash(data: Data(seed.utf8))
+        return digest.map { String(format: "%02x", $0) }.joined()
     }
 
     // MARK: - HTML Pages
