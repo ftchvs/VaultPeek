@@ -51,6 +51,28 @@ Configuration files: `.swiftformat` and `.swiftlint.yml` in the repo root.
 4. Ensure `swift test` passes
 5. Open a PR with a clear description of changes for internal review
 
+### Optional: pre-push gate
+
+`Scripts/pre-push-gate.sh` is a local backstop that, before a push leaves your
+machine, (1) scans every outgoing commit's patch for Plaid tokens / secrets /
+bearer tokens — using the exact refs git supplies on the pre-push hook's stdin
+(including merge side-branch commits, and secrets added then removed within the
+pushed range), failing closed if a range can't be read — and (2) runs the
+Swift 6 strict-concurrency build (the CI gate that most often fails) when the
+pushed ref is the current checkout. It is a heuristic, not a replacement for a
+dedicated scanner.
+
+```bash
+# Wire it up as a native git hook (one time):
+ln -sf ../../Scripts/pre-push-gate.sh .git/hooks/pre-push
+
+# Verify the secret scanner against fixtures (no build, no git writes):
+./Scripts/pre-push-gate.sh --selftest
+```
+
+Escape hatches: `PLAIDBAR_SKIP_GATE=1` skips the whole gate;
+`PLAIDBAR_GATE_SKIP_BUILD=1` runs the secret scan only.
+
 ## Architecture Notes
 
 - **PlaidBarCore** is the shared library — put DTOs and utilities here
