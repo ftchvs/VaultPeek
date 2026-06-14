@@ -4,10 +4,15 @@ import Testing
 
 @Suite("SubscriptionPlan Tests")
 struct SubscriptionPlanTests {
-    @Test("Plan institution limits match the proposed entitlement design")
+    @Test("Plan institution limits match the accepted entitlement matrix")
     func planInstitutionLimits() {
-        #expect(SubscriptionPlan.personal.institutionLimit == 3)
+        #expect(SubscriptionPlan.free.institutionLimit == 0)
         #expect(SubscriptionPlan.plus.institutionLimit == 8)
+    }
+
+    @Test("Default plan is Free")
+    func defaultPlan() {
+        #expect(SubscriptionPlan.defaultPlan == .free)
     }
 
     @Test("Every plan exposes a display name and preview tagline")
@@ -35,12 +40,84 @@ struct SubscriptionPlanTests {
     }
 }
 
+@Suite("Billing lifecycle Tests")
+struct BillingLifecycleTests {
+    @Test(
+        "Feature gates respond predictably to subscription statuses",
+        arguments: [
+            (BillingSubscriptionStatus.active, false),
+            (.trialing, false),
+            (.pastDue, true),
+            (.canceled, true),
+            (.expired, true),
+        ]
+    )
+    func featureGateStatusMatrix(status: BillingSubscriptionStatus, isLocked: Bool) {
+        let subscription = BillingSubscription(
+            status: status,
+            plan: .free,
+            updatedAt: Date(timeIntervalSince1970: 1_800_000_000)
+        )
+
+        let result = BillingFeatureGate.evaluate(
+            featureName: "managed insights",
+            subscription: subscription
+        )
+
+        #expect(result.isLocked == isLocked)
+    }
+
+    @Test("Locked copy explains the failed-payment recovery path")
+    func failedPaymentCopyExplainsRecovery() throws {
+        let subscription = BillingSubscription(
+            status: .pastDue,
+            plan: .plus,
+            updatedAt: Date(timeIntervalSince1970: 1_800_000_001)
+        )
+
+        let result = BillingFeatureGate.evaluate(
+            featureName: "managed insights",
+            subscription: subscription
+        )
+
+        guard case .locked(let lock) = result else {
+            Issue.record("Expected past_due to lock the feature")
+            return
+        }
+        #expect(lock.title == "managed insights is locked")
+        #expect(lock.message.contains("payment failed subscription"))
+        #expect(lock.message.contains("Local financial data stays on this Mac"))
+        #expect(lock.recoveryAction == "Update your payment method to restore access.")
+    }
+
+    @Test("Missing local subscription state leaves local-first installs ungated")
+    func nilSubscriptionAllowsLocalFirstInstalls() {
+        let result = BillingFeatureGate.evaluate(
+            featureName: "managed insights",
+            subscription: nil
+        )
+        #expect(result == .available)
+    }
+
+    @Test("Upgrade and downgrade transitions preserve local financial data")
+    func planTransitionsPreserveLocalData() {
+        let upgrade = BillingPlanTransition(from: .free, to: .plus)
+        let downgrade = BillingPlanTransition(from: .plus, to: .free)
+
+        #expect(upgrade.isDowngrade == false)
+        #expect(upgrade.preservesLocalFinancialData)
+        #expect(downgrade.isDowngrade)
+        #expect(downgrade.preservesLocalFinancialData)
+        #expect(downgrade.explanation.contains("does not delete local accounts"))
+    }
+}
+
 @Suite("InstitutionUsage Tests")
 struct InstitutionUsageTests {
     @Test("Summary text reports count of limit when a limit exists")
     func summaryTextWithLimit() {
-        let usage = InstitutionUsage(connectedCount: 2, plan: .personal)
-        #expect(usage.summaryText == "2 of 3 institutions connected")
+        let usage = InstitutionUsage(connectedCount: 2, plan: .plus)
+        #expect(usage.summaryText == "2 of 8 institutions connected")
     }
 
     @Test("Summary text drops the cap when there is no limit")
@@ -51,23 +128,24 @@ struct InstitutionUsageTests {
 
     @Test("Under the limit is not at limit")
     func underLimit() {
-        let usage = InstitutionUsage(connectedCount: 2, plan: .personal)
+        let usage = InstitutionUsage(connectedCount: 2, plan: .plus)
         #expect(usage.isAtLimit == false)
-        #expect(usage.summaryText == "2 of 3 institutions connected")
+        #expect(usage.summaryText == "2 of 8 institutions connected")
     }
 
-    @Test("At the limit is at limit")
-    func atLimit() {
-        let usage = InstitutionUsage(connectedCount: 3, plan: .personal)
+    @Test("Free managed limit is zero")
+    func freeLimitIsZero() {
+        let usage = InstitutionUsage(connectedCount: 0, plan: .free)
+        #expect(usage.limit == 0)
         #expect(usage.isAtLimit == true)
-        #expect(usage.summaryText == "3 of 3 institutions connected")
+        #expect(usage.summaryText == "0 of 0 institutions connected")
     }
 
     @Test("Over the limit is at limit")
     func overLimit() {
-        let usage = InstitutionUsage(connectedCount: 4, plan: .personal)
+        let usage = InstitutionUsage(connectedCount: 9, plan: .plus)
         #expect(usage.isAtLimit == true)
-        #expect(usage.summaryText == "4 of 3 institutions connected")
+        #expect(usage.summaryText == "9 of 8 institutions connected")
     }
 
     @Test("A nil limit is never at limit, even with many connections")

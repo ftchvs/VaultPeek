@@ -18,6 +18,7 @@ struct MainPopover: View {
     @State private var shouldShowSetupRecoveryDashboard = false
     @State private var dashboardContentHeight: CGFloat = 0
     @State private var activeScreenVisibleWidth: CGFloat?
+    @State private var isRecurringInspectorOpen = false
     /// True after the first render. Gates the inspector's trailing slide-in so a
     /// popover opened with a persisted selection appears directly in three-column
     /// geometry (no slide on restore); in-session selections still slide (AND-405).
@@ -68,6 +69,7 @@ struct MainPopover: View {
     }
 
     private var selectedAccount: AccountDTO? {
+        guard !isRecurringInspectorOpen else { return nil }
         let accounts = filteredAccounts
         // A selection survives only while the account is still visible; a filter
         // change or a removed/synced-away account deselects it (AND-373/375).
@@ -118,6 +120,15 @@ struct MainPopover: View {
         selectedAccountId = ""
     }
 
+    private func openRecurringInspector() {
+        selectedAccountId = ""
+        isRecurringInspectorOpen = true
+    }
+
+    private func closeRecurringInspector() {
+        isRecurringInspectorOpen = false
+    }
+
     private var filteredAccounts: [AccountDTO] {
         appState.accounts.filter { selectedFilter.includes($0, appState: appState) }
     }
@@ -158,6 +169,24 @@ struct MainPopover: View {
                     shouldShowSetupRecoveryDashboard = false
                 }
             }
+            .onChange(of: appState.weeklyReviewNavigation) { _, target in
+                guard let target else { return }
+                handleWeeklyReviewNavigation(target)
+                appState.weeklyReviewNavigation = nil
+            }
+    }
+
+    private func handleWeeklyReviewNavigation(_ target: WeeklyReviewNavigationTarget) {
+        switch target {
+        case .recurring:
+            openRecurringInspector()
+        case .reviewInbox, .safeToSpend:
+            // The review inbox and safe-to-spend cards are inline sections in
+            // this same popover; closing any open inspector returns the user to
+            // the dashboard column where those sections are visible.
+            closeRecurringInspector()
+            selectedAccountId = ""
+        }
     }
 
     // The visual chrome is kept on its own opaque property so neither it nor the
@@ -231,6 +260,7 @@ struct MainPopover: View {
     /// event falls through and closes the popover (AND-373). Hoisted out of the
     /// view chain as an explicitly-typed value to keep the type-checker fast.
     private var exitCommandHandler: (() -> Void)? {
+        guard !isRecurringInspectorOpen else { return { closeRecurringInspector() } }
         guard isAccountInspectorOpen else { return nil }
         return { deselectAccount() }
     }
@@ -263,7 +293,10 @@ struct MainPopover: View {
     // contract, AND-367/369). A stable id keeps SwiftUI from remounting/flashing
     // it when the trailing inspector opens or closes.
     private var wealthSummaryRail: some View {
-        WealthSummaryFlyout(onAddAccount: openAccountSetup)
+        WealthSummaryFlyout(
+            onAddAccount: openAccountSetup,
+            onOpenSubscriptions: openRecurringInspector
+        )
             .environment(appState)
             .id("wealth-summary-rail")
             .frame(width: Layout.flyoutWidth)
@@ -295,6 +328,15 @@ struct MainPopover: View {
                         onClose: deselectAccount
                     )
                     .environment(appState)
+                } else if isRecurringInspectorOpen {
+                    RecurringPaymentsView(
+                        presentation: RecurringPaymentsSurfacePresentation.make(
+                            from: appState.recurringTransactions,
+                            asOf: Date()
+                        ),
+                        loadState: appState.loadState(for: .recurring),
+                        onClose: closeRecurringInspector
+                    )
                 } else if !selectedAccountId.isEmpty {
                     // A persisted selection is still resolving (accounts not loaded
                     // yet); a brief placeholder holds the column until it fills in.
@@ -391,6 +433,19 @@ struct MainPopover: View {
                         DashboardChangeReceiptStrip()
                             .environment(appState)
 
+                        WeeklyReviewCard()
+                            .environment(appState)
+
+                        ReviewInboxView()
+                            .environment(appState)
+
+                        if let presentation = appState.firstRunSnapshotPresentation {
+                            FirstRunSnapshotView(
+                                presentation: presentation,
+                                onDismiss: appState.dismissFirstRunSnapshot
+                            )
+                        }
+
                         if shouldElevateStatusReadinessPanel {
                             VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
                                 AttentionQueueView(title: "Attention", onAddAccount: openAccountSetup)
@@ -410,7 +465,10 @@ struct MainPopover: View {
                             filter: selectedFilter,
                             filterSelection: filterBinding,
                             selectedAccountId: selectedAccount?.id,
-                            onSelectAccount: { selectedAccountId = $0.id },
+                            onSelectAccount: {
+                                isRecurringInspectorOpen = false
+                                selectedAccountId = $0.id
+                            },
                             onDeselectAccount: { selectedAccountId = "" },
                             onAddAccount: openAccountSetup
                         )
@@ -471,7 +529,8 @@ struct MainPopover: View {
                 DashboardFooter(
                     settingsActivation: .shared,
                     openSettings: openSettings,
-                    onAddAccount: openAccountSetup
+                    onAddAccount: openAccountSetup,
+                    onOpenSubscriptions: openRecurringInspector
                 )
                 .environment(appState)
             }
@@ -1981,6 +2040,7 @@ private struct DashboardFooter: View {
     let settingsActivation: SettingsWindowActivationRestorer
     let openSettings: OpenSettingsAction
     let onAddAccount: () -> Void
+    let onOpenSubscriptions: () -> Void
 
     var body: some View {
         HStack(spacing: Spacing.md) {
@@ -2003,6 +2063,15 @@ private struct DashboardFooter: View {
                 .accessibilityLabel("Status: \(statusLineText)")
 
             Spacer()
+
+            Button(action: onOpenSubscriptions) {
+                Image(systemName: "calendar.badge.clock")
+                    .foregroundStyle(.secondary)
+                    .frame(minWidth: Sizing.hitTargetMin, minHeight: Sizing.hitTargetMin)
+            }
+            .buttonStyle(.borderless)
+            .help("Recurring payments")
+            .accessibilityLabel("Open recurring payments")
 
             detachControl
 
