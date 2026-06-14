@@ -17,10 +17,17 @@ struct PlaidBarApp: App {
 
     init() {
         Self.applyForcedAppearance()
+        Self.applyStoredAppearance()
         Self.applyScreenshotDefaults()
 
         let state = AppState()
         _appState = State(initialValue: state)
+        // QA/screenshot aid: "--detach" opens the floating desktop window at
+        // launch (parallel to "--show-popover"), so the detached window can be
+        // exercised and captured without driving the menu-bar UI by hand.
+        if CommandLine.arguments.contains("--detach") {
+            state.isDashboardDetached = true
+        }
         updaterController = SPUStandardUpdaterController(
             startingUpdater: false,
             updaterDelegate: nil,
@@ -76,6 +83,14 @@ struct PlaidBarApp: App {
             MenuBarLabel()
                 .environment(appState)
                 .forcedAppColorScheme(Self.forcedColorScheme)
+                // The label is the only scene content mounted for the whole app
+                // lifetime, so it also carries the live appearance updater: with
+                // it here, flipping Light/Dark re-applies NSApp.appearance even
+                // when the popover and Settings are both closed (the popover and
+                // Settings keep their own copies for when they are the only
+                // mounted scene). Without this, a change made while only the label
+                // is up would not take effect until the popover next opened.
+                .appliesAppAppearance()
                 // The menu-bar label is the only scene content that is mounted
                 // for the whole app lifetime — `MainPopover` is mounted lazily,
                 // only while the popover/menu-extra window is presented, and
@@ -132,6 +147,15 @@ struct PlaidBarApp: App {
                         }
                         appState.isPopoverPresented = true
                     },
+                    openInWindow: {
+                        // Detach into the floating desktop window directly, so the
+                        // window is reachable without hunting for the footer glyph.
+                        detachedDashboard.detach(
+                            appState: appState,
+                            forcedColorScheme: Self.forcedColorScheme,
+                            reduceMotion: reduceMotion
+                        )
+                    },
                     refreshDashboard: {
                         Task { await appState.refreshDashboard() }
                     },
@@ -176,6 +200,20 @@ struct PlaidBarApp: App {
         default:
             break
         }
+    }
+
+    /// Applies the *stored* appearance-mode preference to `NSApplication.appearance`
+    /// **before first paint**, so the very first frame renders in the chosen
+    /// Light/Dark — window chrome and AppKit materials included — instead of
+    /// flashing the system appearance and correcting `onAppear`. `NSApp.appearance`
+    /// is the only API that cascades to chrome + materials; `environment(\.colorScheme)`
+    /// moves SwiftUI content only. The `--appearance` CLI override wins:
+    /// `applyForcedAppearance()` already pinned it and `applyToNSApp` no-ops when set.
+    private static func applyStoredAppearance() {
+        AppAppearance.applyToNSApp(
+            modeRaw: UserDefaults.standard.string(forKey: AppAppearanceMode.storageKey)
+                ?? AppAppearanceMode.defaultValue.rawValue
+        )
     }
 
     /// The color scheme forced by the `--appearance` CLI flag (QA aid), or `nil`
@@ -256,6 +294,20 @@ private struct AppAppearanceApplier: ViewModifier {
     }
 
     @MainActor private func apply() {
+        AppAppearance.applyToNSApp(modeRaw: modeRaw)
+    }
+}
+
+/// Single mapping from the stored appearance mode to `NSApplication.appearance`,
+/// shared by the launch-time application (`PlaidBarApp.applyStoredAppearance`,
+/// before first paint) and the live `AppAppearanceApplier` (`onChange`). Making
+/// this the one writer of `NSApp.appearance` for the stored preference gives every
+/// window — popover, Settings, and the detached dashboard (whose panel leaves
+/// `appearance == nil` so it inherits) — a single source of truth, so flipping
+/// Light/Dark updates all surfaces live. The `--appearance` CLI override wins and
+/// makes this a no-op.
+enum AppAppearance {
+    @MainActor static func applyToNSApp(modeRaw: String) {
         guard CommandLineOptions.value(for: "--appearance") == nil else { return }
         switch AppAppearanceMode(rawValue: modeRaw) ?? .followSystem {
         case .followSystem: NSApplication.shared.appearance = nil

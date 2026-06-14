@@ -78,15 +78,21 @@ struct MainPopover: View {
         return accounts.first { $0.id == id }
     }
 
-    /// The trailing account inspector is reserved: a selection is persisted and
-    /// we are past setup. Derived from the persisted `selectedAccountId`
-    /// (`@AppStorage`) rather than the resolved `selectedAccount`, so a popover
-    /// opened with a persisted selection reserves the three-column width and
-    /// anchor immediately — before `loadInitialData()` populates accounts —
-    /// instead of opening two-column and jumping to three-column once accounts
-    /// arrive (AND-405). The inspector column shows a brief loading placeholder
-    /// until `selectedAccount` resolves. Also drives the popover width, the
-    /// leading-edge anchor, and Esc precedence.
+    /// The trailing inspector COLUMN is present whenever setup is complete — the
+    /// three-column workspace is stable and never collapses to two columns on
+    /// deselect ("3 columns always open"). It drives the popover width, the
+    /// leading-edge anchor, and the detached resize floor, so the layout opens
+    /// directly in three-column geometry and stays there. Only the column's
+    /// CONTENT varies (selected-account inspector, a brief loading placeholder for
+    /// a still-resolving persisted selection, or an empty-selection prompt) —
+    /// never the column's existence.
+    private var isInspectorColumnVisible: Bool {
+        !shouldShowSetupScreen
+    }
+
+    /// Whether a specific account's inspector is showing (a row is selected).
+    /// Distinct from the column's existence: drives Esc-to-deselect precedence
+    /// (AND-373) and which content the always-present inspector column renders.
     private var isAccountInspectorOpen: Bool {
         !selectedAccountId.isEmpty && !shouldShowSetupScreen
     }
@@ -161,7 +167,16 @@ struct MainPopover: View {
             .foregroundStyle(AppearanceTextColors.primary)
             .environment(\.colorScheme, effectiveColorScheme)
             .background {
-                PopoverMaterialBackground(transparencySetting: transparencySetting)
+                // The detached desktop window supplies its own behind-window
+                // vibrancy backdrop (a translucent NSVisualEffectView), so the
+                // dashboard renders a clear root there and lets the desktop show
+                // through. The menu-bar popover keeps the in-content material
+                // backdrop (its host window is not vibrant on its own).
+                if dashboardPresentation.isDetached {
+                    Color.clear
+                } else {
+                    PopoverMaterialBackground(transparencySetting: transparencySetting)
+                }
             }
             // The screen-edge anchor and width reader only apply to the menu-bar
             // popover window (which AppKit re-centers under the status item). The
@@ -170,7 +185,7 @@ struct MainPopover: View {
             // is unchanged.
             .modifier(PopoverWindowGeometryModifier(
                 isDetached: dashboardPresentation.isDetached,
-                isInspectorOpen: isAccountInspectorOpen,
+                isInspectorOpen: isInspectorColumnVisible,
                 collapsedWidth: twoColumnWidth,
                 screenEdgeMargin: Layout.screenEdgeMargin,
                 activeScreenVisibleWidth: $activeScreenVisibleWidth
@@ -199,10 +214,10 @@ struct MainPopover: View {
                 .frame(
                     minWidth: shouldShowSetupScreen
                         ? PopoverGeometry.width(for: .setup)
-                        // Include the inspector column in the floor so selecting
-                        // an account near the minimum width does not clip the
-                        // inspector off the resizable window (AND-384/405).
-                        : PopoverGeometry.detachedMinContentWidth(isInspectorOpen: isAccountInspectorOpen),
+                        // The inspector column is always present, so the resize
+                        // floor always includes it — the window can never be sized
+                        // narrower than the full three-column layout (AND-384/405).
+                        : PopoverGeometry.detachedMinContentWidth(isInspectorOpen: isInspectorColumnVisible),
                     maxWidth: .infinity,
                     alignment: .topLeading
                 )
@@ -261,13 +276,14 @@ struct MainPopover: View {
             .transition(.move(edge: .leading).combined(with: .opacity))
     }
 
-    // RIGHT: the account inspector opens on the trailing side only when a row is
-    // selected, leaving the left rail and center dashboard in place
-    // (AND-369/371). It slides in from the trailing edge and is independently
-    // dismissible.
+    // RIGHT: the account inspector column is always present once setup is complete
+    // (three-column-always contract): the left rail and center dashboard stay put
+    // and the column's CONTENT — not its existence — changes with selection, so
+    // deselecting reverts to an empty-selection prompt instead of collapsing the
+    // workspace to two columns.
     @ViewBuilder
     private var accountInspectorColumn: some View {
-        if isAccountInspectorOpen {
+        if isInspectorColumnVisible {
             Divider()
                 .opacity(0.35)
 
@@ -279,18 +295,21 @@ struct MainPopover: View {
                         onClose: deselectAccount
                     )
                     .environment(appState)
-                } else {
-                    // A persisted selection reserves the column before accounts
-                    // load; show a brief placeholder so the width is correct
-                    // immediately and fills in without a resize jump (AND-405).
+                } else if !selectedAccountId.isEmpty {
+                    // A persisted selection is still resolving (accounts not loaded
+                    // yet); a brief placeholder holds the column until it fills in.
                     inspectorLoadingPlaceholder
+                } else {
+                    // Nothing selected: the column stays as a stable third column
+                    // with a prompt instead of collapsing to two columns.
+                    inspectorEmptySelectionState
                 }
             }
             .frame(width: Layout.flyoutWidth)
             .frame(maxHeight: columnMaxHeight)
             .leftPanelSurface()
-            // Slide in only for an in-session selection; a popover opened with a
-            // persisted selection appears directly in three-column (AND-405).
+            // The column is stable now, so this transition only plays when it
+            // first appears as setup completes — not on every selection (AND-405).
             .transition(.asymmetric(
                 insertion: inspectorInsertionTransition,
                 removal: .move(edge: .trailing).combined(with: .opacity)
@@ -309,6 +328,19 @@ struct MainPopover: View {
             .accessibilityLabel("Loading account details")
     }
 
+    // Empty-selection content for the always-present inspector column: a quiet
+    // prompt (icon + label, never color alone) so the third column reads as
+    // intentional context space rather than a blank gap.
+    private var inspectorEmptySelectionState: some View {
+        ContentUnavailableView {
+            Label("No Account Selected", systemImage: "creditcard")
+        } description: {
+            Text("Select an account to see its balances, recent activity, and trend here.")
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityLabel("No account selected. Select an account to see its details here.")
+    }
+
     private var popoverWidth: CGFloat {
         // Cap the content to the available screen width so the popover never
         // renders off-screen; the center dashboard flexes to absorb the cap so
@@ -316,7 +348,7 @@ struct MainPopover: View {
         // narrow/scaled displays (AND-405). Setup renders at the dashboard width.
         guard !shouldShowSetupScreen else { return PopoverGeometry.width(for: .setup) }
         return PopoverGeometry.fittedWidth(
-            for: isAccountInspectorOpen ? .threeColumn : .twoColumn,
+            for: isInspectorColumnVisible ? .threeColumn : .twoColumn,
             availableWidth: availableScreenWidth
         )
     }
