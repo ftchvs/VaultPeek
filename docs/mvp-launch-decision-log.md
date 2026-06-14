@@ -146,15 +146,17 @@ No current board candidate is classified Dead. The one adjacent retirement worth
 
 These are **decisions, not tasks.** No agent can implement them under the 2026-05-30 scoped approval, because each changes product/security/business scope or moves money (`docs/autonomous-roadmap.md` §Operating Contract; §Stop Conditions). Authorized agents may *prepare* surrounding artifacts (draft docs, stage evidence) but must stop and ask before acting.
 
-| Decision | Issue(s) | What it gates | Default if undecided |
-|---|---|---|---|
-| **D1 — Approve any hosted footprint** (link-token broker + entitlement service) and the amended public privacy promise | AND-392, AND-393, AND-394 | The entire Subscription & Managed Linking milestone | No hosted footprint; launch free + local-first + BYO-keys |
-| **Launch mode: demo/BYO vs Plaid production** (incl. the Plaid sales quote, D2/D3) | AND-391 | Whether the MVP offers managed live banks | Demo + BYO-keys; production approval deferred |
-| **Monetization go/no-go** (tiers, caps, price-lock) | AND-392, AND-393 | Any paid tier | Free, unmetered, local-first |
-| **Signing & notarization** (Developer ID, Gatekeeper, Sparkle) — needs Felipe's Apple Developer credentials | AND-395 / `docs/distribution.md` | Notarized public distribution claims | Ad-hoc-signed DMG, right-click→Open, claims kept conservative |
-| **Public rename execution & timing** | AND-325 | The public VaultPeek tag (this is a *blocker*, sequenced last) | Must land before the public launch |
+> **Ratified 2026-06-14 (Felipe, DRI).** The monetization/hosted-footprint and Plaid launch-mode decisions below were taken explicitly: **defer all monetization, managed linking, and Plaid production; ship the MVP as a free, local-first beta (Demo + bring-your-own-keys), zero hosted footprint.** The "Decision" column now records made decisions, not pending defaults. Re-opening any of them requires a new Felipe decision.
 
-> The rename (AND-325) appears here *and* in MVP Blockers deliberately: it is a Felipe-owned action that also gates the tag. Everything else in this table is out of the MVP entirely until Felipe decides.
+| Decision | Issue(s) | What it gates | Decision (ratified 2026-06-14) |
+|---|---|---|---|
+| **D1 — Approve any hosted footprint** (link-token broker + entitlement service) and the amended public privacy promise | AND-392, AND-393, AND-394 | The entire Subscription & Managed Linking milestone | **DEFERRED.** No hosted footprint; launch free + local-first + BYO-keys. The whole Subscription & Managed Linking milestone stays Post-MVP. |
+| **Launch mode: demo/BYO vs Plaid production** (incl. the Plaid sales quote, D2/D3) | AND-391 | Whether the MVP offers managed live banks | **DEMO + BYO-keys.** Production approval deferred; recorded in [`strategy/plaid-production-decision.md`](strategy/plaid-production-decision.md). |
+| **Monetization go/no-go** (tiers, caps, price-lock) | AND-392, AND-393 | Any paid tier | **NO-GO for MVP.** Free, unmetered, local-first; the proposed tier matrix stays a Post-MVP spec ([`strategy/pricing-and-launch.md` §4](strategy/pricing-and-launch.md)). |
+| **Signing & notarization** (Developer ID, Gatekeeper, Sparkle) — needs Felipe's Apple Developer credentials | AND-395 / `docs/distribution.md` | Notarized public distribution claims | **DEFERRED.** Ad-hoc-signed DMG, right-click→Open, claims kept conservative. |
+| **Public rename execution & timing** | AND-325 | The public VaultPeek tag (this is a *blocker*, sequenced last) | **Still required before the public tag** (sequenced last among blockers). |
+
+> The rename (AND-325) appears here *and* in MVP Blockers deliberately: it is a Felipe-owned action that also gates the tag. With the 2026-06-14 ratification, everything else in this table is settled for the MVP: the gated expansion work is deferred Post-MVP with the rationale below, and only the rename remains as a Felipe-owned launch action.
 
 ---
 

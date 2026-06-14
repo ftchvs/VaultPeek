@@ -123,6 +123,41 @@ status/recovery state, and reduced-noise composition guidance.
 | <img src="Assets/settings-about.png" width="380" alt="Settings About tab showing VaultPeek version, update action, support links, privacy, security, roadmap, and release notes"> |
 | About doubles as a support hub with links to troubleshooting, privacy, security, roadmap, release notes, updates, and the project repository. |
 
+## Launch status (public beta)
+
+VaultPeek is a **free, local-first public beta**. The product is real and in
+daily use, but a few capabilities are intentionally not in this release — so you
+know exactly what you are trying before you install.
+
+**What works today**
+
+- The full menu bar dashboard on **demo data** (`swift run PlaidBar --demo`) — no
+  account, no bank, no signup.
+- **Bring-your-own-Plaid-keys**: connect real or sandbox banks with your own
+  Plaid credentials. Account data and access tokens stay on your Mac.
+
+**What is deferred (not in this beta)**
+
+- **Managed / turnkey bank linking** — connecting banks *without* your own Plaid
+  keys requires a small hosted service and is deliberately not shipped yet.
+- **Paid plans and subscriptions** — VaultPeek is free during the beta; there are
+  no accounts to create and no billing.
+- **Notarized distribution and auto-update** — builds are ad-hoc-signed
+  drag-install DMGs (right-click → **Open** on first launch). Developer ID
+  signing, notarization, and Sparkle auto-update are on the roadmap.
+
+**What leaves your Mac**
+
+Nothing, except the bank calls you make yourself. VaultPeek runs no servers of
+its own, collects no telemetry, and has no hosted backend. In BYO-keys mode the
+only network traffic is from your Mac directly to Plaid using your credentials;
+in demo mode there are no network calls at all.
+
+The full launch scope and the rationale for every deferral live in the
+[MVP launch decision log](docs/mvp-launch-decision-log.md). Support and recovery
+guidance is in [SUPPORT.md](SUPPORT.md) and the
+[support runbook](docs/support-runbook.md).
+
 ## Quick Start
 
 ### DMG (easiest, no developer tools)
