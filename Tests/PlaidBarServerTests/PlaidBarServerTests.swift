@@ -1061,8 +1061,8 @@ struct PlaidBarServerTests {
         #expect(afterRelease != nil)
     }
 
-    @Test("A presumed-dead lease is reclaimable once it is older than the lease TTL")
-    func completionLeaseReclaimableWhenStale() async {
+    @Test("A held lease is never reclaimed on a timer; only release/consume frees it")
+    func completionLeaseIsNotReclaimedByTimer() async {
         let clock = ManualDateClock(Date(timeIntervalSince1970: 1000))
         let store = PendingLinkSessionStore(
             ttl: 30 * 60,
@@ -1075,12 +1075,19 @@ struct PlaidBarServerTests {
         let first = await store.beginCompletion(state: state)
         #expect(first != nil)
 
-        // No release (handler presumed dead). Past the lease TTL, a fresh handler
-        // may reclaim the lease so the user is not blocked forever — bounded
-        // recovery without dropping a still-fresh in-flight lease.
+        // Past the lease TTL with no release, a second handler must STILL be
+        // refused: there is no proof the original handler is dead, and a
+        // slow-but-alive handler must not be raced over the same single-use
+        // tokens. (An in-memory lease for a truly crashed handler clears on
+        // process restart, and the session itself expires at the session TTL.)
         clock.advance(by: 61)
-        let reclaimed = await store.beginCompletion(state: state)
-        #expect(reclaimed != nil)
+        let blocked = await store.beginCompletion(state: state)
+        #expect(blocked == nil)
+
+        // Only an explicit release returns the session to a retryable state.
+        await store.releaseCompletion(state: state)
+        let afterRelease = await store.beginCompletion(state: state)
+        #expect(afterRelease != nil)
     }
 
     @Test func pendingLinkSessionSurvivesStoreRecreation() async throws {
@@ -1497,10 +1504,10 @@ struct PlaidBarServerTests {
     }
 
     @Test(
-        "OAuth callback never replays a public token consumed before a post-exchange failure",
+        "A transient getAccounts failure does not lose the item; it is salvaged and stored once",
         .enabled(if: plaidTokenVaultKeychainAvailable, "macOS Keychain accepts test writes")
     )
-    func oauthCallbackDoesNotReplayConsumedPublicTokenAfterPostExchangeFailure() async throws {
+    func oauthCallbackSalvagesItemWhenGetAccountsFails() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("plaidbar-oauth-postexchange-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -1538,8 +1545,10 @@ struct PlaidBarServerTests {
             onSuccess: nil,
             results: nil
         )
-        // Exchange SUCCEEDS on the first attempt; the failure is in the
-        // post-exchange getAccounts step, so the public token is already spent.
+        // Exchange SUCCEEDS; getAccounts fails. getAccounts only enriches
+        // institution metadata, so a failure there must NOT lose the item — it is
+        // salvaged using the result's own institution and stored on the first
+        // attempt, with the public token exchanged exactly once.
         let plaidClient = HostedLinkStubPlaidClient(
             linkTokenGetResponse: linkTokenGetResponse,
             exchangeResponse: PlaidTokenExchangeResponse(
@@ -1575,21 +1584,18 @@ struct PlaidBarServerTests {
             )
             let request = Self.makeRequest(path: "/oauth/callback?state=\(state)")
 
-            let failedResponse = try await route.handleCallback(
+            let response = try await route.handleCallback(
                 request: request,
                 context: TestRequestContext(source: TestRequestContextSource())
             )
-            let retryResponse = try await route.handleCallback(
-                request: request,
-                context: TestRequestContext(source: TestRequestContextSource())
-            )
+            let savedItem = try await store.getItem(id: itemId)
             let calls = await plaidClient.recordedCalls()
 
-            // First attempt fails in getAccounts (post-exchange).
-            #expect(failedResponse.status == .internalServerError)
-            // Retry must NOT replay the now-spent public token — it is skipped by
-            // identity, so the callback completes without a second exchange call.
-            #expect(retryResponse.status == .ok)
+            // The getAccounts failure was non-fatal: the item is stored and the
+            // callback succeeds on the FIRST attempt, with no replay needed.
+            #expect(response.status == .ok)
+            #expect(savedItem != nil)
+            #expect(savedItem?.institutionName == "Example Credit Union")
             #expect(calls.publicTokens == [publicToken]) // exchanged exactly once
         }
     }

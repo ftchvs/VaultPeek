@@ -51,14 +51,15 @@ actor PendingLinkSessionStore {
         else {
             return nil
         }
-        // A live lease means another handler is mid-flight: refuse, preserving
-        // single-flight. The lease is reclaimable only once it is older than
-        // `completionLeaseTTL`, i.e. the original handler is presumed dead (it
-        // would otherwise have called releaseCompletion/consume). This bounds
-        // recovery without dropping a fresh in-flight lease — unlike purging by
-        // TTL, which could race a still-running handler.
-        if let leaseStartedAt = completionLeases[state],
-           currentDate.timeIntervalSince(leaseStartedAt) <= completionLeaseTTL {
+        // Strict single-flight: ANY live lease means another handler holds this
+        // session, so refuse. A lease is NOT reclaimable on a timer — there is no
+        // owner token or heartbeat proving the original handler is dead, and a
+        // slow-but-alive handler (Plaid/Keychain/SQLite retrying past any TTL)
+        // must not be raced by a second handler over the same single-use public
+        // tokens. The lease is released only by `releaseCompletion`/`consume`, or
+        // it disappears with the session at the session TTL; an in-memory lease
+        // for a truly crashed handler clears on process restart.
+        if completionLeases[state] != nil {
             return nil
         }
         completionLeases[state] = currentDate
