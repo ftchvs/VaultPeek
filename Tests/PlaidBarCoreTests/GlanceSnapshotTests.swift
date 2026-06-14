@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import PlaidBarCore
 
@@ -58,6 +59,77 @@ struct GlanceSnapshotTests {
         #expect(!json.contains("accounts"))
     }
 
+    @Test("Identical display snapshots do not rewrite the file")
+    func identicalDisplaySnapshotsDoNotRewriteFile() throws {
+        let directory = temporaryDirectory()
+        let original = GlanceSnapshot(
+            netWorth: 17_604.24,
+            todayChange: -42,
+            updatedAt: Date(timeIntervalSince1970: 1_780_000_000),
+            sparkline: [0, 0.5, 1],
+            isDemo: false
+        )
+        let timestampOnlyChange = GlanceSnapshot(
+            netWorth: original.netWorth,
+            todayChange: original.todayChange,
+            updatedAt: Date(timeIntervalSince1970: 1_780_000_300),
+            sparkline: original.sparkline,
+            isDemo: original.isDemo
+        )
+
+        #expect(try GlanceSnapshotStore.saveIfChanged(original, directory: directory))
+        let url = GlanceSnapshotStore.snapshotURL(directory: directory)
+        let firstData = try Data(contentsOf: url)
+        let firstAttributes = try FileManager.default.attributesOfItem(atPath: url.path)
+
+        #expect(!(try GlanceSnapshotStore.saveIfChanged(timestampOnlyChange, directory: directory)))
+        #expect(try Data(contentsOf: url) == firstData)
+        #expect(try FileManager.default.attributesOfItem(atPath: url.path)[.modificationDate] as? Date == firstAttributes[.modificationDate] as? Date)
+    }
+
+    @Test("Meaningful display changes rewrite the file")
+    func meaningfulDisplayChangesRewriteFile() throws {
+        let directory = temporaryDirectory()
+        let original = GlanceSnapshot(
+            netWorth: 17_604.24,
+            todayChange: -42,
+            updatedAt: Date(timeIntervalSince1970: 1_780_000_000),
+            sparkline: [0, 0.5, 1],
+            isDemo: false
+        )
+        let changed = GlanceSnapshot(
+            netWorth: 17_650,
+            todayChange: 3.74,
+            updatedAt: Date(timeIntervalSince1970: 1_780_000_300),
+            sparkline: [0.1, 0.4, 1],
+            isDemo: false
+        )
+
+        #expect(try GlanceSnapshotStore.saveIfChanged(original, directory: directory))
+        #expect(try GlanceSnapshotStore.saveIfChanged(changed, directory: directory))
+        #expect(try GlanceSnapshotStore.load(directory: directory) == changed)
+    }
+
+    @Test("Debouncer coalesces burst writes to the latest snapshot")
+    func debouncerCoalescesBurstWritesToLatestSnapshot() async throws {
+        let debouncer = GlanceSnapshotWriteDebouncer(delay: .milliseconds(25))
+        let recorder = SnapshotWriteRecorder()
+
+        await debouncer.schedule(firstSnapshot(netWorth: 100)) { snapshot in
+            await recorder.record(snapshot)
+        }
+        await debouncer.schedule(firstSnapshot(netWorth: 200)) { snapshot in
+            await recorder.record(snapshot)
+        }
+        await debouncer.schedule(firstSnapshot(netWorth: 300)) { snapshot in
+            await recorder.record(snapshot)
+        }
+
+        try await Task.sleep(for: .milliseconds(80))
+        let snapshots = await recorder.snapshots
+        #expect(snapshots.map(\.netWorth) == [300])
+    }
+
     @Test("Command request is consumed once")
     func commandRequestIsConsumedOnce() throws {
         let directory = temporaryDirectory()
@@ -76,5 +148,23 @@ struct GlanceSnapshotTests {
     private func temporaryDirectory() -> URL {
         FileManager.default.temporaryDirectory
             .appendingPathComponent("GlanceSnapshotTests-\(UUID().uuidString)", isDirectory: true)
+    }
+
+    private func firstSnapshot(netWorth: Double) -> GlanceSnapshot {
+        GlanceSnapshot(
+            netWorth: netWorth,
+            todayChange: 0,
+            updatedAt: Date(timeIntervalSince1970: 1_780_000_000),
+            sparkline: [0, 1],
+            isDemo: false
+        )
+    }
+}
+
+private actor SnapshotWriteRecorder {
+    private(set) var snapshots: [GlanceSnapshot] = []
+
+    func record(_ snapshot: GlanceSnapshot) {
+        snapshots.append(snapshot)
     }
 }

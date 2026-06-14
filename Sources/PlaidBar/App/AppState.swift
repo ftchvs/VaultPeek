@@ -187,6 +187,7 @@ final class AppState {
     private let notificationService: any NotificationServiceProtocol
     private var refreshTask: Task<Void, Never>?
     private var localAISummaryRefreshTask: Task<Void, Never>?
+    private let glanceSnapshotWriteDebouncer = GlanceSnapshotWriteDebouncer()
     private var isUpgradingManagedServer = false
     private var isStartingBundledServer = false
     private var lastAttemptedCredentialUpgradeConfig: String?
@@ -1693,13 +1694,23 @@ final class AppState {
             updatedAt: updatedAt,
             isDemo: isDemoMode
         )
-        if (try? GlanceSnapshotStore.save(snapshot)) != nil {
-            WidgetCenter.shared.reloadTimelines(ofKind: "PlaidBarGlanceWidget")
+        let debouncer = glanceSnapshotWriteDebouncer
+        Task { [snapshot, debouncer] in
+            await debouncer.schedule(snapshot) { snapshot in
+                guard (try? GlanceSnapshotStore.saveIfChanged(snapshot)) == true else { return }
+                await MainActor.run {
+                    WidgetCenter.shared.reloadTimelines(ofKind: "PlaidBarGlanceWidget")
+                }
+            }
         }
     }
 
     private func clearGlanceSnapshot() {
-        try? GlanceSnapshotStore.clear()
+        let debouncer = glanceSnapshotWriteDebouncer
+        Task { [debouncer] in
+            await debouncer.cancel()
+            try? GlanceSnapshotStore.clear()
+        }
     }
 
     @discardableResult
