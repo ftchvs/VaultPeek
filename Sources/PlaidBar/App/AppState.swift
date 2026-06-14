@@ -21,6 +21,8 @@ final class AppState {
         static let notifyLargeTransaction = "notifyLargeTransaction"
         static let notifyLowBalance = "notifyLowBalance"
         static let notifyHighUtilization = "notifyHighUtilization"
+        static let weeklyReviewState = "weeklyReview.state"
+        static let weeklyReviewPreviousSafeToSpend = "weeklyReview.previousSafeToSpend"
         static let notifyRecurringChargeDetected = "notifyRecurringChargeDetected"
         static let notifyRecurringChargeChanged = "notifyRecurringChargeChanged"
         static let notifyRecurringChargeDueSoon = "notifyRecurringChargeDueSoon"
@@ -104,6 +106,12 @@ final class AppState {
     var lastSyncDate: Date?
     var balanceHistory: [BalanceSnapshot] = []
     var notificationPermissionState: NotificationPermissionState = .notDetermined
+    var weeklyReviewState: WeeklyReviewState = .empty {
+        didSet {
+            guard weeklyReviewState != oldValue else { return }
+            persistWeeklyReviewState()
+        }
+    }
 
     // MARK: - Settings (persisted to UserDefaults)
     var menuBarSummaryMode: MenuBarSummaryMode = .netWorth {
@@ -309,6 +317,7 @@ final class AppState {
         }
         // Balance history
         loadPersistedBalanceHistory()
+        loadPersistedWeeklyReviewState()
         // Launch at login
         launchAtLogin = LaunchService.isEnabled
         // Detached-dashboard intent (AND-384). A headless snapshot render
@@ -428,7 +437,7 @@ final class AppState {
     }
 
     var menuBarAttentionText: String? {
-        menuBarStatusPresentation.attentionText
+        menuBarStatusPresentation.attentionText ?? weeklyReviewPresentation.menuBarPrompt
     }
 
     var menuBarReviewText: String? {
@@ -441,19 +450,20 @@ final class AppState {
             ? " \(transactionReviewCount) transaction\(transactionReviewCount == 1 ? "" : "s") need review."
             : ""
         let status = "Status: \(diagnosticsSummary)"
+        let review = weeklyReviewPresentation.menuBarPrompt.map { " Weekly review: \($0)." } ?? ""
         switch menuBarSummaryMode {
         case .netWorth:
-            return "VaultPeek - Net worth: \(menuBarText).\(reviewText) \(status)"
+            return "VaultPeek - Net worth: \(menuBarText).\(reviewText) \(status)\(review)"
         case .netCash:
-            return "VaultPeek - Net cash: \(menuBarText).\(reviewText) \(status)"
+            return "VaultPeek - Net cash: \(menuBarText).\(reviewText) \(status)\(review)"
         case .totalCash:
-            return "VaultPeek - Total cash: \(menuBarText).\(reviewText) \(status)"
+            return "VaultPeek - Total cash: \(menuBarText).\(reviewText) \(status)\(review)"
         case .creditUtilization:
-            return "VaultPeek - Credit utilization: \(menuBarText).\(reviewText) \(status)"
+            return "VaultPeek - Credit utilization: \(menuBarText).\(reviewText) \(status)\(review)"
         case .recentSpend:
-            return "VaultPeek - Recent spend: \(menuBarText).\(reviewText) \(status)"
+            return "VaultPeek - Recent spend: \(menuBarText).\(reviewText) \(status)\(review)"
         case .iconOnly:
-            return "VaultPeek.\(reviewText) \(status)"
+            return "VaultPeek.\(reviewText) \(status)\(review)"
         }
     }
 
@@ -466,19 +476,20 @@ final class AppState {
         // keep VoiceOver in sync with the badge sighted users see.
         let attention = menuBarAttentionText.map { ". Attention \($0)" } ?? ""
         let status = "Status \(diagnosticsSummary)\(attention)"
+        let review = weeklyReviewPresentation.menuBarPrompt.map { " Weekly review \($0)." } ?? ""
         switch menuBarSummaryMode {
         case .netWorth:
-            return "VaultPeek net worth \(menuBarText). \(reviewText)\(status)"
+            return "VaultPeek net worth \(menuBarText). \(reviewText)\(status)\(review)"
         case .netCash:
-            return "VaultPeek net cash \(menuBarText). \(reviewText)\(status)"
+            return "VaultPeek net cash \(menuBarText). \(reviewText)\(status)\(review)"
         case .totalCash:
-            return "VaultPeek total cash \(menuBarText). \(reviewText)\(status)"
+            return "VaultPeek total cash \(menuBarText). \(reviewText)\(status)\(review)"
         case .creditUtilization:
-            return "VaultPeek credit utilization \(menuBarText). \(reviewText)\(status)"
+            return "VaultPeek credit utilization \(menuBarText). \(reviewText)\(status)\(review)"
         case .recentSpend:
-            return "VaultPeek recent spend \(menuBarText). \(reviewText)\(status)"
+            return "VaultPeek recent spend \(menuBarText). \(reviewText)\(status)\(review)"
         case .iconOnly:
-            return "VaultPeek. \(reviewText)\(status)"
+            return "VaultPeek. \(reviewText)\(status)\(review)"
         }
     }
 
@@ -693,6 +704,65 @@ final class AppState {
             largeTransactionThreshold: largeTransactionThreshold,
             creditUtilizationThreshold: creditUtilizationThreshold
         )
+    }
+
+    var weeklyReviewPresentation: WeeklyReviewPresentation {
+        let safeToSpend = SafeToSpendCalculator.compute(
+            accounts: accounts,
+            recurringTransactions: recurringTransactions,
+            cashflow: WealthSummaryPresentation.evaluate(
+                accounts: accounts,
+                transactions: transactions,
+                isDemoMode: usesDemoConnectionPresentation,
+                serverConnected: serverConnected,
+                credentialsConfigured: serverCredentialsConfigured,
+                linkedItemCount: statusItemCount,
+                syncedItemCount: serverSyncedItemCount ?? 0,
+                itemStatuses: itemStatuses,
+                isSyncStale: isSyncStale,
+                lastSyncRelative: lastSyncRelative,
+                statusSyncText: statusSyncText,
+                errorMessage: error,
+                creditUtilizationThreshold: creditUtilizationThreshold,
+                balanceHistory: balanceHistory
+            ).cashflow,
+            asOf: Date()
+        )
+
+        return WeeklyReviewBuilder.evaluate(
+            state: weeklyReviewState,
+            transactionState: weeklyReviewTransactionState,
+            transactions: transactions,
+            recurringTransactions: recurringTransactions,
+            safeToSpend: safeToSpend,
+            previousSafeToSpendAmount: persistedPreviousSafeToSpendAmount,
+            categoryBudgets: CategoryBudgetPlanner.suggestedPresentation(
+                from: transactions,
+                asOf: Date()
+            ),
+            itemStatuses: itemStatuses,
+            isSyncStale: isSyncStale
+        )
+    }
+
+    private var weeklyReviewTransactionState: WeeklyReviewTransactionState? {
+        // AND-403 is intentionally gated on AND-399. Production must provide
+        // trusted/unreviewed transaction state before this returns a value; raw
+        // Plaid transactions alone are not treated as reviewed. Demo mode uses
+        // synthetic ids so the checklist surface remains locally exercisable.
+        guard isDemoMode else { return nil }
+        let unreviewed = Set(transactions.filter(\.pending).map(\.id))
+        let trusted = Set(transactions.map(\.id)).subtracting(unreviewed)
+        return WeeklyReviewTransactionState(
+            trustedTransactionIds: trusted,
+            unreviewedTransactionIds: unreviewed
+        )
+    }
+
+    private var persistedPreviousSafeToSpendAmount: Double? {
+        let defaults = UserDefaults.standard
+        guard defaults.object(forKey: Keys.weeklyReviewPreviousSafeToSpend) != nil else { return nil }
+        return defaults.double(forKey: Keys.weeklyReviewPreviousSafeToSpend)
     }
 
     var transactionReviewInboxSnapshot: TransactionReviewInboxSnapshot {
@@ -1273,6 +1343,9 @@ final class AppState {
         balanceHistory = []
         UserDefaults.standard.removeObject(forKey: Keys.balanceHistory)
         UserDefaults.standard.removeObject(forKey: Keys.lastTransactionCacheContext)
+        UserDefaults.standard.removeObject(forKey: Keys.weeklyReviewState)
+        UserDefaults.standard.removeObject(forKey: Keys.weeklyReviewPreviousSafeToSpend)
+        weeklyReviewState = .empty
         notificationService.resetDeduplicationState()
 
         return result
@@ -1319,6 +1392,50 @@ final class AppState {
         let granted = await notificationService.requestPermission()
         notificationPermissionState = await notificationService.checkPermissionStatus()
         return granted
+    }
+
+    func toggleWeeklyReviewItem(_ item: WeeklyReviewItem) {
+        if weeklyReviewState.completedItemIds.contains(item.id) {
+            weeklyReviewState.completedItemIds.remove(item.id)
+        } else {
+            weeklyReviewState.completedItemIds.insert(item.id)
+        }
+    }
+
+    func completeWeeklyReview() {
+        let presentation = weeklyReviewPresentation
+        weeklyReviewState.completedItemIds.formUnion(presentation.items.map(\.id))
+        weeklyReviewState.dismissedItemIds = []
+        weeklyReviewState.lastCompletedAt = Date()
+        UserDefaults.standard.set(currentSafeToSpendAmount(), forKey: Keys.weeklyReviewPreviousSafeToSpend)
+    }
+
+    /// Set when a weekly-review action targets a surface that opens elsewhere
+    /// (e.g. the review inbox or recurring inspector in MainPopover). The view
+    /// observes this and performs the navigation, then clears it.
+    var weeklyReviewNavigation: WeeklyReviewNavigationTarget?
+
+    func performWeeklyReviewAction(_ item: WeeklyReviewItem) {
+        switch item.action {
+        case .openReviewInbox:
+            // The transaction review inbox (AND-399) is available now, so route
+            // the user to it rather than reporting it as missing.
+            weeklyReviewNavigation = .reviewInbox
+        case .inspectCategory:
+            error = "Category budget drill-in is not available in this slice yet."
+        case .reviewRecurring:
+            weeklyReviewNavigation = .recurring
+        case .inspectSafeToSpend:
+            weeklyReviewNavigation = .safeToSpend
+        case .reconnectAccount:
+            guard let itemId = ItemRecoveryTarget.itemId(from: itemStatuses) else {
+                Task { await refreshDashboard() }
+                return
+            }
+            Task { await reconnectItem(itemId: itemId) }
+        case .refreshData:
+            Task { await refreshDashboard() }
+        }
     }
 
     func dismissFirstRunSnapshot() {
@@ -1884,6 +2001,46 @@ final class AppState {
         if let data = try? JSONEncoder().encode(balanceHistory) {
             UserDefaults.standard.set(data, forKey: Keys.balanceHistory)
         }
+    }
+
+    private func loadPersistedWeeklyReviewState() {
+        guard let data = UserDefaults.standard.data(forKey: Keys.weeklyReviewState),
+              let state = try? JSONDecoder().decode(WeeklyReviewState.self, from: data)
+        else {
+            weeklyReviewState = .empty
+            return
+        }
+        weeklyReviewState = state
+    }
+
+    private func persistWeeklyReviewState() {
+        guard let data = try? JSONEncoder().encode(weeklyReviewState) else { return }
+        UserDefaults.standard.set(data, forKey: Keys.weeklyReviewState)
+    }
+
+    private func currentSafeToSpendAmount() -> Double {
+        let presentation = WealthSummaryPresentation.evaluate(
+            accounts: accounts,
+            transactions: transactions,
+            isDemoMode: usesDemoConnectionPresentation,
+            serverConnected: serverConnected,
+            credentialsConfigured: serverCredentialsConfigured,
+            linkedItemCount: statusItemCount,
+            syncedItemCount: serverSyncedItemCount ?? 0,
+            itemStatuses: itemStatuses,
+            isSyncStale: isSyncStale,
+            lastSyncRelative: lastSyncRelative,
+            statusSyncText: statusSyncText,
+            errorMessage: error,
+            creditUtilizationThreshold: creditUtilizationThreshold,
+            balanceHistory: balanceHistory
+        )
+        return SafeToSpendCalculator.compute(
+            accounts: accounts,
+            recurringTransactions: recurringTransactions,
+            cashflow: presentation.cashflow,
+            asOf: Date()
+        ).amount
     }
 
     // MARK: - Demo Data
