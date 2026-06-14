@@ -38,16 +38,23 @@ VaultPeek does not include:
 VaultPeek's roadmap includes an optional **managed cloud bridge** for bank
 linking: instead of bringing your own Plaid keys, a hosted VaultPeek service
 would broker the bank connection on your behalf. In the planned design (see
-`docs/strategy/managed-link-architecture.md`), the boundary is **"never stored,"
-not "never transits."** The broker would hold only your identity, entitlement,
-and an item registry; your financial data (accounts, balances, transactions)
-would still live only on your Mac dashboard. But because Plaid requires
-VaultPeek's production credentials, managed-mode data-plane responses would
-**transit a hosted VaultPeek stateless proxy** (transit-only, in memory, never
-persisted and never logged) on the way to your Mac. So managed mode would break
-the "no data ever leaves a VaultPeek server" promise while preserving the "no
-financial data is ever stored off your Mac" promise. The exact wording will be
-finalized — and approved — before any managed surface ships.
+`docs/strategy/managed-link-architecture.md` and
+`docs/strategy/managed-link-consent-operations.md`), the boundary is **"never
+stored," not "never transits."** The broker would hold only your identity,
+entitlement, and an item registry; your financial data (accounts, balances,
+transactions) would still live only on your Mac dashboard. But because Plaid
+requires VaultPeek's production credentials, managed-mode data-plane responses
+would **transit a hosted VaultPeek stateless proxy** (transit-only, in memory,
+never persisted and never logged) on the way to your Mac. So managed mode would
+break the "no data ever leaves a VaultPeek server" promise while preserving the
+"no financial data is ever stored off your Mac" promise.
+
+Managed support would also have a hard no-secrets rule: helpers could guide
+users through VaultPeek screens, but they could not ask for, receive, type, or
+store bank credentials, MFA codes, Plaid tokens, raw account IDs, balances,
+transactions, local databases, logs, or screenshots containing financial data.
+The exact wording will be finalized — and approved — before any managed surface
+ships.
 
 This managed mode does not exist today. As of this writing:
 

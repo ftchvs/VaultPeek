@@ -221,4 +221,320 @@ struct AttentionQueueTests {
         #expect(queue.rows[0].title == "Plaid sync healthy")
         #expect(queue.rows[0].detail.contains("2 linked items connected"))
     }
+
+    @Test("Queue represents financial attention states in deterministic priority order")
+    func representsFinancialAttentionStatesInPriorityOrder() {
+        let queue = AttentionQueue.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 1,
+            accountCount: 3,
+            syncedItemCount: 1,
+            itemStatuses: [],
+            isSyncStale: false,
+            lastSyncRelative: "now",
+            errorMessage: nil,
+            accounts: [
+                depository(id: "checking-sensitive-id", balance: 99),
+                credit(id: "card-sensitive-id", current: -300, limit: 1_000),
+            ],
+            transactions: [
+                transaction(id: "tx-sensitive-id", amount: 500),
+            ],
+            lowCashThreshold: 100,
+            largeTransactionThreshold: 500,
+            creditUtilizationThreshold: 30
+        )
+
+        #expect(queue.rows.map(\.id) == [
+            "financial-low-cash",
+            "financial-high-utilization",
+            "financial-unusual-spending",
+        ])
+        #expect(queue.rows.map(\.menuBarAttentionText) == ["Cash", "Credit", "Spend"])
+        #expect(queue.rows.allSatisfy { $0.severity == .warning })
+        #expect(queue.highestErrorSeverity == .advisory)
+    }
+
+    @Test("Queue keeps sync and recovery warnings ahead of financial attention")
+    func keepsRecoveryWarningsAheadOfFinancialAttention() {
+        let queue = AttentionQueue.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 1,
+            accountCount: 2,
+            syncedItemCount: 1,
+            itemStatuses: [
+                ItemStatus(id: "item-login-sensitive", institutionName: "Example Bank", status: .loginRequired),
+            ],
+            isSyncStale: true,
+            lastSyncRelative: "3 days ago",
+            errorMessage: nil,
+            accounts: [
+                depository(id: "checking-sensitive-id", balance: 10),
+                credit(id: "card-sensitive-id", current: -900, limit: 1_000),
+            ],
+            transactions: [
+                transaction(id: "tx-sensitive-id", amount: 900),
+            ],
+            lowCashThreshold: 100,
+            largeTransactionThreshold: 500,
+            creditUtilizationThreshold: 30
+        )
+
+        #expect(queue.rows.map(\.id) == [
+            "item-login-0",
+            "sync-stale",
+            "financial-low-cash",
+        ])
+        #expect(queue.rows.first?.action == .reconnect)
+    }
+
+    @Test("Financial attention threshold edges are inclusive where configured")
+    func financialThresholdEdgesAreInclusiveWhereConfigured() {
+        let atThreshold = AttentionQueue.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 1,
+            accountCount: 3,
+            syncedItemCount: 1,
+            itemStatuses: [],
+            isSyncStale: false,
+            lastSyncRelative: "now",
+            errorMessage: nil,
+            accounts: [
+                depository(id: "checking", balance: 100),
+                credit(id: "card", current: -300, limit: 1_000),
+            ],
+            transactions: [
+                transaction(id: "tx-at-threshold", amount: 500),
+            ],
+            lowCashThreshold: 100,
+            largeTransactionThreshold: 500,
+            creditUtilizationThreshold: 30
+        )
+        let belowWarnings = AttentionQueue.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 1,
+            accountCount: 3,
+            syncedItemCount: 1,
+            itemStatuses: [],
+            isSyncStale: false,
+            lastSyncRelative: "now",
+            errorMessage: nil,
+            accounts: [
+                depository(id: "checking", balance: 100),
+                credit(id: "card", current: -299, limit: 1_000),
+            ],
+            transactions: [
+                transaction(id: "tx-below-threshold", amount: 499.99),
+            ],
+            lowCashThreshold: 100,
+            largeTransactionThreshold: 500,
+            creditUtilizationThreshold: 30
+        )
+
+        #expect(atThreshold.rows.map(\.id) == [
+            "financial-high-utilization",
+            "financial-unusual-spending",
+        ])
+        #expect(belowWarnings.rows.map(\.id) == ["healthy"])
+    }
+
+    @Test("Stale large transactions outside the recent window do not raise spend attention")
+    func staleLargeTransactionsDoNotRaiseSpendAttention() {
+        let now = Formatters.parseTransactionDate("2026-06-14")!
+        let queue = AttentionQueue.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 1,
+            accountCount: 1,
+            syncedItemCount: 1,
+            itemStatuses: [],
+            isSyncStale: false,
+            lastSyncRelative: "now",
+            errorMessage: nil,
+            accounts: [depository(id: "checking", balance: 5_000)],
+            transactions: [
+                // A large purchase from over a month ago must not keep the Spend
+                // badge active once it is outside the recent window.
+                TransactionDTO(id: "old-large", accountId: "acct", amount: 900, date: "2026-05-01", name: "Old Purchase"),
+            ],
+            lowCashThreshold: 100,
+            largeTransactionThreshold: 500,
+            creditUtilizationThreshold: 30,
+            now: now
+        )
+
+        #expect(!queue.rows.map(\.id).contains("financial-unusual-spending"))
+        #expect(queue.rows.map(\.id) == ["healthy"])
+    }
+
+    @Test("Finance attention is suppressed until all linked items finish first sync")
+    func financeAttentionWaitsForAllItemsSynced() {
+        let now = Formatters.parseTransactionDate("2026-06-14")!
+        let queue = AttentionQueue.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 2,
+            accountCount: 1,
+            syncedItemCount: 1,
+            itemStatuses: [],
+            isSyncStale: false,
+            lastSyncRelative: "now",
+            errorMessage: nil,
+            accounts: [depository(id: "checking", balance: 10)],
+            transactions: [
+                TransactionDTO(id: "recent-large", accountId: "acct", amount: 900, date: "2026-06-13", name: "Recent"),
+            ],
+            lowCashThreshold: 100,
+            largeTransactionThreshold: 500,
+            creditUtilizationThreshold: 30,
+            now: now
+        )
+
+        // With one of two items still unsynced, partial data must not drive
+        // aggregate finance warnings; only the first-sync-incomplete row shows.
+        #expect(!queue.rows.contains { $0.isFinancialAttention })
+        #expect(queue.rows.map(\.id) == ["first-sync-incomplete"])
+    }
+
+    @Test("Low cash is detected per account, not by summed depository cash")
+    func lowCashIsDetectedPerAccount() {
+        let now = Formatters.parseTransactionDate("2026-06-14")!
+        let queue = AttentionQueue.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 1,
+            accountCount: 2,
+            syncedItemCount: 1,
+            itemStatuses: [],
+            isSyncStale: false,
+            lastSyncRelative: "now",
+            errorMessage: nil,
+            accounts: [
+                // Checking is below threshold even though total depository cash
+                // (checking + savings) is well above it.
+                depository(id: "checking", balance: 20),
+                depository(id: "savings", balance: 5_000),
+            ],
+            transactions: [],
+            lowCashThreshold: 100,
+            largeTransactionThreshold: 500,
+            creditUtilizationThreshold: 30,
+            now: now
+        )
+
+        #expect(queue.rows.map(\.id).contains("financial-low-cash"))
+    }
+
+    @Test("Financial attention copy stays private and amount-free")
+    func financialAttentionCopyStaysPrivateAndAmountFree() {
+        let accountID = "acct_sensitive_private"
+        let transactionID = "tx_sensitive_private"
+        let accountName = "Sensitive Checking 4321"
+        let merchant = "Sensitive Merchant"
+        let institution = "Sensitive Bank"
+        let queue = AttentionQueue.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 1,
+            accountCount: 2,
+            syncedItemCount: 1,
+            itemStatuses: [],
+            isSyncStale: false,
+            lastSyncRelative: "now",
+            errorMessage: nil,
+            accounts: [
+                AccountDTO(
+                    id: accountID,
+                    itemId: "item_sensitive_private",
+                    name: accountName,
+                    type: .depository,
+                    balances: BalanceDTO(available: 12.34),
+                    institutionName: institution
+                ),
+                credit(id: "credit_sensitive_private", current: -900, limit: 1_000),
+            ],
+            transactions: [
+                TransactionDTO(
+                    id: transactionID,
+                    accountId: accountID,
+                    amount: 9_876.54,
+                    date: "2026-06-12",
+                    name: "Raw Sensitive Merchant",
+                    merchantName: merchant
+                ),
+            ],
+            lowCashThreshold: 100,
+            largeTransactionThreshold: 500,
+            creditUtilizationThreshold: 30
+        )
+
+        let renderedCopy = queue.rows
+            .flatMap {
+                [
+                    $0.title,
+                    $0.detail,
+                    $0.menuBarAttentionText ?? "",
+                    $0.actionTitle ?? "",
+                    $0.accessibilityLabel,
+                    $0.accessibilityHint ?? "",
+                ]
+            }
+            .joined(separator: " ")
+
+        for privateText in [
+            accountID,
+            transactionID,
+            accountName,
+            merchant,
+            institution,
+            "Raw Sensitive Merchant",
+            "9876.54",
+            "12.34",
+            "$",
+        ] {
+            #expect(renderedCopy.contains(privateText) == false)
+        }
+    }
+
+    private func transaction(id: String, amount: Double) -> TransactionDTO {
+        TransactionDTO(
+            id: id,
+            accountId: "acct-\(id)",
+            amount: amount,
+            date: "2026-06-12",
+            name: "Synthetic Transaction"
+        )
+    }
+
+    private func depository(id: String, balance: Double) -> AccountDTO {
+        AccountDTO(
+            id: id,
+            itemId: "item-\(id)",
+            name: "Synthetic Checking",
+            type: .depository,
+            balances: BalanceDTO(available: balance)
+        )
+    }
+
+    private func credit(id: String, current: Double, limit: Double) -> AccountDTO {
+        AccountDTO(
+            id: id,
+            itemId: "item-\(id)",
+            name: "Synthetic Credit",
+            type: .credit,
+            balances: BalanceDTO(current: current, limit: limit)
+        )
+    }
 }

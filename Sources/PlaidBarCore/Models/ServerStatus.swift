@@ -14,6 +14,7 @@ public struct ServerStatus: Codable, Sendable {
         case storagePath
         case syncReady
         case syncedItemCount
+        case billingSubscription
     }
 
     public let version: String
@@ -24,6 +25,7 @@ public struct ServerStatus: Codable, Sendable {
     public let storagePath: String
     public let syncReady: Bool
     public let syncedItemCount: Int
+    public let billingSubscription: BillingSubscription?
 
     public init(
         version: String,
@@ -33,7 +35,8 @@ public struct ServerStatus: Codable, Sendable {
         credentialsConfigured: Bool = true,
         storagePath: String = LocalDataStore.displayPath,
         syncReady: Bool? = nil,
-        syncedItemCount: Int? = nil
+        syncedItemCount: Int? = nil,
+        billingSubscription: BillingSubscription? = nil
     ) {
         self.version = version
         self.environment = environment
@@ -43,6 +46,7 @@ public struct ServerStatus: Codable, Sendable {
         self.storagePath = storagePath
         self.syncReady = syncReady ?? (itemCount > 0)
         self.syncedItemCount = syncedItemCount ?? (lastSync == nil ? 0 : itemCount)
+        self.billingSubscription = billingSubscription
     }
 
     public init(from decoder: Decoder) throws {
@@ -55,6 +59,10 @@ public struct ServerStatus: Codable, Sendable {
         let storagePath = try container.decodeIfPresent(String.self, forKey: .storagePath)
         let syncReady = try container.decodeIfPresent(Bool.self, forKey: .syncReady)
         let syncedItemCount = try container.decodeIfPresent(Int.self, forKey: .syncedItemCount)
+        let billingSubscription = try container.decodeIfPresent(
+            BillingSubscription.self,
+            forKey: .billingSubscription
+        )
 
         self.init(
             version: version,
@@ -64,7 +72,8 @@ public struct ServerStatus: Codable, Sendable {
             credentialsConfigured: credentialsConfigured ?? true,
             storagePath: storagePath ?? LocalDataStore.displayPath,
             syncReady: syncReady,
-            syncedItemCount: syncedItemCount
+            syncedItemCount: syncedItemCount,
+            billingSubscription: billingSubscription
         )
     }
 }

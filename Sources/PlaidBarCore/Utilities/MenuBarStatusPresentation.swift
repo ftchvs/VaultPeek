@@ -65,6 +65,7 @@ public struct MenuBarStatusPresentation: Equatable, Sendable {
         needsLoginItemCount: Int,
         isSyncStale: Bool,
         hasEverSynced: Bool,
+        financialAttentionText: String? = nil,
         iconStyle: MenuBarIconStyle = .classic
     ) -> MenuBarStatusPresentation {
         let connection = ServerConnectionPresentation.evaluate(
@@ -82,7 +83,8 @@ public struct MenuBarStatusPresentation: Equatable, Sendable {
                 erroredItemCount: erroredItemCount,
                 needsLoginItemCount: needsLoginItemCount,
                 isSyncStale: isSyncStale,
-                hasEverSynced: hasEverSynced
+                hasEverSynced: hasEverSynced,
+                financialAttentionText: financialAttentionText
             ),
             symbolName: symbolName(
                 isDemoMode: isDemoMode,
@@ -91,6 +93,7 @@ public struct MenuBarStatusPresentation: Equatable, Sendable {
                 erroredItemCount: erroredItemCount,
                 needsLoginItemCount: needsLoginItemCount,
                 isSyncStale: isSyncStale,
+                hasFinancialAttention: financialAttentionText != nil,
                 iconStyle: iconStyle
             ),
             severity: severity(
@@ -98,7 +101,8 @@ public struct MenuBarStatusPresentation: Equatable, Sendable {
                 connection: connection,
                 erroredItemCount: erroredItemCount,
                 needsLoginItemCount: needsLoginItemCount,
-                isSyncStale: isSyncStale
+                isSyncStale: isSyncStale,
+                hasFinancialAttention: financialAttentionText != nil
             )
         )
     }
@@ -109,7 +113,8 @@ public struct MenuBarStatusPresentation: Equatable, Sendable {
         erroredItemCount: Int,
         needsLoginItemCount: Int,
         isSyncStale: Bool,
-        hasEverSynced: Bool
+        hasEverSynced: Bool,
+        financialAttentionText: String?
     ) -> String? {
         if isDemoMode { return nil }
         if connection.issue == .localAuthMissing || connection.issue == .localAuthRejected {
@@ -124,6 +129,7 @@ public struct MenuBarStatusPresentation: Equatable, Sendable {
         }
         if needsLoginItemCount > 0 { return "Login" }
         if isSyncStale { return hasEverSynced ? "Stale" : "Never" }
+        if let financialAttentionText { return financialAttentionText }
         return nil
     }
 
@@ -134,6 +140,7 @@ public struct MenuBarStatusPresentation: Equatable, Sendable {
         erroredItemCount: Int,
         needsLoginItemCount: Int,
         isSyncStale: Bool,
+        hasFinancialAttention: Bool,
         iconStyle: MenuBarIconStyle
     ) -> String {
         // State is carried by the symbol shape, not color: the menu bar
@@ -163,6 +170,7 @@ public struct MenuBarStatusPresentation: Equatable, Sendable {
         if needsLoginItemCount > 0 || isSyncStale {
             return "exclamationmark.triangle"
         }
+        if hasFinancialAttention { return "exclamationmark.triangle" }
         return iconStyle.healthySymbolName
     }
 
@@ -171,12 +179,13 @@ public struct MenuBarStatusPresentation: Equatable, Sendable {
         connection: ServerConnectionPresentation,
         erroredItemCount: Int,
         needsLoginItemCount: Int,
-        isSyncStale: Bool
+        isSyncStale: Bool,
+        hasFinancialAttention: Bool
     ) -> ErrorSeverity? {
         if isDemoMode { return erroredItemCount > 0 ? .blocking : nil }
         if erroredItemCount > 0 { return .blocking }
         if let connectionSeverity = connection.errorSeverity { return connectionSeverity }
-        if needsLoginItemCount > 0 || isSyncStale { return .advisory }
+        if needsLoginItemCount > 0 || isSyncStale || hasFinancialAttention { return .advisory }
         return nil
     }
 }

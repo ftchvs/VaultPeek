@@ -1,17 +1,17 @@
 import Foundation
 
-/// Client-side shape for the proposed managed consumer plans.
+/// Client-side shape for the locked consumer plan matrix.
 ///
 /// FOUNDATION ONLY. These types describe plan limits and connection origin so
 /// the UI can render restrained, honest plan-selection and usage shells. They
 /// do **not** enforce anything: there is no Stripe billing, no entitlement
 /// token, no managed broker, and no server-side limit check behind them yet.
 /// The managed cloud backend remains gated by `docs/strategy/approval-gates.md`
-/// (decisions D1-D10 in `docs/strategy/subscription-entitlements.md` are
-/// unresolved as of 2026-06-12). Until those gates pass, every plan is a
-/// preview and demo / bring-your-own-keys mode stays fully free and ungated.
+/// (remaining architecture decisions in `docs/strategy/subscription-entitlements.md`
+/// are unresolved). Until those gates pass, every plan is a preview and demo /
+/// bring-your-own-keys mode stays fully free and ungated.
 public enum SubscriptionPlan: String, CaseIterable, Sendable, Codable, Identifiable {
-    case personal
+    case free
     case plus
 
     /// `@AppStorage` key for the locally-remembered plan preference. This is a
@@ -19,29 +19,30 @@ public enum SubscriptionPlan: String, CaseIterable, Sendable, Codable, Identifia
     public static let storageKey = "subscription.selectedPlan"
 
     /// Default plan when nothing has been chosen yet.
-    public static let defaultPlan = SubscriptionPlan.personal
+    public static let defaultPlan = SubscriptionPlan.free
 
     public var id: String { rawValue }
 
     /// Human-facing plan name for pickers and labels.
     public var displayName: String {
         switch self {
-        case .personal:
-            "Personal"
+        case .free:
+            "Free"
         case .plus:
             "Plus"
         }
     }
 
-    /// Managed-institution cap proposed for each tier.
+    /// Managed-institution cap locked for each self-serve tier.
     ///
-    /// Values come from `docs/strategy/subscription-entitlements.md` §D2
-    /// (Personal = 3, Plus = 8). These are design proposals, not commitments,
-    /// and are surfaced here for the usage shell only — nothing enforces them.
+    /// Values come from `docs/strategy/entitlement-matrix.md` (Free = 0 managed
+    /// institutions, Plus = 8). These are surfaced for the usage shell only —
+    /// nothing enforces them yet. BYO-keys connections are outside this managed
+    /// cap and remain ungated.
     public var institutionLimit: Int {
         switch self {
-        case .personal:
-            3
+        case .free:
+            0
         case .plus:
             8
         }
@@ -49,10 +50,15 @@ public enum SubscriptionPlan: String, CaseIterable, Sendable, Codable, Identifia
 
     /// Short forward-looking tagline. Deliberately framed as a preview so copy
     /// never implies billing or a managed backend exists today.
+    ///
+    /// Final public pricing is gated behind `docs/strategy/approval-gates.md`
+    /// (AND-349, "Pricing bundles and launch copy") and must not appear in any
+    /// shipping app surface before that gate passes, so this preview copy states
+    /// the managed institution cap only — never a dollar amount.
     public var priceDescription: String {
         switch self {
-        case .personal:
-            "Preview · up to 3 institutions"
+        case .free:
+            "Preview · demo and BYO keys"
         case .plus:
             "Preview · up to 8 institutions"
         }
