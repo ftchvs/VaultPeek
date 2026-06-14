@@ -203,7 +203,12 @@ struct PlaidBarServerTests {
             credentialsConfigured: true,
             storagePath: "/Users/example/.plaidbar",
             syncReady: true,
-            syncedItemCount: 2
+            syncedItemCount: 2,
+            billingSubscription: BillingSubscription(
+                status: .active,
+                plan: .personal,
+                updatedAt: Date(timeIntervalSince1970: 1_800_000_002)
+            )
         )
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -221,6 +226,7 @@ struct PlaidBarServerTests {
             "storagePath",
             "syncReady",
             "syncedItemCount",
+            "billingSubscription",
         ]
         let forbiddenFragments = [
             "account",
@@ -265,7 +271,12 @@ struct PlaidBarServerTests {
             credentialsConfigured: true,
             storagePath: "/Users/example/.plaidbar",
             syncReady: true,
-            syncedItemCount: 1
+            syncedItemCount: 1,
+            billingSubscription: BillingSubscription(
+                status: .trialing,
+                plan: .personal,
+                updatedAt: Date(timeIntervalSince1970: 1_800_000_002)
+            )
         )
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601

@@ -175,7 +175,10 @@ struct SetupView: View {
             // The count reflects all linked institutions (`statusItemCount`), not
             // only currently-healthy ones, so an item needing reauth still counts.
             if environment == .production {
-                PlanSelectionShell(selectedPlan: selectedPlan)
+                PlanSelectionShell(
+                    selectedPlan: selectedPlan,
+                    billingSubscription: appState.billingSubscription
+                )
             }
             InstitutionUsageWidget(
                 usage: InstitutionUsage(connectedCount: appState.statusItemCount, limit: nil),

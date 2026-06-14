@@ -184,12 +184,100 @@ struct ConsumerFoundationTests {
         #expect(decoded == original)
     }
 
+    // MARK: - Billing lifecycle persistence
+
+    @Test("Billing subscription status persists and can move through lifecycle states")
+    func billingSubscriptionLifecyclePersists() async throws {
+        try await withFluent { fluent in
+            let store = BillingSubscriptionStore(fluent: fluent)
+
+            #expect(try await store.currentSubscription() == nil)
+
+            let trial = try await store.save(
+                SaveBillingSubscriptionRequest(status: .trialing, plan: .personal)
+            )
+            #expect(trial.status == .trialing)
+            #expect(trial.plan == .personal)
+
+            let upgraded = try await store.save(
+                SaveBillingSubscriptionRequest(status: .active, plan: .plus)
+            )
+            #expect(upgraded.status == .active)
+            #expect(upgraded.plan == .plus)
+
+            let failedPayment = try await store.save(
+                SaveBillingSubscriptionRequest(status: .pastDue, plan: .plus)
+            )
+            #expect(failedPayment.status == .pastDue)
+
+            let downgraded = try await store.save(
+                SaveBillingSubscriptionRequest(status: .active, plan: .personal)
+            )
+            #expect(downgraded.plan == .personal)
+
+            let canceled = try await store.save(
+                SaveBillingSubscriptionRequest(status: .canceled, plan: .personal)
+            )
+            #expect(canceled.status == .canceled)
+
+            let expired = try await store.save(
+                SaveBillingSubscriptionRequest(status: .expired, plan: .personal)
+            )
+            #expect(expired.status == .expired)
+
+            let reactivated = try await store.save(
+                SaveBillingSubscriptionRequest(status: .active, plan: .personal)
+            )
+            #expect(reactivated.status == .active)
+
+            let loaded = try await store.currentSubscription()
+            #expect(loaded?.status == .active)
+            #expect(loaded?.plan == .personal)
+        }
+    }
+
+    @Test("Billing route receives normalized subscription status")
+    func billingRouteReceivesSubscriptionStatus() async throws {
+        try await withFluent { fluent in
+            let store = BillingSubscriptionStore(fluent: fluent)
+            let routes = BillingRoutes(billingStore: store)
+            let context = TestRequestContext(source: TestRequestContextSource())
+            let response = try await routes.saveSubscription(
+                request: Self.makeJSONRequest(
+                    method: .put,
+                    path: "/api/billing/subscription",
+                    body: SaveBillingSubscriptionRequest(status: .pastDue, plan: .plus)
+                ),
+                context: context
+            )
+
+            #expect(response.status == .ok)
+            let loaded = try await store.currentSubscription()
+            #expect(loaded?.status == .pastDue)
+            #expect(loaded?.plan == .plus)
+        }
+    }
+
     // MARK: - Helpers
 
     private static func makeRequest(path: String) -> Request {
         Request(
             head: HTTPRequest(method: .get, scheme: nil, authority: nil, path: path),
             body: RequestBody(buffer: ByteBuffer())
+        )
+    }
+
+    private static func makeJSONRequest(
+        method: HTTPRequest.Method,
+        path: String,
+        body: some Encodable
+    ) throws -> Request {
+        let data = try JSONEncoder().encode(body)
+        var headers = HTTPFields()
+        headers[.contentType] = "application/json"
+        return Request(
+            head: HTTPRequest(method: method, scheme: nil, authority: nil, path: path, headerFields: headers),
+            body: RequestBody(buffer: ByteBuffer(data: data))
         )
     }
 
@@ -202,6 +290,7 @@ struct ConsumerFoundationTests {
         await fluent.migrations.add(CreateItems())
         await fluent.migrations.add(AddProviderToItems())
         await fluent.migrations.add(CreateSyncCursors())
+        await fluent.migrations.add(CreateBillingSubscriptions())
 
         var bodyError: Error?
         do {

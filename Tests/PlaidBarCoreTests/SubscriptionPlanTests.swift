@@ -35,6 +35,78 @@ struct SubscriptionPlanTests {
     }
 }
 
+@Suite("Billing lifecycle Tests")
+struct BillingLifecycleTests {
+    @Test(
+        "Feature gates respond predictably to subscription statuses",
+        arguments: [
+            (BillingSubscriptionStatus.active, false),
+            (.trialing, false),
+            (.pastDue, true),
+            (.canceled, true),
+            (.expired, true),
+        ]
+    )
+    func featureGateStatusMatrix(status: BillingSubscriptionStatus, isLocked: Bool) {
+        let subscription = BillingSubscription(
+            status: status,
+            plan: .personal,
+            updatedAt: Date(timeIntervalSince1970: 1_800_000_000)
+        )
+
+        let result = BillingFeatureGate.evaluate(
+            featureName: "managed insights",
+            subscription: subscription
+        )
+
+        #expect(result.isLocked == isLocked)
+    }
+
+    @Test("Locked copy explains the failed-payment recovery path")
+    func failedPaymentCopyExplainsRecovery() throws {
+        let subscription = BillingSubscription(
+            status: .pastDue,
+            plan: .plus,
+            updatedAt: Date(timeIntervalSince1970: 1_800_000_001)
+        )
+
+        let result = BillingFeatureGate.evaluate(
+            featureName: "managed insights",
+            subscription: subscription
+        )
+
+        guard case .locked(let lock) = result else {
+            Issue.record("Expected past_due to lock the feature")
+            return
+        }
+        #expect(lock.title == "managed insights is locked")
+        #expect(lock.message.contains("payment failed subscription"))
+        #expect(lock.message.contains("Local financial data stays on this Mac"))
+        #expect(lock.recoveryAction == "Update your payment method to restore access.")
+    }
+
+    @Test("Missing local subscription state leaves local-first installs ungated")
+    func nilSubscriptionAllowsLocalFirstInstalls() {
+        let result = BillingFeatureGate.evaluate(
+            featureName: "managed insights",
+            subscription: nil
+        )
+        #expect(result == .available)
+    }
+
+    @Test("Upgrade and downgrade transitions preserve local financial data")
+    func planTransitionsPreserveLocalData() {
+        let upgrade = BillingPlanTransition(from: .personal, to: .plus)
+        let downgrade = BillingPlanTransition(from: .plus, to: .personal)
+
+        #expect(upgrade.isDowngrade == false)
+        #expect(upgrade.preservesLocalFinancialData)
+        #expect(downgrade.isDowngrade)
+        #expect(downgrade.preservesLocalFinancialData)
+        #expect(downgrade.explanation.contains("does not delete local accounts"))
+    }
+}
+
 @Suite("InstitutionUsage Tests")
 struct InstitutionUsageTests {
     @Test("Summary text reports count of limit when a limit exists")
