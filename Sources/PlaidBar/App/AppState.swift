@@ -2021,7 +2021,6 @@ final class AppState {
         // removed-account net worth until a later reset or successful write.
         guard !accounts.isEmpty else {
             clearGlanceSnapshot()
-            WidgetCenter.shared.reloadTimelines(ofKind: "PlaidBarGlanceWidget")
             return
         }
         let snapshot = GlanceSnapshot.make(
@@ -2037,6 +2036,12 @@ final class AppState {
 
     private func clearGlanceSnapshot() {
         try? GlanceSnapshotStore.clear()
+        // Tell WidgetKit to drop the already-issued timeline entry so the widget
+        // surface stops showing pre-clear balances immediately. This covers
+        // every clear path — the explicit reset/data-wipe (`resetLocalData`) and
+        // removing the last institution — not just the empty-accounts write
+        // branch, which previously reloaded on its own (AND-385 Codex review).
+        WidgetCenter.shared.reloadTimelines(ofKind: "PlaidBarGlanceWidget")
     }
 
     /// Consume a pending widget/control command (e.g. the "Refresh balances"
