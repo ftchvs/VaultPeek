@@ -10,6 +10,11 @@ public struct TransactionDTO: Codable, Sendable, Identifiable, Hashable {
     public let merchantName: String? // Cleaned merchant name
     public let category: SpendingCategory?
     public let pending: Bool
+    /// Plaid `pending_transaction_id`: when a pending charge posts, Plaid removes
+    /// the pending transaction and adds a new posted one that points back to the
+    /// pending id through this field. Privacy-sensitive like every other id — keep
+    /// it out of UI and logs; it exists only to reconcile pending → posted state.
+    public let pendingTransactionId: String?
     public let isoCurrencyCode: String?
 
     public init(
@@ -22,6 +27,7 @@ public struct TransactionDTO: Codable, Sendable, Identifiable, Hashable {
         merchantName: String? = nil,
         category: SpendingCategory? = nil,
         pending: Bool = false,
+        pendingTransactionId: String? = nil,
         isoCurrencyCode: String? = nil
     ) {
         self.id = id
@@ -33,6 +39,7 @@ public struct TransactionDTO: Codable, Sendable, Identifiable, Hashable {
         self.merchantName = merchantName
         self.category = category
         self.pending = pending
+        self.pendingTransactionId = pendingTransactionId
         self.isoCurrencyCode = isoCurrencyCode
     }
 

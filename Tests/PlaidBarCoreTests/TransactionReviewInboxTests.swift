@@ -103,6 +103,140 @@ struct TransactionReviewInboxTests {
         #expect(snapshot.items.first?.reasonCodes.contains(.pendingChanged) == true)
     }
 
+    @Test("Posted transaction reconciles against pending metadata stored under the pending id")
+    func postedTransactionReconcilesViaPendingTransactionId() {
+        // Plaid posts a pending charge as a brand-new transaction id that points
+        // back to the pending id. The pending-phase metadata lives under that old
+        // id, so the change must be detected across the id boundary.
+        let posted = tx(
+            id: "posted-new",
+            amount: 58,
+            name: "MERCHANT FINAL",
+            category: .shopping,
+            merchantName: "Merchant",
+            pendingTransactionId: "pending-old"
+        )
+        let pendingMetadata = TransactionReviewMetadata(
+            id: "pending-old",
+            lastSeenAmount: 50,
+            lastSeenName: "MERCHANT PENDING",
+            lastSeenPending: true
+        )
+
+        let snapshot = evaluate([posted], metadata: [pendingMetadata])
+
+        #expect(snapshot.items.map(\.id) == ["posted-new"])
+        #expect(snapshot.items.first?.reasonCodes.contains(.pendingChanged) == true)
+    }
+
+    @Test("Posted transaction that settled identically stays out of the inbox")
+    func postedTransactionUnchangedStaysSettled() {
+        // Same amount and name as the pending phase, which was already reviewed:
+        // a benign posting should not resurface the charge.
+        let posted = tx(
+            id: "posted-new",
+            amount: 50,
+            name: "MERCHANT PENDING",
+            category: .shopping,
+            merchantName: "Merchant",
+            pendingTransactionId: "pending-old"
+        )
+        let pendingMetadata = TransactionReviewMetadata(
+            id: "pending-old",
+            status: .reviewed,
+            lastSeenAmount: 50,
+            lastSeenName: "MERCHANT PENDING",
+            lastSeenPending: true
+        )
+
+        let snapshot = evaluate([posted], metadata: [pendingMetadata])
+
+        #expect(snapshot.totalCount == 0)
+    }
+
+    @Test("Approving while pending does not block a changed posted charge from reopening")
+    func approvedPendingChargeReopensWhenPostedDifferently() {
+        let posted = tx(
+            id: "posted-new",
+            amount: 58,
+            name: "MERCHANT FINAL",
+            category: .shopping,
+            merchantName: "Merchant",
+            pendingTransactionId: "pending-old"
+        )
+        let approvedPending = TransactionReviewMetadata(
+            id: "pending-old",
+            status: .reviewed,
+            lastSeenAmount: 50,
+            lastSeenName: "MERCHANT PENDING",
+            lastSeenPending: true
+        )
+
+        let snapshot = evaluate([posted], metadata: [approvedPending])
+
+        let item = snapshot.items.first { $0.id == "posted-new" }
+        #expect(item != nil)
+        #expect(item?.reasonCodes.contains(.pendingChanged) == true)
+        // A reopened charge is actionable again rather than reading as settled.
+        #expect(item?.status == .needsReview)
+    }
+
+    @Test("Ignoring while pending does not block a changed posted charge from reopening")
+    func ignoredPendingChargeReopensWhenPostedDifferently() {
+        let posted = tx(
+            id: "posted-new",
+            amount: 58,
+            name: "MERCHANT FINAL",
+            category: .shopping,
+            merchantName: "Merchant",
+            pendingTransactionId: "pending-old"
+        )
+        let ignoredPending = TransactionReviewMetadata(
+            id: "pending-old",
+            status: .ignored,
+            lastSeenAmount: 50,
+            lastSeenName: "MERCHANT PENDING",
+            lastSeenPending: true
+        )
+
+        let snapshot = evaluate([posted], metadata: [ignoredPending])
+
+        let item = snapshot.items.first { $0.id == "posted-new" }
+        #expect(item != nil)
+        #expect(item?.reasonCodes.contains(.pendingChanged) == true)
+    }
+
+    @Test("Posted charge with its own fresh metadata still detects the pending change")
+    func postedTransactionWithSeededMetadataStillReconciles() {
+        // Mirrors production: the posted charge is seeded with its own fresh
+        // metadata (pending = false) while the pending-phase record survives under
+        // the old id. The change must still be detected via the prior record.
+        let posted = tx(
+            id: "posted-new",
+            amount: 58,
+            name: "MERCHANT FINAL",
+            category: .shopping,
+            merchantName: "Merchant",
+            pendingTransactionId: "pending-old"
+        )
+        let seededPosted = TransactionReviewMetadata(
+            id: "posted-new",
+            lastSeenAmount: 58,
+            lastSeenName: "MERCHANT FINAL",
+            lastSeenPending: false
+        )
+        let pendingMetadata = TransactionReviewMetadata(
+            id: "pending-old",
+            lastSeenAmount: 50,
+            lastSeenName: "MERCHANT PENDING",
+            lastSeenPending: true
+        )
+
+        let snapshot = evaluate([posted], metadata: [seededPosted, pendingMetadata])
+
+        #expect(snapshot.items.first?.reasonCodes.contains(.pendingChanged) == true)
+    }
+
     @Test("Reviewed and ignored transactions stay out of inbox")
     func reviewedAndIgnoredAreSuppressed() {
         let reviewed = tx(id: "reviewed", category: nil, merchantName: "Needs Category")
@@ -247,7 +381,9 @@ struct TransactionReviewInboxTests {
         date: String = "2026-06-01",
         name: String = "MERCHANT",
         category: SpendingCategory?,
-        merchantName: String?
+        merchantName: String?,
+        pending: Bool = false,
+        pendingTransactionId: String? = nil
     ) -> TransactionDTO {
         TransactionDTO(
             id: id,
@@ -256,7 +392,9 @@ struct TransactionReviewInboxTests {
             date: date,
             name: name,
             merchantName: merchantName,
-            category: category
+            category: category,
+            pending: pending,
+            pendingTransactionId: pendingTransactionId
         )
     }
 

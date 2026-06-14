@@ -291,6 +291,7 @@ final class AppState {
     private let serverClient = ServerClient()
     private let localDataCache = LocalDataCacheService()
     private let appLockService = AppLockService()
+    private let reviewStorageWriter = ReviewStorageWriter()
     private var localAIInsightsService = LocalAIInsightsService()
     private let notificationService: any NotificationServiceProtocol
     private var refreshTask: Task<Void, Never>?
@@ -2953,16 +2954,22 @@ final class AppState {
         let cacheDirectory = activeStorageDirectoryURL
         let cacheContext = transactionCacheContext
         let cache = localDataCache
-        Task {
+        // Hand the full snapshot to the serial writer instead of spawning an
+        // independent Task. Independent tasks could complete out of order, letting
+        // a stale write overwrite a newer one; the writer applies snapshots in
+        // enqueue order so the last logical state always wins on disk.
+        reviewStorageWriter.enqueue { [weak self] in
             do {
                 try await cache.saveTransactionReviewMetadata(metadata, to: cacheDirectory, context: cacheContext)
                 try await cache.saveTransactionRules(rules, to: cacheDirectory, context: cacheContext)
             } catch {
-                await MainActor.run {
-                    self.error = "Review inbox storage failed to save: \(error.localizedDescription)"
-                }
+                await self?.reportReviewStorageFailure(error.localizedDescription)
             }
         }
+    }
+
+    private func reportReviewStorageFailure(_ description: String) {
+        error = "Review inbox storage failed to save: \(description)"
     }
 
 }
