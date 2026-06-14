@@ -32,6 +32,28 @@ actor LocalDataCacheService {
         try LocalDataStore.saveTransactions(transactions, to: directory, context: context)
     }
 
+    func loadTransactionReviewMetadata(from directory: URL) throws -> [TransactionReviewMetadata] {
+        try LocalDataStore.loadTransactionReviewMetadata(from: directory)
+    }
+
+    func saveTransactionReviewMetadata(
+        _ metadata: [TransactionReviewMetadata],
+        to directory: URL
+    ) throws {
+        try LocalDataStore.saveTransactionReviewMetadata(metadata, to: directory)
+    }
+
+    func loadTransactionRules(from directory: URL) throws -> [TransactionRule] {
+        try LocalDataStore.loadTransactionRules(from: directory)
+    }
+
+    func saveTransactionRules(
+        _ rules: [TransactionRule],
+        to directory: URL
+    ) throws {
+        try LocalDataStore.saveTransactionRules(rules, to: directory)
+    }
+
     func resetLocalData(at directory: URL) throws -> LocalDataResetResult {
         try LocalDataStore.resetLocalData(at: directory)
     }

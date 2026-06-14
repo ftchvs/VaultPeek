@@ -77,6 +77,8 @@ public enum LocalDataStore {
     public static let serverConfigFilename = "server.conf"
     public static let accountCacheFilename = "accounts.json"
     public static let transactionCacheFilename = "transactions.json"
+    public static let transactionReviewMetadataFilename = "transaction-review-metadata.json"
+    public static let transactionRulesFilename = "transaction-rules.json"
     public static let pendingLinkSessionsFilename = "pending-link-sessions.json"
     public static let legacyMigrationResetMarkerFilename = ".legacy-migration-reset"
     /// Preserve the existing Keychain service while moving local files so
@@ -221,6 +223,8 @@ public enum LocalDataStore {
 
         if isAccountCacheFilename(filename) ||
             isTransactionCacheFilename(filename) ||
+            filename == transactionReviewMetadataFilename ||
+            filename == transactionRulesFilename ||
             isPendingLinkSessionsFilename(filename) {
             return true
         }
@@ -268,6 +272,8 @@ public enum LocalDataStore {
         filename == legacyMigrationResetMarkerFilename ||
             resetPreservedFilenames.contains(filename) ||
             filename == ServerAutoLaunchPlan.logFilename ||
+            filename == transactionReviewMetadataFilename ||
+            filename == transactionRulesFilename ||
             isAccountCacheFilename(filename) ||
             isTransactionCacheFilename(filename) ||
             isPendingLinkSessionsFilename(filename) ||
@@ -384,6 +390,18 @@ public enum LocalDataStore {
         in directory: URL = storageDirectoryURL()
     ) -> URL {
         directory.appendingPathComponent(authTokenFilename)
+    }
+
+    public static func transactionReviewMetadataURL(
+        in directory: URL = storageDirectoryURL()
+    ) -> URL {
+        directory.appendingPathComponent(transactionReviewMetadataFilename)
+    }
+
+    public static func transactionRulesURL(
+        in directory: URL = storageDirectoryURL()
+    ) -> URL {
+        directory.appendingPathComponent(transactionRulesFilename)
     }
 
     public static func prepareStorageDirectory(
@@ -637,6 +655,28 @@ public enum LocalDataStore {
         return cache.accounts
     }
 
+    public static func loadTransactionReviewMetadata(
+        from directory: URL = storageDirectoryURL(),
+        fileManager: FileManager = .default
+    ) throws -> [TransactionReviewMetadata] {
+        let url = transactionReviewMetadataURL(in: directory)
+        guard fileManager.fileExists(atPath: url.path) else { return [] }
+
+        let data = try Data(contentsOf: url)
+        return try JSONDecoder().decode([TransactionReviewMetadata].self, from: data)
+    }
+
+    public static func loadTransactionRules(
+        from directory: URL = storageDirectoryURL(),
+        fileManager: FileManager = .default
+    ) throws -> [TransactionRule] {
+        let url = transactionRulesURL(in: directory)
+        guard fileManager.fileExists(atPath: url.path) else { return [] }
+
+        let data = try Data(contentsOf: url)
+        return try JSONDecoder().decode([TransactionRule].self, from: data)
+    }
+
     public static func saveTransactions(
         _ transactions: [TransactionDTO],
         to directory: URL = storageDirectoryURL(),
@@ -663,6 +703,32 @@ public enum LocalDataStore {
         let url = accountCacheURL(in: directory, context: context)
         let cache = AccountCache(context: context, accounts: accounts)
         let data = try JSONEncoder().encode(cache)
+        try writePrivateCacheFile(data, to: url, fileManager: fileManager)
+        try setPrivateCacheFilePermissions(url, fileManager: fileManager)
+    }
+
+    public static func saveTransactionReviewMetadata(
+        _ metadata: [TransactionReviewMetadata],
+        to directory: URL = storageDirectoryURL(),
+        fileManager: FileManager = .default
+    ) throws {
+        try ensurePrivateDirectory(directory, fileManager: fileManager)
+
+        let url = transactionReviewMetadataURL(in: directory)
+        let data = try JSONEncoder().encode(metadata.sorted { $0.id < $1.id })
+        try writePrivateCacheFile(data, to: url, fileManager: fileManager)
+        try setPrivateCacheFilePermissions(url, fileManager: fileManager)
+    }
+
+    public static func saveTransactionRules(
+        _ rules: [TransactionRule],
+        to directory: URL = storageDirectoryURL(),
+        fileManager: FileManager = .default
+    ) throws {
+        try ensurePrivateDirectory(directory, fileManager: fileManager)
+
+        let url = transactionRulesURL(in: directory)
+        let data = try JSONEncoder().encode(rules.sorted { $0.createdAt < $1.createdAt })
         try writePrivateCacheFile(data, to: url, fileManager: fileManager)
         try setPrivateCacheFilePermissions(url, fileManager: fileManager)
     }
