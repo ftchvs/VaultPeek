@@ -14,6 +14,17 @@
     <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
     <string>com.ftchvs.PlaidBar</string>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>VaultPeek Dashboard</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>vaultpeek</string>
+            </array>
+        </dict>
+    </array>
     <key>CFBundleVersion</key>
     <string>10</string>
     <key>CFBundleShortVersionString</key>

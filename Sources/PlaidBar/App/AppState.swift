@@ -1,6 +1,7 @@
 import SwiftUI
 import PlaidBarCore
 import Combine
+import WidgetKit
 @preconcurrency import UserNotifications
 
 @Observable
@@ -1013,6 +1014,7 @@ final class AppState {
     func refreshDashboard() async {
         if refreshDemoDataIfNeeded() { return }
 
+        if await consumePendingGlanceCommand() { return }
         await checkServerConnection()
         // Setup state (credentials missing) cannot refresh anything from
         // Plaid; the status surfaces guide the user instead of surfacing a
@@ -1152,6 +1154,7 @@ final class AppState {
 
         balanceHistory = []
         UserDefaults.standard.removeObject(forKey: Keys.balanceHistory)
+        clearGlanceSnapshot()
         UserDefaults.standard.removeObject(forKey: Keys.lastTransactionCacheContext)
         notificationService.resetDeduplicationState()
 
@@ -1222,6 +1225,7 @@ final class AppState {
             if accounts.isEmpty { loadDemoData() }
             return
         }
+        _ = await consumePendingGlanceCommand()
         // Returning users see cached last-known data immediately: the cache
         // loads before the connectivity check (which can take seconds while
         // a bundled server boots) instead of after it.
@@ -1678,6 +1682,49 @@ final class AppState {
         if let data = try? JSONEncoder().encode(balanceHistory) {
             UserDefaults.standard.set(data, forKey: Keys.balanceHistory)
         }
+        writeGlanceSnapshot()
+    }
+
+    private func writeGlanceSnapshot(updatedAt: Date = Date()) {
+        guard !accounts.isEmpty else { return }
+        let snapshot = GlanceSnapshot.make(
+            netWorth: netBalance,
+            balanceHistory: balanceHistory,
+            updatedAt: updatedAt,
+            isDemo: isDemoMode
+        )
+        if (try? GlanceSnapshotStore.save(snapshot)) != nil {
+            WidgetCenter.shared.reloadTimelines(ofKind: "PlaidBarGlanceWidget")
+        }
+    }
+
+    private func clearGlanceSnapshot() {
+        try? GlanceSnapshotStore.clear()
+    }
+
+    @discardableResult
+    private func consumePendingGlanceCommand() async -> Bool {
+        guard let request = try? GlanceSnapshotStore.consumeCommand() else { return false }
+        switch request.command {
+        case .refreshBalances:
+            await refreshDashboardFromGlanceCommand(requestedAt: request.requestedAt)
+        }
+        return true
+    }
+
+    private func refreshDashboardFromGlanceCommand(requestedAt: Date) async {
+        guard !isDemoMode else {
+            loadDemoData()
+            return
+        }
+
+        await checkServerConnection()
+        guard serverConnected, serverCredentialsConfigured != false else {
+            writeGlanceSnapshot(updatedAt: requestedAt)
+            return
+        }
+        await refreshAccounts()
+        await syncTransactions()
     }
 
     // MARK: - Demo Data
@@ -1714,6 +1761,7 @@ final class AppState {
             ItemStatus(id: "demo_amex_item", institutionName: "American Express", status: .connected, lastSync: Date()),
         ]
         lastSyncDate = isDemoStatusRecoveryScenario ? recoveredSync : Date()
+        writeGlanceSnapshot(updatedAt: lastSyncDate ?? Date())
     }
 
 }
