@@ -132,6 +132,21 @@ Do not improvise billing behavior. If a user has a billing question this
 framework does not cover, escalate it as a product question tagged AND-393 —
 do not invent an answer.
 
+### Managed bank-link support boundary (planned)
+
+> **TBD — pending managed-link implementation (AND-394).** Support-assisted
+> managed linking is not available today. Before it can be sold, the consent,
+> audit, and escalation rules in
+> [`docs/strategy/managed-link-consent-operations.md`](strategy/managed-link-consent-operations.md)
+> must be implemented and approved.
+
+The planned boundary is strict: a helper may guide a user through VaultPeek
+screens and record a safe audit event, but must never ask for, receive, type, or
+store bank credentials, MFA codes, Plaid tokens, raw account identifiers,
+balances, transactions, local databases, logs, or screenshots containing real
+financial data. If a case cannot be diagnosed without one of those inputs, it
+escalates; it does not become a reason to collect the input.
+
 ---
 
 ## 3. Local data path, reset/recovery, and migration troubleshooting
@@ -330,6 +345,11 @@ tell users it is notarized.)*
   change these; direct to Plaid ([`SUPPORT.md`](../SUPPORT.md)).
 - **Billing questions beyond Section 2:** escalate as a product question tagged
   AND-393; do not improvise.
+- **Managed-link consent, audit, account removal, or helper-boundary questions:**
+  managed support is not live. Escalate as a product question tagged AND-394 and
+  use
+  [`docs/strategy/managed-link-consent-operations.md`](strategy/managed-link-consent-operations.md)
+  as the design boundary.
 - **Anything requiring a secret to diagnose:** stop. If you cannot diagnose it
   from sanitized in-app text, `/api/status` words, and demo/sandbox repros, it
   escalates to engineering with a safe repro — it does not escalate by
