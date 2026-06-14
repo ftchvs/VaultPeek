@@ -1310,6 +1310,9 @@ final class AppState {
             } catch {
                 self.error = "Local cache failed to save: \(error.localizedDescription)"
             }
+            // Refresh (or clear, when the last institution is gone) the widget
+            // snapshot so it never shows balances for just-removed accounts.
+            writeGlanceSnapshot()
         } catch {
             self.error = error.localizedDescription
         }
@@ -2012,7 +2015,15 @@ final class AppState {
     }
 
     private func writeGlanceSnapshot(updatedAt: Date = Date()) {
-        guard !accounts.isEmpty else { return }
+        // With no accounts (e.g. the user just disconnected their last
+        // institution), clear the app-group snapshot instead of leaving the
+        // previous balances on disk — otherwise the widget would keep showing
+        // removed-account net worth until a later reset or successful write.
+        guard !accounts.isEmpty else {
+            clearGlanceSnapshot()
+            WidgetCenter.shared.reloadTimelines(ofKind: "PlaidBarGlanceWidget")
+            return
+        }
         let snapshot = GlanceSnapshot.make(
             netWorth: netBalance,
             balanceHistory: balanceHistory,
@@ -2046,7 +2057,10 @@ final class AppState {
 
         await checkServerConnection()
         guard serverConnected, serverCredentialsConfigured != false else {
-            writeGlanceSnapshot(updatedAt: requestedAt)
+            // The refresh could not reach the server, so no balances were
+            // fetched. Do not stamp the snapshot as freshly updated at the click
+            // time — that would present stale data as current. Leave the
+            // last-success snapshot (and its real timestamp) in place.
             return
         }
         await refreshAccounts()
