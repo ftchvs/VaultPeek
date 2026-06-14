@@ -2039,8 +2039,15 @@ final class AppState {
         try? GlanceSnapshotStore.clear()
     }
 
+    /// Consume a pending widget/control command (e.g. the "Refresh balances"
+    /// control) and run it. Reached from `loadInitialData()` and
+    /// `refreshDashboard()`, and — because the control opens the app via its
+    /// `openAppWhenRun` intent while the dashboard popover may be closed, so
+    /// neither of those runs — also from the app's activation hook
+    /// (`PlaidBarApp`). A no-op when no command file is pending, so calling it
+    /// on every app activation is cheap (AND-385).
     @discardableResult
-    private func consumePendingGlanceCommand() async -> Bool {
+    func consumePendingGlanceCommand() async -> Bool {
         guard let request = try? GlanceSnapshotStore.consumeCommand() else { return false }
         switch request.command {
         case .refreshBalances:
@@ -2056,6 +2063,14 @@ final class AppState {
         }
 
         await checkServerConnection()
+        if !serverConnected {
+            // The control can cold-launch the app with the popover closed, so
+            // `loadInitialData()` — which normally starts the bundled server —
+            // never ran. Start it (and wait for it to come up) here so the
+            // requested refresh actually reaches Plaid instead of being dropped
+            // by the not-connected guard below.
+            await startBundledServerIfAvailable()
+        }
         guard serverConnected, serverCredentialsConfigured != false else {
             // The refresh could not reach the server, so no balances were
             // fetched. Do not stamp the snapshot as freshly updated at the click

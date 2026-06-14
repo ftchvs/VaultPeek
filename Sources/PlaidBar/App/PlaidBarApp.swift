@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import MenuBarExtraAccess
 import PlaidBarCore
 import Sparkle
@@ -145,6 +146,18 @@ struct PlaidBarApp: App {
                         return
                     }
                     appState.isPopoverPresented = true
+                }
+                // The "Refresh balances" widget control opens the app via an
+                // `openAppWhenRun` App Intent that writes a pending command but,
+                // unlike the widget's deep link above, opens neither the popover
+                // nor the detached window — so neither `loadInitialData()` nor a
+                // dashboard refresh runs to consume it, and the control feels
+                // inert. Consume it here on the always-mounted label whenever the
+                // app becomes active (the intent activates it, whether it was
+                // already running or freshly launched). A no-op when no command
+                // is pending, so it is cheap on every activation (AND-385).
+                .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                    Task { await appState.consumePendingGlanceCommand() }
                 }
         }
         .menuBarExtraAccess(isPresented: $appState.isPopoverPresented) { statusItem in
