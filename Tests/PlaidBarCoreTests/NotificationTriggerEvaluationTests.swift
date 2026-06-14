@@ -156,6 +156,56 @@ struct NotificationTriggerEvaluationTests {
         #expect(resolved.resolvedDedupKeys.contains(stickyChangedStreamDetectedKey) == false)
     }
 
+    @Test("A second price increase on the same stream notifies after the first was delivered")
+    func secondPriceIncreaseNotifiesAfterFirstDelivered() {
+        let firstChange = NotificationTriggerSelection.evaluate(
+            recurringTransactions: [
+                recurring(id: "Stream", latestAmount: 15, trailingAverageAmount: 10, nextExpectedDate: "2026-07-16"),
+            ],
+            now: fixedNow,
+            config: testConfig
+        )
+        let delivered = firstChange.activeDedupKeys
+        #expect(firstChange.decisions.contains { $0.kind == .recurringChargeChanged })
+
+        // Same stream id, higher latest amount: the second increase must not be
+        // suppressed by the first change alert's delivered key.
+        let secondChange = NotificationTriggerSelection.evaluate(
+            recurringTransactions: [
+                recurring(id: "Stream", latestAmount: 20, trailingAverageAmount: 10, nextExpectedDate: "2026-07-16"),
+            ],
+            now: fixedNow,
+            config: testConfig,
+            deliveredDedupKeys: delivered
+        )
+        #expect(secondChange.decisions.contains { $0.kind == .recurringChargeChanged })
+    }
+
+    @Test("A new due-soon cycle notifies even after the prior cycle was delivered")
+    func dueSoonNotifiesPerCycle() {
+        let june = NotificationTriggerSelection.evaluate(
+            recurringTransactions: [
+                recurring(id: "Stream", latestAmount: 20, trailingAverageAmount: 20, nextExpectedDate: "2026-06-16"),
+            ],
+            now: fixedNow,
+            config: testConfig
+        )
+        let delivered = june.activeDedupKeys
+        #expect(june.decisions.contains { $0.kind == .recurringChargeDueSoon })
+
+        // Next cycle's due date, evaluated when it enters the window, must not be
+        // suppressed by the previous cycle's delivered due-soon key.
+        let july = NotificationTriggerSelection.evaluate(
+            recurringTransactions: [
+                recurring(id: "Stream", latestAmount: 20, trailingAverageAmount: 20, nextExpectedDate: "2026-07-16"),
+            ],
+            now: Formatters.parseTransactionDate("2026-07-14")!,
+            config: testConfig,
+            deliveredDedupKeys: delivered
+        )
+        #expect(july.decisions.contains { $0.kind == .recurringChargeDueSoon })
+    }
+
     @Test("Dedup keys are stable and do not expose source identifiers")
     func dedupKeysAreStableAndOpaque() {
         let key = NotificationTriggerSelection.dedupKey(

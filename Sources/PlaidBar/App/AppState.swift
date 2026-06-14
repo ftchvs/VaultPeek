@@ -1340,6 +1340,12 @@ final class AppState {
                 await syncTransactions()
             }
             startBackgroundRefresh()
+        } else {
+            // Offline cold start: the background refresh loop (the usual caller
+            // of evaluateNotifications) never starts, so evaluate once here so a
+            // stale-sync / broken-connection alert can still fire for cached or
+            // never-synced state booted without a reachable local server.
+            await evaluateNotifications()
         }
     }
 

@@ -362,9 +362,16 @@ public enum NotificationTriggerSelection {
     private static func recurringChargeChangedDecision(
         for recurring: RecurringTransaction
     ) -> NotificationTriggerDecision {
-        NotificationTriggerDecision(
+        // Key on the changed amount, not just the stream id, so a second price
+        // increase on the same stream (e.g. $10→$15 then $15→$20) produces a
+        // new dedupe key and is not suppressed by the first change alert.
+        let latestAmountCents = Int((recurring.latestAmount * 100).rounded())
+        return NotificationTriggerDecision(
             kind: .recurringChargeChanged,
-            dedupKey: dedupKey(kind: .recurringChargeChanged, sourceID: recurring.id),
+            dedupKey: dedupKey(
+                kind: .recurringChargeChanged,
+                sourceID: "\(recurring.id)#\(latestAmountCents)"
+            ),
             title: "Recurring charge changed",
             body: "A recurring charge appears higher than its recent pattern.",
             severity: .warning
@@ -374,9 +381,16 @@ public enum NotificationTriggerSelection {
     private static func recurringChargeDueSoonDecision(
         for recurring: RecurringTransaction
     ) -> NotificationTriggerDecision {
-        NotificationTriggerDecision(
+        // Key on the specific due date so each due occurrence can notify
+        // independently. Using only the stream id would let one cycle's
+        // delivered key suppress the next cycle's due-soon alert when the app
+        // was asleep across the gap and sync advanced nextExpectedDate.
+        return NotificationTriggerDecision(
             kind: .recurringChargeDueSoon,
-            dedupKey: dedupKey(kind: .recurringChargeDueSoon, sourceID: recurring.id),
+            dedupKey: dedupKey(
+                kind: .recurringChargeDueSoon,
+                sourceID: "\(recurring.id)#\(recurring.nextExpectedDate)"
+            ),
             title: "Recurring charge due soon",
             body: "An inferred recurring charge is expected soon.",
             severity: .informational
