@@ -206,3 +206,74 @@ public struct FirstRunSnapshot: Equatable, Sendable {
         return parts.joined(separator: " ")
     }
 }
+
+public struct FirstRunSnapshotPresentation: Equatable, Sendable {
+    public let snapshot: FirstRunSnapshot
+    public let title: String
+    public let subtitle: String
+    public let primaryAccessibilityLabel: String
+    public let dismissalAccessibilityHint: String
+
+    public init(
+        snapshot: FirstRunSnapshot,
+        title: String,
+        subtitle: String,
+        primaryAccessibilityLabel: String,
+        dismissalAccessibilityHint: String
+    ) {
+        self.snapshot = snapshot
+        self.title = title
+        self.subtitle = subtitle
+        self.primaryAccessibilityLabel = primaryAccessibilityLabel
+        self.dismissalAccessibilityHint = dismissalAccessibilityHint
+    }
+
+    public static func evaluate(
+        accounts: [AccountDTO],
+        transactions: [TransactionDTO],
+        completionState: FirstRunCompletionState,
+        isDismissed: Bool,
+        isInitialLoad: Bool,
+        isDemoMode: Bool,
+        largeTransactionThreshold: Double = 500,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> FirstRunSnapshotPresentation? {
+        guard !isDismissed,
+              !isInitialLoad,
+              !isDemoMode,
+              completionState.isReady,
+              completionState.step == .ready,
+              !accounts.isEmpty
+        else {
+            return nil
+        }
+
+        let snapshot = FirstRunSnapshot.evaluate(
+            accounts: accounts,
+            transactions: transactions,
+            completionState: completionState,
+            largeTransactionThreshold: largeTransactionThreshold,
+            now: now,
+            calendar: calendar
+        )
+        return FirstRunSnapshotPresentation(
+            snapshot: snapshot,
+            title: "First Snapshot",
+            subtitle: subtitle(for: snapshot),
+            primaryAccessibilityLabel: snapshot.accessibilitySummary,
+            dismissalAccessibilityHint: "Dismisses this first-run snapshot and keeps it hidden on future launches."
+        )
+    }
+
+    private static func subtitle(for snapshot: FirstRunSnapshot) -> String {
+        switch snapshot.transactionState {
+        case .ready:
+            return "Your local account and transaction sync is ready."
+        case .syncing:
+            return "Accounts are ready; transaction history is still syncing."
+        case .empty:
+            return "Accounts are ready; no transaction rows are available yet."
+        }
+    }
+}

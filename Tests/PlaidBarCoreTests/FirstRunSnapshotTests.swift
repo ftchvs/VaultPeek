@@ -111,6 +111,125 @@ struct FirstRunSnapshotTests {
         #expect(MenuBarSummary.monthToDateSpend(from: transactions, now: localNow, calendar: calendar) == 40)
     }
 
+    @Test("Presentation appears after first successful account and transaction sync")
+    func presentationAppearsAfterFirstSuccessfulSync() {
+        let presentation = FirstRunSnapshotPresentation.evaluate(
+            accounts: [
+                AccountDTO(id: "checking", itemId: "item-a", name: "Checking", type: .depository, balances: BalanceDTO(available: 2_000)),
+                AccountDTO(id: "card", itemId: "item-a", name: "Card", type: .credit, balances: BalanceDTO(current: -250, limit: 1_000)),
+            ],
+            transactions: [
+                expense("large", amount: 650, date: "2026-06-12", name: "Appliance"),
+            ],
+            completionState: readyCompletion(transactionCount: 1),
+            isDismissed: false,
+            isInitialLoad: false,
+            isDemoMode: false,
+            now: now
+        )
+
+        #expect(presentation?.snapshot.cashAvailable == 2_000)
+        #expect(presentation?.snapshot.creditUtilization == 25)
+        #expect(presentation?.snapshot.largeTransactions.map(\.displayName) == ["Appliance"])
+        #expect(presentation?.subtitle == "Your local account and transaction sync is ready.")
+    }
+
+    @Test("Presentation stays hidden while loading, dismissed, demo, or not ready")
+    func presentationGatingHidesWhenIneligible() {
+        let accounts = [
+            AccountDTO(id: "checking", itemId: "item-a", name: "Checking", type: .depository, balances: BalanceDTO(available: 2_000)),
+        ]
+        let transactions = [
+            expense("coffee", amount: 8, date: "2026-06-12", name: "Coffee"),
+        ]
+        let completion = readyCompletion(transactionCount: 1)
+
+        #expect(FirstRunSnapshotPresentation.evaluate(
+            accounts: accounts,
+            transactions: transactions,
+            completionState: completion,
+            isDismissed: true,
+            isInitialLoad: false,
+            isDemoMode: false,
+            now: now
+        ) == nil)
+        #expect(FirstRunSnapshotPresentation.evaluate(
+            accounts: accounts,
+            transactions: transactions,
+            completionState: completion,
+            isDismissed: false,
+            isInitialLoad: true,
+            isDemoMode: false,
+            now: now
+        ) == nil)
+        #expect(FirstRunSnapshotPresentation.evaluate(
+            accounts: accounts,
+            transactions: transactions,
+            completionState: completion,
+            isDismissed: false,
+            isInitialLoad: false,
+            isDemoMode: true,
+            now: now
+        ) == nil)
+        #expect(FirstRunSnapshotPresentation.evaluate(
+            accounts: accounts,
+            transactions: [],
+            completionState: FirstRunCompletionState(
+                step: .syncTransactions,
+                title: "Accounts loaded",
+                detail: "Run the first transaction sync check to finish setup.",
+                isReady: false,
+                canRetry: true
+            ),
+            isDismissed: false,
+            isInitialLoad: false,
+            isDemoMode: false,
+            now: now
+        ) == nil)
+    }
+
+    @Test("Presentation handles no transaction rows after completed sync")
+    func presentationHandlesNoTransactionRows() {
+        let presentation = FirstRunSnapshotPresentation.evaluate(
+            accounts: [
+                AccountDTO(id: "checking", itemId: "item-a", name: "Checking", type: .depository, balances: BalanceDTO(available: 2_000)),
+            ],
+            transactions: [],
+            completionState: readyCompletion(transactionCount: 0),
+            isDismissed: false,
+            isInitialLoad: false,
+            isDemoMode: false,
+            now: now
+        )
+
+        #expect(presentation?.snapshot.transactionState == .empty)
+        #expect(presentation?.snapshot.monthToDateSpend == nil)
+        #expect(presentation?.snapshot.largeTransactions.isEmpty == true)
+        #expect(presentation?.subtitle == "Accounts are ready; no transaction rows are available yet.")
+        #expect(presentation?.primaryAccessibilityLabel.contains("No transactions synced yet") == true)
+    }
+
+    @Test("Presentation keeps partial credit data explicit")
+    func presentationHandlesPartialCreditData() {
+        let presentation = FirstRunSnapshotPresentation.evaluate(
+            accounts: [
+                AccountDTO(id: "checking", itemId: "item-a", name: "Checking", type: .depository, balances: BalanceDTO(available: 1_200)),
+            ],
+            transactions: [
+                expense("grocery", amount: 120, date: "2026-06-10", name: "Groceries"),
+            ],
+            completionState: readyCompletion(transactionCount: 1),
+            isDismissed: false,
+            isInitialLoad: false,
+            isDemoMode: false,
+            now: now
+        )
+
+        #expect(presentation?.snapshot.hasCreditAccounts == false)
+        #expect(presentation?.snapshot.creditUtilization == nil)
+        #expect(presentation?.primaryAccessibilityLabel.contains("No credit utilization available") == true)
+    }
+
     private func readyCompletion(transactionCount: Int) -> FirstRunCompletionState {
         FirstRunCompletionState(
             step: .ready,
