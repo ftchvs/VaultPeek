@@ -22,12 +22,15 @@ struct TransactionRoutes: Sendable {
         let items: [ItemModel]
 
         if let itemIdParam {
+            // An explicit item filter for an id we don't have is a caller error
+            // (typo or stale id), not an empty no-op sync. Surface it as a 404 so
+            // the app/CLI can distinguish a bad filter from a clean sync with no
+            // updates. The unfiltered path below stays a successful empty sync.
             let itemId = String(itemIdParam)
-            if let item = try await tokenStore.getItem(id: itemId) {
-                items = [item]
-            } else {
-                items = []
+            guard let item = try await tokenStore.getItem(id: itemId) else {
+                throw HTTPError(.notFound, message: "Plaid item not found")
             }
+            items = [item]
         } else {
             items = try await tokenStore.getAllItems()
         }
