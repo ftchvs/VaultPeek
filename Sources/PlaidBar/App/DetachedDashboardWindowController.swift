@@ -29,6 +29,22 @@ final class DetachedDashboardWindowController: NSObject, NSWindowDelegate {
 
     private var panel: NSPanel?
     private var hostingController: NSHostingController<AnyView>?
+    /// Monotonic counter bumped on every `show`/`raise`. A pending hide
+    /// fade-out captures the value at the time it started and only orders the
+    /// panel out if it is still the latest — so quickly re-showing the window
+    /// while a hide animation is in flight cannot order out the freshly-shown
+    /// panel (which would leave `isDashboardDetached == true` with no window).
+    private var presentationGeneration = 0
+    /// Observes `dashboard.selectedAccountId` so the panel's real resize floor
+    /// (`contentMinSize`) tracks whether the trailing inspector is showing.
+    ///
+    /// No `deinit` removal: this controller is owned by the app scene's
+    /// process-lifetime `DetachedDashboardCoordinator`, so it is never
+    /// deallocated during a run, and a nonisolated `deinit` cannot legally touch
+    /// this main-actor, non-`Sendable` token under Swift 6 anyway. The closure
+    /// captures `self` weakly, so even an orphaned observation is a harmless
+    /// no-op.
+    private var selectionObserver: NSObjectProtocol?
 
     init(
         appState: AppState,
@@ -55,6 +71,13 @@ final class DetachedDashboardWindowController: NSObject, NSWindowDelegate {
     func show(reduceMotion: Bool) {
         let panel = panel ?? makePanel()
         self.panel = panel
+
+        // A show supersedes any in-flight hide: bump the generation so a pending
+        // fade-out completion does not order this panel back out.
+        presentationGeneration += 1
+        // Make sure the resize floor reflects the current inspector state before
+        // the window appears (a launch-restore could already have a selection).
+        updateContentMinSize()
 
         if panel.isVisible {
             raise()
@@ -86,12 +109,21 @@ final class DetachedDashboardWindowController: NSObject, NSWindowDelegate {
         if reduceMotion {
             panel.orderOut(nil)
         } else {
+            // Capture the generation this hide belongs to; if a `show`/`raise`
+            // bumps it before the fade completes, the panel was re-presented and
+            // must NOT be ordered out by this stale completion.
+            let hideGeneration = presentationGeneration
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = 0.14
                 context.allowsImplicitAnimation = true
                 panel.animator().alphaValue = 0
-            } completionHandler: { [weak panel] in
+            } completionHandler: { [weak self, weak panel] in
                 MainActor.assumeIsolated {
+                    guard let self, self.presentationGeneration == hideGeneration else {
+                        // Superseded by a newer show/raise — leave it visible.
+                        panel?.alphaValue = 1
+                        return
+                    }
                     panel?.orderOut(nil)
                     panel?.alphaValue = 1
                 }
@@ -104,9 +136,40 @@ final class DetachedDashboardWindowController: NSObject, NSWindowDelegate {
     /// opening the popover.
     func raise() {
         guard let panel else { return }
+        // A raise also supersedes an in-flight hide.
+        presentationGeneration += 1
         panel.alphaValue = 1
         panel.orderFrontRegardless()
         panel.makeKey()
+    }
+
+    // MARK: - Resize floor
+
+    /// Keeps the panel's real resize floor (`contentMinSize`) in step with the
+    /// trailing inspector: the SwiftUI `frame(minWidth:)` only constrains layout
+    /// *inside* the hosting view, so without this a window already resized down
+    /// to the two-column minimum could stay narrower than the three-column
+    /// (982pt) layout and clip the inspector when an account is selected.
+    private func updateContentMinSize() {
+        guard let panel else { return }
+        let inspectorOpen = !Self.selectedAccountId().isEmpty
+        let minWidth = DetachedDashboardPreferences.minContentWidth(isInspectorOpen: inspectorOpen)
+        panel.contentMinSize = CGSize(
+            width: minWidth,
+            height: DetachedDashboardPreferences.minContentHeight
+        )
+        // If the user had already shrunk the window below the new floor, grow it
+        // so the inspector is not clipped the instant it opens.
+        if panel.frame.width < minWidth {
+            var frame = panel.frame
+            // Grow rightward from the existing origin (keeps the left edge put).
+            frame.size.width = minWidth
+            panel.setFrame(frame, display: true, animate: false)
+        }
+    }
+
+    private static func selectedAccountId() -> String {
+        UserDefaults.standard.string(forKey: "dashboard.selectedAccountId") ?? ""
     }
 
     // MARK: - Panel construction
@@ -146,6 +209,23 @@ final class DetachedDashboardWindowController: NSObject, NSWindowDelegate {
         ]
         panel.contentMinSize = DetachedDashboardPreferences.minContentSize
         panel.delegate = self
+
+        // Keep the resize floor in step with account selection while the window
+        // is open: selecting an account opens the inspector, which needs the
+        // wider three-column floor. `dashboard.selectedAccountId` is the same
+        // `@AppStorage` key `MainPopover` drives, so observing UserDefaults
+        // reflects both in-window selection and persisted restores.
+        if selectionObserver == nil {
+            selectionObserver = NotificationCenter.default.addObserver(
+                forName: UserDefaults.didChangeNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.updateContentMinSize()
+                }
+            }
+        }
 
         if let forcedColorScheme {
             panel.appearance = NSAppearance(named: forcedColorScheme == .dark ? .darkAqua : .aqua)

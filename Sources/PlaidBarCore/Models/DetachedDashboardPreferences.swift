@@ -57,7 +57,17 @@ public enum DetachedDashboardPreferences {
     /// two-column minimum (fixed rail + the flexible center's floor), so the
     /// Wealth Summary rail and a usable dashboard always stay legible.
     public static var minContentWidth: CGFloat {
-        PopoverGeometry.railWidth + PopoverGeometry.dividerWidth + PopoverGeometry.minDashboardWidth
+        minContentWidth(isInspectorOpen: false)
+    }
+
+    /// Minimum content width the floating panel may be resized to for the current
+    /// inspector state. When the trailing account inspector is open the floor
+    /// must include its fixed-width column, or a window resized to the two-column
+    /// minimum would clip the inspector the moment an account is selected
+    /// (AND-384/405). Shares `PopoverGeometry` so the panel's `contentMinSize`
+    /// and `MainPopover`'s SwiftUI `frame(minWidth:)` agree on the floor.
+    public static func minContentWidth(isInspectorOpen: Bool) -> CGFloat {
+        PopoverGeometry.detachedMinContentWidth(isInspectorOpen: isInspectorOpen)
     }
 
     /// Minimum content height the floating panel may be resized to: enough for

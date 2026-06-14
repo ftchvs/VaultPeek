@@ -135,7 +135,7 @@ struct LinkErrorSurfacingTests {
         #expect(unknown.contains("try connecting again"))
     }
 
-    @Test("Unrecognized code degrades to a generic message carrying only the code")
+    @Test("Unrecognized but enum-shaped code degrades to a generic message carrying only the code")
     func unrecognizedCodeIsGeneric() {
         let message = LinkRoutes.linkErrorMessage(
             errorType: "SOME_NEW_TYPE",
@@ -145,6 +145,30 @@ struct LinkErrorSurfacingTests {
         // The bounded code identifier is preserved; no provider prose is invented.
         #expect(message.contains("SOME_UNMAPPED_CODE"))
         #expect(message.contains("try connecting again"))
+    }
+
+    @Test("A non-identifier-shaped code is collapsed to PLAID_ERROR, never echoed")
+    func nonIdentifierCodeIsSanitized() {
+        // A misbehaving sandbox/proxy could return prose, request data, or an
+        // over-long string in error_code/error_type. None of it may reach the app.
+        let prose = LinkRoutes.linkErrorMessage(
+            errorType: "the redirect uri http://evil/?token=abc was rejected",
+            errorCode: "OAuth redirect URI must be configured; request_id=req_123"
+        )
+        #expect(prose.contains("PLAID_ERROR"))
+        #expect(!prose.contains("request_id"))
+        #expect(!prose.contains("http://"))
+
+        // Lowercase / mixed-case is not Plaid's enum shape → collapsed too.
+        let mixed = LinkRoutes.linkErrorMessage(errorType: "SomethingWeird", errorCode: nil)
+        #expect(mixed.contains("PLAID_ERROR"))
+
+        // An absurdly long all-caps token is rejected by the length bound.
+        let tooLong = LinkRoutes.linkErrorMessage(
+            errorType: nil,
+            errorCode: String(repeating: "A", count: 200)
+        )
+        #expect(tooLong.contains("PLAID_ERROR"))
     }
 
     @Test("Raw Plaid error_message is never echoed into the surfaced text")

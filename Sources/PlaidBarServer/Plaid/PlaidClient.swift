@@ -65,9 +65,17 @@ actor PlaidClient: PlaidClientProtocol {
             products: ["transactions"],
             countryCodes: ["US"],
             language: "en",
-            // No top-level redirect_uri: this is a Hosted Link flow, which
-            // routes the OAuth return through hosted_link.completion_redirect_uri.
-            // Sending redirect_uri too makes Plaid reject with INVALID_FIELD.
+            // Top-level redirect_uri is intentionally omitted for the default
+            // Hosted Link flow, which routes the post-completion return through
+            // hosted_link.completion_redirect_uri. Sending an *unregistered*
+            // redirect_uri is what produced the INVALID_FIELD 500 this fix
+            // resolves. NOTE: OAuth / app-to-app institutions still use the
+            // top-level redirect_uri for the bank-auth handoff, so full OAuth
+            // support requires a *dashboard-registered* redirect_uri threaded
+            // through here from config — tracked as a follow-up (the value and
+            // its config surface are a Plaid-dashboard decision, see PR #351
+            // review). Omitting it keeps non-OAuth Hosted Link sessions working
+            // and avoids re-introducing the 500 for unconfigured setups.
             hostedLink: .init(
                 completionRedirectUri: completionRedirectUri,
                 urlLifetimeSeconds: 30 * 60
