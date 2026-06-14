@@ -194,10 +194,10 @@ struct ConsumerFoundationTests {
             #expect(try await store.currentSubscription() == nil)
 
             let trial = try await store.save(
-                SaveBillingSubscriptionRequest(status: .trialing, plan: .personal)
+                SaveBillingSubscriptionRequest(status: .trialing, plan: .free)
             )
             #expect(trial.status == .trialing)
-            #expect(trial.plan == .personal)
+            #expect(trial.plan == .free)
 
             let upgraded = try await store.save(
                 SaveBillingSubscriptionRequest(status: .active, plan: .plus)
@@ -211,28 +211,28 @@ struct ConsumerFoundationTests {
             #expect(failedPayment.status == .pastDue)
 
             let downgraded = try await store.save(
-                SaveBillingSubscriptionRequest(status: .active, plan: .personal)
+                SaveBillingSubscriptionRequest(status: .active, plan: .free)
             )
-            #expect(downgraded.plan == .personal)
+            #expect(downgraded.plan == .free)
 
             let canceled = try await store.save(
-                SaveBillingSubscriptionRequest(status: .canceled, plan: .personal)
+                SaveBillingSubscriptionRequest(status: .canceled, plan: .free)
             )
             #expect(canceled.status == .canceled)
 
             let expired = try await store.save(
-                SaveBillingSubscriptionRequest(status: .expired, plan: .personal)
+                SaveBillingSubscriptionRequest(status: .expired, plan: .free)
             )
             #expect(expired.status == .expired)
 
             let reactivated = try await store.save(
-                SaveBillingSubscriptionRequest(status: .active, plan: .personal)
+                SaveBillingSubscriptionRequest(status: .active, plan: .free)
             )
             #expect(reactivated.status == .active)
 
             let loaded = try await store.currentSubscription()
             #expect(loaded?.status == .active)
-            #expect(loaded?.plan == .personal)
+            #expect(loaded?.plan == .free)
         }
     }
 
@@ -258,6 +258,37 @@ struct ConsumerFoundationTests {
         }
     }
 
+    @Test("Billing route accepts ISO-8601 trial and period-end dates from the app client")
+    func billingRouteDecodesISO8601Dates() async throws {
+        try await withFluent { fluent in
+            let store = BillingSubscriptionStore(fluent: fluent)
+            let routes = BillingRoutes(billingStore: store)
+            let context = TestRequestContext(source: TestRequestContextSource())
+            let trialEnd = Date(timeIntervalSince1970: 1_800_000_000)
+            let periodEnd = Date(timeIntervalSince1970: 1_802_000_000)
+
+            let response = try await routes.saveSubscription(
+                request: Self.makeJSONRequest(
+                    method: .put,
+                    path: "/api/billing/subscription",
+                    body: SaveBillingSubscriptionRequest(
+                        status: .trialing,
+                        plan: .plus,
+                        currentPeriodEnd: periodEnd,
+                        trialEndsAt: trialEnd
+                    )
+                ),
+                context: context
+            )
+
+            #expect(response.status == .ok)
+            let loaded = try await store.currentSubscription()
+            #expect(loaded?.status == .trialing)
+            #expect(loaded?.trialEndsAt == trialEnd)
+            #expect(loaded?.currentPeriodEnd == periodEnd)
+        }
+    }
+
     // MARK: - Helpers
 
     private static func makeRequest(path: String) -> Request {
@@ -272,7 +303,11 @@ struct ConsumerFoundationTests {
         path: String,
         body: some Encodable
     ) throws -> Request {
-        let data = try JSONEncoder().encode(body)
+        // Mirror the real app client (ServerClient encodes with .iso8601), so
+        // route tests exercise the same date wire format the server must accept.
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(body)
         var headers = HTTPFields()
         headers[.contentType] = "application/json"
         return Request(

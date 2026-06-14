@@ -55,7 +55,7 @@ struct BillingLifecycleTests {
     func featureGateStatusMatrix(status: BillingSubscriptionStatus, isLocked: Bool) {
         let subscription = BillingSubscription(
             status: status,
-            plan: .personal,
+            plan: .free,
             updatedAt: Date(timeIntervalSince1970: 1_800_000_000)
         )
 
@@ -101,8 +101,8 @@ struct BillingLifecycleTests {
 
     @Test("Upgrade and downgrade transitions preserve local financial data")
     func planTransitionsPreserveLocalData() {
-        let upgrade = BillingPlanTransition(from: .personal, to: .plus)
-        let downgrade = BillingPlanTransition(from: .plus, to: .personal)
+        let upgrade = BillingPlanTransition(from: .free, to: .plus)
+        let downgrade = BillingPlanTransition(from: .plus, to: .free)
 
         #expect(upgrade.isDowngrade == false)
         #expect(upgrade.preservesLocalFinancialData)

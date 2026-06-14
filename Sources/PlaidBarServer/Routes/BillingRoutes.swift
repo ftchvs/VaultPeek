@@ -24,10 +24,26 @@ struct BillingRoutes: Sendable {
 
     @Sendable
     func saveSubscription(request: Request, context: some RequestContext) async throws -> Response {
-        let body = try await request.decode(as: SaveBillingSubscriptionRequest.self, context: context)
+        // The app client encodes billing dates with `.iso8601`
+        // (ServerClient.encoder), but Hummingbird's default request decoder
+        // expects numeric `Date`s, so a non-nil trial/period-end date would fail
+        // to decode. Decode the raw body with a matching ISO-8601 decoder.
+        let buffer = try await request.body.collect(upTo: Self.maxBodyBytes)
+        let data = Data(buffer: buffer)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let body: SaveBillingSubscriptionRequest
+        do {
+            body = try decoder.decode(SaveBillingSubscriptionRequest.self, from: data)
+        } catch {
+            throw HTTPError(.badRequest, message: "Invalid billing subscription payload")
+        }
         let subscription = try await billingStore.save(body)
         return try Self.jsonResponse(subscription)
     }
+
+    /// Upper bound for the small JSON billing payload.
+    private static let maxBodyBytes = 64 * 1024
 
     private static func jsonResponse(_ value: (some Encodable)?) throws -> Response {
         let encoder = JSONEncoder()

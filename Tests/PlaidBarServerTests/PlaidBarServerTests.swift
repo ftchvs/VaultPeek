@@ -206,7 +206,7 @@ struct PlaidBarServerTests {
             syncedItemCount: 2,
             billingSubscription: BillingSubscription(
                 status: .active,
-                plan: .personal,
+                plan: .free,
                 updatedAt: Date(timeIntervalSince1970: 1_800_000_002)
             )
         )
@@ -274,7 +274,7 @@ struct PlaidBarServerTests {
             syncedItemCount: 1,
             billingSubscription: BillingSubscription(
                 status: .trialing,
-                plan: .personal,
+                plan: .free,
                 updatedAt: Date(timeIntervalSince1970: 1_800_000_002)
             )
         )
