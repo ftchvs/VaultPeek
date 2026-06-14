@@ -40,6 +40,7 @@ public struct AttentionQueueRow: Equatable, Identifiable, Sendable {
     public let severity: AttentionQueueSeverity
     public let title: String
     public let detail: String
+    public let menuBarAttentionText: String?
     public let action: DashboardStatusReadinessAction?
     public let actionTitle: String?
     public let actionIconName: String?
@@ -47,9 +48,19 @@ public struct AttentionQueueRow: Equatable, Identifiable, Sendable {
     public let accessibilityLabel: String
     public let accessibilityHint: String?
 
+    /// Id prefix for financial cockpit rows (low cash, high utilization,
+    /// unusual spend). Used to keep these out of sync-health treatment.
+    public static let financialAttentionIDPrefix = "financial-"
+
     /// Severity tier derived from the row's existing severity state.
     public var errorSeverity: ErrorSeverity? {
         severity.errorSeverity
+    }
+
+    /// `true` when this row is a financial cockpit warning rather than a
+    /// sync/connection state. Sync-health UI should ignore these rows.
+    public var isFinancialAttention: Bool {
+        id.hasPrefix(Self.financialAttentionIDPrefix)
     }
 
     public init(
@@ -57,6 +68,7 @@ public struct AttentionQueueRow: Equatable, Identifiable, Sendable {
         severity: AttentionQueueSeverity,
         title: String,
         detail: String,
+        menuBarAttentionText: String? = nil,
         action: DashboardStatusReadinessAction? = nil,
         actionTitle: String? = nil,
         actionIconName: String? = nil,
@@ -68,6 +80,7 @@ public struct AttentionQueueRow: Equatable, Identifiable, Sendable {
         self.severity = severity
         self.title = title
         self.detail = detail
+        self.menuBarAttentionText = menuBarAttentionText
         self.action = action
         self.actionTitle = actionTitle ?? action?.defaultTitle
         self.actionIconName = actionIconName ?? action?.defaultIconName
@@ -104,7 +117,14 @@ public struct AttentionQueue: Equatable, Sendable {
         itemStatuses: [ItemStatus],
         isSyncStale: Bool,
         lastSyncRelative: String?,
-        errorMessage: String?
+        errorMessage: String?,
+        accounts: [AccountDTO] = [],
+        transactions: [TransactionDTO] = [],
+        lowCashThreshold: Double = 100,
+        largeTransactionThreshold: Double = 500,
+        creditUtilizationThreshold: Double = PlaidBarConstants.creditUtilizationWarningThreshold,
+        now: Date = Date(),
+        calendar: Calendar = .current
     ) -> AttentionQueue {
         if isDemoMode {
             return AttentionQueue(rows: [healthyDemoRow])
@@ -203,8 +223,26 @@ public struct AttentionQueue: Equatable, Sendable {
                 severity: .warning,
                 title: "Sync is stale",
                 detail: "Last sync: \(lastSyncRelative ?? "never"). Refresh for current data.",
+                menuBarAttentionText: lastSyncRelative == nil ? "Never" : "Stale",
                 action: .refresh,
                 actionTitle: "Refresh Now"
+            ))
+        }
+
+        // Only evaluate aggregate finance warnings once every linked item has
+        // completed its first sync. With a partially-synced set, balances and
+        // transactions from the unsynced item are absent, so aggregate
+        // cash/utilization/spend could fire on incomplete data.
+        if credentialsReady, serverConnected, linkedItemCount > 0, accountCount > 0,
+           syncedItemCount >= linkedItemCount {
+            rows.append(contentsOf: financialAttentionRows(
+                accounts: accounts,
+                transactions: transactions,
+                lowCashThreshold: lowCashThreshold,
+                largeTransactionThreshold: largeTransactionThreshold,
+                creditUtilizationThreshold: creditUtilizationThreshold,
+                now: now,
+                calendar: calendar
             ))
         }
 
@@ -268,6 +306,92 @@ public struct AttentionQueue: Equatable, Sendable {
                 )
             }
         }
+    }
+
+    /// Sliding window for "recent spending changed". A large transaction older
+    /// than this no longer keeps the Spend attention state active.
+    static let unusualSpendingWindowDays = 7
+
+    private static func financialAttentionRows(
+        accounts: [AccountDTO],
+        transactions: [TransactionDTO],
+        lowCashThreshold: Double,
+        largeTransactionThreshold: Double,
+        creditUtilizationThreshold: Double,
+        now: Date,
+        calendar: Calendar
+    ) -> [AttentionQueueRow] {
+        var rows: [AttentionQueueRow] = []
+
+        // Low cash is per-account: a single checking account below the threshold
+        // is a low-cash signal even if a savings account holds enough, matching
+        // NotificationTriggerSelection.lowBalanceAccounts.
+        let lowCashAccounts = NotificationTriggerSelection.lowBalanceAccounts(
+            from: accounts,
+            threshold: lowCashThreshold
+        )
+        if !lowCashAccounts.isEmpty {
+            rows.append(AttentionQueueRow(
+                id: "financial-low-cash",
+                severity: .warning,
+                title: "Cash buffer is low",
+                detail: "A cash account is below your local attention threshold. Review cash accounts before upcoming payments.",
+                menuBarAttentionText: "Cash",
+                action: .refresh,
+                actionTitle: "Refresh Data",
+                accessibilityHint: "Refreshes local balances before you review cash accounts."
+            ))
+        }
+
+        if let utilization = MenuBarSummary.creditUtilization(from: accounts),
+           utilization >= creditUtilizationThreshold {
+            rows.append(AttentionQueueRow(
+                id: "financial-high-utilization",
+                severity: .warning,
+                title: "Credit utilization is high",
+                detail: "Credit usage is at or above your local attention threshold. Review credit accounts for the next payment step.",
+                menuBarAttentionText: "Credit",
+                action: .refresh,
+                actionTitle: "Refresh Data",
+                accessibilityHint: "Refreshes local credit balances before you review utilization."
+            ))
+        }
+
+        // Only count large transactions inside the recent window so a one-time
+        // months-old purchase does not keep the Spend badge active indefinitely.
+        let windowStart = calendar.date(
+            byAdding: .day,
+            value: -unusualSpendingWindowDays,
+            to: calendar.startOfDay(for: now)
+        )
+        let unusualSpendCount = NotificationTriggerSelection.largeTransactions(
+            from: transactions,
+            threshold: largeTransactionThreshold
+        )
+        .filter { transaction in
+            guard let windowStart,
+                  let date = Formatters.parseTransactionDate(transaction.date)
+            else { return false }
+            let day = calendar.startOfDay(for: date)
+            return day >= windowStart && day <= calendar.startOfDay(for: now)
+        }
+        .count
+        if unusualSpendCount > 0 {
+            rows.append(AttentionQueueRow(
+                id: "financial-unusual-spending",
+                severity: .warning,
+                title: "Recent spending changed",
+                detail: unusualSpendCount == 1
+                    ? "One local transaction crossed your spending attention threshold. Review recent activity."
+                    : "\(unusualSpendCount) local transactions crossed your spending attention threshold. Review recent activity.",
+                menuBarAttentionText: "Spend",
+                action: .refresh,
+                actionTitle: "Refresh Data",
+                accessibilityHint: "Refreshes local transactions before you review recent activity."
+            ))
+        }
+
+        return rows
     }
 
     private static func itemTitle(_ item: ItemStatus, fallback: String) -> String {
@@ -386,6 +510,9 @@ public struct AttentionQueue: Equatable, Sendable {
             case "first-sync-needed": return 9
             case "first-sync-incomplete": return 10
             case "sync-stale": return 11
+            case "financial-low-cash": return 12
+            case "financial-high-utilization": return 13
+            case "financial-unusual-spending": return 14
             default:
                 // Unknown rows fall back to severity-tier ordering: blocking
                 // failures first, advisories next, healthy rows last.
