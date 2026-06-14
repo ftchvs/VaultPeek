@@ -12,16 +12,15 @@
 #      most likely to fail. Catches it locally, and acts as CI when GitHub
 #      Actions is unavailable.
 #
-# Designed to be invoked from .git/hooks/pre-push, where a non-zero exit blocks
-# the push. A real Plaid secret in a tracked file is unrecoverable once pushed.
-# It is a heuristic backstop, NOT a replacement for a dedicated scanner such as
-# gitleaks.
+# Invoked from .git/hooks/pre-push (Git feeds the to-be-pushed refs on stdin)
+# and runnable by hand. A real Plaid secret in a tracked file is unrecoverable
+# once pushed. It is a heuristic backstop, NOT a replacement for a dedicated
+# scanner such as gitleaks.
 #
-# NOTE on a Claude Code PreToolUse wrapper: Claude Code treats exit 1 as a
-# NON-blocking hook error and only exit 2 blocks the action. So a companion
-# `.claude/hooks/git-push-gate.sh` wrapper (out of scope here) MUST translate
-# this script's exit 1 → exit 2 to actually block the `git push` tool call. This
-# script keeps the conventional exit 1 for the native git pre-push hook.
+# Blocking failures exit 2: git aborts the push on any non-zero hook exit, and
+# Claude Code hooks treat exit 2 (not 1) as "block the action" — so a single
+# exit 2 blocks both the native pre-push hook and a Claude PreToolUse wrapper,
+# with no exit-code translation needed.
 #
 # Escape hatches (use sparingly):
 #   PLAIDBAR_SKIP_GATE=1        git push ...   # skip the whole gate
@@ -31,6 +30,11 @@
 #   ./Scripts/pre-push-gate.sh --selftest
 
 set -euo pipefail
+
+# Exit code for blocking failures. git aborts the push on ANY non-zero hook
+# exit, and Claude Code hooks treat exit 2 (not 1) as "block the action" — so 2
+# blocks both the native pre-push hook and a Claude PreToolUse wrapper.
+readonly BLOCK_EXIT=2
 
 # --- secret scanner ---------------------------------------------------------
 # Reads a unified diff (-U0) on stdin, prints "file:line" for every added line
@@ -240,7 +244,12 @@ if [[ ${#ranges[@]} -eq 0 && "$stdin_had_refs" -eq 0 ]]; then
 fi
 
 if [[ ${#ranges[@]} -eq 0 ]]; then
-    echo "pre-push-gate: no commits in this push to scan (deletion only)." >&2
+    # Delete-only push (or nothing being added): no commits travel, so there is
+    # nothing to scan AND nothing to build. Exit clean here rather than fall
+    # through to the strict build, which would block `git push origin :branch`
+    # on the current checkout's unrelated build state.
+    echo "pre-push-gate: no commits in this push to scan or build (deletion only). Push allowed." >&2
+    exit 0
 fi
 
 echo "pre-push-gate: scanning ${#ranges[@]} push range(s) per-commit for secrets..." >&2
@@ -283,7 +292,7 @@ else
         echo "Scrub the value (use sandbox/synthetic data), amend the commit, and retry."
         echo "If this is a false positive: PLAIDBAR_SKIP_GATE=1 git push ..."
     } >&2
-    exit 1
+    exit "$BLOCK_EXIT"
 fi
 
 if [[ "${PLAIDBAR_GATE_SKIP_BUILD:-0}" == "1" ]]; then
@@ -325,5 +334,5 @@ else
         echo "  PLAIDBAR_GATE_SKIP_BUILD=1 git push ...   (build only)"
         echo "  PLAIDBAR_SKIP_GATE=1 git push ...         (whole gate)"
     } >&2
-    exit 1
+    exit "$BLOCK_EXIT"
 fi
