@@ -10,6 +10,7 @@ struct PlaidLinkTokenRequest: Encodable, Sendable {
     let products: [String]?
     let countryCodes: [String]
     let language: String
+    let webhook: String?
     /// Top-level OAuth `redirect_uri`. Deliberately omitted (left `nil`) for the
     /// Hosted Link flow: Hosted Link uses `hosted_link.completion_redirect_uri`
     /// instead, and sending both makes Plaid reject the request with
@@ -27,6 +28,7 @@ struct PlaidLinkTokenRequest: Encodable, Sendable {
         products: [String]? = nil,
         countryCodes: [String],
         language: String,
+        webhook: String? = nil,
         redirectUri: String? = nil,
         hostedLink: PlaidHostedLink? = nil,
         accessToken: String? = nil
@@ -38,6 +40,7 @@ struct PlaidLinkTokenRequest: Encodable, Sendable {
         self.products = products
         self.countryCodes = countryCodes
         self.language = language
+        self.webhook = webhook
         self.redirectUri = redirectUri
         self.hostedLink = hostedLink
         self.accessToken = accessToken
@@ -50,7 +53,18 @@ struct PlaidLinkTokenRequest: Encodable, Sendable {
 
 struct PlaidHostedLink: Encodable, Sendable {
     let completionRedirectUri: String
+    let isMobileApp: Bool?
     let urlLifetimeSeconds: Int
+
+    init(
+        completionRedirectUri: String,
+        isMobileApp: Bool? = nil,
+        urlLifetimeSeconds: Int
+    ) {
+        self.completionRedirectUri = completionRedirectUri
+        self.isMobileApp = isMobileApp
+        self.urlLifetimeSeconds = urlLifetimeSeconds
+    }
 }
 
 struct PlaidLinkTokenGetRequest: Encodable, Sendable {
