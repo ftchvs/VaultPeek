@@ -364,6 +364,7 @@ final class AppState {
             needsLoginItemCount: needsLoginItemCount,
             isSyncStale: isSyncStale,
             hasEverSynced: lastSyncDate != nil,
+            financialAttentionText: attentionQueue.rows.first?.menuBarAttentionText,
             iconStyle: menuBarIconStyle
         )
     }
@@ -600,7 +601,12 @@ final class AppState {
             itemStatuses: itemStatuses,
             isSyncStale: isSyncStale,
             lastSyncRelative: lastSyncRelative,
-            errorMessage: error
+            errorMessage: error,
+            accounts: accounts,
+            transactions: transactions,
+            lowCashThreshold: lowBalanceThreshold,
+            largeTransactionThreshold: largeTransactionThreshold,
+            creditUtilizationThreshold: creditUtilizationThreshold
         )
     }
 

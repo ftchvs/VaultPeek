@@ -141,6 +141,8 @@ public struct WealthSummaryPresentation: Sendable, Equatable {
         statusSyncText: String,
         errorMessage: String?,
         creditUtilizationThreshold: Double = PlaidBarConstants.creditUtilizationWarningThreshold,
+        lowCashThreshold: Double = 100,
+        largeTransactionThreshold: Double = 500,
         balanceHistory: [BalanceSnapshot] = [],
         windowDays: Int = 30,
         now: Date = Date(),
@@ -156,7 +158,12 @@ public struct WealthSummaryPresentation: Sendable, Equatable {
             itemStatuses: itemStatuses,
             isSyncStale: isSyncStale,
             lastSyncRelative: lastSyncRelative,
-            errorMessage: errorMessage
+            errorMessage: errorMessage,
+            accounts: accounts,
+            transactions: transactions,
+            lowCashThreshold: lowCashThreshold,
+            largeTransactionThreshold: largeTransactionThreshold,
+            creditUtilizationThreshold: creditUtilizationThreshold
         )
         let attention = attentionSummary(from: attentionQueue)
 

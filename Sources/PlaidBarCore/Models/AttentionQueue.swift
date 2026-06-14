@@ -40,6 +40,7 @@ public struct AttentionQueueRow: Equatable, Identifiable, Sendable {
     public let severity: AttentionQueueSeverity
     public let title: String
     public let detail: String
+    public let menuBarAttentionText: String?
     public let action: DashboardStatusReadinessAction?
     public let actionTitle: String?
     public let actionIconName: String?
@@ -57,6 +58,7 @@ public struct AttentionQueueRow: Equatable, Identifiable, Sendable {
         severity: AttentionQueueSeverity,
         title: String,
         detail: String,
+        menuBarAttentionText: String? = nil,
         action: DashboardStatusReadinessAction? = nil,
         actionTitle: String? = nil,
         actionIconName: String? = nil,
@@ -68,6 +70,7 @@ public struct AttentionQueueRow: Equatable, Identifiable, Sendable {
         self.severity = severity
         self.title = title
         self.detail = detail
+        self.menuBarAttentionText = menuBarAttentionText
         self.action = action
         self.actionTitle = actionTitle ?? action?.defaultTitle
         self.actionIconName = actionIconName ?? action?.defaultIconName
@@ -104,7 +107,12 @@ public struct AttentionQueue: Equatable, Sendable {
         itemStatuses: [ItemStatus],
         isSyncStale: Bool,
         lastSyncRelative: String?,
-        errorMessage: String?
+        errorMessage: String?,
+        accounts: [AccountDTO] = [],
+        transactions: [TransactionDTO] = [],
+        lowCashThreshold: Double = 100,
+        largeTransactionThreshold: Double = 500,
+        creditUtilizationThreshold: Double = PlaidBarConstants.creditUtilizationWarningThreshold
     ) -> AttentionQueue {
         if isDemoMode {
             return AttentionQueue(rows: [healthyDemoRow])
@@ -203,8 +211,19 @@ public struct AttentionQueue: Equatable, Sendable {
                 severity: .warning,
                 title: "Sync is stale",
                 detail: "Last sync: \(lastSyncRelative ?? "never"). Refresh for current data.",
+                menuBarAttentionText: lastSyncRelative == nil ? "Never" : "Stale",
                 action: .refresh,
                 actionTitle: "Refresh Now"
+            ))
+        }
+
+        if credentialsReady, serverConnected, linkedItemCount > 0, accountCount > 0, syncedItemCount > 0 {
+            rows.append(contentsOf: financialAttentionRows(
+                accounts: accounts,
+                transactions: transactions,
+                lowCashThreshold: lowCashThreshold,
+                largeTransactionThreshold: largeTransactionThreshold,
+                creditUtilizationThreshold: creditUtilizationThreshold
             ))
         }
 
@@ -268,6 +287,66 @@ public struct AttentionQueue: Equatable, Sendable {
                 )
             }
         }
+    }
+
+    private static func financialAttentionRows(
+        accounts: [AccountDTO],
+        transactions: [TransactionDTO],
+        lowCashThreshold: Double,
+        largeTransactionThreshold: Double,
+        creditUtilizationThreshold: Double
+    ) -> [AttentionQueueRow] {
+        var rows: [AttentionQueueRow] = []
+
+        let cashAccounts = accounts.filter { $0.type == .depository }
+        let totalCash = MenuBarSummary.totalCash(from: accounts)
+        if !cashAccounts.isEmpty, totalCash < lowCashThreshold {
+            rows.append(AttentionQueueRow(
+                id: "financial-low-cash",
+                severity: .warning,
+                title: "Cash buffer is low",
+                detail: "Depository cash is below your local attention threshold. Review cash accounts before upcoming payments.",
+                menuBarAttentionText: "Cash",
+                action: .refresh,
+                actionTitle: "Refresh Data",
+                accessibilityHint: "Refreshes local balances before you review cash accounts."
+            ))
+        }
+
+        if let utilization = MenuBarSummary.creditUtilization(from: accounts),
+           utilization >= creditUtilizationThreshold {
+            rows.append(AttentionQueueRow(
+                id: "financial-high-utilization",
+                severity: .warning,
+                title: "Credit utilization is high",
+                detail: "Credit usage is at or above your local attention threshold. Review credit accounts for the next payment step.",
+                menuBarAttentionText: "Credit",
+                action: .refresh,
+                actionTitle: "Refresh Data",
+                accessibilityHint: "Refreshes local credit balances before you review utilization."
+            ))
+        }
+
+        let unusualSpendCount = NotificationTriggerSelection.largeTransactions(
+            from: transactions,
+            threshold: largeTransactionThreshold
+        ).count
+        if unusualSpendCount > 0 {
+            rows.append(AttentionQueueRow(
+                id: "financial-unusual-spending",
+                severity: .warning,
+                title: "Recent spending changed",
+                detail: unusualSpendCount == 1
+                    ? "One local transaction crossed your spending attention threshold. Review recent activity."
+                    : "\(unusualSpendCount) local transactions crossed your spending attention threshold. Review recent activity.",
+                menuBarAttentionText: "Spend",
+                action: .refresh,
+                actionTitle: "Refresh Data",
+                accessibilityHint: "Refreshes local transactions before you review recent activity."
+            ))
+        }
+
+        return rows
     }
 
     private static func itemTitle(_ item: ItemStatus, fallback: String) -> String {
@@ -386,6 +465,9 @@ public struct AttentionQueue: Equatable, Sendable {
             case "first-sync-needed": return 9
             case "first-sync-incomplete": return 10
             case "sync-stale": return 11
+            case "financial-low-cash": return 12
+            case "financial-high-utilization": return 13
+            case "financial-unusual-spending": return 14
             default:
                 // Unknown rows fall back to severity-tier ordering: blocking
                 // failures first, advisories next, healthy rows last.
