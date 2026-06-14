@@ -91,14 +91,14 @@ private actor HostedLinkStubPlaidClient: PlaidClientProtocol {
     }
 
     func createLinkToken(
-        userId _: String,
+        clientUserId _: String,
         completionRedirectUri _: String
     ) async throws -> PlaidLinkTokenResponse {
         throw PlaidError.invalidResponse
     }
 
     func createUpdateLinkToken(
-        userId _: String,
+        clientUserId _: String,
         accessToken _: String,
         completionRedirectUri _: String
     ) async throws -> PlaidLinkTokenResponse {
@@ -535,7 +535,7 @@ struct PlaidBarServerTests {
         // deterministically with the setup-state error.
         await #expect(throws: PlaidError.credentialsNotConfigured) {
             _ = try await client.createLinkToken(
-                userId: "test-user",
+                clientUserId: "test-user",
                 completionRedirectUri: "http://localhost:8484/oauth/callback"
             )
         }

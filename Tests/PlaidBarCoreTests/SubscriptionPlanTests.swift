@@ -4,10 +4,15 @@ import Testing
 
 @Suite("SubscriptionPlan Tests")
 struct SubscriptionPlanTests {
-    @Test("Plan institution limits match the proposed entitlement design")
+    @Test("Plan institution limits match the accepted entitlement matrix")
     func planInstitutionLimits() {
-        #expect(SubscriptionPlan.personal.institutionLimit == 3)
+        #expect(SubscriptionPlan.free.institutionLimit == 0)
         #expect(SubscriptionPlan.plus.institutionLimit == 8)
+    }
+
+    @Test("Default plan is Free")
+    func defaultPlan() {
+        #expect(SubscriptionPlan.defaultPlan == .free)
     }
 
     @Test("Every plan exposes a display name and preview tagline")
@@ -111,8 +116,8 @@ struct BillingLifecycleTests {
 struct InstitutionUsageTests {
     @Test("Summary text reports count of limit when a limit exists")
     func summaryTextWithLimit() {
-        let usage = InstitutionUsage(connectedCount: 2, plan: .personal)
-        #expect(usage.summaryText == "2 of 3 institutions connected")
+        let usage = InstitutionUsage(connectedCount: 2, plan: .plus)
+        #expect(usage.summaryText == "2 of 8 institutions connected")
     }
 
     @Test("Summary text drops the cap when there is no limit")
@@ -123,23 +128,24 @@ struct InstitutionUsageTests {
 
     @Test("Under the limit is not at limit")
     func underLimit() {
-        let usage = InstitutionUsage(connectedCount: 2, plan: .personal)
+        let usage = InstitutionUsage(connectedCount: 2, plan: .plus)
         #expect(usage.isAtLimit == false)
-        #expect(usage.summaryText == "2 of 3 institutions connected")
+        #expect(usage.summaryText == "2 of 8 institutions connected")
     }
 
-    @Test("At the limit is at limit")
-    func atLimit() {
-        let usage = InstitutionUsage(connectedCount: 3, plan: .personal)
+    @Test("Free managed limit is zero")
+    func freeLimitIsZero() {
+        let usage = InstitutionUsage(connectedCount: 0, plan: .free)
+        #expect(usage.limit == 0)
         #expect(usage.isAtLimit == true)
-        #expect(usage.summaryText == "3 of 3 institutions connected")
+        #expect(usage.summaryText == "0 of 0 institutions connected")
     }
 
     @Test("Over the limit is at limit")
     func overLimit() {
-        let usage = InstitutionUsage(connectedCount: 4, plan: .personal)
+        let usage = InstitutionUsage(connectedCount: 9, plan: .plus)
         #expect(usage.isAtLimit == true)
-        #expect(usage.summaryText == "4 of 3 institutions connected")
+        #expect(usage.summaryText == "9 of 8 institutions connected")
     }
 
     @Test("A nil limit is never at limit, even with many connections")

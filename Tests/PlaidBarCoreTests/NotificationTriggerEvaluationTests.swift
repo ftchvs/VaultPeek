@@ -18,12 +18,17 @@ struct NotificationTriggerEvaluationTests {
                 credit(id: "acct-high-util", current: -4_500, limit: 5_000),
                 credit(id: "acct-at-util-threshold", current: -300, limit: 1_000),
             ],
+            recurringTransactions: [
+                recurring(id: "Changed Stream", latestAmount: 16, trailingAverageAmount: 10, nextExpectedDate: "2026-06-16"),
+                recurring(id: "Detected Stream", latestAmount: 20, trailingAverageAmount: 20, nextExpectedDate: "2026-07-16"),
+            ],
             itemStatuses: [
                 ItemStatus(id: "item-login", institutionName: "Example Bank", status: .loginRequired),
                 ItemStatus(id: "item-error", institutionName: "City Credit", status: .error),
                 ItemStatus(id: "item-ok", institutionName: "Healthy Bank", status: .connected),
             ],
             isSyncStale: true,
+            now: fixedNow,
             config: testConfig
         )
 
@@ -34,6 +39,10 @@ struct NotificationTriggerEvaluationTests {
             NotificationTriggerKind.syncStale,
             NotificationTriggerKind.highUtilization,
             NotificationTriggerKind.lowBalance,
+            NotificationTriggerKind.recurringChargeChanged,
+            NotificationTriggerKind.recurringChargeDueSoon,
+            NotificationTriggerKind.recurringChargeDetected,
+            NotificationTriggerKind.recurringChargeDetected,
             NotificationTriggerKind.largeTransaction,
             NotificationTriggerKind.largeTransaction,
         ])
@@ -44,6 +53,10 @@ struct NotificationTriggerEvaluationTests {
             NotificationTriggerSeverity.warning,
             NotificationTriggerSeverity.warning,
             NotificationTriggerSeverity.warning,
+            NotificationTriggerSeverity.warning,
+            NotificationTriggerSeverity.informational,
+            NotificationTriggerSeverity.informational,
+            NotificationTriggerSeverity.informational,
             NotificationTriggerSeverity.informational,
             NotificationTriggerSeverity.informational,
         ])
@@ -59,11 +72,16 @@ struct NotificationTriggerEvaluationTests {
                 depository(id: "acct-low", balance: 50),
                 credit(id: "acct-high-util", current: -4_500, limit: 5_000),
             ],
+            recurringTransactions: [
+                recurring(id: "Changed Stream", latestAmount: 16, trailingAverageAmount: 10, nextExpectedDate: "2026-06-16"),
+                recurring(id: "Detected Stream", latestAmount: 20, trailingAverageAmount: 20, nextExpectedDate: "2026-07-16"),
+            ],
             itemStatuses: [
                 ItemStatus(id: "item-login", status: .loginRequired),
                 ItemStatus(id: "item-error", status: .error),
             ],
             isSyncStale: true,
+            now: fixedNow,
             config: testConfig
         )
         let deliveredKeys = active.activeDedupKeys
@@ -74,11 +92,16 @@ struct NotificationTriggerEvaluationTests {
                 depository(id: "acct-low", balance: 50),
                 credit(id: "acct-high-util", current: -4_500, limit: 5_000),
             ],
+            recurringTransactions: [
+                recurring(id: "Changed Stream", latestAmount: 16, trailingAverageAmount: 10, nextExpectedDate: "2026-06-16"),
+                recurring(id: "Detected Stream", latestAmount: 20, trailingAverageAmount: 20, nextExpectedDate: "2026-07-16"),
+            ],
             itemStatuses: [
                 ItemStatus(id: "item-login", status: .loginRequired),
                 ItemStatus(id: "item-error", status: .error),
             ],
             isSyncStale: true,
+            now: fixedNow,
             config: testConfig,
             deliveredDedupKeys: deliveredKeys
         )
@@ -93,11 +116,15 @@ struct NotificationTriggerEvaluationTests {
                 depository(id: "acct-low", balance: 500),
                 credit(id: "acct-high-util", current: -200, limit: 5_000),
             ],
+            recurringTransactions: [
+                recurring(id: "Detected Stream", latestAmount: 20, trailingAverageAmount: 20, nextExpectedDate: "2026-07-16"),
+            ],
             itemStatuses: [
                 ItemStatus(id: "item-login", status: .connected),
                 ItemStatus(id: "item-error", status: .connected),
             ],
             isSyncStale: false,
+            now: fixedNow,
             config: testConfig,
             deliveredDedupKeys: deliveredKeys
         )
@@ -106,11 +133,77 @@ struct NotificationTriggerEvaluationTests {
             kind: .largeTransaction,
             sourceID: "tx-large"
         )
+        let stickyDetectedKey = NotificationTriggerSelection.dedupKey(
+            kind: .recurringChargeDetected,
+            sourceID: recurring(id: "Detected Stream").id
+        )
+        let stickyChangedStreamDetectedKey = NotificationTriggerSelection.dedupKey(
+            kind: .recurringChargeDetected,
+            sourceID: recurring(id: "Changed Stream").id
+        )
 
         #expect(resolved.decisions.isEmpty)
-        #expect(resolved.activeDedupKeys.isEmpty)
-        #expect(resolved.resolvedDedupKeys == deliveredKeys.subtracting([stickyLargeTransactionKey]))
+        #expect(resolved.activeDedupKeys == [stickyDetectedKey])
+        #expect(
+            resolved.resolvedDedupKeys == deliveredKeys.subtracting([
+                stickyLargeTransactionKey,
+                stickyDetectedKey,
+                stickyChangedStreamDetectedKey,
+            ])
+        )
         #expect(resolved.resolvedDedupKeys.contains(stickyLargeTransactionKey) == false)
+        #expect(resolved.resolvedDedupKeys.contains(stickyDetectedKey) == false)
+        #expect(resolved.resolvedDedupKeys.contains(stickyChangedStreamDetectedKey) == false)
+    }
+
+    @Test("A second price increase on the same stream notifies after the first was delivered")
+    func secondPriceIncreaseNotifiesAfterFirstDelivered() {
+        let firstChange = NotificationTriggerSelection.evaluate(
+            recurringTransactions: [
+                recurring(id: "Stream", latestAmount: 15, trailingAverageAmount: 10, nextExpectedDate: "2026-07-16"),
+            ],
+            now: fixedNow,
+            config: testConfig
+        )
+        let delivered = firstChange.activeDedupKeys
+        #expect(firstChange.decisions.contains { $0.kind == .recurringChargeChanged })
+
+        // Same stream id, higher latest amount: the second increase must not be
+        // suppressed by the first change alert's delivered key.
+        let secondChange = NotificationTriggerSelection.evaluate(
+            recurringTransactions: [
+                recurring(id: "Stream", latestAmount: 20, trailingAverageAmount: 10, nextExpectedDate: "2026-07-16"),
+            ],
+            now: fixedNow,
+            config: testConfig,
+            deliveredDedupKeys: delivered
+        )
+        #expect(secondChange.decisions.contains { $0.kind == .recurringChargeChanged })
+    }
+
+    @Test("A new due-soon cycle notifies even after the prior cycle was delivered")
+    func dueSoonNotifiesPerCycle() {
+        let june = NotificationTriggerSelection.evaluate(
+            recurringTransactions: [
+                recurring(id: "Stream", latestAmount: 20, trailingAverageAmount: 20, nextExpectedDate: "2026-06-16"),
+            ],
+            now: fixedNow,
+            config: testConfig
+        )
+        let delivered = june.activeDedupKeys
+        #expect(june.decisions.contains { $0.kind == .recurringChargeDueSoon })
+
+        // Next cycle's due date, evaluated when it enters the window, must not be
+        // suppressed by the previous cycle's delivered due-soon key.
+        let july = NotificationTriggerSelection.evaluate(
+            recurringTransactions: [
+                recurring(id: "Stream", latestAmount: 20, trailingAverageAmount: 20, nextExpectedDate: "2026-07-16"),
+            ],
+            now: Formatters.parseTransactionDate("2026-07-14")!,
+            config: testConfig,
+            deliveredDedupKeys: delivered
+        )
+        #expect(july.decisions.contains { $0.kind == .recurringChargeDueSoon })
     }
 
     @Test("Dedup keys are stable and do not expose source identifiers")
@@ -160,10 +253,19 @@ struct NotificationTriggerEvaluationTests {
                     institutionName: institutionName
                 ),
             ],
+            recurringTransactions: [
+                recurring(
+                    id: "Sensitive Subscription",
+                    latestAmount: 22.22,
+                    trailingAverageAmount: 10,
+                    nextExpectedDate: "2026-06-16"
+                ),
+            ],
             itemStatuses: [
                 ItemStatus(id: rawItemID, institutionName: institutionName, status: .error),
             ],
             isSyncStale: true,
+            now: fixedNow,
             config: testConfig
         )
 
@@ -179,13 +281,53 @@ struct NotificationTriggerEvaluationTests {
             merchantName,
             institutionName,
             "Raw Sensitive Merchant",
+            "Sensitive Subscription",
             "9876.54",
             "12.34",
+            "22.22",
         ] {
             #expect(renderedCopy.contains(privateText) == false)
         }
 
         #expect(evaluation.decisions.allSatisfy { !$0.body.contains("$") })
+    }
+
+    @Test("Disabled trigger families suppress their decisions")
+    func disabledTriggerFamiliesSuppressDecisions() {
+        let evaluation = NotificationTriggerSelection.evaluate(
+            transactions: [transaction(id: "tx-large", amount: 650)],
+            accounts: [
+                depository(id: "acct-low", balance: 50),
+                credit(id: "acct-high-util", current: -4_500, limit: 5_000),
+            ],
+            recurringTransactions: [
+                recurring(id: "Changed Stream", latestAmount: 16, trailingAverageAmount: 10, nextExpectedDate: "2026-06-16"),
+            ],
+            itemStatuses: [
+                ItemStatus(id: "item-login", status: .loginRequired),
+                ItemStatus(id: "item-error", status: .error),
+            ],
+            isSyncStale: true,
+            now: fixedNow,
+            config: NotificationTriggers(
+                largeTransaction: false,
+                lowBalance: false,
+                highUtilization: false,
+                recurringChargeDetected: false,
+                recurringChargeChanged: false,
+                recurringChargeDueSoon: false,
+                staleSync: false,
+                loginRequired: false,
+                itemError: false,
+                largeTransactionThreshold: 500,
+                lowBalanceThreshold: 100,
+                creditUtilizationThreshold: 30
+            )
+        )
+
+        #expect(evaluation.decisions.isEmpty)
+        #expect(evaluation.activeDedupKeys.isEmpty)
+        #expect(evaluation.resolvedDedupKeys.isEmpty)
     }
 
     private var testConfig: NotificationTriggers {
@@ -223,6 +365,30 @@ struct NotificationTriggerEvaluationTests {
             name: "Synthetic Credit",
             type: .credit,
             balances: BalanceDTO(current: current, limit: limit)
+        )
+    }
+
+    private var fixedNow: Date {
+        Formatters.parseTransactionDate("2026-06-14")!
+    }
+
+    private func recurring(
+        id merchantName: String,
+        latestAmount: Double = 20,
+        trailingAverageAmount: Double? = 20,
+        nextExpectedDate: String = "2026-07-16"
+    ) -> RecurringTransaction {
+        RecurringTransaction(
+            merchantName: merchantName,
+            frequency: .monthly,
+            averageAmount: trailingAverageAmount ?? latestAmount,
+            latestAmount: latestAmount,
+            trailingAverageAmount: trailingAverageAmount,
+            lastDate: "2026-05-16",
+            nextExpectedDate: nextExpectedDate,
+            category: nil,
+            transactionCount: 3,
+            confidence: 0.9
         )
     }
 }

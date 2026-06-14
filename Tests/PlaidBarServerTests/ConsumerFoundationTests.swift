@@ -161,9 +161,9 @@ struct ConsumerFoundationTests {
         #expect(belowLimit.hasSpareCapacity == true)
 
         let atLimit = Entitlement(
-            tier: .personal,
-            institutionLimit: 3,
-            itemsUsed: 3,
+            tier: .free,
+            institutionLimit: 0,
+            itemsUsed: 0,
             subscriptionStatus: "active",
             expiresAt: nil
         )

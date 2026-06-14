@@ -1,11 +1,18 @@
 ---
 title: VaultPeek Pricing Bundles, Launch Copy, and Consumer Strategy Summary
-status: proposed
-linear: [AND-349, AND-343]
+status: superseded
+linear: [AND-349, AND-343, AND-392]
 date: 2026-06-12
 ---
 
 # VaultPeek Pricing & Launch Strategy
+
+> **Superseded for plan packaging by AND-392.** Use
+> [`entitlement-matrix.md`](entitlement-matrix.md) as the canonical Free / Plus
+> / Managed matrix for prices, limits, grace states, downgrade behavior, and
+> support copy. This earlier document remains useful background for unit
+> economics and launch positioning, but its Personal/Plus tier table is no
+> longer the plan source of truth.
 
 > **Design/research document only. Nothing in this doc is implemented, and nothing should be implemented from it until the open decisions in §9 are resolved.** All pricing figures retrieved 2026-06-12 unless noted; third-party Plaid cost figures are **estimates** (Plaid publishes no price list).
 
