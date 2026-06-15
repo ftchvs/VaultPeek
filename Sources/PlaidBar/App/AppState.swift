@@ -188,6 +188,7 @@ final class AppState {
     private var refreshTask: Task<Void, Never>?
     private var localAISummaryRefreshTask: Task<Void, Never>?
     private let glanceSnapshotWriteDebouncer = GlanceSnapshotWriteDebouncer()
+    private var glanceSnapshotWriteGeneration = 0
     private var isUpgradingManagedServer = false
     private var isStartingBundledServer = false
     private var lastAttemptedCredentialUpgradeConfig: String?
@@ -1155,7 +1156,7 @@ final class AppState {
 
         balanceHistory = []
         UserDefaults.standard.removeObject(forKey: Keys.balanceHistory)
-        clearGlanceSnapshot()
+        await clearGlanceSnapshot()
         UserDefaults.standard.removeObject(forKey: Keys.lastTransactionCacheContext)
         notificationService.resetDeduplicationState()
 
@@ -1688,6 +1689,8 @@ final class AppState {
 
     private func writeGlanceSnapshot(updatedAt: Date = Date()) {
         guard !accounts.isEmpty else { return }
+        glanceSnapshotWriteGeneration += 1
+        let generation = glanceSnapshotWriteGeneration
         let snapshot = GlanceSnapshot.make(
             netWorth: netBalance,
             balanceHistory: balanceHistory,
@@ -1695,7 +1698,8 @@ final class AppState {
             isDemo: isDemoMode
         )
         let debouncer = glanceSnapshotWriteDebouncer
-        Task { [snapshot, debouncer] in
+        Task { [snapshot, debouncer, generation] in
+            guard await MainActor.run(body: { self.glanceSnapshotWriteGeneration == generation }) else { return }
             await debouncer.schedule(snapshot) { snapshot in
                 guard (try? GlanceSnapshotStore.saveIfChanged(snapshot)) == true else { return }
                 await MainActor.run {
@@ -1705,12 +1709,10 @@ final class AppState {
         }
     }
 
-    private func clearGlanceSnapshot() {
-        let debouncer = glanceSnapshotWriteDebouncer
-        Task { [debouncer] in
-            await debouncer.cancel()
-            try? GlanceSnapshotStore.clear()
-        }
+    private func clearGlanceSnapshot() async {
+        glanceSnapshotWriteGeneration += 1
+        await glanceSnapshotWriteDebouncer.cancel()
+        try? GlanceSnapshotStore.clear()
     }
 
     @discardableResult

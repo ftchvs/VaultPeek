@@ -59,8 +59,8 @@ struct GlanceSnapshotTests {
         #expect(!json.contains("accounts"))
     }
 
-    @Test("Identical display snapshots do not rewrite the file")
-    func identicalDisplaySnapshotsDoNotRewriteFile() throws {
+    @Test("Timestamp display changes rewrite the file")
+    func timestampDisplayChangesRewriteFile() throws {
         let directory = temporaryDirectory()
         let original = GlanceSnapshot(
             netWorth: 17_604.24,
@@ -80,11 +80,10 @@ struct GlanceSnapshotTests {
         #expect(try GlanceSnapshotStore.saveIfChanged(original, directory: directory))
         let url = GlanceSnapshotStore.snapshotURL(directory: directory)
         let firstData = try Data(contentsOf: url)
-        let firstAttributes = try FileManager.default.attributesOfItem(atPath: url.path)
 
-        #expect(!(try GlanceSnapshotStore.saveIfChanged(timestampOnlyChange, directory: directory)))
-        #expect(try Data(contentsOf: url) == firstData)
-        #expect(try FileManager.default.attributesOfItem(atPath: url.path)[.modificationDate] as? Date == firstAttributes[.modificationDate] as? Date)
+        #expect(try GlanceSnapshotStore.saveIfChanged(timestampOnlyChange, directory: directory))
+        #expect(try Data(contentsOf: url) != firstData)
+        #expect(try GlanceSnapshotStore.load(directory: directory) == timestampOnlyChange)
     }
 
     @Test("Meaningful display changes rewrite the file")

@@ -51,6 +51,7 @@ public struct GlanceSnapshot: Codable, Sendable, Equatable {
     public func hasSameDisplayContent(as other: GlanceSnapshot) -> Bool {
         netWorth == other.netWorth &&
             todayChange == other.todayChange &&
+            updatedAt == other.updatedAt &&
             sparkline == other.sparkline &&
             isDemo == other.isDemo
     }
