@@ -3,26 +3,19 @@ import Hummingbird
 import NIOCore
 import PlaidBarCore
 
-/// Entitlement enforcement seam for the consumer (Hosted Link) track.
+/// Store-free entitlement seam for the consumer (Hosted Link) track.
 ///
-/// FOUNDATION ONLY — **this middleware enforces nothing.** It is inserted into
-/// the `/api` chain between `APITokenMiddleware` (authentication) and
-/// `SetupStateMiddleware` (credential-readiness) so the gated managed-consumer
-/// work has a fixed, reviewed place to add Stripe-backed entitlement checks
-/// later, without re-threading the router.
+/// This middleware still enforces nothing directly: it evaluates to `.allow`
+/// for every request and calls `next` unchanged. It stays in the `/api` chain
+/// between `APITokenMiddleware` (authentication) and `SetupStateMiddleware`
+/// (credential-readiness) so future request-signed entitlement checks have a
+/// reviewed insertion point without re-threading the router.
 ///
-/// Today it evaluates to `.allow` for every request and calls `next` unchanged,
-/// so the request path is byte-for-byte identical to before it existed. In
-/// `.local` (BYO-keys) mode it is wired but always allows; entitlements doc D3
-/// keeps BYO fully ungated, so even when enforcement is built it must stay a
-/// no-op in `.local` mode. There are **no Stripe calls, no token verification,
-/// and no network access** here.
-///
-/// When the gated work lands, `evaluate` gains: parse the device-signed
-/// entitlement, verify the embedded Ed25519 signature
-/// (`RemoteBridgeConfig.entitlementPublicKeyBase64`), check TTL/grace, and map
-/// managed-only routes to `.entitlementRequired` / `.limitReached`. The decision
-/// type (`EntitlementDecision`) already models those outcomes.
+/// AND-414's managed Link checks live in `LinkRoutes` instead of here because
+/// they need `BillingSubscriptionStore` plus `TokenStore` counts. In `.local`
+/// (BYO-keys) mode this middleware is wired but always allows; BYO/demo paths
+/// remain ungated. There are **no Stripe calls, no token verification, and no
+/// network access** here.
 struct EntitlementMiddleware<Context: RequestContext>: RouterMiddleware {
     let deployment: DeploymentMode
 

@@ -289,6 +289,259 @@ struct ConsumerFoundationTests {
         }
     }
 
+    // MARK: - Managed Link Broker
+
+    @Test("Allowed managed link session returns only hosted URL and entitlement summary")
+    func allowedManagedLinkSessionOmitsProviderSecrets() async throws {
+        try await withFluent { fluent in
+            let tokenStore = TokenStore(fluent: fluent)
+            let billingStore = BillingSubscriptionStore(fluent: fluent)
+            _ = try await billingStore.save(SaveBillingSubscriptionRequest(status: .active, plan: .plus))
+            let plaidClient = ManagedLinkStubPlaidClient()
+            let routes = LinkRoutes(
+                plaidClient: plaidClient,
+                tokenStore: tokenStore,
+                pendingLinkSessions: PendingLinkSessionStore(),
+                billingStore: billingStore,
+                config: try Self.hostedBridgeConfig()
+            )
+
+            let response = try await routes.createManagedLinkSession(
+                request: Self.makeRequest(path: "/api/link/managed/create"),
+                context: TestRequestContext(source: TestRequestContextSource())
+            )
+            let body = try await Self.responseString(response)
+            let decoded = try JSONDecoder().decode(ManagedLinkSessionResponse.self, from: Data(body.utf8))
+            let calls = await plaidClient.recordedCreateCompletionRedirectURIs()
+
+            #expect(response.status == .ok)
+            #expect(decoded.linkUrl == "https://link.example.test/session")
+            #expect(decoded.entitlement.plan == .plus)
+            #expect(decoded.entitlement.status == .active)
+            #expect(decoded.entitlement.institutionLimit == 8)
+            #expect(decoded.entitlement.activeInstitutionCount == 0)
+            #expect(decoded.entitlement.canCreateManagedLink)
+            #expect(calls.count == 1)
+            #expect(calls.first?.contains("/oauth/callback?state=") == true)
+            #expect(!body.contains("linkToken"))
+            #expect(!body.contains("link-token-server-only"))
+            #expect(!body.localizedCaseInsensitiveContains("secret"))
+            #expect(!body.localizedCaseInsensitiveContains("access"))
+            #expect(!body.localizedCaseInsensitiveContains("public"))
+        }
+    }
+
+    @Test(".local mode always blocks managed link creation regardless of plan or subscription")
+    func localModeAlwaysBlocksManagedLinkCreation() {
+        // The entire safety case for shipping this gated broker in the default
+        // local-first beta rests on `.local` NEVER allowing a managed link. Lock it
+        // as a pure-function invariant: even a fully-paid, active Plus subscription
+        // with spare capacity is blocked with `.managedBridgeUnavailable` (the
+        // route at LinkRoutes gates on exactly this `canCreateManagedLink`).
+        let updatedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let subscriptions: [BillingSubscription?] = [
+            nil,
+            BillingSubscription(status: .active, plan: .plus, updatedAt: updatedAt),
+            BillingSubscription(status: .trialing, plan: .plus, updatedAt: updatedAt),
+        ]
+        for subscription in subscriptions {
+            let summary = ManagedLinkEntitlementService.summary(
+                deployment: .local,
+                subscription: subscription,
+                activeInstitutionCount: 0
+            )
+            #expect(summary.canCreateManagedLink == false)
+            #expect(summary.blockReason == .managedBridgeUnavailable)
+        }
+    }
+
+    @Test("Over-limit managed link creation is blocked before Plaid is called")
+    func overLimitManagedLinkIsBlocked() async throws {
+        try await withFluent { fluent in
+            let tokenStore = TokenStore(fluent: fluent)
+            let billingStore = BillingSubscriptionStore(fluent: fluent)
+            _ = try await billingStore.save(SaveBillingSubscriptionRequest(status: .active, plan: .plus))
+            for index in 0 ..< SubscriptionPlan.plus.institutionLimit {
+                try await ItemModel(
+                    id: "managed-item-\(index)",
+                    accessToken: "keychain:managed-item-\(index)",
+                    institutionId: "ins_managed_\(index)",
+                    origin: .managed
+                ).save(on: fluent.db())
+            }
+            let plaidClient = ManagedLinkStubPlaidClient()
+            let routes = LinkRoutes(
+                plaidClient: plaidClient,
+                tokenStore: tokenStore,
+                pendingLinkSessions: PendingLinkSessionStore(),
+                billingStore: billingStore,
+                config: try Self.hostedBridgeConfig()
+            )
+
+            let response = try await routes.createManagedLinkSession(
+                request: Self.makeRequest(path: "/api/link/managed/create"),
+                context: TestRequestContext(source: TestRequestContextSource())
+            )
+            let body = try await Self.responseString(response)
+            let decoded = try JSONDecoder().decode(ManagedLinkErrorResponse.self, from: Data(body.utf8))
+            let calls = await plaidClient.recordedCreateCompletionRedirectURIs()
+
+            #expect(response.status == ManagedLinkEntitlementService.paymentRequired)
+            #expect(decoded.entitlement.blockReason == .institutionLimitReached)
+            #expect(decoded.entitlement.activeInstitutionCount == 8)
+            #expect(decoded.entitlement.canCreateManagedLink == false)
+            #expect(decoded.error.contains("limit"))
+            #expect(calls.isEmpty)
+            #expect(!body.contains("link-token-server-only"))
+            #expect(!body.localizedCaseInsensitiveContains("secret"))
+        }
+    }
+
+    @Test("Disconnect removes managed item from active entitlement count without counting BYO")
+    func disconnectUpdatesManagedInstitutionCount() async throws {
+        try await withFluent { fluent in
+            let tokenStore = TokenStore(fluent: fluent)
+            let billingStore = BillingSubscriptionStore(fluent: fluent)
+            _ = try await billingStore.save(SaveBillingSubscriptionRequest(status: .active, plan: .plus))
+            try await ItemModel(
+                id: "managed-item-disconnect",
+                accessToken: "keychain:managed-item-disconnect",
+                institutionId: "ins_managed_disconnect",
+                origin: .managed
+            ).save(on: fluent.db())
+            try await ItemModel(
+                id: "byo-item-ignored",
+                accessToken: "keychain:byo-item-ignored",
+                institutionId: "ins_byo_ignored",
+                origin: .bringYourOwn
+            ).save(on: fluent.db())
+            let service = ManagedLinkEntitlementService(
+                deployment: .hostedBridge,
+                billingStore: billingStore,
+                tokenStore: tokenStore
+            )
+
+            let before = try await service.summary()
+            try await tokenStore.deleteItem(id: "managed-item-disconnect")
+            let after = try await service.summary()
+
+            #expect(before.activeInstitutionCount == 1)
+            #expect(before.canCreateManagedLink)
+            #expect(after.activeInstitutionCount == 0)
+            #expect(after.canCreateManagedLink)
+            #expect(try await tokenStore.getItem(id: "byo-item-ignored") != nil)
+        }
+    }
+
+    @Test("Degraded entitlement blocks managed link creation without deleting local data")
+    func degradedEntitlementBlocksManagedLinkCreation() async throws {
+        try await withFluent { fluent in
+            let tokenStore = TokenStore(fluent: fluent)
+            let billingStore = BillingSubscriptionStore(fluent: fluent)
+            _ = try await billingStore.save(SaveBillingSubscriptionRequest(status: .pastDue, plan: .plus))
+            try await ItemModel(
+                id: "managed-item-kept",
+                accessToken: "keychain:managed-item-kept",
+                institutionId: "ins_managed_kept",
+                origin: .managed
+            ).save(on: fluent.db())
+            let plaidClient = ManagedLinkStubPlaidClient()
+            let routes = LinkRoutes(
+                plaidClient: plaidClient,
+                tokenStore: tokenStore,
+                pendingLinkSessions: PendingLinkSessionStore(),
+                billingStore: billingStore,
+                config: try Self.hostedBridgeConfig()
+            )
+
+            let response = try await routes.createManagedLinkSession(
+                request: Self.makeRequest(path: "/api/link/managed/create"),
+                context: TestRequestContext(source: TestRequestContextSource())
+            )
+            let body = try await Self.responseString(response)
+            let decoded = try JSONDecoder().decode(ManagedLinkErrorResponse.self, from: Data(body.utf8))
+            let calls = await plaidClient.recordedCreateCompletionRedirectURIs()
+
+            #expect(response.status == ManagedLinkEntitlementService.paymentRequired)
+            #expect(decoded.entitlement.blockReason == .subscriptionDegraded)
+            #expect(decoded.entitlement.status == .pastDue)
+            #expect(decoded.entitlement.activeInstitutionCount == 1)
+            #expect(calls.isEmpty)
+            #expect(try await tokenStore.getItem(id: "managed-item-kept") != nil)
+        }
+    }
+
+    @Test("Managed OAuth callback enforces limit before public-token exchange")
+    func managedCallbackBlocksWhenLimitReachedBeforeExchange() async throws {
+        try await withFluent { fluent in
+            let tokenStore = TokenStore(fluent: fluent)
+            let billingStore = BillingSubscriptionStore(fluent: fluent)
+            _ = try await billingStore.save(SaveBillingSubscriptionRequest(status: .active, plan: .plus))
+            for index in 0 ..< SubscriptionPlan.plus.institutionLimit {
+                try await ItemModel(
+                    id: "managed-callback-item-\(index)",
+                    accessToken: "keychain:managed-callback-item-\(index)",
+                    institutionId: "ins_managed_callback_\(index)",
+                    origin: .managed
+                ).save(on: fluent.db())
+            }
+            let linkToken = "managed-callback-link-token"
+            let plaidClient = ManagedLinkStubPlaidClient(
+                linkTokenGetResponse: PlaidLinkTokenGetResponse(
+                    linkToken: linkToken,
+                    linkSessions: [
+                        PlaidLinkSession(
+                            linkSessionId: "managed-callback-session",
+                            results: PlaidLinkResults(
+                                itemAddResults: [
+                                    PlaidLinkItemAddResult(
+                                        publicToken: "managed-callback-public-token",
+                                        institution: PlaidLinkInstitution(
+                                            name: "Example Bank",
+                                            institutionId: "ins_new_blocked"
+                                        )
+                                    ),
+                                ]
+                            )
+                        ),
+                    ],
+                    onSuccess: nil,
+                    results: nil
+                )
+            )
+            let pendingLinkSessions = PendingLinkSessionStore()
+            let state = await pendingLinkSessions.issueState()
+            await pendingLinkSessions.save(
+                state: state,
+                linkToken: linkToken,
+                origin: .managed
+            )
+            let route = OAuthCallbackRoute(
+                plaidClient: plaidClient,
+                tokenStore: tokenStore,
+                pendingLinkSessions: pendingLinkSessions,
+                entitlementService: ManagedLinkEntitlementService(
+                    deployment: .hostedBridge,
+                    billingStore: billingStore,
+                    tokenStore: tokenStore
+                )
+            )
+
+            let response = try await route.handleCallback(
+                request: Self.makeRequest(path: "/oauth/callback?state=\(state)"),
+                context: TestRequestContext(source: TestRequestContextSource())
+            )
+            let body = try await Self.responseString(response)
+            let calls = await plaidClient.recordedCalls()
+
+            #expect(response.status == .internalServerError)
+            #expect(body.contains("institution limit"))
+            #expect(calls.linkTokens == [linkToken])
+            #expect(calls.publicTokens.isEmpty)
+            #expect(try await tokenStore.activeInstitutionCount(origin: .managed) == 8)
+        }
+    }
+
     // MARK: - Helpers
 
     private static func makeRequest(path: String) -> Request {
@@ -296,6 +549,55 @@ struct ConsumerFoundationTests {
             head: HTTPRequest(method: .get, scheme: nil, authority: nil, path: path),
             body: RequestBody(buffer: ByteBuffer())
         )
+    }
+
+    private static func responseString(_ response: Response) async throws -> String {
+        let collector = ResponseBodyCollector()
+        let writer = CollectingResponseBodyWriter(collector: collector)
+        try await response.body.write(writer)
+        var buffer = await collector.collectedBuffer()
+        return buffer.readString(length: buffer.readableBytes) ?? ""
+    }
+
+    private static func hostedBridgeConfig() throws -> ServerConfig {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-managed-link-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let configURL = directory.appendingPathComponent("server.conf")
+        let dataDirectory = directory.appendingPathComponent("data", isDirectory: true)
+        try """
+        PLAID_CLIENT_ID=test-client-id
+        PLAID_SECRET=test-secret-placeholder
+        PLAID_ENV=sandbox
+        PLAIDBAR_DEPLOYMENT=hosted-bridge
+        PLAID_LINK_WEBHOOK_URL=https://vaultpeek.example.test/webhooks/plaid/hosted-link
+        PLAIDBAR_OAUTH_REDIRECT_URI=https://link.vaultpeek.example.test/oauth/callback
+        PLAIDBAR_DATA_DIR=\(dataDirectory.path)
+        """.write(to: configURL, atomically: true, encoding: .utf8)
+        return try ServerConfig.load(from: configURL.path)
+    }
+
+    private actor ResponseBodyCollector {
+        private var buffer = ByteBuffer()
+
+        func append(_ chunk: ByteBuffer) {
+            var copy = chunk
+            buffer.writeBuffer(&copy)
+        }
+
+        func collectedBuffer() -> ByteBuffer {
+            buffer
+        }
+    }
+
+    private struct CollectingResponseBodyWriter: ResponseBodyWriter {
+        let collector: ResponseBodyCollector
+
+        mutating func write(_ buffer: ByteBuffer) async throws {
+            await collector.append(buffer)
+        }
+
+        consuming func finish(_ trailingHeaders: HTTPFields?) async throws {}
     }
 
     private static func makeJSONRequest(
@@ -324,6 +626,7 @@ struct ConsumerFoundationTests {
         fluent.databases.use(.sqlite(.memory), as: .sqlite)
         await fluent.migrations.add(CreateItems())
         await fluent.migrations.add(AddProviderToItems())
+        await fluent.migrations.add(AddOriginToItems())
         await fluent.migrations.add(CreateSyncCursors())
         await fluent.migrations.add(CreateBillingSubscriptions())
 
@@ -354,5 +657,81 @@ private struct TestRequestContext: RequestContext {
 
     init(source: TestRequestContextSource) {
         coreContext = CoreRequestContextStorage(source: source)
+    }
+}
+
+private actor ManagedLinkStubPlaidClient: PlaidClientProtocol {
+    private let linkTokenGetResponse: PlaidLinkTokenGetResponse
+    private var createCompletionRedirectURIs: [String] = []
+    private var requestedLinkTokens: [String] = []
+    private var exchangedPublicTokens: [String] = []
+
+    init(
+        linkTokenGetResponse: PlaidLinkTokenGetResponse = PlaidLinkTokenGetResponse(
+            linkToken: nil,
+            linkSessions: nil,
+            onSuccess: nil,
+            results: nil
+        )
+    ) {
+        self.linkTokenGetResponse = linkTokenGetResponse
+    }
+
+    func createLinkToken(
+        clientUserId _: String,
+        completionRedirectUri: String
+    ) async throws -> PlaidLinkTokenResponse {
+        createCompletionRedirectURIs.append(completionRedirectUri)
+        return PlaidLinkTokenResponse(
+            linkToken: "link-token-server-only",
+            expiration: nil,
+            requestId: nil,
+            hostedLinkUrl: "https://link.example.test/session"
+        )
+    }
+
+    func createUpdateLinkToken(
+        clientUserId _: String,
+        accessToken _: String,
+        completionRedirectUri _: String
+    ) async throws -> PlaidLinkTokenResponse {
+        throw PlaidError.invalidResponse
+    }
+
+    func getLinkToken(_ linkToken: String) async throws -> PlaidLinkTokenGetResponse {
+        requestedLinkTokens.append(linkToken)
+        return linkTokenGetResponse
+    }
+
+    func exchangePublicToken(_ publicToken: String) async throws -> PlaidTokenExchangeResponse {
+        exchangedPublicTokens.append(publicToken)
+        throw PlaidError.invalidResponse
+    }
+
+    func getAccounts(accessToken _: String) async throws -> PlaidAccountsResponse {
+        throw PlaidError.invalidResponse
+    }
+
+    func getBalances(accessToken _: String) async throws -> PlaidAccountsResponse {
+        throw PlaidError.invalidResponse
+    }
+
+    func syncTransactions(
+        accessToken _: String,
+        cursor _: String?
+    ) async throws -> PlaidTransactionsSyncResponse {
+        throw PlaidError.invalidResponse
+    }
+
+    func removeItem(accessToken _: String) async throws {
+        throw PlaidError.invalidResponse
+    }
+
+    func recordedCreateCompletionRedirectURIs() -> [String] {
+        createCompletionRedirectURIs
+    }
+
+    func recordedCalls() -> (linkTokens: [String], publicTokens: [String]) {
+        (requestedLinkTokens, exchangedPublicTokens)
     }
 }

@@ -271,6 +271,7 @@ struct TokenStorageSafetyTests {
         fluent.databases.use(.sqlite(.file(databasePath)), as: .sqlite)
         await fluent.migrations.add(CreateItems())
         await fluent.migrations.add(AddProviderToItems())
+        await fluent.migrations.add(AddOriginToItems())
         await fluent.migrations.add(CreateSyncCursors())
 
         var bodyError: Error?
