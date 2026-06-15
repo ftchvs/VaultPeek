@@ -198,7 +198,9 @@ sequenceDiagram
     end
 ```
 
-Notes: the broker callback replaces today's `http://localhost:8484/oauth/callback` (Plaid production OAuth requires registered HTTPS redirect URIs — the localhost redirect is a sandbox affordance). The one-time-state + TTL + single-attempt-exchange discipline is lifted directly from `PendingLinkSessionStore` and `PlaidClient`'s `.singleAttempt` retry policy. The token-claim handoff is device-signed and single-use; an unclaimed session expires and the broker removes the Item (no orphan billing from abandoned links).
+Notes: the broker callback replaces today's `http://localhost:8484/oauth/callback` (Plaid production OAuth requires registered HTTPS redirect URIs — the localhost redirect is a sandbox/BYO affordance). Before managed production link-token creation is enabled, the exact broker HTTPS callback configured as `PLAIDBAR_OAUTH_REDIRECT_URI` must be registered in the Plaid Dashboard for the production application; a mismatch should be treated as a release blocker, not a runtime warning. The one-time-state + TTL + single-attempt-exchange discipline is lifted directly from `PendingLinkSessionStore` and `PlaidClient`'s `.singleAttempt` retry policy. The token-claim handoff is device-signed and single-use; an unclaimed session expires and the broker removes the Item (no orphan billing from abandoned links).
+
+Future app/universal-link callback mode is distinct from the managed broker callback. Plaid OAuth redirect URIs for native app return paths must still be HTTPS Universal Links, registered in the Plaid Dashboard, and backed by Apple Associated Domains plus a valid `apple-app-site-association` file on the callback host. Custom URL schemes such as `vaultpeek://` can be used only after the HTTPS callback has completed and bounced control back to the app; they are not production Plaid OAuth redirect URIs.
 
 ### 5.6 Steady-state sync (sequence)
 

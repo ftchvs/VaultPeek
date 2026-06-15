@@ -88,10 +88,14 @@ approval record:
 8. **Register production redirect / allowed URIs** in the Plaid dashboard:
    - The bridge HTTPS completion redirect (replaces today's
      `http://localhost:8484/oauth/callback`; localhost is a sandbox-only
-     affordance — architecture doc §5.5).
+     affordance — architecture doc §5.5). This must exactly match the
+     production `PLAIDBAR_OAUTH_REDIRECT_URI`.
    - Any OAuth-institution redirect URIs Plaid requires for prod.
-   - Confirm the `vaultpeek://link/complete` deep-link bounce / associated-domains
-     fallback (open question O2).
+   - For future app/universal-link callback mode, register only HTTPS Universal
+     Link redirect URIs with Plaid and verify Apple Associated Domains plus the
+     host's `apple-app-site-association` file before enabling the mode. Custom
+     URL schemes such as `vaultpeek://link/complete` are only post-callback app
+     bounces, not Plaid production OAuth redirect URIs.
 9. **Resolve open question O1 with Plaid:** can an Item be administratively
    removed (to stop per-Item billing) **without** the access token, given device
    custody? The answer decides the orphan runbook vs forcing the token-vault
