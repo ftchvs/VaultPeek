@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import FluentKit
 import FluentSQLiteDriver
@@ -9,6 +10,23 @@ import NIOCore
 @testable import PlaidBarCore
 @testable import PlaidBarServer
 import Testing
+
+private let consumerTestsKeychainAvailable: Bool = {
+    let itemId = "consumer_keychain_probe_\(UUID().uuidString)"
+    do {
+        let storedToken = try PlaidTokenVault.store(accessToken: "probe-token", itemId: itemId)
+        try PlaidTokenVault.delete(storedToken: storedToken, fallbackItemId: itemId)
+        return true
+    } catch {
+        return false
+    }
+}()
+
+/// Accepting verifier for tests that exercise webhook *application* logic; the
+/// fail-closed default is asserted separately.
+private struct AcceptingStripeWebhookVerifier: StripeWebhookVerifier {
+    func verify(payload: Data, signatureHeader: String?, now: Date) async throws {}
+}
 
 /// Foundation tests for the consumer (Hosted Link) deployment seam. These prove
 /// the seam is inert: `.local` is the default, the bridge holds no live
@@ -591,7 +609,8 @@ struct ConsumerFoundationTests {
             let routes = BillingRoutes(
                 billingStore: billingStore,
                 tokenStore: tokenStore,
-                deployment: .hostedBridge
+                deployment: .hostedBridge,
+                verifier: AcceptingStripeWebhookVerifier()
             )
             let trialEnd = Date(timeIntervalSince1970: 1_800_000_000)
             let webhook = StripeBillingWebhookEvent(
@@ -640,7 +659,8 @@ struct ConsumerFoundationTests {
             let routes = BillingRoutes(
                 billingStore: billingStore,
                 tokenStore: tokenStore,
-                deployment: .hostedBridge
+                deployment: .hostedBridge,
+                verifier: AcceptingStripeWebhookVerifier()
             )
             try await ItemModel(
                 id: "managed-kept-after-cancel",
@@ -675,6 +695,175 @@ struct ConsumerFoundationTests {
             #expect(decoded.managedLink.blockReason == .subscriptionDegraded)
             #expect(decoded.features.isEmpty)
             #expect(try await tokenStore.getItem(id: "managed-kept-after-cancel") != nil)
+        }
+    }
+
+    @Test("Stripe webhook fails closed by default: an unverified event mutates no billing state")
+    func stripeWebhookFailsClosedByDefault() async throws {
+        try await withFluent { fluent in
+            let billingStore = BillingSubscriptionStore(fluent: fluent)
+            // Default verifier is UnconfiguredStripeWebhookVerifier (fail-closed).
+            let routes = BillingRoutes(billingStore: billingStore, deployment: .hostedBridge)
+            await #expect(throws: StripeWebhookVerificationError.signatureVerificationUnavailable) {
+                _ = try await routes.handleStripeWebhook(
+                    request: try Self.makeJSONRequest(
+                        method: .post,
+                        path: "/api/billing/webhook",
+                        body: StripeBillingWebhookEvent(
+                            id: "evt_forged_active",
+                            type: "customer.subscription.updated",
+                            status: .active,
+                            plan: .plus
+                        )
+                    ),
+                    context: TestRequestContext(source: TestRequestContextSource())
+                )
+            }
+            // A forged event granted nothing.
+            let granted = try await billingStore.currentSubscription()
+            #expect(granted == nil)
+        }
+    }
+
+    @Test("Unconfigured Stripe verifier rejects every event")
+    func unconfiguredStripeVerifierRejects() async {
+        await #expect(throws: StripeWebhookVerificationError.signatureVerificationUnavailable) {
+            try await UnconfiguredStripeWebhookVerifier().verify(
+                payload: Data("{}".utf8),
+                signatureHeader: "t=1,v1=abc",
+                now: Date(timeIntervalSince1970: 1)
+            )
+        }
+    }
+
+    @Test("HMAC Stripe verifier accepts a correctly signed payload and rejects tampering")
+    func hmacStripeVerifierAcceptsValidRejectsInvalid() async throws {
+        let secret = "whsec_test_secret"
+        let verifier = StripeSignatureWebhookVerifier(signingSecret: secret)
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let payload = Data(#"{"id":"evt_1","type":"customer.subscription.updated"}"#.utf8)
+        let timestamp = String(Int(now.timeIntervalSince1970))
+        var signed = Data(timestamp.utf8)
+        signed.append(0x2e)
+        signed.append(payload)
+        let mac = HMAC<SHA256>.authenticationCode(for: signed, using: SymmetricKey(data: Data(secret.utf8)))
+        let signature = mac.map { String(format: "%02x", $0) }.joined()
+
+        // Correctly signed payload passes.
+        try await verifier.verify(payload: payload, signatureHeader: "t=\(timestamp),v1=\(signature)", now: now)
+        // Wrong signature rejected.
+        await #expect(throws: StripeWebhookVerificationError.signatureMismatch) {
+            try await verifier.verify(payload: payload, signatureHeader: "t=\(timestamp),v1=deadbeef", now: now)
+        }
+        // Missing header rejected.
+        await #expect(throws: StripeWebhookVerificationError.missingSignatureHeader) {
+            try await verifier.verify(payload: payload, signatureHeader: nil, now: now)
+        }
+        // Stale timestamp (replay) rejected.
+        await #expect(throws: StripeWebhookVerificationError.timestampOutOfTolerance) {
+            try await verifier.verify(
+                payload: payload,
+                signatureHeader: "t=\(timestamp),v1=\(signature)",
+                now: now.addingTimeInterval(3600)
+            )
+        }
+    }
+
+    @Test(
+        "Concurrent managed inserts never exceed the institution limit",
+        .enabled(if: consumerTestsKeychainAvailable, "macOS Keychain accepts test writes")
+    )
+    func concurrentManagedInsertsRespectLimit() async throws {
+        try await withFluent { fluent in
+            let tokenStore = TokenStore(fluent: fluent)
+            let limit = SubscriptionPlan.plus.institutionLimit
+            // Seed limit-1 managed institutions, leaving exactly one open slot.
+            for index in 0 ..< (limit - 1) {
+                try await ItemModel(
+                    id: "seed-managed-\(index)",
+                    accessToken: "keychain:seed-managed-\(index)",
+                    institutionId: "ins_seed_\(index)",
+                    origin: .managed
+                ).save(on: fluent.db())
+            }
+            // Drive `limit` concurrent inserts, each a distinct new institution. Only
+            // one may win the last slot; without atomic enforcement they would all
+            // observe count == limit-1 and overshoot.
+            let successes = await withTaskGroup(of: Bool.self) { group -> Int in
+                for index in 0 ..< limit {
+                    group.addTask {
+                        do {
+                            try await tokenStore.saveManagedItemEnforcingLimit(
+                                id: "race-item-\(index)",
+                                accessToken: "race-access-\(index)",
+                                institutionId: "ins_race_\(index)",
+                                institutionName: "Race Bank \(index)",
+                                institutionLimit: limit
+                            )
+                            return true
+                        } catch {
+                            return false
+                        }
+                    }
+                }
+                var count = 0
+                for await stored in group where stored { count += 1 }
+                return count
+            }
+
+            let finalCount = try await tokenStore.activeInstitutionCount(origin: .managed)
+            #expect(successes == 1)
+            #expect(finalCount == limit)
+        }
+    }
+
+    @Test(
+        "Concurrent managed same-institution inserts are allowed at the institution cap",
+        .enabled(if: consumerTestsKeychainAvailable, "macOS Keychain accepts test writes")
+    )
+    func concurrentManagedSameInstitutionInsertsDoNotSpendExtraSlots() async throws {
+        try await withFluent { fluent in
+            let tokenStore = TokenStore(fluent: fluent)
+            let limit = SubscriptionPlan.plus.institutionLimit
+            // Seed limit-1 unique managed institutions, leaving one open slot.
+            for index in 0 ..< (limit - 1) {
+                try await ItemModel(
+                    id: "same-seed-managed-\(index)",
+                    accessToken: "keychain:same-seed-managed-\(index)",
+                    institutionId: "ins_same_seed_\(index)",
+                    origin: .managed
+                ).save(on: fluent.db())
+            }
+
+            let sharedInstitutionId = "ins_shared_race"
+            let successes = await withTaskGroup(of: Bool.self) { group -> Int in
+                for index in 0 ..< 2 {
+                    group.addTask {
+                        do {
+                            try await tokenStore.saveManagedItemEnforcingLimit(
+                                id: "same-race-item-\(index)",
+                                accessToken: "same-race-access-\(index)",
+                                institutionId: sharedInstitutionId,
+                                institutionName: "Shared Race Bank",
+                                institutionLimit: limit
+                            )
+                            return true
+                        } catch {
+                            return false
+                        }
+                    }
+                }
+                var count = 0
+                for await stored in group where stored { count += 1 }
+                return count
+            }
+
+            let finalCount = try await tokenStore.activeInstitutionCount(origin: .managed)
+            let storedItems = try await tokenStore.getAllItems(providerID: .plaid)
+                .filter { $0.origin == ItemOrigin.managed.rawValue && $0.institutionId == sharedInstitutionId }
+            #expect(successes == 2)
+            #expect(finalCount == limit)
+            #expect(storedItems.count == 2)
         }
     }
 
