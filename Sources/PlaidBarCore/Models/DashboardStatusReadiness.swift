@@ -161,10 +161,10 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
                 level: .warning,
                 title: itemRecoveryTitle(
                     count: needsLoginItemCount,
-                    singularAction: "needs login",
-                    pluralAction: "need login"
+                    singularAction: "needs update",
+                    pluralAction: "need update"
                 ),
-                detail: "One or more institutions need an updated login before sync can stay healthy.",
+                detail: "One or more institutions need Plaid Link update mode for login, consent, or account selection.",
                 primaryAction: .reconnect
             )
         }

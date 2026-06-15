@@ -285,11 +285,35 @@ struct AttentionQueueTests {
         )
 
         #expect(queue.rows.map(\.id) == [
-            "item-login-0",
+            "item-repair-0",
             "sync-stale",
             "financial-low-cash",
         ])
         #expect(queue.rows.first?.action == .reconnect)
+    }
+
+    @Test("Queue routes new accounts available to update mode")
+    func routesNewAccountsAvailableToUpdateMode() {
+        let queue = AttentionQueue.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 1,
+            accountCount: 1,
+            syncedItemCount: 1,
+            itemStatuses: [
+                ItemStatus(id: "item-new-accounts", institutionName: "Example Bank", status: .newAccountsAvailable),
+            ],
+            isSyncStale: false,
+            lastSyncRelative: "now",
+            errorMessage: nil
+        )
+
+        #expect(queue.rows.first?.id == "item-repair-0")
+        #expect(queue.rows.first?.title == "Example Bank has new accounts")
+        #expect(queue.rows.first?.detail == "Example Bank has newly available accounts. Update this item to choose what VaultPeek can access.")
+        #expect(queue.rows.first?.action == .reconnect)
+        #expect(queue.rows.first?.targetItemId == "item-new-accounts")
     }
 
     @Test("Financial attention threshold edges are inclusive where configured")

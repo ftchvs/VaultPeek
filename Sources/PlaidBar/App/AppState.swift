@@ -587,11 +587,11 @@ final class AppState {
     }
 
     var connectedItemCount: Int {
-        itemStatuses.filter { $0.status == .connected }.count
+        itemStatuses.filter { !$0.status.isDegraded }.count
     }
 
     var needsLoginItemCount: Int {
-        itemStatuses.filter { $0.status == .loginRequired }.count
+        itemStatuses.filter { $0.status.needsUpdateMode }.count
     }
 
     var erroredItemCount: Int {
@@ -601,7 +601,7 @@ final class AppState {
     var degradedItemIds: Set<String> {
         Set(
             itemStatuses
-                .filter { $0.status == .loginRequired || $0.status == .error }
+                .filter { $0.status.isDegraded }
                 .map(\.id)
         )
     }
@@ -609,7 +609,7 @@ final class AppState {
     var diagnosticsSummary: String {
         if isDemoStatusRecoveryScenario {
             if erroredItemCount > 0 { return "\(erroredItemCount) demo item\(erroredItemCount == 1 ? "" : "s") need attention" }
-            if needsLoginItemCount > 0 { return "\(needsLoginItemCount) demo item\(needsLoginItemCount == 1 ? "" : "s") need login" }
+            if needsLoginItemCount > 0 { return "\(needsLoginItemCount) demo item\(needsLoginItemCount == 1 ? "" : "s") need update" }
         }
         let serverPresentation = serverConnectionPresentation
         if isDemoMode { return serverPresentation.diagnosticsSummary }
@@ -621,7 +621,7 @@ final class AppState {
         }
         if statusItemCount == 0 { return "No Plaid items connected" }
         if erroredItemCount > 0 { return "\(erroredItemCount) item\(erroredItemCount == 1 ? "" : "s") need attention" }
-        if needsLoginItemCount > 0 { return "\(needsLoginItemCount) item\(needsLoginItemCount == 1 ? "" : "s") need login" }
+        if needsLoginItemCount > 0 { return "\(needsLoginItemCount) item\(needsLoginItemCount == 1 ? "" : "s") need update" }
         if serverPresentation.issue == .error { return serverPresentation.diagnosticsSummary }
         return "Plaid connection healthy"
     }

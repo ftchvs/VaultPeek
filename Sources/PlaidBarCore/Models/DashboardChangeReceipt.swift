@@ -45,7 +45,7 @@ public struct DashboardChangeReceipt: Equatable, Sendable {
 
         guard let latest = points.last else { return nil }
 
-        let degradedItemCount = itemStatuses.count { $0.status == .loginRequired || $0.status == .error }
+        let degradedItemCount = itemStatuses.count { $0.status.isDegraded }
 
         guard points.count >= 2 else {
             var rows = [Row(

@@ -369,7 +369,7 @@ public enum WeeklyReviewBuilder {
             // A login-required item needs the reconnect/update-link flow, not
             // another refresh — treat it as reconnectable alongside errors so
             // the checklist action can actually recover it.
-            let needsReconnect = itemStatuses.contains { $0.status == .error || $0.status == .loginRequired }
+            let needsReconnect = itemStatuses.contains { $0.status == .error || $0.status.needsUpdateMode }
             let blocked = itemStatuses.contains { $0.status == .error }
             items.append(WeeklyReviewItem(
                 id: "weekly-review.connection-health",
