@@ -364,7 +364,10 @@ public enum WeeklyReviewBuilder {
             ))
         }
 
-        let unhealthyItems = itemStatuses.filter { $0.status != .connected }.count
+        // `.loginRepaired` is a healthy, non-degraded state; counting it via
+        // `!= .connected` produced a false "needs a check" nag right after a
+        // successful repair. Use the shared degraded predicate instead.
+        let unhealthyItems = itemStatuses.filter { $0.status.isDegraded }.count
         if unhealthyItems > 0 || isSyncStale {
             // A login-required item needs the reconnect/update-link flow, not
             // another refresh — treat it as reconnectable alongside errors so

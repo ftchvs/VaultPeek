@@ -1504,6 +1504,21 @@ struct PlaidBarServerTests {
         #expect(ItemStatusMapping.status(forWebhookCode: "LOGIN_REPAIRED", currentStatus: .error) == .error)
     }
 
+    @Test("Webhook ERROR and repaired-with-new-accounts codes map correctly and preserve hard errors")
+    func webhookItemStatusMappingHandlesErrorAndRepairedWithNewAccounts() {
+        // A bare ITEM `ERROR` keeps the item degraded (login needed) rather than
+        // dropping the signal — independent of the current status.
+        #expect(ItemStatusMapping.status(forWebhookCode: "ERROR", currentStatus: .connected) == .loginRequired)
+        #expect(ItemStatusMapping.status(forWebhookCode: "ERROR", currentStatus: .pendingExpiration) == .loginRequired)
+
+        // `LOGIN_REPAIRED_WITH_NEW_ACCOUNTS` surfaces the actionable new-accounts
+        // state from any non-error baseline...
+        #expect(ItemStatusMapping.status(forWebhookCode: "LOGIN_REPAIRED_WITH_NEW_ACCOUNTS", currentStatus: .connected) == .newAccountsAvailable)
+        #expect(ItemStatusMapping.status(forWebhookCode: "LOGIN_REPAIRED_WITH_NEW_ACCOUNTS", currentStatus: .pendingDisconnect) == .newAccountsAvailable)
+        // ...but, like `LOGIN_REPAIRED`, it must not clobber a hard `.error`.
+        #expect(ItemStatusMapping.status(forWebhookCode: "LOGIN_REPAIRED_WITH_NEW_ACCOUNTS", currentStatus: .error) == .error)
+    }
+
     @Test("Balance refresh all-failure behavior is unchanged while bounded")
     func balanceRefreshAllFailureStillThrowsBadGateway() async throws {
         let directory = FileManager.default.temporaryDirectory
@@ -1980,6 +1995,99 @@ struct PlaidBarServerTests {
             #expect(response.status == .ok)
             #expect(calls.linkTokens == [linkToken])
             #expect(calls.publicTokens.isEmpty)
+            #expect(storedPublicTokens == [publicToken])
+        }
+    }
+
+    @Test("Forged hosted-link completion keyed by link_token cannot veto a real success")
+    func forgedHostedLinkCompletionCannotVetoRealSuccess() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-hosted-link-poison-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let linkToken = "poison-link-token"
+        let publicToken = "poison-public-token"
+        let linkSessionId = "poison-link-session"
+        let linkTokenGetResponse = PlaidLinkTokenGetResponse(
+            linkToken: linkToken,
+            linkSessions: [
+                PlaidLinkSession(
+                    linkSessionId: linkSessionId,
+                    results: PlaidLinkResults(
+                        itemAddResults: [
+                            PlaidLinkItemAddResult(
+                                publicToken: publicToken,
+                                institution: PlaidLinkInstitution(
+                                    name: "Honest Bank",
+                                    institutionId: "ins_honest"
+                                )
+                            ),
+                        ]
+                    )
+                ),
+            ],
+            onSuccess: nil,
+            results: nil
+        )
+        let plaidClient = HostedLinkStubPlaidClient(
+            linkTokenGetResponse: linkTokenGetResponse,
+            exchangeResponse: PlaidTokenExchangeResponse(
+                accessToken: "unused-access-token",
+                itemId: "unused-item",
+                requestId: nil
+            ),
+            accountsResponse: PlaidAccountsResponse(
+                accounts: [],
+                item: PlaidItem(
+                    itemId: "unused-item",
+                    institutionId: "ins_honest",
+                    availableProducts: nil,
+                    billedProducts: nil
+                ),
+                requestId: nil
+            )
+        )
+        let pendingLinkSessions = PendingLinkSessionStore(
+            storageURL: directory.appendingPathComponent("pending-link-sessions.json")
+        )
+        let hostedLinkCompletions = HostedLinkCompletionStore()
+        let state = await pendingLinkSessions.issueState()
+        await pendingLinkSessions.save(state: state, linkToken: linkToken)
+
+        // Attacker pre-seeds a non-success completion keyed only by the non-secret
+        // link_token (no unguessable `state`), exactly as an unauthenticated POST
+        // to /webhooks/plaid/hosted-link could.
+        await hostedLinkCompletions.record(HostedLinkCompletionRecord(
+            state: nil,
+            linkToken: linkToken,
+            linkSessionId: nil,
+            status: .userExit
+        ))
+
+        let databasePath = directory.appendingPathComponent("plaidbar-test.sqlite").path
+        let logger = Logger(label: "com.ftchvs.plaidbar-server-tests.hosted-link-poison")
+        let recorder = HostedLinkCompletionResultRecorder()
+
+        try await withTokenStore(databasePath: databasePath, logger: logger) { store in
+            let route = OAuthCallbackRoute(
+                plaidClient: plaidClient,
+                tokenStore: store,
+                pendingLinkSessions: pendingLinkSessions,
+                hostedLinkCompletions: hostedLinkCompletions,
+                storePublicTokenResult: { result in
+                    await recorder.store(result)
+                }
+            )
+            let response = try await route.handleCallback(
+                request: Self.makeRequest(path: "/oauth/callback?state=\(state)&link_session_id=\(linkSessionId)"),
+                context: TestRequestContext(source: TestRequestContextSource())
+            )
+            let storedPublicTokens = await recorder.recordedPublicTokens()
+
+            // The authoritative Plaid session lookup wins; the forged failure,
+            // keyed only by the non-secret link_token, cannot veto it.
+            #expect(response.status == .ok)
             #expect(storedPublicTokens == [publicToken])
         }
     }

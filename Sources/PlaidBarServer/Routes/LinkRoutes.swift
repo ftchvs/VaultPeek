@@ -466,18 +466,34 @@ struct OAuthCallbackRoute: Sendable {
             return [PlaidPublicTokenResult(publicToken: String(publicToken), institution: nil)]
         }
 
-        let state = request.uri.queryParameters.get("state").map { String($0) }
-        let linkSessionId = request.uri.queryParameters.get("link_session_id").map { String($0) }
-        if let completion = await hostedLinkCompletions.completion(
-            state: state,
-            linkToken: pendingSession.linkToken,
-            linkSessionId: linkSessionId
-        ), completion.status != HostedLinkCompletionStatus.success {
+        // The authoritative source of truth for whether a Hosted Link session
+        // produced a usable token is Plaid's own link-session lookup — never the
+        // `/webhooks/plaid/hosted-link` receiver, which is unauthenticated. Fetch
+        // it first so a forged "failure" completion can never veto a genuine
+        // success.
+        let linkSession = try await plaidClient.getLinkToken(pendingSession.linkToken)
+        let results = linkSession.publicTokenResults
+        if !results.isEmpty {
+            return results
+        }
+
+        // Plaid returned no public token. Only then consult completion metadata to
+        // surface a precise failure message — and ONLY when it is bound to the
+        // unguessable, single-use `state`. The `link_token`/`link_session_id` keys
+        // are handed to the client and surfaced by Plaid's UI, so trusting them
+        // here would let any local caller poison the shared completion store to
+        // grief a known link session.
+        if let state = request.uri.queryParameters.get("state").map({ String($0) }),
+           let completion = await hostedLinkCompletions.completion(
+               state: state,
+               linkToken: nil,
+               linkSessionId: nil
+           ),
+           completion.status != HostedLinkCompletionStatus.success {
             throw HostedLinkCompletionError.status(completion.status)
         }
 
-        let linkSession = try await plaidClient.getLinkToken(pendingSession.linkToken)
-        return linkSession.publicTokenResults
+        return results
     }
 
     /// Exchanges the result's public token and persists the item, returning an
