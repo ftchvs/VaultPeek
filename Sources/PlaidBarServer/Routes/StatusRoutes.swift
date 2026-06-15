@@ -6,6 +6,7 @@ import PlaidBarCore
 struct StatusRoutes: Sendable {
     let tokenStore: TokenStore
     let billingStore: BillingSubscriptionStore
+    var webhookEventStore: WebhookEventStore? = nil
     let config: ServerConfig
 
     func register(with group: RouterGroup<some RequestContext>) {
@@ -70,16 +71,26 @@ struct StatusRoutes: Sendable {
 
     private func safeItemStatuses() async throws -> [ItemStatus] {
         let items = try await tokenStore.getAllItems()
-        return items.map(Self.safeItemStatus)
+        let webhookEvents = try await webhookEventStore?.latestEventsByItem() ?? [:]
+        return items.map { Self.safeItemStatus(from: $0, webhookEvent: webhookEvents[$0.id ?? ""]) }
     }
 
-    private static func safeItemStatus(from item: ItemModel) -> ItemStatus {
+    private static func safeItemStatus(from item: ItemModel, webhookEvent: WebhookItemSignal? = nil) -> ItemStatus {
         ItemStatus(
             id: item.id ?? "",
             institutionName: item.institutionName,
             status: ItemConnectionStatus(rawValue: item.status) ?? .error,
-            lastSync: item.updatedAt
+            lastSync: item.updatedAt,
+            lastWebhookAt: webhookEvent?.effectiveDate,
+            lastWebhookEvent: webhookEvent.map { "\($0.webhookType).\($0.webhookCode)" },
+            needsSync: Self.needsPollingSync(item: item, webhookEvent: webhookEvent)
         )
+    }
+
+    private static func needsPollingSync(item: ItemModel, webhookEvent: WebhookItemSignal?) -> Bool {
+        guard let webhookEvent, webhookEvent.needsSync else { return false }
+        guard let lastSync = item.updatedAt else { return true }
+        return lastSync < webhookEvent.effectiveDate
     }
 
     static func includesItems(_ request: Request) -> Bool {
