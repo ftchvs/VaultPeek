@@ -130,6 +130,9 @@ struct ServerConfig: Sendable {
         // until the owner provisions them (see consumer-production-checklist.md).
         let deployment = DeploymentMode.resolved(from: environmentValues)
         let remoteBridge = RemoteBridgeConfig.resolved(from: environmentValues)
+        if deployment == .hostedBridge, link.webhookURL == nil {
+            throw ServerConfigError.missingManagedLinkWebhookURL
+        }
         let oauthRedirect = try OAuthRedirectConfiguration.resolved(
             from: environmentValues,
             deployment: deployment,
@@ -885,6 +888,7 @@ enum ServerConfigError: LocalizedError {
     case invalidEnvironmentVariable(String, String)
     case invalidConfigLine(path: String, line: Int)
     case invalidPort(Int)
+    case missingManagedLinkWebhookURL
     case missingManagedRedirectURI
     case invalidManagedRedirectURI
     case appRedirectRequiresHTTPS
@@ -897,6 +901,8 @@ enum ServerConfigError: LocalizedError {
             "Invalid config line \(line) in \(path)"
         case .invalidPort(let port):
             "Invalid server port \(port): must be between 1 and 65535"
+        case .missingManagedLinkWebhookURL:
+            "PLAID_LINK_WEBHOOK_URL is required when PLAIDBAR_DEPLOYMENT=hosted-bridge"
         case .missingManagedRedirectURI:
             "Managed production Hosted Link requires PLAIDBAR_OAUTH_REDIRECT_URI to be configured"
         case .invalidManagedRedirectURI:

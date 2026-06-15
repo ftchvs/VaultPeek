@@ -164,6 +164,19 @@ private actor HostedLinkStubPlaidClient: PlaidClientProtocol {
     }
 }
 
+private actor HostedLinkCompletionResultRecorder {
+    private var publicTokens: [String] = []
+
+    func store(_ result: PlaidPublicTokenResult) -> OAuthCallbackRoute.StoreResultOutcome {
+        publicTokens.append(result.publicToken)
+        return .stored
+    }
+
+    func recordedPublicTokens() -> [String] {
+        publicTokens
+    }
+}
+
 private enum RefreshStubError: Error {
     case failed
 }
@@ -893,6 +906,16 @@ struct PlaidBarServerTests {
         )
     }
 
+    private static func makeJSONRequest(path: String, body: [String: String]) throws -> Request {
+        var headers = HTTPFields()
+        headers[.contentType] = "application/json"
+        let data = try JSONEncoder().encode(body)
+        return Request(
+            head: HTTPRequest(method: .post, scheme: nil, authority: nil, path: path, headerFields: headers),
+            body: RequestBody(buffer: ByteBuffer(data: data))
+        )
+    }
+
     private func setupStateConfig(in directory: URL) throws -> ServerConfig {
         let dataDirectory = directory.appendingPathComponent("data", isDirectory: true)
         let configURL = directory.appendingPathComponent("plaidbar.conf")
@@ -912,6 +935,14 @@ struct PlaidBarServerTests {
         var buffer = await collector.collectedBuffer()
         let data = buffer.readData(length: buffer.readableBytes) ?? Data()
         return try JSONDecoder().decode(T.self, from: data)
+    }
+
+    private static func responseString(_ response: Response) async throws -> String {
+        let collector = ResponseBodyCollector()
+        let writer = CollectingResponseBodyWriter(collector: collector)
+        try await response.body.write(writer)
+        var buffer = await collector.collectedBuffer()
+        return buffer.readString(length: buffer.readableBytes) ?? ""
     }
 
     private actor ResponseBodyCollector {
@@ -1778,6 +1809,247 @@ struct PlaidBarServerTests {
         #expect(response.publicTokens == ["public-sandbox-one", "public-sandbox-two"])
         #expect(response.publicTokenResults.first?.institution?.name == "Example Credit Union")
         #expect(response.publicTokenResults.first?.institution?.institutionId == "ins_example_credit_union")
+    }
+
+    @Test("OAuth callback exchanges public token delivered on redirect")
+    func oauthCallbackUsesRedirectPublicTokenWithoutSessionLookup() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-oauth-redirect-token-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let linkToken = "redirect-link-token"
+        let publicToken = "redirect-public-token"
+        let plaidClient = HostedLinkStubPlaidClient(
+            linkTokenGetResponse: PlaidLinkTokenGetResponse(
+                linkToken: linkToken,
+                linkSessions: nil,
+                onSuccess: nil,
+                results: nil
+            ),
+            exchangeResponse: PlaidTokenExchangeResponse(
+                accessToken: "unused-access-token",
+                itemId: "unused-item",
+                requestId: nil
+            ),
+            accountsResponse: PlaidAccountsResponse(
+                accounts: [],
+                item: PlaidItem(
+                    itemId: "unused-item",
+                    institutionId: "ins_redirect",
+                    availableProducts: nil,
+                    billedProducts: nil
+                ),
+                requestId: nil
+            )
+        )
+        let pendingLinkSessions = PendingLinkSessionStore(
+            storageURL: directory.appendingPathComponent("pending-link-sessions.json")
+        )
+        let state = await pendingLinkSessions.issueState()
+        await pendingLinkSessions.save(state: state, linkToken: linkToken)
+        let databasePath = directory.appendingPathComponent("plaidbar-test.sqlite").path
+        let logger = Logger(label: "com.ftchvs.plaidbar-server-tests.oauth-redirect-token")
+        let recorder = HostedLinkCompletionResultRecorder()
+
+        try await withTokenStore(databasePath: databasePath, logger: logger) { store in
+            let route = OAuthCallbackRoute(
+                plaidClient: plaidClient,
+                tokenStore: store,
+                pendingLinkSessions: pendingLinkSessions,
+                storePublicTokenResult: { result in
+                    await recorder.store(result)
+                }
+            )
+            let response = try await route.handleCallback(
+                request: Self.makeRequest(path: "/oauth/callback?state=\(state)&public_token=\(publicToken)"),
+                context: TestRequestContext(source: TestRequestContextSource())
+            )
+            let calls = await plaidClient.recordedCalls()
+            let storedPublicTokens = await recorder.recordedPublicTokens()
+
+            #expect(response.status == .ok)
+            #expect(calls.linkTokens.isEmpty)
+            #expect(calls.publicTokens.isEmpty)
+            #expect(calls.accountAccessTokens.isEmpty)
+            #expect(storedPublicTokens == [publicToken])
+        }
+    }
+
+    @Test("Hosted Link webhook success allows callback to fetch public token from session lookup")
+    func hostedLinkWebhookSuccessAllowsSessionLookup() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-webhook-session-token-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let linkToken = "webhook-link-token"
+        let publicToken = "webhook-public-token"
+        let linkSessionId = "webhook-link-session"
+        let linkTokenGetResponse = PlaidLinkTokenGetResponse(
+            linkToken: linkToken,
+            linkSessions: [
+                PlaidLinkSession(
+                    linkSessionId: linkSessionId,
+                    results: PlaidLinkResults(
+                        itemAddResults: [
+                            PlaidLinkItemAddResult(
+                                publicToken: publicToken,
+                                institution: PlaidLinkInstitution(
+                                    name: "Webhook Credit Union",
+                                    institutionId: "ins_webhook"
+                                )
+                            ),
+                        ]
+                    )
+                ),
+            ],
+            onSuccess: nil,
+            results: nil
+        )
+        let plaidClient = HostedLinkStubPlaidClient(
+            linkTokenGetResponse: linkTokenGetResponse,
+            exchangeResponse: PlaidTokenExchangeResponse(
+                accessToken: "unused-access-token",
+                itemId: "unused-item",
+                requestId: nil
+            ),
+            accountsResponse: PlaidAccountsResponse(
+                accounts: [],
+                item: PlaidItem(
+                    itemId: "unused-item",
+                    institutionId: "ins_accounts_fallback",
+                    availableProducts: nil,
+                    billedProducts: nil
+                ),
+                requestId: nil
+            )
+        )
+        let pendingLinkSessions = PendingLinkSessionStore(
+            storageURL: directory.appendingPathComponent("pending-link-sessions.json")
+        )
+        let hostedLinkCompletions = HostedLinkCompletionStore()
+        let state = await pendingLinkSessions.issueState()
+        await pendingLinkSessions.save(state: state, linkToken: linkToken)
+        let databasePath = directory.appendingPathComponent("plaidbar-test.sqlite").path
+        let logger = Logger(label: "com.ftchvs.plaidbar-server-tests.webhook-session-token")
+        let recorder = HostedLinkCompletionResultRecorder()
+
+        try await withTokenStore(databasePath: databasePath, logger: logger) { store in
+            let webhook = HostedLinkWebhookRoute(hostedLinkCompletions: hostedLinkCompletions)
+            let webhookResponse = try await webhook.receive(
+                request: Self.makeJSONRequest(path: "/webhooks/plaid/hosted-link", body: [
+                    "link_token": linkToken,
+                    "link_session_id": linkSessionId,
+                    "state": state,
+                    "status": "success",
+                ]),
+                context: TestRequestContext(source: TestRequestContextSource())
+            )
+            let route = OAuthCallbackRoute(
+                plaidClient: plaidClient,
+                tokenStore: store,
+                pendingLinkSessions: pendingLinkSessions,
+                hostedLinkCompletions: hostedLinkCompletions,
+                storePublicTokenResult: { result in
+                    await recorder.store(result)
+                }
+            )
+            let response = try await route.handleCallback(
+                request: Self.makeRequest(path: "/oauth/callback?state=\(state)&link_session_id=\(linkSessionId)"),
+                context: TestRequestContext(source: TestRequestContextSource())
+            )
+            let calls = await plaidClient.recordedCalls()
+            let storedPublicTokens = await recorder.recordedPublicTokens()
+
+            #expect(webhookResponse == .ok)
+            #expect(response.status == .ok)
+            #expect(calls.linkTokens == [linkToken])
+            #expect(calls.publicTokens.isEmpty)
+            #expect(storedPublicTokens == [publicToken])
+        }
+    }
+
+    @Test func hostedLinkCompletionStoreIsIdempotentByAnyIdentifier() async {
+        let store = HostedLinkCompletionStore()
+        let first = HostedLinkCompletionRecord(
+            state: "state-one",
+            linkToken: "link-token-one",
+            linkSessionId: "session-one",
+            status: .success,
+            receivedAt: Date(timeIntervalSince1970: 1)
+        )
+        let duplicate = HostedLinkCompletionRecord(
+            state: nil,
+            linkToken: "link-token-one",
+            linkSessionId: nil,
+            status: .retryableProviderFailure,
+            receivedAt: Date(timeIntervalSince1970: 2)
+        )
+
+        let stored = await store.record(first)
+        let storedAgain = await store.record(duplicate)
+        let byState = await store.completion(state: "state-one", linkToken: nil)
+        let byLinkToken = await store.completion(state: nil, linkToken: "link-token-one")
+        let bySession = await store.completion(state: nil, linkToken: nil, linkSessionId: "session-one")
+
+        #expect(stored == first)
+        #expect(storedAgain == first)
+        #expect(byState == first)
+        #expect(byLinkToken == first)
+        #expect(bySession == first)
+    }
+
+    @Test func oauthCallbackDistinguishesUserExitExpiredAndRetryableProviderFailure() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-oauth-outcome-copy-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let databasePath = directory.appendingPathComponent("plaidbar-test.sqlite").path
+        let logger = Logger(label: "com.ftchvs.plaidbar-server-tests.oauth-outcome-copy")
+
+        try await withTokenStore(databasePath: databasePath, logger: logger) { store in
+            let route = OAuthCallbackRoute(
+                plaidClient: HostedLinkStubPlaidClient(
+                    linkTokenGetResponse: PlaidLinkTokenGetResponse(
+                        linkToken: "unused",
+                        linkSessions: nil,
+                        onSuccess: nil,
+                        results: nil
+                    ),
+                    exchangeResponse: PlaidTokenExchangeResponse(
+                        accessToken: "unused-access-token",
+                        itemId: "unused-item",
+                        requestId: nil
+                    ),
+                    accountsResponse: PlaidAccountsResponse(accounts: [], item: nil, requestId: nil)
+                ),
+                tokenStore: store,
+                pendingLinkSessions: PendingLinkSessionStore()
+            )
+            let context = TestRequestContext(source: TestRequestContextSource())
+
+            let userExit = try await route.handleCallback(
+                request: Self.makeRequest(path: "/oauth/callback?state=exit-state&error_code=USER_EXIT"),
+                context: context
+            )
+            let expired = try await route.handleCallback(
+                request: Self.makeRequest(path: "/oauth/callback?state=expired-state&error_code=LINK_TOKEN_EXPIRED"),
+                context: context
+            )
+            let retryable = try await route.handleCallback(
+                request: Self.makeRequest(path: "/oauth/callback?state=retry-state&error_code=INSTITUTION_DOWN"),
+                context: context
+            )
+
+            #expect(userExit.status == .ok)
+            #expect(try await Self.responseString(userExit).contains("Connection Canceled"))
+            #expect(expired.status == .badRequest)
+            #expect(try await Self.responseString(expired).contains("expired"))
+            #expect(retryable.status == .internalServerError)
+            #expect(try await Self.responseString(retryable).contains("temporary problem"))
+        }
     }
 
     @Test(
