@@ -14,6 +14,19 @@ enum ItemStatusMapping {
         switch normalized {
         case "LOGIN_REPAIRED":
             return currentStatus.applyingLoginRepaired()
+        case "LOGIN_REPAIRED_WITH_NEW_ACCOUNTS":
+            // Login was repaired AND Plaid has newly available accounts to grant;
+            // surface the actionable new-accounts state rather than silently
+            // clearing the prompt. Like the sibling `LOGIN_REPAIRED` branch (and
+            // `applyingLoginRepaired()`), a repair signal must never clobber a hard
+            // `.error` this receiver cannot resolve — the item still needs a full
+            // reconnect, so preserve `.error` instead of downgrading it.
+            return currentStatus == .error ? .error : .newAccountsAvailable
+        case "ERROR":
+            // A bare ITEM `ERROR` webhook whose granular `error.error_code` this
+            // receiver does not yet parse: keep the item degraded (login needed)
+            // rather than dropping the signal, preserving prior behavior.
+            return .loginRequired
         default:
             return status(forPlaidCode: normalized)
         }

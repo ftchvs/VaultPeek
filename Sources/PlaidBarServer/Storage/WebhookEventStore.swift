@@ -79,19 +79,11 @@ struct WebhookItemSignal: Sendable {
     let idempotencyHash: String
     let eventAt: Date?
     let receivedAt: Date
-    let status: WebhookItemStatusSignal
     let needsSync: Bool
 
     var effectiveDate: Date {
         eventAt ?? receivedAt
     }
-}
-
-enum WebhookItemStatusSignal: Sendable, Equatable {
-    case connected
-    case loginRequired
-    case error
-    case unchanged
 }
 
 struct WebhookStoreResult: Sendable, Equatable {
@@ -154,7 +146,6 @@ actor WebhookEventStore {
 
     private static func signal(from model: WebhookEventModel) -> WebhookItemSignal? {
         guard let receivedAt = model.receivedAt else { return nil }
-        let status = PlaidWebhookEvent.statusSignal(webhookCode: model.webhookCode)
         return WebhookItemSignal(
             itemId: model.itemId,
             webhookType: model.webhookType,
@@ -163,7 +154,6 @@ actor WebhookEventStore {
             idempotencyHash: model.idempotencyHash,
             eventAt: model.eventAt,
             receivedAt: receivedAt,
-            status: status,
             needsSync: PlaidWebhookEvent.needsSync(webhookCode: model.webhookCode)
         )
     }

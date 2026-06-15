@@ -164,7 +164,7 @@ struct WebhookReceiverTests {
             let status = try await statusRoutes.statusSnapshot(includeItems: true)
             let item = try #require(status.itemStatuses?.first)
 
-            #expect(item.status == .connected)
+            #expect(item.status == .loginRepaired)
             #expect(item.lastWebhookEvent == "ITEM.LOGIN_REPAIRED")
             #expect(item.lastWebhookAt != nil)
             #expect(item.needsSync == false)
@@ -182,7 +182,6 @@ struct WebhookReceiverTests {
                 idempotencyHash: "sync-\(UUID().uuidString)",
                 eventAt: Date(),
                 receivedAt: Date(),
-                status: .unchanged,
                 needsSync: true
             )
             _ = try await eventStore.record(signal)
@@ -199,6 +198,57 @@ struct WebhookReceiverTests {
             try await tokenStore.updateItemStatus(id: "item-webhook", status: ItemConnectionStatus.connected.rawValue)
             let refreshed = try await statusRoutes.statusSnapshot(includeItems: true)
             #expect(!((try #require(refreshed.itemStatuses?.first)).needsSync))
+        }
+    }
+
+    @Test("Consent-repair webhook codes persist their modeled item status")
+    func consentRepairWebhookCodesPersistModeledStatus() async throws {
+        let scenarios: [(code: String, expected: ItemConnectionStatus)] = [
+            ("PENDING_EXPIRATION", .pendingExpiration),
+            ("PENDING_DISCONNECT", .pendingDisconnect),
+            ("USER_PERMISSION_REVOKED", .permissionRevoked),
+            ("NEW_ACCOUNTS_AVAILABLE", .newAccountsAvailable),
+        ]
+        for scenario in scenarios {
+            try await Self.withStores { tokenStore, eventStore in
+                // The fresh item defaults to `.connected`; the consent code must
+                // move it to its modeled repair state, not silently no-op or get
+                // flattened to `.connected` by the old coarse mapper.
+                let route = WebhookRoutes(
+                    verifier: StrictPlaidWebhookVerifier(signatureValidator: AcceptingSignatureValidator()),
+                    tokenStore: tokenStore,
+                    eventStore: eventStore,
+                    now: { Date(timeIntervalSince1970: 1_800_000_000) }
+                )
+                let body = Self.payload(webhookCode: scenario.code)
+                _ = try await route.receive(
+                    request: Self.request(body: body, jwt: Self.jwt(iat: 1_800_000_000, body: Data(body.utf8))),
+                    context: WebhookTestContext(source: WebhookTestContextSource())
+                )
+                let persisted = try await tokenStore.getItem(id: "item-webhook")?.status
+                #expect(persisted == scenario.expected.rawValue, "webhook \(scenario.code)")
+            }
+        }
+    }
+
+    @Test("LOGIN_REPAIRED does not clobber a hard item error")
+    func loginRepairedDoesNotClobberError() async throws {
+        try await Self.withStores { tokenStore, eventStore in
+            try await tokenStore.updateItemStatus(id: "item-webhook", status: ItemConnectionStatus.error.rawValue)
+            let route = WebhookRoutes(
+                verifier: StrictPlaidWebhookVerifier(signatureValidator: AcceptingSignatureValidator()),
+                tokenStore: tokenStore,
+                eventStore: eventStore,
+                now: { Date(timeIntervalSince1970: 1_800_000_000) }
+            )
+            let body = Self.payload(webhookCode: "LOGIN_REPAIRED")
+            _ = try await route.receive(
+                request: Self.request(body: body, jwt: Self.jwt(iat: 1_800_000_000, body: Data(body.utf8))),
+                context: WebhookTestContext(source: WebhookTestContextSource())
+            )
+            // A repair must not flip a hard error to connected/repaired; the item
+            // still needs a full reconnect.
+            #expect(try await tokenStore.getItem(id: "item-webhook")?.status == ItemConnectionStatus.error.rawValue)
         }
     }
 

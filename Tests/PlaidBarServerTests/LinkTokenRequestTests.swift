@@ -352,6 +352,23 @@ struct HostedLinkOAuthRedirectReadinessTests {
         #expect(config.oauthRedirect.isProductionReadyForHostedLink)
     }
 
+    @Test("Managed production rejects http redirect even without hosted-bridge deployment")
+    func managedProductionRejectsHTTPRedirectInLocalDeployment() throws {
+        // Before the fix the HTTPS gate keyed on `.hostedBridge`, so managed mode
+        // + local deployment + production accepted a plaintext redirect carrying
+        // the one-time state. It must reject regardless of deployment mode.
+        #expect(throws: ServerConfigError.self) {
+            _ = try loadConfig([
+                "PLAID_CLIENT_ID=client",
+                "PLAID_SECRET=secret",
+                "PLAID_ENV=production",
+                "PLAIDBAR_DEPLOYMENT=local",
+                "PLAIDBAR_OAUTH_REDIRECT_MODE=managed",
+                "PLAIDBAR_OAUTH_REDIRECT_URI=http://broker.vaultpeek.example/oauth/callback",
+            ])
+        }
+    }
+
     private func loadConfig(_ lines: [String]) throws -> ServerConfig {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("plaidbar-oauth-redirect-\(UUID().uuidString)", isDirectory: true)

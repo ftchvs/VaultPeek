@@ -154,22 +154,8 @@ struct PlaidWebhookEvent: Decodable, Sendable {
             ),
             eventAt: timestamp,
             receivedAt: receivedAt,
-            status: Self.statusSignal(webhookCode: webhookCode),
             needsSync: Self.needsSync(webhookCode: webhookCode)
         )
-    }
-
-    static func statusSignal(webhookCode: String) -> WebhookItemStatusSignal {
-        switch webhookCode {
-        case "ERROR", "ITEM_LOGIN_REQUIRED":
-            return .loginRequired
-        case "LOGIN_REPAIRED", "PENDING_EXPIRATION":
-            return .connected
-        case "LOGIN_REPAIRED_WITH_NEW_ACCOUNTS":
-            return .connected
-        default:
-            return .unchanged
-        }
     }
 
     static func needsSync(webhookCode: String) -> Bool {
@@ -260,18 +246,22 @@ struct WebhookRoutes: Sendable {
         return try Self.jsonResponse(WebhookReceiveResponse(disposition: result.disposition.rawValue))
     }
 
+    /// Resolves the webhook code against the item's *current* status through the
+    /// single source of truth (`ItemStatusMapping`) and persists the result. The
+    /// current status must be read here because consent-repair codes such as
+    /// `LOGIN_REPAIRED` are status-relative (a repair must not clobber a hard
+    /// `.error`), so the resulting status cannot be precomputed when the signal is
+    /// built.
     private func apply(_ signal: WebhookItemSignal) async throws {
-        guard try await tokenStore.getItem(id: signal.itemId) != nil else { return }
-        switch signal.status {
-        case .connected:
-            try await tokenStore.updateItemStatus(id: signal.itemId, status: ItemConnectionStatus.connected.rawValue)
-        case .loginRequired:
-            try await tokenStore.updateItemStatus(id: signal.itemId, status: ItemConnectionStatus.loginRequired.rawValue)
-        case .error:
-            try await tokenStore.updateItemStatus(id: signal.itemId, status: ItemConnectionStatus.error.rawValue)
-        case .unchanged:
-            break
+        guard let item = try await tokenStore.getItem(id: signal.itemId) else { return }
+        let current = ItemConnectionStatus(rawValue: item.status) ?? .error
+        guard let resolved = ItemStatusMapping.status(
+            forWebhookCode: signal.webhookCode,
+            currentStatus: current
+        ), resolved != current else {
+            return
         }
+        try await tokenStore.updateItemStatus(id: signal.itemId, status: resolved.rawValue)
     }
 
     private static let maxBodyBytes = 128 * 1024
