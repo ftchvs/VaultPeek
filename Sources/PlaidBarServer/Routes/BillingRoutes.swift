@@ -1,5 +1,6 @@
 import Foundation
 import Hummingbird
+import HTTPTypes
 import NIOCore
 import PlaidBarCore
 
@@ -14,17 +15,23 @@ struct BillingRoutes: Sendable {
     let tokenStore: TokenStore?
     let deployment: DeploymentMode
     let webhookEvents: StripeBillingEventStore
+    let verifier: any StripeWebhookVerifier
+    let now: @Sendable () -> Date
 
     init(
         billingStore: BillingSubscriptionStore,
         tokenStore: TokenStore? = nil,
         deployment: DeploymentMode = .local,
-        webhookEvents: StripeBillingEventStore = StripeBillingEventStore()
+        webhookEvents: StripeBillingEventStore = StripeBillingEventStore(),
+        verifier: any StripeWebhookVerifier = UnconfiguredStripeWebhookVerifier(),
+        now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.billingStore = billingStore
         self.tokenStore = tokenStore
         self.deployment = deployment
         self.webhookEvents = webhookEvents
+        self.verifier = verifier
+        self.now = now
     }
 
     func register(with group: RouterGroup<some RequestContext>) {
@@ -91,10 +98,21 @@ struct BillingRoutes: Sendable {
 
     @Sendable
     func handleStripeWebhook(request: Request, context: some RequestContext) async throws -> Response {
-        let event: StripeBillingWebhookEvent = try await Self.decodeBody(
-            request,
-            errorMessage: "Invalid Stripe billing webhook payload"
-        )
+        // Verify authenticity over the EXACT received bytes BEFORE decoding or
+        // applying anything. The default verifier is fail-closed, so an unsigned
+        // or forged event mutates nothing — mirroring the Plaid webhook path and
+        // closing the free-premium / cap-raise hole once this route is exposed.
+        let buffer = try await request.body.collect(upTo: Self.maxBodyBytes)
+        let payload = Data(buffer: buffer)
+        let signatureHeader = HTTPField.Name("Stripe-Signature").flatMap { request.headers[$0] }
+        try await verifier.verify(payload: payload, signatureHeader: signatureHeader, now: now())
+
+        let event: StripeBillingWebhookEvent
+        do {
+            event = try Self.webhookDecoder.decode(StripeBillingWebhookEvent.self, from: payload)
+        } catch {
+            throw HTTPError(.badRequest, message: "Invalid Stripe billing webhook payload")
+        }
         let inserted = await webhookEvents.recordIfNew(event.id)
         if inserted {
             _ = try await billingStore.save(SaveBillingSubscriptionRequest(
@@ -158,6 +176,12 @@ struct BillingRoutes: Sendable {
 
     /// Upper bound for the small JSON billing payload.
     private static let maxBodyBytes = 64 * 1024
+
+    private static let webhookDecoder: JSONDecoder = {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }()
 
     private static func jsonResponse(_ value: some Encodable) throws -> Response {
         let encoder = JSONEncoder()
