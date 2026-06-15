@@ -542,6 +542,142 @@ struct ConsumerFoundationTests {
         }
     }
 
+    // MARK: - Stripe Entitlements
+
+    @Test("Checkout and portal endpoints return Stripe-shaped session URLs without secrets")
+    func checkoutAndPortalSessionEndpointsAreSecretFree() async throws {
+        try await withFluent { fluent in
+            let billingStore = BillingSubscriptionStore(fluent: fluent)
+            let routes = BillingRoutes(billingStore: billingStore)
+            let checkout = try await routes.createCheckoutSession(
+                request: try Self.makeJSONRequest(
+                    method: .post,
+                    path: "/api/billing/checkout",
+                    body: BillingCheckoutSessionRequest(
+                        plan: .plus,
+                        successURL: "vaultpeek://billing/success",
+                        cancelURL: "vaultpeek://billing/cancel"
+                    )
+                ),
+                context: TestRequestContext(source: TestRequestContextSource())
+            )
+            let portal = try await routes.createPortalSession(
+                request: try Self.makeJSONRequest(
+                    method: .post,
+                    path: "/api/billing/portal",
+                    body: BillingPortalSessionRequest(returnURL: "vaultpeek://billing/return")
+                ),
+                context: TestRequestContext(source: TestRequestContextSource())
+            )
+            let checkoutBody = try await Self.responseString(checkout)
+            let portalBody = try await Self.responseString(portal)
+            let decodedCheckout = try JSONDecoder().decode(BillingCheckoutSessionResponse.self, from: Data(checkoutBody.utf8))
+            let decodedPortal = try JSONDecoder().decode(BillingPortalSessionResponse.self, from: Data(portalBody.utf8))
+
+            #expect(checkout.status == .ok)
+            #expect(decodedCheckout.plan == .plus)
+            #expect(decodedCheckout.checkoutURL.contains("billing.stripe.local/checkout"))
+            #expect(decodedPortal.portalURL.contains("billing.stripe.local/portal"))
+            #expect(!checkoutBody.localizedCaseInsensitiveContains("secret"))
+            #expect(!portalBody.localizedCaseInsensitiveContains("secret"))
+        }
+    }
+
+    @Test("Stripe webhook metadata updates billing and entitlement summary")
+    func stripeWebhookUpdatesBillingEntitlementSummary() async throws {
+        try await withFluent { fluent in
+            let tokenStore = TokenStore(fluent: fluent)
+            let billingStore = BillingSubscriptionStore(fluent: fluent)
+            let routes = BillingRoutes(
+                billingStore: billingStore,
+                tokenStore: tokenStore,
+                deployment: .hostedBridge
+            )
+            let trialEnd = Date(timeIntervalSince1970: 1_800_000_000)
+            let webhook = StripeBillingWebhookEvent(
+                id: "evt_test_subscription_updated",
+                type: "customer.subscription.updated",
+                status: .trialing,
+                plan: .plus,
+                trialEndsAt: trialEnd
+            )
+
+            let first = try await routes.handleStripeWebhook(
+                request: try Self.makeJSONRequest(method: .post, path: "/api/billing/webhook", body: webhook),
+                context: TestRequestContext(source: TestRequestContextSource())
+            )
+            let duplicate = try await routes.handleStripeWebhook(
+                request: try Self.makeJSONRequest(method: .post, path: "/api/billing/webhook", body: webhook),
+                context: TestRequestContext(source: TestRequestContextSource())
+            )
+            let entitlement = try await routes.getEntitlement(
+                request: Self.makeRequest(path: "/api/billing/entitlement"),
+                context: TestRequestContext(source: TestRequestContextSource())
+            )
+            let entitlementBody = try await Self.responseString(entitlement)
+            let entitlementDecoder = JSONDecoder()
+            entitlementDecoder.dateDecodingStrategy = .iso8601
+            let decoded = try entitlementDecoder.decode(BillingEntitlementSummary.self, from: Data(entitlementBody.utf8))
+
+            #expect(first.status == .ok)
+            #expect(try await Self.responseString(duplicate).contains("duplicate"))
+            #expect(decoded.plan == .plus)
+            #expect(decoded.status == .trialing)
+            #expect(decoded.institutionLimit == 8)
+            #expect(decoded.activeInstitutionCount == 0)
+            #expect(decoded.trialEndsAt == trialEnd)
+            #expect(decoded.features.contains("managed_linking"))
+            #expect(decoded.managedLink.canCreateManagedLink)
+            #expect(!entitlementBody.localizedCaseInsensitiveContains("secret"))
+        }
+    }
+
+    @Test("Canceled Stripe entitlement blocks future managed linking without deleting data")
+    func canceledStripeEntitlementBlocksManagedLinking() async throws {
+        try await withFluent { fluent in
+            let tokenStore = TokenStore(fluent: fluent)
+            let billingStore = BillingSubscriptionStore(fluent: fluent)
+            let routes = BillingRoutes(
+                billingStore: billingStore,
+                tokenStore: tokenStore,
+                deployment: .hostedBridge
+            )
+            try await ItemModel(
+                id: "managed-kept-after-cancel",
+                accessToken: "keychain:managed-kept-after-cancel",
+                institutionId: "ins_cancel_kept",
+                origin: .managed
+            ).save(on: fluent.db())
+            _ = try await routes.handleStripeWebhook(
+                request: try Self.makeJSONRequest(
+                    method: .post,
+                    path: "/api/billing/webhook",
+                    body: StripeBillingWebhookEvent(
+                        id: "evt_test_subscription_deleted",
+                        type: "customer.subscription.deleted",
+                        status: .canceled,
+                        plan: .plus
+                    )
+                ),
+                context: TestRequestContext(source: TestRequestContextSource())
+            )
+
+            let entitlement = try await routes.getEntitlement(
+                request: Self.makeRequest(path: "/api/billing/entitlement"),
+                context: TestRequestContext(source: TestRequestContextSource())
+            )
+            let decoded = try JSONDecoder().decode(
+                BillingEntitlementSummary.self,
+                from: Data(try await Self.responseString(entitlement).utf8)
+            )
+
+            #expect(decoded.managedLink.canCreateManagedLink == false)
+            #expect(decoded.managedLink.blockReason == .subscriptionDegraded)
+            #expect(decoded.features.isEmpty)
+            #expect(try await tokenStore.getItem(id: "managed-kept-after-cancel") != nil)
+        }
+    }
+
     // MARK: - Helpers
 
     private static func makeRequest(path: String) -> Request {
