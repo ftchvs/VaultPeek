@@ -280,6 +280,8 @@ public struct AttentionQueue: Equatable, Sendable {
             switch item.status {
             case .connected:
                 return nil
+            case .loginRepaired:
+                return nil
             case .error:
                 return AttentionQueueRow(
                     id: "item-error-\(index)",
@@ -292,9 +294,9 @@ public struct AttentionQueue: Equatable, Sendable {
                     targetItemId: item.id,
                     accessibilityHint: "Reconnects this institution through Plaid Link."
                 )
-            case .loginRequired:
+            case .loginRequired, .pendingExpiration, .pendingDisconnect, .permissionRevoked, .newAccountsAvailable:
                 return AttentionQueueRow(
-                    id: "item-login-\(index)",
+                    id: "item-repair-\(index)",
                     severity: .warning,
                     title: itemTitle(item, fallback: "Fresh login needed"),
                     detail: itemDetail(item, fallback: "Plaid requires a fresh bank login before sync can continue."),
@@ -397,10 +399,18 @@ public struct AttentionQueue: Equatable, Sendable {
     private static func itemTitle(_ item: ItemStatus, fallback: String) -> String {
         guard let institutionName = normalizedInstitutionName(item.institutionName) else { return fallback }
         switch item.status {
-        case .connected:
+        case .connected, .loginRepaired:
             return institutionName
         case .loginRequired:
             return "\(institutionName) needs login"
+        case .pendingExpiration:
+            return "\(institutionName) login expiring"
+        case .pendingDisconnect:
+            return "\(institutionName) needs consent"
+        case .permissionRevoked:
+            return "\(institutionName) permission revoked"
+        case .newAccountsAvailable:
+            return "\(institutionName) has new accounts"
         case .error:
             return "\(institutionName) needs attention"
         }
@@ -409,10 +419,18 @@ public struct AttentionQueue: Equatable, Sendable {
     private static func itemDetail(_ item: ItemStatus, fallback: String) -> String {
         guard let institutionName = normalizedInstitutionName(item.institutionName) else { return fallback }
         switch item.status {
-        case .connected:
+        case .connected, .loginRepaired:
             return "Connected."
         case .loginRequired:
             return "Plaid requires a fresh \(institutionName) login before sync can continue."
+        case .pendingExpiration:
+            return "Plaid says \(institutionName) login will expire soon. Update this item to keep sync healthy."
+        case .pendingDisconnect:
+            return "Plaid says \(institutionName) needs renewed consent. Update this item before sync disconnects."
+        case .permissionRevoked:
+            return "Plaid says \(institutionName) permission was revoked. Update this item to restore access."
+        case .newAccountsAvailable:
+            return "\(institutionName) has newly available accounts. Update this item to choose what VaultPeek can access."
         case .error:
             return "Plaid reported an item error for \(institutionName). Reconnect, then refresh."
         }
@@ -501,7 +519,7 @@ public struct AttentionQueue: Equatable, Sendable {
         case "credentials-missing": return 2
         default:
             if row.id.hasPrefix("item-error-") { return 4 }
-            if row.id.hasPrefix("item-login-") { return 5 }
+            if row.id.hasPrefix("item-repair-") { return 5 }
             switch row.id {
             case "server-mode-mismatch": return 3
             case "recent-error": return 6

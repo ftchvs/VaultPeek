@@ -1046,6 +1046,24 @@ struct PlaidBarCoreTests {
         #expect(loginRequired.recoveryDetailLabel == "Plaid requires a fresh bank login. Reconnect this item, then refresh.")
         #expect(loginRequired.showsRecoveryActions)
 
+        let newAccounts = AccountConnectionPresentation.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            isSyncStale: false,
+            statusSyncText: "2m ago",
+            itemStatus: .newAccountsAvailable,
+            institutionName: "Chase"
+        )
+
+        #expect(newAccounts.level == .loginRequired)
+        #expect(newAccounts.rowLabel == "Update Chase")
+        #expect(newAccounts.detailLabel == "Chase new accounts available")
+        #expect(newAccounts.signalLabel == "New")
+        #expect(newAccounts.recoveryActionTitle == "Update Chase")
+        #expect(newAccounts.statusFilterSubtitle == "New accounts available • No sync recorded")
+        #expect(newAccounts.recoveryDetailLabel == "Chase has newly available accounts. Update this item to choose what VaultPeek can access.")
+        #expect(newAccounts.showsRecoveryActions)
+
         let errored = AccountConnectionPresentation.evaluate(
             isDemoMode: false,
             serverConnected: true,
@@ -3068,7 +3086,7 @@ struct PlaidBarCoreTests {
 
         #expect(readiness.level == .warning)
         #expect(readiness.primaryAction == .reconnect)
-        #expect(readiness.title == "1 item needs login")
+        #expect(readiness.title == "1 item needs update")
     }
 
     @Test("Dashboard status readiness pluralizes multiple login recovery items")
@@ -3087,7 +3105,7 @@ struct PlaidBarCoreTests {
             errorMessage: nil
         )
 
-        #expect(readiness.title == "2 items need login")
+        #expect(readiness.title == "2 items need update")
     }
 
     @Test("Dashboard status readiness keeps item recovery ahead of recent action failure")
@@ -3108,7 +3126,7 @@ struct PlaidBarCoreTests {
 
         #expect(readiness.level == .warning)
         #expect(readiness.primaryAction == .reconnect)
-        #expect(readiness.title == "1 item needs login")
+        #expect(readiness.title == "1 item needs update")
     }
 
     @Test("Dashboard status readiness detects incomplete first sync")
@@ -3345,12 +3363,31 @@ struct PlaidBarCoreTests {
 
     @Test("ItemConnectionStatus all values")
     func itemConnectionStatuses() throws {
-        let statuses: [ItemConnectionStatus] = [.connected, .loginRequired, .error]
+        let statuses: [ItemConnectionStatus] = [
+            .connected,
+            .loginRequired,
+            .pendingExpiration,
+            .pendingDisconnect,
+            .permissionRevoked,
+            .newAccountsAvailable,
+            .loginRepaired,
+            .error,
+        ]
         for status in statuses {
             let data = try JSONEncoder().encode(status)
             let decoded = try JSONDecoder().decode(ItemConnectionStatus.self, from: data)
             #expect(decoded == status)
         }
+    }
+
+    @Test("LOGIN_REPAIRED clears stale repair states without clearing unrelated warnings")
+    func loginRepairedClearsOnlyStaleRepairStates() {
+        #expect(ItemConnectionStatus.loginRequired.applyingLoginRepaired() == .loginRepaired)
+        #expect(ItemConnectionStatus.pendingExpiration.applyingLoginRepaired() == .loginRepaired)
+        #expect(ItemConnectionStatus.pendingDisconnect.applyingLoginRepaired() == .loginRepaired)
+        #expect(ItemConnectionStatus.permissionRevoked.applyingLoginRepaired() == .loginRepaired)
+        #expect(ItemConnectionStatus.newAccountsAvailable.applyingLoginRepaired() == .newAccountsAvailable)
+        #expect(ItemConnectionStatus.error.applyingLoginRepaired() == .error)
     }
 
     // MARK: - PlaidEnvironment Tests

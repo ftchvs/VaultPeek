@@ -66,5 +66,37 @@ public struct ItemStatus: Codable, Sendable, Identifiable {
 public enum ItemConnectionStatus: String, Codable, Sendable {
     case connected
     case loginRequired = "login_required"
+    case pendingExpiration = "pending_expiration"
+    case pendingDisconnect = "pending_disconnect"
+    case permissionRevoked = "permission_revoked"
+    case newAccountsAvailable = "new_accounts_available"
+    case loginRepaired = "login_repaired"
     case error
+
+    public var needsUpdateMode: Bool {
+        switch self {
+        case .loginRequired, .pendingExpiration, .pendingDisconnect, .permissionRevoked, .newAccountsAvailable:
+            true
+        case .connected, .loginRepaired, .error:
+            false
+        }
+    }
+
+    public var isDegraded: Bool {
+        switch self {
+        case .connected, .loginRepaired:
+            false
+        case .loginRequired, .pendingExpiration, .pendingDisconnect, .permissionRevoked, .newAccountsAvailable, .error:
+            true
+        }
+    }
+
+    public func applyingLoginRepaired() -> ItemConnectionStatus {
+        switch self {
+        case .loginRequired, .pendingExpiration, .pendingDisconnect, .permissionRevoked:
+            .loginRepaired
+        case .connected, .newAccountsAvailable, .loginRepaired, .error:
+            self
+        }
+    }
 }

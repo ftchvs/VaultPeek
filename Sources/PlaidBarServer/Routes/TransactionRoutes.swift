@@ -143,7 +143,10 @@ struct TransactionRoutes: Sendable {
                 // credential guidance instead of marking items errored.
                 throw PlaidError.credentialsNotConfigured
             } catch {
-                try await tokenStore.updateItemStatus(id: itemId, status: itemStatus(for: error).rawValue)
+                try await tokenStore.updateItemStatus(
+                    id: itemId,
+                    status: ItemStatusMapping.status(forAPIError: error).rawValue
+                )
                 return ItemSyncResult(
                     itemId: itemId,
                     attempted: true,
@@ -177,11 +180,4 @@ struct TransactionRoutes: Sendable {
         )
     }
 
-    private func itemStatus(for error: Error) -> ItemConnectionStatus {
-        if case PlaidError.apiError(_, _, let errorCode, _) = error,
-           errorCode == "ITEM_LOGIN_REQUIRED" {
-            return .loginRequired
-        }
-        return .error
-    }
 }
