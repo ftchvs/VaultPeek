@@ -206,6 +206,130 @@ struct LinkTokenRequestTests {
     }
 }
 
+@Suite("Hosted Link OAuth redirect readiness")
+struct HostedLinkOAuthRedirectReadinessTests {
+    @Test("Local sandbox BYO config allows localhost callback")
+    func localSandboxAllowsLocalhostCallback() throws {
+        let config = try loadConfig([
+            "PLAID_CLIENT_ID=client",
+            "PLAID_SECRET=secret",
+            "PLAID_ENV=sandbox",
+            "PLAIDBAR_DEPLOYMENT=local",
+            "PLAIDBAR_OAUTH_REDIRECT_MODE=local",
+            "PLAIDBAR_SERVER_PORT=9494",
+        ])
+
+        #expect(config.deployment == .local)
+        #expect(config.oauthRedirect.mode == .local)
+        #expect(config.redirectUri == "http://localhost:9494/oauth/callback")
+    }
+
+    @Test("Managed production rejects localhost callback")
+    func managedProductionRejectsLocalhostCallback() throws {
+        #expect(throws: ServerConfigError.self) {
+            _ = try loadConfig([
+                "PLAID_CLIENT_ID=client",
+                "PLAID_SECRET=secret",
+                "PLAID_ENV=production",
+                "PLAIDBAR_DEPLOYMENT=hosted-bridge",
+                "PLAIDBAR_OAUTH_REDIRECT_MODE=managed",
+                "PLAIDBAR_OAUTH_REDIRECT_URI=http://localhost:8484/oauth/callback",
+            ])
+        }
+    }
+
+    @Test("Managed production accepts configured HTTPS callback")
+    func managedProductionAcceptsHTTPSCallback() throws {
+        let config = try loadConfig([
+            "PLAID_CLIENT_ID=client",
+            "PLAID_SECRET=secret",
+            "PLAID_ENV=production",
+            "PLAIDBAR_DEPLOYMENT=hosted-bridge",
+            "PLAIDBAR_OAUTH_REDIRECT_MODE=managed",
+            "PLAIDBAR_OAUTH_REDIRECT_URI=https://link.vaultpeek.example/oauth/callback",
+        ])
+
+        #expect(config.deployment == .hostedBridge)
+        #expect(config.oauthRedirect.mode == .managed)
+        #expect(config.redirectUri == "https://link.vaultpeek.example/oauth/callback")
+        #expect(config.oauthRedirect.isProductionReadyForHostedLink)
+    }
+
+    @Test("Link route readiness guard blocks only managed production without HTTPS")
+    func linkRouteReadinessGuardBlocksOnlyManagedProductionWithoutHTTPS() {
+        let localhostRedirect = OAuthRedirectConfiguration(
+            mode: .managed,
+            uri: "http://localhost:8484/oauth/callback"
+        )
+        let httpsRedirect = OAuthRedirectConfiguration(
+            mode: .managed,
+            uri: "https://link.vaultpeek.example/oauth/callback"
+        )
+
+        #expect(LinkRoutes.productionHostedLinkRedirectReadinessError(
+            deployment: .local,
+            plaidEnvironment: .sandbox,
+            oauthRedirect: localhostRedirect
+        ) == nil)
+        #expect(LinkRoutes.productionHostedLinkRedirectReadinessError(
+            deployment: .hostedBridge,
+            plaidEnvironment: .production,
+            oauthRedirect: localhostRedirect
+        ) != nil)
+        #expect(LinkRoutes.productionHostedLinkRedirectReadinessError(
+            deployment: .hostedBridge,
+            plaidEnvironment: .production,
+            oauthRedirect: httpsRedirect
+        ) == nil)
+    }
+
+    @Test("Future app callback mode requires HTTPS Universal Link shape")
+    func appModeRequiresUniversalLinkShape() throws {
+        #expect(throws: ServerConfigError.self) {
+            _ = try loadConfig([
+                "PLAID_CLIENT_ID=client",
+                "PLAID_SECRET=secret",
+                "PLAID_ENV=production",
+                "PLAIDBAR_DEPLOYMENT=hosted-bridge",
+                "PLAIDBAR_OAUTH_REDIRECT_MODE=app",
+                "PLAIDBAR_OAUTH_REDIRECT_URI=vaultpeek://oauth/callback",
+            ])
+        }
+
+        let config = try loadConfig([
+            "PLAID_CLIENT_ID=client",
+            "PLAID_SECRET=secret",
+            "PLAID_ENV=production",
+            "PLAIDBAR_DEPLOYMENT=hosted-bridge",
+            "PLAIDBAR_OAUTH_REDIRECT_MODE=app",
+            "PLAIDBAR_OAUTH_REDIRECT_URI=https://vaultpeek.example/app/oauth/callback",
+        ])
+
+        #expect(config.oauthRedirect.mode == .app)
+        #expect(config.redirectUri == "https://vaultpeek.example/app/oauth/callback")
+        #expect(config.oauthRedirect.isProductionReadyForHostedLink)
+    }
+
+    private func loadConfig(_ lines: [String]) throws -> ServerConfig {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-oauth-redirect-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let dataDirectory = directory.appendingPathComponent("data", isDirectory: true)
+        let configURL = directory.appendingPathComponent("server.conf")
+        let contents = (lines + ["PLAIDBAR_DATA_DIR=\(dataDirectory.path)"])
+            .joined(separator: "\n")
+        try contents.write(to: configURL, atomically: true, encoding: .utf8)
+        do {
+            let config = try ServerConfig.load(from: configURL.path)
+            try? FileManager.default.removeItem(at: directory)
+            return config
+        } catch {
+            try? FileManager.default.removeItem(at: directory)
+            throw error
+        }
+    }
+}
+
 /// Plaid API errors from the Link flow must surface an actionable, secret-free
 /// message instead of a bare HTTP 500 — and without echoing Plaid's raw,
 /// provider-controlled `error_message` into the SwiftUI app (see `AGENTS.md`).
