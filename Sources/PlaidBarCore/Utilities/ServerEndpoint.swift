@@ -16,6 +16,15 @@ public enum ServerEndpoint {
         return components.url
     }
 
+    public static func statusURL(baseURL: String, includeItems: Bool = false) -> URL? {
+        guard var components = URLComponents(string: baseURL) else { return nil }
+        components.path = "/api/status"
+        if includeItems {
+            components.percentEncodedQuery = "include=items"
+        }
+        return components.url
+    }
+
     public static func transactionCursorCommitURL(baseURL: String) -> URL? {
         url(baseURL: baseURL, path: "/api/transactions/sync/cursors")
     }

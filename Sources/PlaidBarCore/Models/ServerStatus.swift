@@ -4,6 +4,8 @@ import Foundation
 ///
 /// Contract: readiness metadata only. Do not add secrets, account IDs,
 /// balances, transactions, Plaid tokens, or raw provider payloads here.
+/// `itemStatuses` is an opt-in coalesced snapshot using the same safe item
+/// health fields exposed by `/api/items`.
 public struct ServerStatus: Codable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case version
@@ -14,6 +16,7 @@ public struct ServerStatus: Codable, Sendable {
         case storagePath
         case syncReady
         case syncedItemCount
+        case itemStatuses
         case billingSubscription
     }
 
@@ -25,6 +28,7 @@ public struct ServerStatus: Codable, Sendable {
     public let storagePath: String
     public let syncReady: Bool
     public let syncedItemCount: Int
+    public let itemStatuses: [ItemStatus]?
     public let billingSubscription: BillingSubscription?
 
     public init(
@@ -36,6 +40,7 @@ public struct ServerStatus: Codable, Sendable {
         storagePath: String = LocalDataStore.displayPath,
         syncReady: Bool? = nil,
         syncedItemCount: Int? = nil,
+        itemStatuses: [ItemStatus]? = nil,
         billingSubscription: BillingSubscription? = nil
     ) {
         self.version = version
@@ -46,6 +51,7 @@ public struct ServerStatus: Codable, Sendable {
         self.storagePath = storagePath
         self.syncReady = syncReady ?? (itemCount > 0)
         self.syncedItemCount = syncedItemCount ?? (lastSync == nil ? 0 : itemCount)
+        self.itemStatuses = itemStatuses
         self.billingSubscription = billingSubscription
     }
 
@@ -59,6 +65,7 @@ public struct ServerStatus: Codable, Sendable {
         let storagePath = try container.decodeIfPresent(String.self, forKey: .storagePath)
         let syncReady = try container.decodeIfPresent(Bool.self, forKey: .syncReady)
         let syncedItemCount = try container.decodeIfPresent(Int.self, forKey: .syncedItemCount)
+        let itemStatuses = try container.decodeIfPresent([ItemStatus].self, forKey: .itemStatuses)
         let billingSubscription = try container.decodeIfPresent(
             BillingSubscription.self,
             forKey: .billingSubscription
@@ -73,6 +80,7 @@ public struct ServerStatus: Codable, Sendable {
             storagePath: storagePath ?? LocalDataStore.displayPath,
             syncReady: syncReady,
             syncedItemCount: syncedItemCount,
+            itemStatuses: itemStatuses,
             billingSubscription: billingSubscription
         )
     }
