@@ -234,6 +234,8 @@ final class AppState {
     private let notificationService: any NotificationServiceProtocol
     private var refreshTask: Task<Void, Never>?
     private var localAISummaryRefreshTask: Task<Void, Never>?
+    private let glanceSnapshotWriteDebouncer = GlanceSnapshotWriteDebouncer()
+    private var glanceSnapshotWriteGeneration = 0
     private var reviewUndoStack: [(metadata: [TransactionReviewMetadata], rules: [TransactionRule])] = []
     private var isUpgradingManagedServer = false
     private var isStartingBundledServer = false
@@ -1430,7 +1432,7 @@ final class AppState {
 
         balanceHistory = []
         UserDefaults.standard.removeObject(forKey: Keys.balanceHistory)
-        clearGlanceSnapshot()
+        await clearGlanceSnapshot()
         UserDefaults.standard.removeObject(forKey: Keys.lastTransactionCacheContext)
         UserDefaults.standard.removeObject(forKey: Keys.weeklyReviewState)
         UserDefaults.standard.removeObject(forKey: Keys.weeklyReviewPreviousSafeToSpend)
@@ -2255,21 +2257,37 @@ final class AppState {
         // previous balances on disk — otherwise the widget would keep showing
         // removed-account net worth until a later reset or successful write.
         guard !accounts.isEmpty else {
-            clearGlanceSnapshot()
+            Task {
+                await clearGlanceSnapshot()
+                await MainActor.run {
+                    WidgetCenter.shared.reloadTimelines(ofKind: "PlaidBarGlanceWidget")
+                }
+            }
             return
         }
+        glanceSnapshotWriteGeneration += 1
+        let generation = glanceSnapshotWriteGeneration
         let snapshot = GlanceSnapshot.make(
             netWorth: netBalance,
             balanceHistory: balanceHistory,
             updatedAt: updatedAt,
             isDemo: isDemoMode
         )
-        if (try? GlanceSnapshotStore.save(snapshot)) != nil {
-            WidgetCenter.shared.reloadTimelines(ofKind: "PlaidBarGlanceWidget")
+        let debouncer = glanceSnapshotWriteDebouncer
+        Task { [snapshot, debouncer, generation] in
+            guard await MainActor.run(body: { self.glanceSnapshotWriteGeneration == generation }) else { return }
+            await debouncer.schedule(snapshot) { snapshot in
+                guard (try? GlanceSnapshotStore.saveIfChanged(snapshot)) == true else { return }
+                await MainActor.run {
+                    WidgetCenter.shared.reloadTimelines(ofKind: "PlaidBarGlanceWidget")
+                }
+            }
         }
     }
 
-    private func clearGlanceSnapshot() {
+    private func clearGlanceSnapshot() async {
+        glanceSnapshotWriteGeneration += 1
+        await glanceSnapshotWriteDebouncer.cancel()
         try? GlanceSnapshotStore.clear()
         // Tell WidgetKit to drop the already-issued timeline entry so the widget
         // surface stops showing pre-clear balances immediately. This covers
