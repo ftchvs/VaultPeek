@@ -1237,6 +1237,86 @@ struct PlaidBarCoreTests {
         #expect(transactions.first { $0.id == "new" }?.amount == 50)
     }
 
+    @Test("Transaction sync batch applies multi-page changes without duplicates or lost updates")
+    func transactionSyncBatchAppliesMultiPageChanges() {
+        let existing = [
+            TransactionDTO(id: "keep", accountId: "a", amount: 10, date: "2026-01-01", name: "Keep"),
+            TransactionDTO(id: "modify", accountId: "a", amount: 20, date: "2026-01-02", name: "Before"),
+            TransactionDTO(id: "remove", accountId: "a", amount: 30, date: "2026-01-03", name: "Remove")
+        ]
+        var batch = TransactionSyncBatch(transactions: existing)
+
+        batch.apply(SyncResponse(
+            added: [
+                TransactionDTO(id: "new-page-1", accountId: "a", amount: 40, date: "2026-01-04", name: "New 1"),
+                TransactionDTO(id: "modify", accountId: "a", amount: 25, date: "2026-01-02", name: "Page 1")
+            ],
+            modified: [],
+            removed: [],
+            hasMore: true,
+            pendingCursors: ["item_1": "cursor_page_1"]
+        ))
+        batch.apply(SyncResponse(
+            added: [
+                TransactionDTO(id: "new-page-2", accountId: "a", amount: 50, date: "2026-01-05", name: "New 2")
+            ],
+            modified: [
+                TransactionDTO(id: "modify", accountId: "a", amount: 35, date: "2026-01-02", name: "Page 2")
+            ],
+            removed: ["remove", "new-page-1"],
+            hasMore: false,
+            pendingCursors: ["item_1": "cursor_page_2", "item_2": "cursor_item_2"]
+        ))
+
+        #expect(batch.hasChanges)
+        #expect(batch.transactions.map(\.id) == ["keep", "modify", "new-page-2"])
+        #expect(batch.transactions.first { $0.id == "modify" }?.amount == 35)
+        #expect(Set(batch.transactions.map(\.id)).count == batch.transactions.count)
+        #expect(batch.pendingCursors == ["item_1": "cursor_page_2", "item_2": "cursor_item_2"])
+    }
+
+    @Test("Transaction sync batch tracks cursors without marking empty pages changed")
+    func transactionSyncBatchKeepsEmptyPagesUnchanged() {
+        let existing = [
+            TransactionDTO(id: "keep", accountId: "a", amount: 10, date: "2026-01-01", name: "Keep")
+        ]
+        var batch = TransactionSyncBatch(transactions: existing)
+
+        batch.apply(SyncResponse(
+            added: [],
+            modified: [],
+            removed: [],
+            hasMore: false,
+            pendingCursors: ["item_1": "cursor_empty"]
+        ))
+
+        #expect(!batch.hasChanges)
+        #expect(batch.transactions == existing)
+        #expect(batch.pendingCursors == ["item_1": "cursor_empty"])
+    }
+
+    @Test("Transaction sync batch treats equivalent non-empty deltas as unchanged")
+    func transactionSyncBatchIgnoresEquivalentDeltas() {
+        let existing = [
+            TransactionDTO(id: "keep", accountId: "a", amount: 10, date: "2026-01-01", name: "Keep")
+        ]
+        var batch = TransactionSyncBatch(transactions: existing)
+
+        batch.apply(SyncResponse(
+            added: [],
+            modified: [
+                TransactionDTO(id: "keep", accountId: "a", amount: 10, date: "2026-01-01", name: "Keep")
+            ],
+            removed: ["missing"],
+            hasMore: false,
+            pendingCursors: ["item_1": "cursor_equivalent"]
+        ))
+
+        #expect(!batch.hasChanges)
+        #expect(batch.transactions == existing)
+        #expect(batch.pendingCursors == ["item_1": "cursor_equivalent"])
+    }
+
     @Test("Net cashflow heatmap keeps Plaid amount signs")
     func netCashflowHeatmapKeepsSigns() {
         let day = Formatters.parseTransactionDate("2026-01-02")!
