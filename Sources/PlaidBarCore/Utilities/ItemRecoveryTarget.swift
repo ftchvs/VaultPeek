@@ -3,7 +3,7 @@ import Foundation
 public enum ItemRecoveryTarget {
     public static func item(from statuses: [ItemStatus]) -> ItemStatus? {
         statuses.first { $0.status == .error }
-            ?? statuses.first { $0.status == .loginRequired }
+            ?? statuses.first { $0.status.needsUpdateMode }
     }
 
     public static func itemId(from statuses: [ItemStatus]) -> String? {
@@ -13,9 +13,9 @@ public enum ItemRecoveryTarget {
     public static func actionTitle(from statuses: [ItemStatus]) -> String? {
         guard let item = item(from: statuses) else { return nil }
         guard let institutionName = normalizedInstitutionName(item.institutionName) else {
-            return "Reconnect Item"
+            return actionFallback(for: item.status)
         }
-        return "Reconnect \(institutionName)"
+        return "\(actionVerb(for: item.status)) \(institutionName)"
     }
 
     public static func recoveryDetail(from statuses: [ItemStatus]) -> String? {
@@ -27,13 +27,51 @@ public enum ItemRecoveryTarget {
                 return "Plaid requires a fresh \(institutionName) login before account rows can be recovered."
             }
             return "Plaid requires a fresh bank login before account rows can be recovered."
+        case .pendingExpiration:
+            if let institutionName = normalizedInstitutionName(item.institutionName) {
+                return "Plaid says \(institutionName) login will expire soon. Update it before account rows stop syncing."
+            }
+            return "Plaid says this login will expire soon. Update the item before account rows stop syncing."
+        case .pendingDisconnect:
+            if let institutionName = normalizedInstitutionName(item.institutionName) {
+                return "Plaid says \(institutionName) needs renewed consent before account rows stop syncing."
+            }
+            return "Plaid says this item needs renewed consent before account rows stop syncing."
+        case .permissionRevoked:
+            if let institutionName = normalizedInstitutionName(item.institutionName) {
+                return "Plaid says \(institutionName) permission was revoked. Update it to restore account rows."
+            }
+            return "Plaid says item permission was revoked. Update it to restore account rows."
+        case .newAccountsAvailable:
+            if let institutionName = normalizedInstitutionName(item.institutionName) {
+                return "\(institutionName) has newly available accounts. Update it to choose what VaultPeek can access."
+            }
+            return "New accounts are available. Update the item to choose what VaultPeek can access."
         case .error:
             if let institutionName = normalizedInstitutionName(item.institutionName) {
                 return "Plaid reported an item error for \(institutionName). Reconnect it, then refresh balances."
             }
             return "Plaid reported an item error. Reconnect the item, then refresh balances."
-        case .connected:
+        case .connected, .loginRepaired:
             return nil
+        }
+    }
+
+    private static func actionVerb(for status: ItemConnectionStatus) -> String {
+        switch status {
+        case .newAccountsAvailable:
+            "Update"
+        case .connected, .loginRepaired, .loginRequired, .pendingExpiration, .pendingDisconnect, .permissionRevoked, .error:
+            "Reconnect"
+        }
+    }
+
+    private static func actionFallback(for status: ItemConnectionStatus) -> String {
+        switch status {
+        case .newAccountsAvailable:
+            "Update Item"
+        case .connected, .loginRepaired, .loginRequired, .pendingExpiration, .pendingDisconnect, .permissionRevoked, .error:
+            "Reconnect Item"
         }
     }
 

@@ -136,7 +136,10 @@ struct AccountRoutes: Sendable {
                 // reporting a misleading per-item refresh failure.
                 throw PlaidError.credentialsNotConfigured
             } catch {
-                try await tokenStore.updateItemStatus(id: itemId, status: itemStatus(for: error).rawValue)
+                try await tokenStore.updateItemStatus(
+                    id: itemId,
+                    status: ItemStatusMapping.status(forAPIError: error).rawValue
+                )
                 return AccountRefreshResult(attempted: true, succeeded: false, accounts: [])
             }
         }
@@ -191,11 +194,4 @@ struct AccountRoutes: Sendable {
         )
     }
 
-    private func itemStatus(for error: Error) -> ItemConnectionStatus {
-        if case PlaidError.apiError(_, _, let errorCode, _) = error,
-           errorCode == "ITEM_LOGIN_REQUIRED" {
-            return .loginRequired
-        }
-        return .error
-    }
 }

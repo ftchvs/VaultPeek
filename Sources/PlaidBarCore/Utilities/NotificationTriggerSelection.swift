@@ -142,7 +142,7 @@ public enum NotificationTriggerSelection {
         }
 
         if config.loginRequired {
-            for item in itemStatuses where item.status == .loginRequired {
+            for item in itemStatuses where item.status.needsUpdateMode {
                 append(loginRequiredDecision(for: item))
             }
         }

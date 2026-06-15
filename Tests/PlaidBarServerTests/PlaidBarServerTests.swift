@@ -1449,7 +1449,7 @@ struct PlaidBarServerTests {
         #expect(!TransactionRoutes.shouldFailSync(attemptedItemCount: 3, successfulItemCount: 3))
     }
 
-    @Test("Account refresh preserves partial success and deterministic aggregation while bounded")
+    @Test("Account refresh maps API repair errors while preserving partial success")
     func accountRefreshRunsWithBoundedConcurrencyAndStableAggregation() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("plaidbar-account-refresh-\(UUID().uuidString)", isDirectory: true)
@@ -1463,8 +1463,8 @@ struct PlaidBarServerTests {
             "token-b": .failure(PlaidError.apiError(
                 statusCode: 400,
                 errorType: "ITEM_ERROR",
-                errorCode: "ITEM_LOGIN_REQUIRED",
-                errorMessage: "login required"
+                errorCode: "PENDING_EXPIRATION",
+                errorMessage: "synthetic repair state"
             ), delayNanoseconds: 50_000_000),
             "token-c": .success(Self.accountsResponse(accountId: "acct-c"), delayNanoseconds: 10_000_000),
         ])
@@ -1485,9 +1485,21 @@ struct PlaidBarServerTests {
             #expect(calls.accounts.sorted() == ["token-a", "token-b", "token-c"])
             #expect(calls.maxActive == 2)
             #expect(try await store.getItem(id: "item-a")?.status == ItemConnectionStatus.connected.rawValue)
-            #expect(try await store.getItem(id: "item-b")?.status == ItemConnectionStatus.loginRequired.rawValue)
+            #expect(try await store.getItem(id: "item-b")?.status == ItemConnectionStatus.pendingExpiration.rawValue)
             #expect(try await store.getItem(id: "item-c")?.status == ItemConnectionStatus.connected.rawValue)
         }
+    }
+
+    @Test("Webhook item status mapping repairs only stale repair prompts")
+    func webhookItemStatusMappingRepairsOnlyStaleRepairPrompts() {
+        #expect(ItemStatusMapping.status(forWebhookCode: "ITEM_LOGIN_REQUIRED", currentStatus: .connected) == .loginRequired)
+        #expect(ItemStatusMapping.status(forWebhookCode: "PENDING_DISCONNECT", currentStatus: .connected) == .pendingDisconnect)
+        #expect(ItemStatusMapping.status(forWebhookCode: "USER_PERMISSION_REVOKED", currentStatus: .connected) == .permissionRevoked)
+        #expect(ItemStatusMapping.status(forWebhookCode: "NEW_ACCOUNTS_AVAILABLE", currentStatus: .connected) == .newAccountsAvailable)
+        #expect(ItemStatusMapping.status(forWebhookCode: "LOGIN_REPAIRED", currentStatus: .loginRequired) == .loginRepaired)
+        #expect(ItemStatusMapping.status(forWebhookCode: "LOGIN_REPAIRED", currentStatus: .pendingExpiration) == .loginRepaired)
+        #expect(ItemStatusMapping.status(forWebhookCode: "LOGIN_REPAIRED", currentStatus: .newAccountsAvailable) == .newAccountsAvailable)
+        #expect(ItemStatusMapping.status(forWebhookCode: "LOGIN_REPAIRED", currentStatus: .error) == .error)
     }
 
     @Test("Balance refresh all-failure behavior is unchanged while bounded")
@@ -2242,6 +2254,76 @@ struct PlaidBarServerTests {
             #expect(calls.linkTokens == [linkToken, linkToken])
             #expect(calls.publicTokens == [publicToken, publicToken])
             #expect(calls.accountAccessTokens == [accessToken])
+        }
+    }
+
+    @Test("OAuth update completion clears new account prompt")
+    func oauthUpdateCompletionClearsNewAccountPrompt() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-oauth-update-completion-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let itemId = "synthetic_update_item_\(UUID().uuidString)"
+        let accessToken = "synthetic-update-access-token-\(UUID().uuidString)"
+
+        let linkToken = "synthetic-update-link-token"
+        let plaidClient = HostedLinkStubPlaidClient(
+            linkTokenGetResponse: PlaidLinkTokenGetResponse(
+                linkToken: linkToken,
+                linkSessions: nil,
+                onSuccess: nil,
+                results: nil
+            ),
+            exchangeResponse: PlaidTokenExchangeResponse(
+                accessToken: accessToken,
+                itemId: itemId,
+                requestId: nil
+            ),
+            accountsResponse: PlaidAccountsResponse(
+                accounts: [],
+                item: PlaidItem(
+                    itemId: itemId,
+                    institutionId: "ins_update",
+                    availableProducts: nil,
+                    billedProducts: nil
+                ),
+                requestId: nil
+            )
+        )
+        let pendingLinkSessions = PendingLinkSessionStore(
+            storageURL: directory.appendingPathComponent("pending-link-sessions.json")
+        )
+        let state = await pendingLinkSessions.issueState()
+        await pendingLinkSessions.save(state: state, linkToken: linkToken, updateItemId: itemId)
+        let databasePath = directory.appendingPathComponent("plaidbar-test.sqlite").path
+        let logger = Logger(label: "com.ftchvs.plaidbar-server-tests.oauth-update-completion")
+
+        try await withTokenStore(databasePath: databasePath, logger: logger) { store, fluent in
+            try await ItemModel(
+                id: itemId,
+                accessToken: accessToken,
+                institutionId: "ins_update",
+                institutionName: "Example Bank"
+            ).save(on: fluent.db())
+            try await store.updateItemStatus(id: itemId, status: ItemConnectionStatus.newAccountsAvailable.rawValue)
+
+            let route = OAuthCallbackRoute(
+                plaidClient: plaidClient,
+                tokenStore: store,
+                pendingLinkSessions: pendingLinkSessions
+            )
+            let response = try await route.handleCallback(
+                request: Self.makeRequest(path: "/oauth/callback?state=\(state)"),
+                context: TestRequestContext(source: TestRequestContextSource())
+            )
+            let calls = await plaidClient.recordedCalls()
+
+            #expect(response.status == .ok)
+            #expect(try await store.getItem(id: itemId)?.status == ItemConnectionStatus.connected.rawValue)
+            #expect(calls.linkTokens == [linkToken])
+            #expect(calls.publicTokens.isEmpty)
+            #expect(calls.accountAccessTokens.isEmpty)
         }
     }
 

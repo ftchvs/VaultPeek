@@ -87,23 +87,26 @@ public struct AccountConnectionPresentation: Sendable, Equatable {
                 itemLastSyncRelative: itemLastSyncRelative,
                 unknownItem: false
             )
-        case .loginRequired:
+        case .loginRequired, .pendingExpiration, .pendingDisconnect, .permissionRevoked, .newAccountsAvailable:
             let itemSyncLabel = itemSyncLabel(itemLastSyncRelative)
             return AccountConnectionPresentation(
                 level: .loginRequired,
-                rowLabel: reconnectActionTitle(institutionName: institutionName),
-                detailLabel: itemDetailLabel(
-                    institutionName: institutionName,
-                    fallback: "Login required",
-                    suffix: "login required"
-                ),
-                signalLabel: "Login",
-                iconName: "person.crop.circle.badge.exclamationmark.fill",
+                rowLabel: repairActionTitle(status: itemStatus, institutionName: institutionName),
+                detailLabel: repairDetailLabel(status: itemStatus, institutionName: institutionName),
+                signalLabel: repairSignalLabel(status: itemStatus),
+                iconName: repairIconName(status: itemStatus),
                 showsRecoveryActions: true,
-                recoveryActionTitle: reconnectActionTitle(institutionName: institutionName),
+                recoveryActionTitle: repairActionTitle(status: itemStatus, institutionName: institutionName),
                 itemSyncLabel: itemSyncLabel,
-                statusFilterSubtitle: "Login required • \(itemSyncLabel)",
-                recoveryDetailLabel: loginRecoveryDetailLabel(institutionName: institutionName)
+                statusFilterSubtitle: "\(repairSubtitle(status: itemStatus)) • \(itemSyncLabel)",
+                recoveryDetailLabel: repairRecoveryDetailLabel(status: itemStatus, institutionName: institutionName)
+            )
+        case .loginRepaired:
+            return AccountConnectionPresentation.synced(
+                isSyncStale: isSyncStale,
+                statusSyncText: statusSyncText,
+                itemLastSyncRelative: itemLastSyncRelative,
+                unknownItem: false
             )
         case .error:
             let itemSyncLabel = itemSyncLabel(itemLastSyncRelative)
@@ -194,6 +197,74 @@ public struct AccountConnectionPresentation: Sendable, Equatable {
         return "Reconnect \(institutionName)"
     }
 
+    private static func repairActionTitle(status: ItemConnectionStatus?, institutionName: String?) -> String {
+        guard status == .newAccountsAvailable else {
+            return reconnectActionTitle(institutionName: institutionName)
+        }
+        guard let institutionName = normalizedInstitutionName(institutionName) else {
+            return "Update Item"
+        }
+        return "Update \(institutionName)"
+    }
+
+    private static func repairDetailLabel(status: ItemConnectionStatus?, institutionName: String?) -> String {
+        switch status {
+        case .pendingExpiration:
+            return itemDetailLabel(institutionName: institutionName, fallback: "Login expiring", suffix: "login expiring")
+        case .pendingDisconnect:
+            return itemDetailLabel(institutionName: institutionName, fallback: "Consent needed", suffix: "consent needed")
+        case .permissionRevoked:
+            return itemDetailLabel(institutionName: institutionName, fallback: "Permission revoked", suffix: "permission revoked")
+        case .newAccountsAvailable:
+            return itemDetailLabel(institutionName: institutionName, fallback: "New accounts available", suffix: "new accounts available")
+        case .connected, .loginRepaired, .loginRequired, .error, nil:
+            return itemDetailLabel(institutionName: institutionName, fallback: "Login required", suffix: "login required")
+        }
+    }
+
+    private static func repairSignalLabel(status: ItemConnectionStatus?) -> String {
+        switch status {
+        case .pendingExpiration:
+            "Expiring"
+        case .pendingDisconnect:
+            "Consent"
+        case .permissionRevoked:
+            "Revoked"
+        case .newAccountsAvailable:
+            "New"
+        case .connected, .loginRepaired, .loginRequired, .error, nil:
+            "Login"
+        }
+    }
+
+    private static func repairSubtitle(status: ItemConnectionStatus?) -> String {
+        switch status {
+        case .pendingExpiration:
+            "Login expiring"
+        case .pendingDisconnect:
+            "Consent needed"
+        case .permissionRevoked:
+            "Permission revoked"
+        case .newAccountsAvailable:
+            "New accounts available"
+        case .connected, .loginRepaired, .loginRequired, .error, nil:
+            "Login required"
+        }
+    }
+
+    private static func repairIconName(status: ItemConnectionStatus?) -> String {
+        switch status {
+        case .pendingExpiration:
+            "clock.badge.exclamationmark.fill"
+        case .pendingDisconnect, .permissionRevoked:
+            "hand.raised.fill"
+        case .newAccountsAvailable:
+            "plus.circle.fill"
+        case .connected, .loginRepaired, .loginRequired, .error, nil:
+            "person.crop.circle.badge.exclamationmark.fill"
+        }
+    }
+
     private static func itemDetailLabel(
         institutionName: String?,
         fallback: String,
@@ -210,6 +281,36 @@ public struct AccountConnectionPresentation: Sendable, Equatable {
             return "Plaid requires a fresh bank login. Reconnect this item, then refresh."
         }
         return "Plaid requires a fresh \(institutionName) login. Reconnect this item, then refresh."
+    }
+
+    private static func repairRecoveryDetailLabel(status: ItemConnectionStatus?, institutionName: String?) -> String {
+        guard let institutionName = normalizedInstitutionName(institutionName) else {
+            switch status {
+            case .pendingExpiration:
+                return "Plaid says this login will expire soon. Reconnect this item to keep sync healthy."
+            case .pendingDisconnect:
+                return "Plaid says this item needs renewed consent. Reconnect this item to keep sync healthy."
+            case .permissionRevoked:
+                return "Plaid says permission was revoked. Reconnect this item to restore access."
+            case .newAccountsAvailable:
+                return "New accounts are available. Update this item to choose what VaultPeek can access."
+            case .connected, .loginRepaired, .loginRequired, .error, nil:
+                return loginRecoveryDetailLabel(institutionName: nil)
+            }
+        }
+
+        switch status {
+        case .pendingExpiration:
+            return "Plaid says \(institutionName) login will expire soon. Reconnect this item to keep sync healthy."
+        case .pendingDisconnect:
+            return "Plaid says \(institutionName) needs renewed consent. Reconnect this item to keep sync healthy."
+        case .permissionRevoked:
+            return "Plaid says \(institutionName) permission was revoked. Reconnect this item to restore access."
+        case .newAccountsAvailable:
+            return "\(institutionName) has newly available accounts. Update this item to choose what VaultPeek can access."
+        case .connected, .loginRepaired, .loginRequired, .error, nil:
+            return loginRecoveryDetailLabel(institutionName: institutionName)
+        }
     }
 
     private static func errorRecoveryDetailLabel(institutionName: String?) -> String {
