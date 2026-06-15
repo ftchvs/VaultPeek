@@ -958,7 +958,7 @@ final class AppState {
     func checkServerConnection() async {
         let statusStart = performanceStart()
         do {
-            let status = try await serverClient.getStatus()
+            let status = try await serverClient.getStatusIncludingItems()
             recordPerformance(
                 .statusFetch,
                 startedAt: statusStart,
@@ -967,20 +967,13 @@ final class AppState {
             )
             serverConnected = true
             error = nil
-            serverEnvironment = status.environment
-            serverVersion = status.version
-            serverItemCount = status.itemCount
-            serverCredentialsConfigured = status.credentialsConfigured
-            serverStoragePath = status.storagePath
-            serverSyncReady = status.syncReady
-            serverSyncedItemCount = status.syncedItemCount
-            billingSubscription = status.billingSubscription
-            lastSyncDate = status.lastSync
+            applyServerStatus(status)
             persistTransactionCacheContext()
             refreshSetupCompletionForActiveContext()
             refreshFirstRunSnapshotDismissalForActiveContext()
-            updateSetupCompletion()
-            if !(await refreshItemStatuses()) {
+            if let itemStatuses = status.itemStatuses {
+                applyItemStatuses(itemStatuses, itemCount: status.itemCount, syncReady: status.syncReady)
+            } else if !(await refreshItemStatuses()) {
                 itemStatuses = []
                 updateSetupCompletion()
             }
@@ -1927,6 +1920,19 @@ final class AppState {
         }
     }
 
+    private func applyServerStatus(_ status: ServerStatus) {
+        serverEnvironment = status.environment
+        serverVersion = status.version
+        serverItemCount = status.itemCount
+        serverCredentialsConfigured = status.credentialsConfigured
+        serverStoragePath = status.storagePath
+        serverSyncReady = status.syncReady
+        serverSyncedItemCount = status.syncedItemCount
+        billingSubscription = status.billingSubscription
+        lastSyncDate = status.lastSync
+        updateSetupCompletion()
+    }
+
     private func loadAccountsFromCacheWithPerformance(
         from directory: URL,
         context: TransactionCacheContext?
@@ -2056,10 +2062,14 @@ final class AppState {
         print("PlaidBar performance trace: \(json)")
     }
 
-    private func applyItemStatuses(_ statuses: [ItemStatus]) {
+    private func applyItemStatuses(
+        _ statuses: [ItemStatus],
+        itemCount: Int? = nil,
+        syncReady: Bool? = nil
+    ) {
         itemStatuses = statuses
-        serverItemCount = statuses.count
-        serverSyncReady = !statuses.isEmpty
+        serverItemCount = itemCount ?? statuses.count
+        serverSyncReady = syncReady ?? !statuses.isEmpty
         updateSetupCompletion()
     }
 
