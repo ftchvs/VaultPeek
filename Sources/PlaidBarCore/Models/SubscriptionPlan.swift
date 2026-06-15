@@ -120,3 +120,75 @@ public struct InstitutionUsage: Sendable, Equatable {
         return "\(connectedCount) \(institutionWord) connected"
     }
 }
+
+public enum ManagedLinkBlockReason: String, Codable, Sendable, Equatable {
+    case managedBridgeUnavailable = "managed_bridge_unavailable"
+    case subscriptionRequired = "subscription_required"
+    case subscriptionDegraded = "subscription_degraded"
+    case institutionLimitReached = "institution_limit_reached"
+
+    public var safeMessage: String {
+        switch self {
+        case .managedBridgeUnavailable:
+            "Managed bank linking is available only on the hosted bridge path. Demo and BYO-key linking stay available locally."
+        case .subscriptionRequired:
+            "Choose an eligible managed plan before connecting a bank through VaultPeek."
+        case .subscriptionDegraded:
+            "Your subscription needs attention before a new managed bank can be connected. Local data is not deleted."
+        case .institutionLimitReached:
+            "Your managed institution limit has been reached. Disconnect an institution or choose a higher plan before connecting another bank."
+        }
+    }
+}
+
+/// Secret-free entitlement and usage state returned to clients. This object is
+/// intentionally limited to plan/status/counts/reasons: never add Plaid tokens,
+/// provider secrets, raw provider payloads, account IDs, balances, transactions,
+/// or local database paths.
+public struct ManagedLinkEntitlementSummary: Codable, Sendable, Equatable {
+    public let plan: SubscriptionPlan
+    public let status: BillingSubscriptionStatus?
+    public let institutionLimit: Int
+    public let activeInstitutionCount: Int
+    public let canCreateManagedLink: Bool
+    public let blockReason: ManagedLinkBlockReason?
+    public let message: String?
+
+    public init(
+        plan: SubscriptionPlan,
+        status: BillingSubscriptionStatus?,
+        institutionLimit: Int,
+        activeInstitutionCount: Int,
+        canCreateManagedLink: Bool,
+        blockReason: ManagedLinkBlockReason?,
+        message: String? = nil
+    ) {
+        self.plan = plan
+        self.status = status
+        self.institutionLimit = institutionLimit
+        self.activeInstitutionCount = activeInstitutionCount
+        self.canCreateManagedLink = canCreateManagedLink
+        self.blockReason = blockReason
+        self.message = message ?? blockReason?.safeMessage
+    }
+}
+
+public struct ManagedLinkSessionResponse: Codable, Sendable, Equatable {
+    public let linkUrl: String
+    public let entitlement: ManagedLinkEntitlementSummary
+
+    public init(linkUrl: String, entitlement: ManagedLinkEntitlementSummary) {
+        self.linkUrl = linkUrl
+        self.entitlement = entitlement
+    }
+}
+
+public struct ManagedLinkErrorResponse: Codable, Sendable, Equatable {
+    public let error: String
+    public let entitlement: ManagedLinkEntitlementSummary
+
+    public init(error: String, entitlement: ManagedLinkEntitlementSummary) {
+        self.error = error
+        self.entitlement = entitlement
+    }
+}

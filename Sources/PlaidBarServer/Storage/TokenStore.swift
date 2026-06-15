@@ -2,6 +2,7 @@ import FluentKit
 import HummingbirdFluent
 import Foundation
 import Logging
+import PlaidBarCore
 
 actor TokenStore {
     private let fluent: Fluent
@@ -19,7 +20,8 @@ actor TokenStore {
         accessToken: String,
         institutionId: String?,
         institutionName: String?,
-        providerID: ProviderID = .plaid
+        providerID: ProviderID = .plaid,
+        origin: ItemOrigin = .bringYourOwn
     ) async throws {
         let storedAccessToken = try PlaidTokenVault.store(
             accessToken: accessToken,
@@ -30,7 +32,8 @@ actor TokenStore {
             accessToken: storedAccessToken,
             institutionId: institutionId,
             institutionName: institutionName,
-            providerID: providerID
+            providerID: providerID,
+            origin: origin
         )
         try await item.save(on: fluent.db())
     }
@@ -95,6 +98,19 @@ actor TokenStore {
 
     func itemCount() async throws -> Int {
         try await ItemModel.query(on: fluent.db()).count()
+    }
+
+    func activeInstitutionCount(origin: ItemOrigin) async throws -> Int {
+        let items = try await ItemModel.query(on: fluent.db())
+            .filter(\.$origin == origin.rawValue)
+            .all()
+        let activeInstitutionKeys = items.compactMap { item -> String? in
+            if item.status == ItemConnectionStatus.pendingDisconnect.rawValue {
+                return nil
+            }
+            return item.institutionId ?? item.id
+        }
+        return Set(activeInstitutionKeys).count
     }
 
     func lastSyncDate() async throws -> Date? {

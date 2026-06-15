@@ -224,6 +224,7 @@ struct WebhookReceiverTests {
         fluent.databases.use(.sqlite(.file(databasePath)), as: .sqlite)
         await fluent.migrations.add(CreateItems())
         await fluent.migrations.add(AddProviderToItems())
+        await fluent.migrations.add(AddOriginToItems())
         await fluent.migrations.add(CreateSyncCursors())
         await fluent.migrations.add(CreateBillingSubscriptions())
         await fluent.migrations.add(CreateWebhookEvents())

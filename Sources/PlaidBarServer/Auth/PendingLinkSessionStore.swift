@@ -1,4 +1,5 @@
 import Foundation
+import PlaidBarCore
 #if canImport(Darwin)
 import Darwin
 #endif
@@ -32,11 +33,17 @@ actor PendingLinkSessionStore {
         return UUID().uuidString.lowercased()
     }
 
-    func save(state: String, linkToken: String, updateItemId: String? = nil) {
+    func save(
+        state: String,
+        linkToken: String,
+        updateItemId: String? = nil,
+        origin: ItemOrigin = .bringYourOwn
+    ) {
         purgeExpired()
         sessions[state] = PendingLinkSession(
             linkToken: linkToken,
             updateItemId: updateItemId,
+            origin: origin,
             createdAt: now()
         )
         completionLeases.removeValue(forKey: state)
@@ -219,6 +226,7 @@ actor PendingLinkSessionStore {
 struct PendingLinkSession: Codable, Sendable {
     let linkToken: String
     let updateItemId: String?
+    let origin: ItemOrigin
     let createdAt: Date
     /// Stable, token-free identities of results already consumed (their
     /// single-use public token exchanged). Tracking by identity — not an ordinal
@@ -229,11 +237,13 @@ struct PendingLinkSession: Codable, Sendable {
     init(
         linkToken: String,
         updateItemId: String?,
+        origin: ItemOrigin = .bringYourOwn,
         createdAt: Date,
         completedResultIdentities: Set<String> = []
     ) {
         self.linkToken = linkToken
         self.updateItemId = updateItemId
+        self.origin = origin
         self.createdAt = createdAt
         self.completedResultIdentities = completedResultIdentities
     }
@@ -242,6 +252,7 @@ struct PendingLinkSession: Codable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         linkToken = try container.decode(String.self, forKey: .linkToken)
         updateItemId = try container.decodeIfPresent(String.self, forKey: .updateItemId)
+        origin = try container.decodeIfPresent(ItemOrigin.self, forKey: .origin) ?? .bringYourOwn
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         // Backward compatible: sessions persisted by an earlier build carry no
         // identity set (and the legacy ordinal count is intentionally dropped —

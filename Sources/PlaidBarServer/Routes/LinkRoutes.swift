@@ -8,11 +8,15 @@ struct LinkRoutes: Sendable {
     let plaidClient: any PlaidClientProtocol
     let tokenStore: TokenStore
     let pendingLinkSessions: PendingLinkSessionStore
+    let billingStore: BillingSubscriptionStore
     let config: ServerConfig
 
     func register(with group: RouterGroup<some RequestContext>) {
         let link = group.group("link")
         link.post("create", use: createLinkToken)
+        let managed = link.group("managed")
+        managed.get("entitlement", use: managedEntitlement)
+        managed.post("create", use: createManagedLinkSession)
         link.group("update")
             .post("{itemId}", use: createUpdateLinkToken)
     }
@@ -43,6 +47,47 @@ struct LinkRoutes: Sendable {
             headers: [.contentType: "application/json"],
             body: .init(byteBuffer: ByteBuffer(data: data))
         )
+    }
+
+    @Sendable
+    func managedEntitlement(
+        request: Request,
+        context: some RequestContext
+    ) async throws -> Response {
+        let summary = try await entitlementService.summary()
+        return try Self.jsonResponse(summary)
+    }
+
+    @Sendable
+    func createManagedLinkSession(
+        request: Request,
+        context: some RequestContext
+    ) async throws -> Response {
+        try ensureProductionHostedLinkRedirectIsReady()
+        let summary = try await entitlementService.summary()
+        guard summary.canCreateManagedLink else {
+            return try ManagedLinkEntitlementService.blockedResponse(summary: summary)
+        }
+
+        let state = await pendingLinkSessions.issueState()
+        let plaidResponse = try await Self.mappingPlaidError {
+            try await plaidClient.createLinkToken(
+                clientUserId: config.linkClientUserId,
+                completionRedirectUri: callbackURL(state: state)
+            )
+        }
+
+        guard let linkUrl = plaidResponse.hostedLinkUrl else {
+            throw HTTPError(.internalServerError, message: "Plaid did not return a hosted Link URL")
+        }
+        await pendingLinkSessions.save(
+            state: state,
+            linkToken: plaidResponse.linkToken,
+            origin: .managed
+        )
+        let dto = ManagedLinkSessionResponse(linkUrl: linkUrl, entitlement: summary)
+
+        return try Self.jsonResponse(dto)
     }
 
     @Sendable
@@ -79,6 +124,23 @@ struct LinkRoutes: Sendable {
         let dto = LinkResponse(linkToken: plaidResponse.linkToken, linkUrl: linkUrl)
 
         let data = try JSONEncoder().encode(dto)
+        return Response(
+            status: .ok,
+            headers: [.contentType: "application/json"],
+            body: .init(byteBuffer: ByteBuffer(data: data))
+        )
+    }
+
+    private var entitlementService: ManagedLinkEntitlementService {
+        ManagedLinkEntitlementService(
+            deployment: config.deployment,
+            billingStore: billingStore,
+            tokenStore: tokenStore
+        )
+    }
+
+    private static func jsonResponse(_ value: some Encodable) throws -> Response {
+        let data = try JSONEncoder().encode(value)
         return Response(
             status: .ok,
             headers: [.contentType: "application/json"],
@@ -217,6 +279,7 @@ struct OAuthCallbackRoute: Sendable {
     let tokenStore: TokenStore
     let pendingLinkSessions: PendingLinkSessionStore
     let hostedLinkCompletions: HostedLinkCompletionStore
+    let entitlementService: ManagedLinkEntitlementService?
     private let storePublicTokenResult: (@Sendable (PlaidPublicTokenResult) async -> StoreResultOutcome)?
 
     init(
@@ -224,12 +287,14 @@ struct OAuthCallbackRoute: Sendable {
         tokenStore: TokenStore,
         pendingLinkSessions: PendingLinkSessionStore,
         hostedLinkCompletions: HostedLinkCompletionStore = HostedLinkCompletionStore(),
+        entitlementService: ManagedLinkEntitlementService? = nil,
         storePublicTokenResult: (@Sendable (PlaidPublicTokenResult) async -> StoreResultOutcome)? = nil
     ) {
         self.plaidClient = plaidClient
         self.tokenStore = tokenStore
         self.pendingLinkSessions = pendingLinkSessions
         self.hostedLinkCompletions = hostedLinkCompletions
+        self.entitlementService = entitlementService
         self.storePublicTokenResult = storePublicTokenResult
     }
 
@@ -305,11 +370,24 @@ struct OAuthCallbackRoute: Sendable {
                     continue
                 }
 
+                if pendingSession.origin == .managed {
+                    let summary = try await managedEntitlementSummary()
+                    guard summary.canCreateManagedLink else {
+                        _ = await pendingLinkSessions.consume(state: state)
+                        return Self.errorResponse(
+                            summary.message ?? "Managed bank linking is unavailable."
+                        )
+                    }
+                }
+
                 let outcome: StoreResultOutcome
                 if let storePublicTokenResult {
                     outcome = await storePublicTokenResult(publicTokenResult)
                 } else {
-                    outcome = await storeResult(publicTokenResult: publicTokenResult)
+                    outcome = await storeResult(
+                        publicTokenResult: publicTokenResult,
+                        origin: pendingSession.origin
+                    )
                 }
                 switch outcome {
                 case .stored:
@@ -407,7 +485,21 @@ struct OAuthCallbackRoute: Sendable {
     /// pre-exchange failure (token unspent → retryable) from a post-exchange
     /// failure (token spent → not retryable, must report failure), so the caller
     /// never both consumes a token AND tells the user the account connected.
-    private func storeResult(publicTokenResult: PlaidPublicTokenResult) async -> StoreResultOutcome {
+    private func managedEntitlementSummary() async throws -> ManagedLinkEntitlementSummary {
+        guard let entitlementService else {
+            return ManagedLinkEntitlementService.summary(
+                deployment: .local,
+                subscription: nil,
+                activeInstitutionCount: 0
+            )
+        }
+        return try await entitlementService.summary()
+    }
+
+    private func storeResult(
+        publicTokenResult: PlaidPublicTokenResult,
+        origin: ItemOrigin
+    ) async -> StoreResultOutcome {
         let exchangeResponse: PlaidTokenExchangeResponse
         do {
             exchangeResponse = try await plaidClient.exchangePublicToken(publicTokenResult.publicToken)
@@ -433,7 +525,8 @@ struct OAuthCallbackRoute: Sendable {
                 id: exchangeResponse.itemId,
                 accessToken: exchangeResponse.accessToken,
                 institutionId: institutionId,
-                institutionName: publicTokenResult.institution?.normalizedName
+                institutionName: publicTokenResult.institution?.normalizedName,
+                origin: origin
             )
         } catch {
             return .spentButNotStored
