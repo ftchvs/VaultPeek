@@ -27,45 +27,62 @@ public struct AccountActivitySummary: Sendable, Equatable {
         calendar: Calendar = .current,
         days: Int = 30
     ) -> AccountActivitySummary {
-        let referenceDate = now ?? latestTransactionDate(in: transactions) ?? Date()
+        recent(
+            from: TransactionDerivedIndex(transactions: transactions),
+            now: now,
+            calendar: calendar,
+            days: days
+        )
+    }
+
+    public static func recent(
+        from index: TransactionDerivedIndex,
+        now: Date? = nil,
+        calendar: Calendar = .current,
+        days: Int = 30
+    ) -> AccountActivitySummary {
+        recent(from: index.entries, now: now, calendar: calendar, days: days)
+    }
+
+    public static func recent(
+        from entries: [TransactionDerivedIndex.Entry],
+        now: Date? = nil,
+        calendar: Calendar = .current,
+        days: Int = 30
+    ) -> AccountActivitySummary {
+        let referenceDate = now ?? latestTransactionDate(in: entries) ?? Date()
         let startDate = calendar.startOfDay(
             for: calendar.date(byAdding: .day, value: -(days - 1), to: referenceDate) ?? referenceDate
         )
 
-        let recentTransactions = transactions.filter { transaction in
-            guard let date = Formatters.parseTransactionDate(transaction.date) else { return false }
+        let recentEntries = entries.filter { entry in
+            guard let date = entry.parsedDate else { return false }
             return date >= startDate && date <= referenceDate
         }
 
         var inflowTotal = 0.0
         var outflowTotal = 0.0
 
-        for transaction in recentTransactions where !transaction.isTransfer {
-            if transaction.isIncome {
-                inflowTotal += transaction.displayAmount
+        for entry in recentEntries where !entry.isTransfer {
+            if entry.isIncome {
+                inflowTotal += entry.displayAmount
             } else {
-                outflowTotal += transaction.displayAmount
+                outflowTotal += entry.displayAmount
             }
         }
 
         return AccountActivitySummary(
-            transactionCount: recentTransactions.count,
-            pendingCount: recentTransactions.filter(\.pending).count,
+            transactionCount: recentEntries.count,
+            pendingCount: recentEntries.count(where: { $0.transaction.pending }),
             inflowTotal: inflowTotal,
             outflowTotal: outflowTotal,
             days: days
         )
     }
 
-    private static func latestTransactionDate(in transactions: [TransactionDTO]) -> Date? {
-        transactions
-            .compactMap { Formatters.parseTransactionDate($0.date) }
+    private static func latestTransactionDate(in entries: [TransactionDerivedIndex.Entry]) -> Date? {
+        entries
+            .compactMap(\.parsedDate)
             .max()
-    }
-}
-
-private extension TransactionDTO {
-    var isTransfer: Bool {
-        category == .transfer || category == .transferOut
     }
 }
