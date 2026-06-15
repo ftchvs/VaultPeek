@@ -187,6 +187,22 @@ struct OAuthCallbackRoute: Sendable {
     let plaidClient: any PlaidClientProtocol
     let tokenStore: TokenStore
     let pendingLinkSessions: PendingLinkSessionStore
+    let hostedLinkCompletions: HostedLinkCompletionStore
+    private let storePublicTokenResult: (@Sendable (PlaidPublicTokenResult) async -> StoreResultOutcome)?
+
+    init(
+        plaidClient: any PlaidClientProtocol,
+        tokenStore: TokenStore,
+        pendingLinkSessions: PendingLinkSessionStore,
+        hostedLinkCompletions: HostedLinkCompletionStore = HostedLinkCompletionStore(),
+        storePublicTokenResult: (@Sendable (PlaidPublicTokenResult) async -> StoreResultOutcome)? = nil
+    ) {
+        self.plaidClient = plaidClient
+        self.tokenStore = tokenStore
+        self.pendingLinkSessions = pendingLinkSessions
+        self.hostedLinkCompletions = hostedLinkCompletions
+        self.storePublicTokenResult = storePublicTokenResult
+    }
 
     func register(with router: Router<some RequestContext>) {
         router.get("oauth/callback", use: handleCallback)
@@ -207,12 +223,21 @@ struct OAuthCallbackRoute: Sendable {
             )
         }
         let state = String(stateParam)
+        if let redirectStatus = Self.completionStatus(from: request) {
+            await hostedLinkCompletions.record(HostedLinkCompletionRecord(
+                state: state,
+                linkToken: nil,
+                linkSessionId: request.uri.queryParameters.get("link_session_id").map { String($0) },
+                status: redirectStatus
+            ))
+            return Self.completionResponse(for: redirectStatus)
+        }
         guard let pendingSession = await pendingLinkSessions.beginCompletion(state: state) else {
             return Response(
                 status: .badRequest,
                 headers: [.contentType: "text/html"],
                 body: .init(byteBuffer: ByteBuffer(
-                    string: Self.errorPage("Missing or expired link session state")
+                    string: Self.expiredPage()
                 ))
             )
         }
@@ -251,7 +276,12 @@ struct OAuthCallbackRoute: Sendable {
                     continue
                 }
 
-                let outcome = await storeResult(publicTokenResult: publicTokenResult)
+                let outcome: StoreResultOutcome
+                if let storePublicTokenResult {
+                    outcome = await storePublicTokenResult(publicTokenResult)
+                } else {
+                    outcome = await storeResult(publicTokenResult: publicTokenResult)
+                }
                 switch outcome {
                 case .stored:
                     // Fully persisted — mark finalized so a retry skips it.
@@ -302,7 +332,7 @@ struct OAuthCallbackRoute: Sendable {
 
     /// The outcome of attempting to exchange + store a single Link result, which
     /// determines both whether the result may be retried and what the user sees.
-    private enum StoreResultOutcome {
+    enum StoreResultOutcome {
         /// Exchanged and persisted locally; safe to mark finalized.
         case stored
         /// The public-token exchange itself failed; the token is unspent and the
@@ -327,6 +357,16 @@ struct OAuthCallbackRoute: Sendable {
     ) async throws -> [PlaidPublicTokenResult] {
         if let publicToken = request.uri.queryParameters.get("public_token") {
             return [PlaidPublicTokenResult(publicToken: String(publicToken), institution: nil)]
+        }
+
+        let state = request.uri.queryParameters.get("state").map { String($0) }
+        let linkSessionId = request.uri.queryParameters.get("link_session_id").map { String($0) }
+        if let completion = await hostedLinkCompletions.completion(
+            state: state,
+            linkToken: pendingSession.linkToken,
+            linkSessionId: linkSessionId
+        ), completion.status != HostedLinkCompletionStatus.success {
+            throw HostedLinkCompletionError.status(completion.status)
         }
 
         let linkSession = try await plaidClient.getLinkToken(pendingSession.linkToken)
@@ -386,6 +426,41 @@ struct OAuthCallbackRoute: Sendable {
         return digest.map { String(format: "%02x", $0) }.joined()
     }
 
+    private static func completionStatus(from request: Request) -> HostedLinkCompletionStatus? {
+        let query = request.uri.queryParameters
+        let status = query.get("status").map { String($0) }
+        let errorCode = query.get("error_code").map { String($0) }
+        let errorType = query.get("error_type").map { String($0) }
+        return HostedLinkCompletionStatus.classify(status: status, errorCode: errorCode, errorType: errorType)
+    }
+
+    private static func completionResponse(for status: HostedLinkCompletionStatus) -> Response {
+        switch status {
+        case .success:
+            Response(
+                status: .ok,
+                headers: [.contentType: "text/html"],
+                body: .init(byteBuffer: ByteBuffer(string: successPage()))
+            )
+        case .userExit:
+            Response(
+                status: .ok,
+                headers: [.contentType: "text/html"],
+                body: .init(byteBuffer: ByteBuffer(string: userExitPage()))
+            )
+        case .expired:
+            Response(
+                status: .badRequest,
+                headers: [.contentType: "text/html"],
+                body: .init(byteBuffer: ByteBuffer(string: expiredPage()))
+            )
+        case .retryableProviderFailure:
+            errorResponse("The bank connection provider had a temporary problem. Please try again.")
+        case .providerFailure:
+            errorResponse("The bank connection provider could not finish this connection. Please try again.")
+        }
+    }
+
     // MARK: - HTML Pages
 
     private static func successPage() -> String {
@@ -416,6 +491,148 @@ struct OAuthCallbackRoute: Sendable {
         </body>
         </html>
         """
+    }
+
+    private static func userExitPage() -> String {
+        """
+        <!DOCTYPE html>
+        <html>
+        <head><title>VaultPeek -- Connection Canceled</title></head>
+        <body style="font-family: -apple-system, sans-serif; text-align: center; padding: 60px;">
+            <h1>Connection Canceled</h1>
+            <p>No account was linked because the bank connection was closed before completion.</p>
+            <p>You can close this tab and start again from VaultPeek.</p>
+        </body>
+        </html>
+        """
+    }
+
+    private static func expiredPage() -> String {
+        errorPage("This bank connection link expired or was already used. Please start a fresh connection from VaultPeek.")
+    }
+}
+
+private enum HostedLinkCompletionError: LocalizedError {
+    case status(HostedLinkCompletionStatus)
+
+    var errorDescription: String? {
+        switch self {
+        case let .status(status):
+            switch status {
+            case .success:
+                "Plaid Link completed, but no public token was available yet. Please try again."
+            case .userExit:
+                "No account was linked because the bank connection was closed before completion."
+            case .expired:
+                "This bank connection link expired. Please start a fresh connection from VaultPeek."
+            case .retryableProviderFailure:
+                "The bank connection provider had a temporary problem. Please try again."
+            case .providerFailure:
+                "The bank connection provider could not finish this connection. Please try again."
+            }
+        }
+    }
+}
+
+struct HostedLinkWebhookRoute: Sendable {
+    private static let maxBodyBytes = 16 * 1024
+
+    let hostedLinkCompletions: HostedLinkCompletionStore
+
+    func register(with router: Router<some RequestContext>) {
+        router.post("webhooks/plaid/hosted-link", use: receive)
+    }
+
+    @Sendable
+    func receive(request: Request, context _: some RequestContext) async throws -> HTTPResponse.Status {
+        let buffer = try await request.body.collect(upTo: Self.maxBodyBytes)
+        let data = Data(buffer: buffer)
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let payload: HostedLinkCompletionWebhookPayload
+        do {
+            payload = try decoder.decode(HostedLinkCompletionWebhookPayload.self, from: data)
+        } catch {
+            throw HTTPError(.badRequest, message: "Invalid Hosted Link completion payload")
+        }
+
+        guard payload.hasStableIdentifier else {
+            throw HTTPError(.badRequest, message: "Hosted Link completion payload is missing a stable identifier")
+        }
+
+        await hostedLinkCompletions.record(HostedLinkCompletionRecord(
+            state: payload.state,
+            linkToken: payload.linkToken,
+            linkSessionId: payload.linkSessionId,
+            status: payload.completionStatus
+        ))
+        return .ok
+    }
+}
+
+struct HostedLinkCompletionWebhookPayload: Decodable, Sendable {
+    let linkToken: String?
+    let linkSessionId: String?
+    let state: String?
+    let status: String?
+    let webhookCode: String?
+    let errorType: String?
+    let errorCode: String?
+
+    var hasStableIdentifier: Bool {
+        linkToken?.trimmedHostedLinkValue != nil
+            || linkSessionId?.trimmedHostedLinkValue != nil
+            || state?.trimmedHostedLinkValue != nil
+    }
+
+    var completionStatus: HostedLinkCompletionStatus {
+        HostedLinkCompletionStatus.classify(
+            status: status ?? webhookCode,
+            errorCode: errorCode,
+            errorType: errorType
+        ) ?? .success
+    }
+}
+
+extension HostedLinkCompletionStatus {
+    static func classify(
+        status: String?,
+        errorCode: String?,
+        errorType: String?
+    ) -> HostedLinkCompletionStatus? {
+        let candidates = [status, errorCode, errorType]
+            .compactMap { $0?.trimmedHostedLinkValue?.uppercased() }
+        guard !candidates.isEmpty else { return nil }
+
+        if candidates.contains(where: { ["SUCCESS", "COMPLETED", "LINK_SESSION_FINISHED"].contains($0) }) {
+            return .success
+        }
+        if candidates.contains(where: { ["USER_EXIT", "USER_CLOSED", "EXIT", "CANCELED", "CANCELLED"].contains($0) }) {
+            return .userExit
+        }
+        if candidates.contains(where: { ["EXPIRED", "LINK_TOKEN_EXPIRED", "INVALID_LINK_TOKEN"].contains($0) }) {
+            return .expired
+        }
+        if candidates.contains(where: { retryableProviderCodes.contains($0) }) {
+            return .retryableProviderFailure
+        }
+        return .providerFailure
+    }
+
+    private static let retryableProviderCodes: Set<String> = [
+        "API_ERROR",
+        "INTERNAL_SERVER_ERROR",
+        "INSTITUTION_DOWN",
+        "INSTITUTION_NOT_RESPONDING",
+        "PLANNED_MAINTENANCE",
+        "RATE_LIMIT_EXCEEDED",
+    ]
+}
+
+private extension String {
+    var trimmedHostedLinkValue: String? {
+        let value = trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
     }
 }
 

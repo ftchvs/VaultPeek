@@ -67,6 +67,7 @@ struct PlaidBarServer: AsyncParsableCommand {
         let pendingLinkSessions = PendingLinkSessionStore(
             storageURL: URL(fileURLWithPath: serverConfig.pendingLinkSessionsPath)
         )
+        let hostedLinkCompletions = HostedLinkCompletionStore()
 
         // Build router
         let router = Router()
@@ -110,9 +111,12 @@ struct PlaidBarServer: AsyncParsableCommand {
         OAuthCallbackRoute(
             plaidClient: plaidClient,
             tokenStore: tokenStore,
-            pendingLinkSessions: pendingLinkSessions
+            pendingLinkSessions: pendingLinkSessions,
+            hostedLinkCompletions: hostedLinkCompletions
         )
         .register(with: router)
+        HostedLinkWebhookRoute(hostedLinkCompletions: hostedLinkCompletions)
+            .register(with: router)
 
         // Build and run application
         var app = Application(

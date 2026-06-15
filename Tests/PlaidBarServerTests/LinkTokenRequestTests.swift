@@ -106,6 +106,43 @@ struct LinkTokenRequestTests {
         #expect(hostedLink["is_mobile_app"] as? Bool == true)
     }
 
+    @Test("Hosted-bridge config requires a Link webhook URL")
+    func hostedBridgeRequiresWebhookURL() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-hosted-webhook-config-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let missingWebhookConfig = directory.appendingPathComponent("missing.conf")
+        let configuredWebhookConfig = directory.appendingPathComponent("configured.conf")
+        let missingDataDirectory = directory.appendingPathComponent("missing-data", isDirectory: true)
+        let configuredDataDirectory = directory.appendingPathComponent("configured-data", isDirectory: true)
+
+        try """
+        PLAID_CLIENT_ID=client-id
+        PLAID_SECRET=secret
+        PLAID_ENV=sandbox
+        PLAIDBAR_DEPLOYMENT=hosted-bridge
+        PLAIDBAR_DATA_DIR=\(missingDataDirectory.path)
+        """.write(to: missingWebhookConfig, atomically: true, encoding: .utf8)
+        try """
+        PLAID_CLIENT_ID=client-id
+        PLAID_SECRET=secret
+        PLAID_ENV=sandbox
+        PLAIDBAR_DEPLOYMENT=hosted-bridge
+        PLAID_LINK_WEBHOOK_URL=https://vaultpeek.example/webhooks/plaid/hosted-link
+        PLAIDBAR_DATA_DIR=\(configuredDataDirectory.path)
+        """.write(to: configuredWebhookConfig, atomically: true, encoding: .utf8)
+
+        #expect(throws: ServerConfigError.self) {
+            _ = try ServerConfig.load(from: missingWebhookConfig.path)
+        }
+
+        let configured = try ServerConfig.load(from: configuredWebhookConfig.path)
+        #expect(configured.deployment == .hostedBridge)
+        #expect(configured.link.webhookURL == "https://vaultpeek.example/webhooks/plaid/hosted-link")
+    }
+
     @Test("Link configuration rejects unsupported values before calling Plaid")
     func linkConfigurationValidation() {
         #expect(throws: PlaidLinkConfigurationError.self) {
