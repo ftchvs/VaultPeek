@@ -335,6 +335,39 @@ struct ErrorSeverityTests {
         #expect(neverSynced.severity == .advisory)
     }
 
+    @Test("Financial attention uses privacy-safe menu bar text")
+    func financialAttentionUsesPrivacySafeMenuBarText() {
+        let presentation = MenuBarStatusPresentation.evaluate(
+            isDemoMode: false,
+            isLoading: false,
+            serverConnected: true,
+            errorMessage: nil,
+            erroredItemCount: 0,
+            needsLoginItemCount: 0,
+            isSyncStale: false,
+            hasEverSynced: true,
+            financialAttentionText: "Cash"
+        )
+        let offline = MenuBarStatusPresentation.evaluate(
+            isDemoMode: false,
+            isLoading: false,
+            serverConnected: false,
+            errorMessage: nil,
+            erroredItemCount: 0,
+            needsLoginItemCount: 0,
+            isSyncStale: false,
+            hasEverSynced: true,
+            financialAttentionText: "Cash"
+        )
+
+        #expect(presentation.attentionText == "Cash")
+        #expect(presentation.symbolName == "exclamationmark.triangle")
+        #expect(presentation.severity == .advisory)
+        #expect(offline.attentionText == "Offline")
+        #expect(offline.symbolName == "network.slash")
+        #expect(offline.severity == .blocking)
+    }
+
     @Test("Healthy and demo states show no menu bar attention chrome")
     func healthyAndDemoShowNoAttentionChrome() {
         let healthy = MenuBarStatusPresentation.evaluate(

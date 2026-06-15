@@ -14,6 +14,7 @@ import SwiftUI
 /// intentionally not here.
 struct RecurringObligationsSection: View {
     let presentation: RecurringObligationsPresentation
+    var onOpenSubscriptions: (() -> Void)?
 
     /// Keep the narrow column dense: show the most relevant few, summarize the
     /// rest. Attention-first ordering means flagged items are never hidden
@@ -58,6 +59,18 @@ struct RecurringObligationsSection: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .accessibilityHidden(true)
+
+            if let onOpenSubscriptions {
+                Button(action: onOpenSubscriptions) {
+                    Image(systemName: "list.bullet.rectangle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(minWidth: Sizing.hitTargetMin, minHeight: Sizing.hitTargetMin)
+                }
+                .buttonStyle(.borderless)
+                .help("Open recurring payments")
+                .accessibilityLabel("Open recurring payments")
+            }
         }
     }
 

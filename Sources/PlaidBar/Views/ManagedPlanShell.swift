@@ -16,6 +16,7 @@ import SwiftUI
 /// the copy never implies billing exists today.
 struct PlanSelectionShell: View {
     @Binding var selectedPlan: SubscriptionPlan
+    var billingSubscription: BillingSubscription?
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -41,6 +42,10 @@ struct PlanSelectionShell: View {
             }
             .accessibilityElement(children: .combine)
 
+            if let billingSubscription {
+                BillingStatusRow(subscription: billingSubscription)
+            }
+
             Text(
                 "Managed plans are a preview — billing and managed bank linking aren't "
                     + "available yet. Demo and bring-your-own-keys connections stay free."
@@ -51,6 +56,41 @@ struct PlanSelectionShell: View {
         .padding(Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassSurface(.inset)
+    }
+}
+
+private struct BillingStatusRow: View {
+    let subscription: BillingSubscription
+
+    private var gate: BillingFeatureGateResult {
+        BillingFeatureGate.evaluate(featureName: "managed plan features", subscription: subscription)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            HStack(spacing: Spacing.xs) {
+                Image(systemName: iconName)
+                    .foregroundStyle(subscription.status.allowsPaidFeatures ? .secondary : SemanticColors.warning)
+                    .frame(width: 16)
+                Text("Billing: \(subscription.status.displayName)")
+                    .font(.caption.weight(.medium))
+            }
+            .accessibilityElement(children: .combine)
+
+            if case .locked(let lock) = gate {
+                Text("\(lock.message) \(lock.recoveryAction)")
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if subscription.status == .trialing {
+                Text(subscription.status.recoveryAction)
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var iconName: String {
+        subscription.status.allowsPaidFeatures ? "checkmark.circle" : "lock.circle"
     }
 }
 
