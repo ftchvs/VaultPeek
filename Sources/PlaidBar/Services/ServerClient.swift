@@ -31,7 +31,14 @@ actor ServerClient {
     }
 
     func getStatus() async throws -> ServerStatus {
-        guard let url = ServerEndpoint.url(baseURL: baseURL, path: "/api/status") else {
+        guard let url = ServerEndpoint.statusURL(baseURL: baseURL) else {
+            throw ServerClientError.requestFailed
+        }
+        return try await get(url)
+    }
+
+    func getStatusIncludingItems() async throws -> ServerStatus {
+        guard let url = ServerEndpoint.statusURL(baseURL: baseURL, includeItems: true) else {
             throw ServerClientError.requestFailed
         }
         return try await get(url)

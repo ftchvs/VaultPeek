@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import MenuBarExtraAccess
 import PlaidBarCore
 import Sparkle
@@ -119,8 +120,11 @@ struct PlaidBarApp: App {
                 // While detached, a status-item click sets isPopoverPresented
                 // true; intercept it on the always-mounted label, snap it back to
                 // false, and raise the floating window instead of the popover.
+                // A `--detach` launch override also has a visible detached window
+                // but intentionally leaves the persisted detached preference off,
+                // so include window visibility in the intercept.
                 .onChange(of: appState.isPopoverPresented) { _, isPresented in
-                    guard isPresented, appState.isDashboardDetached else { return }
+                    guard isPresented, appState.isDashboardDetached || detachedDashboard.isWindowVisible else { return }
                     appState.isPopoverPresented = false
                     detachedDashboard.handleMenuBarActivation(
                         appState: appState,
@@ -145,6 +149,18 @@ struct PlaidBarApp: App {
                         return
                     }
                     appState.isPopoverPresented = true
+                }
+                // The "Refresh balances" widget control opens the app via an
+                // `openAppWhenRun` App Intent that writes a pending command but,
+                // unlike the widget's deep link above, opens neither the popover
+                // nor the detached window — so neither `loadInitialData()` nor a
+                // dashboard refresh runs to consume it, and the control feels
+                // inert. Consume it here on the always-mounted label whenever the
+                // app becomes active (the intent activates it, whether it was
+                // already running or freshly launched). A no-op when no command
+                // is pending, so it is cheap on every activation (AND-385).
+                .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                    Task { await appState.consumePendingGlanceCommand() }
                 }
         }
         .menuBarExtraAccess(isPresented: $appState.isPopoverPresented) { statusItem in

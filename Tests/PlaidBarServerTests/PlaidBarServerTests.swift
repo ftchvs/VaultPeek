@@ -136,6 +136,21 @@ private actor HostedLinkStubPlaidClient: PlaidClientProtocol {
         return accountsResponse
     }
 
+    func getBalances(accessToken _: String) async throws -> PlaidAccountsResponse {
+        throw PlaidError.invalidResponse
+    }
+
+    func syncTransactions(
+        accessToken _: String,
+        cursor _: String?
+    ) async throws -> PlaidTransactionsSyncResponse {
+        throw PlaidError.invalidResponse
+    }
+
+    func removeItem(accessToken _: String) async throws {
+        throw PlaidError.invalidResponse
+    }
+
     func recordedCalls() -> (
         linkTokens: [String],
         publicTokens: [String],
@@ -146,6 +161,150 @@ private actor HostedLinkStubPlaidClient: PlaidClientProtocol {
             exchangedPublicTokens,
             requestedAccountAccessTokens
         )
+    }
+}
+
+private enum RefreshStubError: Error {
+    case failed
+}
+
+private actor DelayedRefreshPlaidClient: PlaidClientProtocol {
+    struct AccountOutcome: Sendable {
+        var response: PlaidAccountsResponse?
+        var error: (any Error & Sendable)?
+        var delayNanoseconds: UInt64
+
+        static func success(
+            _ response: PlaidAccountsResponse,
+            delayNanoseconds: UInt64 = 0
+        ) -> AccountOutcome {
+            AccountOutcome(response: response, error: nil, delayNanoseconds: delayNanoseconds)
+        }
+
+        static func failure(
+            _ error: any Error & Sendable = RefreshStubError.failed,
+            delayNanoseconds: UInt64 = 0
+        ) -> AccountOutcome {
+            AccountOutcome(response: nil, error: error, delayNanoseconds: delayNanoseconds)
+        }
+    }
+
+    struct SyncOutcome: Sendable {
+        var response: PlaidTransactionsSyncResponse?
+        var error: (any Error & Sendable)?
+        var delayNanoseconds: UInt64
+
+        static func success(
+            _ response: PlaidTransactionsSyncResponse,
+            delayNanoseconds: UInt64 = 0
+        ) -> SyncOutcome {
+            SyncOutcome(response: response, error: nil, delayNanoseconds: delayNanoseconds)
+        }
+
+        static func failure(
+            _ error: any Error & Sendable = RefreshStubError.failed,
+            delayNanoseconds: UInt64 = 0
+        ) -> SyncOutcome {
+            SyncOutcome(response: nil, error: error, delayNanoseconds: delayNanoseconds)
+        }
+    }
+
+    private let accountOutcomes: [String: AccountOutcome]
+    private let balanceOutcomes: [String: AccountOutcome]
+    private let syncOutcomes: [String: SyncOutcome]
+    private var activeCalls = 0
+    private var maxActiveCalls = 0
+    private var accountAccessTokens: [String] = []
+    private var balanceAccessTokens: [String] = []
+    private var syncAccessTokens: [String] = []
+
+    init(
+        accountOutcomes: [String: AccountOutcome] = [:],
+        balanceOutcomes: [String: AccountOutcome] = [:],
+        syncOutcomes: [String: SyncOutcome] = [:]
+    ) {
+        self.accountOutcomes = accountOutcomes
+        self.balanceOutcomes = balanceOutcomes
+        self.syncOutcomes = syncOutcomes
+    }
+
+    func createLinkToken(
+        clientUserId _: String,
+        completionRedirectUri _: String
+    ) async throws -> PlaidLinkTokenResponse {
+        throw PlaidError.invalidResponse
+    }
+
+    func createUpdateLinkToken(
+        clientUserId _: String,
+        accessToken _: String,
+        completionRedirectUri _: String
+    ) async throws -> PlaidLinkTokenResponse {
+        throw PlaidError.invalidResponse
+    }
+
+    func getLinkToken(_: String) async throws -> PlaidLinkTokenGetResponse {
+        throw PlaidError.invalidResponse
+    }
+
+    func exchangePublicToken(_: String) async throws -> PlaidTokenExchangeResponse {
+        throw PlaidError.invalidResponse
+    }
+
+    func getAccounts(accessToken: String) async throws -> PlaidAccountsResponse {
+        accountAccessTokens.append(accessToken)
+        return try await resolve(accountOutcomes[accessToken] ?? .failure())
+    }
+
+    func getBalances(accessToken: String) async throws -> PlaidAccountsResponse {
+        balanceAccessTokens.append(accessToken)
+        return try await resolve(balanceOutcomes[accessToken] ?? .failure())
+    }
+
+    func syncTransactions(
+        accessToken: String,
+        cursor _: String?
+    ) async throws -> PlaidTransactionsSyncResponse {
+        syncAccessTokens.append(accessToken)
+        let outcome = syncOutcomes[accessToken] ?? .failure()
+        activeCalls += 1
+        maxActiveCalls = max(maxActiveCalls, activeCalls)
+        let delay = outcome.delayNanoseconds
+        if delay > 0 {
+            try await Task.sleep(nanoseconds: delay)
+        }
+        activeCalls -= 1
+        if let error = outcome.error {
+            throw error
+        }
+        return outcome.response!
+    }
+
+    func removeItem(accessToken _: String) async throws {
+        throw PlaidError.invalidResponse
+    }
+
+    func recordedCalls() -> (
+        accounts: [String],
+        balances: [String],
+        syncs: [String],
+        maxActive: Int
+    ) {
+        (accountAccessTokens, balanceAccessTokens, syncAccessTokens, maxActiveCalls)
+    }
+
+    private func resolve(_ outcome: AccountOutcome) async throws -> PlaidAccountsResponse {
+        activeCalls += 1
+        maxActiveCalls = max(maxActiveCalls, activeCalls)
+        let delay = outcome.delayNanoseconds
+        if delay > 0 {
+            try await Task.sleep(nanoseconds: delay)
+        }
+        activeCalls -= 1
+        if let error = outcome.error {
+            throw error
+        }
+        return outcome.response!
     }
 }
 
@@ -313,6 +472,112 @@ struct PlaidBarServerTests {
 
         for fieldName in forbiddenFieldNames {
             #expect(!payload.contains("\"\(fieldName)\""))
+        }
+    }
+
+    @Test(
+        "Status include items returns safe item readiness snapshot",
+        .enabled(if: plaidTokenVaultKeychainAvailable, "macOS Keychain accepts test writes")
+    )
+    func statusIncludeItemsReturnsSafeItemReadinessSnapshot() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-status-items-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let loginItemId = "test_item_login_\(UUID().uuidString)"
+        let errorItemId = "test_item_error_\(UUID().uuidString)"
+        defer {
+            for itemId in [loginItemId, errorItemId] {
+                try? PlaidTokenVault.delete(
+                    storedToken: PlaidTokenVault.reference(for: itemId),
+                    fallbackItemId: itemId
+                )
+            }
+        }
+
+        let databasePath = directory.appendingPathComponent("plaidbar-status-items.sqlite").path
+        let logger = Logger(label: "com.ftchvs.plaidbar-server-tests.status-items")
+        let config = try setupStateConfig(in: directory)
+        try await withStatusStores(databasePath: databasePath, logger: logger) { store, billingStore in
+            try await store.saveItem(
+                id: loginItemId,
+                accessToken: "access-sandbox-\(UUID().uuidString)",
+                institutionId: "ins_login",
+                institutionName: "Example Bank"
+            )
+            try await store.saveItem(
+                id: errorItemId,
+                accessToken: "access-sandbox-\(UUID().uuidString)",
+                institutionId: "ins_error",
+                institutionName: "Credit Union"
+            )
+            try await store.updateItemStatus(id: loginItemId, status: ItemConnectionStatus.loginRequired.rawValue)
+            try await store.updateItemStatus(id: errorItemId, status: ItemConnectionStatus.error.rawValue)
+
+            let routes = StatusRoutes(
+                tokenStore: store,
+                billingStore: billingStore,
+                config: config
+            )
+            let includeItemsRequest = Self.makeRequest(path: "/api/status?include=items")
+            let status = try await routes.statusSnapshot(
+                includeItems: StatusRoutes.includesItems(includeItemsRequest)
+            )
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let payload = try #require(String(data: encoder.encode(status), encoding: .utf8))
+
+            #expect(StatusRoutes.includesItems(includeItemsRequest))
+            #expect(status.credentialsConfigured == false)
+            #expect(status.itemCount == 2)
+            #expect(status.syncReady)
+            #expect(status.itemStatuses?.count == 2)
+            #expect(
+                (status.itemStatuses?.map(\.status.rawValue).sorted() ?? []) ==
+                    [
+                        ItemConnectionStatus.error.rawValue,
+                        ItemConnectionStatus.loginRequired.rawValue,
+                    ]
+            )
+            #expect(Set(status.itemStatuses?.compactMap(\.institutionName) ?? []) == ["Example Bank", "Credit Union"])
+            #expect(!payload.contains("access-sandbox-"))
+            #expect(!payload.contains("access_token"))
+            #expect(!payload.contains("institutionId"))
+            #expect(!payload.contains("institution_id"))
+            #expect(!payload.contains("transaction"))
+            #expect(!payload.contains("balance"))
+        }
+    }
+
+    @Test("Status omits item readiness snapshot by default")
+    func statusOmitsItemReadinessSnapshotByDefault() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-status-default-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let databasePath = directory.appendingPathComponent("plaidbar-status-default.sqlite").path
+        let logger = Logger(label: "com.ftchvs.plaidbar-server-tests.status-default")
+        let config = try setupStateConfig(in: directory)
+        try await withStatusStores(databasePath: databasePath, logger: logger) { store, billingStore in
+            let routes = StatusRoutes(
+                tokenStore: store,
+                billingStore: billingStore,
+                config: config
+            )
+            let defaultStatusRequest = Self.makeRequest(path: "/api/status")
+            let status = try await routes.statusSnapshot(
+                includeItems: StatusRoutes.includesItems(defaultStatusRequest)
+            )
+            let object = try #require(
+                JSONSerialization.jsonObject(with: JSONEncoder().encode(status)) as? [String: Any]
+            )
+
+            #expect(!StatusRoutes.includesItems(defaultStatusRequest))
+            #expect(status.itemCount == 0)
+            #expect(status.itemStatuses == nil)
+            #expect(object["itemStatuses"] == nil)
         }
     }
 
@@ -628,12 +893,137 @@ struct PlaidBarServerTests {
         )
     }
 
+    private func setupStateConfig(in directory: URL) throws -> ServerConfig {
+        let dataDirectory = directory.appendingPathComponent("data", isDirectory: true)
+        let configURL = directory.appendingPathComponent("plaidbar.conf")
+        try """
+        PLAID_CLIENT_ID=
+        PLAID_SECRET=
+        PLAID_ENV=sandbox
+        PLAIDBAR_DATA_DIR=\(dataDirectory.path)
+        """.write(to: configURL, atomically: true, encoding: .utf8)
+        return try ServerConfig.load(from: configURL.path)
+    }
+
+    private static func decodeBody<T: Decodable>(_ response: Response) async throws -> T {
+        let collector = ResponseBodyCollector()
+        let writer = CollectingResponseBodyWriter(collector: collector)
+        try await response.body.write(writer)
+        var buffer = await collector.collectedBuffer()
+        let data = buffer.readData(length: buffer.readableBytes) ?? Data()
+        return try JSONDecoder().decode(T.self, from: data)
+    }
+
+    private actor ResponseBodyCollector {
+        private var buffer = ByteBuffer()
+
+        func append(_ chunk: ByteBuffer) {
+            var copy = chunk
+            buffer.writeBuffer(&copy)
+        }
+
+        func collectedBuffer() -> ByteBuffer {
+            buffer
+        }
+    }
+
+    private struct CollectingResponseBodyWriter: ResponseBodyWriter {
+        let collector: ResponseBodyCollector
+
+        mutating func write(_ buffer: ByteBuffer) async throws {
+            await collector.append(buffer)
+        }
+
+        consuming func finish(_ trailingHeaders: HTTPFields?) async throws {}
+    }
+
+    private static func saveRefreshItems(on fluent: Fluent) async throws {
+        try await ItemModel(
+            id: "item-a",
+            accessToken: "token-a",
+            institutionId: "ins-a",
+            institutionName: "Institution A"
+        ).save(on: fluent.db())
+        try await ItemModel(
+            id: "item-b",
+            accessToken: "token-b",
+            institutionId: "ins-b",
+            institutionName: "Institution B"
+        ).save(on: fluent.db())
+        try await ItemModel(
+            id: "item-c",
+            accessToken: "token-c",
+            institutionId: "ins-c",
+            institutionName: "Institution C"
+        ).save(on: fluent.db())
+    }
+
+    private static func accountsResponse(accountId: String) -> PlaidAccountsResponse {
+        PlaidAccountsResponse(
+            accounts: [
+                PlaidAccount(
+                    accountId: accountId,
+                    balances: PlaidBalances(
+                        available: 100,
+                        current: 125,
+                        limit: nil,
+                        isoCurrencyCode: "USD",
+                        unofficialCurrencyCode: nil
+                    ),
+                    mask: "0000",
+                    name: accountId,
+                    officialName: nil,
+                    type: "depository",
+                    subtype: "checking"
+                ),
+            ],
+            item: nil,
+            requestId: "request-\(accountId)"
+        )
+    }
+
+    private static func syncResponse(
+        transactionId: String,
+        cursor: String
+    ) -> PlaidTransactionsSyncResponse {
+        PlaidTransactionsSyncResponse(
+            added: [
+                PlaidTransaction(
+                    transactionId: transactionId,
+                    accountId: "account-\(transactionId)",
+                    amount: 12,
+                    date: "2026-06-01",
+                    name: transactionId,
+                    merchantName: nil,
+                    pending: false,
+                    isoCurrencyCode: "USD",
+                    personalFinanceCategory: nil
+                ),
+            ],
+            modified: [],
+            removed: [],
+            nextCursor: cursor,
+            hasMore: false,
+            requestId: "request-\(transactionId)"
+        )
+    }
+
     /// Runs `body` against a TokenStore backed by a temporary SQLite file,
     /// and always shuts Fluent down so the test does not hold database files.
     private func withTokenStore(
         databasePath: String,
         logger: Logger,
         _ body: (TokenStore) async throws -> Void
+    ) async throws {
+        try await withTokenStore(databasePath: databasePath, logger: logger) { store, _ in
+            try await body(store)
+        }
+    }
+
+    private func withTokenStore(
+        databasePath: String,
+        logger: Logger,
+        _ body: (TokenStore, Fluent) async throws -> Void
     ) async throws {
         let fluent = Fluent(logger: logger)
         fluent.databases.use(.sqlite(.file(databasePath)), as: .sqlite)
@@ -644,7 +1034,35 @@ struct PlaidBarServerTests {
         var bodyError: Error?
         do {
             try await fluent.migrate()
-            try await body(TokenStore(fluent: fluent, logger: logger))
+            try await body(TokenStore(fluent: fluent, logger: logger), fluent)
+        } catch {
+            bodyError = error
+        }
+        try await fluent.shutdown()
+        if let bodyError {
+            throw bodyError
+        }
+    }
+
+    private func withStatusStores(
+        databasePath: String,
+        logger: Logger,
+        _ body: (TokenStore, BillingSubscriptionStore) async throws -> Void
+    ) async throws {
+        let fluent = Fluent(logger: logger)
+        fluent.databases.use(.sqlite(.file(databasePath)), as: .sqlite)
+        await fluent.migrations.add(CreateItems())
+        await fluent.migrations.add(AddProviderToItems())
+        await fluent.migrations.add(CreateSyncCursors())
+        await fluent.migrations.add(CreateBillingSubscriptions())
+
+        var bodyError: Error?
+        do {
+            try await fluent.migrate()
+            try await body(
+                TokenStore(fluent: fluent, logger: logger),
+                BillingSubscriptionStore(fluent: fluent)
+            )
         } catch {
             bodyError = error
         }
@@ -1000,45 +1418,178 @@ struct PlaidBarServerTests {
         #expect(!TransactionRoutes.shouldFailSync(attemptedItemCount: 3, successfulItemCount: 3))
     }
 
-    @Test func transactionSyncRejectsUnknownExplicitItemFilter() async throws {
+    @Test("Account refresh preserves partial success and deterministic aggregation while bounded")
+    func accountRefreshRunsWithBoundedConcurrencyAndStableAggregation() async throws {
         let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("plaidbar-sync-item-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("plaidbar-account-refresh-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
 
-        let configURL = directory.appendingPathComponent("plaidbar.conf")
-        try """
-        PLAID_CLIENT_ID=test-client
-        PLAID_SECRET=test-secret
-        PLAID_ENV=sandbox
-        PLAIDBAR_DATA_DIR=\(directory.appendingPathComponent("data").path)
-        """.write(to: configURL, atomically: true, encoding: .utf8)
-        let config = try ServerConfig.load(from: configURL.path)
-        let plaidClient = PlaidClient(config: config)
+        let databasePath = directory.appendingPathComponent("plaidbar-test.sqlite").path
+        let logger = Logger(label: "com.ftchvs.plaidbar-server-tests.account-refresh")
+        let client = DelayedRefreshPlaidClient(accountOutcomes: [
+            "token-a": .success(Self.accountsResponse(accountId: "acct-a"), delayNanoseconds: 150_000_000),
+            "token-b": .failure(PlaidError.apiError(
+                statusCode: 400,
+                errorType: "ITEM_ERROR",
+                errorCode: "ITEM_LOGIN_REQUIRED",
+                errorMessage: "login required"
+            ), delayNanoseconds: 50_000_000),
+            "token-c": .success(Self.accountsResponse(accountId: "acct-c"), delayNanoseconds: 10_000_000),
+        ])
+
+        try await withTokenStore(databasePath: databasePath, logger: logger) { store, fluent in
+            try await Self.saveRefreshItems(on: fluent)
+            let route = AccountRoutes(plaidClient: client, tokenStore: store, maxConcurrentItemRefreshes: 2)
+
+            let response = try await route.listAccounts(
+                request: Self.makeRequest(path: "/api/accounts"),
+                context: TestRequestContext(source: TestRequestContextSource())
+            )
+
+            let accounts: [AccountDTO] = try await Self.decodeBody(response)
+            #expect(accounts.map(\.id) == ["acct-a", "acct-c"])
+            #expect(accounts.map(\.itemId) == ["item-a", "item-c"])
+            let calls = await client.recordedCalls()
+            #expect(calls.accounts.sorted() == ["token-a", "token-b", "token-c"])
+            #expect(calls.maxActive == 2)
+            #expect(try await store.getItem(id: "item-a")?.status == ItemConnectionStatus.connected.rawValue)
+            #expect(try await store.getItem(id: "item-b")?.status == ItemConnectionStatus.loginRequired.rawValue)
+            #expect(try await store.getItem(id: "item-c")?.status == ItemConnectionStatus.connected.rawValue)
+        }
+    }
+
+    @Test("Balance refresh all-failure behavior is unchanged while bounded")
+    func balanceRefreshAllFailureStillThrowsBadGateway() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-balance-refresh-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
 
         let databasePath = directory.appendingPathComponent("plaidbar-test.sqlite").path
-        let logger = Logger(label: "com.ftchvs.plaidbar-server-tests.sync-item")
+        let logger = Logger(label: "com.ftchvs.plaidbar-server-tests.balance-refresh")
+        let client = DelayedRefreshPlaidClient(balanceOutcomes: [
+            "token-a": .failure(delayNanoseconds: 120_000_000),
+            "token-b": .failure(delayNanoseconds: 120_000_000),
+            "token-c": .failure(delayNanoseconds: 10_000_000),
+        ])
 
-        try await withTokenStore(databasePath: databasePath, logger: logger) { store in
-            let route = TransactionRoutes(plaidClient: plaidClient, tokenStore: store)
+        try await withTokenStore(databasePath: databasePath, logger: logger) { store, fluent in
+            try await Self.saveRefreshItems(on: fluent)
+            let route = AccountRoutes(plaidClient: client, tokenStore: store, maxConcurrentItemRefreshes: 2)
 
-            // An explicit filter for an unknown item id is a 404, not a silent
-            // 200 empty sync that looks like a clean no-op. The Plaid client is
-            // never reached because the guard throws first.
-            let unknownError = await #expect(throws: HTTPError.self) {
-                _ = try await route.syncTransactions(
-                    request: Self.makeRequest(path: "/api/transactions/sync?item_id=does-not-exist"),
+            let error = await #expect(throws: HTTPError.self) {
+                _ = try await route.getBalances(
+                    request: Self.makeRequest(path: "/api/accounts/balances"),
                     context: TestRequestContext(source: TestRequestContextSource())
                 )
             }
-            #expect(unknownError?.status == .notFound)
 
-            // The unfiltered path against an empty store stays a successful empty sync.
+            #expect(error?.status == .badGateway)
+            let calls = await client.recordedCalls()
+            #expect(calls.balances.sorted() == ["token-a", "token-b", "token-c"])
+            #expect(calls.maxActive == 2)
+            #expect(try await store.getItem(id: "item-a")?.status == ItemConnectionStatus.error.rawValue)
+            #expect(try await store.getItem(id: "item-b")?.status == ItemConnectionStatus.error.rawValue)
+            #expect(try await store.getItem(id: "item-c")?.status == ItemConnectionStatus.error.rawValue)
+        }
+    }
+
+    @Test("Credentials-not-configured remains a global setup error")
+    func credentialsNotConfiguredDoesNotBecomePerItemFailure() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-credentials-refresh-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let databasePath = directory.appendingPathComponent("plaidbar-test.sqlite").path
+        let logger = Logger(label: "com.ftchvs.plaidbar-server-tests.credentials-refresh")
+        let client = DelayedRefreshPlaidClient(accountOutcomes: [
+            "token-a": .failure(PlaidError.credentialsNotConfigured),
+            "token-b": .failure(PlaidError.credentialsNotConfigured),
+            "token-c": .failure(PlaidError.credentialsNotConfigured),
+        ])
+
+        try await withTokenStore(databasePath: databasePath, logger: logger) { store, fluent in
+            try await Self.saveRefreshItems(on: fluent)
+            let route = AccountRoutes(plaidClient: client, tokenStore: store, maxConcurrentItemRefreshes: 2)
+
+            let error = await #expect(throws: PlaidError.self) {
+                _ = try await route.listAccounts(
+                    request: Self.makeRequest(path: "/api/accounts"),
+                    context: TestRequestContext(source: TestRequestContextSource())
+                )
+            }
+
+            #expect(error == PlaidError.credentialsNotConfigured)
+            #expect(try await store.getItem(id: "item-a")?.status == ItemConnectionStatus.connected.rawValue)
+            #expect(try await store.getItem(id: "item-b")?.status == ItemConnectionStatus.connected.rawValue)
+            #expect(try await store.getItem(id: "item-c")?.status == ItemConnectionStatus.connected.rawValue)
+        }
+    }
+
+    @Test("Transaction sync preserves partial success and deterministic aggregation while bounded")
+    func transactionSyncRunsWithBoundedConcurrencyAndStableAggregation() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-transaction-refresh-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let databasePath = directory.appendingPathComponent("plaidbar-test.sqlite").path
+        let logger = Logger(label: "com.ftchvs.plaidbar-server-tests.transaction-refresh")
+        let client = DelayedRefreshPlaidClient(syncOutcomes: [
+            "token-a": .success(Self.syncResponse(transactionId: "tx-a", cursor: "cursor-a"), delayNanoseconds: 150_000_000),
+            "token-b": .failure(delayNanoseconds: 50_000_000),
+            "token-c": .success(Self.syncResponse(transactionId: "tx-c", cursor: "cursor-c"), delayNanoseconds: 10_000_000),
+        ])
+
+        try await withTokenStore(databasePath: databasePath, logger: logger) { store, fluent in
+            try await Self.saveRefreshItems(on: fluent)
+            try await store.saveSyncCursor(itemId: "item-a", cursor: "old-a")
+            try await store.saveSyncCursor(itemId: "item-c", cursor: "old-c")
+            let route = TransactionRoutes(plaidClient: client, tokenStore: store, maxConcurrentItemRefreshes: 2)
+
             let response = try await route.syncTransactions(
                 request: Self.makeRequest(path: "/api/transactions/sync"),
                 context: TestRequestContext(source: TestRequestContextSource())
             )
-            #expect(response.status == .ok)
+
+            let sync: SyncResponse = try await Self.decodeBody(response)
+            #expect(sync.added.map(\.id) == ["tx-a", "tx-c"])
+            #expect(sync.added.map(\.itemId) == ["item-a", "item-c"])
+            #expect(sync.nextCursor == "cursor-c")
+            #expect(sync.pendingCursors == ["item-a": "cursor-a", "item-c": "cursor-c"])
+            let calls = await client.recordedCalls()
+            #expect(calls.syncs.sorted() == ["token-a", "token-b", "token-c"])
+            #expect(calls.maxActive == 2)
+            #expect(try await store.getItem(id: "item-b")?.status == ItemConnectionStatus.error.rawValue)
+        }
+    }
+
+    @Test("Transaction sync rejects unknown explicit item id")
+    func transactionSyncRejectsUnknownExplicitItemId() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-transaction-unknown-item-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let databasePath = directory.appendingPathComponent("plaidbar-test.sqlite").path
+        let logger = Logger(label: "com.ftchvs.plaidbar-server-tests.transaction-unknown-item")
+        let client = DelayedRefreshPlaidClient()
+
+        try await withTokenStore(databasePath: databasePath, logger: logger) { store in
+            let route = TransactionRoutes(plaidClient: client, tokenStore: store, maxConcurrentItemRefreshes: 2)
+
+            let error = await #expect(throws: HTTPError.self) {
+                _ = try await route.syncTransactions(
+                    request: Self.makeRequest(path: "/api/transactions/sync?item_id=missing-item"),
+                    context: TestRequestContext(source: TestRequestContextSource())
+                )
+            }
+
+            #expect(error?.status == .notFound)
+            let calls = await client.recordedCalls()
+            #expect(calls.syncs.isEmpty)
         }
     }
 
