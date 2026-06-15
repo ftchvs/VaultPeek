@@ -370,6 +370,7 @@ struct OAuthCallbackRoute: Sendable {
                     continue
                 }
 
+                var managedInstitutionLimit: Int?
                 if pendingSession.origin == .managed {
                     let summary = try await managedEntitlementSummary()
                     guard summary.canCreateManagedLink else {
@@ -378,6 +379,12 @@ struct OAuthCallbackRoute: Sendable {
                             summary.message ?? "Managed bank linking is unavailable."
                         )
                     }
+                    // The pre-check avoids spending a single-use token on a
+                    // degraded/absent subscription; the authoritative cap is
+                    // re-checked atomically at insert time
+                    // (TokenStore.saveManagedItemEnforcingLimit), which closes the
+                    // concurrent check-then-insert overshoot.
+                    managedInstitutionLimit = summary.institutionLimit
                 }
 
                 let outcome: StoreResultOutcome
@@ -386,7 +393,8 @@ struct OAuthCallbackRoute: Sendable {
                 } else {
                     outcome = await storeResult(
                         publicTokenResult: publicTokenResult,
-                        origin: pendingSession.origin
+                        origin: pendingSession.origin,
+                        institutionLimit: managedInstitutionLimit
                     )
                 }
                 switch outcome {
@@ -514,7 +522,8 @@ struct OAuthCallbackRoute: Sendable {
 
     private func storeResult(
         publicTokenResult: PlaidPublicTokenResult,
-        origin: ItemOrigin
+        origin: ItemOrigin,
+        institutionLimit: Int?
     ) async -> StoreResultOutcome {
         let exchangeResponse: PlaidTokenExchangeResponse
         do {
@@ -537,13 +546,27 @@ struct OAuthCallbackRoute: Sendable {
         let institutionId = publicTokenResult.institution?.institutionId ?? accountsItemInstitutionId
 
         do {
-            try await tokenStore.saveItem(
-                id: exchangeResponse.itemId,
-                accessToken: exchangeResponse.accessToken,
-                institutionId: institutionId,
-                institutionName: publicTokenResult.institution?.normalizedName,
-                origin: origin
-            )
+            if origin == .managed, let institutionLimit {
+                // Atomic count-check-and-insert: a concurrent managed completion
+                // that won the last slot makes this throw `.limitReached`. The
+                // token is already spent, so report spent-but-not-stored (re-link)
+                // rather than overshooting the institution cap.
+                try await tokenStore.saveManagedItemEnforcingLimit(
+                    id: exchangeResponse.itemId,
+                    accessToken: exchangeResponse.accessToken,
+                    institutionId: institutionId,
+                    institutionName: publicTokenResult.institution?.normalizedName,
+                    institutionLimit: institutionLimit
+                )
+            } else {
+                try await tokenStore.saveItem(
+                    id: exchangeResponse.itemId,
+                    accessToken: exchangeResponse.accessToken,
+                    institutionId: institutionId,
+                    institutionName: publicTokenResult.institution?.normalizedName,
+                    origin: origin
+                )
+            }
         } catch {
             return .spentButNotStored
         }
