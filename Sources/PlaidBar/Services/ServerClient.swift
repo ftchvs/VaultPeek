@@ -8,6 +8,7 @@ actor ServerClient {
     private let baseURL: String
     private let session: URLSession
     private let decoder: JSONDecoder
+    private let encoder: JSONEncoder
     private let authTokenURL: URL
 
     init(
@@ -24,6 +25,9 @@ actor ServerClient {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         self.decoder = decoder
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        self.encoder = encoder
     }
 
     func getStatus() async throws -> ServerStatus {
@@ -45,6 +49,20 @@ actor ServerClient {
             throw ServerClientError.requestFailed
         }
         return try await get(url)
+    }
+
+    func getBillingSubscription() async throws -> BillingSubscription? {
+        guard let url = ServerEndpoint.url(baseURL: baseURL, path: "/api/billing/subscription") else {
+            throw ServerClientError.requestFailed
+        }
+        return try await get(url)
+    }
+
+    func saveBillingSubscription(_ request: SaveBillingSubscriptionRequest) async throws -> BillingSubscription {
+        guard let url = ServerEndpoint.url(baseURL: baseURL, path: "/api/billing/subscription") else {
+            throw ServerClientError.requestFailed
+        }
+        return try await put(url, body: request)
     }
 
     func getAccounts() async throws -> [AccountDTO] {
@@ -118,11 +136,24 @@ actor ServerClient {
         return try decoder.decode(T.self, from: data)
     }
 
+    private func put<T: Decodable & Sendable>(
+        _ url: URL,
+        body: some Encodable & Sendable
+    ) async throws -> T {
+        var request = try authorizedRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(body)
+        let (data, response) = try await data(for: request)
+        try Self.validateHTTPResponse(response, data: data)
+        return try decoder.decode(T.self, from: data)
+    }
+
     private func post(_ url: URL, body: some Encodable & Sendable) async throws {
         var request = try authorizedRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(body)
+        request.httpBody = try encoder.encode(body)
         let (data, response) = try await data(for: request)
         try Self.validateHTTPResponse(response, data: data)
     }

@@ -17,6 +17,7 @@ public struct ServerStatus: Codable, Sendable {
         case syncReady
         case syncedItemCount
         case itemStatuses
+        case billingSubscription
     }
 
     public let version: String
@@ -28,6 +29,7 @@ public struct ServerStatus: Codable, Sendable {
     public let syncReady: Bool
     public let syncedItemCount: Int
     public let itemStatuses: [ItemStatus]?
+    public let billingSubscription: BillingSubscription?
 
     public init(
         version: String,
@@ -38,7 +40,8 @@ public struct ServerStatus: Codable, Sendable {
         storagePath: String = LocalDataStore.displayPath,
         syncReady: Bool? = nil,
         syncedItemCount: Int? = nil,
-        itemStatuses: [ItemStatus]? = nil
+        itemStatuses: [ItemStatus]? = nil,
+        billingSubscription: BillingSubscription? = nil
     ) {
         self.version = version
         self.environment = environment
@@ -49,6 +52,7 @@ public struct ServerStatus: Codable, Sendable {
         self.syncReady = syncReady ?? (itemCount > 0)
         self.syncedItemCount = syncedItemCount ?? (lastSync == nil ? 0 : itemCount)
         self.itemStatuses = itemStatuses
+        self.billingSubscription = billingSubscription
     }
 
     public init(from decoder: Decoder) throws {
@@ -62,6 +66,10 @@ public struct ServerStatus: Codable, Sendable {
         let syncReady = try container.decodeIfPresent(Bool.self, forKey: .syncReady)
         let syncedItemCount = try container.decodeIfPresent(Int.self, forKey: .syncedItemCount)
         let itemStatuses = try container.decodeIfPresent([ItemStatus].self, forKey: .itemStatuses)
+        let billingSubscription = try container.decodeIfPresent(
+            BillingSubscription.self,
+            forKey: .billingSubscription
+        )
 
         self.init(
             version: version,
@@ -72,7 +80,8 @@ public struct ServerStatus: Codable, Sendable {
             storagePath: storagePath ?? LocalDataStore.displayPath,
             syncReady: syncReady,
             syncedItemCount: syncedItemCount,
-            itemStatuses: itemStatuses
+            itemStatuses: itemStatuses,
+            billingSubscription: billingSubscription
         )
     }
 }

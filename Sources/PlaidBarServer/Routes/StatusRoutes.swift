@@ -5,6 +5,7 @@ import PlaidBarCore
 
 struct StatusRoutes: Sendable {
     let tokenStore: TokenStore
+    let billingStore: BillingSubscriptionStore
     let config: ServerConfig
 
     func register(with group: RouterGroup<some RequestContext>) {
@@ -33,6 +34,7 @@ struct StatusRoutes: Sendable {
         let itemCount = try await tokenStore.itemCount()
         let lastSync = try await tokenStore.lastSyncDate()
         let syncedItemCount = try await tokenStore.syncedItemCount()
+        let billingSubscription = try await billingStore.currentSubscription()
         let itemStatuses = includeItems ? try await safeItemStatuses() : nil
 
         return ServerStatus(
@@ -44,7 +46,8 @@ struct StatusRoutes: Sendable {
             storagePath: config.dataDirectoryPath,
             syncReady: itemCount > 0,
             syncedItemCount: syncedItemCount,
-            itemStatuses: itemStatuses
+            itemStatuses: itemStatuses,
+            billingSubscription: billingSubscription
         )
     }
 

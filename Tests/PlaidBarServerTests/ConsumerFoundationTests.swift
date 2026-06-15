@@ -184,12 +184,135 @@ struct ConsumerFoundationTests {
         #expect(decoded == original)
     }
 
+    // MARK: - Billing lifecycle persistence
+
+    @Test("Billing subscription status persists and can move through lifecycle states")
+    func billingSubscriptionLifecyclePersists() async throws {
+        try await withFluent { fluent in
+            let store = BillingSubscriptionStore(fluent: fluent)
+
+            #expect(try await store.currentSubscription() == nil)
+
+            let trial = try await store.save(
+                SaveBillingSubscriptionRequest(status: .trialing, plan: .free)
+            )
+            #expect(trial.status == .trialing)
+            #expect(trial.plan == .free)
+
+            let upgraded = try await store.save(
+                SaveBillingSubscriptionRequest(status: .active, plan: .plus)
+            )
+            #expect(upgraded.status == .active)
+            #expect(upgraded.plan == .plus)
+
+            let failedPayment = try await store.save(
+                SaveBillingSubscriptionRequest(status: .pastDue, plan: .plus)
+            )
+            #expect(failedPayment.status == .pastDue)
+
+            let downgraded = try await store.save(
+                SaveBillingSubscriptionRequest(status: .active, plan: .free)
+            )
+            #expect(downgraded.plan == .free)
+
+            let canceled = try await store.save(
+                SaveBillingSubscriptionRequest(status: .canceled, plan: .free)
+            )
+            #expect(canceled.status == .canceled)
+
+            let expired = try await store.save(
+                SaveBillingSubscriptionRequest(status: .expired, plan: .free)
+            )
+            #expect(expired.status == .expired)
+
+            let reactivated = try await store.save(
+                SaveBillingSubscriptionRequest(status: .active, plan: .free)
+            )
+            #expect(reactivated.status == .active)
+
+            let loaded = try await store.currentSubscription()
+            #expect(loaded?.status == .active)
+            #expect(loaded?.plan == .free)
+        }
+    }
+
+    @Test("Billing route receives normalized subscription status")
+    func billingRouteReceivesSubscriptionStatus() async throws {
+        try await withFluent { fluent in
+            let store = BillingSubscriptionStore(fluent: fluent)
+            let routes = BillingRoutes(billingStore: store)
+            let context = TestRequestContext(source: TestRequestContextSource())
+            let response = try await routes.saveSubscription(
+                request: Self.makeJSONRequest(
+                    method: .put,
+                    path: "/api/billing/subscription",
+                    body: SaveBillingSubscriptionRequest(status: .pastDue, plan: .plus)
+                ),
+                context: context
+            )
+
+            #expect(response.status == .ok)
+            let loaded = try await store.currentSubscription()
+            #expect(loaded?.status == .pastDue)
+            #expect(loaded?.plan == .plus)
+        }
+    }
+
+    @Test("Billing route accepts ISO-8601 trial and period-end dates from the app client")
+    func billingRouteDecodesISO8601Dates() async throws {
+        try await withFluent { fluent in
+            let store = BillingSubscriptionStore(fluent: fluent)
+            let routes = BillingRoutes(billingStore: store)
+            let context = TestRequestContext(source: TestRequestContextSource())
+            let trialEnd = Date(timeIntervalSince1970: 1_800_000_000)
+            let periodEnd = Date(timeIntervalSince1970: 1_802_000_000)
+
+            let response = try await routes.saveSubscription(
+                request: Self.makeJSONRequest(
+                    method: .put,
+                    path: "/api/billing/subscription",
+                    body: SaveBillingSubscriptionRequest(
+                        status: .trialing,
+                        plan: .plus,
+                        currentPeriodEnd: periodEnd,
+                        trialEndsAt: trialEnd
+                    )
+                ),
+                context: context
+            )
+
+            #expect(response.status == .ok)
+            let loaded = try await store.currentSubscription()
+            #expect(loaded?.status == .trialing)
+            #expect(loaded?.trialEndsAt == trialEnd)
+            #expect(loaded?.currentPeriodEnd == periodEnd)
+        }
+    }
+
     // MARK: - Helpers
 
     private static func makeRequest(path: String) -> Request {
         Request(
             head: HTTPRequest(method: .get, scheme: nil, authority: nil, path: path),
             body: RequestBody(buffer: ByteBuffer())
+        )
+    }
+
+    private static func makeJSONRequest(
+        method: HTTPRequest.Method,
+        path: String,
+        body: some Encodable
+    ) throws -> Request {
+        // Mirror the real app client (ServerClient encodes with .iso8601), so
+        // route tests exercise the same date wire format the server must accept.
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(body)
+        var headers = HTTPFields()
+        headers[.contentType] = "application/json"
+        return Request(
+            head: HTTPRequest(method: method, scheme: nil, authority: nil, path: path, headerFields: headers),
+            body: RequestBody(buffer: ByteBuffer(data: data))
         )
     }
 
@@ -202,6 +325,7 @@ struct ConsumerFoundationTests {
         await fluent.migrations.add(CreateItems())
         await fluent.migrations.add(AddProviderToItems())
         await fluent.migrations.add(CreateSyncCursors())
+        await fluent.migrations.add(CreateBillingSubscriptions())
 
         var bodyError: Error?
         do {

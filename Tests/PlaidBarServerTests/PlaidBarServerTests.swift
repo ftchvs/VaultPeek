@@ -203,7 +203,12 @@ struct PlaidBarServerTests {
             credentialsConfigured: true,
             storagePath: "/Users/example/.plaidbar",
             syncReady: true,
-            syncedItemCount: 2
+            syncedItemCount: 2,
+            billingSubscription: BillingSubscription(
+                status: .active,
+                plan: .free,
+                updatedAt: Date(timeIntervalSince1970: 1_800_000_002)
+            )
         )
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -221,6 +226,7 @@ struct PlaidBarServerTests {
             "storagePath",
             "syncReady",
             "syncedItemCount",
+            "billingSubscription",
         ]
         let forbiddenFragments = [
             "account",
@@ -265,7 +271,12 @@ struct PlaidBarServerTests {
             credentialsConfigured: true,
             storagePath: "/Users/example/.plaidbar",
             syncReady: true,
-            syncedItemCount: 1
+            syncedItemCount: 1,
+            billingSubscription: BillingSubscription(
+                status: .trialing,
+                plan: .free,
+                updatedAt: Date(timeIntervalSince1970: 1_800_000_002)
+            )
         )
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -329,7 +340,7 @@ struct PlaidBarServerTests {
         let databasePath = directory.appendingPathComponent("plaidbar-status-items.sqlite").path
         let logger = Logger(label: "com.ftchvs.plaidbar-server-tests.status-items")
         let config = try setupStateConfig(in: directory)
-        try await withTokenStore(databasePath: databasePath, logger: logger) { store in
+        try await withStatusStores(databasePath: databasePath, logger: logger) { store, billingStore in
             try await store.saveItem(
                 id: loginItemId,
                 accessToken: "access-sandbox-\(UUID().uuidString)",
@@ -347,6 +358,7 @@ struct PlaidBarServerTests {
 
             let routes = StatusRoutes(
                 tokenStore: store,
+                billingStore: billingStore,
                 config: config
             )
             let includeItemsRequest = Self.makeRequest(path: "/api/status?include=items")
@@ -389,9 +401,10 @@ struct PlaidBarServerTests {
         let databasePath = directory.appendingPathComponent("plaidbar-status-default.sqlite").path
         let logger = Logger(label: "com.ftchvs.plaidbar-server-tests.status-default")
         let config = try setupStateConfig(in: directory)
-        try await withTokenStore(databasePath: databasePath, logger: logger) { store in
+        try await withStatusStores(databasePath: databasePath, logger: logger) { store, billingStore in
             let routes = StatusRoutes(
                 tokenStore: store,
+                billingStore: billingStore,
                 config: config
             )
             let defaultStatusRequest = Self.makeRequest(path: "/api/status")
@@ -750,6 +763,34 @@ struct PlaidBarServerTests {
         do {
             try await fluent.migrate()
             try await body(TokenStore(fluent: fluent, logger: logger))
+        } catch {
+            bodyError = error
+        }
+        try await fluent.shutdown()
+        if let bodyError {
+            throw bodyError
+        }
+    }
+
+    private func withStatusStores(
+        databasePath: String,
+        logger: Logger,
+        _ body: (TokenStore, BillingSubscriptionStore) async throws -> Void
+    ) async throws {
+        let fluent = Fluent(logger: logger)
+        fluent.databases.use(.sqlite(.file(databasePath)), as: .sqlite)
+        await fluent.migrations.add(CreateItems())
+        await fluent.migrations.add(AddProviderToItems())
+        await fluent.migrations.add(CreateSyncCursors())
+        await fluent.migrations.add(CreateBillingSubscriptions())
+
+        var bodyError: Error?
+        do {
+            try await fluent.migrate()
+            try await body(
+                TokenStore(fluent: fluent, logger: logger),
+                BillingSubscriptionStore(fluent: fluent)
+            )
         } catch {
             bodyError = error
         }
