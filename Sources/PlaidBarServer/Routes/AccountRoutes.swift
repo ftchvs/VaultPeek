@@ -4,8 +4,9 @@ import NIOCore
 import PlaidBarCore
 
 struct AccountRoutes: Sendable {
-    let plaidClient: PlaidClient
+    let plaidClient: any PlaidClientProtocol
     let tokenStore: TokenStore
+    var maxConcurrentItemRefreshes = Self.defaultMaxConcurrentItemRefreshes
 
     func register(with group: RouterGroup<some RequestContext>) {
         group.group("accounts")
@@ -19,59 +20,18 @@ struct AccountRoutes: Sendable {
         request: Request,
         context: some RequestContext
     ) async throws -> Response {
-        let items = try await tokenStore.getAllItems()
-        var allAccounts: [AccountDTO] = []
-        var attemptedItemCount = 0
-        var successfulItemCount = 0
-
-        for item in items {
-            guard let itemId = item.id else { continue }
-            attemptedItemCount += 1
-
-            let response: PlaidAccountsResponse
-            do {
-                let accessToken = try tokenStore.accessToken(for: item)
-                response = try await plaidClient.getAccounts(
-                    accessToken: accessToken
-                )
-                try await tokenStore.updateItemStatus(id: itemId, status: ItemConnectionStatus.connected.rawValue)
-                successfulItemCount += 1
-            } catch PlaidError.credentialsNotConfigured {
-                // Setup state affects every item identically: surface the 503
-                // credential guidance instead of marking items errored and
-                // reporting a misleading per-item refresh failure.
-                throw PlaidError.credentialsNotConfigured
-            } catch {
-                try await tokenStore.updateItemStatus(id: itemId, status: itemStatus(for: error).rawValue)
-                continue
-            }
-
-            let accounts = response.accounts.map { account in
-                AccountDTO(
-                    id: account.accountId,
-                    itemId: itemId,
-                    name: account.name,
-                    officialName: account.officialName,
-                    type: AccountType(rawValue: account.type) ?? .other,
-                    subtype: account.subtype,
-                    mask: account.mask,
-                    balances: BalanceDTO(
-                        available: account.balances.available,
-                        current: account.balances.current,
-                        limit: account.balances.limit,
-                        isoCurrencyCode: account.balances.isoCurrencyCode
-                    ),
-                    institutionName: item.institutionName
-                )
-            }
-            allAccounts.append(contentsOf: accounts)
+        let items = Self.deterministicItems(try await tokenStore.getAllItems())
+        let results = try await refreshAccounts(items: items) { accessToken in
+            try await plaidClient.getAccounts(accessToken: accessToken)
         }
+        let attemptedItemCount = results.filter(\.attempted).count
+        let successfulItemCount = results.filter(\.succeeded).count
 
         if Self.shouldFailRefresh(attemptedItemCount: attemptedItemCount, successfulItemCount: successfulItemCount) {
             throw HTTPError(.badGateway, message: "Plaid account refresh failed for every linked item")
         }
 
-        return try Self.jsonResponse(allAccounts)
+        return try Self.jsonResponse(results.flatMap(\.accounts))
     }
 
     @Sendable
@@ -79,56 +39,18 @@ struct AccountRoutes: Sendable {
         request: Request,
         context: some RequestContext
     ) async throws -> Response {
-        let items = try await tokenStore.getAllItems()
-        var allAccounts: [AccountDTO] = []
-        var attemptedItemCount = 0
-        var successfulItemCount = 0
-
-        for item in items {
-            guard let itemId = item.id else { continue }
-            attemptedItemCount += 1
-
-            let response: PlaidAccountsResponse
-            do {
-                let accessToken = try tokenStore.accessToken(for: item)
-                response = try await plaidClient.getBalances(
-                    accessToken: accessToken
-                )
-                try await tokenStore.updateItemStatus(id: itemId, status: ItemConnectionStatus.connected.rawValue)
-                successfulItemCount += 1
-            } catch PlaidError.credentialsNotConfigured {
-                throw PlaidError.credentialsNotConfigured
-            } catch {
-                try await tokenStore.updateItemStatus(id: itemId, status: itemStatus(for: error).rawValue)
-                continue
-            }
-
-            let accounts = response.accounts.map { account in
-                AccountDTO(
-                    id: account.accountId,
-                    itemId: itemId,
-                    name: account.name,
-                    officialName: account.officialName,
-                    type: AccountType(rawValue: account.type) ?? .other,
-                    subtype: account.subtype,
-                    mask: account.mask,
-                    balances: BalanceDTO(
-                        available: account.balances.available,
-                        current: account.balances.current,
-                        limit: account.balances.limit,
-                        isoCurrencyCode: account.balances.isoCurrencyCode
-                    ),
-                    institutionName: item.institutionName
-                )
-            }
-            allAccounts.append(contentsOf: accounts)
+        let items = Self.deterministicItems(try await tokenStore.getAllItems())
+        let results = try await refreshAccounts(items: items) { accessToken in
+            try await plaidClient.getBalances(accessToken: accessToken)
         }
+        let attemptedItemCount = results.filter(\.attempted).count
+        let successfulItemCount = results.filter(\.succeeded).count
 
         if Self.shouldFailRefresh(attemptedItemCount: attemptedItemCount, successfulItemCount: successfulItemCount) {
             throw HTTPError(.badGateway, message: "Plaid balance refresh failed for every linked item")
         }
 
-        return try Self.jsonResponse(allAccounts)
+        return try Self.jsonResponse(results.flatMap(\.accounts))
     }
 
     @Sendable
@@ -177,7 +99,88 @@ struct AccountRoutes: Sendable {
         attemptedItemCount > 0 && successfulItemCount == 0
     }
 
+    static var defaultMaxConcurrentItemRefreshes: Int {
+        let rawValue = ProcessInfo.processInfo.environment["PLAIDBAR_MAX_CONCURRENT_ITEM_REFRESHES"]
+        return rawValue.flatMap(Int.init).map { max(1, $0) } ?? 4
+    }
+
     // MARK: - Helpers
+
+    private struct AccountRefreshResult: Sendable {
+        let attempted: Bool
+        let succeeded: Bool
+        let accounts: [AccountDTO]
+
+        static let skipped = AccountRefreshResult(attempted: false, succeeded: false, accounts: [])
+    }
+
+    private func refreshAccounts(
+        items: [ItemModel],
+        fetch: @escaping @Sendable (String) async throws -> PlaidAccountsResponse
+    ) async throws -> [AccountRefreshResult] {
+        try await BoundedConcurrency.map(items, limit: maxConcurrentItemRefreshes) { item in
+            guard let itemId = item.id else { return .skipped }
+
+            do {
+                let accessToken = try tokenStore.accessToken(for: item)
+                let response = try await fetch(accessToken)
+                try await tokenStore.updateItemStatus(id: itemId, status: ItemConnectionStatus.connected.rawValue)
+                return AccountRefreshResult(
+                    attempted: true,
+                    succeeded: true,
+                    accounts: Self.accountDTOs(from: response, item: item, itemId: itemId)
+                )
+            } catch PlaidError.credentialsNotConfigured {
+                // Setup state affects every item identically: surface the 503
+                // credential guidance instead of marking items errored and
+                // reporting a misleading per-item refresh failure.
+                throw PlaidError.credentialsNotConfigured
+            } catch {
+                try await tokenStore.updateItemStatus(id: itemId, status: itemStatus(for: error).rawValue)
+                return AccountRefreshResult(attempted: true, succeeded: false, accounts: [])
+            }
+        }
+    }
+
+    private static func accountDTOs(
+        from response: PlaidAccountsResponse,
+        item: ItemModel,
+        itemId: String
+    ) -> [AccountDTO] {
+        response.accounts.map { account in
+            AccountDTO(
+                id: account.accountId,
+                itemId: itemId,
+                name: account.name,
+                officialName: account.officialName,
+                type: AccountType(rawValue: account.type) ?? .other,
+                subtype: account.subtype,
+                mask: account.mask,
+                balances: BalanceDTO(
+                    available: account.balances.available,
+                    current: account.balances.current,
+                    limit: account.balances.limit,
+                    isoCurrencyCode: account.balances.isoCurrencyCode
+                ),
+                institutionName: item.institutionName
+            )
+        }
+    }
+
+    static func deterministicItems(_ items: [ItemModel]) -> [ItemModel] {
+        items.sorted { lhs, rhs in
+            switch (lhs.createdAt, rhs.createdAt) {
+            case let (left?, right?) where left != right:
+                return left < right
+            case (_?, nil):
+                return true
+            case (nil, _?):
+                return false
+            default:
+                return (lhs.id ?? "") < (rhs.id ?? "")
+            }
+        }
+    }
 
     private static func jsonResponse<T: Encodable>(_ value: T) throws -> Response {
         let data = try JSONEncoder().encode(value)
