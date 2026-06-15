@@ -1102,6 +1102,7 @@ final class AppState {
         var removedCount = 0
         do {
             var hasMore = true
+            var batch = TransactionSyncBatch(transactions: transactions)
             while hasMore {
                 pageCount += 1
                 guard pageCount <= PlaidBarConstants.maxTransactionSyncPages else {
@@ -1113,25 +1114,23 @@ final class AppState {
                 addedCount += response.added.count
                 modifiedCount += response.modified.count
                 removedCount += response.removed.count
-                let updatedTransactions = TransactionSyncReducer.applying(response, to: transactions)
-                // Assign before awaiting the cache write so a concurrent
-                // reentrant mutation (e.g. removeAccount filtering
-                // `transactions`) cannot be clobbered by the resumed sync
-                // overwriting it with a value reduced from the pre-suspension
-                // array. The cursor is still committed only after the cache
-                // write succeeds, preserving local-first durability.
-                transactions = updatedTransactions
-                seedReviewMetadataForNewTransactions(updatedTransactions)
+                batch.apply(response)
+                hasMore = response.hasMore
+            }
+            if batch.hasChanges {
+                // Assign once for the logical sync so downstream SwiftUI
+                // caches recompute only after all pages have been reduced.
+                transactions = batch.transactions
+                seedReviewMetadataForNewTransactions(batch.transactions)
                 let cacheDirectory = activeStorageDirectoryURL
                 let cacheContext = transactionCacheContext
                 try await saveTransactionsToCacheWithPerformance(
-                    updatedTransactions,
+                    batch.transactions,
                     to: cacheDirectory,
                     context: cacheContext
                 )
-                try await serverClient.commitSyncCursors(response.pendingCursors)
-                hasMore = response.hasMore
             }
+            try await serverClient.commitSyncCursors(batch.pendingCursors)
             lastSyncDate = Date()
             serverSyncedItemCount = statusItemCount
             await refreshItemStatuses()
@@ -1144,7 +1143,7 @@ final class AppState {
                     .transactionAddedCount: addedCount,
                     .transactionModifiedCount: modifiedCount,
                     .transactionRemovedCount: removedCount,
-                    .transactionTotalCount: transactions.count,
+                    .transactionTotalCount: batch.transactions.count,
                 ],
                 outcome: .success
             )
