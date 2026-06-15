@@ -1409,6 +1409,33 @@ struct PlaidBarServerTests {
         }
     }
 
+    @Test("Transaction sync rejects unknown explicit item id")
+    func transactionSyncRejectsUnknownExplicitItemId() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-transaction-unknown-item-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let databasePath = directory.appendingPathComponent("plaidbar-test.sqlite").path
+        let logger = Logger(label: "com.ftchvs.plaidbar-server-tests.transaction-unknown-item")
+        let client = DelayedRefreshPlaidClient()
+
+        try await withTokenStore(databasePath: databasePath, logger: logger) { store in
+            let route = TransactionRoutes(plaidClient: client, tokenStore: store, maxConcurrentItemRefreshes: 2)
+
+            let error = await #expect(throws: HTTPError.self) {
+                _ = try await route.syncTransactions(
+                    request: Self.makeRequest(path: "/api/transactions/sync?item_id=missing-item"),
+                    context: TestRequestContext(source: TestRequestContextSource())
+                )
+            }
+
+            #expect(error?.status == .notFound)
+            let calls = await client.recordedCalls()
+            #expect(calls.syncs.isEmpty)
+        }
+    }
+
     @Test func linkResponseCodable() throws {
         let response = LinkResponse(linkToken: "token_123", linkUrl: "https://example.com/link")
         let data = try JSONEncoder().encode(response)

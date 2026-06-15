@@ -27,7 +27,7 @@ struct TransactionRoutes: Sendable {
             if let item = try await tokenStore.getItem(id: itemId) {
                 items = [item]
             } else {
-                items = []
+                throw HTTPError(.notFound, message: "Unknown Plaid item")
             }
         } else {
             items = AccountRoutes.deterministicItems(try await tokenStore.getAllItems())
