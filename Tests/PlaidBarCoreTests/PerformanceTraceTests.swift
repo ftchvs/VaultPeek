@@ -66,6 +66,18 @@ struct PerformanceTraceTests {
         #expect(snapshot.events.map(\.operation).contains(.transactionSync))
         #expect(snapshot.events.allSatisfy { $0.durationMilliseconds >= 0 })
     }
+
+    @Test("bounds retained events as a ring buffer")
+    func boundsRetainedEventsAsRingBuffer() {
+        var trace = PerformanceTrace(maximumEventCount: 3)
+
+        trace.record(.statusFetch, durationNanoseconds: 1_000_000, outcome: .success)
+        trace.record(.itemsFetch, durationNanoseconds: 2_000_000, outcome: .success)
+        trace.record(.accountsRefresh, durationNanoseconds: 3_000_000, outcome: .success)
+        trace.record(.transactionSync, durationNanoseconds: 4_000_000, outcome: .success)
+
+        #expect(trace.events.map(\.operation) == [.itemsFetch, .accountsRefresh, .transactionSync])
+    }
 }
 
 private final class ManualPerformanceClock: @unchecked Sendable {

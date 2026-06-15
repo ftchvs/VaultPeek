@@ -92,13 +92,19 @@ public struct PerformanceSnapshot: Codable, Equatable, Sendable {
 }
 
 public struct PerformanceTrace: Sendable {
+    public static let defaultMaximumEventCount = 200
     public typealias Clock = @Sendable () -> UInt64
 
     private var clock: Clock
+    private var maximumEventCount: Int
     private var recordedEvents: [PerformanceEvent]
 
-    public init(clock: @escaping Clock = { DispatchTime.now().uptimeNanoseconds }) {
+    public init(
+        maximumEventCount: Int = Self.defaultMaximumEventCount,
+        clock: @escaping Clock = { DispatchTime.now().uptimeNanoseconds }
+    ) {
         self.clock = clock
+        self.maximumEventCount = max(1, maximumEventCount)
         recordedEvents = []
     }
 
@@ -133,6 +139,9 @@ public struct PerformanceTrace: Sendable {
         counts: [PerformanceCountKey: Int] = [:],
         outcome: PerformanceOutcome
     ) {
+        if recordedEvents.count >= maximumEventCount {
+            recordedEvents.removeFirst(recordedEvents.count - maximumEventCount + 1)
+        }
         recordedEvents.append(
             PerformanceEvent(
                 operation: operation,
