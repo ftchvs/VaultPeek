@@ -22,6 +22,7 @@ struct ServerConfig: Sendable {
     let databasePath: String
     let pendingLinkSessionsPath: String
     let redirectUri: String
+    let oauthRedirect: OAuthRedirectConfiguration
     let authToken: String
     let linkClientUserId: String
     let link: PlaidLinkConfiguration
@@ -129,6 +130,12 @@ struct ServerConfig: Sendable {
         // until the owner provisions them (see consumer-production-checklist.md).
         let deployment = DeploymentMode.resolved(from: environmentValues)
         let remoteBridge = RemoteBridgeConfig.resolved(from: environmentValues)
+        let oauthRedirect = try OAuthRedirectConfiguration.resolved(
+            from: environmentValues,
+            deployment: deployment,
+            plaidEnvironment: environment,
+            port: resolvedPort
+        )
 
         return ServerConfig(
             port: resolvedPort,
@@ -143,7 +150,8 @@ struct ServerConfig: Sendable {
             pendingLinkSessionsPath: URL(fileURLWithPath: dataDir, isDirectory: true)
                 .appendingPathComponent(pendingLinkSessionsFilename)
                 .path,
-            redirectUri: "http://localhost:\(resolvedPort)/oauth/callback",
+            redirectUri: oauthRedirect.uri,
+            oauthRedirect: oauthRedirect,
             authToken: authToken,
             linkClientUserId: linkClientUserId,
             link: link,
@@ -877,6 +885,9 @@ enum ServerConfigError: LocalizedError {
     case invalidEnvironmentVariable(String, String)
     case invalidConfigLine(path: String, line: Int)
     case invalidPort(Int)
+    case missingManagedRedirectURI
+    case invalidManagedRedirectURI
+    case appRedirectRequiresHTTPS
 
     var errorDescription: String? {
         switch self {
@@ -886,7 +897,84 @@ enum ServerConfigError: LocalizedError {
             "Invalid config line \(line) in \(path)"
         case .invalidPort(let port):
             "Invalid server port \(port): must be between 1 and 65535"
+        case .missingManagedRedirectURI:
+            "Managed production Hosted Link requires PLAIDBAR_OAUTH_REDIRECT_URI to be configured"
+        case .invalidManagedRedirectURI:
+            "Managed production Hosted Link redirect URI must be configured as HTTPS"
+        case .appRedirectRequiresHTTPS:
+            "App or Universal Link OAuth redirect mode requires an HTTPS Universal Link callback"
         }
+    }
+}
+
+enum OAuthRedirectMode: String, Sendable, Equatable, CaseIterable {
+    case local
+    case managed
+    case app
+
+    static let environmentVariable = "PLAIDBAR_OAUTH_REDIRECT_MODE"
+
+    static func resolved(from environment: [String: String], deployment: DeploymentMode) -> OAuthRedirectMode {
+        guard let rawValue = environment[environmentVariable]?.trimmedNonEmpty else {
+            return deployment == .hostedBridge ? .managed : .local
+        }
+        return OAuthRedirectMode(rawValue: rawValue) ?? (deployment == .hostedBridge ? .managed : .local)
+    }
+}
+
+struct OAuthRedirectConfiguration: Sendable, Equatable {
+    static let uriEnvironmentVariable = "PLAIDBAR_OAUTH_REDIRECT_URI"
+
+    let mode: OAuthRedirectMode
+    let uri: String
+
+    var isProductionReadyForHostedLink: Bool {
+        switch mode {
+        case .local:
+            return false
+        case .managed, .app:
+            return Self.isHTTPS(uri)
+        }
+    }
+
+    static func resolved(
+        from environment: [String: String],
+        deployment: DeploymentMode,
+        plaidEnvironment: PlaidEnvironment,
+        port: Int
+    ) throws -> OAuthRedirectConfiguration {
+        let mode = OAuthRedirectMode.resolved(from: environment, deployment: deployment)
+        let configuredURI = environment[uriEnvironmentVariable]?.trimmedNonEmpty
+
+        switch mode {
+        case .local:
+            return OAuthRedirectConfiguration(
+                mode: .local,
+                uri: configuredURI ?? "http://localhost:\(port)/oauth/callback"
+            )
+        case .managed:
+            guard let configuredURI else {
+                throw ServerConfigError.missingManagedRedirectURI
+            }
+            if deployment == .hostedBridge, plaidEnvironment == .production, !isHTTPS(configuredURI) {
+                throw ServerConfigError.invalidManagedRedirectURI
+            }
+            return OAuthRedirectConfiguration(mode: .managed, uri: configuredURI)
+        case .app:
+            guard let configuredURI else {
+                throw ServerConfigError.missingManagedRedirectURI
+            }
+            guard isHTTPS(configuredURI) else {
+                throw ServerConfigError.appRedirectRequiresHTTPS
+            }
+            return OAuthRedirectConfiguration(mode: .app, uri: configuredURI)
+        }
+    }
+
+    private static func isHTTPS(_ uri: String) -> Bool {
+        guard let components = URLComponents(string: uri) else { return false }
+        return components.scheme?.lowercased() == "https"
+            && components.host?.isEmpty == false
     }
 }
 
