@@ -8,8 +8,9 @@ import Foundation
 /// coupling to the UI preview enum. Nothing issues or verifies real
 /// entitlements yet — see `docs/strategy/subscription-entitlements.md`.
 public enum EntitlementTier: String, Sendable, Codable, CaseIterable {
-    case personal
+    case free
     case plus
+    case managed
 }
 
 /// A signed consumer entitlement, as it will eventually arrive from the hosted

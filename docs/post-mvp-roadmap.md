@@ -71,6 +71,14 @@ This is where VaultPeek gets smarter without getting larger. The local-AI founda
 
 Only after the core instrument is stable, polished, and intelligently complete does VaultPeek grow to new macOS surfaces: a detachable, pinnable window (**AND-384**) and a widget extension + Control Center presence (**AND-385**).
 
+Native iOS/mobile companion work remains outside v1.0 and outside this phase
+unless Felipe explicitly promotes it to the Native Expansion milestone. If that
+happens, the Link decision is already recorded in
+[`docs/strategy/ios-native-link-decision.md`](strategy/ios-native-link-decision.md):
+a first-party iOS/native VaultPeek companion should plan on LinkKit 7.x via
+Swift Package Manager with Universal Links/AASA, while Hosted Link stays the
+macOS path and a documented fallback for webview or non-owned-frontend flows.
+
 **Why it comes this late:** both introduce new surfaces and new targets, and both must be tested against the *Menu Bar First* principle — VaultPeek "should remain a menu bar utility, not a full desktop finance app that happens to have a menu bar icon" (`docs/v1.0-roadmap.md` §"Menu Bar First"). A detached window is exactly the kind of "large canvas / persistent workspace" the brief says to treat with skepticism; a widget is a named Horizon-5 "Allowed Later With Care" item requiring a data-boundary review. Expanding the *number* of surfaces before the *content* of the core surface is final would scatter effort across canvases that the intelligence and design phases might still reshape.
 
 ### Phase 6 — provider & platform expansion · *milestone: Provider & Platform Expansion*
@@ -87,7 +95,7 @@ These directions stay **out of scope** unless the project deliberately changes i
 - **Cloud sync.**
 - **Telemetry by default.** The privacy-preserving metrics *plan* (AND-396) is a thinking artifact only; it must never become "add analytics," and launching with *no* metrics is the correct default.
 - **Multi-user finance platform.**
-- **iOS companion app.**
+- **iOS companion app, including native LinkKit implementation for mobile.**
 - **Investment portfolio dashboard.**
 - **Cloud AI/ML over private transactions** or any insight feature that sends raw financial data off-device.
 - **Generic Plaid developer playground.**

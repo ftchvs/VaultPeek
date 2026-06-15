@@ -91,14 +91,14 @@ private actor HostedLinkStubPlaidClient: PlaidClientProtocol {
     }
 
     func createLinkToken(
-        userId _: String,
+        clientUserId _: String,
         completionRedirectUri _: String
     ) async throws -> PlaidLinkTokenResponse {
         throw PlaidError.invalidResponse
     }
 
     func createUpdateLinkToken(
-        userId _: String,
+        clientUserId _: String,
         accessToken _: String,
         completionRedirectUri _: String
     ) async throws -> PlaidLinkTokenResponse {
@@ -203,7 +203,12 @@ struct PlaidBarServerTests {
             credentialsConfigured: true,
             storagePath: "/Users/example/.plaidbar",
             syncReady: true,
-            syncedItemCount: 2
+            syncedItemCount: 2,
+            billingSubscription: BillingSubscription(
+                status: .active,
+                plan: .free,
+                updatedAt: Date(timeIntervalSince1970: 1_800_000_002)
+            )
         )
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -221,6 +226,7 @@ struct PlaidBarServerTests {
             "storagePath",
             "syncReady",
             "syncedItemCount",
+            "billingSubscription",
         ]
         let forbiddenFragments = [
             "account",
@@ -265,7 +271,12 @@ struct PlaidBarServerTests {
             credentialsConfigured: true,
             storagePath: "/Users/example/.plaidbar",
             syncReady: true,
-            syncedItemCount: 1
+            syncedItemCount: 1,
+            billingSubscription: BillingSubscription(
+                status: .trialing,
+                plan: .free,
+                updatedAt: Date(timeIntervalSince1970: 1_800_000_002)
+            )
         )
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -524,7 +535,7 @@ struct PlaidBarServerTests {
         // deterministically with the setup-state error.
         await #expect(throws: PlaidError.credentialsNotConfigured) {
             _ = try await client.createLinkToken(
-                userId: "test-user",
+                clientUserId: "test-user",
                 completionRedirectUri: "http://localhost:8484/oauth/callback"
             )
         }

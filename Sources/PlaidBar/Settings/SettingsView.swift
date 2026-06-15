@@ -912,6 +912,10 @@ struct NotificationSettingsView: View {
                         }
                     }
                     .disabled(permissionPresentation.isNotificationToggleDisabled)
+
+                Text("Alerts are evaluated from local cached VaultPeek data. Lock-screen copy avoids account names, merchants, exact balances, and transaction amounts.")
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Section("Transaction alerts") {
@@ -978,6 +982,30 @@ struct NotificationSettingsView: View {
                 )
                 .detailText()
                 .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Section("Recurring alerts") {
+                Toggle("New recurring charge detected", isOn: $state.notifyRecurringChargeDetected)
+                    .disabled(areNotificationControlsDisabled)
+
+                Toggle("Recurring charge changed", isOn: $state.notifyRecurringChargeChanged)
+                    .disabled(areNotificationControlsDisabled)
+
+                Toggle("Recurring charge due soon", isOn: $state.notifyRecurringChargeDueSoon)
+                    .disabled(areNotificationControlsDisabled)
+
+                Text("Due-soon alerts use inferred recurring patterns from synced transaction history and the default 3-day window.")
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Section("Connection alerts") {
+                Toggle("Broken connection or stale sync", isOn: $state.notifyBrokenConnection)
+                    .disabled(areNotificationControlsDisabled)
+
+                Text("Alerts point you back to VaultPeek when a linked institution needs login, reports a sync error, or local data has gone stale.")
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .formStyle(.grouped)
