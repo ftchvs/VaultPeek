@@ -93,6 +93,102 @@ public struct SaveBillingSubscriptionRequest: Codable, Sendable, Equatable {
     }
 }
 
+public struct BillingCheckoutSessionRequest: Codable, Sendable, Equatable {
+    public let plan: SubscriptionPlan
+    public let successURL: String
+    public let cancelURL: String
+
+    public init(plan: SubscriptionPlan, successURL: String, cancelURL: String) {
+        self.plan = plan
+        self.successURL = successURL
+        self.cancelURL = cancelURL
+    }
+}
+
+public struct BillingCheckoutSessionResponse: Codable, Sendable, Equatable {
+    public let checkoutURL: String
+    public let plan: SubscriptionPlan
+    public let mode: String
+
+    public init(checkoutURL: String, plan: SubscriptionPlan, mode: String = "subscription") {
+        self.checkoutURL = checkoutURL
+        self.plan = plan
+        self.mode = mode
+    }
+}
+
+public struct BillingPortalSessionRequest: Codable, Sendable, Equatable {
+    public let returnURL: String
+
+    public init(returnURL: String) {
+        self.returnURL = returnURL
+    }
+}
+
+public struct BillingPortalSessionResponse: Codable, Sendable, Equatable {
+    public let portalURL: String
+
+    public init(portalURL: String) {
+        self.portalURL = portalURL
+    }
+}
+
+/// Safe Stripe webhook projection. It intentionally carries only normalized
+/// subscription metadata; never raw Stripe payloads, signatures, customer email,
+/// payment-method details, invoices, or secrets.
+public struct StripeBillingWebhookEvent: Codable, Sendable, Equatable {
+    public let id: String
+    public let type: String
+    public let status: BillingSubscriptionStatus
+    public let plan: SubscriptionPlan
+    public let currentPeriodEnd: Date?
+    public let trialEndsAt: Date?
+
+    public init(
+        id: String,
+        type: String,
+        status: BillingSubscriptionStatus,
+        plan: SubscriptionPlan,
+        currentPeriodEnd: Date? = nil,
+        trialEndsAt: Date? = nil
+    ) {
+        self.id = id
+        self.type = type
+        self.status = status
+        self.plan = plan
+        self.currentPeriodEnd = currentPeriodEnd
+        self.trialEndsAt = trialEndsAt
+    }
+}
+
+public struct BillingEntitlementSummary: Codable, Sendable, Equatable {
+    public let plan: SubscriptionPlan
+    public let status: BillingSubscriptionStatus?
+    public let institutionLimit: Int
+    public let activeInstitutionCount: Int
+    public let trialEndsAt: Date?
+    public let features: [String]
+    public let managedLink: ManagedLinkEntitlementSummary
+
+    public init(
+        plan: SubscriptionPlan,
+        status: BillingSubscriptionStatus?,
+        institutionLimit: Int,
+        activeInstitutionCount: Int,
+        trialEndsAt: Date?,
+        features: [String],
+        managedLink: ManagedLinkEntitlementSummary
+    ) {
+        self.plan = plan
+        self.status = status
+        self.institutionLimit = institutionLimit
+        self.activeInstitutionCount = activeInstitutionCount
+        self.trialEndsAt = trialEndsAt
+        self.features = features
+        self.managedLink = managedLink
+    }
+}
+
 public struct BillingFeatureLock: Sendable, Equatable {
     public let title: String
     public let message: String

@@ -112,7 +112,11 @@ struct PlaidBarServer: AsyncParsableCommand {
             .register(with: api)
         BudgetRoutes(budgetStore: budgetStore)
             .register(with: api)
-        BillingRoutes(billingStore: billingStore)
+        BillingRoutes(
+            billingStore: billingStore,
+            tokenStore: tokenStore,
+            deployment: serverConfig.deployment
+        )
             .register(with: api)
 
         // OAuth callback (top-level, not under /api)
