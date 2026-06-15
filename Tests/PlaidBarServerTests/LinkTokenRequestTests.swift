@@ -123,6 +123,7 @@ struct LinkTokenRequestTests {
         PLAID_SECRET=secret
         PLAID_ENV=sandbox
         PLAIDBAR_DEPLOYMENT=hosted-bridge
+        PLAIDBAR_OAUTH_REDIRECT_URI=https://link.vaultpeek.example/oauth/callback
         PLAIDBAR_DATA_DIR=\(missingDataDirectory.path)
         """.write(to: missingWebhookConfig, atomically: true, encoding: .utf8)
         try """
@@ -131,6 +132,7 @@ struct LinkTokenRequestTests {
         PLAID_ENV=sandbox
         PLAIDBAR_DEPLOYMENT=hosted-bridge
         PLAID_LINK_WEBHOOK_URL=https://vaultpeek.example/webhooks/plaid/hosted-link
+        PLAIDBAR_OAUTH_REDIRECT_URI=https://link.vaultpeek.example/oauth/callback
         PLAIDBAR_DATA_DIR=\(configuredDataDirectory.path)
         """.write(to: configuredWebhookConfig, atomically: true, encoding: .utf8)
 
@@ -284,6 +286,7 @@ struct HostedLinkOAuthRedirectReadinessTests {
             "PLAIDBAR_DEPLOYMENT=hosted-bridge",
             "PLAIDBAR_OAUTH_REDIRECT_MODE=managed",
             "PLAIDBAR_OAUTH_REDIRECT_URI=https://link.vaultpeek.example/oauth/callback",
+            "PLAID_LINK_WEBHOOK_URL=https://vaultpeek.example/webhooks/plaid/hosted-link",
         ])
 
         #expect(config.deployment == .hostedBridge)
@@ -330,6 +333,7 @@ struct HostedLinkOAuthRedirectReadinessTests {
                 "PLAIDBAR_DEPLOYMENT=hosted-bridge",
                 "PLAIDBAR_OAUTH_REDIRECT_MODE=app",
                 "PLAIDBAR_OAUTH_REDIRECT_URI=vaultpeek://oauth/callback",
+                "PLAID_LINK_WEBHOOK_URL=https://vaultpeek.example/webhooks/plaid/hosted-link",
             ])
         }
 
@@ -340,6 +344,7 @@ struct HostedLinkOAuthRedirectReadinessTests {
             "PLAIDBAR_DEPLOYMENT=hosted-bridge",
             "PLAIDBAR_OAUTH_REDIRECT_MODE=app",
             "PLAIDBAR_OAUTH_REDIRECT_URI=https://vaultpeek.example/app/oauth/callback",
+            "PLAID_LINK_WEBHOOK_URL=https://vaultpeek.example/webhooks/plaid/hosted-link",
         ])
 
         #expect(config.oauthRedirect.mode == .app)
