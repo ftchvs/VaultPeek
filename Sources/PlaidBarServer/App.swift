@@ -47,6 +47,7 @@ struct PlaidBarServer: AsyncParsableCommand {
         // Register migrations
         await fluent.migrations.add(CreateItems())
         await fluent.migrations.add(AddProviderToItems())
+        await fluent.migrations.add(AddOriginToItems())
         await fluent.migrations.add(CreateSyncCursors())
         await fluent.migrations.add(CreateCategoryBudgets())
         await fluent.migrations.add(CreateBillingSubscriptions())
@@ -82,10 +83,9 @@ struct PlaidBarServer: AsyncParsableCommand {
         // API routes
         let api = router.group("api")
         api.add(middleware: APITokenMiddleware(authToken: serverConfig.authToken))
-        // Entitlement seam (foundation only): enforces nothing today — always
-        // allows — and is a no-op in `.local` mode. Placed between auth and
-        // setup-state so the gated consumer (Hosted Link) track has a fixed
-        // place to add Stripe-backed checks without re-threading the router.
+        // Entitlement seam: remains store-free and route-agnostic here. Managed
+        // Link creation enforces plan limits in `LinkRoutes`, where billing and
+        // item-count state are available, while BYO/local paths stay ungated.
         api.add(middleware: EntitlementMiddleware(deployment: serverConfig.deployment))
         api.add(middleware: SetupStateMiddleware(
             credentialDiagnosis: serverConfig.credentialDiagnosis,
@@ -95,6 +95,7 @@ struct PlaidBarServer: AsyncParsableCommand {
             plaidClient: plaidClient,
             tokenStore: tokenStore,
             pendingLinkSessions: pendingLinkSessions,
+            billingStore: billingStore,
             config: serverConfig
         )
         .register(with: api)
@@ -119,7 +120,12 @@ struct PlaidBarServer: AsyncParsableCommand {
             plaidClient: plaidClient,
             tokenStore: tokenStore,
             pendingLinkSessions: pendingLinkSessions,
-            hostedLinkCompletions: hostedLinkCompletions
+            hostedLinkCompletions: hostedLinkCompletions,
+            entitlementService: ManagedLinkEntitlementService(
+                deployment: serverConfig.deployment,
+                billingStore: billingStore,
+                tokenStore: tokenStore
+            )
         )
         .register(with: router)
         WebhookRoutes(

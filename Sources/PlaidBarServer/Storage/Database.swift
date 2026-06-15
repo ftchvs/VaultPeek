@@ -1,5 +1,6 @@
 import FluentKit
 import Foundation
+import PlaidBarCore
 
 // MARK: - Item Model (Fluent)
 
@@ -24,6 +25,9 @@ final class ItemModel: Model, @unchecked Sendable {
     @OptionalField(key: "provider")
     var provider: String?
 
+    @OptionalField(key: "origin")
+    var origin: String?
+
     @Timestamp(key: "created_at", on: .create)
     var createdAt: Date?
 
@@ -37,7 +41,8 @@ final class ItemModel: Model, @unchecked Sendable {
         accessToken: String,
         institutionId: String? = nil,
         institutionName: String? = nil,
-        providerID: ProviderID = .plaid
+        providerID: ProviderID = .plaid,
+        origin: ItemOrigin = .bringYourOwn
     ) {
         self.id = id
         self.accessToken = accessToken
@@ -45,10 +50,15 @@ final class ItemModel: Model, @unchecked Sendable {
         self.institutionName = institutionName
         self.status = "connected"
         self.provider = providerID.rawValue
+        self.origin = origin.rawValue
     }
 
     var providerID: ProviderID {
         ProviderID(rawValue: provider ?? "") ?? .plaid
+    }
+
+    var itemOrigin: ItemOrigin {
+        ItemOrigin(rawValue: origin ?? "") ?? .bringYourOwn
     }
 }
 
@@ -113,17 +123,25 @@ struct AddProviderToItems: AsyncMigration {
         try await database.schema("items")
             .field("provider", .string)
             .update()
-
-        let rows = try await ItemModel.query(on: database).all()
-        for row in rows where row.provider == nil {
-            row.provider = ProviderID.plaid.rawValue
-            try await row.save(on: database)
-        }
     }
 
     func revert(on database: Database) async throws {
         try await database.schema("items")
             .deleteField("provider")
+            .update()
+    }
+}
+
+struct AddOriginToItems: AsyncMigration {
+    func prepare(on database: Database) async throws {
+        try await database.schema("items")
+            .field("origin", .string)
+            .update()
+    }
+
+    func revert(on database: Database) async throws {
+        try await database.schema("items")
+            .deleteField("origin")
             .update()
     }
 }
