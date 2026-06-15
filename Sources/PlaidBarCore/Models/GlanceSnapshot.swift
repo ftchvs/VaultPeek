@@ -48,6 +48,14 @@ public struct GlanceSnapshot: Codable, Sendable, Equatable {
         return "\(source)Net worth \(Formatters.currency(netWorth, format: .full)). Today's change \(changeDirection.glyph) \(signedChangeText)."
     }
 
+    public func hasSameDisplayContent(as other: GlanceSnapshot) -> Bool {
+        netWorth == other.netWorth &&
+            todayChange == other.todayChange &&
+            updatedAt == other.updatedAt &&
+            sparkline == other.sparkline &&
+            isDemo == other.isDemo
+    }
+
     public init(
         netWorth: Double,
         todayChange: Double,
@@ -131,6 +139,40 @@ public struct GlanceCommandRequest: Codable, Sendable, Equatable {
     }
 }
 
+public actor GlanceSnapshotWriteDebouncer {
+    private let delay: Duration
+    private var pendingTask: Task<Void, Never>?
+
+    public init(delay: Duration = .milliseconds(400)) {
+        self.delay = delay
+    }
+
+    deinit {
+        pendingTask?.cancel()
+    }
+
+    public func schedule(
+        _ snapshot: GlanceSnapshot,
+        operation: @escaping @Sendable (GlanceSnapshot) async -> Void
+    ) {
+        pendingTask?.cancel()
+        pendingTask = Task { [delay] in
+            do {
+                try await Task.sleep(for: delay)
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+            await operation(snapshot)
+        }
+    }
+
+    public func cancel() {
+        pendingTask?.cancel()
+        pendingTask = nil
+    }
+}
+
 public enum GlanceSnapshotStore {
     private static var encoder: JSONEncoder {
         let encoder = JSONEncoder()
@@ -169,6 +211,22 @@ public enum GlanceSnapshotStore {
         fileManager: FileManager = .default
     ) throws {
         try write(snapshot, to: snapshotURL(directory: directory), fileManager: fileManager)
+    }
+
+    @discardableResult
+    public static func saveIfChanged(
+        _ snapshot: GlanceSnapshot,
+        directory: URL = snapshotDirectory(),
+        fileManager: FileManager = .default
+    ) throws -> Bool {
+        let url = snapshotURL(directory: directory)
+        if fileManager.fileExists(atPath: url.path),
+           let existing = try? load(directory: directory, fileManager: fileManager),
+           existing.hasSameDisplayContent(as: snapshot) {
+            return false
+        }
+        try write(snapshot, to: url, fileManager: fileManager)
+        return true
     }
 
     public static func load(
