@@ -22,6 +22,7 @@ struct LinkRoutes: Sendable {
         request: Request,
         context: some RequestContext
     ) async throws -> Response {
+        try ensureProductionHostedLinkRedirectIsReady()
         let state = await pendingLinkSessions.issueState()
         let plaidResponse = try await Self.mappingPlaidError {
             try await plaidClient.createLinkToken(
@@ -49,6 +50,7 @@ struct LinkRoutes: Sendable {
         request: Request,
         context: some RequestContext
     ) async throws -> Response {
+        try ensureProductionHostedLinkRedirectIsReady()
         guard let itemId = context.parameters.get("itemId") else {
             throw HTTPError(.badRequest, message: "Missing itemId parameter")
         }
@@ -178,6 +180,33 @@ struct LinkRoutes: Sendable {
         queryItems.append(URLQueryItem(name: "state", value: state))
         components.queryItems = queryItems
         return components.string ?? config.redirectUri
+    }
+
+    private func ensureProductionHostedLinkRedirectIsReady() throws {
+        if let error = Self.productionHostedLinkRedirectReadinessError(
+            deployment: config.deployment,
+            plaidEnvironment: config.plaidEnvironment,
+            oauthRedirect: config.oauthRedirect
+        ) {
+            throw error
+        }
+    }
+
+    static func productionHostedLinkRedirectReadinessError(
+        deployment: DeploymentMode,
+        plaidEnvironment: PlaidEnvironment,
+        oauthRedirect: OAuthRedirectConfiguration
+    ) -> HTTPError? {
+        guard deployment == .hostedBridge,
+              plaidEnvironment == .production,
+              !oauthRedirect.isProductionReadyForHostedLink
+        else {
+            return nil
+        }
+        return HTTPError(
+            .serviceUnavailable,
+            message: "Managed production Hosted Link requires a configured HTTPS OAuth redirect URI"
+        )
     }
 }
 
