@@ -962,7 +962,12 @@ struct OAuthRedirectConfiguration: Sendable, Equatable {
             guard let configuredURI else {
                 throw ServerConfigError.missingManagedRedirectURI
             }
-            if deployment == .hostedBridge, plaidEnvironment == .production, !isHTTPS(configuredURI) {
+            // Production OAuth redirect URIs must be HTTPS regardless of
+            // deployment mode (mirrors the `.app` branch): a plaintext callback
+            // would carry the one-time `state` over http. Gating on `.hostedBridge`
+            // alone left managed + local deployment + production accepting an
+            // http:// redirect — a TLS-downgrade hole.
+            if plaidEnvironment == .production, !isHTTPS(configuredURI) {
                 throw ServerConfigError.invalidManagedRedirectURI
             }
             return OAuthRedirectConfiguration(mode: .managed, uri: configuredURI)

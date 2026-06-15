@@ -3390,6 +3390,32 @@ struct PlaidBarCoreTests {
         #expect(ItemConnectionStatus.error.applyingLoginRepaired() == .error)
     }
 
+    @Test("Degraded and update-mode predicates classify every item status")
+    func itemStatusDegradedAndUpdateModePredicates() {
+        // `.loginRepaired` is healthy (no weekly-review nag, no degraded count);
+        // every other non-connected state is degraded. This locks the predicate
+        // that WeeklyReview and DashboardChangeReceipt now filter on.
+        #expect(ItemConnectionStatus.connected.isDegraded == false)
+        #expect(ItemConnectionStatus.loginRepaired.isDegraded == false)
+        #expect(ItemConnectionStatus.loginRequired.isDegraded)
+        #expect(ItemConnectionStatus.pendingExpiration.isDegraded)
+        #expect(ItemConnectionStatus.pendingDisconnect.isDegraded)
+        #expect(ItemConnectionStatus.permissionRevoked.isDegraded)
+        #expect(ItemConnectionStatus.newAccountsAvailable.isDegraded)
+        #expect(ItemConnectionStatus.error.isDegraded)
+
+        // Update mode recovers consent/login states; `.error` needs a full
+        // reconnect, and `.connected`/`.loginRepaired` need nothing.
+        #expect(ItemConnectionStatus.loginRequired.needsUpdateMode)
+        #expect(ItemConnectionStatus.pendingExpiration.needsUpdateMode)
+        #expect(ItemConnectionStatus.pendingDisconnect.needsUpdateMode)
+        #expect(ItemConnectionStatus.permissionRevoked.needsUpdateMode)
+        #expect(ItemConnectionStatus.newAccountsAvailable.needsUpdateMode)
+        #expect(ItemConnectionStatus.connected.needsUpdateMode == false)
+        #expect(ItemConnectionStatus.loginRepaired.needsUpdateMode == false)
+        #expect(ItemConnectionStatus.error.needsUpdateMode == false)
+    }
+
     // MARK: - PlaidEnvironment Tests
 
     @Test("PlaidEnvironment raw values")
