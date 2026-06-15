@@ -41,6 +41,7 @@ final class AppState {
     }
     var transactions: [TransactionDTO] = [] {
         didSet {
+            _cachedTransactionDerivedIndex = nil
             _cachedRecurringTransactions = nil
             invalidateLocalAIActivitySummaries()
         }
@@ -826,7 +827,7 @@ final class AppState {
     }
 
     var recentTransactions: [TransactionDTO] {
-        Array(transactions.sorted { $0.date > $1.date }.prefix(PlaidBarConstants.maxRecentTransactions))
+        transactionDerivedIndex.recentFeedEntries.map(\.transaction)
     }
 
     var transactionsByDate: [(String, [TransactionDTO])] {
@@ -842,13 +843,23 @@ final class AppState {
         spendingByCategory.reduce(0) { $0 + $1.1 }
     }
 
+    /// Cached transaction index — invalidated via transactions.didSet.
+    private var _cachedTransactionDerivedIndex: TransactionDerivedIndex?
+
+    var transactionDerivedIndex: TransactionDerivedIndex {
+        if let cached = _cachedTransactionDerivedIndex { return cached }
+        let index = TransactionDerivedIndex(transactions: transactions)
+        _cachedTransactionDerivedIndex = index
+        return index
+    }
+
     /// Cached recurring detection — invalidated via transactions.didSet
     private var _cachedRecurringTransactions: [RecurringTransaction]?
 
     var recurringTransactions: [RecurringTransaction] {
         if let cached = _cachedRecurringTransactions { return cached }
         let start = performanceStart()
-        let result = RecurringDetector.detect(from: transactions)
+        let result = RecurringDetector.detect(from: transactionDerivedIndex)
         _cachedRecurringTransactions = result
         recordPerformance(
             .derivedSummaryRecompute,
@@ -944,14 +955,14 @@ final class AppState {
     }
 
     func accountActivitySnapshot(for accountId: String) -> AccountTransactionFeed.AccountActivitySnapshot {
-        AccountTransactionFeed.activitySnapshot(forAccountId: accountId, in: transactions)
+        AccountTransactionFeed.activitySnapshot(forAccountId: accountId, in: transactionDerivedIndex)
     }
 
     func transactionsForMerchant(_ merchantName: String, excluding transactionId: String) -> [TransactionDTO] {
         AccountTransactionFeed.relatedMerchantTransactions(
             merchantName: merchantName,
             excluding: transactionId,
-            in: transactions
+            in: transactionDerivedIndex
         )
     }
 

@@ -13,11 +13,16 @@ public enum AccountTransactionFeed {
         }
 
         public init(transactions: [TransactionDTO]) {
-            self.transactions = AccountTransactionFeed.sortedForFeed(transactions)
-            self.transactionCount = transactions.count
-            self.pendingTransactionCount = transactions.count(where: \.pending)
-            self.latestTransactionDate = transactions.latestTransactionDate
-            self.recentSummary = AccountActivitySummary.recent(from: self.transactions)
+            self.init(entries: TransactionDerivedIndex(transactions: transactions).entries)
+        }
+
+        public init(entries: [TransactionDerivedIndex.Entry]) {
+            let sortedEntries = entries.sorted(by: TransactionDerivedIndex.isPreferredInFeed)
+            self.transactions = sortedEntries.map(\.transaction)
+            self.transactionCount = entries.count
+            self.pendingTransactionCount = entries.count(where: { $0.transaction.pending })
+            self.latestTransactionDate = entries.latestTransactionDate
+            self.recentSummary = AccountActivitySummary.recent(from: sortedEntries)
         }
     }
 
@@ -25,7 +30,17 @@ public enum AccountTransactionFeed {
         forAccountId accountId: String,
         in transactions: [TransactionDTO]
     ) -> AccountActivitySnapshot {
-        AccountActivitySnapshot(transactions: transactions.filter { $0.accountId == accountId })
+        activitySnapshot(
+            forAccountId: accountId,
+            in: TransactionDerivedIndex(transactions: transactions)
+        )
+    }
+
+    public static func activitySnapshot(
+        forAccountId accountId: String,
+        in index: TransactionDerivedIndex
+    ) -> AccountActivitySnapshot {
+        AccountActivitySnapshot(entries: index.entries(forAccountId: accountId))
     }
 
     public static func transactions(
@@ -40,46 +55,35 @@ public enum AccountTransactionFeed {
         excluding transactionId: String,
         in transactions: [TransactionDTO]
     ) -> [TransactionDTO] {
-        sortedForFeed(
-            transactions.filter {
-                $0.merchantName == merchantName && $0.id != transactionId
-            }
+        relatedMerchantTransactions(
+            merchantName: merchantName,
+            excluding: transactionId,
+            in: TransactionDerivedIndex(transactions: transactions)
         )
     }
 
-    public static func sortedForFeed(_ transactions: [TransactionDTO]) -> [TransactionDTO] {
-        transactions.sorted(by: isPreferredInFeed)
+    public static func relatedMerchantTransactions(
+        merchantName: String,
+        excluding transactionId: String,
+        in index: TransactionDerivedIndex
+    ) -> [TransactionDTO] {
+        index.sortedForFeed(
+            index.entries(forMerchantName: merchantName).filter { $0.transaction.id != transactionId }
+        )
+        .map(\.transaction)
     }
 
-    private static func isPreferredInFeed(_ lhs: TransactionDTO, _ rhs: TransactionDTO) -> Bool {
-        let lhsDate = Formatters.parseTransactionDate(lhs.date) ?? .distantPast
-        let rhsDate = Formatters.parseTransactionDate(rhs.date) ?? .distantPast
-        if lhsDate != rhsDate {
-            return lhsDate > rhsDate
-        }
-
-        if lhs.pending != rhs.pending {
-            return lhs.pending
-        }
-
-        if lhs.displayAmount != rhs.displayAmount {
-            return lhs.displayAmount > rhs.displayAmount
-        }
-
-        let nameComparison = lhs.displayName.localizedStandardCompare(rhs.displayName)
-        if nameComparison != .orderedSame {
-            return nameComparison == .orderedAscending
-        }
-
-        return lhs.id < rhs.id
+    public static func sortedForFeed(_ transactions: [TransactionDTO]) -> [TransactionDTO] {
+        let index = TransactionDerivedIndex(transactions: transactions)
+        return index.sortedForFeed(index.entries).map(\.transaction)
     }
 }
 
-private extension Array where Element == TransactionDTO {
+private extension Array where Element == TransactionDerivedIndex.Entry {
     var latestTransactionDate: String? {
-        compactMap { transaction -> (raw: String, parsed: Date)? in
-            guard let parsed = Formatters.parseTransactionDate(transaction.date) else { return nil }
-            return (transaction.date, parsed)
+        compactMap { entry -> (raw: String, parsed: Date)? in
+            guard let parsed = entry.parsedDate else { return nil }
+            return (entry.rawDate, parsed)
         }
         .max { $0.parsed < $1.parsed }?
         .raw

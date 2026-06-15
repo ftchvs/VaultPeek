@@ -4,18 +4,22 @@ public enum RecurringDetector {
     /// Detect recurring transactions from a list of transactions.
     /// Groups by merchantName, computes date intervals, classifies frequency.
     public static func detect(from transactions: [TransactionDTO]) -> [RecurringTransaction] {
+        detect(from: TransactionDerivedIndex(transactions: transactions))
+    }
+
+    public static func detect(from index: TransactionDerivedIndex) -> [RecurringTransaction] {
         // Group by merchantName (non-nil only), excluding income
-        let grouped = Dictionary(grouping: transactions.filter {
-            $0.merchantName != nil && !$0.isIncome
-        }) { $0.merchantName! }
+        let grouped = index.merchantBuckets.mapValues { entries in
+            entries.filter { !$0.isIncome }
+        }
 
         var results: [RecurringTransaction] = []
 
-        for (merchant, txns) in grouped {
-            guard txns.count >= 2 else { continue }
+        for (merchant, entries) in grouped {
+            guard entries.count >= 2 else { continue }
 
             // Sort by date ascending
-            let sorted = txns.sorted { $0.date < $1.date }
+            let sorted = entries.sorted { $0.rawDate < $1.rawDate }
 
             // Compute intervals in days between consecutive transactions
             let intervals = computeIntervals(sorted)
@@ -40,7 +44,7 @@ public enum RecurringDetector {
                 ? nil
                 : previousTransactions.reduce(0.0) { $0 + $1.displayAmount } / Double(previousTransactions.count)
             let latestAmount = sorted.last!.displayAmount
-            let lastDate = sorted.last!.date
+            let lastDate = sorted.last!.rawDate
             let nextExpected = computeNextDate(from: lastDate, frequency: frequency)
             let category = sorted.last!.category
 
@@ -64,11 +68,30 @@ public enum RecurringDetector {
     // MARK: - Private Helpers
 
     static func computeIntervals(_ sorted: [TransactionDTO]) -> [Double] {
+        computeIntervals(
+            sorted.map {
+                TransactionDerivedIndex.EntryForRecurring(
+                    rawDate: $0.date,
+                    parsedDate: Formatters.parseTransactionDate($0.date)
+                )
+            }
+        )
+    }
+
+    static func computeIntervals(_ sorted: [TransactionDerivedIndex.Entry]) -> [Double] {
+        computeIntervals(
+            sorted.map {
+                TransactionDerivedIndex.EntryForRecurring(rawDate: $0.rawDate, parsedDate: $0.parsedDate)
+            }
+        )
+    }
+
+    private static func computeIntervals(_ sorted: [TransactionDerivedIndex.EntryForRecurring]) -> [Double] {
         guard sorted.count >= 2 else { return [] }
         var intervals: [Double] = []
         for i in 1..<sorted.count {
-            guard let d1 = Formatters.parseTransactionDate(sorted[i - 1].date),
-                  let d2 = Formatters.parseTransactionDate(sorted[i].date) else { continue }
+            guard let d1 = sorted[i - 1].parsedDate,
+                  let d2 = sorted[i].parsedDate else { continue }
             let days = d2.timeIntervalSince(d1) / 86400.0
             if days > 0 { intervals.append(days) }
         }
@@ -121,5 +144,12 @@ public enum RecurringDetector {
             next = calendar.date(byAdding: .year, value: 1, to: date)
         }
         return Formatters.transactionDateString(next ?? date)
+    }
+}
+
+private extension TransactionDerivedIndex {
+    struct EntryForRecurring {
+        let rawDate: String
+        let parsedDate: Date?
     }
 }
