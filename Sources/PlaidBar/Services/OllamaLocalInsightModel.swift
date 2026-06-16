@@ -131,7 +131,16 @@ struct OllamaLocalInsightModel: LocalInsightModel {
     private func requestDiagnostic(_ request: URLRequest) -> String {
         guard let url = request.url else { return "Ollama endpoint" }
         let host = url.host(percentEncoded: false) ?? "unknown-host"
-        return "\(host)\(url.path)"
+        let endpoint = Self.diagnosticEndpointPath(from: url)
+        return "\(host)\(endpoint)"
+    }
+
+    private static func diagnosticEndpointPath(from url: URL) -> String {
+        let components = url.pathComponents.filter { $0 != "/" }
+        guard let apiIndex = components.lastIndex(of: "api"), components.indices.contains(apiIndex + 1) else {
+            return ""
+        }
+        return "/api/\(components[apiIndex + 1])"
     }
 
     private func transportDiagnostic(_ error: Error) -> String {
