@@ -70,6 +70,21 @@ struct LocalAIRuntimeResolutionTests {
         #expect(availability.state == .unavailable)
     }
 
+    @Test("App enablement preference takes precedence over runtime environment")
+    func appEnablementPreferenceTakesPrecedenceOverEnvironment() {
+        #expect(LocalAIRuntimeResolution.isOptedIn(enabledPreference: true, rawValue: nil) == true)
+        #expect(LocalAIRuntimeResolution.isOptedIn(enabledPreference: true, rawValue: "off") == true)
+        #expect(LocalAIRuntimeResolution.isOptedIn(enabledPreference: false, rawValue: "ollama") == false)
+
+        let disabled = LocalAIRuntimeResolution.configuredAvailability(
+            enabledPreference: false,
+            rawValue: "ollama",
+            hasWiredModel: true,
+            endpointIsLocalhost: true
+        )
+        #expect(disabled.state == .disabled)
+    }
+
     @Test("Unsupported runtime value is disabled with a clear reason")
     func unsupportedRuntimeIsDisabled() {
         let availability = LocalAIRuntimeResolution.configuredAvailability(

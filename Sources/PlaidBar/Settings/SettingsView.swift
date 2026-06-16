@@ -389,6 +389,16 @@ struct GeneralSettingsView: View {
             }
 
             Section("Local AI") {
+                Toggle("Enable Local AI", isOn: $state.localAIEnabled)
+
+                LabeledContent("Model") {
+                    TextField("llama3.2", text: $state.localAIModelName)
+                        .multilineTextAlignment(.trailing)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 180)
+                        .disabled(!appState.localAIEnabled)
+                }
+
                 LabeledContent("Availability") {
                     HStack(spacing: Spacing.xs) {
                         Image(systemName: LocalAIAvailabilityPresentation
