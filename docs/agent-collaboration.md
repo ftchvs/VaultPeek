@@ -41,12 +41,12 @@ as the only source of truth for a branch.
 ## Worktree Ownership
 
 - Hermes should work from its own builder-owned checkout or temporary worktree,
-  such as `/Users/otto/.openclaw/workspace/repos/PlaidBar` when launched via
-  the Codex CLI examples in `commands/vaultpeek-prod-loop.md`. Local checkout
-  paths keep the `PlaidBar` directory name until the GitHub repo rename lands;
-  update them when the checkout moves.
+  such as `/Users/otto/workspace/VaultPeek` when launched via the Codex CLI
+  examples in `commands/vaultpeek-prod-loop.md`. Legacy local checkouts may
+  still keep the `PlaidBar` directory name, but new automation examples should
+  use VaultPeek-named paths.
 - Otto should review and fix from a separate operator-owned checkout or worktree,
-  such as `/private/tmp/PlaidBar-otto` for this scheduled loop.
+  such as `/private/tmp/VaultPeek-otto` for this scheduled loop.
 - Do not mutate another agent's active worktree.
 - Before pushing to a branch another agent owns, verify that agent is not
   actively editing or running a write step on the same branch.

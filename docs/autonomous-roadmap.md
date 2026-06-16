@@ -32,8 +32,10 @@ with its local-first menu bar finance vision. It complements `GOAL.md`,
 
 ## Loop Cadence
 
-The OpenClaw cron job `d6eb6833-969a-4436-af06-0fd0f1bd94e2` runs an isolated
-VaultPeek production-readiness loop every four hours. Each run should:
+VaultPeek production-readiness loops should run from a VaultPeek-named checkout
+or disposable worktree. Older OpenClaw cron IDs may exist in operator history,
+but this repository does not treat those external schedules as authoritative.
+Each autonomous run should:
 
 1. Inspect `git status --short --branch` and recent commits.
 2. Read `GOAL.md`, `commands/vaultpeek-prod-loop.md`,
