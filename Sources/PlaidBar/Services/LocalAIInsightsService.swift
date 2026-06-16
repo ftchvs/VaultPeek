@@ -92,7 +92,8 @@ struct LocalAIInsightsService: Sendable {
             let summaryAvailability = LocalAIRuntimeResolution.resolved(
                 base: currentAvailability,
                 usedModelOutput: generated.usedModelOutput,
-                fallbackReason: generated.fallbackReason
+                fallbackReason: generated.fallbackReason,
+                fallbackDiagnostic: generated.fallbackDiagnostic
             )
             summaries.append(
                 LocalAIActivitySummary(

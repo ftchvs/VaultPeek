@@ -94,7 +94,8 @@ public enum LocalAIRuntimeResolution {
     public static func resolved(
         base: LocalAIAvailability,
         usedModelOutput: Bool,
-        fallbackReason: LocalInsightModelFallbackReason?
+        fallbackReason: LocalInsightModelFallbackReason?,
+        fallbackDiagnostic: String? = nil
     ) -> LocalAIAvailability {
         guard base.state == .checking || base.state == .available else { return base }
 
@@ -102,7 +103,8 @@ public enum LocalAIRuntimeResolution {
             return LocalAIAvailability(
                 state: .available,
                 runtimeName: base.runtimeName,
-                detail: availableDetail(runtimeName: base.runtimeName)
+                detail: availableDetail(runtimeName: base.runtimeName),
+                probeErrorText: nil
             )
         }
 
@@ -111,7 +113,12 @@ public enum LocalAIRuntimeResolution {
         return LocalAIAvailability(
             state: .unavailable,
             runtimeName: base.runtimeName,
-            detail: fallbackDetail(runtimeName: base.runtimeName, reason: fallbackReason)
+            detail: fallbackDetail(
+                runtimeName: base.runtimeName,
+                reason: fallbackReason,
+                diagnostic: fallbackDiagnostic
+            ),
+            probeErrorText: fallbackDiagnostic
         )
     }
 
@@ -140,7 +147,8 @@ public enum LocalAIRuntimeResolution {
 
     static func fallbackDetail(
         runtimeName: String?,
-        reason: LocalInsightModelFallbackReason
+        reason: LocalInsightModelFallbackReason,
+        diagnostic: String? = nil
     ) -> String {
         let runtime = runtimeName.map { "Local runtime '\($0)'" } ?? "The configured local runtime"
         let reasonText = switch reason {
@@ -159,6 +167,10 @@ public enum LocalAIRuntimeResolution {
         case .invalidOutput:
             "returned invalid or unsafe output"
         }
-        return "\(runtime) \(reasonText). VaultPeek used deterministic local summaries and did not call cloud AI."
+        var detail = "\(runtime) \(reasonText). VaultPeek used deterministic local summaries and did not call cloud AI."
+        if let diagnostic, !diagnostic.isEmpty {
+            detail += " Probe error: \(diagnostic)"
+        }
+        return detail
     }
 }

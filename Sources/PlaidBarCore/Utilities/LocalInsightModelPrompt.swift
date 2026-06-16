@@ -32,6 +32,7 @@ public protocol LocalInsightModel: Sendable {
 
 public enum LocalInsightModelError: Error, Sendable, Hashable {
     case runtimeUnavailable
+    case runtimeUnavailableWithDiagnostic(String)
     case noInstalledModel
     case unsupportedConfiguration
 }
