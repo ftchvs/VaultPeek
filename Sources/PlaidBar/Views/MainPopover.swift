@@ -1013,6 +1013,7 @@ private struct BalanceHeatmapCell: View {
 
 private struct LocalInsightsCard: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.openSettings) private var openSettings
 
     private var summaries: [LocalAIActivitySummary] {
         appState.localAIActivitySummaries
@@ -1043,7 +1044,13 @@ private struct LocalInsightsCard: View {
 
                 Spacer()
 
-                LocalAIStatusPill(availability: availability)
+                LocalAIStatusPill(
+                    availability: availability,
+                    isChecking: appState.isCheckingLocalAIAvailability,
+                    modelName: appState.localAIModelName,
+                    onRetry: { Task { await appState.checkLocalAIAvailability() } },
+                    onOpenSettings: { openSettings() }
+                )
             }
 
             Text(receipt.headline)
@@ -1104,12 +1111,25 @@ private struct LocalInsightsCard: View {
 
 private struct LocalAIStatusPill: View {
     let availability: LocalAIAvailability
+    let isChecking: Bool
+    let modelName: String
+    let onRetry: () -> Void
+    let onOpenSettings: () -> Void
 
     var body: some View {
         HStack(spacing: Spacing.xs) {
-            Image(systemName: iconName)
+            statusCapsule
+
+            actionButton
+        }
+        .help(LocalAIAvailabilityPresentation.helpText(for: availability))
+    }
+
+    private var statusCapsule: some View {
+        HStack(spacing: Spacing.xs) {
+            Image(systemName: LocalAIAvailabilityPresentation.iconName(for: availability.state))
                 .font(.caption2.weight(.medium))
-            Text("Local - \(availability.state.displayName)")
+            Text(LocalAIAvailabilityPresentation.popoverLabel(for: availability))
                 .font(.caption.weight(.medium))
                 .lineLimit(1)
         }
@@ -1117,15 +1137,49 @@ private struct LocalAIStatusPill: View {
         .padding(.horizontal, Spacing.sm)
         .padding(.vertical, Spacing.chipVertical)
         .background(.quinary, in: Capsule())
-        .help(availability.detail)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(LocalAIAvailabilityPresentation.popoverLabel(for: availability))
     }
 
-    private var iconName: String {
-        switch availability.state {
-        case .available: "cpu.fill"
-        case .disabled: "pause.circle.fill"
-        case .unavailable: "exclamationmark.triangle.fill"
-        case .checking: "hourglass"
+    @ViewBuilder
+    private var actionButton: some View {
+        switch LocalAIAvailabilityPresentation.remediationCategory(for: availability) {
+        case .noInstalledModel:
+            Button {
+                LocalAIRemediationActions.copyPullCommand(modelName: modelName)
+            } label: {
+                Label("Copy Command", systemImage: "doc.on.doc")
+            }
+            .labelStyle(.iconOnly)
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+            .help("Copy the Ollama model install command")
+            .accessibilityLabel("Copy Ollama model command")
+        case .runtimeUnavailable, .modelError:
+            Button {
+                onRetry()
+            } label: {
+                Label(isChecking ? "Checking" : "Retry", systemImage: isChecking ? "hourglass" : "arrow.clockwise")
+            }
+            .labelStyle(.iconOnly)
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+            .disabled(isChecking)
+            .help("Check Ollama again")
+            .accessibilityLabel("Retry Ollama connection")
+        case .unsupportedConfiguration:
+            Button {
+                onOpenSettings()
+            } label: {
+                Label("Settings", systemImage: "gearshape")
+            }
+            .labelStyle(.iconOnly)
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+            .help("Open Local AI settings")
+            .accessibilityLabel("Open Local AI settings")
+        case .none, .disabled, .checking:
+            EmptyView()
         }
     }
 

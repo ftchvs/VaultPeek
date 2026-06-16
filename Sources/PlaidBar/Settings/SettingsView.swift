@@ -309,6 +309,7 @@ struct GeneralSettingsView: View {
     @Environment(AppState.self) private var appState
     @AppStorage(DetachedDashboardPreferences.keepOnTopStorageKey) private var keepDashboardOnTop = false
     @State private var isShowingResetConfirmation = false
+    @State private var isShowingLocalAIProbeDetails = false
     @State private var resetResultMessage: String?
     @State private var resetErrorMessage: String?
 
@@ -405,24 +406,50 @@ struct GeneralSettingsView: View {
                             .iconName(for: appState.localAIAvailability.state))
                             .foregroundStyle(localAIAvailabilityTint)
                             .accessibilityHidden(true)
-                        Text(appState.localAIAvailability.state.displayName)
+                        Text(LocalAIAvailabilityPresentation.settingsLabel(for: appState.localAIAvailability))
                             .font(.body.weight(.medium))
                     }
                 }
                 .accessibilityElement(children: .combine)
 
                 LabeledContent("Runtime") {
-                    Text(appState.localAIAvailability.runtimeName ?? "None configured")
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
+                    VStack(alignment: .trailing, spacing: Spacing.xxs) {
+                        Text(appState.localAIAvailability.runtimeName ?? "None configured")
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+
+                        if let cause = LocalAIAvailabilityPresentation.causeLabel(for: appState.localAIAvailability) {
+                            Text(cause)
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(localAIAvailabilityTint)
+                                .lineLimit(1)
+                        }
+                    }
                 }
+
+                localAIRemediationControls
 
                 Text(appState.localAIAvailability.detail)
                     .detailText()
                     .fixedSize(horizontal: false, vertical: true)
 
-                localAIRemediationControls
+                if let probeErrorText = appState.localAIAvailability.probeErrorText, !probeErrorText.isEmpty {
+                    Button(isShowingLocalAIProbeDetails ? "Hide Probe Error" : "View Probe Error") {
+                        isShowingLocalAIProbeDetails.toggle()
+                    }
+                    .buttonStyle(.borderless)
+                    .controlSize(.small)
+                    .help("Show the exact Ollama probe error captured during the local availability check.")
+
+                    if isShowingLocalAIProbeDetails {
+                        Text(probeErrorText)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
 
                 Text(
                     "VaultPeek does not send transaction data to cloud AI services. Local insight summaries are derived from local accounts, transactions, and recurring detections; raw Plaid transaction categories remain unchanged."
@@ -543,50 +570,119 @@ struct GeneralSettingsView: View {
 
     @ViewBuilder
     private var localAIRemediationControls: some View {
-        HStack(spacing: Spacing.sm) {
+        switch LocalAIAvailabilityPresentation.remediationCategory(for: appState.localAIAvailability) {
+        case .none:
+            EmptyView()
+        case .checking:
             Button {
                 Task { await appState.checkLocalAIAvailability() }
             } label: {
-                Label(
-                    appState.isCheckingLocalAIAvailability ? "Checking…" : "Retry Check",
-                    systemImage: "arrow.clockwise"
-                )
+                Label("Checking…", systemImage: "hourglass")
             }
+            .buttonStyle(.bordered)
             .controlSize(.small)
-            .disabled(!appState.localAIEnabled || appState.isCheckingLocalAIAvailability)
-            .help("Probe the local Ollama runtime again without sending Plaid credentials, account IDs, or transaction IDs.")
-
+            .disabled(true)
+        case .disabled:
             Button {
                 LocalAIRemediationActions.openInstallPage()
             } label: {
-                Label("Install Ollama", systemImage: "arrow.down.app")
+                Label("Install or Open Ollama", systemImage: "arrow.down.app")
             }
+            .buttonStyle(.bordered)
             .controlSize(.small)
             .help("Open the Ollama download page in your browser.")
+        case .noInstalledModel:
+            HStack(spacing: Spacing.sm) {
+                Button {
+                    LocalAIRemediationActions.copyPullCommand(modelName: appState.localAIModelName)
+                } label: {
+                    Label("Copy Model Command", systemImage: "square.and.arrow.down")
+                }
+                .buttonStyle(.borderedProminent)
+                .help("Copies: \(LocalAIRemediationActions.pullCommand(modelName: appState.localAIModelName))")
 
-            Button {
-                LocalAIRemediationActions.copyStartCommand()
-            } label: {
-                Label("Copy Start Command", systemImage: "terminal")
+                retryLocalAIButton
+
+                installOllamaButton
             }
             .controlSize(.small)
-            .help("Copies: \(LocalAIRemediationActions.startCommand)")
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Local AI remediation actions")
+        case .runtimeUnavailable:
+            HStack(spacing: Spacing.sm) {
+                retryLocalAIButton
+                    .buttonStyle(.borderedProminent)
 
-            Button {
-                LocalAIRemediationActions.copyPullCommand(modelName: appState.localAIModelName)
-            } label: {
-                Label("Copy Pull Command", systemImage: "square.and.arrow.down")
+                installOllamaButton
+
+                Button {
+                    LocalAIRemediationActions.copyStartCommand()
+                } label: {
+                    Label("Copy ollama serve", systemImage: "terminal")
+                }
+                .buttonStyle(.bordered)
+                .help("Copies: \(LocalAIRemediationActions.startCommand)")
             }
             .controlSize(.small)
-            .disabled(!appState.localAIEnabled)
-            .help("Copies: \(LocalAIRemediationActions.pullCommand(modelName: appState.localAIModelName))")
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Local AI remediation actions")
+        case .unsupportedConfiguration:
+            HStack(spacing: Spacing.sm) {
+                installOllamaButton
+
+                Button {
+                    LocalAIRemediationActions.copyStartCommand()
+                } label: {
+                    Label("Copy ollama serve", systemImage: "terminal")
+                }
+                .buttonStyle(.bordered)
+                .help("Copies: \(LocalAIRemediationActions.startCommand)")
+            }
+            .controlSize(.small)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Local AI remediation actions")
+        case .modelError:
+            HStack(spacing: Spacing.sm) {
+                retryLocalAIButton
+                    .buttonStyle(.borderedProminent)
+
+                installOllamaButton
+
+                Button {
+                    LocalAIRemediationActions.copyStartCommand()
+                } label: {
+                    Label("Copy ollama serve", systemImage: "terminal")
+                }
+                .buttonStyle(.bordered)
+                .help("Copies: \(LocalAIRemediationActions.startCommand)")
+            }
+            .controlSize(.small)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Local AI remediation actions")
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Local AI remediation actions")
+    }
 
-        Text("If Ollama is not installed, install it first. If it is installed but unavailable, start it with `ollama serve`, pull the selected model, then retry the check. The probe uses a synthetic health-check prompt only.")
-            .detailText()
-            .fixedSize(horizontal: false, vertical: true)
+    private var retryLocalAIButton: some View {
+        Button {
+            Task { await appState.checkLocalAIAvailability() }
+        } label: {
+            Label(
+                appState.isCheckingLocalAIAvailability ? "Checking…" : "Retry",
+                systemImage: "arrow.clockwise"
+            )
+        }
+        .disabled(!appState.localAIEnabled || appState.isCheckingLocalAIAvailability)
+        .help("Probe the local Ollama runtime again without sending Plaid credentials, account IDs, or transaction IDs.")
+    }
+
+    private var installOllamaButton: some View {
+        Button {
+            LocalAIRemediationActions.openInstallPage()
+        } label: {
+            Label("Install or Open Ollama", systemImage: "arrow.down.app")
+        }
+        .buttonStyle(.bordered)
+        .help("Open the Ollama download page in your browser.")
     }
 
     private func color(for tone: SettingsStatusTone) -> Color {
