@@ -120,15 +120,18 @@ Examples in documentation use placeholders only.
 Public screenshots, bug reports, tests, and fixtures should use demo, sandbox,
 or synthetic financial data.
 
-Privacy Mask and App Lock are display-safety controls, not storage controls:
+The in-flight Privacy Mask and App Lock work is planned as display-safety
+controls, not storage controls. Until the corresponding app controls ship, this
+section is a release gate for that work rather than a claim about the current
+published build:
 
-- **Privacy Mask** hides balances, account endings, utilization values,
+- **Privacy Mask** should hide balances, account endings, utilization values,
   transaction amounts, merchant names, and other financial details from the app
   chrome while keeping the dashboard usable on a shared desktop.
-- **App Lock** blocks access until local macOS authentication succeeds. When the
-  app is locked, refresh and notification behavior must follow the user's lock
-  policy and must fail closed when a safe policy is unavailable.
-- **Notification privacy** must not include account names, balances,
+- **App Lock** should block access until local macOS authentication succeeds.
+  When the app is locked, refresh and notification behavior must follow the
+  user's lock policy and must fail closed when a safe policy is unavailable.
+- **Notification privacy** should not include account names, balances,
   transaction amounts, merchants, utilization status, or recovery details while
   Privacy Mask or App Lock is active. Use generic copy instead.
 

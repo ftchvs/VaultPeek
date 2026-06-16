@@ -7,10 +7,11 @@ current design system, realistic states, and public-safe data.
 
 Only use demo, sandbox, or synthetic financial data in screenshots.
 
-Privacy/app-lock screenshots are safest when captured from demo data with the
-mask or lock control already enabled. They should prove the privacy state with
-generic labels such as "Private" or "Locked" and fixed placeholders, not by
-showing real values beside masked values.
+When Privacy Mask or App Lock screenshots become part of the release set, they
+must be captured from demo data with the mask or lock control already enabled.
+They should prove the privacy state with generic labels such as "Private" or
+"Locked" and fixed placeholders, not by showing real values beside masked
+values.
 
 Do not publish screenshots containing:
 
@@ -21,7 +22,7 @@ Do not publish screenshots containing:
 - terminal output containing credentials or tokens
 - notification banners containing account names, balances, merchants,
   utilization status, or recovery details while Privacy Mask or App Lock is
-  active
+  active in a build that includes those controls
 
 ## Generate Screenshots
 
