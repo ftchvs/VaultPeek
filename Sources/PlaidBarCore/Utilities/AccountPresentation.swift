@@ -54,24 +54,30 @@ public enum AccountPresentation {
     }
 
     public static func subtitle(for account: AccountDTO) -> String {
+        subtitle(for: account, privacyMaskEnabled: false)
+    }
+
+    public static func subtitle(for account: AccountDTO, privacyMaskEnabled: Bool) -> String {
         let subtype = account.subtype?.capitalized ?? account.type.rawValue.capitalized
-        let mask = account.mask.map { " •••• \($0)" } ?? ""
+        let mask = account.mask.map { privacyMaskEnabled ? " ••••" : " •••• \($0)" } ?? ""
         return "\(account.type.rawValue.capitalized) • \(subtype)\(mask)"
     }
 
     public static func rowAmountText(
         for account: AccountDTO,
-        format: CurrencyFormat = .full
+        format: CurrencyFormat = .full,
+        privacyMaskEnabled: Bool = false
     ) -> String {
-        Formatters.currency(displayBalance(for: account), format: format)
+        PrivacyMaskPresentation.currency(displayBalance(for: account), format: format, isEnabled: privacyMaskEnabled)
     }
 
     public static func dashboardRowSubtitle(
         for account: AccountDTO,
         connectionLabel: String,
-        pendingCount: Int = 0
+        pendingCount: Int = 0,
+        privacyMaskEnabled: Bool = false
     ) -> String {
-        let mask = account.mask.map { " •••• \($0)" } ?? ""
+        let mask = account.mask.map { privacyMaskEnabled ? " ••••" : " •••• \($0)" } ?? ""
         let pending = pendingCount > 0 ? " • \(pendingCount) pending" : ""
         return "\(account.institutionName ?? account.type.rawValue.capitalized)\(mask) • \(connectionLabel)\(pending)"
     }
@@ -79,20 +85,21 @@ public enum AccountPresentation {
     public static func dashboardTrailingDetailText(
         for account: AccountDTO,
         connectionLabel: String,
-        format: CurrencyFormat = .compact
+        format: CurrencyFormat = .compact,
+        privacyMaskEnabled: Bool = false
     ) -> String {
         guard account.type == .credit else {
             return connectionLabel
         }
 
-        let availableText = "\(Formatters.currency(availableBalance(for: account), format: format)) available"
+        let availableText = "\(PrivacyMaskPresentation.currency(availableBalance(for: account), format: format, isEnabled: privacyMaskEnabled)) available"
         let dueText = creditDueMetadataText(for: account)
 
         guard let utilization = account.balances.utilizationPercent else {
             return "\(availableText) • \(dueText)"
         }
 
-        return "\(Formatters.percent(utilization, decimals: 0)) • \(availableText) • \(dueText)"
+        return "\(PrivacyMaskPresentation.percent(utilization, decimals: 0, isEnabled: privacyMaskEnabled)) • \(availableText) • \(dueText)"
     }
 
     public static func creditDueMetadataText(for account: AccountDTO) -> String {
@@ -115,10 +122,18 @@ public enum AccountPresentation {
     public static func dashboardUtilizationDetailText(
         for account: AccountDTO,
         threshold: Double = PlaidBarConstants.creditUtilizationWarningThreshold,
-        format: CurrencyFormat = .compact
+        format: CurrencyFormat = .compact,
+        privacyMaskEnabled: Bool = false
     ) -> String? {
         guard let utilization = account.balances.utilizationPercent else {
             return nil
+        }
+
+        if privacyMaskEnabled {
+            guard let limit = account.balances.limit, limit > 0 else {
+                return PrivacyMaskPresentation.compactValue
+            }
+            return "\(PrivacyMaskPresentation.compactValue) of \(PrivacyMaskPresentation.currency(limit, format: format, isEnabled: true))"
         }
 
         let status = utilizationStatusLabel(for: utilization, threshold: threshold)
@@ -135,7 +150,8 @@ public enum AccountPresentation {
         connectionLabel: String? = nil,
         pendingCount: Int = 0,
         isSelected: Bool? = nil,
-        utilizationThreshold: Double = PlaidBarConstants.creditUtilizationWarningThreshold
+        utilizationThreshold: Double = PlaidBarConstants.creditUtilizationWarningThreshold,
+        privacyMaskEnabled: Bool = false
     ) -> String {
         var components = [String]()
         components.append(account.name)
@@ -143,23 +159,27 @@ public enum AccountPresentation {
             components.append(institutionName)
         }
         components.append(account.type.rawValue.capitalized)
-        if let mask = account.mask {
+        if let mask = account.mask, !privacyMaskEnabled {
             components.append("Ending in \(mask)")
         }
 
-        let balance = amountText ?? rowAmountText(for: account)
+        let balance = privacyMaskEnabled
+            ? PrivacyMaskPresentation.compactValue
+            : (amountText ?? rowAmountText(for: account))
         components.append("\(balance)\(isDebt(account) ? " owed" : "")")
 
         if let utilization = account.balances.utilizationPercent {
-            components.append("\(Formatters.percent(utilization, decimals: 0)) utilization")
-            components.append(utilizationStatusLabel(
-                for: utilization,
-                threshold: utilizationThreshold
-            ))
+            components.append("\(PrivacyMaskPresentation.percent(utilization, decimals: 0, isEnabled: privacyMaskEnabled)) utilization")
+            if !privacyMaskEnabled {
+                components.append(utilizationStatusLabel(
+                    for: utilization,
+                    threshold: utilizationThreshold
+                ))
+            }
         }
 
         if account.type == .credit {
-            components.append("\(Formatters.currency(availableBalance(for: account))) available credit")
+            components.append("\(PrivacyMaskPresentation.currency(availableBalance(for: account), isEnabled: privacyMaskEnabled)) available credit")
             components.append(creditDueMetadataText(for: account))
         }
 
