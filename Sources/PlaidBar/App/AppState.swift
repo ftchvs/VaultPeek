@@ -900,15 +900,11 @@ final class AppState {
             recurringTransactions: recurringTransactions
         )
         _cachedLocalAIActivitySummaries = result
-        recordPerformance(
-            .derivedSummaryRecompute,
+        recordLocalAIActivitySummaryPerformance(
             startedAt: start,
-            counts: [
-                .accountCount: accounts.count,
-                .transactionTotalCount: transactions.count,
-                .activitySummaryCount: result.count,
-            ],
-            outcome: .success
+            summaries: result,
+            accountCount: accounts.count,
+            transactionCount: transactions.count
         )
         return result
     }
@@ -940,6 +936,7 @@ final class AppState {
             }
             guard !Task.isCancelled else { return }
 
+            let start = performanceStart()
             let generated = await service.generatedActivitySummaries(
                 accounts: accountSnapshot,
                 transactions: transactionSnapshot,
@@ -947,6 +944,12 @@ final class AppState {
             )
             guard !Task.isCancelled else { return }
             _cachedLocalAIActivitySummaries = generated
+            recordLocalAIActivitySummaryPerformance(
+                startedAt: start,
+                summaries: generated,
+                accountCount: accountSnapshot.count,
+                transactionCount: transactionSnapshot.count
+            )
         }
     }
 
@@ -2057,6 +2060,24 @@ final class AppState {
             outcome: outcome
         )
         emitPerformanceTraceIfRequested()
+    }
+
+    private func recordLocalAIActivitySummaryPerformance(
+        startedAt start: UInt64,
+        summaries: [LocalAIActivitySummary],
+        accountCount: Int,
+        transactionCount: Int
+    ) {
+        recordPerformance(
+            .derivedSummaryRecompute,
+            startedAt: start,
+            counts: [
+                .accountCount: accountCount,
+                .transactionTotalCount: transactionCount,
+                .activitySummaryCount: summaries.count,
+            ],
+            outcome: .success
+        )
     }
 
     /// Local-only performance capture: run the app with `PLAIDBAR_PERF_TRACE=1`
