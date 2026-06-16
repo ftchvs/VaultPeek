@@ -154,14 +154,13 @@ struct LocalAIInsightsService: Sendable {
     private static func configuredModelName(
         modelNamePreference: String?,
         environment: [String: String]
-    ) -> String {
+    ) -> String? {
         modelNamePreference?
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .nilIfEmpty
             ?? environment[EnvironmentKeys.ollamaModel]?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .nilIfEmpty
-            ?? "llama3.2"
     }
 
     /// Whether a configured custom endpoint (if any) is localhost. A missing or

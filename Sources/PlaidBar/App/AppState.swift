@@ -231,13 +231,12 @@ final class AppState {
     var localAIModelName: String = "llama3.2" {
         didSet {
             let normalized = Self.normalizedLocalAIModelName(localAIModelName) ?? "llama3.2"
-            guard normalized == localAIModelName else {
+            if normalized != localAIModelName {
                 localAIModelName = normalized
-                return
             }
-            guard localAIModelName != oldValue, !isLoadingLocalAISettings else { return }
-            localAIModelNamePreference = localAIModelName
-            UserDefaults.standard.set(localAIModelName, forKey: Keys.localAIModelName)
+            guard normalized != oldValue, !isLoadingLocalAISettings else { return }
+            localAIModelNamePreference = normalized
+            UserDefaults.standard.set(normalized, forKey: Keys.localAIModelName)
             rebuildLocalAIInsightsService()
             invalidateLocalAIActivitySummaries()
         }
