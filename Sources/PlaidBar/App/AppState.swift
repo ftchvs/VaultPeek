@@ -252,6 +252,7 @@ final class AppState {
             invalidateLocalAIActivitySummaries()
         }
     }
+    var isCheckingLocalAIAvailability = false
 
     var launchAtLogin: Bool = false {
         didSet {
@@ -277,6 +278,7 @@ final class AppState {
     private var reviewUndoStack: [(metadata: [TransactionReviewMetadata], rules: [TransactionRule])] = []
     private var localAIEnabledPreference: Bool?
     private var localAIModelNamePreference: String?
+    private var localAIProbeAvailability: LocalAIAvailability?
     private var isLoadingLocalAISettings = false
     private var isUpgradingManagedServer = false
     private var isStartingBundledServer = false
@@ -411,6 +413,7 @@ final class AppState {
     }
 
     private func rebuildLocalAIInsightsService() {
+        localAIProbeAvailability = nil
         localAIInsightsService = LocalAIInsightsService(
             enabledPreference: localAIEnabledPreference,
             modelNamePreference: localAIModelNamePreference
@@ -1032,6 +1035,9 @@ final class AppState {
     }
 
     var localAIAvailability: LocalAIAvailability {
+        if let probeAvailability = localAIProbeAvailability {
+            return probeAvailability
+        }
         if let generatedAvailability = _cachedLocalAIActivitySummaries?
             .first(where: { $0.window == .lastMonth })?
             .availability
@@ -1063,8 +1069,16 @@ final class AppState {
     }
 
     private func invalidateLocalAIActivitySummaries() {
+        localAIProbeAvailability = nil
         _cachedLocalAIActivitySummaries = nil
         scheduleLocalAIActivitySummaryRefresh()
+    }
+
+    func checkLocalAIAvailability() async {
+        guard !isCheckingLocalAIAvailability else { return }
+        isCheckingLocalAIAvailability = true
+        defer { isCheckingLocalAIAvailability = false }
+        localAIProbeAvailability = await localAIInsightsService.probeAvailability()
     }
 
     private func scheduleLocalAIActivitySummaryRefresh() {

@@ -422,6 +422,8 @@ struct GeneralSettingsView: View {
                     .detailText()
                     .fixedSize(horizontal: false, vertical: true)
 
+                localAIRemediationControls
+
                 Text(
                     "VaultPeek does not send transaction data to cloud AI services. Local insight summaries are derived from local accounts, transactions, and recurring detections; raw Plaid transaction categories remain unchanged."
                 )
@@ -537,6 +539,54 @@ struct GeneralSettingsView: View {
 
     private var localAIAvailabilityTint: Color {
         color(for: LocalAIAvailabilityPresentation.tone(for: appState.localAIAvailability.state))
+    }
+
+    @ViewBuilder
+    private var localAIRemediationControls: some View {
+        HStack(spacing: Spacing.sm) {
+            Button {
+                Task { await appState.checkLocalAIAvailability() }
+            } label: {
+                Label(
+                    appState.isCheckingLocalAIAvailability ? "Checking…" : "Retry Check",
+                    systemImage: "arrow.clockwise"
+                )
+            }
+            .controlSize(.small)
+            .disabled(!appState.localAIEnabled || appState.isCheckingLocalAIAvailability)
+            .help("Probe the local Ollama runtime again without sending Plaid credentials, account IDs, or transaction IDs.")
+
+            Button {
+                LocalAIRemediationActions.openInstallPage()
+            } label: {
+                Label("Install Ollama", systemImage: "arrow.down.app")
+            }
+            .controlSize(.small)
+            .help("Open the Ollama download page in your browser.")
+
+            Button {
+                LocalAIRemediationActions.copyStartCommand()
+            } label: {
+                Label("Copy Start Command", systemImage: "terminal")
+            }
+            .controlSize(.small)
+            .help("Copies: \(LocalAIRemediationActions.startCommand)")
+
+            Button {
+                LocalAIRemediationActions.copyPullCommand(modelName: appState.localAIModelName)
+            } label: {
+                Label("Copy Pull Command", systemImage: "square.and.arrow.down")
+            }
+            .controlSize(.small)
+            .disabled(!appState.localAIEnabled)
+            .help("Copies: \(LocalAIRemediationActions.pullCommand(modelName: appState.localAIModelName))")
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Local AI remediation actions")
+
+        Text("If Ollama is not installed, install it first. If it is installed but unavailable, start it with `ollama serve`, pull the selected model, then retry the check. The probe uses a synthetic health-check prompt only.")
+            .detailText()
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     private func color(for tone: SettingsStatusTone) -> Color {

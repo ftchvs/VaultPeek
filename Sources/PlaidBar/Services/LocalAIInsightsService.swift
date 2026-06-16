@@ -65,6 +65,58 @@ struct LocalAIInsightsService: Sendable {
         }
     }
 
+    func probeAvailability() async -> LocalAIAvailability {
+        let currentAvailability = availability
+        guard LocalAIRuntimeResolution.usesModel(for: currentAvailability.state), let model else {
+            return currentAvailability
+        }
+
+        do {
+            _ = try await model.summarize(
+                LocalInsightModelPrompt(
+                    system: "Reply with OK if the local runtime is available. Do not include financial data.",
+                    user: "Health check only."
+                ),
+                maxTokens: 8
+            )
+            return LocalAIRuntimeResolution.resolved(
+                base: currentAvailability,
+                usedModelOutput: true,
+                fallbackReason: nil
+            )
+        } catch let error as LocalInsightModelError {
+            let reason: LocalInsightModelFallbackReason
+            let diagnostic: String?
+            switch error {
+            case .runtimeUnavailable:
+                reason = .runtimeUnavailable
+                diagnostic = nil
+            case .runtimeUnavailableWithDiagnostic(let message):
+                reason = .runtimeUnavailable
+                diagnostic = message
+            case .noInstalledModel:
+                reason = .noInstalledModel
+                diagnostic = nil
+            case .unsupportedConfiguration:
+                reason = .unsupportedConfiguration
+                diagnostic = nil
+            }
+            return LocalAIRuntimeResolution.resolved(
+                base: currentAvailability,
+                usedModelOutput: false,
+                fallbackReason: reason,
+                fallbackDiagnostic: diagnostic
+            )
+        } catch {
+            return LocalAIRuntimeResolution.resolved(
+                base: currentAvailability,
+                usedModelOutput: false,
+                fallbackReason: .modelError,
+                fallbackDiagnostic: String(describing: error)
+            )
+        }
+    }
+
     func generatedActivitySummaries(
         accounts: [AccountDTO],
         transactions: [TransactionDTO],
