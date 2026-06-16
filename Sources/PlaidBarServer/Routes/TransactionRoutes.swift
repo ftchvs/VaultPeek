@@ -142,8 +142,6 @@ struct TransactionRoutes: Sendable {
                 // Setup state affects every item identically: surface the 503
                 // credential guidance instead of marking items errored.
                 throw PlaidError.credentialsNotConfigured
-            } catch let error as HTTPError {
-                throw error
             } catch {
                 try await tokenStore.updateItemStatus(
                     id: itemId,
@@ -164,6 +162,30 @@ struct TransactionRoutes: Sendable {
     }
 
     private func syncItem(
+        itemId: String,
+        accessToken: String,
+        persistedCursor: String?
+    ) async throws -> (added: [TransactionDTO], modified: [TransactionDTO], removed: [String], nextCursor: String?) {
+        var mutationRestartCount = 0
+
+        while true {
+            do {
+                return try await syncItemPageSequence(
+                    itemId: itemId,
+                    accessToken: accessToken,
+                    persistedCursor: persistedCursor
+                )
+            } catch let error as PlaidError where Self.isTransactionsSyncMutationDuringPagination(error) {
+                mutationRestartCount += 1
+                guard mutationRestartCount <= PlaidBarConstants.maxTransactionSyncMutationRestarts else {
+                    throw error
+                }
+                continue
+            }
+        }
+    }
+
+    private func syncItemPageSequence(
         itemId: String,
         accessToken: String,
         persistedCursor: String?
@@ -202,6 +224,11 @@ struct TransactionRoutes: Sendable {
                 return (added, modified, removed, finalCursor)
             }
         }
+    }
+
+    private static func isTransactionsSyncMutationDuringPagination(_ error: PlaidError) -> Bool {
+        guard case PlaidError.apiError(_, _, let errorCode, _) = error else { return false }
+        return errorCode == "TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION"
     }
 
     private static func toDTO(_ plaidTx: PlaidTransaction, itemId: String) -> TransactionDTO {
