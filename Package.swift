@@ -42,6 +42,9 @@ let package = Package(
         .package(url: "https://github.com/hummingbird-project/hummingbird-fluent", from: "2.0.0"),
         .package(url: "https://github.com/vapor/fluent-sqlite-driver", from: "4.0.0"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0"),
+        // Keep SwiftPM resolution compatible with the documented Swift 6.0
+        // baseline. async-http-client 1.34.0 dropped Package@swift-6.0.swift.
+        .package(url: "https://github.com/swift-server/async-http-client.git", exact: "1.33.1"),
         // Keep `swift test` working on command-line toolchains that ship the
         // Swift Testing macro plugin but not the importable `Testing` module.
         .package(url: "https://github.com/swiftlang/swift-testing", exact: "6.1.3"),
