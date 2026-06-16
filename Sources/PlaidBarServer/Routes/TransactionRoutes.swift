@@ -121,27 +121,29 @@ struct TransactionRoutes: Sendable {
             guard let itemId = item.id else { return .skipped }
 
             do {
-                let cursor = try await tokenStore.getSyncCursor(itemId: itemId)
                 let accessToken = try tokenStore.accessToken(for: item)
-                let response = try await plaidClient.syncTransactions(
+                let itemResult = try await syncItem(
+                    itemId: itemId,
                     accessToken: accessToken,
-                    cursor: cursor
+                    persistedCursor: try await tokenStore.getSyncCursor(itemId: itemId)
                 )
                 try await tokenStore.updateItemStatus(id: itemId, status: ItemConnectionStatus.connected.rawValue)
                 return ItemSyncResult(
                     itemId: itemId,
                     attempted: true,
                     succeeded: true,
-                    added: response.added.map { Self.toDTO($0, itemId: itemId) },
-                    modified: response.modified.map { Self.toDTO($0, itemId: itemId) },
-                    removed: response.removed.map(\.transactionId),
-                    hasMore: response.hasMore,
-                    nextCursor: response.nextCursor.isEmpty ? nil : response.nextCursor
+                    added: itemResult.added,
+                    modified: itemResult.modified,
+                    removed: itemResult.removed,
+                    hasMore: false,
+                    nextCursor: itemResult.nextCursor
                 )
             } catch PlaidError.credentialsNotConfigured {
                 // Setup state affects every item identically: surface the 503
                 // credential guidance instead of marking items errored.
                 throw PlaidError.credentialsNotConfigured
+            } catch let error as HTTPError {
+                throw error
             } catch {
                 try await tokenStore.updateItemStatus(
                     id: itemId,
@@ -157,6 +159,47 @@ struct TransactionRoutes: Sendable {
                     hasMore: false,
                     nextCursor: nil
                 )
+            }
+        }
+    }
+
+    private func syncItem(
+        itemId: String,
+        accessToken: String,
+        persistedCursor: String?
+    ) async throws -> (added: [TransactionDTO], modified: [TransactionDTO], removed: [String], nextCursor: String?) {
+        var cursor = persistedCursor
+        var pageCount = 0
+        var added: [TransactionDTO] = []
+        var modified: [TransactionDTO] = []
+        var removed: [String] = []
+        var finalCursor: String?
+
+        while true {
+            pageCount += 1
+            guard pageCount <= PlaidBarConstants.maxTransactionSyncPages else {
+                throw HTTPError(
+                    .badGateway,
+                    message: "Plaid transaction sync did not finish after \(PlaidBarConstants.maxTransactionSyncPages) pages"
+                )
+            }
+
+            let response = try await plaidClient.syncTransactions(
+                accessToken: accessToken,
+                cursor: cursor
+            )
+
+            added.append(contentsOf: response.added.map { Self.toDTO($0, itemId: itemId) })
+            modified.append(contentsOf: response.modified.map { Self.toDTO($0, itemId: itemId) })
+            removed.append(contentsOf: response.removed.map(\.transactionId))
+
+            if !response.nextCursor.isEmpty {
+                cursor = response.nextCursor
+                finalCursor = response.nextCursor
+            }
+
+            guard response.hasMore else {
+                return (added, modified, removed, finalCursor)
             }
         }
     }

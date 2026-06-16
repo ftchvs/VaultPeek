@@ -321,6 +321,63 @@ private actor DelayedRefreshPlaidClient: PlaidClientProtocol {
     }
 }
 
+private actor PaginatedTransactionsPlaidClient: PlaidClientProtocol {
+    private var responses: [PlaidTransactionsSyncResponse]
+    private var syncCalls: [(accessToken: String, cursor: String?)] = []
+
+    init(responses: [PlaidTransactionsSyncResponse]) {
+        self.responses = responses
+    }
+
+    func createLinkToken(
+        clientUserId _: String,
+        completionRedirectUri _: String
+    ) async throws -> PlaidLinkTokenResponse {
+        throw PlaidError.invalidResponse
+    }
+
+    func createUpdateLinkToken(
+        clientUserId _: String,
+        accessToken _: String,
+        completionRedirectUri _: String
+    ) async throws -> PlaidLinkTokenResponse {
+        throw PlaidError.invalidResponse
+    }
+
+    func getLinkToken(_: String) async throws -> PlaidLinkTokenGetResponse {
+        throw PlaidError.invalidResponse
+    }
+
+    func exchangePublicToken(_: String) async throws -> PlaidTokenExchangeResponse {
+        throw PlaidError.invalidResponse
+    }
+
+    func getAccounts(accessToken _: String) async throws -> PlaidAccountsResponse {
+        throw PlaidError.invalidResponse
+    }
+
+    func getBalances(accessToken _: String) async throws -> PlaidAccountsResponse {
+        throw PlaidError.invalidResponse
+    }
+
+    func syncTransactions(
+        accessToken: String,
+        cursor: String?
+    ) async throws -> PlaidTransactionsSyncResponse {
+        syncCalls.append((accessToken: accessToken, cursor: cursor))
+        guard !responses.isEmpty else { throw PlaidError.invalidResponse }
+        return responses.removeFirst()
+    }
+
+    func removeItem(accessToken _: String) async throws {
+        throw PlaidError.invalidResponse
+    }
+
+    func recordedSyncCalls() -> [(accessToken: String, cursor: String?)] {
+        syncCalls
+    }
+}
+
 @Suite("PlaidBarServer")
 struct PlaidBarServerTests {
     @Test func accountTypes() {
@@ -1015,7 +1072,8 @@ struct PlaidBarServerTests {
 
     private static func syncResponse(
         transactionId: String,
-        cursor: String
+        cursor: String,
+        hasMore: Bool = false
     ) -> PlaidTransactionsSyncResponse {
         PlaidTransactionsSyncResponse(
             added: [
@@ -1034,7 +1092,7 @@ struct PlaidBarServerTests {
             modified: [],
             removed: [],
             nextCursor: cursor,
-            hasMore: false,
+            hasMore: hasMore,
             requestId: "request-\(transactionId)"
         )
     }
@@ -1623,6 +1681,54 @@ struct PlaidBarServerTests {
             #expect(calls.syncs.sorted() == ["token-a", "token-b", "token-c"])
             #expect(calls.maxActive == 2)
             #expect(try await store.getItem(id: "item-b")?.status == ItemConnectionStatus.error.rawValue)
+        }
+    }
+
+    @Test("Paginated transaction sync advances with each page cursor")
+    func paginatedTransactionSyncAdvancesWithEachPageCursor() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-paginated-sync-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let databasePath = directory.appendingPathComponent("plaidbar-test.sqlite").path
+        let logger = Logger(label: "com.ftchvs.plaidbar-server-tests.paginated-sync")
+        let itemId = "test_item_\(UUID().uuidString)"
+        let accessToken = "test-access-token-\(UUID().uuidString)"
+        let client = PaginatedTransactionsPlaidClient(responses: [
+            Self.syncResponse(transactionId: "tx-page-1", cursor: "cursor-1", hasMore: true),
+            Self.syncResponse(transactionId: "tx-page-2", cursor: "cursor-2"),
+        ])
+        defer {
+            try? PlaidTokenVault.delete(
+                storedToken: PlaidTokenVault.reference(for: itemId),
+                fallbackItemId: itemId
+            )
+        }
+
+        try await withTokenStore(databasePath: databasePath, logger: logger) { store in
+            try await store.saveItem(
+                id: itemId,
+                accessToken: accessToken,
+                institutionId: "ins_test",
+                institutionName: "Test Bank"
+            )
+            try await store.saveSyncCursor(itemId: itemId, cursor: "persisted-cursor")
+            let route = TransactionRoutes(plaidClient: client, tokenStore: store, maxConcurrentItemRefreshes: 2)
+
+            let httpResponse = try await route.syncTransactions(
+                request: Self.makeRequest(path: "/api/transactions/sync"),
+                context: TestRequestContext(source: TestRequestContextSource())
+            )
+            let response: SyncResponse = try await Self.decodeBody(httpResponse)
+            let calls = await client.recordedSyncCalls()
+
+            #expect(calls.map(\.accessToken) == [accessToken, accessToken])
+            #expect(calls.map(\.cursor) == ["persisted-cursor", "cursor-1"])
+            #expect(response.added.map(\.id) == ["tx-page-1", "tx-page-2"])
+            #expect(response.hasMore == false)
+            #expect(response.nextCursor == "cursor-2")
+            #expect(response.pendingCursors == [itemId: "cursor-2"])
         }
     }
 
