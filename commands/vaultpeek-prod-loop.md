@@ -35,19 +35,17 @@ The default goal is:
 /vaultpeek-prod-loop "RepoBar-style finance dashboard" --hours=4
 ```
 
-For Codex CLI non-interactive runs (the local checkout path keeps the
-`PlaidBar` directory name until the GitHub repo rename lands; update the
-`--cd` path when the checkout moves):
+For Codex CLI non-interactive runs, use a VaultPeek-named checkout or worktree:
 
 ```bash
-codex exec --cd <home>/.openclaw/workspace/repos/PlaidBar \
+codex exec --cd <home>/workspace/VaultPeek \
   "$(cat commands/vaultpeek-prod-loop.md)"
 ```
 
 For a focused autonomous iteration:
 
 ```bash
-codex exec --cd <home>/.openclaw/workspace/repos/PlaidBar \
+codex exec --cd <home>/workspace/VaultPeek \
   "Read commands/vaultpeek-prod-loop.md and complete the next unfinished task from docs/autonomous-loop-backlog.md for: <focus>"
 ```
 
