@@ -6,6 +6,7 @@ struct ReviewInboxView: View {
     @FocusState private var isFocused: Bool
     @State private var selectedIndex = 0
     @State private var merchantDrafts: [String: String] = [:]
+    @State private var actionConfirmation: ReviewActionConfirmation?
 
     private var snapshot: TransactionReviewInboxSnapshot {
         appState.transactionReviewInboxSnapshot
@@ -16,9 +17,14 @@ struct ReviewInboxView: View {
     }
 
     var body: some View {
-        if snapshot.totalCount > 0 {
+        if snapshot.totalCount > 0 || actionConfirmation != nil {
             VStack(alignment: .leading, spacing: Spacing.sm) {
                 header
+
+                if let actionConfirmation {
+                    ReviewActionConfirmationBanner(confirmation: actionConfirmation)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
 
                 VStack(spacing: Spacing.xs) {
                     ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
@@ -27,14 +33,38 @@ struct ReviewInboxView: View {
                             isSelected: index == selectedIndex,
                             merchantDraft: merchantDraftBinding(for: item),
                             onSelect: { selectedIndex = index },
-                            onApprove: { appState.approveReviewItem(item.id) },
-                            onCategory: { appState.updateReviewCategory(item.id, category: $0) },
-                            onRename: { appState.renameReviewMerchant(item.id, merchantName: merchantDraft(for: item)) },
-                            onTransfer: { appState.markReviewItemTransfer(item.id) },
-                            onNotTransfer: { appState.markReviewItemTransfer(item.id, isTransfer: false) },
-                            onCategoryRule: { appState.createRule(from: item, category: $0) },
-                            onTransferRule: { appState.createRule(from: item, markTransfer: true) },
-                            onIgnore: { appState.ignoreReviewItem(item.id) }
+                            onApprove: {
+                                recordAction(.approved, for: item)
+                                appState.approveReviewItem(item.id)
+                            },
+                            onCategory: {
+                                recordAction(.categorized($0), for: item)
+                                appState.updateReviewCategory(item.id, category: $0)
+                            },
+                            onRename: {
+                                recordAction(.renamed, for: item)
+                                appState.renameReviewMerchant(item.id, merchantName: merchantDraft(for: item))
+                            },
+                            onTransfer: {
+                                recordAction(.markedTransfer, for: item)
+                                appState.markReviewItemTransfer(item.id)
+                            },
+                            onNotTransfer: {
+                                recordAction(.markedSpend, for: item)
+                                appState.markReviewItemTransfer(item.id, isTransfer: false)
+                            },
+                            onCategoryRule: {
+                                recordAction(.ruleCreated, for: item)
+                                appState.createRule(from: item, category: $0)
+                            },
+                            onTransferRule: {
+                                recordAction(.ruleCreated, for: item)
+                                appState.createRule(from: item, markTransfer: true)
+                            },
+                            onIgnore: {
+                                recordAction(.ignored, for: item)
+                                appState.ignoreReviewItem(item.id)
+                            }
                         )
                     }
                 }
@@ -116,6 +146,74 @@ struct ReviewInboxView: View {
     private func clampSelection() {
         selectedIndex = min(max(selectedIndex, 0), max(items.count - 1, 0))
     }
+
+    private func recordAction(_ action: ReviewActionConfirmation.Action, for item: TransactionReviewItem) {
+        withAnimation(.snappy(duration: 0.18)) {
+            actionConfirmation = ReviewActionConfirmation(action: action, merchantName: item.effectiveMerchantName)
+        }
+    }
+}
+
+private struct ReviewActionConfirmation: Equatable {
+    enum Action: Equatable {
+        case approved
+        case ignored
+        case categorized(SpendingCategory)
+        case renamed
+        case markedTransfer
+        case markedSpend
+        case ruleCreated
+
+        var message: String {
+            switch self {
+            case .approved:
+                "Approved"
+            case .ignored:
+                "Ignored"
+            case let .categorized(category):
+                "Categorized as \(category.displayName)"
+            case .renamed:
+                "Merchant name updated"
+            case .markedTransfer:
+                "Marked as transfer"
+            case .markedSpend:
+                "Marked as spend"
+            case .ruleCreated:
+                "Rule created"
+            }
+        }
+    }
+
+    let action: Action
+    let merchantName: String
+
+    var accessibilityLabel: String {
+        "Review action completed: \(action.message) for \(merchantName)"
+    }
+}
+
+private struct ReviewActionConfirmationBanner: View {
+    let confirmation: ReviewActionConfirmation
+
+    var body: some View {
+        Label {
+            Text("\(confirmation.action.message): \(confirmation.merchantName)")
+                .font(.caption.weight(.semibold))
+                .lineLimit(2)
+        } icon: {
+            Image(systemName: "checkmark.circle.fill")
+        }
+        .foregroundStyle(SemanticColors.positive)
+        .padding(.horizontal, Spacing.sm)
+        .padding(.vertical, Spacing.xs)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(SemanticColors.positive.opacity(0.10), in: RoundedRectangle(cornerRadius: 10))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10).stroke(SemanticColors.positive.opacity(0.20), lineWidth: 1)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(confirmation.accessibilityLabel)
+    }
 }
 
 private struct ReviewInboxRow: View {
@@ -139,7 +237,9 @@ private struct ReviewInboxRow: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(accessibilitySummary)
-            .accessibilityHint("Selects this transaction review row.")
+            .accessibilityHint("Selects this transaction review row. Approve and ignore actions are also available below this summary.")
+
+            compactActionStrip
 
             if isSelected {
                 selectedControls
@@ -209,6 +309,40 @@ private struct ReviewInboxRow: View {
                     }
             }
         }
+    }
+
+    private var compactActionStrip: some View {
+        HStack(spacing: Spacing.xs) {
+            Button {
+                onApprove()
+            } label: {
+                Label("Approve", systemImage: "checkmark")
+            }
+            .help("Approve transaction")
+            .accessibilityLabel("Approve transaction")
+            .accessibilityHint("Marks \(item.effectiveMerchantName) as reviewed and shows a confirmation.")
+
+            Button {
+                onSelect()
+            } label: {
+                Label(isSelected ? "Editing" : "Review", systemImage: isSelected ? "checkmark.circle" : "chevron.down")
+            }
+            .help(isSelected ? "Review controls are expanded" : "Show category, transfer, rule, and rename controls")
+            .accessibilityLabel(isSelected ? "Review controls expanded" : "Show full review controls")
+
+            Spacer(minLength: Spacing.xs)
+
+            Button {
+                onIgnore()
+            } label: {
+                Label("Ignore", systemImage: "eye.slash")
+            }
+            .help("Ignore unless materially changed")
+            .accessibilityLabel("Ignore transaction")
+            .accessibilityHint("Marks \(item.effectiveMerchantName) reviewed unless it changes materially and shows a confirmation.")
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.mini)
     }
 
     private var selectedControls: some View {
