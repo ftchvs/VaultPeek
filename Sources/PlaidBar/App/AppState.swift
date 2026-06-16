@@ -32,6 +32,7 @@ final class AppState {
         static let setupCompletedContextPrefix = "setup.completedOnce.context"
         static let firstRunSnapshotDismissedContextPrefix = "firstRunSnapshot.dismissed.context"
         static let lastTransactionCacheContext = "cache.lastTransactionCacheContext"
+        static let categoryBudgetCache = "cache.categoryBudgets"
         static let dashboardDetached = DetachedDashboardPreferences.detachedStorageKey
     }
 
@@ -120,6 +121,11 @@ final class AppState {
         }
     }
     @ObservationIgnored private var performanceTrace = PerformanceTrace()
+
+    private struct CategoryBudgetCache: Codable {
+        let context: TransactionCacheContext
+        let budgets: [String: Double]
+    }
 
     // MARK: - Settings (persisted to UserDefaults)
     var menuBarSummaryMode: MenuBarSummaryMode = .netWorth {
@@ -1245,6 +1251,7 @@ final class AppState {
             categoryBudgets = Dictionary(
                 budgets.map { ($0.category, $0.monthlyLimit) }
             ) { first, _ in first }
+            persistCategoryBudgetCache()
         } catch {
             // Keep the last-known in-memory budgets (or local suggestions) visible
             // when the companion server is offline or the endpoint errors; never
@@ -1263,7 +1270,7 @@ final class AppState {
             return
         }
 
-        let previousBudgets = categoryBudgets
+        let previousValue = categoryBudgets[category]
         categoryBudgets[category] = amount
         error = nil
         do {
@@ -1272,20 +1279,29 @@ final class AppState {
                 amount: amount
             )
             categoryBudgets[saved.category] = saved.monthlyLimit
+            persistCategoryBudgetCache()
         } catch {
-            categoryBudgets = previousBudgets
+            if let previousValue {
+                categoryBudgets[category] = previousValue
+            } else {
+                categoryBudgets.removeValue(forKey: category)
+            }
             self.error = error.localizedDescription
         }
     }
 
     func removeCategoryBudget(_ category: SpendingCategory) async {
-        let previousBudgets = categoryBudgets
+        let previousValue = categoryBudgets[category]
         categoryBudgets.removeValue(forKey: category)
         error = nil
         do {
             try await serverClient.deleteCategoryBudget(categoryId: category.rawValue)
+            categoryBudgets.removeValue(forKey: category)
+            persistCategoryBudgetCache()
         } catch {
-            categoryBudgets = previousBudgets
+            if let previousValue {
+                categoryBudgets[category] = previousValue
+            }
             self.error = error.localizedDescription
         }
     }
@@ -1551,6 +1567,7 @@ final class AppState {
         serverSyncReady = nil
         serverSyncedItemCount = nil
         lastSyncDate = nil
+        clearCategoryBudgetCache()
         UserDefaults.standard.set(false, forKey: resetSetupCompletionDefaultsKey)
         UserDefaults.standard.removeObject(forKey: firstRunSnapshotDismissalDefaultsKey)
         isSetupComplete = false
@@ -1858,6 +1875,7 @@ final class AppState {
         ) {
             transactionRules = cachedRules
         }
+        loadCategoryBudgetCache(for: context)
     }
 
     private func preconnectCacheDirectory(for context: TransactionCacheContext) -> URL? {
@@ -1947,7 +1965,44 @@ final class AppState {
         UserDefaults.standard.set(data, forKey: Keys.lastTransactionCacheContext)
     }
 
-    // MARK: - Balance History
+    private func persistCategoryBudgetCache() {
+        guard let transactionCacheContext else { return }
+        let rawBudgets = Dictionary(
+            categoryBudgets.map { ($0.key.rawValue, $0.value) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        guard let data = try? JSONEncoder().encode(
+            CategoryBudgetCache(context: normalizedCacheContext(transactionCacheContext), budgets: rawBudgets)
+        ) else { return }
+        UserDefaults.standard.set(data, forKey: Keys.categoryBudgetCache)
+    }
+
+    private func loadCategoryBudgetCacheForActiveContext() {
+        guard let transactionCacheContext else { return }
+        loadCategoryBudgetCache(for: transactionCacheContext)
+    }
+
+    private func loadCategoryBudgetCache(for context: TransactionCacheContext) {
+        guard let data = UserDefaults.standard.data(forKey: Keys.categoryBudgetCache),
+              let cache = try? JSONDecoder().decode(CategoryBudgetCache.self, from: data),
+              cache.context == normalizedCacheContext(context)
+        else { return }
+
+        categoryBudgets = Dictionary(
+            cache.budgets.compactMap { rawCategory, monthlyLimit in
+                guard let category = SpendingCategory(rawValue: rawCategory) else { return nil }
+                return (category, monthlyLimit)
+            },
+            uniquingKeysWith: { first, _ in first }
+        )
+    }
+
+    private func clearCategoryBudgetCache() {
+        categoryBudgets = [:]
+        UserDefaults.standard.removeObject(forKey: Keys.categoryBudgetCache)
+    }
+
+    // MARK: - Local Caches
 
     private func loadCachedAccounts() async {
         do {
