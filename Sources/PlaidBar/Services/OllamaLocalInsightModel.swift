@@ -86,19 +86,31 @@ struct OllamaLocalInsightModel: LocalInsightModel {
         do {
             let (data, response) = try await session.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse else {
-                throw LocalInsightModelError.runtimeUnavailable
+                throw LocalInsightModelError.runtimeUnavailableWithDiagnostic(
+                    "Ollama returned a non-HTTP response from \(requestDiagnostic(request))."
+                )
             }
             guard (200 ..< 300).contains(httpResponse.statusCode) else {
                 if httpResponse.statusCode == 404 {
                     throw LocalInsightModelError.noInstalledModel
                 }
-                throw LocalInsightModelError.runtimeUnavailable
+                throw LocalInsightModelError.runtimeUnavailableWithDiagnostic(
+                    "Ollama request to \(requestDiagnostic(request)) failed with HTTP \(httpResponse.statusCode)."
+                )
             }
-            return try JSONDecoder().decode(Response.self, from: data)
+            do {
+                return try JSONDecoder().decode(Response.self, from: data)
+            } catch {
+                throw LocalInsightModelError.runtimeUnavailableWithDiagnostic(
+                    "Ollama response from \(requestDiagnostic(request)) could not be decoded as \(Response.self)."
+                )
+            }
         } catch let error as LocalInsightModelError {
             throw error
         } catch {
-            throw LocalInsightModelError.runtimeUnavailable
+            throw LocalInsightModelError.runtimeUnavailableWithDiagnostic(
+                "Ollama request to \(requestDiagnostic(request)) failed: \(transportDiagnostic(error))."
+            )
         }
     }
 
@@ -115,6 +127,17 @@ struct OllamaLocalInsightModel: LocalInsightModel {
         "qwen2.5",
         "phi3",
     ]
+
+    private func requestDiagnostic(_ request: URLRequest) -> String {
+        guard let url = request.url else { return "Ollama endpoint" }
+        let host = url.host(percentEncoded: false) ?? "unknown-host"
+        return "\(host)\(url.path)"
+    }
+
+    private func transportDiagnostic(_ error: Error) -> String {
+        let nsError = error as NSError
+        return "\(nsError.domain) code \(nsError.code)"
+    }
 
     static func isLocalhost(_ url: URL) -> Bool {
         guard let host = url.host(percentEncoded: false)?.lowercased() else { return false }
