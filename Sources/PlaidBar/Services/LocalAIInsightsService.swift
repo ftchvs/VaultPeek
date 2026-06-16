@@ -1,6 +1,22 @@
 import Foundation
 import PlaidBarCore
 
+private final class LocalAIProbeRace: @unchecked Sendable {
+    private let lock = NSLock()
+    private var didResume = false
+
+    func resumeOnce(_ body: () -> Void) {
+        lock.lock()
+        guard !didResume else {
+            lock.unlock()
+            return
+        }
+        didResume = true
+        lock.unlock()
+        body()
+    }
+}
+
 struct LocalAIInsightsService: Sendable {
     private enum EnvironmentKeys {
         static let localRuntime = LocalAIRuntimeResolution.optInEnvironmentKey
@@ -112,26 +128,43 @@ struct LocalAIInsightsService: Sendable {
     }
 
     private func boundedProbe(model: any LocalInsightModel) async throws -> String {
-        try await withThrowingTaskGroup(of: String.self) { group in
-            group.addTask {
-                try await model.summarize(
-                    LocalInsightModelPrompt(
-                        system: "Reply with OK if the local runtime is available. Do not include financial data.",
-                        user: "Health check only."
-                    ),
-                    maxTokens: 8
-                )
-            }
-            group.addTask {
-                try await Task.sleep(nanoseconds: generationConfiguration.timeoutNanoseconds)
-                throw LocalInsightModelError.runtimeUnavailableWithDiagnostic("Local AI health probe timed out.")
+        let race = LocalAIProbeRace()
+        return try await withCheckedThrowingContinuation { continuation in
+            var probeTask: Task<Void, Never>?
+            var timeoutTask: Task<Void, Never>?
+
+            probeTask = Task {
+                do {
+                    let result = try await model.summarize(
+                        LocalInsightModelPrompt(
+                            system: "Reply with OK if the local runtime is available. Do not include financial data.",
+                            user: "Health check only."
+                        ),
+                        maxTokens: 8
+                    )
+                    race.resumeOnce {
+                        timeoutTask?.cancel()
+                        continuation.resume(returning: result)
+                    }
+                } catch {
+                    race.resumeOnce {
+                        timeoutTask?.cancel()
+                        continuation.resume(throwing: error)
+                    }
+                }
             }
 
-            guard let result = try await group.next() else {
-                throw LocalInsightModelError.runtimeUnavailable
+            timeoutTask = Task {
+                do {
+                    try await Task.sleep(nanoseconds: generationConfiguration.timeoutNanoseconds)
+                    race.resumeOnce {
+                        probeTask?.cancel()
+                        continuation.resume(throwing: LocalInsightModelError.runtimeUnavailableWithDiagnostic("Local AI health probe timed out."))
+                    }
+                } catch {
+                    probeTask?.cancel()
+                }
             }
-            group.cancelAll()
-            return result
         }
     }
 
