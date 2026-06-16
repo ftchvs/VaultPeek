@@ -79,6 +79,28 @@ actor ServerClient {
         return try await get(url)
     }
 
+    func listCategoryBudgets() async throws -> [CategoryBudgetDTO] {
+        guard let url = ServerEndpoint.categoryBudgetsURL(baseURL: baseURL) else {
+            throw ServerClientError.requestFailed
+        }
+        let response: CategoryBudgetsResponse = try await get(url)
+        return response.budgets
+    }
+
+    func saveCategoryBudget(categoryId: String, amount: Double) async throws -> CategoryBudgetDTO {
+        guard let url = ServerEndpoint.saveCategoryBudgetURL(baseURL: baseURL, categoryId: categoryId) else {
+            throw ServerClientError.requestFailed
+        }
+        return try await put(url, body: SaveCategoryBudgetRequest(monthlyLimit: amount))
+    }
+
+    func deleteCategoryBudget(categoryId: String) async throws {
+        guard let url = ServerEndpoint.deleteCategoryBudgetURL(baseURL: baseURL, categoryId: categoryId) else {
+            throw ServerClientError.requestFailed
+        }
+        try await delete(url)
+    }
+
     func syncTransactions(itemId: String? = nil) async throws -> SyncResponse {
         guard let url = ServerEndpoint.transactionSyncURL(baseURL: baseURL, itemId: itemId) else {
             throw ServerClientError.requestFailed
@@ -154,6 +176,13 @@ actor ServerClient {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(body)
+        let (data, response) = try await data(for: request)
+        try Self.validateHTTPResponse(response, data: data)
+    }
+
+    private func delete(_ url: URL) async throws {
+        var request = try authorizedRequest(url: url)
+        request.httpMethod = "DELETE"
         let (data, response) = try await data(for: request)
         try Self.validateHTTPResponse(response, data: data)
     }

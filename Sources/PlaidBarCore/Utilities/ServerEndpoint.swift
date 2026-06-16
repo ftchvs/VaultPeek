@@ -37,6 +37,18 @@ public enum ServerEndpoint {
         url(baseURL: baseURL, path: "/api/accounts/\(percentEncodedPathComponent(itemId))")
     }
 
+    public static func categoryBudgetsURL(baseURL: String) -> URL? {
+        url(baseURL: baseURL, path: "/api/budgets")
+    }
+
+    public static func saveCategoryBudgetURL(baseURL: String, categoryId: String) -> URL? {
+        url(baseURL: baseURL, path: "/api/budgets/\(percentEncodedPathComponent(categoryId))")
+    }
+
+    public static func deleteCategoryBudgetURL(baseURL: String, categoryId: String) -> URL? {
+        url(baseURL: baseURL, path: "/api/budgets/\(percentEncodedPathComponent(categoryId))")
+    }
+
     private static func percentEncodedPathComponent(_ value: String) -> String {
         var allowed = CharacterSet.urlPathAllowed
         allowed.remove(charactersIn: "/?#[]@!$&'()*+,;=")
