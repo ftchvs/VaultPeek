@@ -108,14 +108,15 @@ Intentional, kept for compatibility:
   `plaidbar-production.sqlite`.
 - Source-checkout helper `Scripts/plaidbar-run` remains a deprecated alias for
   `Scripts/vaultpeek-run`.
-- GitHub repository slug `ftchvs/PlaidBar` until the repo rename lands.
+- GitHub repository slug `ftchvs/VaultPeek`; old `ftchvs/PlaidBar` links should
+  redirect.
 
 ### Follow-Ups
 
 - Update the application display name/branding in the Plaid Dashboard so the
   Plaid Link consent screen shows VaultPeek.
-- Repo rename (`ftchvs/PlaidBar` -> VaultPeek) and the in-app GitHub links that
-  depend on it.
+- Any follow-up in-app or docs links still pointing at the pre-rename
+  `ftchvs/PlaidBar` slug.
 - Staged SwiftPM product/executable rename.
 
 ## Post-1.0 Design and Trust Roadmap - Active

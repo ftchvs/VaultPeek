@@ -75,7 +75,7 @@ from any VaultPeek process.
 
 | Metric | Public/explicit source | Collection method | Cadence | Decision it informs |
 |---|---|---|---|---|
-| Stars | GitHub repo (`github.com/ftchvs/PlaidBar`, rename tracked separately per `README.md`) | Public GitHub REST/GraphQL API (read-only) or the repo's Insights tab, read manually | Weekly | Is top-of-funnel awareness growing after a launch post? Flat stars after outreach = the message isn't landing. |
+| Stars | GitHub repo (`github.com/ftchvs/VaultPeek`) | Public GitHub REST/GraphQL API (read-only) or the repo's Insights tab, read manually | Weekly | Is top-of-funnel awareness growing after a launch post? Flat stars after outreach = the message isn't landing. |
 | Forks | GitHub repo | Public GitHub API or Insights, manual | Weekly | Developer/contributor pull. High forks vs stars suggests the BYO-keys/source audience (the trust anchor in `docs/strategy/pricing-and-launch.md` §4) is who's showing up. |
 | Watchers | GitHub repo | Public GitHub API or Insights, manual | Weekly | Sustained-interest signal — who wants release notifications, distinct from a one-time star. |
 | Repository traffic (views, unique visitors, clones) | GitHub repo **Insights → Traffic** (owner-only, but it is GitHub-side metadata, not app instrumentation) | Read manually from Insights; GitHub retains a 14-day window, so it must be recorded on cadence or it is lost | Weekly | Did a specific launch channel (HN, a newsletter, a post) drive repo visits? Correlate spikes to outreach dates. |
