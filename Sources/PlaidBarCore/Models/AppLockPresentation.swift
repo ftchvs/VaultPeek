@@ -39,6 +39,8 @@ public enum NotificationPrivacyMode: String, CaseIterable, Sendable, Equatable {
     }
 
     public func usesGenericCopy(isPrivate: Bool) -> Bool {
+        guard !isPrivate else { return true }
+
         switch self {
         case .detailed, .offWhileLocked:
             return false

@@ -45,6 +45,15 @@ struct AppLockPresentationTests {
         #expect(generic.shouldEvaluateFinancialNotifications(isAppLocked: true) == true)
     }
 
+    @Test("notification modes use generic copy whenever the app is private")
+    func notificationModesUseGenericCopyWhenPrivate() {
+        #expect(NotificationPrivacyMode.detailed.usesGenericCopy(isPrivate: true) == true)
+        #expect(NotificationPrivacyMode.offWhileLocked.usesGenericCopy(isPrivate: true) == true)
+        #expect(NotificationPrivacyMode.detailed.usesGenericCopy(isPrivate: false) == false)
+        #expect(NotificationPrivacyMode.genericWhenPrivate.usesGenericCopy(isPrivate: false) == false)
+        #expect(NotificationPrivacyMode.alwaysGeneric.usesGenericCopy(isPrivate: false) == true)
+    }
+
     @Test("inactivity intervals normalize to supported options")
     func inactivityIntervalsNormalize() {
         #expect(AppLockPreferences.normalizedInactivityInterval(75) == 60)
