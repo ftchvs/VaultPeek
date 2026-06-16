@@ -10,8 +10,8 @@ code (see [LICENSE](LICENSE)).
 
 1. **Clone the repo:**
    ```bash
-   git clone https://github.com/ftchvs/PlaidBar.git
-   cd PlaidBar
+   git clone https://github.com/ftchvs/VaultPeek.git
+   cd VaultPeek
    ```
 
 2. **Build:**
