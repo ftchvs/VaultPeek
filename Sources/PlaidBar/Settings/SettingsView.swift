@@ -577,11 +577,11 @@ struct GeneralSettingsView: View {
             Button {
                 Task { await appState.checkLocalAIAvailability() }
             } label: {
-                Label("Checking…", systemImage: "hourglass")
+                Label(appState.isCheckingLocalAIAvailability ? "Checking…" : "Check Ollama", systemImage: appState.isCheckingLocalAIAvailability ? "hourglass" : "arrow.clockwise")
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
-            .disabled(true)
+            .disabled(appState.isCheckingLocalAIAvailability)
         case .disabled:
             Button {
                 LocalAIRemediationActions.openInstallPage()
