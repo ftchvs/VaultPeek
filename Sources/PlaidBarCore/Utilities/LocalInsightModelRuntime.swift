@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 public struct LocalInsightModelGenerationConfiguration: Sendable, Equatable {
     public static let `default` = LocalInsightModelGenerationConfiguration()
@@ -32,15 +33,18 @@ public struct LocalInsightModelGenerationResult: Sendable, Equatable {
     public let summary: String
     public let usedModelOutput: Bool
     public let fallbackReason: LocalInsightModelFallbackReason?
+    public let fallbackDiagnostic: String?
 
     public init(
         summary: String,
         usedModelOutput: Bool,
-        fallbackReason: LocalInsightModelFallbackReason?
+        fallbackReason: LocalInsightModelFallbackReason?,
+        fallbackDiagnostic: String? = nil
     ) {
         self.summary = summary
         self.usedModelOutput = usedModelOutput
         self.fallbackReason = fallbackReason
+        self.fallbackDiagnostic = fallbackDiagnostic
     }
 }
 
@@ -294,6 +298,11 @@ public enum LocalInsightModelOutputValidator {
 }
 
 public enum LocalInsightModelRuntime {
+    private static let logger = Logger(
+        subsystem: "com.ftchvs.PlaidBar",
+        category: "LocalInsightModelRuntime"
+    )
+
     public static func generateSummary(
         input: LocalAIActivitySummaryInput,
         model: (any LocalInsightModel)?,
@@ -310,6 +319,9 @@ public enum LocalInsightModelRuntime {
         }
 
         let prompt = LocalInsightPromptBuilder.make(from: input)
+        let actionName = "generateSummary"
+        let modelID = String(reflecting: type(of: model))
+        let startedAt = Date()
         let rawOutput: String
 
         do {
@@ -317,18 +329,40 @@ public enum LocalInsightModelRuntime {
                 try await model.summarize(prompt, maxTokens: configuration.maxTokens)
             }
         } catch is LocalInsightModelTimeoutError {
+            recordModelFailure(
+                actionName: actionName,
+                modelID: modelID,
+                elapsedMilliseconds: elapsedMilliseconds(since: startedAt),
+                reason: .timeout
+            )
             return LocalInsightModelGenerationResult(
                 summary: fallback,
                 usedModelOutput: false,
                 fallbackReason: .timeout
             )
         } catch let error as LocalInsightModelError {
+            let reason = error.fallbackReason
+            let diagnostic = error.diagnostic
+            recordModelFailure(
+                actionName: actionName,
+                modelID: modelID,
+                elapsedMilliseconds: elapsedMilliseconds(since: startedAt),
+                reason: reason,
+                diagnostic: diagnostic
+            )
             return LocalInsightModelGenerationResult(
                 summary: fallback,
                 usedModelOutput: false,
-                fallbackReason: error.fallbackReason
+                fallbackReason: reason,
+                fallbackDiagnostic: diagnostic
             )
         } catch {
+            recordModelFailure(
+                actionName: actionName,
+                modelID: modelID,
+                elapsedMilliseconds: elapsedMilliseconds(since: startedAt),
+                reason: .modelError
+            )
             return LocalInsightModelGenerationResult(
                 summary: fallback,
                 usedModelOutput: false,
@@ -354,6 +388,28 @@ public enum LocalInsightModelRuntime {
                 fallbackReason: .invalidOutput
             )
         }
+    }
+
+    private static func recordModelFailure(
+        actionName: String,
+        modelID: String,
+        elapsedMilliseconds: Int,
+        reason: LocalInsightModelFallbackReason,
+        diagnostic: String? = nil
+    ) {
+        if let diagnostic {
+            logger.warning(
+                "local_insight_model_failure action=\(actionName, privacy: .public) model_id=\(modelID, privacy: .public) elapsed_ms=\(elapsedMilliseconds) reason=\(reason.rawValue, privacy: .public) diagnostic=\(diagnostic, privacy: .public)"
+            )
+        } else {
+            logger.warning(
+                "local_insight_model_failure action=\(actionName, privacy: .public) model_id=\(modelID, privacy: .public) elapsed_ms=\(elapsedMilliseconds) reason=\(reason.rawValue, privacy: .public)"
+            )
+        }
+    }
+
+    private static func elapsedMilliseconds(since startedAt: Date) -> Int {
+        max(0, Int(Date().timeIntervalSince(startedAt) * 1_000))
     }
 
     private static func withTimeout<T: Sendable>(
@@ -456,12 +512,21 @@ private struct LocalInsightModelTimeoutError: Error {}
 private extension LocalInsightModelError {
     var fallbackReason: LocalInsightModelFallbackReason {
         switch self {
-        case .runtimeUnavailable:
+        case .runtimeUnavailable, .runtimeUnavailableWithDiagnostic:
             .runtimeUnavailable
         case .noInstalledModel:
             .noInstalledModel
         case .unsupportedConfiguration:
             .unsupportedConfiguration
+        }
+    }
+
+    var diagnostic: String? {
+        switch self {
+        case .runtimeUnavailableWithDiagnostic(let diagnostic):
+            diagnostic
+        case .runtimeUnavailable, .noInstalledModel, .unsupportedConfiguration:
+            nil
         }
     }
 }
