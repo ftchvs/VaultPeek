@@ -43,6 +43,7 @@ struct StrongMaskFormatterTests {
         #expect(StrongMaskFormatter.money(-87.42, preservesSign: true) == "-$••••")
         #expect(StrongMaskFormatter.money(Decimal(12_000), preservesSign: true) == "+$••••")
         #expect(StrongMaskFormatter.money(Decimal(-22.99), preservesSign: true) == "-$••••")
+        #expect(StrongMaskFormatter.money(Decimal.nan) == "—")
         #expect(StrongMaskFormatter.money(Double.nan) == "—")
         #expect(StrongMaskFormatter.money(Double.infinity) == "—")
         #expect(StrongMaskFormatter.money(3_250.0, preservesSign: true) == "+$••••")

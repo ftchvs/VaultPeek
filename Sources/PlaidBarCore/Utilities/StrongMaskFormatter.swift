@@ -140,7 +140,7 @@ public enum StrongMaskFormatter {
         preservesSign: Bool = false,
         unavailable: String = Self.unavailable
     ) -> String {
-        guard let value else { return unavailable }
+        guard let value, !value.isNaN else { return unavailable }
         guard preservesSign else { return maskedMoney }
         if value < 0 { return "-\(maskedMoney)" }
         if value > 0 { return "+\(maskedMoney)" }
