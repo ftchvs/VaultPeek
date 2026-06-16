@@ -116,7 +116,7 @@ Distribute the resulting DMG privately to licensed users.
 
 Use this when a published release is broken and must be withdrawn. VaultPeek
 distribution today is git/tag/DMG-based: a tag `v<version>`, a GitHub release on
-`ftchvs/PlaidBar`, and a privately distributed `VaultPeek-<version>.dmg`. There
+`ftchvs/VaultPeek`, and a privately distributed `VaultPeek-<version>.dmg`. There
 is no live auto-update channel, so rollback is a manual withdraw-and-redistribute
 of the prior good release. Notarization and Sparkle are deferred
 (`docs/distribution.md`), so the Sparkle step below is N/A until that runbook is
@@ -126,15 +126,15 @@ Work the steps in order.
 
 ### 1. Identify the bad release and the prior good one
 
-- Bad release: tag `v<bad-version>`, its GitHub release on `ftchvs/PlaidBar`, and
+- Bad release: tag `v<bad-version>`, its GitHub release on `ftchvs/VaultPeek`, and
   any distributed `VaultPeek-<bad-version>.dmg` (with its recorded SHA-256).
 - Prior good release: the last `v<good-version>` whose
   `docs/release-checklist.md` gates passed and whose DMG was clean-install
   verified.
 
 ```bash
-gh release list --repo ftchvs/PlaidBar
-gh release view "v<bad-version>" --repo ftchvs/PlaidBar
+gh release list --repo ftchvs/VaultPeek
+gh release view "v<bad-version>" --repo ftchvs/VaultPeek
 git ls-remote --tags origin "v<bad-version>"
 ```
 
@@ -145,7 +145,7 @@ Reverse exactly what `./Scripts/release.sh --publish` did (it runs `git tag -a`,
 
 ```bash
 # Delete (or yank) the GitHub release so it stops being offered.
-gh release delete "v<bad-version>" --repo ftchvs/PlaidBar --yes
+gh release delete "v<bad-version>" --repo ftchvs/VaultPeek --yes
 
 # Delete the bad tag on origin, then locally.
 git push origin :refs/tags/v<bad-version>
@@ -157,7 +157,7 @@ delete the GitHub release so it is not the published artifact. Confirm the prior
 good tag `v<good-version>` is now the effective latest:
 
 ```bash
-gh release list --repo ftchvs/PlaidBar   # newest non-prerelease should be v<good-version>
+gh release list --repo ftchvs/VaultPeek   # newest non-prerelease should be v<good-version>
 git ls-remote --tags origin              # v<bad-version> gone from origin
 ```
 
@@ -212,7 +212,7 @@ Re-run the relevant `docs/release-checklist.md` gates against the restored
   other than the build machine; SHA-256 recorded and matching.
 - Privacy And Security: secret scan, `/api/status` contract test, `/api/*` auth
   tests pass on the restored build.
-- Confirm `gh release list --repo ftchvs/PlaidBar` shows `v<good-version>` as the
+- Confirm `gh release list --repo ftchvs/VaultPeek` shows `v<good-version>` as the
   effective latest and the bad release/tag are gone.
 
 ## Distribution Scope

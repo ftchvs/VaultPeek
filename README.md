@@ -13,8 +13,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ftchvs/PlaidBar/actions/workflows/ci.yml"><img src="https://github.com/ftchvs/PlaidBar/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/ftchvs/PlaidBar/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Proprietary-red.svg" alt="Proprietary License"></a>
+  <a href="https://github.com/ftchvs/VaultPeek/actions/workflows/ci.yml"><img src="https://github.com/ftchvs/VaultPeek/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/ftchvs/VaultPeek/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Proprietary-red.svg" alt="Proprietary License"></a>
   <img src="https://img.shields.io/badge/platform-macOS%2015%2B-lightgrey.svg" alt="macOS 15+">
   <img src="https://img.shields.io/badge/swift-6.0%2B-F05138.svg" alt="Swift 6.0+">
 </p>
@@ -258,7 +258,7 @@ few technical surfaces for compatibility, and those are not bugs:
 | Keychain service | `PlaidBar.PlaidAccessToken` | SQLite `keychain:<item_id>` references must keep resolving after the storage migration |
 | SQLite store filenames | `plaidbar-sandbox.sqlite`, `plaidbar-production.sqlite` | Renaming live database files is riskier than keeping them |
 | Legacy data directory | `~/.plaidbar/` | Migration source; left in place as rollback evidence (default is now `~/.vaultpeek/`) |
-| GitHub repository | `github.com/ftchvs/PlaidBar` | Repo rename is tracked separately; links in-app and in docs are correct today |
+| GitHub repository | `github.com/ftchvs/VaultPeek` | Repo rename has landed; old `ftchvs/PlaidBar` URLs should redirect to this slug |
 
 Rename history and upgrade guidance live in
 [docs/release-notes.md](docs/release-notes.md) and [CHANGELOG.md](CHANGELOG.md).
@@ -283,8 +283,8 @@ export PLAID_SECRET=your_sandbox_secret
 Building from source requires authorized access to this private repository.
 
 ```bash
-git clone https://github.com/ftchvs/PlaidBar.git
-cd PlaidBar
+git clone https://github.com/ftchvs/VaultPeek.git
+cd VaultPeek
 swift build
 ```
 

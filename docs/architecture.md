@@ -135,7 +135,8 @@ an explicit migration plan:
 - SQLite store filenames: `plaidbar-sandbox.sqlite`,
   `plaidbar-production.sqlite`.
 - Legacy default data directory: `~/.plaidbar/` (migration source only).
-- GitHub repository slug `ftchvs/PlaidBar` until the repo rename lands.
+- GitHub repository slug: `ftchvs/VaultPeek`. The old `ftchvs/PlaidBar` slug
+  should redirect for compatibility.
 
 ## Status Endpoint Contract
 
