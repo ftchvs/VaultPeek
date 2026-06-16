@@ -32,6 +32,7 @@ final class AppState {
         static let setupCompletedContextPrefix = "setup.completedOnce.context"
         static let firstRunSnapshotDismissedContextPrefix = "firstRunSnapshot.dismissed.context"
         static let lastTransactionCacheContext = "cache.lastTransactionCacheContext"
+        static let categoryBudgetCache = "cache.categoryBudgets"
         static let dashboardDetached = DetachedDashboardPreferences.detachedStorageKey
     }
 
@@ -105,6 +106,10 @@ final class AppState {
     var serverSyncedItemCount: Int?
     var billingSubscription: BillingSubscription?
     var itemStatuses: [ItemStatus] = []
+    /// User-set category budget limits hydrated from `/api/budgets`.
+    /// Suggestions remain a local fallback/complement, but this cache wins for
+    /// categories the user explicitly saved on the server.
+    var categoryBudgets: [SpendingCategory: Double] = [:]
     var isDemoMode = false
     var isDemoStatusRecoveryScenario = false
     var lastSyncDate: Date?
@@ -117,6 +122,11 @@ final class AppState {
         }
     }
     @ObservationIgnored private var performanceTrace = PerformanceTrace()
+
+    private struct CategoryBudgetCache: Codable {
+        let context: TransactionCacheContext
+        let budgets: [String: Double]
+    }
 
     // MARK: - Settings (persisted to UserDefaults)
     var menuBarSummaryMode: MenuBarSummaryMode = .netWorth {
@@ -743,13 +753,72 @@ final class AppState {
             recurringTransactions: recurringTransactions,
             safeToSpend: safeToSpend,
             previousSafeToSpendAmount: persistedPreviousSafeToSpendAmount,
-            categoryBudgets: CategoryBudgetPlanner.suggestedPresentation(
-                from: transactions,
-                asOf: Date()
-            ),
+            categoryBudgets: categoryBudgetPresentation,
             itemStatuses: itemStatuses,
             isSyncStale: isSyncStale
         )
+    }
+
+    var categoryBudgetPresentation: CategoryBudgetPresentation {
+        let now = Date()
+        let suggestedBudgets = CategoryBudgetPlanner.suggestedBudgets(
+            from: transactions,
+            asOf: now
+        )
+        let suggestedPresentation = CategoryBudgetPlanner.presentation(
+            budgets: suggestedBudgets.filter { categoryBudgets[$0.key] == nil },
+            transactions: transactions,
+            asOf: now,
+            areSuggested: true
+        )
+
+        guard !categoryBudgets.isEmpty else { return suggestedPresentation }
+
+        let serverPresentation = CategoryBudgetPlanner.presentation(
+            budgets: categoryBudgets,
+            transactions: transactions,
+            asOf: now
+        )
+        return Self.mergeCategoryBudgetPresentations(
+            serverPresentation,
+            suggestedPresentation
+        )
+    }
+
+    private static func mergeCategoryBudgetPresentations(
+        _ explicit: CategoryBudgetPresentation,
+        _ suggested: CategoryBudgetPresentation
+    ) -> CategoryBudgetPresentation {
+        let explicitCategoryIds = Set(explicit.items.map(\.id))
+        let items = (explicit.items + suggested.items.filter { !explicitCategoryIds.contains($0.id) })
+            .sorted { lhs, rhs in
+                if lhs.status != rhs.status {
+                    return categoryBudgetStatusRank(lhs.status) < categoryBudgetStatusRank(rhs.status)
+                }
+                if lhs.fractionUsed != rhs.fractionUsed {
+                    return lhs.fractionUsed > rhs.fractionUsed
+                }
+                if lhs.isSuggested != rhs.isSuggested {
+                    return !lhs.isSuggested
+                }
+                return lhs.category.displayName < rhs.category.displayName
+            }
+
+        return CategoryBudgetPresentation(
+            items: items,
+            totalLimit: items.reduce(0) { $0 + $1.monthlyLimit },
+            totalSpent: items.reduce(0) { $0 + $1.spent },
+            overBudgetCount: items.reduce(0) { $0 + ($1.status == .over ? 1 : 0) },
+            nearingCount: items.reduce(0) { $0 + ($1.status == .nearing ? 1 : 0) }
+        )
+    }
+
+    private static func categoryBudgetStatusRank(_ status: CategoryBudgetStatus) -> Int {
+        switch status {
+        case .over: 0
+        case .nearing: 1
+        case .under: 2
+        }
     }
 
     private var weeklyReviewTransactionState: WeeklyReviewTransactionState? {
@@ -1192,6 +1261,68 @@ final class AppState {
         }
     }
 
+    func refreshCategoryBudgets() async {
+        guard !isDemoMode else { return }
+        do {
+            let budgets = try await serverClient.listCategoryBudgets()
+            categoryBudgets = Dictionary(
+                budgets.map { ($0.category, $0.monthlyLimit) }
+            ) { first, _ in first }
+            persistCategoryBudgetCache()
+        } catch {
+            // Keep the last-known in-memory budgets (or local suggestions) visible
+            // when the companion server is offline or the endpoint errors; never
+            // replace a valid UI state with an empty cache on refresh failure.
+            self.error = error.localizedDescription
+        }
+    }
+
+    func setCategoryBudget(_ category: SpendingCategory, amount: Double) async {
+        guard !CategoryBudgetPlanner.excludedCategories.contains(category) else {
+            error = "Income and transfer categories cannot be budgeted."
+            return
+        }
+        guard amount > 0 else {
+            await removeCategoryBudget(category)
+            return
+        }
+
+        let previousValue = categoryBudgets[category]
+        categoryBudgets[category] = amount
+        error = nil
+        do {
+            let saved = try await serverClient.saveCategoryBudget(
+                categoryId: category.rawValue,
+                amount: amount
+            )
+            categoryBudgets[saved.category] = saved.monthlyLimit
+            persistCategoryBudgetCache()
+        } catch {
+            if let previousValue {
+                categoryBudgets[category] = previousValue
+            } else {
+                categoryBudgets.removeValue(forKey: category)
+            }
+            self.error = error.localizedDescription
+        }
+    }
+
+    func removeCategoryBudget(_ category: SpendingCategory) async {
+        let previousValue = categoryBudgets[category]
+        categoryBudgets.removeValue(forKey: category)
+        error = nil
+        do {
+            try await serverClient.deleteCategoryBudget(categoryId: category.rawValue)
+            categoryBudgets.removeValue(forKey: category)
+            persistCategoryBudgetCache()
+        } catch {
+            if let previousValue {
+                categoryBudgets[category] = previousValue
+            }
+            self.error = error.localizedDescription
+        }
+    }
+
     func addAccount() async {
         error = nil
 
@@ -1217,6 +1348,7 @@ final class AppState {
             transactionReviewMetadata = []
             transactionRules = []
             itemStatuses = []
+            categoryBudgets = [:]
             // loadDemoData() replaced the in-memory balance history with a
             // synthetic 60-day series. Restore persisted real history when it
             // exists so the first real snapshot cannot persist a demo trend.
@@ -1304,6 +1436,9 @@ final class AppState {
             await refreshAccounts()
             await syncTransactions()
         }
+        if serverConnected {
+            await refreshCategoryBudgets()
+        }
         recordPerformance(
             .dashboardRefresh,
             startedAt: dashboardStart,
@@ -1373,6 +1508,7 @@ final class AppState {
         }
 
         await syncTransactions()
+        await refreshCategoryBudgets()
         updateSetupCompletion()
         return firstRunCompletionState.isReady
     }
@@ -1448,6 +1584,7 @@ final class AppState {
         serverSyncReady = nil
         serverSyncedItemCount = nil
         lastSyncDate = nil
+        clearCategoryBudgetCache()
         UserDefaults.standard.set(false, forKey: resetSetupCompletionDefaultsKey)
         UserDefaults.standard.removeObject(forKey: firstRunSnapshotDismissalDefaultsKey)
         isSetupComplete = false
@@ -1615,6 +1752,7 @@ final class AppState {
                 await refreshAccounts()
                 await syncTransactions()
             }
+            await refreshCategoryBudgets()
             startBackgroundRefresh()
         } else {
             // Offline cold start: the background refresh loop (the usual caller
@@ -1755,6 +1893,7 @@ final class AppState {
         ) {
             transactionRules = cachedRules
         }
+        loadCategoryBudgetCache(for: context)
     }
 
     private func preconnectCacheDirectory(for context: TransactionCacheContext) -> URL? {
@@ -1844,7 +1983,44 @@ final class AppState {
         UserDefaults.standard.set(data, forKey: Keys.lastTransactionCacheContext)
     }
 
-    // MARK: - Balance History
+    private func persistCategoryBudgetCache() {
+        guard let transactionCacheContext else { return }
+        let rawBudgets = Dictionary(
+            categoryBudgets.map { ($0.key.rawValue, $0.value) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        guard let data = try? JSONEncoder().encode(
+            CategoryBudgetCache(context: normalizedCacheContext(transactionCacheContext), budgets: rawBudgets)
+        ) else { return }
+        UserDefaults.standard.set(data, forKey: Keys.categoryBudgetCache)
+    }
+
+    private func loadCategoryBudgetCacheForActiveContext() {
+        guard let transactionCacheContext else { return }
+        loadCategoryBudgetCache(for: transactionCacheContext)
+    }
+
+    private func loadCategoryBudgetCache(for context: TransactionCacheContext) {
+        guard let data = UserDefaults.standard.data(forKey: Keys.categoryBudgetCache),
+              let cache = try? JSONDecoder().decode(CategoryBudgetCache.self, from: data),
+              cache.context == normalizedCacheContext(context)
+        else { return }
+
+        categoryBudgets = Dictionary(
+            cache.budgets.compactMap { rawCategory, monthlyLimit in
+                guard let category = SpendingCategory(rawValue: rawCategory) else { return nil }
+                return (category, monthlyLimit)
+            },
+            uniquingKeysWith: { first, _ in first }
+        )
+    }
+
+    private func clearCategoryBudgetCache() {
+        categoryBudgets = [:]
+        UserDefaults.standard.removeObject(forKey: Keys.categoryBudgetCache)
+    }
+
+    // MARK: - Local Caches
 
     private func loadCachedAccounts() async {
         do {
@@ -2444,6 +2620,7 @@ final class AppState {
         transactions = DemoFixtures.transactions()
         transactionReviewMetadata = []
         transactionRules = []
+        categoryBudgets = [:]
         balanceHistory = DemoFixtures.balanceHistory()
 
         isSetupComplete = true
