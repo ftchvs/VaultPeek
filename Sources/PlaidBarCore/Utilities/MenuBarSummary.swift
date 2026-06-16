@@ -182,8 +182,13 @@ public enum MenuBarSummary {
         accounts: [AccountDTO],
         transactions: [TransactionDTO],
         currencyFormat: CurrencyFormat,
-        isInitialLoad: Bool = false
+        isInitialLoad: Bool = false,
+        privacyMaskEnabled: Bool = false
     ) -> String {
+        if privacyMaskEnabled, mode != .iconOnly {
+            return PrivacyMaskPresentation.heroValue
+        }
+
         switch mode {
         case .netWorth:
             guard !accounts.isEmpty else { return PlaidBarConstants.appName }
