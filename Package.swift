@@ -124,7 +124,12 @@ let package = Package(
         ),
         .testTarget(
             name: "PlaidBarServerTests",
-            dependencies: ["PlaidBarCore", "PlaidBarServer", swiftTestingTestDependency],
+            dependencies: [
+                "PlaidBarCore",
+                "PlaidBarServer",
+                .product(name: "HummingbirdTesting", package: "hummingbird"),
+                swiftTestingTestDependency,
+            ],
             path: "Tests/PlaidBarServerTests",
             swiftSettings: [.swiftLanguageMode(.v5)],
             linkerSettings: swiftTestingLinkerSettings

@@ -1218,6 +1218,9 @@ struct PlaidBarCoreTests {
         let cursorCommitURL = try #require(ServerEndpoint.transactionCursorCommitURL(baseURL: baseURL))
         let updateURL = try #require(ServerEndpoint.updateLinkTokenURL(baseURL: baseURL, itemId: itemId))
         let removeURL = try #require(ServerEndpoint.removeItemURL(baseURL: baseURL, itemId: itemId))
+        let budgetListURL = try #require(ServerEndpoint.categoryBudgetsURL(baseURL: baseURL))
+        let budgetSaveURL = try #require(ServerEndpoint.saveCategoryBudgetURL(baseURL: baseURL, categoryId: itemId))
+        let budgetDeleteURL = try #require(ServerEndpoint.deleteCategoryBudgetURL(baseURL: baseURL, categoryId: itemId))
 
         #expect(syncURL.absoluteString == "http://127.0.0.1:8484/api/transactions/sync?item_id=item%20with%2Fslash%3Fand%26symbols")
         #expect(statusURL.absoluteString == "http://127.0.0.1:8484/api/status")
@@ -1225,6 +1228,9 @@ struct PlaidBarCoreTests {
         #expect(cursorCommitURL.absoluteString == "http://127.0.0.1:8484/api/transactions/sync/cursors")
         #expect(updateURL.absoluteString == "http://127.0.0.1:8484/api/link/update/item%20with%2Fslash%3Fand%26symbols")
         #expect(removeURL.absoluteString == "http://127.0.0.1:8484/api/accounts/item%20with%2Fslash%3Fand%26symbols")
+        #expect(budgetListURL.absoluteString == "http://127.0.0.1:8484/api/budgets")
+        #expect(budgetSaveURL.absoluteString == "http://127.0.0.1:8484/api/budgets/item%20with%2Fslash%3Fand%26symbols")
+        #expect(budgetDeleteURL.absoluteString == "http://127.0.0.1:8484/api/budgets/item%20with%2Fslash%3Fand%26symbols")
     }
 
     @Test("Transaction sync reducer upserts and removes transactions")

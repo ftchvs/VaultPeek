@@ -3,6 +3,7 @@ import FluentKit
 import FluentSQLiteDriver
 import Hummingbird
 import HummingbirdFluent
+import HummingbirdTesting
 import Logging
 @testable import PlaidBarCore
 @testable import PlaidBarServer
@@ -10,6 +11,8 @@ import Testing
 
 @Suite("Category budget persistence (AND-402)")
 struct CategoryBudgetStoreTests {
+    private let apiToken = "local-budget-token"
+
     /// Runs `body` against a BudgetStore backed by a temporary SQLite file, then
     /// always shuts Fluent down so the test does not hold database files.
     private func withBudgetStore(_ body: (BudgetStore) async throws -> Void) async throws {
@@ -33,6 +36,60 @@ struct CategoryBudgetStoreTests {
         }
         try await fluent.shutdown()
         if let bodyError { throw bodyError }
+    }
+
+    /// Runs `body` against the real `/api/budgets` route registered behind the
+    /// same bearer-token middleware shape as the server. The temporary SQLite
+    /// database is migrated first so these tests fail if the budget table is not
+    /// available to the wired route/store contract.
+    private func withBudgetAPI(_ body: @Sendable (any TestClientProtocol) async throws -> Void) async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-budget-api-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let databasePath = directory.appendingPathComponent("budgets.sqlite").path
+        let logger = Logger(label: "com.ftchvs.plaidbar-server-tests.budget-api")
+        let fluent = Fluent(logger: logger)
+        fluent.databases.use(.sqlite(.file(databasePath)), as: .sqlite)
+        await fluent.migrations.add(CreateCategoryBudgets())
+
+        var bodyError: Error?
+        do {
+            try await fluent.migrate()
+
+            let router = Router()
+            let api = router.group("api")
+            api.add(middleware: APITokenMiddleware(authToken: apiToken))
+            BudgetRoutes(budgetStore: BudgetStore(fluent: fluent))
+                .register(with: api)
+
+            let app = Application(router: router, logger: logger)
+            try await app.test(.router) { client in
+                try await body(client)
+            }
+        } catch {
+            bodyError = error
+        }
+        try await fluent.shutdown()
+        if let bodyError { throw bodyError }
+    }
+
+    private var authorizedJSONHeaders: HTTPFields {
+        var headers = HTTPFields()
+        headers[.authorization] = "Bearer \(apiToken)"
+        headers[.contentType] = "application/json"
+        return headers
+    }
+
+    private func encodeBudgetRequest(monthlyLimit: Double) throws -> ByteBuffer {
+        ByteBuffer(data: try JSONEncoder().encode(SaveCategoryBudgetRequest(monthlyLimit: monthlyLimit)))
+    }
+
+    private func decodeResponse<T: Decodable>(_ type: T.Type, from response: TestResponse) throws -> T {
+        var body = response.body
+        let data = body.readData(length: body.readableBytes) ?? Data()
+        return try JSONDecoder().decode(T.self, from: data)
     }
 
     // MARK: - Storage round-trip
@@ -83,6 +140,77 @@ struct CategoryBudgetStoreTests {
         }
     }
 
+    // MARK: - API contract round-trip
+
+    @Test("GET /api/budgets starts empty after the category budget migration")
+    func apiListBudgetsStartsEmptyAfterMigration() async throws {
+        try await withBudgetAPI { client in
+            let response = try await client.execute(
+                uri: "/api/budgets",
+                method: .get,
+                headers: authorizedJSONHeaders
+            )
+
+            #expect(response.status == .ok)
+            let payload = try decodeResponse(CategoryBudgetsResponse.self, from: response)
+            #expect(payload.budgets.isEmpty)
+        }
+    }
+
+    @Test("PUT/GET/DELETE /api/budgets/{category} round-trips the client payload shape")
+    func apiBudgetRoundTripContract() async throws {
+        try await withBudgetAPI { client in
+            let create = try await client.execute(
+                uri: "/api/budgets/FOOD_AND_DRINK",
+                method: .put,
+                headers: authorizedJSONHeaders,
+                body: try encodeBudgetRequest(monthlyLimit: 125.50)
+            )
+            #expect(create.status == .ok)
+            let created = try decodeResponse(CategoryBudgetDTO.self, from: create)
+            #expect(created.category == .foodAndDrink)
+            #expect(created.monthlyLimit == 125.50)
+
+            let update = try await client.execute(
+                uri: "/api/budgets/FOOD_AND_DRINK",
+                method: .put,
+                headers: authorizedJSONHeaders,
+                body: try encodeBudgetRequest(monthlyLimit: 150.75)
+            )
+            #expect(update.status == .ok)
+            let updated = try decodeResponse(CategoryBudgetDTO.self, from: update)
+            #expect(updated.category == .foodAndDrink)
+            #expect(updated.monthlyLimit == 150.75)
+
+            let listAfterUpdate = try await client.execute(
+                uri: "/api/budgets",
+                method: .get,
+                headers: authorizedJSONHeaders
+            )
+            #expect(listAfterUpdate.status == .ok)
+            let persisted = try decodeResponse(CategoryBudgetsResponse.self, from: listAfterUpdate)
+            #expect(persisted.budgets == [
+                CategoryBudgetDTO(category: .foodAndDrink, monthlyLimit: 150.75),
+            ])
+
+            let delete = try await client.execute(
+                uri: "/api/budgets/FOOD_AND_DRINK",
+                method: .delete,
+                headers: authorizedJSONHeaders
+            )
+            #expect(delete.status == .noContent)
+
+            let listAfterDelete = try await client.execute(
+                uri: "/api/budgets",
+                method: .get,
+                headers: authorizedJSONHeaders
+            )
+            #expect(listAfterDelete.status == .ok)
+            let deleted = try decodeResponse(CategoryBudgetsResponse.self, from: listAfterDelete)
+            #expect(deleted.budgets.isEmpty)
+        }
+    }
+
     // MARK: - Route validation
 
     @Test("Path category parameter parses, with bad/missing/excluded values rejected")
@@ -113,5 +241,25 @@ struct CategoryBudgetStoreTests {
             CategoryBudgetDTO(category: .shopping, monthlyLimit: 200),
         ])
         #expect(response.byCategory == [.foodAndDrink: 500, .shopping: 200])
+    }
+
+    @Test("Budget route payloads use the documented JSON contract")
+    func payloadJSONContract() throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let decoder = JSONDecoder()
+
+        let saveData = try encoder.encode(SaveCategoryBudgetRequest(monthlyLimit: 123.45))
+        #expect(String(data: saveData, encoding: .utf8) == "{\"monthlyLimit\":123.45}")
+        let decodedSave = try decoder.decode(SaveCategoryBudgetRequest.self, from: saveData)
+        #expect(decodedSave.monthlyLimit == 123.45)
+
+        let response = CategoryBudgetsResponse(budgets: [
+            CategoryBudgetDTO(category: .foodAndDrink, monthlyLimit: 500),
+        ])
+        let responseData = try encoder.encode(response)
+        #expect(String(data: responseData, encoding: .utf8) == "{\"budgets\":[{\"category\":\"FOOD_AND_DRINK\",\"monthlyLimit\":500}]}")
+        let decodedResponse = try decoder.decode(CategoryBudgetsResponse.self, from: responseData)
+        #expect(decodedResponse.budgets == response.budgets)
     }
 }
