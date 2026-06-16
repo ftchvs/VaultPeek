@@ -10,21 +10,30 @@ struct LocalAIInsightsService: Sendable {
 
     private let model: (any LocalInsightModel)?
     private let environment: [String: String]
+    private let enabledPreference: Bool?
     private let generationConfiguration: LocalInsightModelGenerationConfiguration
 
     init(
         model: (any LocalInsightModel)? = nil,
         environment: [String: String] = ProcessInfo.processInfo.environment,
+        enabledPreference: Bool? = nil,
+        modelNamePreference: String? = nil,
         autoDiscoverModel: Bool = true,
         generationConfiguration: LocalInsightModelGenerationConfiguration = .default
     ) {
         self.environment = environment
-        self.model = model ?? (autoDiscoverModel ? Self.makeDefaultModel(environment: environment) : nil)
+        self.enabledPreference = enabledPreference
+        self.model = model ?? (autoDiscoverModel ? Self.makeDefaultModel(
+            environment: environment,
+            enabledPreference: enabledPreference,
+            modelNamePreference: modelNamePreference
+        ) : nil)
         self.generationConfiguration = generationConfiguration
     }
 
     var availability: LocalAIAvailability {
         LocalAIRuntimeResolution.configuredAvailability(
+            enabledPreference: enabledPreference,
             rawValue: environment[EnvironmentKeys.localRuntime],
             hasWiredModel: model != nil,
             endpointIsLocalhost: Self.endpointIsLocalhost(environment: environment)
@@ -111,11 +120,19 @@ struct LocalAIInsightsService: Sendable {
     }
 
     /// Construct the on-device model ONLY when the user has explicitly opted in
-    /// (`PLAIDBAR_LOCAL_AI_RUNTIME=ollama`/`auto`) and the endpoint is localhost.
-    /// An unset variable yields `nil` — no transaction-derived prompt data is
-    /// routed to any process listening on localhost without consent.
-    private static func makeDefaultModel(environment: [String: String]) -> (any LocalInsightModel)? {
-        guard LocalAIRuntimeResolution.isOptedIn(rawValue: environment[EnvironmentKeys.localRuntime]) else {
+    /// via persisted app settings or (`PLAIDBAR_LOCAL_AI_RUNTIME=ollama`/`auto`)
+    /// and the endpoint is localhost. An unset app setting plus unset variable
+    /// yields `nil` — no transaction-derived prompt data is routed to any process
+    /// listening on localhost without consent.
+    private static func makeDefaultModel(
+        environment: [String: String],
+        enabledPreference: Bool?,
+        modelNamePreference: String?
+    ) -> (any LocalInsightModel)? {
+        guard LocalAIRuntimeResolution.isOptedIn(
+            enabledPreference: enabledPreference,
+            rawValue: environment[EnvironmentKeys.localRuntime]
+        ) else {
             return nil
         }
 
@@ -128,8 +145,23 @@ struct LocalAIInsightsService: Sendable {
 
         return OllamaLocalInsightModel(
             baseURL: baseURL,
-            configuredModelName: environment[EnvironmentKeys.ollamaModel]
+            configuredModelName: Self.configuredModelName(
+                modelNamePreference: modelNamePreference,
+                environment: environment
+            )
         )
+    }
+
+    private static func configuredModelName(
+        modelNamePreference: String?,
+        environment: [String: String]
+    ) -> String? {
+        modelNamePreference?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .nilIfEmpty
+            ?? environment[EnvironmentKeys.ollamaModel]?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .nilIfEmpty
     }
 
     /// Whether a configured custom endpoint (if any) is localhost. A missing or
@@ -199,5 +231,11 @@ struct LocalAIInsightsService: Sendable {
     private static func signedCurrency(_ amount: Double) -> String {
         let prefix = amount > 0 ? "+" : amount < 0 ? "-" : ""
         return "\(prefix)\(Formatters.currency(abs(amount), format: .compact))"
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        isEmpty ? nil : self
     }
 }

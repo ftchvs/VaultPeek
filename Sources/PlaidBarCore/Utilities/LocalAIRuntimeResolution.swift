@@ -36,10 +36,23 @@ public enum LocalAIRuntimeResolution {
         return supportedRuntimes.contains(name)
     }
 
+    /// App settings take precedence over environment variables. A `nil`
+    /// preference means no persisted app choice exists yet, so environment
+    /// fallback can still opt in for CLI/debug launches.
+    public static func isOptedIn(enabledPreference: Bool?, rawValue: String?) -> Bool {
+        if let enabledPreference { return enabledPreference }
+        return isOptedIn(rawValue: rawValue)
+    }
+
     /// True only when the user set the variable to an explicit "off" value, as
     /// opposed to leaving it unset (also off, but opt-in copy differs).
     public static func isExplicitlyDisabled(rawValue: String?) -> Bool {
         disabledValues.contains(runtimeName(from: rawValue).lowercased())
+    }
+
+    public static func isExplicitlyDisabled(enabledPreference: Bool?, rawValue: String?) -> Bool {
+        if let enabledPreference { return !enabledPreference }
+        return isExplicitlyDisabled(rawValue: rawValue)
     }
 
     /// True when a non-empty value names a runtime this build does not support
@@ -55,14 +68,18 @@ public enum LocalAIRuntimeResolution {
     /// opted-in, statically valid runtime reports `.checking` until
     /// `resolved(...)` upgrades it from an actual generation.
     public static func configuredAvailability(
+        enabledPreference: Bool? = nil,
         rawValue: String?,
         hasWiredModel: Bool,
         endpointIsLocalhost: Bool
     ) -> LocalAIAvailability {
-        let runtime = runtimeName(from: rawValue)
+        let runtime = enabledPreference == true ? "ollama" : runtimeName(from: rawValue)
 
-        guard isOptedIn(rawValue: rawValue) else {
-            return LocalAIAvailability(state: .disabled, detail: disabledDetail(rawValue: rawValue))
+        guard isOptedIn(enabledPreference: enabledPreference, rawValue: rawValue) else {
+            return LocalAIAvailability(
+                state: .disabled,
+                detail: disabledDetail(enabledPreference: enabledPreference, rawValue: rawValue)
+            )
         }
 
         guard endpointIsLocalhost else {
@@ -130,8 +147,8 @@ public enum LocalAIRuntimeResolution {
 
     // MARK: - Copy
 
-    static func disabledDetail(rawValue: String?) -> String {
-        if isExplicitlyDisabled(rawValue: rawValue) {
+    static func disabledDetail(enabledPreference: Bool? = nil, rawValue: String?) -> String {
+        if isExplicitlyDisabled(enabledPreference: enabledPreference, rawValue: rawValue) {
             return "Local AI is disabled. VaultPeek is using deterministic local summaries and category hints only."
         }
         if isUnsupportedRuntime(rawValue: rawValue) {

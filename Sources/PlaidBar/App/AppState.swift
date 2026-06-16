@@ -28,6 +28,8 @@ final class AppState {
         static let notifyRecurringChargeChanged = "notifyRecurringChargeChanged"
         static let notifyRecurringChargeDueSoon = "notifyRecurringChargeDueSoon"
         static let notifyBrokenConnection = "notifyBrokenConnection"
+        static let localAIEnabled = "localAIEnabled"
+        static let localAIModelName = "localAIModelName"
         static let setupCompletedOnce = "setup.completedOnce"
         static let setupCompletedContextPrefix = "setup.completedOnce.context"
         static let firstRunSnapshotDismissedContextPrefix = "firstRunSnapshot.dismissed.context"
@@ -227,6 +229,30 @@ final class AppState {
         }
     }
 
+    var localAIEnabled: Bool = false {
+        didSet {
+            guard localAIEnabled != oldValue, !isLoadingLocalAISettings else { return }
+            localAIEnabledPreference = localAIEnabled
+            UserDefaults.standard.set(localAIEnabled, forKey: Keys.localAIEnabled)
+            rebuildLocalAIInsightsService()
+            invalidateLocalAIActivitySummaries()
+        }
+    }
+
+    var localAIModelName: String = "llama3.2" {
+        didSet {
+            let normalized = Self.normalizedLocalAIModelName(localAIModelName) ?? "llama3.2"
+            if normalized != localAIModelName {
+                localAIModelName = normalized
+            }
+            guard normalized != oldValue, !isLoadingLocalAISettings else { return }
+            localAIModelNamePreference = normalized
+            UserDefaults.standard.set(normalized, forKey: Keys.localAIModelName)
+            rebuildLocalAIInsightsService()
+            invalidateLocalAIActivitySummaries()
+        }
+    }
+
     var launchAtLogin: Bool = false {
         didSet {
             guard launchAtLogin != oldValue else { return }
@@ -242,13 +268,16 @@ final class AppState {
     // MARK: - Services
     private let serverClient = ServerClient()
     private let localDataCache = LocalDataCacheService()
-    private let localAIInsightsService = LocalAIInsightsService()
+    private var localAIInsightsService = LocalAIInsightsService()
     private let notificationService: any NotificationServiceProtocol
     private var refreshTask: Task<Void, Never>?
     private var localAISummaryRefreshTask: Task<Void, Never>?
     private let glanceSnapshotWriteDebouncer = GlanceSnapshotWriteDebouncer()
     private var glanceSnapshotWriteGeneration = 0
     private var reviewUndoStack: [(metadata: [TransactionReviewMetadata], rules: [TransactionRule])] = []
+    private var localAIEnabledPreference: Bool?
+    private var localAIModelNamePreference: String?
+    private var isLoadingLocalAISettings = false
     private var isUpgradingManagedServer = false
     private var isStartingBundledServer = false
     private var lastAttemptedCredentialUpgradeConfig: String?
@@ -332,6 +361,7 @@ final class AppState {
         if defaults.object(forKey: Keys.notifyBrokenConnection) != nil {
             notifyBrokenConnection = defaults.bool(forKey: Keys.notifyBrokenConnection)
         }
+        loadLocalAISettings(defaults: defaults)
         // Balance history
         loadPersistedBalanceHistory()
         loadPersistedWeeklyReviewState()
@@ -350,6 +380,46 @@ final class AppState {
             storedValue: storedDetached,
             isRenderingSnapshot: CommandLineOptions.isRenderingSnapshot()
         )
+    }
+
+    private func loadLocalAISettings(defaults: UserDefaults) {
+        isLoadingLocalAISettings = true
+        defer {
+            isLoadingLocalAISettings = false
+            rebuildLocalAIInsightsService()
+        }
+
+        let environment = ProcessInfo.processInfo.environment
+        if defaults.object(forKey: Keys.localAIEnabled) != nil {
+            let enabled = defaults.bool(forKey: Keys.localAIEnabled)
+            localAIEnabledPreference = enabled
+            localAIEnabled = enabled
+        } else {
+            localAIEnabledPreference = nil
+            localAIEnabled = LocalAIRuntimeResolution.isOptedIn(
+                rawValue: environment[LocalAIRuntimeResolution.optInEnvironmentKey]
+            )
+        }
+
+        if let storedModelName = Self.normalizedLocalAIModelName(defaults.string(forKey: Keys.localAIModelName)) {
+            localAIModelNamePreference = storedModelName
+            localAIModelName = storedModelName
+        } else {
+            localAIModelNamePreference = nil
+            localAIModelName = Self.normalizedLocalAIModelName(environment["PLAIDBAR_LOCAL_AI_MODEL"]) ?? "llama3.2"
+        }
+    }
+
+    private func rebuildLocalAIInsightsService() {
+        localAIInsightsService = LocalAIInsightsService(
+            enabledPreference: localAIEnabledPreference,
+            modelNamePreference: localAIModelNamePreference
+        )
+    }
+
+    private static func normalizedLocalAIModelName(_ value: String?) -> String? {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     // MARK: - Computed
