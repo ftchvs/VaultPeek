@@ -8,7 +8,12 @@ enum LocalAIRemediationActions {
 
     static func pullCommand(modelName: String) -> String {
         let normalized = modelName.trimmingCharacters(in: .whitespacesAndNewlines)
-        return "ollama pull \(normalized.isEmpty ? "llama3.2" : normalized)"
+        let model = shellQuoted(normalized.isEmpty ? "llama3.2" : normalized)
+        return "ollama pull \(model)"
+    }
+
+    private static func shellQuoted(_ value: String) -> String {
+        "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
     }
 
     static func openInstallPage() {
