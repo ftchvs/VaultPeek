@@ -7,6 +7,11 @@ current design system, realistic states, and public-safe data.
 
 Only use demo, sandbox, or synthetic financial data in screenshots.
 
+Privacy/app-lock screenshots are safest when captured from demo data with the
+mask or lock control already enabled. They should prove the privacy state with
+generic labels such as "Private" or "Locked" and fixed placeholders, not by
+showing real values beside masked values.
+
 Do not publish screenshots containing:
 
 - real account balances
@@ -14,6 +19,9 @@ Do not publish screenshots containing:
 - real transaction history
 - Plaid item IDs or account IDs
 - terminal output containing credentials or tokens
+- notification banners containing account names, balances, merchants,
+  utilization status, or recovery details while Privacy Mask or App Lock is
+  active
 
 ## Generate Screenshots
 
@@ -114,6 +122,9 @@ when the menu-bar popover is positioned outside the active display bounds.
 - Screenshots match the current design system.
 - Text is readable at README display sizes.
 - No real personal finance data appears.
+- Privacy Mask/App Lock screenshots show only generic copy or fixed
+  placeholders for balances, account endings, transactions, utilization, and
+  notifications.
 - Empty/degraded states are represented where relevant.
 - `dashboard-status.png` shows the recovery fixture, not a real Plaid error.
 - Peekaboo/AX validation can find local insight receipt text saying
@@ -122,6 +133,9 @@ when the menu-bar popover is positioned outside the active display bounds.
 - Button labels and status copy match the current app.
 - Settings screenshots show useful controls, not blank tabs.
 - Screenshots do not include unrelated desktop windows or notifications.
+- Captions and alt text claim only what is visible in the image. VoiceOver or
+  below-the-fold privacy checks should be recorded as validation notes, not as
+  screenshot-visible claims.
 
 ## When To Regenerate
 
@@ -134,5 +148,7 @@ Regenerate screenshots when a change affects:
 - settings tabs
 - local data copy
 - notification controls
+- Privacy Mask or App Lock controls, locked-state copy, masking copy, or
+  notification privacy behavior
 - design tokens
 - README screenshot tables

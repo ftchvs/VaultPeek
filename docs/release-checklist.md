@@ -69,6 +69,17 @@ the (not yet performed) signing and notarization runbook.
   platform supports them.
 - [ ] All screenshots, fixtures, examples, and docs use demo, sandbox, or
   synthetic data only.
+- [ ] Privacy Mask QA passed for menu bar, dashboard balances, account endings,
+  utilization labels, transaction rows, accessibility labels, and screenshots:
+  no real balances, merchants, account IDs, or transaction details leak while
+  masked.
+- [ ] App Lock QA passed for launch lock, manual lock/unlock, failed/cancelled
+  local authentication, background/focus-loss locking where configured, and
+  locked-state menu bar/popover copy.
+- [ ] Notification privacy QA passed: when Privacy Mask or App Lock is active,
+  notification titles and bodies use generic copy and do not expose account
+  names, balances, transaction amounts, merchants, utilization status, or
+  recovery details.
 
 ## Accessibility
 
