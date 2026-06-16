@@ -48,6 +48,10 @@ local storage, notifications, and distribution.
 | Settings Accounts | Add Account | Setup/connect sheet opens from Accounts tab |
 | Settings Accounts | Remove item | Confirmation explains local vs Plaid/bank boundaries |
 | Notifications | Permission denied | UI explains system permission and avoids false enabled state |
+| Privacy Mask | Enable Privacy Mask in Settings, then open menu bar and dashboard | Balances, account endings, transaction amounts, merchants, and utilization values render as fixed placeholders or generic copy; icon-only menu bar stays blank |
+| App Lock | Enable App Lock and lock manually | Popover and menu bar switch to locked copy until local authentication succeeds; cancelling or failing authentication leaves the app locked |
+| Auto-lock | Configure lock-on-launch, inactivity, background, and focus-loss policy | Each configured trigger locks deterministically without spawning duplicate authentication prompts; disabled triggers do not lock |
+| Notification privacy | Trigger financial notification evaluation while masked or locked | Notifications use generic copy or are suppressed per policy; no account names, balances, merchants, utilization status, or recovery details appear |
 | Reconnect | Item is `login_required` | Reconnect action is visible from status/account surfaces |
 
 ## Accessibility QA
@@ -58,6 +62,8 @@ local storage, notifications, and distribution.
 | VoiceOver labels | Icon-only buttons have useful labels |
 | Color independence | Risk, balance, utilization, sync, and chart meanings have text/icon backup |
 | Focus states | Keyboard focus remains visible |
+| Privacy Mask accessibility | VoiceOver labels use generic hidden-value copy instead of reading raw masked balances, account endings, merchants, or transaction details |
+| App Lock accessibility | Locked state, unlock action, authentication failure, and cancellation are reachable and announced without exposing financial details |
 | Reduced motion | Animations do not block comprehension |
 | Screenshot readability | README screenshots remain legible at documented widths |
 
@@ -195,6 +201,9 @@ tech):
 | Reset copy | UI explains local reset does not guarantee Plaid/bank revocation |
 | Screenshots | Assets contain demo/sandbox/synthetic data only |
 | Local AI boundary | Insight receipts and category hints stay local-only and do not send raw transaction data to cloud AI services |
+| Privacy Mask leak check | Masked menu bar, dashboard, account rows, transaction rows, and accessibility labels expose no real balances, account endings, merchants, transaction amounts, utilization status, account IDs, or transaction IDs |
+| App Lock leak check | Locked popover/menu bar/notifications show only locked or generic copy until local authentication succeeds; failed or cancelled authentication does not reveal cached financial data |
+| Notification privacy | While Privacy Mask or App Lock is active, notification titles and bodies are generic or suppressed by policy; no account names, balances, merchants, utilization status, or recovery details appear |
 
 ## Release Candidate Exit Criteria
 
