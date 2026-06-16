@@ -81,6 +81,37 @@ struct SettingsPresentationTests {
         #expect(LocalAIAvailabilityPresentation.tone(for: availability.state) == .warning)
     }
 
+    @Test("Local AI remediation presentation distinguishes missing model from offline runtime")
+    func localAIRemediationPresentationDistinguishesMissingModelFromOfflineRuntime() {
+        let base = LocalAIRuntimeResolution.configuredAvailability(
+            rawValue: "ollama",
+            hasWiredModel: true,
+            endpointIsLocalhost: true
+        )
+        let missingModel = LocalAIRuntimeResolution.resolved(
+            base: base,
+            usedModelOutput: false,
+            fallbackReason: .noInstalledModel,
+            fallbackDiagnostic: "ollama list returned no supported model"
+        )
+        let offlineRuntime = LocalAIRuntimeResolution.resolved(
+            base: base,
+            usedModelOutput: false,
+            fallbackReason: .runtimeUnavailable,
+            fallbackDiagnostic: "connection refused"
+        )
+
+        #expect(LocalAIAvailabilityPresentation.remediationCategory(for: missingModel) == .noInstalledModel)
+        #expect(LocalAIAvailabilityPresentation.settingsLabel(for: missingModel) == "Model Missing")
+        #expect(LocalAIAvailabilityPresentation.popoverLabel(for: missingModel) == "No Model")
+        #expect(LocalAIAvailabilityPresentation.causeLabel(for: missingModel) == "No local model installed")
+
+        #expect(LocalAIAvailabilityPresentation.remediationCategory(for: offlineRuntime) == .runtimeUnavailable)
+        #expect(LocalAIAvailabilityPresentation.settingsLabel(for: offlineRuntime) == "Ollama Offline")
+        #expect(LocalAIAvailabilityPresentation.popoverLabel(for: offlineRuntime) == "Local Offline")
+        #expect(LocalAIAvailabilityPresentation.causeLabel(for: offlineRuntime) == "Ollama not reachable")
+    }
+
     @Test("Storage detail prefers the server path and abbreviates the home directory")
     func storageDetailPrefersServerPath() {
         let detail = LocalDataResetPresentation.storageDetail(
