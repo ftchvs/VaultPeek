@@ -109,10 +109,13 @@ struct LocalAIRuntimeResolutionTests {
         let resolved = LocalAIRuntimeResolution.resolved(
             base: base,
             usedModelOutput: false,
-            fallbackReason: .runtimeUnavailable
+            fallbackReason: .runtimeUnavailable,
+            fallbackDiagnostic: "Connection refused"
         )
         #expect(resolved.state == .unavailable)
         #expect(resolved.detail.contains("not reachable"))
+        #expect(resolved.detail.contains("Connection refused"))
+        #expect(resolved.probeErrorText == "Connection refused")
     }
 
     @Test("Terminal states pass through resolution unchanged")

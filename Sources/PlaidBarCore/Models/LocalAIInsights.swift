@@ -23,17 +23,20 @@ public struct LocalAIAvailability: Codable, Sendable, Hashable {
     public let runtimeName: String?
     public let detail: String
     public let supportsCloudModels: Bool
+    public let probeErrorText: String?
 
     public init(
         state: LocalAIAvailabilityState,
         runtimeName: String? = nil,
         detail: String,
-        supportsCloudModels: Bool = false
+        supportsCloudModels: Bool = false,
+        probeErrorText: String? = nil
     ) {
         self.state = state
         self.runtimeName = runtimeName
         self.detail = detail
         self.supportsCloudModels = supportsCloudModels
+        self.probeErrorText = probeErrorText
     }
 }
 
