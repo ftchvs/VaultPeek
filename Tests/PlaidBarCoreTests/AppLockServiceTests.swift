@@ -20,6 +20,22 @@ struct AppLockServiceTests {
         #expect(service.state == .locked)
     }
 
+    @Test("Unavailable authentication capability does not enable app lock")
+    func unavailableCapabilityDoesNotEnableLock() {
+        let store = InMemoryAppLockSettingsStore(isLockEnabled: false)
+        let service = AppLockService(
+            settingsStore: store,
+            authenticator: StubAppLockAuthenticator(capability: .unavailable(.biometryNotEnrolled))
+        )
+
+        let capability = service.setLockEnabled(true)
+
+        #expect(capability == .unavailable(.biometryNotEnrolled))
+        #expect(store.isLockEnabled == false)
+        #expect(service.isLockEnabled == false)
+        #expect(service.state == .unlocked)
+    }
+
     @Test("UserDefaults settings store persists enabled state")
     func userDefaultsSettingsStorePersistsEnabledState() throws {
         let suiteName = "AppLockServiceTests.\(UUID().uuidString)"
@@ -105,6 +121,24 @@ struct AppLockServiceTests {
         #expect(service.state == .unlocked)
         #expect(authenticator.authenticateCallCount == 0)
     }
+
+    @Test("Overlapping authentication attempts share one system prompt")
+    func overlappingAuthenticationAttemptsCoalesce() async {
+        let authenticator = StubAppLockAuthenticator(result: .success, delayNanoseconds: 50_000_000)
+        let service = AppLockService(
+            settingsStore: InMemoryAppLockSettingsStore(isLockEnabled: true),
+            authenticator: authenticator
+        )
+
+        async let first = service.authenticate(reason: "Unlock VaultPeek")
+        async let second = service.authenticate(reason: "Unlock VaultPeek")
+
+        let results = await [first, second]
+
+        #expect(results == [.success, .success])
+        #expect(authenticator.authenticateCallCount == 1)
+        #expect(service.state == .unlocked)
+    }
 }
 
 @MainActor
@@ -112,13 +146,16 @@ private final class StubAppLockAuthenticator: AppLockAuthenticating {
     var capability: AppLockCapability
     var result: AppLockAuthenticationResult
     var authenticateCallCount = 0
+    var delayNanoseconds: UInt64
 
     init(
         capability: AppLockCapability = .available(biometry: .none),
-        result: AppLockAuthenticationResult = .success
+        result: AppLockAuthenticationResult = .success,
+        delayNanoseconds: UInt64 = 0
     ) {
         self.capability = capability
         self.result = result
+        self.delayNanoseconds = delayNanoseconds
     }
 
     func authenticationCapability() -> AppLockCapability {
@@ -127,6 +164,9 @@ private final class StubAppLockAuthenticator: AppLockAuthenticating {
 
     func authenticate(reason: String) async -> AppLockAuthenticationResult {
         authenticateCallCount += 1
+        if delayNanoseconds > 0 {
+            try? await Task.sleep(nanoseconds: delayNanoseconds)
+        }
         return result
     }
 }

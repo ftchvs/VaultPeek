@@ -79,6 +79,7 @@ public final class AppLockService {
 
     private let settingsStore: any AppLockSettingsStoring
     private let authenticator: any AppLockAuthenticating
+    private var inFlightAuthenticationTask: Task<AppLockAuthenticationResult, Never>?
 
     public var isLocked: Bool {
         state == .locked
@@ -98,11 +99,24 @@ public final class AppLockService {
         authenticator.authenticationCapability()
     }
 
-    public func setLockEnabled(_ isEnabled: Bool) {
-        guard isLockEnabled != isEnabled else { return }
+    @discardableResult
+    public func setLockEnabled(_ isEnabled: Bool) -> AppLockCapability {
+        if isEnabled {
+            let capability = authenticator.authenticationCapability()
+            guard case .available = capability else {
+                isLockEnabled = false
+                settingsStore.isLockEnabled = false
+                state = .unlocked
+                return capability
+            }
+        }
+
+        let capability: AppLockCapability = isEnabled ? authenticator.authenticationCapability() : .available(biometry: .none)
+        guard isLockEnabled != isEnabled else { return capability }
         isLockEnabled = isEnabled
         settingsStore.isLockEnabled = isEnabled
         state = isEnabled ? .locked : .unlocked
+        return capability
     }
 
     public func lock() {
@@ -128,7 +142,17 @@ public final class AppLockService {
             return .unavailable(reason)
         }
 
-        let result = await authenticator.authenticate(reason: reason)
+        if let inFlightAuthenticationTask {
+            return await inFlightAuthenticationTask.value
+        }
+
+        let task = Task { @MainActor [authenticator] in
+            await authenticator.authenticate(reason: reason)
+        }
+        inFlightAuthenticationTask = task
+        let result = await task.value
+        inFlightAuthenticationTask = nil
+
         switch result {
         case .success:
             state = .unlocked
@@ -145,6 +169,7 @@ public final class LocalAuthenticationAppLockAuthenticator: AppLockAuthenticatin
 
     public func authenticationCapability() -> AppLockCapability {
         let context = LAContext()
+        _ = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil)
         var error: NSError?
         guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else {
             return .unavailable(Self.unavailableReason(from: error))
