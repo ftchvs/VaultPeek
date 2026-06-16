@@ -120,6 +120,25 @@ Examples in documentation use placeholders only.
 Public screenshots, bug reports, tests, and fixtures should use demo, sandbox,
 or synthetic financial data.
 
+The in-flight Privacy Mask and App Lock work is planned as display-safety
+controls, not storage controls. Until the corresponding app controls ship, this
+section is a release gate for that work rather than a claim about the current
+published build:
+
+- **Privacy Mask** should hide balances, account endings, utilization values,
+  transaction amounts, merchant names, and other financial details from the app
+  chrome while keeping the dashboard usable on a shared desktop.
+- **App Lock** should block access until local macOS authentication succeeds.
+  When the app is locked, refresh and notification behavior must follow the
+  user's lock policy and must fail closed when a safe policy is unavailable.
+- **Notification privacy** should not include account names, balances,
+  transaction amounts, merchants, utilization status, or recovery details while
+  Privacy Mask or App Lock is active. Use generic copy instead.
+
+These controls do not delete local data and do not change where data is stored.
+They reduce accidental disclosure on-screen, in notifications, and in public QA
+artifacts.
+
 Do not publish:
 
 - real Plaid credentials
@@ -155,7 +174,13 @@ should also review Plaid Dashboard and bank-side permission settings.
 - README privacy claims match implementation.
 - Setup copy explains local storage before Plaid Link opens.
 - Settings shows the local storage path.
+- Privacy Mask and App Lock copy states the difference between on-screen
+  masking, local authentication, and local data retention.
+- Notification previews and release notes use generic copy when private; no
+  release artifact claims sensitive notification detail is shown while masked or
+  locked.
 - Reset/remove actions explain local-vs-Plaid-vs-bank boundaries.
 - Status endpoints do not expose secrets.
 - Logs do not print secrets or raw financial exports.
-- Screenshots contain no real financial data.
+- Screenshots contain no real financial data and any privacy/app-lock screenshot
+  uses demo, sandbox, or synthetic values only.
