@@ -1037,15 +1037,15 @@ final class AppState {
     }
 
     var localAIAvailability: LocalAIAvailability {
+        if let probeAvailability = localAIProbeAvailability {
+            return probeAvailability
+        }
         if let generatedAvailability = _cachedLocalAIActivitySummaries?
             .first(where: { $0.window == .lastMonth })?
             .availability,
             generatedAvailability.state == .available
         {
             return generatedAvailability
-        }
-        if let probeAvailability = localAIProbeAvailability {
-            return probeAvailability
         }
         if let generatedAvailability = _cachedLocalAIActivitySummaries?
             .first(where: { $0.window == .lastMonth })?
