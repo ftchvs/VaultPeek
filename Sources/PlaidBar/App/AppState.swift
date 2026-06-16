@@ -48,6 +48,7 @@ final class AppState {
     }
     var transactionReviewMetadata: [TransactionReviewMetadata] = []
     var transactionRules: [TransactionRule] = []
+    var hasLoadedTransactionReviewStorage = false
     var isLoading = false
     /// True from launch until the first `loadInitialData()` pass completes.
     /// While booting, data surfaces render loading/skeleton states instead
@@ -752,9 +753,10 @@ final class AppState {
     }
 
     private var weeklyReviewTransactionState: WeeklyReviewTransactionState? {
-        // AND-403 is intentionally gated on AND-399 review metadata. Raw Plaid
-        // transactions alone are not treated as reviewed; demo mode keeps using
-        // pending flags so the checklist surface remains locally exercisable.
+        // Production weekly reviews require loaded transaction-review metadata.
+        // Raw Plaid transactions alone are not treated as reviewed; demo mode
+        // keeps using pending flags so the checklist surface remains locally
+        // exercisable.
         guard !isDemoMode else {
             let unreviewed = Set(transactions.filter(\.pending).map(\.id))
             let trusted = Set(transactions.map(\.id)).subtracting(unreviewed)
@@ -764,9 +766,16 @@ final class AppState {
             )
         }
 
-        return WeeklyReviewTransactionState.derived(
-            from: transactions,
-            metadata: transactionReviewMetadata
+        guard hasLoadedTransactionReviewStorage,
+              !transactions.isEmpty
+        else { return nil }
+
+        let inbox = transactionReviewInboxSnapshot
+        let unreviewed = Set(inbox.items.map(\.id))
+        let trusted = Set(transactions.map(\.id)).subtracting(unreviewed)
+        return WeeklyReviewTransactionState(
+            trustedTransactionIds: trusted,
+            unreviewedTransactionIds: unreviewed
         )
     }
 
@@ -1524,8 +1533,8 @@ final class AppState {
     func performWeeklyReviewAction(_ item: WeeklyReviewItem) {
         switch item.action {
         case .openReviewInbox:
-            // The transaction review inbox (AND-399) is available now, so route
-            // the user to it rather than reporting it as missing.
+            // The transaction review inbox is available now, so route the user
+            // to it rather than reporting it as missing.
             weeklyReviewNavigation = .reviewInbox
         case .inspectCategory:
             error = "Category budget drill-in is not available in this slice yet."
@@ -1735,6 +1744,7 @@ final class AppState {
             context: context
         ) {
             transactionReviewMetadata = cachedMetadata
+            hasLoadedTransactionReviewStorage = true
         }
         if let cachedRules = try? await localDataCache.loadTransactionRules(
             from: cacheDirectory,
@@ -1895,6 +1905,7 @@ final class AppState {
     }
 
     private func loadTransactionReviewStorage() async {
+        hasLoadedTransactionReviewStorage = false
         do {
             transactionReviewMetadata = try await localDataCache.loadTransactionReviewMetadata(
                 from: activeStorageDirectoryURL,
@@ -1905,7 +1916,9 @@ final class AppState {
                 context: transactionCacheContext
             )
             seedReviewMetadataForNewTransactions(transactions)
+            hasLoadedTransactionReviewStorage = true
         } catch {
+            hasLoadedTransactionReviewStorage = false
             self.error = "Review inbox storage failed to load: \(error.localizedDescription)"
         }
     }
