@@ -52,15 +52,51 @@ struct PrivacyMaskPresentationTests {
             connectionLabel: "Synced",
             privacyMaskEnabled: true
         ) == "•••• • •••• available • due not synced")
+        #expect(AccountPresentation.dashboardUtilizationDetailText(
+            for: account,
+            privacyMaskEnabled: true
+        ) == "•••• of ••••")
 
         let label = AccountPresentation.rowAccessibilityLabel(
             for: account,
+            amountText: "$1,250.00",
             connectionLabel: "Synced",
             privacyMaskEnabled: true
         )
         #expect(label.contains("Ending in 1234") == false)
+        #expect(label.contains("$1,250.00") == false)
         #expect(label.contains("•••• owed"))
         #expect(label.contains("•••• available credit"))
         #expect(label.contains("•••• utilization"))
+        #expect(label.contains("Good") == false)
+        #expect(label.contains("Warning") == false)
+        #expect(label.contains("High") == false)
+    }
+
+    @Test("Menu bar privacy mask preserves non-sensitive empty states")
+    func menuBarPrivacyMaskPreservesEmptyStates() {
+        #expect(MenuBarSummary.text(
+            mode: .netWorth,
+            accounts: [],
+            transactions: [],
+            currencyFormat: .compact,
+            privacyMaskEnabled: true
+        ) == PlaidBarConstants.appName)
+
+        #expect(MenuBarSummary.text(
+            mode: .creditUtilization,
+            accounts: [AccountDTO(id: "checking", itemId: "item", name: "Checking", type: .depository, balances: BalanceDTO(current: 120))],
+            transactions: [],
+            currencyFormat: .compact,
+            privacyMaskEnabled: true
+        ) == "No credit")
+
+        #expect(MenuBarSummary.text(
+            mode: .recentSpend,
+            accounts: [],
+            transactions: [],
+            currencyFormat: .compact,
+            privacyMaskEnabled: true
+        ) == "No spend")
     }
 }

@@ -185,23 +185,23 @@ public enum MenuBarSummary {
         isInitialLoad: Bool = false,
         privacyMaskEnabled: Bool = false
     ) -> String {
-        if privacyMaskEnabled, mode != .iconOnly {
-            return PrivacyMaskPresentation.heroValue
-        }
-
         switch mode {
         case .netWorth:
             guard !accounts.isEmpty else { return PlaidBarConstants.appName }
+            guard !privacyMaskEnabled else { return PrivacyMaskPresentation.heroValue }
             return Formatters.currency(netWorth(from: accounts), format: currencyFormat)
         case .netCash:
             guard !accounts.isEmpty else { return PlaidBarConstants.appName }
+            guard !privacyMaskEnabled else { return PrivacyMaskPresentation.heroValue }
             return Formatters.currency(netCash(from: accounts), format: currencyFormat)
         case .totalCash:
             guard !accounts.isEmpty else { return PlaidBarConstants.appName }
+            guard !privacyMaskEnabled else { return PrivacyMaskPresentation.heroValue }
             return Formatters.currency(totalCash(from: accounts), format: currencyFormat)
         case .creditUtilization:
             guard !accounts.isEmpty else { return PlaidBarConstants.appName }
             guard let utilization = creditUtilization(from: accounts) else { return "No credit" }
+            guard !privacyMaskEnabled else { return PrivacyMaskPresentation.heroValue }
             return Formatters.percent(utilization, decimals: 0)
         case .recentSpend:
             // During the boot fetch an empty history is unknown, not zero:
@@ -209,6 +209,7 @@ public enum MenuBarSummary {
             guard !transactions.isEmpty else {
                 return isInitialLoad ? PlaidBarConstants.appName : "No spend"
             }
+            guard !privacyMaskEnabled else { return PrivacyMaskPresentation.heroValue }
             return Formatters.currency(recentSpend(from: transactions), format: currencyFormat)
         case .iconOnly:
             return ""

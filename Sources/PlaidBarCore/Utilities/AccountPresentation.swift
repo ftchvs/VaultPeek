@@ -129,12 +129,19 @@ public enum AccountPresentation {
             return nil
         }
 
-        let status = utilizationStatusLabel(for: utilization, threshold: threshold)
-        guard let limit = account.balances.limit, limit > 0 else {
-            return "\(PrivacyMaskPresentation.percent(utilization, decimals: 0, isEnabled: privacyMaskEnabled)), \(status)"
+        if privacyMaskEnabled {
+            guard let limit = account.balances.limit, limit > 0 else {
+                return PrivacyMaskPresentation.compactValue
+            }
+            return "\(PrivacyMaskPresentation.compactValue) of \(PrivacyMaskPresentation.currency(limit, format: format, isEnabled: true))"
         }
 
-        return "\(PrivacyMaskPresentation.percent(utilization, decimals: 0, isEnabled: privacyMaskEnabled)) of \(PrivacyMaskPresentation.currency(limit, format: format, isEnabled: privacyMaskEnabled)), \(status)"
+        let status = utilizationStatusLabel(for: utilization, threshold: threshold)
+        guard let limit = account.balances.limit, limit > 0 else {
+            return "\(Formatters.percent(utilization, decimals: 0)), \(status)"
+        }
+
+        return "\(Formatters.percent(utilization, decimals: 0)) of \(Formatters.currency(limit, format: format)), \(status)"
     }
 
     public static func rowAccessibilityLabel(
@@ -156,15 +163,19 @@ public enum AccountPresentation {
             components.append("Ending in \(mask)")
         }
 
-        let balance = amountText ?? rowAmountText(for: account, privacyMaskEnabled: privacyMaskEnabled)
+        let balance = privacyMaskEnabled
+            ? PrivacyMaskPresentation.compactValue
+            : (amountText ?? rowAmountText(for: account))
         components.append("\(balance)\(isDebt(account) ? " owed" : "")")
 
         if let utilization = account.balances.utilizationPercent {
             components.append("\(PrivacyMaskPresentation.percent(utilization, decimals: 0, isEnabled: privacyMaskEnabled)) utilization")
-            components.append(utilizationStatusLabel(
-                for: utilization,
-                threshold: utilizationThreshold
-            ))
+            if !privacyMaskEnabled {
+                components.append(utilizationStatusLabel(
+                    for: utilization,
+                    threshold: utilizationThreshold
+                ))
+            }
         }
 
         if account.type == .credit {
