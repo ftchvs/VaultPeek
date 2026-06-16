@@ -44,6 +44,7 @@ public enum PlaidBarConstants {
     public static let maxRecentTransactions: Int = 50
     public static let initialSyncDays: Int = 90
     public static let maxTransactionSyncPages: Int = 100
+    public static let maxTransactionSyncMutationRestarts: Int = 2
 
     // Keychain
     public static let keychainServiceName: String = "com.ftchvs.PlaidBar"

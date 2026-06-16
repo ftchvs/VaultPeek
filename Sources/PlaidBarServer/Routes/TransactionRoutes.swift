@@ -121,22 +121,22 @@ struct TransactionRoutes: Sendable {
             guard let itemId = item.id else { return .skipped }
 
             do {
-                let cursor = try await tokenStore.getSyncCursor(itemId: itemId)
                 let accessToken = try tokenStore.accessToken(for: item)
-                let response = try await plaidClient.syncTransactions(
+                let itemResult = try await syncItem(
+                    itemId: itemId,
                     accessToken: accessToken,
-                    cursor: cursor
+                    persistedCursor: try await tokenStore.getSyncCursor(itemId: itemId)
                 )
                 try await tokenStore.updateItemStatus(id: itemId, status: ItemConnectionStatus.connected.rawValue)
                 return ItemSyncResult(
                     itemId: itemId,
                     attempted: true,
                     succeeded: true,
-                    added: response.added.map { Self.toDTO($0, itemId: itemId) },
-                    modified: response.modified.map { Self.toDTO($0, itemId: itemId) },
-                    removed: response.removed.map(\.transactionId),
-                    hasMore: response.hasMore,
-                    nextCursor: response.nextCursor.isEmpty ? nil : response.nextCursor
+                    added: itemResult.added,
+                    modified: itemResult.modified,
+                    removed: itemResult.removed,
+                    hasMore: false,
+                    nextCursor: itemResult.nextCursor
                 )
             } catch PlaidError.credentialsNotConfigured {
                 // Setup state affects every item identically: surface the 503
@@ -159,6 +159,76 @@ struct TransactionRoutes: Sendable {
                 )
             }
         }
+    }
+
+    private func syncItem(
+        itemId: String,
+        accessToken: String,
+        persistedCursor: String?
+    ) async throws -> (added: [TransactionDTO], modified: [TransactionDTO], removed: [String], nextCursor: String?) {
+        var mutationRestartCount = 0
+
+        while true {
+            do {
+                return try await syncItemPageSequence(
+                    itemId: itemId,
+                    accessToken: accessToken,
+                    persistedCursor: persistedCursor
+                )
+            } catch let error as PlaidError where Self.isTransactionsSyncMutationDuringPagination(error) {
+                mutationRestartCount += 1
+                guard mutationRestartCount <= PlaidBarConstants.maxTransactionSyncMutationRestarts else {
+                    throw error
+                }
+                continue
+            }
+        }
+    }
+
+    private func syncItemPageSequence(
+        itemId: String,
+        accessToken: String,
+        persistedCursor: String?
+    ) async throws -> (added: [TransactionDTO], modified: [TransactionDTO], removed: [String], nextCursor: String?) {
+        var cursor = persistedCursor
+        var pageCount = 0
+        var added: [TransactionDTO] = []
+        var modified: [TransactionDTO] = []
+        var removed: [String] = []
+        var finalCursor: String?
+
+        while true {
+            pageCount += 1
+            guard pageCount <= PlaidBarConstants.maxTransactionSyncPages else {
+                throw HTTPError(
+                    .badGateway,
+                    message: "Plaid transaction sync did not finish after \(PlaidBarConstants.maxTransactionSyncPages) pages"
+                )
+            }
+
+            let response = try await plaidClient.syncTransactions(
+                accessToken: accessToken,
+                cursor: cursor
+            )
+
+            added.append(contentsOf: response.added.map { Self.toDTO($0, itemId: itemId) })
+            modified.append(contentsOf: response.modified.map { Self.toDTO($0, itemId: itemId) })
+            removed.append(contentsOf: response.removed.map(\.transactionId))
+
+            if !response.nextCursor.isEmpty {
+                cursor = response.nextCursor
+                finalCursor = response.nextCursor
+            }
+
+            guard response.hasMore else {
+                return (added, modified, removed, finalCursor)
+            }
+        }
+    }
+
+    private static func isTransactionsSyncMutationDuringPagination(_ error: PlaidError) -> Bool {
+        guard case PlaidError.apiError(_, _, let errorCode, _) = error else { return false }
+        return errorCode == "TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION"
     }
 
     private static func toDTO(_ plaidTx: PlaidTransaction, itemId: String) -> TransactionDTO {
