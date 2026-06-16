@@ -52,9 +52,33 @@ public struct WeeklyReviewTransactionState: Sendable, Equatable {
         self.trustedTransactionIds = trustedTransactionIds
         self.unreviewedTransactionIds = unreviewedTransactionIds
     }
+
+    public static func derived(
+        from transactions: [TransactionDTO],
+        metadata: [TransactionReviewMetadata]
+    ) -> WeeklyReviewTransactionState {
+        let metadataById = Dictionary(metadata.map { ($0.id, $0) }) { _, latest in latest }
+        var trustedTransactionIds = Set<String>()
+        var unreviewedTransactionIds = Set<String>()
+
+        for transaction in transactions {
+            switch metadataById[transaction.id]?.status ?? .needsReview {
+            case .reviewed, .ignored:
+                trustedTransactionIds.insert(transaction.id)
+            case .needsReview:
+                unreviewedTransactionIds.insert(transaction.id)
+            }
+        }
+
+        return WeeklyReviewTransactionState(
+            trustedTransactionIds: trustedTransactionIds,
+            unreviewedTransactionIds: unreviewedTransactionIds
+        )
+    }
 }
 
 public enum WeeklyReviewOutcome: String, Sendable, Equatable {
+    case notReady
     case looksGood
     case reviewItems
     case payAttention
@@ -62,6 +86,7 @@ public enum WeeklyReviewOutcome: String, Sendable, Equatable {
 
     public var title: String {
         switch self {
+        case .notReady: "Not ready yet"
         case .looksGood: "Looks good"
         case .reviewItems: "Review these few items"
         case .payAttention: "Pay attention"
@@ -195,11 +220,25 @@ public struct WeeklyReviewPresentation: Sendable, Equatable {
     }
 
     public var notificationBody: String {
+        if outcome == .notReady {
+            return "Weekly review will appear once transaction data is ready."
+        }
         if remainingCount > 0 {
             return "VaultPeek found \(remainingCount) private item\(remainingCount == 1 ? "" : "s") to review."
         }
         return "Open VaultPeek to complete your private weekly review."
     }
+
+    public static let transactionDataNotReady = WeeklyReviewPresentation(
+        outcome: .notReady,
+        isDue: false,
+        nextReviewDueAt: nil,
+        completedCount: 0,
+        totalCount: 0,
+        reviewedTransactionCount: 0,
+        items: [],
+        isBlockedByTransactionReviewDependency: false
+    )
 
     public static let waitingForTransactionReview = WeeklyReviewPresentation(
         outcome: .waitingForTransactionReview,
@@ -231,7 +270,7 @@ public enum WeeklyReviewBuilder {
         calendar: Calendar = .current
     ) -> WeeklyReviewPresentation {
         guard let transactionState else {
-            return .waitingForTransactionReview
+            return .transactionDataNotReady
         }
 
         let isDue = state.isDue(asOf: date, calendar: calendar)
@@ -301,7 +340,7 @@ public enum WeeklyReviewBuilder {
                 id: "weekly-review.transactions",
                 kind: .transactionReview,
                 severity: .warning,
-                title: "\(count) transaction\(count == 1 ? "" : "s") need review",
+                title: "\(count) transaction\(count == 1 ? " needs" : "s need") review",
                 detail: "Approve or categorize the latest inbox items before closing the week.",
                 action: .openReviewInbox,
                 accessibilityHint: "Opens the transaction review inbox."

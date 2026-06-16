@@ -6,8 +6,8 @@ struct WeeklyReviewTests {
     private let calendar = Calendar(identifier: .gregorian)
     private let now = Date(timeIntervalSince1970: 1_781_510_400) // 2026-06-14
 
-    @Test("Review waits for transaction review state instead of raw transactions")
-    func waitsForTransactionReviewState() {
+    @Test("Review degrades neutrally while transaction data is not ready")
+    func waitsNeutrallyForTransactionData() {
         let presentation = WeeklyReviewBuilder.evaluate(
             state: .empty,
             transactionState: nil,
@@ -18,10 +18,34 @@ struct WeeklyReviewTests {
             calendar: calendar
         )
 
-        #expect(presentation.outcome == .waitingForTransactionReview)
-        #expect(presentation.isBlockedByTransactionReviewDependency)
+        #expect(presentation.outcome == .notReady)
+        #expect(presentation.isBlockedByTransactionReviewDependency == false)
         #expect(presentation.items.isEmpty)
         #expect(presentation.menuBarPrompt == nil)
+        #expect(presentation.notificationBody == "Weekly review will appear once transaction data is ready.")
+    }
+
+    @Test("Transaction review item still gives a clear user action")
+    func transactionReviewItemGivesUserAction() {
+        let presentation = WeeklyReviewBuilder.evaluate(
+            state: .empty,
+            transactionState: WeeklyReviewTransactionState(
+                trustedTransactionIds: [],
+                unreviewedTransactionIds: ["tx-unreviewed"]
+            ),
+            transactions: [],
+            recurringTransactions: [],
+            safeToSpend: safeToSpend(amount: 500),
+            asOf: now,
+            calendar: calendar
+        )
+
+        #expect(presentation.outcome == .reviewItems)
+        #expect(presentation.items.count == 1)
+        #expect(presentation.items.first?.kind == .transactionReview)
+        #expect(presentation.items.first?.title == "1 transaction needs review")
+        #expect(presentation.items.first?.detail == "Approve or categorize the latest inbox items before closing the week.")
+        #expect(presentation.items.first?.action == .openReviewInbox)
     }
 
     @Test("Derived items summarize review inbox, budgets, recurring, safe-to-spend, and connection health")
@@ -80,6 +104,89 @@ struct WeeklyReviewTests {
             .connectionHealth,
         ])
         #expect(presentation.menuBarPrompt == "6 items to review")
+    }
+
+    @Test("Transaction review metadata derives trusted and unreviewed weekly state")
+    func transactionReviewMetadataDerivesWeeklyTransactionState() {
+        let state = WeeklyReviewTransactionState.derived(
+            from: [
+                transaction(id: "reviewed", date: "2026-06-14"),
+                transaction(id: "ignored", date: "2026-06-14"),
+                transaction(id: "needs-review", date: "2026-06-14"),
+            ],
+            metadata: [
+                TransactionReviewMetadata(id: "reviewed", status: .reviewed),
+                TransactionReviewMetadata(id: "ignored", status: .ignored),
+                TransactionReviewMetadata(id: "needs-review", status: .needsReview),
+                TransactionReviewMetadata(id: "stale-reviewed", status: .reviewed),
+            ]
+        )
+
+        #expect(state.trustedTransactionIds == ["reviewed", "ignored"])
+        #expect(state.unreviewedTransactionIds == ["needs-review"])
+    }
+
+    @Test("Transactions without metadata are not treated as trusted")
+    func missingTransactionReviewMetadataRequiresReview() {
+        let state = WeeklyReviewTransactionState.derived(
+            from: [transaction(id: "missing-metadata", date: "2026-06-14")],
+            metadata: []
+        )
+
+        #expect(state.trustedTransactionIds.isEmpty)
+        #expect(state.unreviewedTransactionIds == ["missing-metadata"])
+    }
+
+    @Test("Reviewed and ignored transaction metadata unblock weekly review")
+    func reviewedAndIgnoredTransactionMetadataUnblocksWeeklyReview() {
+        let transactions = [
+            transaction(id: "reviewed", date: "2026-06-14"),
+            transaction(id: "ignored", date: "2026-06-14"),
+        ]
+        let transactionState = WeeklyReviewTransactionState.derived(
+            from: transactions,
+            metadata: [
+                TransactionReviewMetadata(id: "reviewed", status: .reviewed),
+                TransactionReviewMetadata(id: "ignored", status: .ignored),
+            ]
+        )
+
+        let presentation = WeeklyReviewBuilder.evaluate(
+            state: .empty,
+            transactionState: transactionState,
+            transactions: transactions,
+            recurringTransactions: [],
+            safeToSpend: safeToSpend(amount: 500),
+            asOf: now,
+            calendar: calendar
+        )
+
+        #expect(!presentation.isBlockedByTransactionReviewDependency)
+        #expect(!presentation.items.contains { $0.kind == .transactionReview })
+        #expect(presentation.reviewedTransactionCount == 2)
+    }
+
+    @Test("Needs-review transaction metadata creates actionable weekly review item")
+    func needsReviewTransactionMetadataCreatesActionableWeeklyReviewItem() {
+        let transactions = [transaction(id: "needs-review", date: "2026-06-14")]
+        let transactionState = WeeklyReviewTransactionState.derived(
+            from: transactions,
+            metadata: [TransactionReviewMetadata(id: "needs-review", status: .needsReview)]
+        )
+
+        let presentation = WeeklyReviewBuilder.evaluate(
+            state: .empty,
+            transactionState: transactionState,
+            transactions: transactions,
+            recurringTransactions: [],
+            safeToSpend: safeToSpend(amount: 500),
+            asOf: now,
+            calendar: calendar
+        )
+
+        #expect(!presentation.isBlockedByTransactionReviewDependency)
+        #expect(presentation.items.map(\.kind) == [.transactionReview])
+        #expect(presentation.items.first?.action == .openReviewInbox)
     }
 
     @Test("Completing all derived items in the current cycle yields positive empty state")

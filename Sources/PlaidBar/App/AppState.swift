@@ -752,16 +752,21 @@ final class AppState {
     }
 
     private var weeklyReviewTransactionState: WeeklyReviewTransactionState? {
-        // AND-403 is intentionally gated on AND-399. Production must provide
-        // trusted/unreviewed transaction state before this returns a value; raw
-        // Plaid transactions alone are not treated as reviewed. Demo mode uses
-        // synthetic ids so the checklist surface remains locally exercisable.
-        guard isDemoMode else { return nil }
-        let unreviewed = Set(transactions.filter(\.pending).map(\.id))
-        let trusted = Set(transactions.map(\.id)).subtracting(unreviewed)
-        return WeeklyReviewTransactionState(
-            trustedTransactionIds: trusted,
-            unreviewedTransactionIds: unreviewed
+        // AND-403 is intentionally gated on AND-399 review metadata. Raw Plaid
+        // transactions alone are not treated as reviewed; demo mode keeps using
+        // pending flags so the checklist surface remains locally exercisable.
+        guard !isDemoMode else {
+            let unreviewed = Set(transactions.filter(\.pending).map(\.id))
+            let trusted = Set(transactions.map(\.id)).subtracting(unreviewed)
+            return WeeklyReviewTransactionState(
+                trustedTransactionIds: trusted,
+                unreviewedTransactionIds: unreviewed
+            )
+        }
+
+        return WeeklyReviewTransactionState.derived(
+            from: transactions,
+            metadata: transactionReviewMetadata
         )
     }
 

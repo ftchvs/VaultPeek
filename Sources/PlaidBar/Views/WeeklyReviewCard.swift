@@ -49,15 +49,15 @@ struct WeeklyReviewCard: View {
 
     private var dependencyState: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
-            Text("Weekly review unlocks after the transaction review inbox can say which transactions are trusted.")
+            Text("Weekly review will appear once transaction data is ready.")
                 .microText()
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Label("Waiting for AND-399 review state", systemImage: "checklist")
+            Label("Waiting for transaction data", systemImage: "clock")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(SemanticColors.warning)
-                .accessibilityLabel("Waiting for transaction review state")
+                .accessibilityLabel("Waiting for transaction data")
         }
         .padding(Spacing.sm)
         .nativeInsetSurface()
@@ -65,34 +65,36 @@ struct WeeklyReviewCard: View {
 
     private func positiveState(_ presentation: WeeklyReviewPresentation) -> some View {
         HStack(alignment: .top, spacing: Spacing.sm) {
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(SemanticColors.positive)
+            Image(systemName: presentation.outcome == .notReady ? "clock" : "checkmark.circle.fill")
+                .foregroundStyle(presentation.outcome == .notReady ? .secondary : SemanticColors.positive)
                 .frame(width: 22, height: 22)
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: Spacing.xxs) {
-                Text("Nothing needs review")
+                Text(presentation.outcome == .notReady ? "Weekly review not ready" : "Nothing needs review")
                     .font(.caption.weight(.semibold))
                 Text(nextReviewText(presentation))
                     .microText()
                     .foregroundStyle(.secondary)
             }
 
-            Spacer(minLength: Spacing.sm)
+            if presentation.outcome != .notReady {
+                Spacer(minLength: Spacing.sm)
 
-            Button {
-                appState.completeWeeklyReview()
-            } label: {
-                Label("Complete", systemImage: "checkmark")
-                    .labelStyle(.iconOnly)
+                Button {
+                    appState.completeWeeklyReview()
+                } label: {
+                    Label("Complete", systemImage: "checkmark")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.mini)
+                .help("Complete weekly review")
+                .accessibilityLabel("Complete weekly review")
             }
-            .buttonStyle(.bordered)
-            .controlSize(.mini)
-            .help("Complete weekly review")
-            .accessibilityLabel("Complete weekly review")
         }
         .padding(Spacing.sm)
-        .nativeInsetSurface(stroke: SemanticColors.positive.opacity(0.18))
+        .nativeInsetSurface(stroke: (presentation.outcome == .notReady ? Color.secondary : SemanticColors.positive).opacity(0.18))
     }
 
     private func checklist(_ presentation: WeeklyReviewPresentation) -> some View {
@@ -135,6 +137,9 @@ struct WeeklyReviewCard: View {
     }
 
     private func nextReviewText(_ presentation: WeeklyReviewPresentation) -> String {
+        if presentation.outcome == .notReady {
+            return "Weekly review will appear once transaction data is ready."
+        }
         guard let nextReviewDueAt = presentation.nextReviewDueAt else {
             return "Complete this review to start the weekly cadence."
         }
@@ -150,6 +155,7 @@ struct WeeklyReviewCard: View {
 
     private func outcomeIcon(_ outcome: WeeklyReviewOutcome) -> String {
         switch outcome {
+        case .notReady: "clock"
         case .looksGood: "checkmark.circle.fill"
         case .reviewItems: "exclamationmark.circle.fill"
         case .payAttention: "exclamationmark.triangle.fill"
@@ -159,6 +165,7 @@ struct WeeklyReviewCard: View {
 
     private func outcomeTint(_ outcome: WeeklyReviewOutcome) -> Color {
         switch outcome {
+        case .notReady: .secondary
         case .looksGood: SemanticColors.positive
         case .reviewItems, .waitingForTransactionReview: SemanticColors.warning
         case .payAttention: SemanticColors.negative
