@@ -146,11 +146,11 @@ tech):
 | VoiceOver | Selecting a row announces the account opened in the inspector; the inspector reads as a trailing inspector, not replacement left content; selected/unselected row state is spoken |
 | Reduce Transparency | Rail, center, and inspector stay legible in both appearances (manual toggle) |
 
-### Matrix status (last pass: 2026-06-13, demo fixtures)
+### Matrix status (last pass: 2026-06-17, demo fixtures — launch candidate, release build, Retina 2× rasterization)
 
 | Surface | Light | Dark | Light + Reduce Transparency | Dark + Reduce Transparency |
 |---------|-------|------|-----------------------------|----------------------------|
-| Dashboard, no selection (two-column 801pt) | Pass — headless render | Pass — headless render | Needs human eyes | Needs human eyes |
+| Dashboard, no selection (three-column 1122pt, empty "No Account Selected" inspector) | Pass — headless render | Pass — headless render | Needs human eyes | Needs human eyes |
 | Selected account (three-column 1122pt: rail + dashboard + right inspector) | Pass — headless render | Pass — headless render | Needs human eyes | Needs human eyes |
 | Account inspector (credit, right column) | Pass — headless render | Pass — headless render | Needs human eyes | Needs human eyes |
 | Dashboard filters (Cash/Credit/Savings/Debt/Status) | Code-inspected only (filters reuse the All-state visual system) | Code-inspected only | Needs human eyes | Needs human eyes |
@@ -158,30 +158,36 @@ tech):
 | Settings (General/Accounts/Notifications/About) | Needs `screenshots.sh` or human eyes | Needs `screenshots.sh` or human eyes | Needs human eyes | Needs human eyes |
 | Setup sandbox preflight | Needs `screenshots.sh` or human eyes | Needs `screenshots.sh` or human eyes | Needs human eyes | Needs human eyes |
 
-2026-06-13 pass notes, recorded from the committed renders under `docs/qa/`:
+2026-06-17 pass notes — re-run on the current `main` launch candidate, recorded from the
+committed renders under `docs/qa/` (demo data only):
 
-- The renders now cover the three-column model (AND-367): `render-dashboard.png`
-  is the 801pt two-column state (Wealth Summary rail + center dashboard) and
-  `render-flyout.png` is the 1122pt three-column state with the account inspector
-  on the right — the rail stays visible when an account is selected (AND-375 AC).
-- `render-settings-appearance.png` covers Settings → Appearance at the 560pt
-  minimum width (AND-366): the transparency slider, the live preview + Solid/
-  Balanced/Glass presets (AND-364), and the Display section pickers — Appearance,
-  Contrast, Decorative Effects, Density (AND-365). Both appearances confirm top
-  anchoring, slider/label readability, and no text overlap at the minimum width.
-  The preview card's vibrant material composites against nothing off-screen (same
-  caveat as the popover); Reduce Transparency for this pane stays a manual check.
-- Both appearances force correctly end to end (header, heatmap, account rows,
-  balance mix, insight receipt all follow the forced appearance).
-- The 365-day heatmap shows continuous activity in both appearances — the
-  former days-61–73 fixture dead zone is gone (see `DemoFixturesTests`).
-- Color-independence backups confirmed in renders and code: utilization rows
-  pair color with text ("84% • $790 available - due not synced"), the heatmap
-  ships a Less/More legend plus `accessibilityLabel` summaries, and trend
-  direction is reinforced by signed amounts, not color alone.
-- Reduce Transparency (both appearances), grayscale full-screen check, and
-  Retina hairline inspection (1px hairlines, no half-pixel chip borders) were
-  NOT verified in this pass — they need a human on a Retina display.
+- Re-rendered light + dark via `Scripts/qa-appearance-matrix.sh` (release build, window
+  rasterization at Retina 2×: 2244×1988 dashboard/flyout, 1120×1280 settings). The PNGs under
+  `docs/qa/appearance-light` and `docs/qa/appearance-dark` were refreshed against the
+  launch-candidate tree (all 2026-06-16 audit fixes + #471/#472 merged).
+- Layout matches the shipped **three-columns-always** model (AND-467 corrected the contract):
+  `render-dashboard.png` is the no-selection state — the full 1122pt three-column workspace with
+  a "No Account Selected" empty inspector (it does NOT collapse to a 801pt two-column);
+  `render-flyout.png` is the selected state with the account inspector on the right and the rail
+  still visible (AND-375 AC).
+- Post-merge UI confirmed in the renders: Review Inbox rows are flattened to separator-backed
+  inline rows (AND-474 — no nested card-in-card) and stay legible in both appearances; the credit
+  inspector pairs utilization with text ("84% of $5,000, Very high"), not color alone (AND-473).
+- `render-settings-appearance.png` covers Settings → Appearance at the 560pt minimum width
+  (AND-366): transparency slider, live preview + Solid/Balanced/Glass presets (AND-364), and the
+  Display pickers — Appearance, Contrast, Decorative Effects, Density (AND-365). Both appearances
+  confirm top anchoring, slider/label readability, and no text overlap at minimum width.
+- Both appearances force correctly end to end (Wealth Summary rail, weekly review, review inbox,
+  heatmap, account rows, balance mix, insight receipt all follow the forced appearance).
+- Color-independence backups confirmed in renders and code: utilization rows pair color with text,
+  the heatmap ships a Less/More legend plus `accessibilityLabel` summaries, and trend direction is
+  reinforced by signed amounts, not color alone.
+- **Still requires a human on a physical Retina display + system-wide accessibility settings:**
+  Reduce Transparency (both appearances), grayscale full-screen check, and 1px-hairline inspection
+  (no half-pixel chip borders) were NOT verified in this pass. Reduce Transparency cannot be forced
+  per-process — re-run `PLAIDBAR_QA_MATRIX_SUFFIX="-reduce-transparency" ./Scripts/qa-appearance-matrix.sh`
+  after toggling System Settings → Accessibility → Display. These rows are honestly marked
+  "Needs human eyes" in the table above.
 
 ## Security and Privacy QA
 
