@@ -153,17 +153,20 @@ the RepoBar visual language as inspiration, not as literal GitHub UI.
 credit, attention | center **dashboard** (480pt): change receipt | financial
 heatmap (`last 365 days`, Spend or Net mode) | native segmented filter (`All`,
 `Cash`, `Credit`, `Savings`, `Debt`, `Status`) | account/card rows | local-only
-insight receipt | footer with the single sync/mode status line | optional
-**account inspector** (right, 320pt) when a row is selected. Widths: setup 480pt;
-two-column 801pt (no selection); three-column 1122pt (selected), clamped on-screen
-near a display edge.
+insight receipt | footer with the single sync/mode status line | always-present
+**account inspector** (right, 320pt). Widths: setup 480pt; three-column 1122pt
+default post-setup (the inspector column is always open), clamped on-screen near a
+display edge.
 
 The left rail owns the portfolio totals, so the center no longer repeats the
-net-worth hero (AND-376) or the summary cards / balance mix (AND-372). Selecting
-a row opens the inspector on the **right** without hiding the rail or center; the
-left edge stays anchored so the rail does not jump (AND-370). Esc (inspector
-first, then popover), the inspector's ✕, re-clicking the row, or switching
-filters closes the inspector. The binding contract — geometry, anchoring,
+net-worth hero (AND-376) or the summary cards / balance mix (AND-372). The right
+inspector column is always open post-setup; selecting a row fills it with that
+account's detail without hiding the rail or center, and the left edge stays
+anchored so the rail does not jump (AND-370). Esc (clears the selection first,
+then dismisses the popover), the inspector's ✕, re-clicking the row, or switching
+filters clears the selection — the inspector reverts to an empty-selection prompt
+rather than collapsing the layout to two columns. The binding contract —
+geometry, anchoring,
 screen-constrained fallback, and selection/keyboard/accessibility behavior —
 lives in
 [`docs/three-column-popover-contract.md`](docs/three-column-popover-contract.md).
@@ -197,9 +200,10 @@ trailing primary metric (balance owed/cash balance) | secondary metric
 
 ### AccountDetailFlyout
 
-The contextual account submenu. Opens to the LEFT of the dashboard when an
-account row is selected; one `raised`-rank surface, sections separated by
-spacing (never nested cards).
+The contextual account inspector. It is the always-present RIGHT column of the
+three-column popover (post-setup); selecting a row fills it with that account's
+detail. One `raised`-rank surface, sections separated by spacing (never nested
+cards).
 
 **Anatomy:** header (account name + institution/type/mask metadata + close ✕)
 | Status (connection badge + sync freshness + recovery action when degraded)
@@ -216,8 +220,10 @@ insight math in `Sources/PlaidBarCore/Utilities/AccountDetailInsights.swift`
 
 | State | Behavior |
 |-------|----------|
-| Open | Popover widens 480 → 801pt; fly-out animates in with `MotionTokens.content` (gated by Reduce Motion) |
-| Close | ✕ button, Esc, re-clicking the selected row, or switching filters |
+| Empty selection | No account selected: the column stays open and shows a quiet empty-selection prompt (icon + label, never color alone) so the third column reads as intentional context space |
+| Selected | A row is selected: the inspector fills with that account's detail; content animates in with `MotionTokens.content` (gated by Reduce Motion). The popover width does not change — it is already the 1122pt three-column default |
+| Resolving persisted selection | A persisted selection is still loading: a brief progress placeholder holds the column until the account resolves |
+| Deselect | ✕ button, Esc, re-clicking the selected row, or switching filters reverts the content to the empty-selection prompt; the column and the 1122pt layout stay in place |
 | Degraded item | Status section shows recovery detail + Reconnect/Refresh action |
 | No review items / categories | Sections are omitted entirely, never shown empty |
 | Demo mode | Actions reduce to the demo-safe set (`DashboardDrillInAction.accountDrillInActions`) |
