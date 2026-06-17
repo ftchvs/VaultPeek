@@ -97,8 +97,8 @@ private struct AttentionQueueRowView: View {
             Image(systemName: row.severity.statusSymbolName)
                 .font(.callout.weight(.semibold))
                 .foregroundStyle(tint)
-                .frame(width: 24, height: 24)
-                .background(tint.opacity(0.13), in: RoundedRectangle(cornerRadius: 7))
+                .frame(width: Sizing.glyphMedium, height: Sizing.glyphMedium)
+                .background(tint.opacity(0.13), in: RoundedRectangle(cornerRadius: SurfaceTokens.panelCornerRadius))
                 // One-shot, non-repeating feedback when a warning or blocked row
                 // appears. The attention queue keys rows by id, so a real
                 // healthy→warning/blocked transition *inserts* a new row view

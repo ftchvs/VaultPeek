@@ -67,7 +67,7 @@ struct WeeklyReviewCard: View {
         HStack(alignment: .top, spacing: Spacing.sm) {
             Image(systemName: presentation.outcome == .notReady ? "clock" : "checkmark.circle.fill")
                 .foregroundStyle(presentation.outcome == .notReady ? .secondary : SemanticColors.positive)
-                .frame(width: 22, height: 22)
+                .frame(width: Sizing.glyphSmall, height: Sizing.glyphSmall)
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: Spacing.xxs) {
@@ -185,7 +185,7 @@ private struct WeeklyReviewItemRow: View {
             Button(action: onToggle) {
                 Image(systemName: isCompleted ? "checkmark.square.fill" : "square")
                     .font(.callout.weight(.semibold))
-                    .frame(width: 22, height: 22)
+                    .frame(width: Sizing.glyphSmall, height: Sizing.glyphSmall)
             }
             .buttonStyle(.plain)
             .foregroundStyle(isCompleted ? SemanticColors.positive : tint)
@@ -196,7 +196,7 @@ private struct WeeklyReviewItemRow: View {
             Image(systemName: item.severity.statusSymbolName)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(tint)
-                .frame(width: 18, height: 18)
+                .frame(width: Sizing.glyphSmall, height: Sizing.glyphSmall)
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: Spacing.xxs) {

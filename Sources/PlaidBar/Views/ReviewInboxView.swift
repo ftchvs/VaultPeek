@@ -33,8 +33,11 @@ struct ReviewInboxView: View {
                 if appState.shouldMaskFinancialValues {
                     privateInboxPlaceholder
                 } else {
-                    VStack(spacing: Spacing.xs) {
+                    VStack(spacing: 0) {
                     ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                        if index > 0 {
+                            Divider()
+                        }
                         ReviewInboxRow(
                             item: item,
                             isSelected: index == selectedIndex,
@@ -282,10 +285,17 @@ private struct ReviewInboxRow: View {
         }
         .padding(.horizontal, Spacing.sm)
         .padding(.vertical, Spacing.rowVertical)
-        .nativePanelSurface(
-            fill: AnyShapeStyle(SurfaceTokens.panelFill(emphasisTint: isSelected ? SemanticColors.warning : nil)),
-            stroke: isSelected ? SemanticColors.warning.opacity(0.22) : Color.primary.opacity(0.07)
-        )
+        // Flattened: no per-row card. Selection reads as a subtle inline
+        // emphasis (tinted wash + leading accent) inside the single raised
+        // surface, with Dividers separating rows.
+        .background(alignment: .leading) {
+            if isSelected {
+                SemanticColors.warning.opacity(0.08)
+                Rectangle()
+                    .fill(SemanticColors.warning.opacity(0.55))
+                    .frame(width: 2)
+            }
+        }
     }
 
     private var rowSummary: some View {
@@ -293,8 +303,8 @@ private struct ReviewInboxRow: View {
             Image(systemName: leadingSymbolName)
                 .font(.callout.weight(.semibold))
                 .foregroundStyle(leadingTint)
-                .frame(width: 24, height: 24)
-                .background(leadingTint.opacity(0.12), in: RoundedRectangle(cornerRadius: 7))
+                .frame(width: Sizing.glyphMedium, height: Sizing.glyphMedium)
+                .background(leadingTint.opacity(0.12), in: RoundedRectangle(cornerRadius: SurfaceTokens.panelCornerRadius))
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: Spacing.xxs) {
