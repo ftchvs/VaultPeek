@@ -576,7 +576,7 @@ public enum LocalDataStore {
 
         let remappedCache = TransactionCache(
             context: remappedContext,
-            transactions: cache.transactions
+            transactions: transactionsForLocalPersistence(cache.transactions)
         )
         return (
             transactionCacheURL(in: currentDirectory, context: remappedContext),
@@ -696,7 +696,10 @@ public enum LocalDataStore {
         try ensurePrivateDirectory(directory, fileManager: fileManager)
 
         let url = transactionCacheURL(in: directory, context: context)
-        let cache = TransactionCache(context: context, transactions: transactions)
+        let cache = TransactionCache(
+            context: context,
+            transactions: transactionsForLocalPersistence(transactions)
+        )
         let data = try JSONEncoder().encode(cache)
         try writePrivateCacheFile(data, to: url, fileManager: fileManager)
         try setPrivateCacheFilePermissions(url, fileManager: fileManager)
@@ -757,6 +760,24 @@ public enum LocalDataStore {
 
         let key = "\(context.environment.rawValue)|\(context.storagePath)"
         return "transactions-\(context.environment.rawValue)-\(stableHashHex(key)).json"
+    }
+
+    private static func transactionsForLocalPersistence(_ transactions: [TransactionDTO]) -> [TransactionDTO] {
+        transactions.map { transaction in
+            TransactionDTO(
+                id: transaction.id,
+                itemId: transaction.itemId,
+                accountId: transaction.accountId,
+                amount: transaction.amount,
+                date: transaction.date,
+                name: transaction.name,
+                merchantName: transaction.merchantName,
+                category: transaction.category,
+                pending: transaction.pending,
+                pendingTransactionId: nil,
+                isoCurrencyCode: transaction.isoCurrencyCode
+            )
+        }
     }
 
     // Review metadata and merchant rules are scoped to the active cache context

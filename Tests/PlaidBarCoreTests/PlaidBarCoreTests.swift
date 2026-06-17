@@ -3869,6 +3869,32 @@ struct PlaidBarCoreTests {
         #expect(resolved == directory)
     }
 
+    @Test("Local transaction cache strips pending transaction ids before persistence")
+    func localTransactionCacheStripsPendingTransactionIdsBeforePersistence() throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        try LocalDataStore.saveTransactions([
+            TransactionDTO(
+                id: "posted-1",
+                accountId: "checking",
+                amount: 12,
+                date: "2026-01-01",
+                name: "Coffee",
+                pendingTransactionId: "pending-sensitive-id"
+            )
+        ], to: directory)
+
+        let payload = try String(
+            contentsOf: LocalDataStore.transactionCacheURL(in: directory),
+            encoding: .utf8
+        )
+        #expect(!payload.contains("pendingTransactionId"))
+        #expect(!payload.contains("pending-sensitive-id"))
+        #expect(try LocalDataStore.loadTransactions(from: directory).first?.pendingTransactionId == nil)
+    }
+
     @Test("Local data store resolves active directory from server database path")
     func localDataStoreResolvesActiveDirectoryFromServerDatabasePath() {
         let root = URL(fileURLWithPath: NSTemporaryDirectory())
