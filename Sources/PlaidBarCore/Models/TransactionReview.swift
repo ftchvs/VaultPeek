@@ -181,6 +181,11 @@ public enum TransactionReviewInbox {
         let spendTransactions = transactions.filter { !$0.isIncome }
         let recurringByMerchant = Dictionary(grouping: recurring, by: { normalizedKey($0.merchantName) })
 
+        // Precompute per-merchant and per-category spend aggregates once so the
+        // unusual-amount check is O(1) per transaction instead of re-scanning
+        // every spend transaction per row (which made the inbox O(n^2)).
+        let unusualPeerIndex = UnusualSpendPeerIndex(spendTransactions: spendTransactions)
+
         let items = transactions.compactMap { transaction -> TransactionReviewItem? in
             let metadata = metadataById[transaction.id]
             let isAlreadyResolved = metadata?.status == .reviewed || metadata?.status == .ignored
@@ -206,7 +211,7 @@ public enum TransactionReviewInbox {
                 merchantCounts[normalizedMerchantKey(transaction), default: 0] == 1 {
                 reasons.insert(.newMerchant)
             }
-            if isUnusual(transaction, in: spendTransactions, category: effectiveCategory) {
+            if isUnusual(transaction, peers: unusualPeerIndex, category: effectiveCategory) {
                 reasons.insert(.unusualAmount)
             }
             if looksLikeTransfer(transaction), !isTransfer {
@@ -281,24 +286,80 @@ public enum TransactionReviewInbox {
 
     private static func isUnusual(
         _ transaction: TransactionDTO,
-        in transactions: [TransactionDTO],
+        peers index: UnusualSpendPeerIndex,
         category: SpendingCategory?
     ) -> Bool {
         guard transaction.amount > 0 else { return false }
         let merchantKey = normalizedMerchantKey(transaction)
-        var peers = transactions.filter {
-            $0.id != transaction.id &&
-                normalizedMerchantKey($0) == merchantKey &&
-                abs($0.amount) > 0
-        }
+        var peers = index.merchantPeers(excluding: transaction, merchantKey: merchantKey)
         if peers.count < 3, let category {
-            peers = transactions.filter {
-                $0.id != transaction.id && $0.category == category && abs($0.amount) > 0
-            }
+            peers = index.categoryPeers(excluding: transaction, category: category)
         }
         guard peers.count >= 3 else { return false }
-        let average = peers.map { abs($0.amount) }.reduce(0, +) / Double(peers.count)
+        let average = peers.sum / Double(peers.count)
         return transaction.displayAmount >= max(average * 1.75, average + 50)
+    }
+
+    /// Precomputed spend aggregates so `isUnusual` can resolve a transaction's
+    /// peer set in O(1) instead of filtering every spend transaction per row.
+    ///
+    /// Aggregates are built over spend transactions with `abs(amount) > 0`,
+    /// grouped by normalized merchant key and by raw category — matching the
+    /// two filters the original per-row scan used. Because the current
+    /// transaction is itself part of these aggregates when it qualifies, each
+    /// lookup subtracts its own contribution, reproducing the `id != self`
+    /// exclusion exactly.
+    private struct UnusualSpendPeerIndex {
+        struct Peers {
+            let count: Int
+            let sum: Double
+        }
+
+        private struct Aggregate {
+            var count = 0
+            var sum = 0.0
+
+            mutating func add(_ magnitude: Double) {
+                count += 1
+                sum += magnitude
+            }
+
+            /// Peers seen by another transaction, excluding its own contribution
+            /// when it is part of this aggregate.
+            func excluding(magnitude: Double, present: Bool) -> Peers {
+                guard present else { return Peers(count: count, sum: sum) }
+                return Peers(count: count - 1, sum: sum - magnitude)
+            }
+        }
+
+        private var byMerchantKey: [String: Aggregate] = [:]
+        private var byCategory: [SpendingCategory: Aggregate] = [:]
+
+        init(spendTransactions: [TransactionDTO]) {
+            for transaction in spendTransactions where abs(transaction.amount) > 0 {
+                let magnitude = abs(transaction.amount)
+                let merchantKey = TransactionReviewInbox.normalizedMerchantKey(transaction)
+                byMerchantKey[merchantKey, default: Aggregate()].add(magnitude)
+                if let category = transaction.category {
+                    byCategory[category, default: Aggregate()].add(magnitude)
+                }
+            }
+        }
+
+        func merchantPeers(excluding transaction: TransactionDTO, merchantKey: String) -> Peers {
+            let aggregate = byMerchantKey[merchantKey] ?? Aggregate()
+            // The current transaction is in this aggregate when it is a qualifying
+            // spend (amount > 0 implies non-income and abs > 0), so remove itself.
+            return aggregate.excluding(magnitude: abs(transaction.amount), present: transaction.amount > 0)
+        }
+
+        func categoryPeers(excluding transaction: TransactionDTO, category: SpendingCategory) -> Peers {
+            let aggregate = byCategory[category] ?? Aggregate()
+            // Aggregates key on the raw category, so the current transaction is in
+            // this bucket only when its own category equals the lookup category.
+            let isSelfInBucket = transaction.amount > 0 && transaction.category == category
+            return aggregate.excluding(magnitude: abs(transaction.amount), present: isSelfInBucket)
+        }
     }
 
     private static func looksLikeTransfer(_ transaction: TransactionDTO) -> Bool {
