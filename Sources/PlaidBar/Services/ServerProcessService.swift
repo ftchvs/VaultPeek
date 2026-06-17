@@ -74,6 +74,16 @@ final class ServerProcessService {
         do {
             try process.run()
         } catch {
+            // A failed spawn is otherwise indistinguishable from "no server
+            // was started"; record the cause in the already-open server log so
+            // it is diagnosable. The message carries no credentials.
+            if let logHandle {
+                let line = "VaultPeek: failed to launch bundled server at " +
+                    "\(plan.executablePath): \(String(describing: error))\n"
+                if let data = line.data(using: .utf8) {
+                    try? logHandle.write(contentsOf: data)
+                }
+            }
             return false
         }
 
