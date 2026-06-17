@@ -58,11 +58,17 @@ final class AppState {
         didSet {
             _cachedTransactionDerivedIndex = nil
             _cachedRecurringTransactions = nil
+            _cachedCategoryBudgetPresentation = nil
+            _cachedTransactionReviewInboxSnapshot = nil
             invalidateLocalAIActivitySummaries()
         }
     }
-    var transactionReviewMetadata: [TransactionReviewMetadata] = []
-    var transactionRules: [TransactionRule] = []
+    var transactionReviewMetadata: [TransactionReviewMetadata] = [] {
+        didSet { _cachedTransactionReviewInboxSnapshot = nil }
+    }
+    var transactionRules: [TransactionRule] = [] {
+        didSet { _cachedTransactionReviewInboxSnapshot = nil }
+    }
     var hasLoadedTransactionReviewStorage = false
     var isLoading = false
     /// True from launch until the first `loadInitialData()` pass completes.
@@ -123,7 +129,9 @@ final class AppState {
     /// User-set category budget limits hydrated from `/api/budgets`.
     /// Suggestions remain a local fallback/complement, but this cache wins for
     /// categories the user explicitly saved on the server.
-    var categoryBudgets: [SpendingCategory: Double] = [:]
+    var categoryBudgets: [SpendingCategory: Double] = [:] {
+        didSet { _cachedCategoryBudgetPresentation = nil }
+    }
     var isDemoMode = false
     var isDemoStatusRecoveryScenario = false
     var lastSyncDate: Date?
@@ -897,7 +905,20 @@ final class AppState {
         )
     }
 
+    /// Cached category budget presentation — invalidated via transactions.didSet
+    /// and categoryBudgets.didSet. Recomputed full-scan on every read otherwise,
+    /// which `MenuBarLabel.body` triggers repeatedly through the weekly-review
+    /// and menu-bar accessors.
+    private var _cachedCategoryBudgetPresentation: CategoryBudgetPresentation?
+
     var categoryBudgetPresentation: CategoryBudgetPresentation {
+        if let cached = _cachedCategoryBudgetPresentation { return cached }
+        let presentation = computeCategoryBudgetPresentation()
+        _cachedCategoryBudgetPresentation = presentation
+        return presentation
+    }
+
+    private func computeCategoryBudgetPresentation() -> CategoryBudgetPresentation {
         let now = Date()
         let suggestedBudgets = CategoryBudgetPlanner.suggestedBudgets(
             from: transactions,
@@ -995,14 +1016,25 @@ final class AppState {
         return defaults.double(forKey: Keys.weeklyReviewPreviousSafeToSpend)
     }
 
+    /// Cached review inbox snapshot — invalidated via transactions.didSet,
+    /// transactionReviewMetadata.didSet, and transactionRules.didSet. The
+    /// underlying scan is O(n) (peer aggregates are precomputed once in
+    /// `TransactionReviewInbox.evaluate`), but `MenuBarLabel.body` reads
+    /// `transactionReviewCount` from several accessors per render, so memoizing
+    /// avoids re-running the whole scan multiple times for one frame.
+    private var _cachedTransactionReviewInboxSnapshot: TransactionReviewInboxSnapshot?
+
     var transactionReviewInboxSnapshot: TransactionReviewInboxSnapshot {
-        TransactionReviewInbox.evaluate(
+        if let cached = _cachedTransactionReviewInboxSnapshot { return cached }
+        let snapshot = TransactionReviewInbox.evaluate(
             transactions: transactions,
             metadata: transactionReviewMetadata,
             rules: transactionRules,
             recurring: recurringTransactions,
             now: Date()
         )
+        _cachedTransactionReviewInboxSnapshot = snapshot
+        return snapshot
     }
 
     var transactionReviewCount: Int {
