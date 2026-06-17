@@ -3476,6 +3476,19 @@ struct PlaidBarCoreTests {
         #expect(PlaidBarConstants.defaultServerHost == "127.0.0.1")
     }
 
+    @Test("Repository URL helper builds VaultPeek doc URLs")
+    func repositoryFileURL() {
+        #expect(PlaidBarConstants.repositoryURL == "https://github.com/ftchvs/VaultPeek")
+        #expect(
+            PlaidBarConstants.repositoryFileURL("docs/privacy.md")
+                == "https://github.com/ftchvs/VaultPeek/blob/main/docs/privacy.md"
+        )
+        #expect(
+            PlaidBarConstants.repositoryFileURL("/SECURITY.md")
+                == "https://github.com/ftchvs/VaultPeek/blob/main/SECURITY.md"
+        )
+    }
+
     @Test("Constants have reasonable values")
     func constantsReasonable() {
         #expect(PlaidBarConstants.backgroundRefreshInterval > 0)

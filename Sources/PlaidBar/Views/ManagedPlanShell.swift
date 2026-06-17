@@ -137,7 +137,7 @@ struct InstitutionUsageWidget: View {
         .glassSurface(.inset)
         .alert("Managed plans are coming soon", isPresented: $showUpgradeNote) {
             Button("OK", role: .cancel) {}
-            if let docsURL = URL(string: "https://github.com/ftchvs/PlaidBar/blob/main/docs/privacy.md") {
+            if let docsURL = URL(string: PlaidBarConstants.repositoryFileURL("docs/privacy.md")) {
                 Link("Learn more", destination: docsURL)
             }
         } message: {

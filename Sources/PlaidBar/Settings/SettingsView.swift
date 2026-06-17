@@ -1343,21 +1343,21 @@ struct AboutView: View {
                 supportLink(
                     "Troubleshooting",
                     systemImage: "wrench.and.screwdriver",
-                    url: "https://github.com/ftchvs/PlaidBar/blob/main/docs/troubleshooting.md",
+                    url: PlaidBarConstants.repositoryFileURL("docs/troubleshooting.md"),
                     detail: "Setup, server, Plaid Link, notifications, and screenshot fixes."
                 )
 
                 supportLink(
                     "Privacy",
                     systemImage: "lock.shield",
-                    url: "https://github.com/ftchvs/PlaidBar/blob/main/docs/privacy.md",
+                    url: PlaidBarConstants.repositoryFileURL("docs/privacy.md"),
                     detail: "What stays local, what calls Plaid, and what not to share."
                 )
 
                 supportLink(
                     "Security",
                     systemImage: "exclamationmark.shield",
-                    url: "https://github.com/ftchvs/PlaidBar/blob/main/SECURITY.md",
+                    url: PlaidBarConstants.repositoryFileURL("SECURITY.md"),
                     detail: "Private reporting path for token, credential, or data exposure."
                 )
             }
@@ -1366,21 +1366,21 @@ struct AboutView: View {
                 supportLink(
                     "GitHub Repository",
                     systemImage: "chevron.left.forwardslash.chevron.right",
-                    url: "https://github.com/ftchvs/PlaidBar",
+                    url: PlaidBarConstants.repositoryURL,
                     detail: "Source, issues, and releases (private repository)."
                 )
 
                 supportLink(
                     "1.0 Roadmap",
                     systemImage: "map",
-                    url: "https://github.com/ftchvs/PlaidBar/blob/main/docs/v1.0-roadmap.md",
+                    url: PlaidBarConstants.repositoryFileURL("docs/v1.0-roadmap.md"),
                     detail: "Product, design, system, security, and release plan."
                 )
 
                 supportLink(
                     "Release Notes",
                     systemImage: "doc.text",
-                    url: "https://github.com/ftchvs/PlaidBar/blob/main/docs/release-notes.md",
+                    url: PlaidBarConstants.repositoryFileURL("docs/release-notes.md"),
                     detail: "Curated release summary for current and upcoming versions."
                 )
             }
