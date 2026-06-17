@@ -3,17 +3,67 @@ import PlaidBarCore
 
 private final class LocalAIProbeRace: @unchecked Sendable {
     private let lock = NSLock()
-    private var didResume = false
+    private var continuation: CheckedContinuation<String, Error>?
+    private var probeTask: Task<Void, Never>?
+    private var timeoutTask: Task<Void, Never>?
 
-    func resumeOnce(_ body: () -> Void) {
+    init(continuation: CheckedContinuation<String, Error>) {
+        self.continuation = continuation
+    }
+
+    func setTasks(probeTask: Task<Void, Never>, timeoutTask: Task<Void, Never>) {
+        var shouldCancel = false
         lock.lock()
-        guard !didResume else {
-            lock.unlock()
-            return
+        if continuation == nil {
+            shouldCancel = true
+        } else {
+            self.probeTask = probeTask
+            self.timeoutTask = timeoutTask
         }
-        didResume = true
         lock.unlock()
-        body()
+
+        if shouldCancel {
+            probeTask.cancel()
+            timeoutTask.cancel()
+        }
+    }
+
+    func complete(_ result: Result<String, Error>) {
+        let continuationToResume: CheckedContinuation<String, Error>?
+        let probeTaskToCancel: Task<Void, Never>?
+        let timeoutTaskToCancel: Task<Void, Never>?
+
+        lock.lock()
+        continuationToResume = continuation
+        continuation = nil
+        probeTaskToCancel = probeTask
+        timeoutTaskToCancel = timeoutTask
+        probeTask = nil
+        timeoutTask = nil
+        lock.unlock()
+
+        guard let continuationToResume else { return }
+
+        probeTaskToCancel?.cancel()
+        timeoutTaskToCancel?.cancel()
+
+        switch result {
+        case .success(let value):
+            continuationToResume.resume(returning: value)
+        case .failure(let error):
+            continuationToResume.resume(throwing: error)
+        }
+    }
+
+    func cancelTimeout() {
+        let timeoutTaskToCancel: Task<Void, Never>?
+
+        lock.lock()
+        timeoutTaskToCancel = timeoutTask
+        timeoutTask = nil
+        lock.unlock()
+
+        timeoutTaskToCancel?.cancel()
     }
 }
 
@@ -128,12 +178,11 @@ struct LocalAIInsightsService: Sendable {
     }
 
     private func boundedProbe(model: any LocalInsightModel) async throws -> String {
-        let race = LocalAIProbeRace()
+        let timeoutNanoseconds = generationConfiguration.timeoutNanoseconds
         return try await withCheckedThrowingContinuation { continuation in
-            var probeTask: Task<Void, Never>?
-            var timeoutTask: Task<Void, Never>?
+            let race = LocalAIProbeRace(continuation: continuation)
 
-            probeTask = Task {
+            let probeTask = Task {
                 do {
                     let result = try await model.summarize(
                         LocalInsightModelPrompt(
@@ -142,29 +191,21 @@ struct LocalAIInsightsService: Sendable {
                         ),
                         maxTokens: 8
                     )
-                    race.resumeOnce {
-                        timeoutTask?.cancel()
-                        continuation.resume(returning: result)
-                    }
+                    race.complete(.success(result))
                 } catch {
-                    race.resumeOnce {
-                        timeoutTask?.cancel()
-                        continuation.resume(throwing: error)
-                    }
+                    race.complete(.failure(error))
                 }
             }
 
-            timeoutTask = Task {
+            let timeoutTask = Task {
                 do {
-                    try await Task.sleep(nanoseconds: generationConfiguration.timeoutNanoseconds)
-                    race.resumeOnce {
-                        probeTask?.cancel()
-                        continuation.resume(throwing: LocalInsightModelError.runtimeUnavailableWithDiagnostic("Local AI health probe timed out."))
-                    }
+                    try await Task.sleep(nanoseconds: timeoutNanoseconds)
+                    race.complete(.failure(LocalInsightModelError.runtimeUnavailableWithDiagnostic("Local AI health probe timed out.")))
                 } catch {
-                    probeTask?.cancel()
+                    race.cancelTimeout()
                 }
             }
+            race.setTasks(probeTask: probeTask, timeoutTask: timeoutTask)
         }
     }
 
