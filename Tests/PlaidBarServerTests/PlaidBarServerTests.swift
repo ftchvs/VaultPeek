@@ -964,6 +964,85 @@ struct PlaidBarServerTests {
         #expect(response.status == .ok)
     }
 
+    @Test func apiMiddlewareRejectsForeignBrowserOrigin() async throws {
+        let middleware = APITokenMiddleware<TestRequestContext>(authToken: "local-token")
+        let context = TestRequestContext(source: TestRequestContextSource())
+
+        for request in [
+            Self.makeRequest(
+                path: "/api/status",
+                authorization: "Bearer local-token",
+                origin: "https://evil.example.com"
+            ),
+            Self.makeRequest(
+                path: "/api/status",
+                authorization: "Bearer local-token",
+                referer: "https://evil.example.com/page"
+            ),
+            Self.makeRequest(
+                path: "/api/status",
+                authorization: "Bearer local-token",
+                origin: "null"
+            ),
+        ] {
+            do {
+                _ = try await middleware.handle(request, context: context) { _, _ in
+                    Response(status: .ok)
+                }
+                #expect(Bool(false), "Expected cross-origin API request to throw")
+            } catch let error as HTTPError {
+                #expect(error.status == .forbidden)
+                #expect(error.body == "Cross-origin requests are not allowed")
+            } catch {
+                #expect(Bool(false), "Expected HTTPError, got \(error)")
+            }
+        }
+    }
+
+    @Test func apiMiddlewareAllowsNativeAppAndLoopbackOrigins() async throws {
+        let middleware = APITokenMiddleware<TestRequestContext>(authToken: "local-token")
+        let context = TestRequestContext(source: TestRequestContextSource())
+
+        for request in [
+            // Native app: no Origin or Referer header.
+            Self.makeRequest(path: "/api/status", authorization: "Bearer local-token"),
+            // Loopback origins are allowed in case a local tool calls the API.
+            Self.makeRequest(
+                path: "/api/status",
+                authorization: "Bearer local-token",
+                origin: "http://127.0.0.1:8484"
+            ),
+            Self.makeRequest(
+                path: "/api/status",
+                authorization: "Bearer local-token",
+                origin: "http://localhost:8484",
+                referer: "http://localhost:8484/index.html"
+            ),
+        ] {
+            let response = try await middleware.handle(request, context: context) { _, _ in
+                Response(status: .ok)
+            }
+            #expect(response.status == .ok)
+        }
+    }
+
+    @Test func apiOriginAllowlistClassifiesHosts() {
+        // Native app sends neither header.
+        #expect(APITokenAuthorization.isAllowedBrowserOrigin(origin: nil, referer: nil))
+        // Loopback hosts (with and without ports) are allowed.
+        #expect(APITokenAuthorization.isAllowedBrowserOrigin(origin: "http://127.0.0.1:8484", referer: nil))
+        #expect(APITokenAuthorization.isAllowedBrowserOrigin(origin: "http://localhost", referer: nil))
+        #expect(APITokenAuthorization.isAllowedBrowserOrigin(origin: "http://[::1]:8484", referer: nil))
+        // Foreign origins are rejected.
+        #expect(!APITokenAuthorization.isAllowedBrowserOrigin(origin: "https://evil.example.com", referer: nil))
+        #expect(!APITokenAuthorization.isAllowedBrowserOrigin(origin: nil, referer: "https://evil.example.com/p"))
+        // Malformed values fail closed.
+        #expect(!APITokenAuthorization.isAllowedBrowserOrigin(origin: "null", referer: nil))
+        #expect(!APITokenAuthorization.isAllowedBrowserOrigin(origin: "127.0.0.1", referer: nil))
+        // Lookalike hosts that merely contain a loopback substring are rejected.
+        #expect(!APITokenAuthorization.isAllowedBrowserOrigin(origin: "http://localhost.evil.com", referer: nil))
+    }
+
     @Test func oauthCallbackErrorPageEscapesDynamicMessage() {
         let html = OAuthCallbackRoute.errorPage("<script>alert('x')</script> & retry \"soon\"")
 
@@ -972,10 +1051,21 @@ struct PlaidBarServerTests {
         #expect(html.contains("&amp; retry &quot;soon&quot;"))
     }
 
-    private static func makeRequest(path: String, authorization: String? = nil) -> Request {
+    private static func makeRequest(
+        path: String,
+        authorization: String? = nil,
+        origin: String? = nil,
+        referer: String? = nil
+    ) -> Request {
         var headers = HTTPFields()
         if let authorization {
             headers[.authorization] = authorization
+        }
+        if let origin {
+            headers[.origin] = origin
+        }
+        if let referer {
+            headers[.referer] = referer
         }
         return Request(
             head: HTTPRequest(method: .get, scheme: nil, authority: nil, path: path, headerFields: headers),
