@@ -13,6 +13,7 @@ public enum TransactionReviewReason: String, Codable, Sendable, CaseIterable, Eq
     case possibleTransfer
     case recurringChanged
     case pendingChanged
+    case changedSinceReview
 
     public var displayName: String {
         switch self {
@@ -22,12 +23,13 @@ public enum TransactionReviewReason: String, Codable, Sendable, CaseIterable, Eq
         case .possibleTransfer: "Possible transfer"
         case .recurringChanged: "Recurring changed"
         case .pendingChanged: "Pending changed"
+        case .changedSinceReview: "Changed since review"
         }
     }
 
     public var priority: Int {
         switch self {
-        case .possibleTransfer, .pendingChanged, .recurringChanged: 0
+        case .possibleTransfer, .pendingChanged, .recurringChanged, .changedSinceReview: 0
         case .unusualAmount: 1
         case .uncategorized, .newMerchant: 2
         }
@@ -244,6 +246,16 @@ public enum TransactionReviewInbox {
             if didSettleDifferently {
                 reasons.insert(.pendingChanged)
             }
+            // A charge the user already resolved under its own id whose amount or
+            // name drifted afterward must reopen even when the new value trips no
+            // other heuristic (e.g. a known, categorized merchant going $50 -> $60,
+            // below the unusual-amount threshold). Insert the reason BEFORE the
+            // empty-reasons guard below — otherwise that guard drops the row and the
+            // reopen logic never runs, silently swallowing the post-review change.
+            let reviewedChargeChangedSinceReview = ownResolved && reviewedChargeChanged(transaction, ownMetadata)
+            if reviewedChargeChangedSinceReview {
+                reasons.insert(.changedSinceReview)
+            }
 
             let orderedReasons = reasons.sorted {
                 if $0.priority == $1.priority { return $0.rawValue < $1.rawValue }
@@ -251,19 +263,38 @@ public enum TransactionReviewInbox {
             }
             guard !orderedReasons.isEmpty else { return nil }
 
-            // A matched rule applies its normalized fields, and an already
-            // reviewed/ignored item is settled — but neither should hide a
-            // high-priority signal (large spike, recurring change, posted-pending
-            // change, possible transfer). Surface those; suppress the rest.
-            if isAlreadyResolved || !matchedRules.isEmpty {
+            // A charge the user already reviewed/ignored is CLEARED from the
+            // inbox once they act — even when it carries a high-priority reason.
+            // (Previously a high-priority reason kept resolved items pinned, so
+            // Approve/Ignore appeared to do nothing on exactly the large/unusual
+            // rows users most want to clear.) It only returns if the charge
+            // materially changed SINCE the review — a different posted amount/name
+            // (`reviewedChargeChanged`) or a pending→posted settle difference —
+            // in which case it reopens as needs-review (reportedStatus below).
+            // Reopen a resolved charge only if it materially changed since review:
+            // a pending→posted settle difference (`didSettleDifferently`), or — when
+            // the user resolved the POSTED charge under its own id — a later
+            // amount/name change vs that own baseline. The carried-forward pending
+            // record is NOT used as a change baseline (its pending-phase name/amount
+            // legitimately differ from the posted charge; that comparison is
+            // `didSettleDifferently`'s job).
+            let changedSinceReview = isAlreadyResolved
+                && (didSettleDifferently || reviewedChargeChangedSinceReview)
+            if isAlreadyResolved, !changedSinceReview {
+                return nil
+            }
+
+            // A matched rule normalizes fields on an item the user has NOT
+            // explicitly resolved; it should not hide a fresh high-priority
+            // signal, but the rule handles the lower-priority ones.
+            if !isAlreadyResolved, !matchedRules.isEmpty {
                 guard orderedReasons.contains(where: \.isHighPriority) else { return nil }
             }
 
-            // A charge that settled with a different amount or name after its
-            // pending phase was already approved/ignored is effectively reopened —
-            // present it as needing review rather than as still resolved.
+            // A reviewed charge that changed after the fact is effectively
+            // reopened — present it as needing review rather than as resolved.
             let reportedStatus: TransactionReviewStatus =
-                (didSettleDifferently && isAlreadyResolved) ? .needsReview : (metadata?.status ?? .needsReview)
+                changedSinceReview ? .needsReview : (metadata?.status ?? .needsReview)
 
             return TransactionReviewItem(
                 transaction: transaction,
@@ -421,6 +452,27 @@ public enum TransactionReviewInbox {
             (recurring.lastDate == transaction.date && recurring.hasPriceIncrease) ||
                 recurring.isStale(asOf: now)
         }
+    }
+
+    /// Whether a charge the user already reviewed has materially changed since,
+    /// relative to the amount/name snapshot captured at review time (`lastSeen*`).
+    /// A changed charge reopens in the inbox as needs-review; an unchanged one
+    /// stays cleared. Missing baselines mean "no change". The pending→posted
+    /// transition itself is NOT a material change — a charge that posts with the
+    /// same amount/name should stay cleared (the pending-vs-posted settle
+    /// difference is detected separately by `pendingSettledDifferently`).
+    private static func reviewedChargeChanged(
+        _ transaction: TransactionDTO,
+        _ metadata: TransactionReviewMetadata?
+    ) -> Bool {
+        guard let metadata else { return false }
+        if let seenAmount = metadata.lastSeenAmount, abs(seenAmount - transaction.amount) > 0.005 {
+            return true
+        }
+        if let seenName = metadata.lastSeenName, seenName != transaction.name {
+            return true
+        }
+        return false
     }
 
     /// The record that captured this charge while it was pending. Prefer the
