@@ -123,6 +123,14 @@ public struct AppLockPreferences: Sendable, Equatable {
         }
     }
 
+    public var shouldLockOnLaunch: Bool {
+        appLockEnabled && lockOnLaunch
+    }
+
+    public var shouldLockWhenBackgrounded: Bool {
+        appLockEnabled && lockWhenBackgrounded
+    }
+
     public func shouldEvaluateFinancialNotifications(isAppLocked: Bool) -> Bool {
         guard appLockEnabled && isAppLocked else { return true }
         return notificationPrivacyMode != .offWhileLocked
