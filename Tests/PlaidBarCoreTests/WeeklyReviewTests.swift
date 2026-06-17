@@ -292,6 +292,44 @@ struct WeeklyReviewTests {
         #expect(presentation.remainingCount == 1)
     }
 
+    @Test("Category drift hint does not promise navigation that does not happen")
+    func categoryDriftHintDoesNotPromiseNavigation() {
+        // The category-drift item's `.inspectCategory` action has no budget
+        // surface to open (AND-466). Its accessibility hint must therefore not
+        // claim it opens one — that read as a live dead-end.
+        let presentation = WeeklyReviewBuilder.evaluate(
+            state: .empty,
+            transactionState: WeeklyReviewTransactionState(
+                trustedTransactionIds: [],
+                unreviewedTransactionIds: []
+            ),
+            transactions: [],
+            recurringTransactions: [],
+            safeToSpend: safeToSpend(amount: 500),
+            categoryBudgets: CategoryBudgetPresentation(
+                items: [
+                    CategoryBudgetPresentation.Item(
+                        category: .foodAndDrink,
+                        monthlyLimit: 100,
+                        spent: 125,
+                        isSuggested: false
+                    ),
+                ],
+                totalLimit: 100,
+                totalSpent: 125,
+                overBudgetCount: 1,
+                nearingCount: 0
+            ),
+            asOf: now,
+            calendar: calendar
+        )
+
+        let driftItem = presentation.items.first { $0.kind == .categoryDrift }
+        #expect(driftItem?.action == .inspectCategory)
+        #expect(driftItem?.accessibilityHint == "Flags category budget pressure for this month.")
+        #expect(driftItem?.accessibilityHint.contains("Opens") == false)
+    }
+
     @Test("Notification copy is privacy preserving by default")
     func notificationCopyIsPrivate() {
         let presentation = WeeklyReviewBuilder.evaluate(
