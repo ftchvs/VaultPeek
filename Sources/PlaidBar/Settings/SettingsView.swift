@@ -365,12 +365,13 @@ struct PrivacySecuritySettingsView: View {
             }
 
             Section("Notifications while private") {
-                Picker("Notification details", selection: $state.appLockPreferences.notificationPrivacyMode) {
-                    ForEach(NotificationPrivacyMode.allCases, id: \.self) { mode in
-                        Text(mode.displayName).tag(mode)
-                    }
-                }
-                .accessibilityValue(appState.appLockPreferences.notificationPrivacyMode.displayName)
+                // VaultPeek's notification bodies are always generic (no merchant,
+                // account, or amount), so the only honest choice is whether alerts
+                // are suppressed while locked. The binding maps to the underlying
+                // `notificationPrivacyMode` so every persisted raw value stays
+                // decodable.
+                Toggle("Suppress alerts while locked", isOn: $state.appLockPreferences.notificationPrivacyMode.suppressesNotificationsWhileLocked)
+                    .disabled(!appState.appLockPreferences.appLockEnabled)
 
                 Text(appState.appLockPreferences.notificationPrivacyMode.detail)
                     .detailText()

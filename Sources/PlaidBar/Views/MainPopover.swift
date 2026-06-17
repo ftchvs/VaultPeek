@@ -135,6 +135,26 @@ struct MainPopover: View {
 
     var body: some View {
         chromedPopover
+            // Full App Lock gate: when content is LOCKED (not merely masked) the
+            // dashboard must be hidden entirely — account and institution names
+            // would otherwise leak even though balances are dotted (AND-462). The
+            // overlay sits above the chrome on both the popover and the detached
+            // host (both render this same view). Privacy Mask (`.masked`) is
+            // unaffected: it only dots values and leaves content visible.
+            .overlay {
+                if appState.isContentLocked {
+                    AppLockedGateView(
+                        message: appState.lockedSurfaceCopy,
+                        reduceMotion: reduceMotion,
+                        onUnlock: { Task { await appState.unlockApp() } }
+                    )
+                    .transition(.opacity)
+                }
+            }
+            .animation(
+                MotionTokens.animation(MotionTokens.standard, reduceMotion: reduceMotion),
+                value: appState.isContentLocked
+            )
             .sheet(
                 isPresented: $isShowingAccountSetup,
                 onDismiss: {
@@ -565,6 +585,60 @@ struct MainPopover: View {
 
     private func openAccountSetup() {
         isShowingAccountSetup = true
+    }
+}
+
+/// Full-surface gate shown when App Lock is engaged (LOCKED, not just masked).
+/// It paints an opaque material over the entire dashboard so no real value,
+/// account, or institution name behind it can be read, and offers a single
+/// Unlock action that re-prompts for authentication. Distinct from Privacy
+/// Mask, which only dots currency and leaves the dashboard visible (AND-462).
+private struct AppLockedGateView: View {
+    let message: String
+    let reduceMotion: Bool
+    let onUnlock: () -> Void
+
+    var body: some View {
+        ZStack {
+            // Opaque backdrop: the detached window renders a clear root, so the
+            // gate cannot rely on the host being opaque — it must obscure on its
+            // own. `.bar` material over the window background fully hides content.
+            Rectangle()
+                .fill(.background)
+                .overlay(.bar)
+                .ignoresSafeArea()
+
+            VStack(spacing: Spacing.md) {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 34, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+
+                Text("VaultPeek Locked")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(AppearanceTextColors.primary)
+
+                Text(message)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: 320)
+
+                Button(action: onUnlock) {
+                    Label("Unlock", systemImage: "lock.open.fill")
+                        .frame(minWidth: 120)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .keyboardShortcut(.defaultAction)
+            }
+            .padding(Spacing.xl)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("VaultPeek is locked. \(message)")
+        .accessibilityAddTraits(.isModal)
     }
 }
 

@@ -32,6 +32,11 @@ final class DetachedDashboardWindowController: NSObject, NSWindowDelegate {
     /// closed (via the close button or the in-dashboard re-dock control). Set by
     /// the owner so the controller does not reach back into app state policy.
     private let onRedock: @MainActor () -> Void
+    /// Invoked whenever the detached panel becomes key (the user focuses the
+    /// window). The owner uses it to drive the App Lock unlock prompt, mirroring
+    /// the popover-open unlock trigger so a locked app with a detached window is
+    /// not stuck (AND-462). The controller stays unaware of lock policy.
+    private let onWindowBecomeKey: @MainActor () -> Void
 
     private var panel: NSWindow?
     private var hostingController: NSHostingController<AnyView>?
@@ -52,6 +57,12 @@ final class DetachedDashboardWindowController: NSObject, NSWindowDelegate {
     /// captures `self` weakly, so even an orphaned observation is a harmless
     /// no-op.
     private var selectionObserver: NSObjectProtocol?
+    /// Observes the panel's `didBecomeKeyNotification` so focusing the detached
+    /// window triggers the App Lock unlock prompt (AND-462). Scoped to the panel
+    /// object so it never fires for other windows. Same no-`deinit` rationale as
+    /// `selectionObserver`: the controller lives for the process and the closure
+    /// captures `self` weakly.
+    private var becomeKeyObserver: NSObjectProtocol?
     /// True while this window holds a `.regular` activation request with the shared
     /// `AppActivationPolicyCoordinator` (managed mode only). Tracked so show/raise
     /// request exactly once and re-dock releases exactly once.
@@ -60,11 +71,13 @@ final class DetachedDashboardWindowController: NSObject, NSWindowDelegate {
     init(
         appState: AppState,
         forcedColorScheme: ColorScheme?,
-        onRedock: @escaping @MainActor () -> Void
+        onRedock: @escaping @MainActor () -> Void,
+        onWindowBecomeKey: @escaping @MainActor () -> Void
     ) {
         self.appState = appState
         self.forcedColorScheme = forcedColorScheme
         self.onRedock = onRedock
+        self.onWindowBecomeKey = onWindowBecomeKey
         super.init()
     }
 
@@ -309,6 +322,24 @@ final class DetachedDashboardWindowController: NSObject, NSWindowDelegate {
                     if let panel = self.panel {
                         self.applyWindowLevelBehavior(to: panel)
                     }
+                }
+            }
+        }
+
+        // App Lock unlock trigger for the detached surface: focusing the window
+        // prompts to unlock, mirroring the popover-open trigger so a locked app
+        // with a detached window is not stuck (AND-462). Scoped to this panel via
+        // the notification `object`, so other windows becoming key are ignored.
+        // The owner's callback guards on `isAppLocked` and is a cheap no-op
+        // otherwise, so this cannot start a lock/unlock loop.
+        if becomeKeyObserver == nil {
+            becomeKeyObserver = NotificationCenter.default.addObserver(
+                forName: NSWindow.didBecomeKeyNotification,
+                object: panel,
+                queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.onWindowBecomeKey()
                 }
             }
         }
