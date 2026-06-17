@@ -320,6 +320,75 @@ struct TransactionReviewInboxTests {
         #expect(snapshot.totalCount == 0)
     }
 
+    @Test("Approving a high-priority (unusual-amount) charge clears it from the inbox")
+    func approvingHighPriorityChargeClearsIt() {
+        let transactions = [
+            tx(id: "old-1", amount: 20, date: "2026-05-01", category: .foodAndDrink, merchantName: "Coffee Shop"),
+            tx(id: "old-2", amount: 22, date: "2026-05-08", category: .foodAndDrink, merchantName: "Coffee Shop"),
+            tx(id: "old-3", amount: 21, date: "2026-05-15", category: .foodAndDrink, merchantName: "Coffee Shop"),
+            tx(id: "spike", amount: 120, date: "2026-06-01", category: .foodAndDrink, merchantName: "Coffee Shop"),
+        ]
+
+        // The spike is high-priority (unusual amount) before review.
+        #expect(evaluate(transactions).items.contains { $0.id == "spike" })
+
+        // Approving it clears it from the inbox even though the reason is
+        // high-priority — the user acted, so it should not stay pinned.
+        let approved = TransactionReviewMetadata(id: "spike", status: .reviewed, lastSeenAmount: 120)
+        let afterApprove = evaluate(transactions, metadata: [approved])
+        #expect(afterApprove.items.contains { $0.id == "spike" } == false)
+    }
+
+    @Test("A reviewed charge reopens if its amount changes afterward")
+    func reviewedChargeReopensWhenAmountChanges() {
+        let transactions = [
+            tx(id: "old-1", amount: 20, date: "2026-05-01", category: .foodAndDrink, merchantName: "Coffee Shop"),
+            tx(id: "old-2", amount: 22, date: "2026-05-08", category: .foodAndDrink, merchantName: "Coffee Shop"),
+            tx(id: "old-3", amount: 21, date: "2026-05-15", category: .foodAndDrink, merchantName: "Coffee Shop"),
+            tx(id: "spike", amount: 120, date: "2026-06-01", category: .foodAndDrink, merchantName: "Coffee Shop"),
+        ]
+
+        // Reviewed at $40, but the charge is now $120 — materially changed since
+        // review, so it reopens as needs-review instead of staying cleared.
+        let staleApproval = TransactionReviewMetadata(id: "spike", status: .reviewed, lastSeenAmount: 40)
+        let snapshot = evaluate(transactions, metadata: [staleApproval])
+        let spike = snapshot.items.first { $0.id == "spike" }
+        #expect(spike != nil)
+        #expect(spike?.status == .needsReview)
+    }
+
+    @Test("A reviewed charge reopens when its amount drifts below the unusual threshold (no other signal)")
+    func reviewedChargeReopensOnSubThresholdDrift() {
+        // A known, categorized merchant the inbox would not otherwise flag: several
+        // similar prior charges (so it is not a new merchant), categorized (not
+        // uncategorized), and a new amount close to its peers (not unusual). The
+        // ONLY thing that can surface it is that it changed after review — the case
+        // the empty-reasons guard used to swallow before the reopen logic ran.
+        let transactions = [
+            tx(id: "g-1", amount: 40, date: "2026-05-01", category: .foodAndDrink, merchantName: "Corner Grocer"),
+            tx(id: "g-2", amount: 42, date: "2026-05-08", category: .foodAndDrink, merchantName: "Corner Grocer"),
+            tx(id: "g-3", amount: 41, date: "2026-05-15", category: .foodAndDrink, merchantName: "Corner Grocer"),
+            tx(id: "g-4", amount: 43, date: "2026-05-22", category: .foodAndDrink, merchantName: "Corner Grocer"),
+            tx(id: "drift", amount: 45, date: "2026-06-01", category: .foodAndDrink, merchantName: "Corner Grocer"),
+        ]
+
+        // With no metadata the modest $45 charge trips no heuristic on its own.
+        #expect(evaluate(transactions).items.contains { $0.id == "drift" } == false)
+
+        // Reviewed when it was $41, later posted as $45 — a sub-threshold change no
+        // other heuristic catches. It must still reopen as needs-review.
+        let staleReview = TransactionReviewMetadata(id: "drift", status: .reviewed, lastSeenAmount: 41)
+        let reopened = evaluate(transactions, metadata: [staleReview])
+        let drift = reopened.items.first { $0.id == "drift" }
+        #expect(drift != nil)
+        #expect(drift?.status == .needsReview)
+        #expect(drift?.reasonCodes.contains(.changedSinceReview) == true)
+
+        // An unchanged reviewed charge (seen at the same $45) stays cleared.
+        let cleanReview = TransactionReviewMetadata(id: "drift", status: .reviewed, lastSeenAmount: 45)
+        #expect(evaluate(transactions, metadata: [cleanReview]).items.contains { $0.id == "drift" } == false)
+    }
+
     @Test("Rule-matched transactions stay out of inbox")
     func ruleMatchedTransactionsAreTrusted() {
         let transaction = tx(id: "rule-match", category: nil, merchantName: "Known Merchant")
