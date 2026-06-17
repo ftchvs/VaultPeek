@@ -6,7 +6,6 @@ public struct SyncResponse: Codable, Sendable {
     public let modified: [TransactionDTO]
     public let removed: [String]  // transaction IDs
     public let hasMore: Bool
-    public let nextCursor: String?
     public let pendingCursors: [String: String]
 
     public init(
@@ -14,14 +13,12 @@ public struct SyncResponse: Codable, Sendable {
         modified: [TransactionDTO],
         removed: [String],
         hasMore: Bool,
-        nextCursor: String? = nil,
         pendingCursors: [String: String] = [:]
     ) {
         self.added = added
         self.modified = modified
         self.removed = removed
         self.hasMore = hasMore
-        self.nextCursor = nextCursor
         self.pendingCursors = pendingCursors
     }
 
@@ -30,7 +27,6 @@ public struct SyncResponse: Codable, Sendable {
         case modified
         case removed
         case hasMore
-        case nextCursor
         case pendingCursors
     }
 
@@ -40,7 +36,6 @@ public struct SyncResponse: Codable, Sendable {
         modified = try container.decode([TransactionDTO].self, forKey: .modified)
         removed = try container.decode([String].self, forKey: .removed)
         hasMore = try container.decode(Bool.self, forKey: .hasMore)
-        nextCursor = try container.decodeIfPresent(String.self, forKey: .nextCursor)
         pendingCursors = try container.decodeIfPresent([String: String].self, forKey: .pendingCursors) ?? [:]
     }
 }

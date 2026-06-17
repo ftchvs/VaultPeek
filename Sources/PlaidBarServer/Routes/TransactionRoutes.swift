@@ -70,7 +70,6 @@ struct TransactionRoutes: Sendable {
             modified: successfulResults.flatMap(\.modified),
             removed: successfulResults.flatMap(\.removed),
             hasMore: successfulResults.contains(where: \.hasMore),
-            nextCursor: successfulResults.last(where: { ($0.nextCursor?.isEmpty == false) })?.nextCursor,
             pendingCursors: pendingCursors
         )
 

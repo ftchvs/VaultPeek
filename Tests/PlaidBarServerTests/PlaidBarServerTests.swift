@@ -1785,7 +1785,6 @@ struct PlaidBarServerTests {
             let sync: SyncResponse = try await Self.decodeBody(response)
             #expect(sync.added.map(\.id) == ["tx-a", "tx-c"])
             #expect(sync.added.map(\.itemId) == ["item-a", "item-c"])
-            #expect(sync.nextCursor == "cursor-c")
             #expect(sync.pendingCursors == ["item-a": "cursor-a", "item-c": "cursor-c"])
             let calls = await client.recordedCalls()
             #expect(calls.syncs.sorted() == ["token-a", "token-b", "token-c"])
@@ -1837,7 +1836,6 @@ struct PlaidBarServerTests {
             #expect(calls.map(\.cursor) == ["persisted-cursor", "cursor-1"])
             #expect(response.added.map(\.id) == ["tx-page-1", "tx-page-2"])
             #expect(response.hasMore == false)
-            #expect(response.nextCursor == "cursor-2")
             #expect(response.pendingCursors == [itemId: "cursor-2"])
         }
     }
@@ -1891,7 +1889,6 @@ struct PlaidBarServerTests {
 
             #expect(calls.map(\.cursor) == ["persisted-cursor", "stale-cursor", "persisted-cursor", "fresh-cursor-1"])
             #expect(response.added.map(\.id) == ["fresh-page-1", "fresh-page-2"])
-            #expect(response.nextCursor == "fresh-cursor-2")
             #expect(response.pendingCursors == [itemId: "fresh-cursor-2"])
         }
     }
