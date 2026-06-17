@@ -1292,6 +1292,36 @@ struct PlaidBarCoreTests {
         #expect(transactions.first { $0.id == "new" }?.amount == 50)
     }
 
+    @Test("Transaction sync reducer collapses pending into posted via pendingTransactionId")
+    func transactionSyncReducerReconcilesPendingToPosted() {
+        let existing = [
+            TransactionDTO(id: "pending-1", accountId: "a", amount: 42, date: "2026-01-05", name: "Coffee", pending: true)
+        ]
+        // Plaid posts the transaction under a new id but omits the explicit `removed` entry.
+        let response = SyncResponse(
+            added: [
+                TransactionDTO(
+                    id: "posted-1",
+                    accountId: "a",
+                    amount: 42,
+                    date: "2026-01-05",
+                    name: "Coffee",
+                    pending: false,
+                    pendingTransactionId: "pending-1"
+                )
+            ],
+            modified: [],
+            removed: [],
+            hasMore: false
+        )
+
+        let transactions = TransactionSyncReducer.applying(response, to: existing)
+
+        #expect(transactions.map(\.id) == ["posted-1"])
+        #expect(transactions.first?.pending == false)
+        #expect(transactions.contains { $0.id == "pending-1" } == false)
+    }
+
     @Test("Transaction sync batch applies multi-page changes without duplicates or lost updates")
     func transactionSyncBatchAppliesMultiPageChanges() {
         let existing = [
