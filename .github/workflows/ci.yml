@@ -33,6 +33,9 @@ jobs:
         run: |
           bash -n Scripts/*.sh Scripts/vaultpeek-run Scripts/plaidbar-run
 
+      - name: Secret scan
+        run: PLAIDBAR_GATE_SKIP_BUILD=1 bash Scripts/pre-push-gate.sh
+
       - name: Version metadata alignment
         run: ./Scripts/verify-version-alignment.sh
 
