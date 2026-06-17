@@ -38,4 +38,10 @@ enum CategoryAccentTokens {
             .secondary
         }
     }
+
+    /// Resolves the category's chart hex color for the active appearance, selecting
+    /// `colorHexDark` in dark mode so low-contrast light-mode hues stay above 3:1.
+    static func chartHex(for category: SpendingCategory, colorScheme: ColorScheme) -> String {
+        colorScheme == .dark ? category.colorHexDark : category.colorHex
+    }
 }

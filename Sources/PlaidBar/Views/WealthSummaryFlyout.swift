@@ -369,7 +369,7 @@ private struct WealthBalanceMixSection: View {
     private func tint(for id: String) -> Color {
         switch id {
         case "cash":
-            Color.secondary.opacity(0.6)
+            SemanticColors.positive
         case "investments":
             Color.primary.opacity(0.36)
         case "credit":
