@@ -137,6 +137,53 @@ struct WeeklyReviewTests {
         #expect(state.unreviewedTransactionIds == ["missing-metadata"])
     }
 
+    /// Regression for the Weekly Review under-count: a transaction whose metadata
+    /// is `.needsReview` but which trips no Review Inbox heuristic must still be
+    /// counted as unreviewed. The old production path derived the count from the
+    /// inbox snapshot, which emits no item for such a transaction — silently
+    /// counting a genuinely-unreviewed transaction as trusted. `derived(...)`
+    /// (the contract production now uses) classifies strictly by metadata status.
+    @Test("Needs-review transaction tripping no inbox heuristic is still unreviewed")
+    func needsReviewWithoutHeuristicIsCountedUnreviewed() {
+        // Three identical, well-categorized charges for one established merchant:
+        // categorized (no `.uncategorized`), merchant count > 1 (no `.newMerchant`),
+        // uniform amount (no `.unusualAmount`), not income/transfer/pending. This
+        // trips none of the inbox heuristics.
+        let transactions = (0..<3).map { index in
+            TransactionDTO(
+                id: "grocery-\(index)",
+                accountId: "acct-grocery",
+                amount: 42.50,
+                date: "2026-06-1\(index)",
+                name: "WHOLE FOODS",
+                merchantName: "Whole Foods",
+                category: .foodAndDrink
+            )
+        }
+        // Two settled as reviewed; the third left needing review.
+        let metadata = [
+            TransactionReviewMetadata(id: "grocery-0", status: .reviewed),
+            TransactionReviewMetadata(id: "grocery-1", status: .reviewed),
+            TransactionReviewMetadata(id: "grocery-2", status: .needsReview),
+        ]
+
+        // The inbox emits no item for the needs-review transaction — this is the
+        // exact gap that made the old production count miss it.
+        let inbox = TransactionReviewInbox.evaluate(
+            transactions: transactions,
+            metadata: metadata,
+            rules: [],
+            recurring: [],
+            now: now
+        )
+        #expect(inbox.items.contains { $0.id == "grocery-2" } == false)
+
+        // The tested contract still counts it as unreviewed.
+        let state = WeeklyReviewTransactionState.derived(from: transactions, metadata: metadata)
+        #expect(state.unreviewedTransactionIds == ["grocery-2"])
+        #expect(state.trustedTransactionIds == ["grocery-0", "grocery-1"])
+    }
+
     @Test("Reviewed and ignored transaction metadata unblock weekly review")
     func reviewedAndIgnoredTransactionMetadataUnblocksWeeklyReview() {
         let transactions = [

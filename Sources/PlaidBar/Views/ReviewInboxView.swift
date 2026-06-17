@@ -7,6 +7,10 @@ struct ReviewInboxView: View {
     @State private var selectedIndex = 0
     @State private var merchantDrafts: [String: String] = [:]
     @State private var actionConfirmation: ReviewActionConfirmation?
+    /// Monotonic token so a queued auto-dismiss only clears the banner it was
+    /// scheduled for — a newer action (which bumps the token) is never wiped by
+    /// an older timer.
+    @State private var confirmationGeneration = 0
 
     private var snapshot: TransactionReviewInboxSnapshot {
         appState.transactionReviewInboxSnapshot
@@ -81,8 +85,14 @@ struct ReviewInboxView: View {
                 isFocused = true
                 clampSelection()
             }
-            .onChange(of: snapshot.totalCount) { _, _ in
+            .onChange(of: snapshot.totalCount) { _, newCount in
                 clampSelection()
+                // When the queue drains to empty, drop any lingering confirmation
+                // banner so the inbox can collapse out of the popover instead of
+                // sitting in an empty "0 items" state with a stuck banner.
+                if newCount == 0 {
+                    withAnimation(.snappy(duration: 0.18)) { actionConfirmation = nil }
+                }
             }
             .onMoveCommand(perform: moveSelection)
             .accessibilityElement(children: .contain)
@@ -164,8 +174,17 @@ struct ReviewInboxView: View {
     }
 
     private func recordAction(_ action: ReviewActionConfirmation.Action, for item: TransactionReviewItem) {
+        confirmationGeneration &+= 1
+        let generation = confirmationGeneration
         withAnimation(.snappy(duration: 0.18)) {
             actionConfirmation = ReviewActionConfirmation(action: action, merchantName: item.effectiveMerchantName)
+        }
+        // Auto-dismiss so the banner never persists indefinitely. The generation
+        // guard means a newer action's banner is not cleared by this older timer.
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2.5))
+            guard confirmationGeneration == generation else { return }
+            withAnimation(.snappy(duration: 0.18)) { actionConfirmation = nil }
         }
     }
 }
