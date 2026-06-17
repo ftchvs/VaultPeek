@@ -96,6 +96,11 @@ struct ReviewInboxView: View {
             .modifier(ConditionalRaisedSurface(embedded: embedded))
             .focusable()
             .focused($isFocused)
+            // Keep the container focusable for arrow-key row navigation, but
+            // suppress the macOS system focus ring. Embedded as the full right
+            // column the ring wraps the whole panel and reads as an accidental
+            // "selected" state; the selected row already shows its own accent.
+            .focusEffectDisabled()
             .onAppear {
                 isFocused = true
                 clampSelection()
