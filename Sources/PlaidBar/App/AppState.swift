@@ -968,12 +968,15 @@ final class AppState {
               !transactions.isEmpty
         else { return nil }
 
-        let inbox = transactionReviewInboxSnapshot
-        let unreviewed = Set(inbox.items.map(\.id))
-        let trusted = Set(transactions.map(\.id)).subtracting(unreviewed)
-        return WeeklyReviewTransactionState(
-            trustedTransactionIds: trusted,
-            unreviewedTransactionIds: unreviewed
+        // Classify by the tested trust contract (metadata status), not by the
+        // Review Inbox snapshot. `TransactionReviewInbox.evaluate` only emits an
+        // item when a transaction trips a heuristic reason, so a transaction the
+        // user never reviewed (status `.needsReview`, or no metadata yet) that
+        // happens to trip no heuristic would otherwise be miscounted as trusted,
+        // under-reporting the "needs review" count.
+        return WeeklyReviewTransactionState.derived(
+            from: transactions,
+            metadata: transactionReviewMetadata
         )
     }
 
