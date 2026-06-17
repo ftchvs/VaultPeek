@@ -38,9 +38,12 @@ The target is a **three-column** layout where portfolio context is *permanent*:
 
 The Wealth Summary rail stays put while you inspect an account; the inspector
 column is always the **right** column, not a panel that swaps in place of the
-left rail. Selecting an account fills the inspector with that account's detail;
-deselecting returns it to an empty-selection prompt — the column itself never
-disappears.
+left rail. With no account selected the right column hosts the **Review Inbox**
+(its default content); selecting an account swaps the column to that account's
+detail, and deselecting returns it to the Review Inbox — the column itself never
+disappears. Below, "empty-selection state" denotes this default Review Inbox
+surface (which renders its own "Inbox Clear" prompt when the review queue is
+empty), not a blank placeholder.
 
 ## 2. Anatomy and ownership
 
@@ -48,7 +51,7 @@ disappears.
 |--------|------|-----------|------|
 | **Left — Wealth Summary** | `WealthSummaryFlyout` | Always (post-setup) | The one net-worth hero number, portfolio metric grid, balance mix, cashflow, credit utilization summary, attention rollup, sync health pill |
 | **Center — Dashboard** | dashboard column in `MainPopover` | Always (post-setup) | Latest local changes (change receipt), attention/recovery, 365-day heatmap, segmented finance filters, account rows, balance/summary context, footer status line |
-| **Right — Account Inspector** | `AccountDetailFlyout`, adapted | Always (post-setup); content varies with selection | When a row is selected: the selected account's detail — connection status, balances, 30-day changes, to-review, top categories, recent activity, account actions. With no selection: an empty-selection prompt (or a brief loading placeholder while a persisted selection resolves) |
+| **Right — Review Inbox / Account Inspector** | `ReviewInboxView` (embedded) by default; `AccountDetailFlyout`, adapted, when a row is selected | Always (post-setup); content varies with selection | With no selection: the **Review Inbox** (embedded — no own surface, scrolls, shows an "Inbox Clear" empty state). When a row is selected: the selected account's detail — connection status, balances, 30-day changes, to-review, top categories, recent activity, account actions (or a brief loading placeholder while a persisted selection resolves) |
 
 **Hard rules:**
 

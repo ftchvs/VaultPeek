@@ -394,19 +394,6 @@ struct MainPopover: View {
             .accessibilityLabel("Loading account details")
     }
 
-    // Empty-selection content for the always-present inspector column: a quiet
-    // prompt (icon + label, never color alone) so the third column reads as
-    // intentional context space rather than a blank gap.
-    private var inspectorEmptySelectionState: some View {
-        ContentUnavailableView {
-            Label("No Account Selected", systemImage: "creditcard")
-        } description: {
-            Text("Select an account to see its balances, recent activity, and trend here.")
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .accessibilityLabel("No account selected. Select an account to see its details here.")
-    }
-
     private var popoverWidth: CGFloat {
         // Cap the content to the available screen width so the popover never
         // renders off-screen; the center dashboard flexes to absorb the cap so
