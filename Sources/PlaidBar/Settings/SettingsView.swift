@@ -356,6 +356,13 @@ struct PrivacySecuritySettingsView: View {
                 Toggle("Lock on launch", isOn: $state.appLockPreferences.lockOnLaunch)
                     .disabled(!appState.appLockPreferences.appLockEnabled)
 
+                Toggle("Lock when it loses focus", isOn: $state.appLockPreferences.lockWhenBackgrounded)
+                    .disabled(!appState.appLockPreferences.appLockEnabled)
+
+                Text("Re-lock automatically — on launch, and whenever VaultPeek loses focus (you click away or the popover closes). Turn either off to stay unlocked across those transitions.")
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
+
                 Toggle("Pause refresh while locked", isOn: $state.appLockPreferences.pauseRefreshWhileLocked)
                     .disabled(!appState.appLockPreferences.appLockEnabled)
 
