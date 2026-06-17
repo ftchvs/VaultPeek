@@ -3933,6 +3933,38 @@ struct PlaidBarCoreTests {
         ).isEmpty)
     }
 
+
+    @Test("Transaction cache does not persist pending transaction identifiers")
+    func transactionCacheDoesNotPersistPendingTransactionIdentifiers() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let directory = root.appendingPathComponent(".vaultpeek", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let context = TransactionCacheContext(environment: .sandbox, storagePath: directory.path)
+        try LocalDataStore.saveTransactions(
+            [TransactionDTO(
+                id: "posted-new",
+                accountId: "checking",
+                amount: 58,
+                date: "2026-06-01",
+                name: "Merchant final",
+                pending: false,
+                pendingTransactionId: "pending-old"
+            )],
+            to: directory,
+            context: context
+        )
+
+        let cacheURL = LocalDataStore.transactionCacheURL(in: directory, context: context)
+        let rawCache = try String(contentsOf: cacheURL, encoding: .utf8)
+        let loaded = try LocalDataStore.loadTransactions(from: directory, context: context)
+
+        #expect(!rawCache.contains("pending-old"))
+        #expect(!rawCache.contains("pendingTransactionId"))
+        #expect(loaded.first?.pendingTransactionId == nil)
+    }
+
     @Test("Local data migration does not restore reset-cleared legacy data")
     func localDataMigrationDoesNotRestoreResetClearedLegacyData() throws {
         let root = URL(fileURLWithPath: NSTemporaryDirectory())

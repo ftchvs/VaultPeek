@@ -2823,6 +2823,7 @@ final class AppState {
         updateReviewMetadata(id: id) { metadata, transaction in
             metadata.status = .ignored
             metadata.reviewedAt = Date()
+            metadata.reviewReasonCodes = []
             metadata.lastSeenAmount = transaction.amount
             metadata.lastSeenName = transaction.name
             metadata.lastSeenPending = transaction.pending
@@ -2936,8 +2937,14 @@ final class AppState {
             )
             changed = true
         }
+        let seeded = byId.values.sorted { $0.id < $1.id }
+        let reconciled = TransactionReviewMetadataReconciler.reconcilePostedPendingTransactions(
+            transactions: transactions,
+            metadata: seeded
+        )
+        if reconciled != seeded { changed = true }
         guard changed else { return }
-        transactionReviewMetadata = byId.values.sorted { $0.id < $1.id }
+        transactionReviewMetadata = reconciled
         persistReviewStorage()
     }
 

@@ -123,8 +123,13 @@ struct TransactionReviewInboxTests {
             lastSeenPending: true
         )
 
-        let snapshot = evaluate([posted], metadata: [pendingMetadata])
+        let reconciled = TransactionReviewMetadataReconciler.reconcilePostedPendingTransactions(
+            transactions: [posted],
+            metadata: [pendingMetadata]
+        )
+        let snapshot = evaluate([posted], metadata: reconciled)
 
+        #expect(reconciled.map(\.id) == ["posted-new"])
         #expect(snapshot.items.map(\.id) == ["posted-new"])
         #expect(snapshot.items.first?.reasonCodes.contains(.pendingChanged) == true)
     }
@@ -149,8 +154,14 @@ struct TransactionReviewInboxTests {
             lastSeenPending: true
         )
 
-        let snapshot = evaluate([posted], metadata: [pendingMetadata])
+        let reconciled = TransactionReviewMetadataReconciler.reconcilePostedPendingTransactions(
+            transactions: [posted],
+            metadata: [pendingMetadata]
+        )
+        let snapshot = evaluate([posted], metadata: reconciled)
 
+        #expect(reconciled.map(\.id) == ["posted-new"])
+        #expect(reconciled.first?.status == .reviewed)
         #expect(snapshot.totalCount == 0)
     }
 
@@ -172,7 +183,11 @@ struct TransactionReviewInboxTests {
             lastSeenPending: true
         )
 
-        let snapshot = evaluate([posted], metadata: [approvedPending])
+        let reconciled = TransactionReviewMetadataReconciler.reconcilePostedPendingTransactions(
+            transactions: [posted],
+            metadata: [approvedPending]
+        )
+        let snapshot = evaluate([posted], metadata: reconciled)
 
         let item = snapshot.items.first { $0.id == "posted-new" }
         #expect(item != nil)
@@ -199,7 +214,11 @@ struct TransactionReviewInboxTests {
             lastSeenPending: true
         )
 
-        let snapshot = evaluate([posted], metadata: [ignoredPending])
+        let reconciled = TransactionReviewMetadataReconciler.reconcilePostedPendingTransactions(
+            transactions: [posted],
+            metadata: [ignoredPending]
+        )
+        let snapshot = evaluate([posted], metadata: reconciled)
 
         let item = snapshot.items.first { $0.id == "posted-new" }
         #expect(item != nil)
@@ -232,8 +251,13 @@ struct TransactionReviewInboxTests {
             lastSeenPending: true
         )
 
-        let snapshot = evaluate([posted], metadata: [seededPosted, pendingMetadata])
+        let reconciled = TransactionReviewMetadataReconciler.reconcilePostedPendingTransactions(
+            transactions: [posted],
+            metadata: [seededPosted, pendingMetadata]
+        )
+        let snapshot = evaluate([posted], metadata: reconciled)
 
+        #expect(reconciled.map(\.id) == ["posted-new"])
         #expect(snapshot.items.first?.reasonCodes.contains(.pendingChanged) == true)
     }
 
@@ -266,8 +290,14 @@ struct TransactionReviewInboxTests {
             lastSeenPending: true
         )
 
-        let snapshot = evaluate([posted], metadata: [seededPosted, reviewedPending])
+        let reconciled = TransactionReviewMetadataReconciler.reconcilePostedPendingTransactions(
+            transactions: [posted],
+            metadata: [seededPosted, reviewedPending]
+        )
+        let snapshot = evaluate([posted], metadata: reconciled)
 
+        #expect(reconciled.map(\.id) == ["posted-new"])
+        #expect(reconciled.first?.status == .reviewed)
         #expect(snapshot.totalCount == 0)
     }
 
@@ -302,6 +332,96 @@ struct TransactionReviewInboxTests {
         let snapshot = evaluate([posted], metadata: [resolvedPosted, pendingOld])
 
         #expect(snapshot.items.contains { $0.id == "posted-new" } == false)
+    }
+
+
+    @Test("Sync-time reconciliation migrates pending review state to posted id")
+    func syncReconciliationMigratesPendingReviewStateToPostedId() {
+        let posted = tx(
+            id: "posted-new",
+            amount: 50,
+            name: "MERCHANT PENDING",
+            category: .shopping,
+            merchantName: "Merchant",
+            pendingTransactionId: "pending-old"
+        )
+        let reviewedPending = TransactionReviewMetadata(
+            id: "pending-old",
+            status: .reviewed,
+            userCategory: .foodAndDrink,
+            userMerchantName: "Merchant",
+            isTransferOverride: false,
+            reviewedAt: now,
+            lastSeenAmount: 50,
+            lastSeenName: "MERCHANT PENDING",
+            lastSeenPending: true
+        )
+
+        let reconciled = TransactionReviewMetadataReconciler.reconcilePostedPendingTransactions(
+            transactions: [posted],
+            metadata: [reviewedPending]
+        )
+
+        #expect(reconciled.map(\.id) == ["posted-new"])
+        #expect(reconciled.first?.status == .reviewed)
+        #expect(reconciled.first?.userCategory == .foodAndDrink)
+        #expect(reconciled.first?.reviewedAt == now)
+        #expect(reconciled.first?.lastSeenAmount == 50)
+        #expect(reconciled.first?.lastSeenPending == false)
+        #expect(evaluate([posted], metadata: reconciled).totalCount == 0)
+    }
+
+    @Test("Sync-time reconciliation durably reopens changed posted charge once")
+    func syncReconciliationReopensChangedPostedChargeOnce() {
+        let posted = tx(
+            id: "posted-new",
+            amount: 58,
+            name: "MERCHANT FINAL",
+            category: .shopping,
+            merchantName: "Merchant",
+            pendingTransactionId: "pending-old"
+        )
+        let reviewedPending = TransactionReviewMetadata(
+            id: "pending-old",
+            status: .reviewed,
+            userCategory: .foodAndDrink,
+            reviewedAt: now,
+            lastSeenAmount: 50,
+            lastSeenName: "MERCHANT PENDING",
+            lastSeenPending: true
+        )
+
+        let reconciled = TransactionReviewMetadataReconciler.reconcilePostedPendingTransactions(
+            transactions: [posted],
+            metadata: [reviewedPending]
+        )
+        let reopened = evaluate([posted], metadata: reconciled)
+        let item = reopened.items.first { $0.id == "posted-new" }
+
+        #expect(reconciled.map(\.id) == ["posted-new"])
+        #expect(reconciled.first?.status == .needsReview)
+        #expect(reconciled.first?.reviewReasonCodes == [.pendingChanged])
+        #expect(reconciled.first?.reviewedAt == nil)
+        #expect(item?.status == .needsReview)
+        #expect(item?.reasonCodes.contains(.pendingChanged) == true)
+
+        let resolvedMetadata = [TransactionReviewMetadata(
+            id: "posted-new",
+            status: .reviewed,
+            userCategory: .foodAndDrink,
+            reviewedAt: now,
+            reviewReasonCodes: [],
+            lastSeenAmount: 58,
+            lastSeenName: "MERCHANT FINAL",
+            lastSeenPending: false
+        )]
+        let afterResolution = TransactionReviewMetadataReconciler.reconcilePostedPendingTransactions(
+            transactions: [posted],
+            metadata: resolvedMetadata
+        )
+
+        #expect(afterResolution == resolvedMetadata)
+        #expect(evaluate([posted], metadata: afterResolution).items.contains { $0.id == "posted-new" } == false)
     }
 
     @Test("Reviewed and ignored transactions stay out of inbox")

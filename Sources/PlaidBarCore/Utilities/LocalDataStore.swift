@@ -696,7 +696,25 @@ public enum LocalDataStore {
         try ensurePrivateDirectory(directory, fileManager: fileManager)
 
         let url = transactionCacheURL(in: directory, context: context)
-        let cache = TransactionCache(context: context, transactions: transactions)
+        // `pendingTransactionId` is needed only transiently while reconciling a
+        // freshly-synced posted transaction with its pending phase. Do not persist
+        // that second raw Plaid transaction identifier in the app cache.
+        let cacheTransactions = transactions.map { transaction in
+            TransactionDTO(
+                id: transaction.id,
+                itemId: transaction.itemId,
+                accountId: transaction.accountId,
+                amount: transaction.amount,
+                date: transaction.date,
+                name: transaction.name,
+                merchantName: transaction.merchantName,
+                category: transaction.category,
+                pending: transaction.pending,
+                pendingTransactionId: nil,
+                isoCurrencyCode: transaction.isoCurrencyCode
+            )
+        }
+        let cache = TransactionCache(context: context, transactions: cacheTransactions)
         let data = try JSONEncoder().encode(cache)
         try writePrivateCacheFile(data, to: url, fileManager: fileManager)
         try setPrivateCacheFilePermissions(url, fileManager: fileManager)
