@@ -251,7 +251,7 @@ final class AppState {
 
     var appLockPreferences = AppLockPreferences() {
         didSet {
-            guard appLockPreferences != oldValue else { return }
+            guard appLockPreferences != oldValue, !isLoadingAppLockPreferences else { return }
             persistAppLockPreferences()
         }
     }
@@ -320,6 +320,7 @@ final class AppState {
     private var localAIProbeAvailability: LocalAIAvailability?
     private var localAIProbeGeneration = 0
     private var isLoadingLocalAISettings = false
+    private var isLoadingAppLockPreferences = false
     private var isUpgradingManagedServer = false
     private var isStartingBundledServer = false
     private var lastAttemptedCredentialUpgradeConfig: String?
@@ -426,13 +427,17 @@ final class AppState {
     }
 
     private func loadAppLockPreferences(defaults: UserDefaults) {
+        // `appLockService` is the single source of truth for the enabled flag —
+        // it owns `Keys.appLockEnabled` via its settings store. Deriving the
+        // preference from the service (rather than reading the key again here)
+        // keeps the in-memory service state and the persisted flag coherent and
+        // avoids the dual-write desync on the shared UserDefaults key.
+        isLoadingAppLockPreferences = true
         appLockPreferences = AppLockPreferences(
             privacyMaskEnabled: defaults.object(forKey: Keys.privacyMaskEnabled) != nil
                 ? defaults.bool(forKey: Keys.privacyMaskEnabled)
                 : appLockPreferences.privacyMaskEnabled,
-            appLockEnabled: defaults.object(forKey: Keys.appLockEnabled) != nil
-                ? defaults.bool(forKey: Keys.appLockEnabled)
-                : appLockPreferences.appLockEnabled,
+            appLockEnabled: appLockService.isLockEnabled,
             notificationPrivacyMode: defaults.string(forKey: Keys.appLockNotificationPrivacyMode)
                 .flatMap(NotificationPrivacyMode.init(rawValue:))
                 ?? appLockPreferences.notificationPrivacyMode,
@@ -440,14 +445,83 @@ final class AppState {
                 ? defaults.bool(forKey: Keys.appLockPauseRefreshWhileLocked)
                 : appLockPreferences.pauseRefreshWhileLocked
         )
+        isLoadingAppLockPreferences = false
         isAppLocked = appLockService.isLocked
     }
 
     private func persistAppLockPreferences() {
+        // `appLockEnabled` is intentionally NOT written here — `appLockService`
+        // owns `Keys.appLockEnabled` and is the single writer for it (via
+        // `setAppLockEnabled`). Writing it from both paths is what previously
+        // desynced the in-memory service from the persisted flag.
         UserDefaults.standard.set(appLockPreferences.privacyMaskEnabled, forKey: Keys.privacyMaskEnabled)
-        UserDefaults.standard.set(appLockPreferences.appLockEnabled, forKey: Keys.appLockEnabled)
         UserDefaults.standard.set(appLockPreferences.notificationPrivacyMode.rawValue, forKey: Keys.appLockNotificationPrivacyMode)
         UserDefaults.standard.set(appLockPreferences.pauseRefreshWhileLocked, forKey: Keys.appLockPauseRefreshWhileLocked)
+    }
+
+    // MARK: - App Lock
+
+    /// The current biometric / device-authentication capability, surfaced to the
+    /// settings UI so the App Lock toggle can disable and explain itself when no
+    /// authentication is available.
+    func appLockAuthenticationCapability() -> AppLockCapability {
+        appLockService.authenticationCapability()
+    }
+
+    /// Single entry point for enabling/disabling App Lock. Routes through
+    /// `AppLockService` (the source of truth for the enabled flag) so the
+    /// service's `isLockEnabled`, the persisted UserDefaults key, and the
+    /// mirrored `appLockPreferences.appLockEnabled` stay coherent.
+    ///
+    /// Returns the resolved capability so callers can surface why enabling was
+    /// refused (e.g. biometrics unavailable).
+    @discardableResult
+    func setAppLockEnabled(_ isEnabled: Bool) -> AppLockCapability {
+        let capability = appLockService.setLockEnabled(isEnabled)
+        // Mirror the service's authoritative state back onto the observable
+        // preference and lock flag. The setter below persists the non-enabled
+        // keys only; the service already persisted the enabled flag.
+        appLockPreferences.appLockEnabled = appLockService.isLockEnabled
+        isAppLocked = appLockService.isLocked
+        return capability
+    }
+
+    /// Locks VaultPeek immediately when App Lock is enabled (no-op otherwise).
+    /// Used by launch and resign-active lifecycle triggers.
+    func lockApp() {
+        appLockService.lock()
+        isAppLocked = appLockService.isLocked
+    }
+
+    /// Locks on launch when both App Lock and the lock-on-launch preference are
+    /// enabled. Called once after the app finishes loading initial data.
+    func lockOnLaunchIfNeeded() {
+        guard appLockPreferences.appLockEnabled, appLockPreferences.lockOnLaunch else { return }
+        lockApp()
+    }
+
+    /// Locks when VaultPeek loses focus (resign active / popover close), when
+    /// the lock-when-backgrounded preference is enabled. MainActor-safe and
+    /// cheap when App Lock is off.
+    func lockOnResignActiveIfNeeded() {
+        guard appLockPreferences.appLockEnabled, appLockPreferences.lockWhenBackgrounded else { return }
+        lockApp()
+    }
+
+    /// Prompts for biometric / device authentication to unlock VaultPeek. A
+    /// no-op that resolves to `.success` when App Lock is disabled or already
+    /// unlocked. Mirrors the resulting lock state back onto `isAppLocked`.
+    @discardableResult
+    func unlockApp() async -> AppLockAuthenticationResult {
+        guard appLockService.isLockEnabled, appLockService.isLocked else {
+            isAppLocked = appLockService.isLocked
+            return .success
+        }
+        let result = await appLockService.authenticate(
+            reason: "Unlock VaultPeek to view your balances."
+        )
+        isAppLocked = appLockService.isLocked
+        return result
     }
 
     private func loadLocalAISettings(defaults: UserDefaults) {
@@ -1924,6 +1998,12 @@ final class AppState {
         // The boot window ends when this pass returns, on every path: from
         // then on, offline/empty verdicts are real and may render.
         defer { isBooting = false }
+
+        // Engage App Lock on launch (when enabled). Done before any data work
+        // so the dashboard's first paint is already masked if lock-on-launch is
+        // on; views read `shouldMaskFinancialValues`, which the locked state
+        // drives.
+        lockOnLaunchIfNeeded()
 
         // Recheck notification permission at startup (user may have revoked in System Settings)
         if notificationsEnabled {
