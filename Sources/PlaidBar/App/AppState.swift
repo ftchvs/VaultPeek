@@ -29,8 +29,7 @@ final class AppState {
         static let notifyRecurringChargeDueSoon = "notifyRecurringChargeDueSoon"
         static let notifyBrokenConnection = "notifyBrokenConnection"
         static let privacyMaskEnabled = "privacyMaskEnabled"
-        static let appLockEnabled = "appLockEnabled"
-        static let appLockIsLocked = "appLock.isLocked"
+        static let appLockEnabled = UserDefaultsAppLockSettingsStore.defaultStorageKey
         static let appLockNotificationPrivacyMode = "appLock.notificationPrivacyMode"
         static let appLockPauseRefreshWhileLocked = "appLock.pauseRefreshWhileLocked"
         static let localAIEnabled = "localAIEnabled"
@@ -241,12 +240,7 @@ final class AppState {
         }
     }
 
-    var isAppLocked = false {
-        didSet {
-            guard isAppLocked != oldValue else { return }
-            UserDefaults.standard.set(isAppLocked, forKey: Keys.appLockIsLocked)
-        }
-    }
+    var isAppLocked = false
 
     var financialPrivacyDisplayMode: PrivacyDisplayMode {
         appLockPreferences.effectiveDisplayMode(isAppLocked: isAppLocked)
@@ -296,6 +290,7 @@ final class AppState {
     // MARK: - Services
     private let serverClient = ServerClient()
     private let localDataCache = LocalDataCacheService()
+    private let appLockService = AppLockService()
     private var localAIInsightsService = LocalAIInsightsService()
     private let notificationService: any NotificationServiceProtocol
     private var refreshTask: Task<Void, Never>?
@@ -428,9 +423,7 @@ final class AppState {
                 ? defaults.bool(forKey: Keys.appLockPauseRefreshWhileLocked)
                 : appLockPreferences.pauseRefreshWhileLocked
         )
-        if defaults.object(forKey: Keys.appLockIsLocked) != nil {
-            isAppLocked = defaults.bool(forKey: Keys.appLockIsLocked)
-        }
+        isAppLocked = appLockService.isLocked
     }
 
     private func persistAppLockPreferences() {
@@ -577,7 +570,7 @@ final class AppState {
             needsLoginItemCount: needsLoginItemCount,
             isSyncStale: isSyncStale,
             hasEverSynced: lastSyncDate != nil,
-            financialAttentionText: firstMenuBarAttentionText,
+            financialAttentionText: shouldMaskFinancialValues ? nil : firstMenuBarAttentionText,
             iconStyle: menuBarIconStyle
         )
     }

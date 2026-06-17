@@ -637,9 +637,20 @@ private struct RecentSpendChip: View {
 
                 Spacer(minLength: Spacing.sm)
 
-                Text(Formatters.currency(appState.recentSpend, format: .compact))
+                Text(PrivacyMaskPresentation.currency(
+                    appState.recentSpend,
+                    format: .compact,
+                    isEnabled: appState.shouldMaskFinancialValues
+                ))
                     .font(.caption.weight(.semibold))
-                    .rollingTabularNumber(Formatters.currency(appState.recentSpend, format: .compact), reduceMotion: reduceMotion)
+                    .rollingTabularNumber(
+                        PrivacyMaskPresentation.currency(
+                            appState.recentSpend,
+                            format: .compact,
+                            isEnabled: appState.shouldMaskFinancialValues
+                        ),
+                        reduceMotion: reduceMotion
+                    )
                     .lineLimit(1)
             }
             .padding(.horizontal, Spacing.sm)
@@ -647,7 +658,7 @@ private struct RecentSpendChip: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(.quinary, in: Capsule())
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("7 day spend: \(Formatters.currency(appState.recentSpend, format: .full))")
+            .accessibilityLabel("7 day spend: \(PrivacyMaskPresentation.currency(appState.recentSpend, format: .full, isEnabled: appState.shouldMaskFinancialValues))")
         }
     }
 }
@@ -655,6 +666,7 @@ private struct RecentSpendChip: View {
 // MARK: - 365 Day Heatmap
 
 private struct BalanceActivityHeatmap: View {
+    @Environment(AppState.self) private var appState
     let transactions: [TransactionDTO]
     var loadState: DashboardLoadState?
 
@@ -912,6 +924,9 @@ private struct BalanceActivityHeatmap: View {
     }
 
     private func totalLabel(for layout: SpendingHeatmapLayout) -> String {
+        guard !appState.shouldMaskFinancialValues else {
+            return PrivacyMaskPresentation.compactValue
+        }
         guard layout.mode == .netCashflow else {
             return Formatters.currency(layout.totalValue, format: .compact)
         }
@@ -927,6 +942,9 @@ private struct BalanceActivityHeatmap: View {
     }
 
     private func cashflowText(for value: Double) -> String {
+        guard !appState.shouldMaskFinancialValues else {
+            return PrivacyMaskPresentation.compactValue
+        }
         let displayAmount = SpendingHeatmap.displayCashflowAmount(value)
         let prefix = displayAmount > 0 ? "+" : displayAmount < 0 ? "-" : ""
         return "\(prefix)\(Formatters.currency(abs(displayAmount), format: .compact))"

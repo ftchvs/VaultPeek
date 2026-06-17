@@ -854,6 +854,9 @@ struct PlaidBarCoreTests {
         #expect(label.contains("$520.00") == false)
         #expect(label.contains("••••"))
         #expect(label.contains("Ending in 1234") == false)
+        #expect(label.contains("synced transaction") == false)
+        #expect(label.contains("pending transaction") == false)
+        #expect(label.contains("Latest transaction") == false)
     }
 
     @Test("Drill-in action accessibility labels include display names only")

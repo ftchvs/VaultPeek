@@ -180,16 +180,19 @@ public struct DashboardAccountDrillInSummary: Sendable, Equatable {
             subtitle,
             "\(availableTitle) \(PrivacyMaskPresentation.currency(availableBalance, format: .full, isEnabled: privacyMaskEnabled))",
             "\(currentTitle) \(PrivacyMaskPresentation.currency(currentBalance, format: .full, isEnabled: privacyMaskEnabled))",
-            "\(transactionCount) synced transaction\(transactionCount == 1 ? "" : "s")",
-            "\(pendingTransactionCount) pending transaction\(pendingTransactionCount == 1 ? "" : "s")",
             "Sync \(freshnessLabel)",
         ]
+
+        if !privacyMaskEnabled {
+            parts.append("\(transactionCount) synced transaction\(transactionCount == 1 ? "" : "s")")
+            parts.append("\(pendingTransactionCount) pending transaction\(pendingTransactionCount == 1 ? "" : "s")")
+        }
 
         if let utilizationPercent {
             parts.append("Utilization \(PrivacyMaskPresentation.percent(utilizationPercent, decimals: 0, isEnabled: privacyMaskEnabled))")
         }
 
-        if let latestTransactionDate {
+        if let latestTransactionDate, !privacyMaskEnabled {
             parts.append("Latest transaction \(Formatters.displayTransactionDate(latestTransactionDate))")
         }
 
