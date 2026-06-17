@@ -124,8 +124,7 @@ struct GlanceSnapshotTests {
             await recorder.record(snapshot)
         }
 
-        try await Task.sleep(for: .milliseconds(80))
-        let snapshots = await recorder.snapshots
+        let snapshots = try await recorder.waitForSnapshotCount(1, timeout: .milliseconds(500))
         #expect(snapshots.map(\.netWorth) == [300])
     }
 
@@ -165,5 +164,18 @@ private actor SnapshotWriteRecorder {
 
     func record(_ snapshot: GlanceSnapshot) {
         snapshots.append(snapshot)
+    }
+
+    func waitForSnapshotCount(
+        _ expectedCount: Int,
+        timeout: Duration,
+        pollInterval: Duration = .milliseconds(10)
+    ) async throws -> [GlanceSnapshot] {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+        while snapshots.count < expectedCount, clock.now < deadline {
+            try await Task.sleep(for: pollInterval)
+        }
+        return snapshots
     }
 }
