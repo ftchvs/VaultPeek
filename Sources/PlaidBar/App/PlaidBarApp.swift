@@ -162,6 +162,23 @@ struct PlaidBarApp: App {
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
                     Task { await appState.consumePendingGlanceCommand() }
                 }
+                // App Lock trigger: lock when VaultPeek loses focus (the user
+                // clicks away / the popover closes) so balances re-mask behind
+                // the lock. A cheap no-op when App Lock or lock-when-backgrounded
+                // is off. The unlock prompt is driven from the popover-open path
+                // below, not from didBecomeActive, so presenting the system auth
+                // sheet (which deactivates this app) cannot start a lock/unlock
+                // loop (AND-462).
+                .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
+                    appState.lockOnResignActiveIfNeeded()
+                }
+                // Opening the popover while locked prompts for authentication to
+                // reveal balances; `unlockApp()` is a no-op when App Lock is off
+                // or already unlocked.
+                .onChange(of: appState.isPopoverPresented) { _, isPresented in
+                    guard isPresented, appState.isAppLocked else { return }
+                    Task { await appState.unlockApp() }
+                }
         }
         .menuBarExtraAccess(isPresented: $appState.isPopoverPresented) { statusItem in
             statusItemContextMenuController.configure(

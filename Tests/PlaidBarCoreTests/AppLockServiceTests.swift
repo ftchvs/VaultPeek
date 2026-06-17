@@ -122,6 +122,50 @@ struct AppLockServiceTests {
         #expect(authenticator.authenticateCallCount == 0)
     }
 
+    @Test("Enabling and disabling through setLockEnabled keeps the persisted flag coherent")
+    func setLockEnabledIsSingleSourceOfTruth() throws {
+        // Mirrors AppState.setAppLockEnabled, which routes all enabled-flag
+        // writes through the service so the in-memory state and the persisted
+        // UserDefaults key never desync (AND-462). A second service constructed
+        // from the same store must read back exactly what the first one wrote.
+        let suiteName = "AppLockServiceTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let key = UserDefaultsAppLockSettingsStore.defaultStorageKey
+        let store = UserDefaultsAppLockSettingsStore(defaults: defaults, storageKey: key)
+        let service = AppLockService(
+            settingsStore: store,
+            authenticator: StubAppLockAuthenticator(capability: .available(biometry: .touchID))
+        )
+
+        service.setLockEnabled(true)
+
+        #expect(service.isLockEnabled == true)
+        #expect(service.state == .locked)
+        #expect(store.isLockEnabled == true)
+        #expect(defaults.bool(forKey: key) == true)
+        // A fresh service derived from the same persisted store agrees.
+        let reloadedEnabled = AppLockService(
+            settingsStore: UserDefaultsAppLockSettingsStore(defaults: defaults, storageKey: key),
+            authenticator: StubAppLockAuthenticator(capability: .available(biometry: .touchID))
+        )
+        #expect(reloadedEnabled.isLockEnabled == true)
+        #expect(reloadedEnabled.isLocked == true)
+
+        service.setLockEnabled(false)
+
+        #expect(service.isLockEnabled == false)
+        #expect(service.state == .unlocked)
+        #expect(store.isLockEnabled == false)
+        #expect(defaults.bool(forKey: key) == false)
+        let reloadedDisabled = AppLockService(
+            settingsStore: UserDefaultsAppLockSettingsStore(defaults: defaults, storageKey: key),
+            authenticator: StubAppLockAuthenticator(capability: .available(biometry: .touchID))
+        )
+        #expect(reloadedDisabled.isLockEnabled == false)
+        #expect(reloadedDisabled.isLocked == false)
+    }
+
     @Test("Overlapping authentication attempts share one system prompt")
     func overlappingAuthenticationAttemptsCoalesce() async {
         let authenticator = StubAppLockAuthenticator(result: .success, delayNanoseconds: 50_000_000)

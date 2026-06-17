@@ -37,6 +37,13 @@ struct SettingsView: View {
                 }
                 .tag(SettingsTab.notifications.rawValue)
 
+            PrivacySecuritySettingsView()
+                .environment(appState)
+                .tabItem {
+                    Label("Privacy", systemImage: "lock.shield")
+                }
+                .tag(SettingsTab.privacy.rawValue)
+
             AboutView(updater: updater)
                 .tabItem {
                     Label("About", systemImage: "info.circle")
@@ -59,6 +66,7 @@ private enum SettingsTab: String {
     case accounts
     case appearance
     case notifications
+    case privacy
     case about
 }
 
@@ -302,6 +310,79 @@ private struct AppearancePreviewCard: View {
         .accessibilityLabel(
             "Live preview of the popover at \(setting.displayPercent) percent transparency, with sample data only."
         )
+    }
+}
+
+struct PrivacySecuritySettingsView: View {
+    @Environment(AppState.self) private var appState
+    /// Snapshot of the live authentication capability, refreshed on appear and
+    /// after any App Lock change so the toggle can disable + explain itself when
+    /// biometrics / device authentication are unavailable.
+    @State private var capability: AppLockCapability = .available(biometry: .none)
+
+    private var control: AppLockSettingsControl {
+        AppLockSettingsControl.resolve(
+            capability: capability,
+            isEnabled: appState.appLockPreferences.appLockEnabled
+        )
+    }
+
+    var body: some View {
+        @Bindable var state = appState
+
+        Form {
+            Section("Privacy Mask") {
+                Toggle("Hide balances and amounts", isOn: $state.appLockPreferences.privacyMaskEnabled)
+
+                Text("Masks balances, amounts, and the menu bar value behind dots without requiring authentication. Use it for quick over-the-shoulder privacy; flip it off to reveal again.")
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Section("App Lock") {
+                Toggle("Require authentication", isOn: Binding(
+                    get: { appState.appLockPreferences.appLockEnabled },
+                    set: { newValue in
+                        appState.setAppLockEnabled(newValue)
+                        capability = appState.appLockAuthenticationCapability()
+                    }
+                ))
+                .disabled(!control.isToggleEnabled)
+
+                Text(control.explanation)
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Toggle("Lock on launch", isOn: $state.appLockPreferences.lockOnLaunch)
+                    .disabled(!appState.appLockPreferences.appLockEnabled)
+
+                Toggle("Pause refresh while locked", isOn: $state.appLockPreferences.pauseRefreshWhileLocked)
+                    .disabled(!appState.appLockPreferences.appLockEnabled)
+
+                Text("When locked, VaultPeek stops fetching new balances and transactions until you authenticate. Leave off to keep cached data current behind the lock.")
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Section("Notifications while private") {
+                Picker("Notification details", selection: $state.appLockPreferences.notificationPrivacyMode) {
+                    ForEach(NotificationPrivacyMode.allCases, id: \.self) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                .accessibilityValue(appState.appLockPreferences.notificationPrivacyMode.displayName)
+
+                Text(appState.appLockPreferences.notificationPrivacyMode.detail)
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .formStyle(.grouped)
+        .toggleStyle(.switch)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .task {
+            capability = appState.appLockAuthenticationCapability()
+        }
     }
 }
 
