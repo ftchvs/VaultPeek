@@ -8,6 +8,24 @@ struct TransactionRoutes: Sendable {
     let tokenStore: TokenStore
     var maxConcurrentItemRefreshes = AccountRoutes.defaultMaxConcurrentItemRefreshes
 
+    /// Per-item in-flight gate: concurrent `/transactions/sync` requests for the
+    /// same item coalesce onto a single sync instead of racing the cursor.
+    /// Registered once with the router, so all request handlers share it.
+    private let syncCoalescer = ItemSyncCoalescer<ItemSyncResult>()
+
+    // Explicit initializer: a `private` stored property would otherwise lower
+    // the synthesized memberwise initializer's access below `internal` and break
+    // the App.swift call site.
+    init(
+        plaidClient: any PlaidClientProtocol,
+        tokenStore: TokenStore,
+        maxConcurrentItemRefreshes: Int = AccountRoutes.defaultMaxConcurrentItemRefreshes
+    ) {
+        self.plaidClient = plaidClient
+        self.tokenStore = tokenStore
+        self.maxConcurrentItemRefreshes = maxConcurrentItemRefreshes
+    }
+
     func register(with group: RouterGroup<some RequestContext>) {
         group.group("transactions")
             .get("sync", use: syncTransactions)
@@ -72,10 +90,16 @@ struct TransactionRoutes: Sendable {
         let commitRequest = try await request.decode(as: SyncCursorCommitRequest.self, context: context)
         for (itemId, cursor) in commitRequest.cursors {
             guard let committableCursor = Self.normalizedCommittableCursor(cursor) else { continue }
-            guard try await tokenStore.getItem(id: itemId) != nil else {
+            // Atomic existence-check + save: closes the TOCTOU between the
+            // unknown-item guard and the persist, so a cursor can never be
+            // resurrected for an item deleted mid-request.
+            let persisted = try await tokenStore.saveSyncCursorIfItemExists(
+                itemId: itemId,
+                cursor: committableCursor
+            )
+            guard persisted else {
                 throw HTTPError(.badRequest, message: "Cannot commit cursor for unknown item")
             }
-            try await tokenStore.saveSyncCursor(itemId: itemId, cursor: committableCursor)
         }
         return .ok
     }
@@ -120,44 +144,61 @@ struct TransactionRoutes: Sendable {
         try await BoundedConcurrency.map(items, limit: maxConcurrentItemRefreshes) { item in
             guard let itemId = item.id else { return .skipped }
 
+            // Coalesce per item: a second concurrent sync for the same item
+            // awaits the in-flight result rather than racing its cursor.
             do {
-                let accessToken = try tokenStore.accessToken(for: item)
-                let itemResult = try await syncItem(
-                    itemId: itemId,
-                    accessToken: accessToken,
-                    persistedCursor: try await tokenStore.getSyncCursor(itemId: itemId)
-                )
-                try await tokenStore.updateItemStatus(id: itemId, status: ItemConnectionStatus.connected.rawValue)
-                return ItemSyncResult(
-                    itemId: itemId,
-                    attempted: true,
-                    succeeded: true,
-                    added: itemResult.added,
-                    modified: itemResult.modified,
-                    removed: itemResult.removed,
-                    hasMore: false,
-                    nextCursor: itemResult.nextCursor
-                )
+                return try await syncCoalescer.run(itemId: itemId) {
+                    try await self.syncItemRecordingStatus(item: item, itemId: itemId)
+                }
             } catch PlaidError.credentialsNotConfigured {
                 // Setup state affects every item identically: surface the 503
                 // credential guidance instead of marking items errored.
                 throw PlaidError.credentialsNotConfigured
-            } catch {
-                try await tokenStore.updateItemStatus(
-                    id: itemId,
-                    status: ItemStatusMapping.status(forAPIError: error).rawValue
-                )
-                return ItemSyncResult(
-                    itemId: itemId,
-                    attempted: true,
-                    succeeded: false,
-                    added: [],
-                    modified: [],
-                    removed: [],
-                    hasMore: false,
-                    nextCursor: nil
-                )
             }
+        }
+    }
+
+    /// Performs one item's sync and records the resulting connection status.
+    /// Runs through the per-item coalescing gate so concurrent callers for the
+    /// same item share a single execution.
+    private func syncItemRecordingStatus(item: ItemModel, itemId: String) async throws -> ItemSyncResult {
+        do {
+            let accessToken = try tokenStore.accessToken(for: item)
+            let itemResult = try await syncItem(
+                itemId: itemId,
+                accessToken: accessToken,
+                persistedCursor: try await tokenStore.getSyncCursor(itemId: itemId)
+            )
+            try await tokenStore.updateItemStatus(id: itemId, status: ItemConnectionStatus.connected.rawValue)
+            return ItemSyncResult(
+                itemId: itemId,
+                attempted: true,
+                succeeded: true,
+                added: itemResult.added,
+                modified: itemResult.modified,
+                removed: itemResult.removed,
+                hasMore: false,
+                nextCursor: itemResult.nextCursor
+            )
+        } catch PlaidError.credentialsNotConfigured {
+            // Setup state affects every item identically: surface the 503
+            // credential guidance instead of marking items errored.
+            throw PlaidError.credentialsNotConfigured
+        } catch {
+            try await tokenStore.updateItemStatus(
+                id: itemId,
+                status: ItemStatusMapping.status(forAPIError: error).rawValue
+            )
+            return ItemSyncResult(
+                itemId: itemId,
+                attempted: true,
+                succeeded: false,
+                added: [],
+                modified: [],
+                removed: [],
+                hasMore: false,
+                nextCursor: nil
+            )
         }
     }
 

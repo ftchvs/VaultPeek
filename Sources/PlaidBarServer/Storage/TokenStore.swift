@@ -21,6 +21,14 @@ actor TokenStore {
     private var managedInsertLocked = false
     private var managedInsertWaiters: [CheckedContinuation<Void, Never>] = []
 
+    // Serializes item deletion against conditional cursor saves so a sync
+    // cursor cannot be resurrected for an item that was concurrently deleted.
+    // `deleteItem` and `saveSyncCursorIfItemExists` both straddle several
+    // suspending Fluent calls (find -> mutate), so an actor method alone is not
+    // atomic across them; an in-process FIFO gate fully orders them.
+    private var cursorWriteLocked = false
+    private var cursorWriteWaiters: [CheckedContinuation<Void, Never>] = []
+
     // MARK: - Items
 
     func saveItem(
@@ -105,6 +113,25 @@ actor TokenStore {
         }
     }
 
+    private func acquireCursorWriteLock() async {
+        if !cursorWriteLocked {
+            cursorWriteLocked = true
+            return
+        }
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            cursorWriteWaiters.append(continuation)
+        }
+        // Resumed: the lock was handed off to us; `cursorWriteLocked` stays true.
+    }
+
+    private func releaseCursorWriteLock() {
+        if cursorWriteWaiters.isEmpty {
+            cursorWriteLocked = false
+        } else {
+            cursorWriteWaiters.removeFirst().resume()
+        }
+    }
+
     func getItem(id: String) async throws -> ItemModel? {
         try await ItemModel.find(id, on: fluent.db())
     }
@@ -120,11 +147,28 @@ actor TokenStore {
     }
 
     func deleteItem(id: String) async throws {
-        guard let item = try await ItemModel.find(id, on: fluent.db()) else { return }
-        if let cursor = try await SyncCursorModel.find(id, on: fluent.db()) {
-            try await cursor.delete(on: fluent.db())
+        // Serialize the row removal against `saveSyncCursorIfItemExists` so a
+        // concurrent sync cannot resurrect a `sync_cursors` row after the item
+        // is gone.
+        await acquireCursorWriteLock()
+        let outcome: Result<ItemModel?, Error>
+        do {
+            guard let item = try await ItemModel.find(id, on: fluent.db()) else {
+                releaseCursorWriteLock()
+                return
+            }
+            if let cursor = try await SyncCursorModel.find(id, on: fluent.db()) {
+                try await cursor.delete(on: fluent.db())
+            }
+            try await item.delete(on: fluent.db())
+            outcome = .success(item)
+        } catch {
+            outcome = .failure(error)
         }
-        try await item.delete(on: fluent.db())
+        releaseCursorWriteLock()
+
+        let item = try outcome.get()
+        guard let item else { return }
         do {
             try PlaidTokenVault.delete(storedToken: item.accessToken, fallbackItemId: id)
         } catch {
@@ -159,6 +203,30 @@ actor TokenStore {
             let model = SyncCursorModel(itemId: itemId, cursor: cursor)
             try await model.save(on: fluent.db())
         }
+    }
+
+    /// Atomically persists a sync cursor only while the owning item still
+    /// exists, returning `false` (a no-op) if the item was deleted. The
+    /// existence check and the save run under the cursor-write lock, serialized
+    /// against `deleteItem`, so a concurrent deletion cannot interleave between
+    /// the check and the save and resurrect a `sync_cursors` row for a gone
+    /// item.
+    @discardableResult
+    func saveSyncCursorIfItemExists(itemId: String, cursor: String) async throws -> Bool {
+        await acquireCursorWriteLock()
+        let outcome: Result<Bool, Error>
+        do {
+            if try await ItemModel.find(itemId, on: fluent.db()) != nil {
+                try await saveSyncCursor(itemId: itemId, cursor: cursor)
+                outcome = .success(true)
+            } else {
+                outcome = .success(false)
+            }
+        } catch {
+            outcome = .failure(error)
+        }
+        releaseCursorWriteLock()
+        return try outcome.get()
     }
 
     // MARK: - Stats

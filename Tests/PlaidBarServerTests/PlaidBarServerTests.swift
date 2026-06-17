@@ -1875,6 +1875,90 @@ struct PlaidBarServerTests {
         }
     }
 
+    @Test("Conditional cursor save no-ops once the owning item is deleted")
+    func conditionalCursorSaveSkipsDeletedItem() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-cursor-atomic-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let databasePath = directory.appendingPathComponent("plaidbar-test.sqlite").path
+        let logger = Logger(label: "com.ftchvs.plaidbar-server-tests.cursor-atomic")
+
+        try await withTokenStore(databasePath: databasePath, logger: logger) { store, fluent in
+            // Persist an item directly (no Keychain) so the test runs anywhere.
+            try await ItemModel(
+                id: "item-a",
+                accessToken: "keychain:item-a",
+                institutionId: "ins-a",
+                institutionName: "Institution A"
+            ).save(on: fluent.db())
+
+            // While the item exists, the conditional save persists the cursor.
+            let persisted = try await store.saveSyncCursorIfItemExists(itemId: "item-a", cursor: "cursor-1")
+            #expect(persisted)
+            #expect(try await store.getSyncCursor(itemId: "item-a") == "cursor-1")
+
+            // After the item is deleted, a late cursor save must be a no-op and
+            // must not resurrect a sync_cursors row for the gone item.
+            try await store.deleteItem(id: "item-a")
+            let skipped = try await store.saveSyncCursorIfItemExists(itemId: "item-a", cursor: "cursor-2")
+            #expect(!skipped)
+            #expect(try await store.getSyncCursor(itemId: "item-a") == nil)
+        }
+    }
+
+    @Test("Concurrent syncs for the same item coalesce onto a single Plaid pass")
+    func concurrentItemSyncsCoalesce() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-sync-coalesce-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let databasePath = directory.appendingPathComponent("plaidbar-test.sqlite").path
+        let logger = Logger(label: "com.ftchvs.plaidbar-server-tests.sync-coalesce")
+        // A deliberate delay keeps the first sync in flight long enough for the
+        // second concurrent request to land on the coalescing gate.
+        let client = DelayedRefreshPlaidClient(syncOutcomes: [
+            "token-a": .success(
+                Self.syncResponse(transactionId: "tx-a", cursor: "cursor-a"),
+                delayNanoseconds: 200_000_000
+            ),
+        ])
+
+        try await withTokenStore(databasePath: databasePath, logger: logger) { store, fluent in
+            try await ItemModel(
+                id: "item-a",
+                accessToken: "token-a",
+                institutionId: "ins-a",
+                institutionName: "Institution A"
+            ).save(on: fluent.db())
+            // A single route instance shares one coalescer across both requests.
+            let route = TransactionRoutes(plaidClient: client, tokenStore: store, maxConcurrentItemRefreshes: 2)
+
+            async let first = route.syncTransactions(
+                request: Self.makeRequest(path: "/api/transactions/sync?item_id=item-a"),
+                context: TestRequestContext(source: TestRequestContextSource())
+            )
+            async let second = route.syncTransactions(
+                request: Self.makeRequest(path: "/api/transactions/sync?item_id=item-a"),
+                context: TestRequestContext(source: TestRequestContextSource())
+            )
+
+            let firstSync: SyncResponse = try await Self.decodeBody(try await first)
+            let secondSync: SyncResponse = try await Self.decodeBody(try await second)
+
+            // Both callers observe the same coalesced result.
+            #expect(firstSync.added.map(\.id) == ["tx-a"])
+            #expect(secondSync.added.map(\.id) == ["tx-a"])
+
+            // The underlying Plaid sync ran exactly once for the item.
+            let calls = await client.recordedCalls()
+            #expect(calls.syncs == ["token-a"])
+            #expect(calls.maxActive == 1)
+        }
+    }
+
     @Test func linkResponseCodable() throws {
         let response = LinkResponse(linkToken: "token_123", linkUrl: "https://example.com/link")
         let data = try JSONEncoder().encode(response)
