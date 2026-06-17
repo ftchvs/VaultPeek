@@ -25,19 +25,22 @@ The target is a **three-column** layout where portfolio context is *permanent*:
 ┌──────────────────┬───────────────────────────┬────────────────────┐
 │  Left            │  Center                    │  Right             │
 │  Wealth Summary  │  Dashboard                 │  Account Inspector │
-│  (always)        │  (always)                  │  (when selected)   │
-│                  │                            │                    │
+│  (always)        │  (always)                  │  (always; content  │
+│                  │                            │   varies)          │
 │  net worth,      │  change receipt, attention,│  selected account  │
-│  metric grid,    │  heatmap, filters,         │  detail: status,   │
-│  balance mix,    │  account rows, summary     │  balances, changes,│
-│  cashflow,       │  context, footer status    │  review, top cats, │
-│  credit, sync    │                            │  recent, actions   │
+│  metric grid,    │  heatmap, filters,         │  detail when a row │
+│  balance mix,    │  account rows, summary     │  is selected; else │
+│  cashflow,       │  context, footer status    │  empty-selection   │
+│  credit, sync    │                            │  prompt            │
 └──────────────────┴───────────────────────────┴────────────────────┘
-   320pt              480pt                        320pt (additive)
+   320pt              480pt                        320pt
 ```
 
 The Wealth Summary rail stays put while you inspect an account; the inspector
-opens to the **right** of the dashboard, not in place of the left rail.
+column is always the **right** column, not a panel that swaps in place of the
+left rail. Selecting an account fills the inspector with that account's detail;
+deselecting returns it to an empty-selection prompt — the column itself never
+disappears.
 
 ## 2. Anatomy and ownership
 
@@ -45,7 +48,7 @@ opens to the **right** of the dashboard, not in place of the left rail.
 |--------|------|-----------|------|
 | **Left — Wealth Summary** | `WealthSummaryFlyout` | Always (post-setup) | The one net-worth hero number, portfolio metric grid, balance mix, cashflow, credit utilization summary, attention rollup, sync health pill |
 | **Center — Dashboard** | dashboard column in `MainPopover` | Always (post-setup) | Latest local changes (change receipt), attention/recovery, 365-day heatmap, segmented finance filters, account rows, balance/summary context, footer status line |
-| **Right — Account Inspector** | `AccountDetailFlyout`, adapted | Only when an account row is selected | The selected account's detail: connection status, balances, 30-day changes, to-review, top categories, recent activity, account actions |
+| **Right — Account Inspector** | `AccountDetailFlyout`, adapted | Always (post-setup); content varies with selection | When a row is selected: the selected account's detail — connection status, balances, 30-day changes, to-review, top categories, recent activity, account actions. With no selection: an empty-selection prompt (or a brief loading placeholder while a persisted selection resolves) |
 
 **Hard rules:**
 
@@ -64,20 +67,25 @@ opens to the **right** of the dashboard, not in place of the left rail.
 
 ## 3. Geometry contract
 
-Three layout states, three widths. Column widths are tokens, not magic numbers;
-implementations must read them from a single `Layout` source.
+Two layout states, two widths. Column widths are tokens, not magic numbers;
+implementations must read them from a single `Layout` source. The
+**three-column workspace is always open post-setup**: the inspector column is
+present whether or not a specific account is selected — only its *content*
+changes (account inspector, a brief loading placeholder for a still-resolving
+persisted selection, or an empty-selection prompt). The layout never collapses
+to two columns when an account is deselected.
 
 | State | Condition | Columns | Width (pt) |
 |-------|-----------|---------|-----------|
 | **Setup** | `!isSetupComplete && !recoveryDashboard` | Center only | `dashboard` = 480 |
-| **Two-column** | post-setup, no account selected | Left + Center | `summaryRail` + 1 + `dashboard` = 320 + 1 + 480 = **801** |
-| **Three-column** | post-setup, an account selected | Left + Center + Right | `summaryRail` + 1 + `dashboard` + 1 + `inspector` = 320 + 1 + 480 + 1 + 320 = **1122** (ideal; clamped — see §5) |
+| **Three-column** | post-setup (default; with or without a selection) | Left + Center + Right | `summaryRail` + 1 + `dashboard` + 1 + `inspector` = 320 + 1 + 480 + 1 + 320 = **1122** (ideal; clamped — see §5) |
 
 Notes:
 
 - `summaryRail = 320`, `dashboard = 480`, `inspector = 320`, dividers = 1pt.
-- The two-column width (801) equals today's expanded popover width, so the
-  default (no-selection) state does **not** change size when this work lands.
+- The three-column width (1122) is the fixed default post-setup. Deselecting an
+  account swaps the inspector's content to an empty-selection prompt but does
+  **not** change the popover width — the workspace stays three columns wide.
 - Heights stay screen-bounded: each side column caps its internal scroll to the
   same screen-bounded height the dashboard scroll column already uses, so tall
   content scrolls *inside* a column instead of growing the whole popover.
@@ -92,17 +100,22 @@ the **right** (the inspector) on top of a permanent left rail.
 Behavioral contract — the implementation may use any NSWindow/NSPopover
 mechanism that satisfies all of these without fragile run-loop timing:
 
-1. **No horizontal jump of the Wealth Summary** when the right inspector opens
-   or closes. The left + center block is the stable anchor; the inspector is
-   additive on the trailing side.
-2. **Persisted selection opens directly into three-column geometry** — if an
-   account was selected when the popover last closed, reopening lands in the
-   correct three-column layout without a visible resize animation from
-   two-column to three-column.
+1. **No horizontal jump of the Wealth Summary** when the inspector's content
+   changes between an account detail and the empty-selection prompt. The
+   left + center block is the stable anchor; the always-present inspector is the
+   fixed trailing column.
+2. **Opens directly into three-column geometry** — post-setup the popover always
+   lands in the three-column layout (1122pt, clamped — see §5), whether or not an
+   account was selected when it last closed. A persisted selection reopens with
+   the account detail already in the inspector; with no selection the inspector
+   shows the empty-selection prompt. Either way there is no resize animation
+   between layouts, because the geometry does not change.
 3. **Stay within the visible screen** where practical (see §5 for what happens
    when the ideal width does not fit).
-4. **Close/deselect returns to two-column geometry** without losing the natural
-   menu-bar anchor — the popover does not drift away from its status item.
+4. **Deselect changes only the inspector's content, not the geometry** — the
+   popover stays three columns wide and keeps its natural menu-bar anchor; it
+   does not collapse to a narrower layout and does not drift away from its
+   status item.
 5. **MainActor / strict-concurrency clean** across the resize path; any
    `NSViewRepresentable` window code is correctly isolated.
 
@@ -134,21 +147,25 @@ Constraints that hold in every tier:
 Selection model:
 
 - Clicking an account row **selects** it: the row shows the native accent
-  selection highlight **and** the right inspector opens for that account.
-- The selected-row highlight stays synchronized with the open inspector — they
-  are two views of one selection state.
+  selection highlight **and** the always-present right inspector fills with that
+  account's detail.
+- The selected-row highlight stays synchronized with the inspector content —
+  they are two views of one selection state.
 - Re-clicking the selected row, clicking the inspector's ✕, changing the filter,
-  or pressing Esc **deselects**: the right inspector closes and the layout
-  returns to two-column. Deselect closes **only** the right inspector and must
-  not remount or flash the left Wealth Summary.
+  or pressing Esc **deselects**: the inspector's content reverts to the
+  empty-selection prompt while the inspector column stays in place. The layout
+  stays three columns wide. Deselect changes **only** the inspector's content and
+  must not remount or flash the left Wealth Summary or the inspector column
+  itself.
 
 Keyboard:
 
-- **Esc closes the right inspector first**, then (on a subsequent Esc, when no
-  inspector is open) falls through to the system popover dismiss. A single Esc
-  never both closes the inspector and dismisses the popover.
-- Keyboard users can open and close the inspector without losing context.
-- **Focus after close returns to the previously selected row**, so keyboard
+- **Esc clears the account selection first** — it returns the inspector to its
+  empty-selection state — then (on a subsequent Esc, when no account is
+  selected) falls through to the system popover dismiss. A single Esc never both
+  clears the selection and dismisses the popover.
+- Keyboard users can select and deselect an account without losing context.
+- **Focus after deselect returns to the previously selected row**, so keyboard
   navigation continues from where the user was — not the top of the list, not a
   dismissed popover.
 
