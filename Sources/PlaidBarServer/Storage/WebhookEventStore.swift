@@ -119,7 +119,20 @@ actor WebhookEventStore {
             eventAt: signal.eventAt,
             receivedAt: signal.receivedAt
         )
-        try await model.save(on: fluent.db())
+        do {
+            try await model.save(on: fluent.db())
+        } catch {
+            // The find-then-save above is not atomic: two concurrent deliveries
+            // of the same webhook can both pass the existence check and race to
+            // insert, so one save hits the `idempotency_hash` unique constraint.
+            // Re-check existence — if the row is now present, the other writer
+            // won and this delivery is a duplicate (idempotent). Otherwise the
+            // failure is unrelated and must propagate.
+            if try await WebhookEventModel.find(signal.idempotencyHash, on: fluent.db()) != nil {
+                return WebhookStoreResult(disposition: .duplicate)
+            }
+            throw error
+        }
         return WebhookStoreResult(disposition: isOutOfOrder ? .outOfOrder : .stored)
     }
 
