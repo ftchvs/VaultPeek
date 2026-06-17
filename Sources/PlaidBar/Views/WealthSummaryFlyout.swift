@@ -30,9 +30,10 @@ struct WealthSummaryFlyout: View {
 
     var body: some View {
         let presentation = presentation
+        let privacyMaskEnabled = appState.shouldMaskFinancialValues
 
         VStack(spacing: 0) {
-            header(presentation)
+            header(presentation, privacyMaskEnabled: privacyMaskEnabled)
                 .padding(Spacing.md)
 
             Divider()
@@ -40,15 +41,15 @@ struct WealthSummaryFlyout: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.lg) {
-                    WealthMetricGrid(presentation: presentation)
+                    WealthMetricGrid(presentation: presentation, privacyMaskEnabled: privacyMaskEnabled)
                         .loadingRedaction(appState.loadState(for: .summaryCards))
                         .scrollEdgeDepth(reduceMotion: reduceMotion)
 
-                    WealthBalanceMixSection(presentation: presentation)
+                    WealthBalanceMixSection(presentation: presentation, privacyMaskEnabled: privacyMaskEnabled)
                         .loadingRedaction(appState.loadState(for: .summaryCards))
                         .scrollEdgeDepth(reduceMotion: reduceMotion)
 
-                    WealthCashflowSection(cashflow: presentation.cashflow)
+                    WealthCashflowSection(cashflow: presentation.cashflow, privacyMaskEnabled: privacyMaskEnabled)
                         .loadingRedaction(appState.loadState(for: .transactions))
                         .scrollEdgeDepth(reduceMotion: reduceMotion)
 
@@ -59,7 +60,8 @@ struct WealthSummaryFlyout: View {
                             cashflow: presentation.cashflow,
                             asOf: Date()
                         ),
-                        lastUpdatedRelative: appState.lastSyncRelative
+                        lastUpdatedRelative: appState.lastSyncRelative,
+                        privacyMaskEnabled: privacyMaskEnabled
                     )
                     .loadingRedaction(appState.loadState(for: .summaryCards))
                     .scrollEdgeDepth(reduceMotion: reduceMotion)
@@ -73,14 +75,16 @@ struct WealthSummaryFlyout: View {
                             from: appState.recurringTransactions,
                             asOf: Date()
                         ),
-                        onOpenSubscriptions: onOpenSubscriptions
+                        onOpenSubscriptions: onOpenSubscriptions,
+                        privacyMaskEnabled: privacyMaskEnabled
                     )
                     .loadingRedaction(appState.loadState(for: .transactions))
                     .scrollEdgeDepth(reduceMotion: reduceMotion)
 
                     WealthCreditSection(
                         summary: presentation.creditUtilization,
-                        threshold: appState.creditUtilizationThreshold
+                        threshold: appState.creditUtilizationThreshold,
+                        privacyMaskEnabled: privacyMaskEnabled
                     )
                         .loadingRedaction(appState.loadState(for: .credit))
                         .scrollEdgeDepth(reduceMotion: reduceMotion)
@@ -108,11 +112,20 @@ struct WealthSummaryFlyout: View {
         }
         .frame(maxHeight: .infinity, alignment: .top)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(accessibilitySummary(presentation))
+        .accessibilityLabel(accessibilitySummary(presentation, privacyMaskEnabled: privacyMaskEnabled))
     }
 
-    private func header(_ presentation: WealthSummaryPresentation) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
+    private func header(
+        _ presentation: WealthSummaryPresentation,
+        privacyMaskEnabled: Bool
+    ) -> some View {
+        let netWorthText = PrivacyMaskPresentation.currency(
+            presentation.netWorth,
+            format: .full,
+            isEnabled: privacyMaskEnabled,
+            style: .hero
+        )
+        return VStack(alignment: .leading, spacing: Spacing.sm) {
             HStack(alignment: .firstTextBaseline) {
                 Text("Wealth Summary")
                     .font(.headline.weight(.semibold))
@@ -128,22 +141,34 @@ struct WealthSummaryFlyout: View {
                     .sectionTitle()
                     .foregroundStyle(.secondary)
 
-                Text(Formatters.currency(presentation.netWorth, format: .full))
+                Text(netWorthText)
                     .displayBalance()
-                    .rollingTabularNumber(Formatters.currency(presentation.netWorth, format: .full), reduceMotion: reduceMotion)
+                    .rollingTabularNumber(netWorthText, reduceMotion: reduceMotion)
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
 
-                WealthNetWorthTrendBlock(trend: presentation.netWorthTrend)
+                if !privacyMaskEnabled {
+                    WealthNetWorthTrendBlock(trend: presentation.netWorthTrend)
+                }
             }
             .padding(Spacing.sm)
             .heroAccentSurface()
         }
     }
 
-    private func accessibilitySummary(_ presentation: WealthSummaryPresentation) -> String {
-        let netWorth = Formatters.currency(presentation.netWorth, format: .full)
-        let netCashflow = cashflowText(presentation.cashflow.net, format: .full)
+    private func accessibilitySummary(
+        _ presentation: WealthSummaryPresentation,
+        privacyMaskEnabled: Bool
+    ) -> String {
+        let netWorth = PrivacyMaskPresentation.currency(
+            presentation.netWorth,
+            format: .full,
+            isEnabled: privacyMaskEnabled,
+            style: .hero
+        )
+        let netCashflow = privacyMaskEnabled
+            ? PrivacyMaskPresentation.compactValue
+            : cashflowText(presentation.cashflow.net, format: .full)
         return "Wealth summary. Net worth \(netWorth). 30 day net cashflow \(netCashflow). \(presentation.syncHealth.title). \(presentation.attention.detail)"
     }
 }
@@ -227,6 +252,7 @@ private struct WealthSyncPill: View {
 private struct WealthMetricGrid: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let presentation: WealthSummaryPresentation
+    let privacyMaskEnabled: Bool
 
     private var columns: [GridItem] {
         [
@@ -239,7 +265,7 @@ private struct WealthMetricGrid: View {
         LazyVGrid(columns: columns, alignment: .leading, spacing: Spacing.sm) {
             WealthMetricTile(
                 title: "Assets",
-                value: Formatters.currency(presentation.totalAssets, format: .compact),
+                value: PrivacyMaskPresentation.currency(presentation.totalAssets, format: .compact, isEnabled: privacyMaskEnabled),
                 detail: "\(presentation.accountCount) accounts",
                 systemImage: "building.columns.fill",
                 reduceMotion: reduceMotion
@@ -247,7 +273,7 @@ private struct WealthMetricGrid: View {
 
             WealthMetricTile(
                 title: "Debt",
-                value: Formatters.currency(presentation.totalDebt, format: .compact),
+                value: PrivacyMaskPresentation.currency(presentation.totalDebt, format: .compact, isEnabled: privacyMaskEnabled),
                 detail: presentation.totalDebt > 0 ? "Credit and loans" : "No debt synced",
                 systemImage: "creditcard.fill",
                 tint: presentation.totalDebt > 0 ? SemanticColors.creditDebt : AppearanceTextColors.secondary,
@@ -301,6 +327,7 @@ private struct WealthMetricTile: View {
 
 private struct WealthBalanceMixSection: View {
     let presentation: WealthSummaryPresentation
+    let privacyMaskEnabled: Bool
 
     private var barSegments: [BalanceCompositionBarSegment] {
         presentation.balanceMix.segments.map { segment in
@@ -327,7 +354,11 @@ private struct WealthBalanceMixSection: View {
 
                 VStack(alignment: .leading, spacing: Spacing.xs) {
                     ForEach(presentation.balanceMix.segments) { segment in
-                        WealthMixLegendRow(segment: segment, tint: tint(for: segment.id))
+                        WealthMixLegendRow(
+                            segment: segment,
+                            tint: tint(for: segment.id),
+                            privacyMaskEnabled: privacyMaskEnabled
+                        )
                     }
                 }
             }
@@ -355,6 +386,11 @@ private struct WealthMixLegendRow: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let segment: BalanceCompositionPresentation.Segment
     let tint: Color
+    let privacyMaskEnabled: Bool
+
+    private var compactValue: String {
+        PrivacyMaskPresentation.currency(segment.value, format: .compact, isEnabled: privacyMaskEnabled)
+    }
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
@@ -370,9 +406,9 @@ private struct WealthMixLegendRow: View {
 
             Spacer(minLength: Spacing.sm)
 
-            Text(Formatters.currency(segment.value, format: .compact))
+            Text(compactValue)
                 .font(.caption.weight(.semibold))
-                .rollingTabularNumber(Formatters.currency(segment.value, format: .compact), reduceMotion: reduceMotion)
+                .rollingTabularNumber(compactValue, reduceMotion: reduceMotion)
                 .lineLimit(1)
 
             Text(percentText(segment.share))
@@ -382,7 +418,7 @@ private struct WealthMixLegendRow: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            "\(segment.title): \(Formatters.currency(segment.value, format: .full)), \(percentText(segment.share))"
+            "\(segment.title): \(PrivacyMaskPresentation.currency(segment.value, format: .full, isEnabled: privacyMaskEnabled)), \(percentText(segment.share))"
         )
     }
 }
@@ -390,6 +426,7 @@ private struct WealthMixLegendRow: View {
 private struct WealthCashflowSection: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let cashflow: WealthSummaryPresentation.CashflowSummary
+    let privacyMaskEnabled: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -402,9 +439,9 @@ private struct WealthCashflowSection: View {
             }
 
             VStack(spacing: Spacing.xs) {
-                WealthCashflowRow(title: "Income", amount: cashflow.income, role: .income, reduceMotion: reduceMotion)
-                WealthCashflowRow(title: "Spending", amount: cashflow.spending, role: .spending, reduceMotion: reduceMotion)
-                WealthCashflowRow(title: "Net", amount: cashflow.net, role: .net, reduceMotion: reduceMotion)
+                WealthCashflowRow(title: "Income", amount: cashflow.income, role: .income, privacyMaskEnabled: privacyMaskEnabled, reduceMotion: reduceMotion)
+                WealthCashflowRow(title: "Spending", amount: cashflow.spending, role: .spending, privacyMaskEnabled: privacyMaskEnabled, reduceMotion: reduceMotion)
+                WealthCashflowRow(title: "Net", amount: cashflow.net, role: .net, privacyMaskEnabled: privacyMaskEnabled, reduceMotion: reduceMotion)
             }
         }
         .accessibilityElement(children: .contain)
@@ -421,6 +458,7 @@ private struct WealthCashflowRow: View {
     let title: String
     let amount: Double
     let role: WealthCashflowRole
+    var privacyMaskEnabled: Bool = false
     var reduceMotion: Bool = false
 
     var body: some View {
@@ -453,20 +491,22 @@ private struct WealthCashflowRow: View {
     }
 
     private var amountText: String {
+        guard !privacyMaskEnabled else { return PrivacyMaskPresentation.compactValue }
         switch role {
         case .income, .net:
-            cashflowText(amount, format: .compact)
+            return cashflowText(amount, format: .compact)
         case .spending:
-            Formatters.currency(amount, format: .compact)
+            return Formatters.currency(amount, format: .compact)
         }
     }
 
     private var accessibilityAmountText: String {
+        guard !privacyMaskEnabled else { return PrivacyMaskPresentation.compactValue }
         switch role {
         case .income, .net:
-            cashflowText(amount, format: .full)
+            return cashflowText(amount, format: .full)
         case .spending:
-            Formatters.currency(amount, format: .full)
+            return Formatters.currency(amount, format: .full)
         }
     }
 
@@ -487,6 +527,7 @@ private struct WealthCashflowRow: View {
 private struct WealthCreditSection: View {
     let summary: WealthSummaryPresentation.CreditUtilizationSummary?
     let threshold: Double
+    let privacyMaskEnabled: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -500,19 +541,19 @@ private struct WealthCreditSection: View {
                         .frame(width: Sizing.iconInline, height: Sizing.iconInline)
 
                     VStack(alignment: .leading, spacing: Spacing.xxs) {
-                        Text("\(Formatters.percent(summary.percent, decimals: 0)) utilization, \(summary.statusLabel.lowercased())")
+                        Text("\(percentValue(summary)) utilization, \(summary.statusLabel.lowercased())")
                             .font(.caption.weight(.semibold))
                             .lineLimit(1)
                             .minimumScaleFactor(0.82)
 
-                        Text("\(Formatters.currency(summary.usedCredit, format: .compact)) used of \(Formatters.currency(summary.totalLimit, format: .compact)) limit")
+                        Text("\(usedValue(summary, format: .compact)) used of \(limitValue(summary, format: .compact)) limit")
                             .detailText()
                             .lineLimit(2)
                     }
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(
-                    "Credit utilization \(Formatters.percent(summary.percent, decimals: 0)), \(summary.statusLabel). \(Formatters.currency(summary.usedCredit, format: .full)) used of \(Formatters.currency(summary.totalLimit, format: .full)) limit."
+                    "Credit utilization \(percentValue(summary)), \(summary.statusLabel). \(usedValue(summary, format: .full)) used of \(limitValue(summary, format: .full)) limit."
                 )
             } else {
                 Label("No credit utilization available", systemImage: "creditcard")
@@ -520,6 +561,24 @@ private struct WealthCreditSection: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    private func percentValue(_ summary: WealthSummaryPresentation.CreditUtilizationSummary) -> String {
+        PrivacyMaskPresentation.percent(summary.percent, decimals: 0, isEnabled: privacyMaskEnabled)
+    }
+
+    private func usedValue(
+        _ summary: WealthSummaryPresentation.CreditUtilizationSummary,
+        format: CurrencyFormat
+    ) -> String {
+        PrivacyMaskPresentation.currency(summary.usedCredit, format: format, isEnabled: privacyMaskEnabled)
+    }
+
+    private func limitValue(
+        _ summary: WealthSummaryPresentation.CreditUtilizationSummary,
+        format: CurrencyFormat
+    ) -> String {
+        PrivacyMaskPresentation.currency(summary.totalLimit, format: format, isEnabled: privacyMaskEnabled)
     }
 
     private func tint(_ summary: WealthSummaryPresentation.CreditUtilizationSummary) -> Color {

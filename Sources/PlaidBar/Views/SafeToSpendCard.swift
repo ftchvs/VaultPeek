@@ -11,6 +11,9 @@ struct SafeToSpendCard: View {
     let result: SafeToSpendResult
     /// Relative "last updated" text (e.g. "2 minutes ago"). Nil hides the line.
     var lastUpdatedRelative: String?
+    /// When true, every currency figure (headline + breakdown) is masked while
+    /// Privacy Mask or App Lock is active.
+    var privacyMaskEnabled: Bool = false
 
     @State private var isBreakdownExpanded = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -50,13 +53,19 @@ struct SafeToSpendCard: View {
     }
 
     private var amountRow: some View {
-        Text(Formatters.currency(result.amount, format: .full))
+        let amount = PrivacyMaskPresentation.currency(
+            result.amount,
+            format: .full,
+            isEnabled: privacyMaskEnabled,
+            style: .hero
+        )
+        return Text(amount)
             .dataText()
             .foregroundStyle(amountTint)
             .contentTransition(.numericText())
             .lineLimit(1)
             .minimumScaleFactor(0.7)
-            .accessibilityLabel("\(Formatters.currency(result.amount, format: .full)) safe to spend through \(horizonText)")
+            .accessibilityLabel("\(amount) safe to spend through \(horizonText)")
     }
 
     private var confidenceCue: some View {
@@ -98,7 +107,7 @@ struct SafeToSpendCard: View {
             if isBreakdownExpanded {
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
                     ForEach(result.visibleComponents) { component in
-                        SafeToSpendBreakdownRow(component: component)
+                        SafeToSpendBreakdownRow(component: component, privacyMaskEnabled: privacyMaskEnabled)
                     }
                 }
                 .transition(.opacity.combined(with: .move(edge: .top)))
@@ -135,7 +144,12 @@ struct SafeToSpendCard: View {
     }
 
     private var accessibilitySummary: String {
-        let amount = Formatters.currency(result.amount, format: .full)
+        let amount = PrivacyMaskPresentation.currency(
+            result.amount,
+            format: .full,
+            isEnabled: privacyMaskEnabled,
+            style: .hero
+        )
         let updated = lastUpdatedRelative.map { " Updated \($0)." } ?? " Not yet updated."
         return "Safe to spend \(amount) through \(horizonText). Confidence: \(result.confidence.label).\(updated)"
     }
@@ -143,6 +157,7 @@ struct SafeToSpendCard: View {
 
 private struct SafeToSpendBreakdownRow: View {
     let component: SafeToSpendComponent
+    var privacyMaskEnabled: Bool = false
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
@@ -170,10 +185,12 @@ private struct SafeToSpendBreakdownRow: View {
     }
 
     private var amountText: String {
-        signPrefix + Formatters.currency(abs(component.amount), format: .compact)
+        guard !privacyMaskEnabled else { return PrivacyMaskPresentation.compactValue }
+        return signPrefix + Formatters.currency(abs(component.amount), format: .compact)
     }
 
     private var accessibilityAmountText: String {
+        guard !privacyMaskEnabled else { return PrivacyMaskPresentation.compactValue }
         let magnitude = Formatters.currency(abs(component.amount), format: .full)
         if component.amount > 0 { return "plus \(magnitude)" }
         if component.amount < 0 { return "minus \(magnitude)" }

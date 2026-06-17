@@ -54,7 +54,8 @@ struct AccountDetailFlyout: View {
             for: account,
             activitySnapshot: snapshot,
             itemStatus: itemConnectionStatus,
-            fallbackFreshnessLabel: connection.signalLabel
+            fallbackFreshnessLabel: connection.signalLabel,
+            privacyMaskEnabled: appState.shouldMaskFinancialValues
         )
         let recent = Array(snapshot.transactions.prefix(6))
 
@@ -71,21 +72,26 @@ struct AccountDetailFlyout: View {
                         .scrollEdgeDepth(reduceMotion: reduceMotion)
                     balancesSection(summary: summary)
                         .scrollEdgeDepth(reduceMotion: reduceMotion)
-                    changesSection(insights: insights)
+                    if appState.shouldMaskFinancialValues {
+                        privateDetailsPlaceholder()
+                            .scrollEdgeDepth(reduceMotion: reduceMotion)
+                    } else {
+                        changesSection(insights: insights)
+                            .scrollEdgeDepth(reduceMotion: reduceMotion)
+                        if !insights.reviewItems.isEmpty {
+                            reviewSection(insights: insights)
+                                .scrollEdgeDepth(reduceMotion: reduceMotion)
+                        }
+                        if !insights.topCategories.isEmpty {
+                            categoriesSection(insights: insights)
+                                .scrollEdgeDepth(reduceMotion: reduceMotion)
+                        }
+                        activitySection(
+                            recent: recent,
+                            emptyState: emptyState(snapshot: snapshot, connection: connection)
+                        )
                         .scrollEdgeDepth(reduceMotion: reduceMotion)
-                    if !insights.reviewItems.isEmpty {
-                        reviewSection(insights: insights)
-                            .scrollEdgeDepth(reduceMotion: reduceMotion)
                     }
-                    if !insights.topCategories.isEmpty {
-                        categoriesSection(insights: insights)
-                            .scrollEdgeDepth(reduceMotion: reduceMotion)
-                    }
-                    activitySection(
-                        recent: recent,
-                        emptyState: emptyState(snapshot: snapshot, connection: connection)
-                    )
-                    .scrollEdgeDepth(reduceMotion: reduceMotion)
                     actionsSection(summary: summary)
                         .scrollEdgeDepth(reduceMotion: reduceMotion)
                 }
@@ -101,7 +107,7 @@ struct AccountDetailFlyout: View {
         }
         .frame(maxHeight: .infinity, alignment: .top)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Account details for \(summary.displayName)")
+        .accessibilityLabel(summary.accessibilityLabel(privacyMaskEnabled: appState.shouldMaskFinancialValues))
         .confirmationDialog(
             "Remove \(institutionRemovalName)?",
             isPresented: $isConfirmingAccountRemoval,
@@ -200,13 +206,21 @@ struct AccountDetailFlyout: View {
         HStack(alignment: .top, spacing: Spacing.lg) {
             DetailValue(
                 title: summary.availableTitle,
-                value: Formatters.currency(summary.availableBalance, format: .compact),
+                value: PrivacyMaskPresentation.currency(
+                    summary.availableBalance,
+                    format: .compact,
+                    isEnabled: appState.shouldMaskFinancialValues
+                ),
                 tint: AppearanceTextColors.primary,
                 reduceMotion: reduceMotion
             )
             DetailValue(
                 title: summary.currentTitle,
-                value: Formatters.currency(summary.currentBalance, format: .compact),
+                value: PrivacyMaskPresentation.currency(
+                    summary.currentBalance,
+                    format: .compact,
+                    isEnabled: appState.shouldMaskFinancialValues
+                ),
                 tint: AppearanceTextColors.primary,
                 reduceMotion: reduceMotion
             )
@@ -217,7 +231,8 @@ struct AccountDetailFlyout: View {
             if account.balances.utilizationPercent != nil,
                let utilizationText = AccountPresentation.dashboardUtilizationDetailText(
                    for: account,
-                   threshold: appState.creditUtilizationThreshold
+                   threshold: appState.creditUtilizationThreshold,
+                   privacyMaskEnabled: appState.shouldMaskFinancialValues
                )
             {
                 DetailValue(
@@ -230,6 +245,18 @@ struct AccountDetailFlyout: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Balances for \(summary.displayName)")
+    }
+
+    private func privateDetailsPlaceholder() -> some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            FlyoutSectionLabel("Private")
+            Text("Detailed balances, activity, and transaction history are hidden while Privacy Mask or App Lock is active.")
+                .detailText()
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Private details hidden while VaultPeek is private")
     }
 
     // MARK: Changes (30D vs prior 30D)

@@ -26,7 +26,10 @@ struct ReviewInboxView: View {
                         .transition(.opacity.combined(with: .move(edge: .top)))
                 }
 
-                VStack(spacing: Spacing.xs) {
+                if appState.shouldMaskFinancialValues {
+                    privateInboxPlaceholder
+                } else {
+                    VStack(spacing: Spacing.xs) {
                     ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                         ReviewInboxRow(
                             item: item,
@@ -66,6 +69,7 @@ struct ReviewInboxView: View {
                                 appState.ignoreReviewItem(item.id)
                             }
                         )
+                    }
                     }
                 }
             }
@@ -119,6 +123,18 @@ struct ReviewInboxView: View {
             .help("Undo last review action")
             .accessibilityLabel("Undo last review action")
         }
+    }
+
+    private var privateInboxPlaceholder: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            Text("Review items, merchants, and amounts are hidden while Privacy Mask or App Lock is active.")
+                .detailText()
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Review inbox items hidden while VaultPeek is private")
     }
 
     private func merchantDraftBinding(for item: TransactionReviewItem) -> Binding<String> {
