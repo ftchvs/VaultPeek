@@ -1566,6 +1566,40 @@ struct PlaidBarCoreTests {
         }
     }
 
+    @Test("SpendingCategory colorHexDark overrides the five low-contrast categories")
+    func categoryColorHexDarkOverrides() {
+        let expectedDarkVariants: [SpendingCategory: String] = [
+            .personalCare: "#F0D890",
+            .homeImprovement: "#E8CD60",
+            .transferOut: "#B8C0C0",
+            .income: "#6FCC98",
+            .other: "#A0A8AC",
+        ]
+        for (category, darkHex) in expectedDarkVariants {
+            #expect(category.colorHexDark == darkHex)
+            // The dark variant must actually differ from the light-mode hex.
+            #expect(category.colorHexDark != category.colorHex)
+        }
+    }
+
+    @Test("SpendingCategory colorHexDark falls back to colorHex for other categories")
+    func categoryColorHexDarkFallback() {
+        let overridden: Set<SpendingCategory> = [
+            .personalCare, .homeImprovement, .transferOut, .income, .other,
+        ]
+        for category in SpendingCategory.allCases where !overridden.contains(category) {
+            #expect(category.colorHexDark == category.colorHex)
+        }
+    }
+
+    @Test("SpendingCategory colorHexDark format")
+    func categoryColorHexDarkFormat() {
+        for category in SpendingCategory.allCases {
+            #expect(category.colorHexDark.hasPrefix("#"))
+            #expect(category.colorHexDark.count == 7)
+        }
+    }
+
     // MARK: - Formatters Tests
 
     @Test("Currency full format")

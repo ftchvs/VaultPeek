@@ -28,6 +28,14 @@ struct AnimatedBalanceCompositionBar: View {
                 ForEach(segments) { segment in
                     RoundedRectangle(cornerRadius: Radius.cell)
                         .fill(segment.fillColor)
+                        .overlay(
+                            // Non-color cue: a hairline outline separates adjacent
+                            // segments so the mix is legible without relying on hue.
+                            // Uses the window background so it reads as a "cut" in
+                            // both light and dark appearances.
+                            RoundedRectangle(cornerRadius: Radius.cell)
+                                .strokeBorder(Color(nsColor: .windowBackgroundColor).opacity(0.7), lineWidth: 0.5)
+                        )
                         .frame(
                             width: segmentWidth(
                                 segment,

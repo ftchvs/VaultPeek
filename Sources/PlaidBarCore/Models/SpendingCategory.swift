@@ -88,4 +88,20 @@ public enum SpendingCategory: String, Codable, Sendable, CaseIterable, Hashable 
         case .other: "#BDC3C7"
         }
     }
+
+    /// Color for charts on dark backgrounds (hex string).
+    ///
+    /// Five light-mode `colorHex` values fall below a 3:1 contrast ratio against the
+    /// dark background (`#1E1E1E`); those are overridden here with the darker variants
+    /// recommended in `DESIGN.md`. All other categories reuse `colorHex` unchanged.
+    public var colorHexDark: String {
+        switch self {
+        case .personalCare: "#F0D890"
+        case .homeImprovement: "#E8CD60"
+        case .transferOut: "#B8C0C0"
+        case .income: "#6FCC98"
+        case .other: "#A0A8AC"
+        default: colorHex
+        }
+    }
 }
