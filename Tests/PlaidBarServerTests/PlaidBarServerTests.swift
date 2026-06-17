@@ -62,6 +62,7 @@ private let plaidTokenVaultKeychainAvailable: Bool = {
 
 private actor HostedLinkStubPlaidClient: PlaidClientProtocol {
     private let linkTokenGetResponse: PlaidLinkTokenGetResponse
+    private let linkTokenGetError: (any Error & Sendable)?
     private let exchangeResponse: PlaidTokenExchangeResponse
     private let exchangeResponsesByPublicToken: [String: PlaidTokenExchangeResponse]
     private let accountsResponse: PlaidAccountsResponse
@@ -76,12 +77,14 @@ private actor HostedLinkStubPlaidClient: PlaidClientProtocol {
         linkTokenGetResponse: PlaidLinkTokenGetResponse,
         exchangeResponse: PlaidTokenExchangeResponse,
         accountsResponse: PlaidAccountsResponse,
+        linkTokenGetError: (any Error & Sendable)? = nil,
         exchangeFailuresBeforeSuccess: Int = 0,
         exchangeFailuresByPublicToken: [String: Int] = [:],
         exchangeResponsesByPublicToken: [String: PlaidTokenExchangeResponse] = [:],
         accountsFailuresBeforeSuccess: Int = 0
     ) {
         self.linkTokenGetResponse = linkTokenGetResponse
+        self.linkTokenGetError = linkTokenGetError
         self.exchangeResponse = exchangeResponse
         self.exchangeResponsesByPublicToken = exchangeResponsesByPublicToken
         self.accountsResponse = accountsResponse
@@ -107,6 +110,9 @@ private actor HostedLinkStubPlaidClient: PlaidClientProtocol {
 
     func getLinkToken(_ linkToken: String) async throws -> PlaidLinkTokenGetResponse {
         requestedLinkTokens.append(linkToken)
+        if let linkTokenGetError {
+            throw linkTokenGetError
+        }
         return linkTokenGetResponse
     }
 
@@ -2212,6 +2218,72 @@ struct PlaidBarServerTests {
             #expect(calls.linkTokens == [linkToken])
             #expect(calls.publicTokens.isEmpty)
             #expect(storedPublicTokens == [publicToken])
+        }
+    }
+
+    @Test("Hosted Link callback redacts provider error text from fallback HTML")
+    func oauthCallbackRedactsProviderErrorText() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-oauth-provider-error-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let linkToken = "provider-error-link-token"
+        let providerSentinel = "sentinel provider detail from plaid raw error_message"
+        let plaidClient = HostedLinkStubPlaidClient(
+            linkTokenGetResponse: PlaidLinkTokenGetResponse(
+                linkToken: linkToken,
+                linkSessions: nil,
+                onSuccess: nil,
+                results: nil
+            ),
+            exchangeResponse: PlaidTokenExchangeResponse(
+                accessToken: "unused-access-token",
+                itemId: "unused-item",
+                requestId: nil
+            ),
+            accountsResponse: PlaidAccountsResponse(
+                accounts: [],
+                item: PlaidItem(
+                    itemId: "unused-item",
+                    institutionId: "ins_unused",
+                    availableProducts: nil,
+                    billedProducts: nil
+                ),
+                requestId: nil
+            ),
+            linkTokenGetError: PlaidError.apiError(
+                statusCode: 400,
+                errorType: "INVALID_REQUEST",
+                errorCode: "INVALID_FIELD",
+                errorMessage: providerSentinel
+            )
+        )
+        let pendingLinkSessions = PendingLinkSessionStore(
+            storageURL: directory.appendingPathComponent("pending-link-sessions.json")
+        )
+        let state = await pendingLinkSessions.issueState()
+        await pendingLinkSessions.save(state: state, linkToken: linkToken)
+        let databasePath = directory.appendingPathComponent("plaidbar-test.sqlite").path
+        let logger = Logger(label: "com.ftchvs.plaidbar-server-tests.oauth-provider-error")
+
+        try await withTokenStore(databasePath: databasePath, logger: logger) { store in
+            let route = OAuthCallbackRoute(
+                plaidClient: plaidClient,
+                tokenStore: store,
+                pendingLinkSessions: pendingLinkSessions
+            )
+            let response = try await route.handleCallback(
+                request: Self.makeRequest(path: "/oauth/callback?state=\(state)"),
+                context: TestRequestContext(source: TestRequestContextSource())
+            )
+            let body = try await Self.responseString(response)
+
+            #expect(response.status == .internalServerError)
+            #expect(body.contains("Plaid Link error (INVALID_FIELD)"))
+            #expect(!body.contains(providerSentinel))
+            #expect(!body.contains("raw error_message"))
+            #expect(!body.contains("Plaid API error (400)"))
         }
     }
 
