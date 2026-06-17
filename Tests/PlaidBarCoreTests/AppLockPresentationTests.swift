@@ -80,6 +80,17 @@ struct AppLockPresentationTests {
         #expect(restored.lockWhenBackgrounded != AppLockPreferences().lockWhenBackgrounded)
     }
 
+    @Test("launch/background lock policies require App Lock plus their trigger")
+    func launchAndBackgroundLockPoliciesRequireEnabledLock() {
+        #expect(AppLockPreferences(appLockEnabled: true, lockOnLaunch: true).shouldLockOnLaunch == true)
+        #expect(AppLockPreferences(appLockEnabled: false, lockOnLaunch: true).shouldLockOnLaunch == false)
+        #expect(AppLockPreferences(appLockEnabled: true, lockOnLaunch: false).shouldLockOnLaunch == false)
+
+        #expect(AppLockPreferences(appLockEnabled: true, lockWhenBackgrounded: true).shouldLockWhenBackgrounded == true)
+        #expect(AppLockPreferences(appLockEnabled: false, lockWhenBackgrounded: true).shouldLockWhenBackgrounded == false)
+        #expect(AppLockPreferences(appLockEnabled: true, lockWhenBackgrounded: false).shouldLockWhenBackgrounded == false)
+    }
+
     @Test("suppress-while-locked toggle maps to canonical modes and reads honestly")
     func suppressWhileLockedTogglesCanonicalModes() {
         // Only `.offWhileLocked` suppresses; the three generic-equivalent modes
