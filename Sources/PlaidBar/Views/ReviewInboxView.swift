@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ReviewInboxView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var isFocused: Bool
     @State private var selectedIndex = 0
     @State private var merchantDrafts: [String: String] = [:]
@@ -27,7 +28,7 @@ struct ReviewInboxView: View {
 
                 if let actionConfirmation {
                     ReviewActionConfirmationBanner(confirmation: actionConfirmation)
-                        .transition(.opacity.combined(with: .move(edge: .top)))
+                        .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
                 }
 
                 if appState.shouldMaskFinancialValues {
@@ -91,7 +92,7 @@ struct ReviewInboxView: View {
                 // banner so the inbox can collapse out of the popover instead of
                 // sitting in an empty "0 items" state with a stuck banner.
                 if newCount == 0 {
-                    withAnimation(.snappy(duration: 0.18)) { actionConfirmation = nil }
+                    withAnimation(MotionTokens.animation(MotionTokens.standard, reduceMotion: reduceMotion)) { actionConfirmation = nil }
                 }
             }
             .onMoveCommand(perform: moveSelection)
@@ -176,7 +177,7 @@ struct ReviewInboxView: View {
     private func recordAction(_ action: ReviewActionConfirmation.Action, for item: TransactionReviewItem) {
         confirmationGeneration &+= 1
         let generation = confirmationGeneration
-        withAnimation(.snappy(duration: 0.18)) {
+        withAnimation(MotionTokens.animation(MotionTokens.standard, reduceMotion: reduceMotion)) {
             actionConfirmation = ReviewActionConfirmation(action: action, merchantName: item.effectiveMerchantName)
         }
         // Auto-dismiss so the banner never persists indefinitely. The generation
@@ -184,7 +185,7 @@ struct ReviewInboxView: View {
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(2.5))
             guard confirmationGeneration == generation else { return }
-            withAnimation(.snappy(duration: 0.18)) { actionConfirmation = nil }
+            withAnimation(MotionTokens.animation(MotionTokens.standard, reduceMotion: reduceMotion)) { actionConfirmation = nil }
         }
     }
 }
