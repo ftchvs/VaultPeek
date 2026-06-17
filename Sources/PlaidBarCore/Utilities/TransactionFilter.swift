@@ -25,12 +25,13 @@ public enum TransactionFilter {
         criteria: TransactionFilterCriteria = TransactionFilterCriteria(),
         maxCount: Int = PlaidBarConstants.maxRecentTransactions
     ) -> [(String, [TransactionDTO])] {
+        let matching = filtered(transactions, criteria: criteria)
         let recent = Array(
-            transactions
+            matching
                 .sorted { $0.date > $1.date }
                 .prefix(maxCount)
         )
-        return grouped(filtered(recent, criteria: criteria))
+        return grouped(recent)
     }
 
     public static func filtered(
