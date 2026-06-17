@@ -433,16 +433,33 @@ struct OAuthCallbackRoute: Sendable {
             )
         } catch {
             // A failure outside the per-result loop (e.g. /link/token/get) leaves
-            // nothing consumed, so the session stays retryable.
+            // nothing consumed, so the session stays retryable. Keep the HTML
+            // browser surface on the same redaction boundary as app-facing Link
+            // errors: Plaid's free-form error_message is provider-controlled and
+            // must not be echoed back into Hosted Link callback pages.
             await pendingLinkSessions.releaseCompletion(state: state)
             return Response(
                 status: .internalServerError,
                 headers: [.contentType: "text/html"],
                 body: .init(byteBuffer: ByteBuffer(
-                    string: Self.errorPage(error.localizedDescription)
+                    string: Self.errorPage(Self.callbackErrorMessage(for: error))
                 ))
             )
         }
+    }
+
+    private static func callbackErrorMessage(for error: any Error) -> String {
+        if let plaidError = error as? PlaidError {
+            switch plaidError {
+            case .credentialsNotConfigured:
+                return "Plaid credentials are not configured. Check the VaultPeek companion server config."
+            case let .apiError(_, errorType, errorCode, _):
+                return LinkRoutes.linkErrorMessage(errorType: errorType, errorCode: errorCode)
+            case .invalidResponse:
+                return "Plaid returned an invalid response. Please try connecting again."
+            }
+        }
+        return "Connecting your account failed. Please try again, or check the VaultPeek companion server logs for details."
     }
 
     /// The outcome of attempting to exchange + store a single Link result, which
