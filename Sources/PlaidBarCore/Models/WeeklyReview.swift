@@ -360,7 +360,10 @@ public enum WeeklyReviewBuilder {
                 title: title,
                 detail: "Category pressure changed this month.",
                 action: .inspectCategory,
-                accessibilityHint: "Opens the category budget details."
+                // No category-budget surface exists to navigate to yet, so the
+                // hint must not promise navigation it cannot perform. Describe
+                // what the item flags instead of "Opens ...".
+                accessibilityHint: "Flags category budget pressure for this month."
             ))
         }
 
