@@ -1761,6 +1761,14 @@ final class AppState {
         return result
     }
 
+    /// Starts the background refresh loop only if one is not already running.
+    /// Used by the boot bootstrap so both the online and offline `loadInitialData()`
+    /// paths leave the self-healing loop running without restarting an existing one.
+    func startBackgroundRefreshIfNeeded() {
+        guard refreshTask == nil else { return }
+        startBackgroundRefresh()
+    }
+
     func startBackgroundRefresh() {
         refreshTask?.cancel()
         refreshTask = Task {
@@ -1913,14 +1921,19 @@ final class AppState {
                 await syncTransactions()
             }
             await refreshCategoryBudgets()
-            startBackgroundRefresh()
         } else {
-            // Offline cold start: the background refresh loop (the usual caller
-            // of evaluateNotifications) never starts, so evaluate once here so a
-            // stale-sync / broken-connection alert can still fire for cached or
-            // never-synced state booted without a reachable local server.
+            // Offline cold start: evaluate once immediately so a stale-sync /
+            // broken-connection alert can still fire for cached or never-synced
+            // state booted without a reachable local server, before the loop's
+            // first sleep elapses.
             await evaluateNotifications()
         }
+        // Start the self-healing background refresh loop on every boot path
+        // (online and offline). The loop re-probes connectivity via
+        // `refreshDashboard` and is gated by the app-lock predicates, so an
+        // offline-at-boot launch recovers automatically once the server comes
+        // up instead of staying frozen. Idempotent: never starts a second task.
+        startBackgroundRefreshIfNeeded()
     }
 
     /// When installed as a standalone `.app` (DMG drag-install), the server
