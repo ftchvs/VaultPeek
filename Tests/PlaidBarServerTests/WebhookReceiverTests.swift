@@ -252,6 +252,43 @@ struct WebhookReceiverTests {
         }
     }
 
+    @Test("Concurrent duplicate record returns .duplicate instead of throwing a unique-constraint error")
+    func concurrentDuplicateRecordIsIdempotent() async throws {
+        try await Self.withStores { _, eventStore in
+            // Both deliveries share an idempotency hash, so the find-then-save in
+            // `record` races: one save wins, the other hits the unique
+            // constraint. The store must translate that into `.duplicate`, never
+            // surface the throw.
+            let hash = "concurrent-\(UUID().uuidString)"
+            func makeSignal() -> WebhookItemSignal {
+                WebhookItemSignal(
+                    itemId: "item-webhook",
+                    webhookType: "TRANSACTIONS",
+                    webhookCode: "SYNC_UPDATES_AVAILABLE",
+                    requestId: "request-concurrent",
+                    idempotencyHash: hash,
+                    eventAt: Date(timeIntervalSince1970: 1_800_000_000),
+                    receivedAt: Date(timeIntervalSince1970: 1_800_000_000),
+                    needsSync: true
+                )
+            }
+
+            async let first = eventStore.record(makeSignal())
+            async let second = eventStore.record(makeSignal())
+            let results = try await [first, second]
+
+            // Neither call threw; the pair is one persisted write and one
+            // duplicate (order is nondeterministic).
+            #expect(results.contains { $0.disposition == .duplicate })
+            #expect(results.filter { $0.disposition == .stored }.count <= 1)
+            #expect(results.allSatisfy { $0.disposition != .outOfOrder })
+
+            // Exactly one row exists for the shared hash.
+            let stored = try await eventStore.latestEvent(itemId: "item-webhook")
+            #expect(stored?.idempotencyHash == hash)
+        }
+    }
+
     private static func withStores(
         _ body: (TokenStore, WebhookEventStore) async throws -> Void
     ) async throws {

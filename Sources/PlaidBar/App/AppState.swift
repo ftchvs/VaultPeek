@@ -1,12 +1,20 @@
 import SwiftUI
 import PlaidBarCore
 import Combine
+import OSLog
 import WidgetKit
 @preconcurrency import UserNotifications
 
 @Observable
 @MainActor
 final class AppState {
+    /// Used off the main actor inside the glance-snapshot write task; a
+    /// `Logger` is `Sendable`, so it is safe to reference there.
+    nonisolated static let glanceSnapshotLogger = Logger(
+        subsystem: "com.ftchvs.PlaidBar",
+        category: "GlanceSnapshot"
+    )
+
     // MARK: - UserDefaults Keys
     private enum Keys {
         static let showBalanceInMenuBar = "showBalanceInMenuBar"
@@ -2662,7 +2670,20 @@ final class AppState {
         Task { [snapshot, debouncer, generation] in
             guard await MainActor.run(body: { self.glanceSnapshotWriteGeneration == generation }) else { return }
             await debouncer.schedule(snapshot) { snapshot in
-                guard (try? GlanceSnapshotStore.saveIfChanged(snapshot)) == true else { return }
+                let changed: Bool
+                do {
+                    changed = try GlanceSnapshotStore.saveIfChanged(snapshot)
+                } catch {
+                    // A genuine write failure was previously indistinguishable
+                    // from the "no change" skip below. Surface it (no balance
+                    // material is logged) so a stuck widget snapshot is
+                    // diagnosable; otherwise behave as before and skip.
+                    AppState.glanceSnapshotLogger.error(
+                        "Failed to write glance snapshot: \(String(describing: error), privacy: .public)"
+                    )
+                    return
+                }
+                guard changed else { return }
                 await MainActor.run {
                     WidgetCenter.shared.reloadTimelines(ofKind: "PlaidBarGlanceWidget")
                 }

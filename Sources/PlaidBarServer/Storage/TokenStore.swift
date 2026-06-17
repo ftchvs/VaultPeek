@@ -128,8 +128,13 @@ actor TokenStore {
         do {
             try PlaidTokenVault.delete(storedToken: item.accessToken, fallbackItemId: id)
         } catch {
+            // Best-effort: the SQLite item/cursor rows are already gone, so a
+            // Keychain-delete failure leaves only an orphaned token entry
+            // (reclaimed later by `pruneOrphanedKeychainTokens`). Log enough to
+            // diagnose — the item id is an opaque identifier, never token
+            // material — without aborting the delete.
             logger.warning(
-                "Failed to delete Plaid access token from Keychain: \(String(describing: error))"
+                "Failed to delete Plaid access token from Keychain for item \(id): \(String(describing: error))"
             )
         }
     }
