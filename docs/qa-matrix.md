@@ -1,7 +1,7 @@
 # QA Matrix
 
 This matrix defines the minimum 1.0 release candidate checks. It is deliberately
-manual-friendly because PlaidBar crosses macOS UI, local server, Plaid sandbox,
+manual-friendly because VaultPeek crosses macOS UI, local server, Plaid sandbox,
 local storage, notifications, and distribution.
 
 ## Automated Gates
