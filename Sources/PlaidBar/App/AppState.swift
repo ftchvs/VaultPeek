@@ -1837,7 +1837,11 @@ final class AppState {
             // to it rather than reporting it as missing.
             weeklyReviewNavigation = .reviewInbox
         case .inspectCategory:
-            error = "Category budget drill-in is not available in this slice yet."
+            // No category-budget surface exists to navigate to yet. The drift
+            // item is an informational flag, not a recoverable failure, so this
+            // is a deliberate no-op rather than the error-banner path — surfacing
+            // a red failure banner here read as a broken action (AND-466).
+            break
         case .reviewRecurring:
             weeklyReviewNavigation = .recurring
         case .inspectSafeToSpend:
