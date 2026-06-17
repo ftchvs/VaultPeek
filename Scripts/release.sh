@@ -92,6 +92,9 @@ else
 fi
 bash -n Scripts/*.sh Scripts/vaultpeek-run Scripts/plaidbar-run
 
+echo "Running release-diff secret scan (release-checklist.md Privacy And Security)..."
+PLAIDBAR_GATE_SKIP_BUILD=1 bash "$SCRIPT_DIR/pre-push-gate.sh"
+
 echo "Validating packaged VaultPeek.app bundle..."
 "$SCRIPT_DIR/package-app.sh"
 "$SCRIPT_DIR/validate-app-bundle.sh"
