@@ -1685,7 +1685,6 @@ struct PlaidBarCoreTests {
             modified: [],
             removed: ["old_id"],
             hasMore: false,
-            nextCursor: "cursor_abc",
             pendingCursors: ["item_1": "cursor_abc"]
         )
         let data = try JSONEncoder().encode(response)
@@ -1694,7 +1693,6 @@ struct PlaidBarCoreTests {
         #expect(decoded.added[0].id == "1")
         #expect(decoded.removed == ["old_id"])
         #expect(decoded.hasMore == false)
-        #expect(decoded.nextCursor == "cursor_abc")
         #expect(decoded.pendingCursors == ["item_1": "cursor_abc"])
     }
 
@@ -1707,19 +1705,22 @@ struct PlaidBarCoreTests {
         #expect(decoded.modified.isEmpty)
         #expect(decoded.removed.isEmpty)
         #expect(decoded.hasMore == false)
-        #expect(decoded.nextCursor == nil)
         #expect(decoded.pendingCursors.isEmpty)
     }
 
     @Test("SyncResponse decodes legacy responses without pending cursors")
     func syncResponseDecodesLegacyPayload() throws {
+        // Legacy server payloads carried a scalar `nextCursor`; the decoder must
+        // tolerate that now-removed key and still decode cleanly with an empty
+        // pendingCursors map.
         let data = Data("""
         {"added":[],"modified":[],"removed":[],"hasMore":false,"nextCursor":"cursor_legacy"}
         """.utf8)
 
         let decoded = try JSONDecoder().decode(SyncResponse.self, from: data)
 
-        #expect(decoded.nextCursor == "cursor_legacy")
+        #expect(decoded.added.isEmpty)
+        #expect(decoded.hasMore == false)
         #expect(decoded.pendingCursors.isEmpty)
     }
 

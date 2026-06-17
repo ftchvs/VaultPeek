@@ -1160,19 +1160,6 @@ final class AppState {
         transactionDerivedIndex.recentFeedEntries.map(\.transaction)
     }
 
-    var transactionsByDate: [(String, [TransactionDTO])] {
-        let grouped = Dictionary(grouping: recentTransactions) { $0.date }
-        return grouped.sorted { $0.key > $1.key }
-    }
-
-    var spendingByCategory: [(SpendingCategory, Double)] {
-        SpendingSummary.spendingByCategory(from: transactions)
-    }
-
-    var totalSpending: Double {
-        spendingByCategory.reduce(0) { $0 + $1.1 }
-    }
-
     /// Cached transaction index — invalidated via transactions.didSet.
     private var _cachedTransactionDerivedIndex: TransactionDerivedIndex?
 
@@ -2798,7 +2785,7 @@ final class AppState {
         )
         let debouncer = glanceSnapshotWriteDebouncer
         Task { [snapshot, debouncer, generation] in
-            guard await MainActor.run(body: { self.glanceSnapshotWriteGeneration == generation }) else { return }
+            guard self.glanceSnapshotWriteGeneration == generation else { return }
             await debouncer.schedule(snapshot) { snapshot in
                 let changed: Bool
                 do {

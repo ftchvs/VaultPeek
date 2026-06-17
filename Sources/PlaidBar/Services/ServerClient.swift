@@ -30,13 +30,6 @@ actor ServerClient {
         self.encoder = encoder
     }
 
-    func getStatus() async throws -> ServerStatus {
-        guard let url = ServerEndpoint.statusURL(baseURL: baseURL) else {
-            throw ServerClientError.requestFailed
-        }
-        return try await get(url)
-    }
-
     func getStatusIncludingItems() async throws -> ServerStatus {
         guard let url = ServerEndpoint.statusURL(baseURL: baseURL, includeItems: true) else {
             throw ServerClientError.requestFailed
@@ -51,6 +44,7 @@ actor ServerClient {
         return try await get(url)
     }
 
+    // Reserved for the gated billing track (AND-392/393) — deferred scaffolding, no live callers yet.
     func getBillingSubscription() async throws -> BillingSubscription? {
         guard let url = ServerEndpoint.url(baseURL: baseURL, path: "/api/billing/subscription") else {
             throw ServerClientError.requestFailed
