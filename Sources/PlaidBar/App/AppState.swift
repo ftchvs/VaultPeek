@@ -28,6 +28,11 @@ final class AppState {
         static let notifyRecurringChargeChanged = "notifyRecurringChargeChanged"
         static let notifyRecurringChargeDueSoon = "notifyRecurringChargeDueSoon"
         static let notifyBrokenConnection = "notifyBrokenConnection"
+        static let privacyMaskEnabled = "privacyMaskEnabled"
+        static let appLockEnabled = "appLockEnabled"
+        static let appLockIsLocked = "appLock.isLocked"
+        static let appLockNotificationPrivacyMode = "appLock.notificationPrivacyMode"
+        static let appLockPauseRefreshWhileLocked = "appLock.pauseRefreshWhileLocked"
         static let localAIEnabled = "localAIEnabled"
         static let localAIModelName = "localAIModelName"
         static let setupCompletedOnce = "setup.completedOnce"
@@ -229,6 +234,28 @@ final class AppState {
         }
     }
 
+    var appLockPreferences = AppLockPreferences() {
+        didSet {
+            guard appLockPreferences != oldValue else { return }
+            persistAppLockPreferences()
+        }
+    }
+
+    var isAppLocked = false {
+        didSet {
+            guard isAppLocked != oldValue else { return }
+            UserDefaults.standard.set(isAppLocked, forKey: Keys.appLockIsLocked)
+        }
+    }
+
+    var financialPrivacyDisplayMode: PrivacyDisplayMode {
+        appLockPreferences.effectiveDisplayMode(isAppLocked: isAppLocked)
+    }
+
+    var shouldMaskFinancialValues: Bool {
+        financialPrivacyDisplayMode != .normal
+    }
+
     var localAIEnabled: Bool = false {
         didSet {
             guard localAIEnabled != oldValue, !isLoadingLocalAISettings else { return }
@@ -364,6 +391,7 @@ final class AppState {
         if defaults.object(forKey: Keys.notifyBrokenConnection) != nil {
             notifyBrokenConnection = defaults.bool(forKey: Keys.notifyBrokenConnection)
         }
+        loadAppLockPreferences(defaults: defaults)
         loadLocalAISettings(defaults: defaults)
         // Balance history
         loadPersistedBalanceHistory()
@@ -383,6 +411,33 @@ final class AppState {
             storedValue: storedDetached,
             isRenderingSnapshot: CommandLineOptions.isRenderingSnapshot()
         )
+    }
+
+    private func loadAppLockPreferences(defaults: UserDefaults) {
+        appLockPreferences = AppLockPreferences(
+            privacyMaskEnabled: defaults.object(forKey: Keys.privacyMaskEnabled) != nil
+                ? defaults.bool(forKey: Keys.privacyMaskEnabled)
+                : appLockPreferences.privacyMaskEnabled,
+            appLockEnabled: defaults.object(forKey: Keys.appLockEnabled) != nil
+                ? defaults.bool(forKey: Keys.appLockEnabled)
+                : appLockPreferences.appLockEnabled,
+            notificationPrivacyMode: defaults.string(forKey: Keys.appLockNotificationPrivacyMode)
+                .flatMap(NotificationPrivacyMode.init(rawValue:))
+                ?? appLockPreferences.notificationPrivacyMode,
+            pauseRefreshWhileLocked: defaults.object(forKey: Keys.appLockPauseRefreshWhileLocked) != nil
+                ? defaults.bool(forKey: Keys.appLockPauseRefreshWhileLocked)
+                : appLockPreferences.pauseRefreshWhileLocked
+        )
+        if defaults.object(forKey: Keys.appLockIsLocked) != nil {
+            isAppLocked = defaults.bool(forKey: Keys.appLockIsLocked)
+        }
+    }
+
+    private func persistAppLockPreferences() {
+        UserDefaults.standard.set(appLockPreferences.privacyMaskEnabled, forKey: Keys.privacyMaskEnabled)
+        UserDefaults.standard.set(appLockPreferences.appLockEnabled, forKey: Keys.appLockEnabled)
+        UserDefaults.standard.set(appLockPreferences.notificationPrivacyMode.rawValue, forKey: Keys.appLockNotificationPrivacyMode)
+        UserDefaults.standard.set(appLockPreferences.pauseRefreshWhileLocked, forKey: Keys.appLockPauseRefreshWhileLocked)
     }
 
     private func loadLocalAISettings(defaults: UserDefaults) {
@@ -496,12 +551,18 @@ final class AppState {
     }
 
     var menuBarText: String {
-        MenuBarSummary.text(
+        let rawText = MenuBarSummary.text(
             mode: menuBarSummaryMode,
             accounts: accounts,
             transactions: transactions,
             currencyFormat: balanceFormat,
-            isInitialLoad: isBootLoadInFlight
+            isInitialLoad: isBootLoadInFlight,
+            privacyMaskEnabled: shouldMaskFinancialValues
+        )
+        return appLockPreferences.menuBarText(
+            currentText: rawText,
+            isAppLocked: isAppLocked,
+            isIconOnly: menuBarSummaryMode == .iconOnly
         )
     }
 
@@ -1708,8 +1769,12 @@ final class AppState {
         refreshTask?.cancel()
         refreshTask = Task {
             while !Task.isCancelled {
-                await refreshDashboard()
-                await evaluateNotifications()
+                if appLockPreferences.shouldRefreshFinancialData(isAppLocked: isAppLocked) {
+                    await refreshDashboard()
+                }
+                if appLockPreferences.shouldEvaluateFinancialNotifications(isAppLocked: isAppLocked) {
+                    await evaluateNotifications()
+                }
                 try? await Task.sleep(for: .seconds(refreshInterval))
             }
         }
@@ -1717,6 +1782,7 @@ final class AppState {
 
     private func evaluateNotifications() async {
         guard notificationsEnabled else { return }
+        guard appLockPreferences.shouldEvaluateFinancialNotifications(isAppLocked: isAppLocked) else { return }
         let config = NotificationTriggers(
             largeTransaction: notifyLargeTransaction,
             lowBalance: notifyLowBalance,

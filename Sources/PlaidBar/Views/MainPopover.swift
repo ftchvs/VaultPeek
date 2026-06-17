@@ -1691,7 +1691,12 @@ private struct AccountRowWithDrilldown: View {
         // dashboard (mounted by MainPopover), not an inline panel below. The
         // left rail stays in place; only the right inspector toggles.
         Button(action: onSelect) {
-            DashboardAccountRow(account: account, isStatusFilter: isStatusFilter, isSelected: isSelected)
+            DashboardAccountRow(
+                account: account,
+                isStatusFilter: isStatusFilter,
+                isSelected: isSelected,
+                privacyMaskEnabled: appState.shouldMaskFinancialValues
+            )
         }
         .buttonStyle(.plain)
         .focused(focusBinding, equals: account.id)
@@ -1706,11 +1711,15 @@ private struct AccountRowWithDrilldown: View {
     private var accountAccessibilityLabel: String {
         let label = AccountPresentation.rowAccessibilityLabel(
             for: account,
-            amountText: AccountPresentation.rowAmountText(for: account),
+            amountText: AccountPresentation.rowAmountText(
+                for: account,
+                privacyMaskEnabled: appState.shouldMaskFinancialValues
+            ),
             connectionLabel: connectionPresentation.rowLabel,
             pendingCount: pendingCount,
             isSelected: isSelected,
-            utilizationThreshold: appState.creditUtilizationThreshold
+            utilizationThreshold: appState.creditUtilizationThreshold,
+            privacyMaskEnabled: appState.shouldMaskFinancialValues
         )
         guard let demoTrend else { return label }
         return "\(label). \(accountTrendAccessibility(demoTrend))"
@@ -1884,6 +1893,7 @@ private struct DashboardAccountRow: View {
     let account: AccountDTO
     let isStatusFilter: Bool
     let isSelected: Bool
+    let privacyMaskEnabled: Bool
 
     var body: some View {
         HStack(spacing: Spacing.compactRowContentSpacing) {
@@ -2000,12 +2010,13 @@ private struct DashboardAccountRow: View {
         AccountPresentation.dashboardRowSubtitle(
             for: account,
             connectionLabel: isStatusFilter ? connectionPresentation.statusFilterSubtitle : statusText,
-            pendingCount: pendingCount
-        )
+            pendingCount: pendingCount,
+            privacyMaskEnabled: privacyMaskEnabled)
+
     }
 
     private var amountText: String {
-        AccountPresentation.rowAmountText(for: account)
+        AccountPresentation.rowAmountText(for: account, privacyMaskEnabled: privacyMaskEnabled)
     }
 
     private var pendingCount: Int {
@@ -2039,7 +2050,8 @@ private struct DashboardAccountRow: View {
     private var trailingDetailText: String {
         AccountPresentation.dashboardTrailingDetailText(
             for: account,
-            connectionLabel: statusText
+            connectionLabel: statusText,
+            privacyMaskEnabled: privacyMaskEnabled
         )
     }
 
