@@ -116,6 +116,12 @@ enum Sizing {
     static let iconNav: CGFloat = 20
     static let iconChip: CGFloat = 28
     static let statusDot: CGFloat = 8
+    /// Fixed glyph frame for inline row icons that need a tight bound (e.g.
+    /// weekly-review checkbox/severity glyphs) without a backing tile.
+    static let glyphSmall: CGFloat = 20
+    /// Fixed glyph frame for leading row icons that sit on a tinted tile
+    /// (review-inbox / attention-queue leading symbols).
+    static let glyphMedium: CGFloat = 24
     /// Minimum clickable frame for borderless glyph controls. 28pt is the
     /// macOS pointer-target floor (compact control height); the 44pt HIG
     /// figure is a touch-input minimum and would break menu bar density.
