@@ -111,7 +111,8 @@ struct GlanceSnapshotTests {
 
     @Test("Debouncer coalesces burst writes to the latest snapshot")
     func debouncerCoalescesBurstWritesToLatestSnapshot() async throws {
-        let debouncer = GlanceSnapshotWriteDebouncer(delay: .milliseconds(25))
+        let scheduler = ManualDebounceScheduler()
+        let debouncer = GlanceSnapshotWriteDebouncer(delay: .milliseconds(25), scheduler: scheduler)
         let recorder = SnapshotWriteRecorder()
 
         await debouncer.schedule(firstSnapshot(netWorth: 100)) { snapshot in
@@ -124,7 +125,16 @@ struct GlanceSnapshotTests {
             await recorder.record(snapshot)
         }
 
-        try await Task.sleep(for: .milliseconds(80))
+        // Each scheduled task parks in the manual scheduler instead of sleeping
+        // on a real clock. Once all three are parked, release them together: the
+        // two superseded tasks bail at their cancellation check and only the
+        // latest snapshot is written — no wall-clock window to race.
+        await scheduler.waitForParkedSleepers(count: 3)
+        await scheduler.releaseAll()
+
+        let firstWrite = await recorder.waitForWrite()
+        #expect(firstWrite.netWorth == 300)
+
         let snapshots = await recorder.snapshots
         #expect(snapshots.map(\.netWorth) == [300])
     }
@@ -162,8 +172,69 @@ struct GlanceSnapshotTests {
 
 private actor SnapshotWriteRecorder {
     private(set) var snapshots: [GlanceSnapshot] = []
+    private var pendingWaiter: CheckedContinuation<GlanceSnapshot, Never>?
 
     func record(_ snapshot: GlanceSnapshot) {
         snapshots.append(snapshot)
+        if let waiter = pendingWaiter {
+            pendingWaiter = nil
+            waiter.resume(returning: snapshot)
+        }
+    }
+
+    /// Suspends until the first write lands (or returns immediately if one
+    /// already has), so the test awaits the real write event instead of a
+    /// fixed wall-clock budget.
+    func waitForWrite() async -> GlanceSnapshot {
+        if let latest = snapshots.last {
+            return latest
+        }
+        return await withCheckedContinuation { continuation in
+            pendingWaiter = continuation
+        }
+    }
+}
+
+/// A `DebounceScheduler` whose `sleep` parks the caller until the test releases
+/// it, making debounce coalescing deterministic with no dependence on a real
+/// debounce window. The requested `duration` is intentionally ignored.
+private actor ManualDebounceScheduler: DebounceScheduler {
+    private var parked: [CheckedContinuation<Void, Never>] = []
+    private var parkWaiters: [(threshold: Int, continuation: CheckedContinuation<Void, Never>)] = []
+
+    func sleep(for duration: Duration) async {
+        await withCheckedContinuation { continuation in
+            parked.append(continuation)
+            resolveParkWaiters()
+        }
+    }
+
+    /// Suspends until at least `count` callers are parked inside `sleep`.
+    func waitForParkedSleepers(count: Int) async {
+        if parked.count >= count {
+            return
+        }
+        await withCheckedContinuation { continuation in
+            parkWaiters.append((threshold: count, continuation: continuation))
+        }
+    }
+
+    /// Resumes every parked sleeper at once. Superseded debouncer tasks then
+    /// return at their cancellation check; only the latest task runs its
+    /// operation.
+    func releaseAll() {
+        let resumable = parked
+        parked.removeAll()
+        for continuation in resumable {
+            continuation.resume()
+        }
+    }
+
+    private func resolveParkWaiters() {
+        parkWaiters.removeAll { waiter in
+            guard parked.count >= waiter.threshold else { return false }
+            waiter.continuation.resume()
+            return true
+        }
     }
 }

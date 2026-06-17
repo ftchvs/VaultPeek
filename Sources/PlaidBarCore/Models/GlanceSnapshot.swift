@@ -139,12 +139,36 @@ public struct GlanceCommandRequest: Codable, Sendable, Equatable {
     }
 }
 
+/// Abstracts the delay step of ``GlanceSnapshotWriteDebouncer`` so tests can
+/// drive coalescing deterministically instead of racing a real debounce window.
+/// Production uses ``SystemDebounceScheduler``, a thin `Task.sleep` wrapper, so
+/// the live debounce behavior is unchanged.
+public protocol DebounceScheduler: Sendable {
+    /// Suspends for `duration`, throwing `CancellationError` if the surrounding
+    /// task is cancelled while waiting.
+    func sleep(for duration: Duration) async throws
+}
+
+/// The production scheduler: waits on the real clock via `Task.sleep`.
+public struct SystemDebounceScheduler: DebounceScheduler {
+    public init() {}
+
+    public func sleep(for duration: Duration) async throws {
+        try await Task.sleep(for: duration)
+    }
+}
+
 public actor GlanceSnapshotWriteDebouncer {
     private let delay: Duration
+    private let scheduler: any DebounceScheduler
     private var pendingTask: Task<Void, Never>?
 
-    public init(delay: Duration = .milliseconds(400)) {
+    public init(
+        delay: Duration = .milliseconds(400),
+        scheduler: any DebounceScheduler = SystemDebounceScheduler()
+    ) {
         self.delay = delay
+        self.scheduler = scheduler
     }
 
     deinit {
@@ -156,9 +180,9 @@ public actor GlanceSnapshotWriteDebouncer {
         operation: @escaping @Sendable (GlanceSnapshot) async -> Void
     ) {
         pendingTask?.cancel()
-        pendingTask = Task { [delay] in
+        pendingTask = Task { [delay, scheduler] in
             do {
-                try await Task.sleep(for: delay)
+                try await scheduler.sleep(for: delay)
             } catch {
                 return
             }
