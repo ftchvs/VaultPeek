@@ -171,21 +171,24 @@ struct ServerConfig: Sendable {
             .replacingOccurrences(of: "=", with: "")
     }
 
-    private static func generateAuthToken() -> String {
-        authTokenString(randomBytes: secureRandomBytes(count: 32))
+    private static func generateAuthToken() throws -> String {
+        authTokenString(randomBytes: try secureRandomBytes(count: 32))
     }
 
-    private static func secureRandomBytes(count: Int) -> [UInt8] {
+    private static func secureRandomBytes(count: Int) throws -> [UInt8] {
         var bytes = [UInt8](repeating: 0, count: count)
         #if canImport(Security)
-        if SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess {
-            return bytes
+        let result = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        guard result == errSecSuccess else {
+            // Fail loudly rather than silently downgrading to UUID-derived
+            // material: the auth token is the only thing guarding /api, so a
+            // CSPRNG failure must be surfaced, not masked by a weaker fallback.
+            throw ServerConfigError.secureRandomUnavailable(status: result)
         }
+        return bytes
+        #else
+        throw ServerConfigError.secureRandomUnavailable(status: nil)
         #endif
-
-        let fallback = "\(UUID().uuidString)\(UUID().uuidString)"
-            .replacingOccurrences(of: "-", with: "")
-        return Array(fallback.utf8.prefix(count))
     }
 
     private static func loadOrCreateAuthToken(at url: URL) throws -> String {
@@ -200,7 +203,7 @@ struct ServerConfig: Sendable {
             return existing
         }
 
-        let generated = generateAuthToken()
+        let generated = try generateAuthToken()
         try writePrivateTextFile(generated, to: url)
         return generated
     }
@@ -219,7 +222,7 @@ struct ServerConfig: Sendable {
             return existing
         }
 
-        let generated = "vaultpeek-install-\(authTokenString(randomBytes: secureRandomBytes(count: 32)))"
+        let generated = "vaultpeek-install-\(authTokenString(randomBytes: try secureRandomBytes(count: 32)))"
         try writePrivateTextFile(generated, to: url)
         return generated
     }
@@ -892,6 +895,7 @@ enum ServerConfigError: LocalizedError {
     case missingManagedRedirectURI
     case invalidManagedRedirectURI
     case appRedirectRequiresHTTPS
+    case secureRandomUnavailable(status: Int32?)
 
     var errorDescription: String? {
         switch self {
@@ -909,6 +913,12 @@ enum ServerConfigError: LocalizedError {
             "Managed production Hosted Link redirect URI must be configured as HTTPS"
         case .appRedirectRequiresHTTPS:
             "App or Universal Link OAuth redirect mode requires an HTTPS Universal Link callback"
+        case .secureRandomUnavailable(let status):
+            if let status {
+                "Secure random generation failed (OSStatus \(status)); refusing to fall back to weaker auth-token material"
+            } else {
+                "Secure random generation is unavailable on this platform; refusing to fall back to weaker auth-token material"
+            }
         }
     }
 }
