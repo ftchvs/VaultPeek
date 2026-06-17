@@ -54,37 +54,40 @@ struct ReviewInboxView: View {
                             onSelect: { selectedIndex = index },
                             onApprove: {
                                 recordAction(.approved, for: item)
-                                appState.approveReviewItem(item.id)
+                                animatingResolution { appState.approveReviewItem(item.id) }
                             },
-                            onCategory: {
-                                recordAction(.categorized($0), for: item)
-                                appState.updateReviewCategory(item.id, category: $0)
+                            onCategory: { category in
+                                recordAction(.categorized(category), for: item)
+                                animatingResolution { appState.updateReviewCategory(item.id, category: category) }
                             },
                             onRename: {
                                 recordAction(.renamed, for: item)
-                                appState.renameReviewMerchant(item.id, merchantName: merchantDraft(for: item))
+                                animatingResolution { appState.renameReviewMerchant(item.id, merchantName: merchantDraft(for: item)) }
                             },
                             onTransfer: {
                                 recordAction(.markedTransfer, for: item)
-                                appState.markReviewItemTransfer(item.id)
+                                animatingResolution { appState.markReviewItemTransfer(item.id) }
                             },
                             onNotTransfer: {
                                 recordAction(.markedSpend, for: item)
-                                appState.markReviewItemTransfer(item.id, isTransfer: false)
+                                animatingResolution { appState.markReviewItemTransfer(item.id, isTransfer: false) }
                             },
-                            onCategoryRule: {
+                            onCategoryRule: { category in
                                 recordAction(.ruleCreated, for: item)
-                                appState.createRule(from: item, category: $0)
+                                animatingResolution { appState.createRule(from: item, category: category) }
                             },
                             onTransferRule: {
                                 recordAction(.ruleCreated, for: item)
-                                appState.createRule(from: item, markTransfer: true)
+                                animatingResolution { appState.createRule(from: item, markTransfer: true) }
                             },
                             onIgnore: {
                                 recordAction(.ignored, for: item)
-                                appState.ignoreReviewItem(item.id)
+                                animatingResolution { appState.ignoreReviewItem(item.id) }
                             }
                         )
+                        // Resolved rows animate out (and the rest slide up) when
+                        // the action removes them from the snapshot.
+                        .transition(reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity))
                     }
                     }
                 }
@@ -206,6 +209,15 @@ struct ReviewInboxView: View {
 
     private func clampSelection() {
         selectedIndex = min(max(selectedIndex, 0), max(items.count - 1, 0))
+    }
+
+    // Runs a review mutation inside an animation so the resulting snapshot
+    // change (a resolved row leaving the inbox, the rest sliding up) animates
+    // fluidly instead of snapping. Gated by Reduce Motion.
+    private func animatingResolution(_ change: () -> Void) {
+        withAnimation(MotionTokens.animation(MotionTokens.standard, reduceMotion: reduceMotion)) {
+            change()
+        }
     }
 
     private func recordAction(_ action: ReviewActionConfirmation.Action, for item: TransactionReviewItem) {
