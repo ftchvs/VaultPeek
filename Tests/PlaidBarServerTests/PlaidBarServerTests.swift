@@ -1195,6 +1195,7 @@ struct PlaidBarServerTests {
                     name: transactionId,
                     merchantName: nil,
                     pending: false,
+                    pendingTransactionId: nil,
                     isoCurrencyCode: "USD",
                     personalFinanceCategory: nil
                 ),
