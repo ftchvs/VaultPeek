@@ -182,8 +182,28 @@ public enum TransactionReviewInbox {
         let recurringByMerchant = Dictionary(grouping: recurring, by: { normalizedKey($0.merchantName) })
 
         let items = transactions.compactMap { transaction -> TransactionReviewItem? in
-            let metadata = metadataById[transaction.id]
+            let ownMetadata = metadataById[transaction.id]
+            // When Plaid posts a previously-pending charge it arrives under a
+            // brand-new transaction id that links back to the pending id via
+            // pending_transaction_id. The pending-phase record (the user's
+            // category/transfer choices and the last-seen amount/name) still lives
+            // under that old id, so carry it forward to reconcile the two.
+            let priorPendingMetadata = transaction.pendingTransactionId.flatMap { metadataById[$0] }
+            // Production seeds a fresh `.needsReview` record under the posted id
+            // before this runs, so `ownMetadata` almost always exists. Treat the
+            // posted charge as resolved on its own only once the user has acted on
+            // it directly (reviewed/ignored under the posted id). Until then the
+            // own record is just the seeded baseline, so prefer the pending-phase
+            // record — otherwise the seeded `.needsReview` would mask a charge the
+            // user already reviewed while pending, dropping its status and overrides.
+            let ownResolved = ownMetadata.map { $0.status == .reviewed || $0.status == .ignored } ?? false
+            let metadata = ownResolved ? ownMetadata : (priorPendingMetadata ?? ownMetadata)
             let isAlreadyResolved = metadata?.status == .reviewed || metadata?.status == .ignored
+            // The pending baseline only matters until the charge is resolved under
+            // its posted id. After that, comparing the posted amount against the old
+            // pending amount would re-flag `.pendingChanged` and reopen it on every
+            // refresh, so stop falling back to the prior pending record.
+            let pendingBaseline = ownResolved ? nil : pendingBaseline(own: ownMetadata, prior: priorPendingMetadata)
             let matchedRules = rules.filter { $0.matches(transaction) }
 
             let effectiveCategory = metadata?.userCategory ?? transaction.category
@@ -215,7 +235,8 @@ public enum TransactionReviewInbox {
             if recurringChanged(transaction, recurringByMerchant: recurringByMerchant, now: now) {
                 reasons.insert(.recurringChanged)
             }
-            if pendingChanged(transaction, metadata: metadata) {
+            let didSettleDifferently = pendingSettledDifferently(transaction, baseline: pendingBaseline)
+            if didSettleDifferently {
                 reasons.insert(.pendingChanged)
             }
 
@@ -233,9 +254,15 @@ public enum TransactionReviewInbox {
                 guard orderedReasons.contains(where: \.isHighPriority) else { return nil }
             }
 
+            // A charge that settled with a different amount or name after its
+            // pending phase was already approved/ignored is effectively reopened —
+            // present it as needing review rather than as still resolved.
+            let reportedStatus: TransactionReviewStatus =
+                (didSettleDifferently && isAlreadyResolved) ? .needsReview : (metadata?.status ?? .needsReview)
+
             return TransactionReviewItem(
                 transaction: transaction,
-                status: metadata?.status ?? .needsReview,
+                status: reportedStatus,
                 reasonCodes: orderedReasons,
                 effectiveCategory: effectiveCategory,
                 effectiveMerchantName: effectiveMerchant,
@@ -335,15 +362,26 @@ public enum TransactionReviewInbox {
         }
     }
 
-    private static func pendingChanged(
+    /// The record that captured this charge while it was pending. Prefer the
+    /// transaction's own history; fall back to the record carried over from a
+    /// prior pending transaction id when Plaid posts the charge under a new id.
+    private static func pendingBaseline(
+        own: TransactionReviewMetadata?,
+        prior: TransactionReviewMetadata?
+    ) -> TransactionReviewMetadata? {
+        if own?.lastSeenPending == true { return own }
+        if prior?.lastSeenPending == true { return prior }
+        return nil
+    }
+
+    private static func pendingSettledDifferently(
         _ transaction: TransactionDTO,
-        metadata: TransactionReviewMetadata?
+        baseline: TransactionReviewMetadata?
     ) -> Bool {
-        guard transaction.pending == false,
-              metadata?.lastSeenPending == true
+        guard transaction.pending == false, let baseline, baseline.lastSeenPending == true
         else { return false }
-        let amountChanged = metadata?.lastSeenAmount.map { abs($0 - transaction.amount) >= 0.01 } ?? false
-        let nameChanged = metadata?.lastSeenName.map { $0 != transaction.name } ?? false
+        let amountChanged = baseline.lastSeenAmount.map { abs($0 - transaction.amount) >= 0.01 } ?? false
+        let nameChanged = baseline.lastSeenName.map { $0 != transaction.name } ?? false
         return amountChanged || nameChanged
     }
 
