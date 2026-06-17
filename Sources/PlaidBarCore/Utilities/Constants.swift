@@ -54,6 +54,16 @@ public enum PlaidBarConstants {
     public static let appVersion: String = "1.0.0"
     public static let appName: String = "VaultPeek"
 
+    // Repository
+    public static let repositoryURL: String = "https://github.com/ftchvs/VaultPeek"
+
+    /// Builds an absolute URL to a file on the default branch of the repository.
+    /// Pass a repo-relative path (e.g. `"docs/privacy.md"`); leading slashes are ignored.
+    public static func repositoryFileURL(_ path: String) -> String {
+        let trimmed = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        return "\(repositoryURL)/blob/main/\(trimmed)"
+    }
+
     // Plaid
     public static var plaidSandboxRedirectUri: String {
         "http://localhost:\(serverPort)/oauth/callback"

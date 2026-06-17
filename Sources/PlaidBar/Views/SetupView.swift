@@ -446,19 +446,19 @@ private struct SetupSupportLinks: View {
             supportLink(
                 "Troubleshooting",
                 systemImage: "wrench.and.screwdriver",
-                url: "https://github.com/ftchvs/PlaidBar/blob/main/docs/troubleshooting.md"
+                url: PlaidBarConstants.repositoryFileURL("docs/troubleshooting.md")
             )
 
             supportLink(
                 "Privacy",
                 systemImage: "lock.shield",
-                url: "https://github.com/ftchvs/PlaidBar/blob/main/docs/privacy.md"
+                url: PlaidBarConstants.repositoryFileURL("docs/privacy.md")
             )
 
             supportLink(
                 "Security",
                 systemImage: "exclamationmark.shield",
-                url: "https://github.com/ftchvs/PlaidBar/blob/main/SECURITY.md"
+                url: PlaidBarConstants.repositoryFileURL("SECURITY.md")
             )
         }
         .font(.caption)
