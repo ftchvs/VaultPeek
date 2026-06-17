@@ -15,6 +15,9 @@ import SwiftUI
 struct RecurringObligationsSection: View {
     let presentation: RecurringObligationsPresentation
     var onOpenSubscriptions: (() -> Void)?
+    /// When true, recurring amounts and the monthly total are masked while
+    /// Privacy Mask or App Lock is active.
+    var privacyMaskEnabled: Bool = false
 
     /// Keep the narrow column dense: show the most relevant few, summarize the
     /// rest. Attention-first ordering means flagged items are never hidden
@@ -28,7 +31,7 @@ struct RecurringObligationsSection: View {
 
                 VStack(alignment: .leading, spacing: Spacing.xs) {
                     ForEach(Array(presentation.items.prefix(visibleLimit))) { item in
-                        RecurringObligationRow(item: item)
+                        RecurringObligationRow(item: item, privacyMaskEnabled: privacyMaskEnabled)
                     }
                 }
 
@@ -53,7 +56,7 @@ struct RecurringObligationsSection: View {
 
             Spacer(minLength: Spacing.sm)
 
-            Text("~\(Formatters.currency(presentation.estimatedMonthlyTotal, format: .compact))/mo")
+            Text("~\(PrivacyMaskPresentation.currency(presentation.estimatedMonthlyTotal, format: .compact, isEnabled: privacyMaskEnabled))/mo")
                 .microText()
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
@@ -76,7 +79,11 @@ struct RecurringObligationsSection: View {
 
     private var accessibilitySummary: String {
         let countText = "\(presentation.count) recurring \(presentation.count == 1 ? "charge" : "charges")"
-        let total = Formatters.currency(presentation.estimatedMonthlyTotal, format: .full)
+        let total = PrivacyMaskPresentation.currency(
+            presentation.estimatedMonthlyTotal,
+            format: .full,
+            isEnabled: privacyMaskEnabled
+        )
         let attention = presentation.attentionCount > 0
             ? " \(presentation.attentionCount) need attention."
             : ""
@@ -86,6 +93,7 @@ struct RecurringObligationsSection: View {
 
 private struct RecurringObligationRow: View {
     let item: RecurringObligationsPresentation.Item
+    var privacyMaskEnabled: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xxs) {
@@ -102,7 +110,7 @@ private struct RecurringObligationRow: View {
 
                 Spacer(minLength: Spacing.sm)
 
-                Text(Formatters.currency(item.expectedAmount, format: .compact))
+                Text(PrivacyMaskPresentation.currency(item.expectedAmount, format: .compact, isEnabled: privacyMaskEnabled))
                     .font(.subheadline.weight(.semibold))
                     .monospacedDigit()
                     .foregroundStyle(AppearanceTextColors.primary)
@@ -139,7 +147,7 @@ private struct RecurringObligationRow: View {
         var parts = [
             item.merchantName,
             item.frequency.displayName,
-            "expected \(Formatters.currency(item.expectedAmount, format: .full))",
+            "expected \(PrivacyMaskPresentation.currency(item.expectedAmount, format: .full, isEnabled: privacyMaskEnabled))",
             "next \(Formatters.displayTransactionDate(item.nextExpectedDate))",
         ]
         parts.append(contentsOf: orderedFlags.map(\.accessibilityDescription))
