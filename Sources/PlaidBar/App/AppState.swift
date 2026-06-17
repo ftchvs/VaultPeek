@@ -354,6 +354,12 @@ final class AppState {
         _ = try? LocalDataStore.migrateLegacyDefaultStorageIfNeeded()
         self.notificationService = notificationService ?? NotificationService.shared
         loadSettings()
+        // Engage launch App Lock synchronously before the first SwiftUI body is
+        // ever evaluated. Deferring this to `loadInitialData()` leaks one frame
+        // of cached/demo account names and activity because `.task` runs after
+        // the initial render; the lock-on-launch privacy contract needs to be
+        // true as soon as AppState enters the environment.
+        lockOnLaunchIfNeeded()
         isSetupComplete = storedSetupCompletion()
         isFirstRunSnapshotDismissed = storedFirstRunSnapshotDismissal()
         if isSetupComplete {
@@ -530,9 +536,10 @@ final class AppState {
     }
 
     /// Locks on launch when both App Lock and the lock-on-launch preference are
-    /// enabled. Called once after the app finishes loading initial data.
+    /// enabled. Called synchronously during init before first render, and again
+    /// idempotently during the initial data task for legacy call sites.
     func lockOnLaunchIfNeeded() {
-        guard appLockPreferences.appLockEnabled, appLockPreferences.lockOnLaunch else { return }
+        guard appLockPreferences.shouldLockOnLaunch else { return }
         lockApp()
     }
 
@@ -540,7 +547,7 @@ final class AppState {
     /// the lock-when-backgrounded preference is enabled. MainActor-safe and
     /// cheap when App Lock is off.
     func lockOnResignActiveIfNeeded() {
-        guard appLockPreferences.appLockEnabled, appLockPreferences.lockWhenBackgrounded else { return }
+        guard appLockPreferences.shouldLockWhenBackgrounded else { return }
         lockApp()
     }
 
@@ -2026,10 +2033,10 @@ final class AppState {
         // then on, offline/empty verdicts are real and may render.
         defer { isBooting = false }
 
-        // Engage App Lock on launch (when enabled). Done before any data work
-        // so the dashboard's first paint is already masked if lock-on-launch is
-        // on; views read `shouldMaskFinancialValues`, which the locked state
-        // drives.
+        // Re-assert the launch lock before data work as a defensive/idempotent
+        // guard. The first-render privacy guarantee is established in init;
+        // keeping this call protects any test or future construction path that
+        // invokes loadInitialData after mutating App Lock preferences.
         lockOnLaunchIfNeeded()
 
         // Recheck notification permission at startup (user may have revoked in System Settings)
