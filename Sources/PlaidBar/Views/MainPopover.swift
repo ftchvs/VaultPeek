@@ -637,9 +637,20 @@ private struct RecentSpendChip: View {
 
                 Spacer(minLength: Spacing.sm)
 
-                Text(Formatters.currency(appState.recentSpend, format: .compact))
+                Text(PrivacyMaskPresentation.currency(
+                    appState.recentSpend,
+                    format: .compact,
+                    isEnabled: appState.shouldMaskFinancialValues
+                ))
                     .font(.caption.weight(.semibold))
-                    .rollingTabularNumber(Formatters.currency(appState.recentSpend, format: .compact), reduceMotion: reduceMotion)
+                    .rollingTabularNumber(
+                        PrivacyMaskPresentation.currency(
+                            appState.recentSpend,
+                            format: .compact,
+                            isEnabled: appState.shouldMaskFinancialValues
+                        ),
+                        reduceMotion: reduceMotion
+                    )
                     .lineLimit(1)
             }
             .padding(.horizontal, Spacing.sm)
@@ -647,7 +658,7 @@ private struct RecentSpendChip: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(.quinary, in: Capsule())
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("7 day spend: \(Formatters.currency(appState.recentSpend, format: .full))")
+            .accessibilityLabel("7 day spend: \(PrivacyMaskPresentation.currency(appState.recentSpend, format: .full, isEnabled: appState.shouldMaskFinancialValues))")
         }
     }
 }
@@ -655,6 +666,7 @@ private struct RecentSpendChip: View {
 // MARK: - 365 Day Heatmap
 
 private struct BalanceActivityHeatmap: View {
+    @Environment(AppState.self) private var appState
     let transactions: [TransactionDTO]
     var loadState: DashboardLoadState?
 
@@ -912,6 +924,9 @@ private struct BalanceActivityHeatmap: View {
     }
 
     private func totalLabel(for layout: SpendingHeatmapLayout) -> String {
+        guard !appState.shouldMaskFinancialValues else {
+            return PrivacyMaskPresentation.compactValue
+        }
         guard layout.mode == .netCashflow else {
             return Formatters.currency(layout.totalValue, format: .compact)
         }
@@ -927,6 +942,9 @@ private struct BalanceActivityHeatmap: View {
     }
 
     private func cashflowText(for value: Double) -> String {
+        guard !appState.shouldMaskFinancialValues else {
+            return PrivacyMaskPresentation.compactValue
+        }
         let displayAmount = SpendingHeatmap.displayCashflowAmount(value)
         let prefix = displayAmount > 0 ? "+" : displayAmount < 0 ? "-" : ""
         return "\(prefix)\(Formatters.currency(abs(displayAmount), format: .compact))"
@@ -1691,7 +1709,12 @@ private struct AccountRowWithDrilldown: View {
         // dashboard (mounted by MainPopover), not an inline panel below. The
         // left rail stays in place; only the right inspector toggles.
         Button(action: onSelect) {
-            DashboardAccountRow(account: account, isStatusFilter: isStatusFilter, isSelected: isSelected)
+            DashboardAccountRow(
+                account: account,
+                isStatusFilter: isStatusFilter,
+                isSelected: isSelected,
+                privacyMaskEnabled: appState.shouldMaskFinancialValues
+            )
         }
         .buttonStyle(.plain)
         .focused(focusBinding, equals: account.id)
@@ -1706,11 +1729,15 @@ private struct AccountRowWithDrilldown: View {
     private var accountAccessibilityLabel: String {
         let label = AccountPresentation.rowAccessibilityLabel(
             for: account,
-            amountText: AccountPresentation.rowAmountText(for: account),
+            amountText: AccountPresentation.rowAmountText(
+                for: account,
+                privacyMaskEnabled: appState.shouldMaskFinancialValues
+            ),
             connectionLabel: connectionPresentation.rowLabel,
             pendingCount: pendingCount,
             isSelected: isSelected,
-            utilizationThreshold: appState.creditUtilizationThreshold
+            utilizationThreshold: appState.creditUtilizationThreshold,
+            privacyMaskEnabled: appState.shouldMaskFinancialValues
         )
         guard let demoTrend else { return label }
         return "\(label). \(accountTrendAccessibility(demoTrend))"
@@ -1884,6 +1911,7 @@ private struct DashboardAccountRow: View {
     let account: AccountDTO
     let isStatusFilter: Bool
     let isSelected: Bool
+    let privacyMaskEnabled: Bool
 
     var body: some View {
         HStack(spacing: Spacing.compactRowContentSpacing) {
@@ -2000,12 +2028,13 @@ private struct DashboardAccountRow: View {
         AccountPresentation.dashboardRowSubtitle(
             for: account,
             connectionLabel: isStatusFilter ? connectionPresentation.statusFilterSubtitle : statusText,
-            pendingCount: pendingCount
-        )
+            pendingCount: pendingCount,
+            privacyMaskEnabled: privacyMaskEnabled)
+
     }
 
     private var amountText: String {
-        AccountPresentation.rowAmountText(for: account)
+        AccountPresentation.rowAmountText(for: account, privacyMaskEnabled: privacyMaskEnabled)
     }
 
     private var pendingCount: Int {
@@ -2039,7 +2068,8 @@ private struct DashboardAccountRow: View {
     private var trailingDetailText: String {
         AccountPresentation.dashboardTrailingDetailText(
             for: account,
-            connectionLabel: statusText
+            connectionLabel: statusText,
+            privacyMaskEnabled: privacyMaskEnabled
         )
     }
 

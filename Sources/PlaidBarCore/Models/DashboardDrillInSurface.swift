@@ -170,22 +170,29 @@ public struct DashboardAccountDrillInSummary: Sendable, Equatable {
     public let freshnessLabel: String
 
     public var accessibilityLabel: String {
+        accessibilityLabel(privacyMaskEnabled: false)
+    }
+
+    public func accessibilityLabel(privacyMaskEnabled: Bool) -> String {
         var parts = [
             "Selected account drill-in",
             displayName,
             subtitle,
-            "\(availableTitle) \(Formatters.currency(availableBalance, format: .full))",
-            "\(currentTitle) \(Formatters.currency(currentBalance, format: .full))",
-            "\(transactionCount) synced transaction\(transactionCount == 1 ? "" : "s")",
-            "\(pendingTransactionCount) pending transaction\(pendingTransactionCount == 1 ? "" : "s")",
+            "\(availableTitle) \(PrivacyMaskPresentation.currency(availableBalance, format: .full, isEnabled: privacyMaskEnabled))",
+            "\(currentTitle) \(PrivacyMaskPresentation.currency(currentBalance, format: .full, isEnabled: privacyMaskEnabled))",
             "Sync \(freshnessLabel)",
         ]
 
-        if let utilizationPercent {
-            parts.append("Utilization \(Formatters.percent(utilizationPercent, decimals: 0))")
+        if !privacyMaskEnabled {
+            parts.append("\(transactionCount) synced transaction\(transactionCount == 1 ? "" : "s")")
+            parts.append("\(pendingTransactionCount) pending transaction\(pendingTransactionCount == 1 ? "" : "s")")
         }
 
-        if let latestTransactionDate {
+        if let utilizationPercent {
+            parts.append("Utilization \(PrivacyMaskPresentation.percent(utilizationPercent, decimals: 0, isEnabled: privacyMaskEnabled))")
+        }
+
+        if let latestTransactionDate, !privacyMaskEnabled {
             parts.append("Latest transaction \(Formatters.displayTransactionDate(latestTransactionDate))")
         }
 
@@ -196,13 +203,15 @@ public struct DashboardAccountDrillInSummary: Sendable, Equatable {
         for account: AccountDTO,
         transactions: [TransactionDTO],
         itemStatus: ItemStatus?,
-        fallbackFreshnessLabel: String
+        fallbackFreshnessLabel: String,
+        privacyMaskEnabled: Bool = false
     ) -> Self {
         presentation(
             for: account,
             activitySnapshot: AccountTransactionFeed.activitySnapshot(forAccountId: account.id, in: transactions),
             itemStatus: itemStatus,
-            fallbackFreshnessLabel: fallbackFreshnessLabel
+            fallbackFreshnessLabel: fallbackFreshnessLabel,
+            privacyMaskEnabled: privacyMaskEnabled
         )
     }
 
@@ -210,11 +219,12 @@ public struct DashboardAccountDrillInSummary: Sendable, Equatable {
         for account: AccountDTO,
         activitySnapshot: AccountTransactionFeed.AccountActivitySnapshot,
         itemStatus: ItemStatus?,
-        fallbackFreshnessLabel: String
+        fallbackFreshnessLabel: String,
+        privacyMaskEnabled: Bool = false
     ) -> Self {
         Self(
             displayName: AccountPresentation.displayName(for: account),
-            subtitle: AccountPresentation.subtitle(for: account),
+            subtitle: AccountPresentation.subtitle(for: account, privacyMaskEnabled: privacyMaskEnabled),
             availableTitle: AccountPresentation.dashboardAvailableTitle(for: account),
             availableBalance: AccountPresentation.availableBalance(for: account),
             currentTitle: AccountPresentation.dashboardCurrentTitle(for: account),

@@ -828,6 +828,37 @@ struct PlaidBarCoreTests {
         #expect(!summary.accessibilityLabel.contains(account.itemId))
     }
 
+    @Test("Account drill-in summary masks values for private display mode")
+    func accountDrillInSummaryMasksPrivateValues() {
+        let account = AccountDTO(
+            id: "acct-private-123",
+            itemId: "item-private-456",
+            name: "Everyday",
+            type: .depository,
+            subtype: "checking",
+            mask: "1234",
+            balances: BalanceDTO(available: 500, current: 520),
+            institutionName: "Chase"
+        )
+        let summary = DashboardAccountDrillInSummary.presentation(
+            for: account,
+            transactions: [],
+            itemStatus: nil,
+            fallbackFreshnessLabel: "Fresh",
+            privacyMaskEnabled: true
+        )
+        let label = summary.accessibilityLabel(privacyMaskEnabled: true)
+
+        #expect(summary.subtitle == "Depository • Checking ••••")
+        #expect(label.contains("$500.00") == false)
+        #expect(label.contains("$520.00") == false)
+        #expect(label.contains("••••"))
+        #expect(label.contains("Ending in 1234") == false)
+        #expect(label.contains("synced transaction") == false)
+        #expect(label.contains("pending transaction") == false)
+        #expect(label.contains("Latest transaction") == false)
+    }
+
     @Test("Drill-in action accessibility labels include display names only")
     func drillInActionAccessibilityLabelsUseDisplayNamesOnly() {
         let displayName = "Everyday Checking"
