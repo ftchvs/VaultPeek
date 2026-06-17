@@ -586,6 +586,7 @@ private struct ReviewInboxRow: View {
         case .possibleTransfer: "arrow.left.arrow.right"
         case .recurringChanged: "calendar.badge.exclamationmark"
         case .pendingChanged: "clock.badge.exclamationmark"
+        case .changedSinceReview: "arrow.triangle.2.circlepath"
         }
     }
 

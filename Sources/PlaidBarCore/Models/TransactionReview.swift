@@ -13,6 +13,7 @@ public enum TransactionReviewReason: String, Codable, Sendable, CaseIterable, Eq
     case possibleTransfer
     case recurringChanged
     case pendingChanged
+    case changedSinceReview
 
     public var displayName: String {
         switch self {
@@ -22,12 +23,13 @@ public enum TransactionReviewReason: String, Codable, Sendable, CaseIterable, Eq
         case .possibleTransfer: "Possible transfer"
         case .recurringChanged: "Recurring changed"
         case .pendingChanged: "Pending changed"
+        case .changedSinceReview: "Changed since review"
         }
     }
 
     public var priority: Int {
         switch self {
-        case .possibleTransfer, .pendingChanged, .recurringChanged: 0
+        case .possibleTransfer, .pendingChanged, .recurringChanged, .changedSinceReview: 0
         case .unusualAmount: 1
         case .uncategorized, .newMerchant: 2
         }
@@ -244,6 +246,16 @@ public enum TransactionReviewInbox {
             if didSettleDifferently {
                 reasons.insert(.pendingChanged)
             }
+            // A charge the user already resolved under its own id whose amount or
+            // name drifted afterward must reopen even when the new value trips no
+            // other heuristic (e.g. a known, categorized merchant going $50 -> $60,
+            // below the unusual-amount threshold). Insert the reason BEFORE the
+            // empty-reasons guard below — otherwise that guard drops the row and the
+            // reopen logic never runs, silently swallowing the post-review change.
+            let reviewedChargeChangedSinceReview = ownResolved && reviewedChargeChanged(transaction, ownMetadata)
+            if reviewedChargeChangedSinceReview {
+                reasons.insert(.changedSinceReview)
+            }
 
             let orderedReasons = reasons.sorted {
                 if $0.priority == $1.priority { return $0.rawValue < $1.rawValue }
@@ -267,8 +279,7 @@ public enum TransactionReviewInbox {
             // legitimately differ from the posted charge; that comparison is
             // `didSettleDifferently`'s job).
             let changedSinceReview = isAlreadyResolved
-                && (didSettleDifferently
-                    || (ownResolved && reviewedChargeChanged(transaction, ownMetadata)))
+                && (didSettleDifferently || reviewedChargeChangedSinceReview)
             if isAlreadyResolved, !changedSinceReview {
                 return nil
             }
