@@ -40,6 +40,8 @@ final class AppState {
         static let appLockEnabled = UserDefaultsAppLockSettingsStore.defaultStorageKey
         static let appLockNotificationPrivacyMode = "appLock.notificationPrivacyMode"
         static let appLockPauseRefreshWhileLocked = "appLock.pauseRefreshWhileLocked"
+        static let appLockLockOnLaunch = "appLock.lockOnLaunch"
+        static let appLockLockWhenBackgrounded = "appLock.lockWhenBackgrounded"
         static let localAIEnabled = "localAIEnabled"
         static let localAIModelName = "localAIModelName"
         static let setupCompletedOnce = "setup.completedOnce"
@@ -258,12 +260,33 @@ final class AppState {
 
     var isAppLocked = false
 
+    /// The message shown on the locked gate, updated from the most recent unlock
+    /// attempt (`nil` once unlocked). Drives `lockedSurfaceCopy` so a cancelled /
+    /// failed / unavailable attempt explains itself instead of leaving the plain
+    /// idle prompt.
+    private var lastUnlockMessage: AppLockAuthenticationMessage?
+
     var financialPrivacyDisplayMode: PrivacyDisplayMode {
         appLockPreferences.effectiveDisplayMode(isAppLocked: isAppLocked)
     }
 
     var shouldMaskFinancialValues: Bool {
         financialPrivacyDisplayMode != .normal
+    }
+
+    /// True only in full App Lock (`.locked`) — distinct from
+    /// `shouldMaskFinancialValues`, which is also true for the lighter Privacy
+    /// Mask (`.masked`). When this is true the dashboard must be gated behind the
+    /// locked surface, not merely have its currency dotted: account and
+    /// institution names must not leak (AND-462).
+    var isContentLocked: Bool {
+        financialPrivacyDisplayMode == .locked
+    }
+
+    /// Copy for the locked gate: the most recent unlock-attempt message when one
+    /// exists, otherwise the neutral idle prompt.
+    var lockedSurfaceCopy: String {
+        lastUnlockMessage?.lockedSurfaceCopy ?? AppLockAuthenticationMessage.idleSurfaceCopy
     }
 
     var localAIEnabled: Bool = false {
@@ -438,6 +461,12 @@ final class AppState {
                 ? defaults.bool(forKey: Keys.privacyMaskEnabled)
                 : appLockPreferences.privacyMaskEnabled,
             appLockEnabled: appLockService.isLockEnabled,
+            lockOnLaunch: defaults.object(forKey: Keys.appLockLockOnLaunch) != nil
+                ? defaults.bool(forKey: Keys.appLockLockOnLaunch)
+                : appLockPreferences.lockOnLaunch,
+            lockWhenBackgrounded: defaults.object(forKey: Keys.appLockLockWhenBackgrounded) != nil
+                ? defaults.bool(forKey: Keys.appLockLockWhenBackgrounded)
+                : appLockPreferences.lockWhenBackgrounded,
             notificationPrivacyMode: defaults.string(forKey: Keys.appLockNotificationPrivacyMode)
                 .flatMap(NotificationPrivacyMode.init(rawValue:))
                 ?? appLockPreferences.notificationPrivacyMode,
@@ -455,6 +484,8 @@ final class AppState {
         // `setAppLockEnabled`). Writing it from both paths is what previously
         // desynced the in-memory service from the persisted flag.
         UserDefaults.standard.set(appLockPreferences.privacyMaskEnabled, forKey: Keys.privacyMaskEnabled)
+        UserDefaults.standard.set(appLockPreferences.lockOnLaunch, forKey: Keys.appLockLockOnLaunch)
+        UserDefaults.standard.set(appLockPreferences.lockWhenBackgrounded, forKey: Keys.appLockLockWhenBackgrounded)
         UserDefaults.standard.set(appLockPreferences.notificationPrivacyMode.rawValue, forKey: Keys.appLockNotificationPrivacyMode)
         UserDefaults.standard.set(appLockPreferences.pauseRefreshWhileLocked, forKey: Keys.appLockPauseRefreshWhileLocked)
     }
@@ -491,6 +522,11 @@ final class AppState {
     func lockApp() {
         appLockService.lock()
         isAppLocked = appLockService.isLocked
+        // A fresh lock starts the gate at the neutral idle prompt — clear any
+        // stale message from a prior cancelled/failed unlock attempt.
+        if isAppLocked {
+            lastUnlockMessage = nil
+        }
     }
 
     /// Locks on launch when both App Lock and the lock-on-launch preference are
@@ -521,6 +557,10 @@ final class AppState {
             reason: "Unlock VaultPeek to view your balances."
         )
         isAppLocked = appLockService.isLocked
+        // Surface the outcome on the locked gate: `nil` on success (the gate is
+        // about to be dismissed), otherwise the cancelled / failed / unavailable
+        // message so the user sees why it stayed locked.
+        lastUnlockMessage = AppLockAuthenticationMessage(unlockResult: result)
         return result
     }
 

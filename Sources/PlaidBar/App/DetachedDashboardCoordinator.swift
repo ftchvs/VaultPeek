@@ -94,6 +94,15 @@ final class DetachedDashboardCoordinator {
                 // the user's current accessibility preference.
                 let reduceMotionNow = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
                 self?.redock(appState: appState, reduceMotion: reduceMotionNow)
+            },
+            onWindowBecomeKey: {
+                // Focusing the detached window prompts to unlock when App Lock is
+                // engaged, mirroring the popover-open trigger. `unlockApp()` is a
+                // no-op when App Lock is off or already unlocked, so the guard
+                // keeps the system auth sheet from re-prompting in a loop
+                // (AND-462).
+                guard appState.isAppLocked else { return }
+                Task { await appState.unlockApp() }
             }
         )
         self.controller = controller
