@@ -101,11 +101,14 @@ Current local data may include:
 
 Sandbox and production use separate scoped stores.
 
-`/api/status` is authenticated and intentionally limited to readiness metadata:
-server version, Plaid environment, credential availability, storage path, item
-counts, synced item count, sync readiness, and last sync time. It should not
-contain Plaid secrets, Plaid access tokens, public tokens, local auth tokens,
-account IDs, item IDs, balances, or transactions.
+`/api/status` is authenticated and limited to readiness metadata: server
+version, Plaid environment, credential availability, storage path, item counts,
+synced item count, sync readiness, and last sync time. When the caller opts in
+with `?include=items`, it also returns the same authenticated item-health
+snapshot as `/api/items` — per-item Plaid `item_id`, institution name,
+connection status, last sync, last webhook, and whether a sync is pending. It
+should not contain Plaid secrets, Plaid access tokens, public tokens, local
+auth tokens, account IDs, balances, or transactions.
 
 ## Credentials
 

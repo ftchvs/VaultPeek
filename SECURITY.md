@@ -56,11 +56,15 @@ Use GitHub private vulnerability reporting if available, or contact the reposito
 - Existing legacy `plaidbar.sqlite` data, SQLite sidecar files, and matching transaction cache are copied into a scoped database only when the legacy environment is explicit (`PLAIDBAR_MIGRATE_LEGACY_DATABASE=sandbox|production`) or can be inferred from the existing transaction-cache context. Ambiguous legacy databases are left untouched to avoid sandbox/production token crossover. Explicit migration can replace an existing scoped store, backs up the previous scoped SQLite store and transaction cache before copying legacy data, and writes a migration marker so restarts do not reapply stale legacy data.
 - The app/server auth token is generated locally under `~/.vaultpeek/auth-token`
   (or `$PLAIDBAR_DATA_DIR/auth-token`).
-- `/api/status` is authenticated and should expose only readiness metadata:
-  version, environment, credential availability, storage path, linked item
-  count, synced item count, sync readiness, and last sync time. It must not
-  include Plaid secrets, Plaid access tokens, public tokens, auth tokens,
-  account IDs, item IDs, balances, or transaction data.
+- `/api/status` is authenticated and exposes readiness metadata: version,
+  environment, credential availability, storage path, linked item count,
+  synced item count, sync readiness, and last sync time. With the opt-in
+  `?include=items` query parameter it additionally returns the same
+  authenticated item-health snapshot served by `/api/items` — per-item Plaid
+  `item_id`, institution name, connection status, last sync, last webhook, and
+  whether a sync is pending. It must never include Plaid secrets, Plaid access
+  tokens, public tokens, auth tokens, account IDs, balances, or transaction
+  data.
 - Protect your macOS user account, disk encryption, backups, and shell history.
 - App-server communication should preserve local-only assumptions unless a future change explicitly documents otherwise.
 
