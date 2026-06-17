@@ -114,18 +114,25 @@ struct OllamaLocalInsightModel: LocalInsightModel {
         }
     }
 
+    // Auto-discovery prefers small/medium INSTRUCT models. A local insight is a
+    // single short summary, so a direct instruct model is the right fit. Reasoning
+    // models (e.g. gpt-oss) are intentionally NOT preferred: for a short prompt
+    // they spend their token budget on chain-of-thought and return an empty
+    // `response`, which VaultPeek then rejects as invalid output. If a user has
+    // only a reasoning model installed, discovery may still fall through to it,
+    // but the empty-output probe guard surfaces an accurate error rather than
+    // silently degrading.
     private static let preferredModelPrefixes = [
-        "gpt-oss",
         "llama3.2",
         "llama3.1",
-        "gemma4",
+        "qwen2.5",
         "gemma3",
         "gemma2",
-        "qwen3.5",
-        "qwen3",
         "mistral",
-        "qwen2.5",
         "phi3",
+        "qwen3",
+        "gemma4",
+        "qwen3.5",
     ]
 
     private func requestDiagnostic(_ request: URLRequest) -> String {

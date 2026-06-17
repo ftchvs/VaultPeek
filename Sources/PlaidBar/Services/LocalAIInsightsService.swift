@@ -138,7 +138,21 @@ struct LocalAIInsightsService: Sendable {
         }
 
         do {
-            _ = try await boundedProbe(model: model)
+            let probeOutput = try await boundedProbe(model: model)
+            // A model that responds but emits nothing usable (e.g. a reasoning
+            // model that spends a short token budget on chain-of-thought and
+            // returns an empty `response`) must NOT be reported as available —
+            // the real summary call would hit the same empty output and be
+            // rejected. Surface it as invalid output with an actionable hint
+            // instead of falsely claiming the runtime is healthy.
+            guard !probeOutput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return LocalAIRuntimeResolution.resolved(
+                    base: currentAvailability,
+                    usedModelOutput: false,
+                    fallbackReason: .invalidOutput,
+                    fallbackDiagnostic: "Local runtime returned an empty response. This usually means a reasoning model is configured; set an instruct model such as llama3.2."
+                )
+            }
             return LocalAIRuntimeResolution.resolved(
                 base: currentAvailability,
                 usedModelOutput: true,
