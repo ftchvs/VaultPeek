@@ -1792,6 +1792,25 @@ struct PlaidBarCoreTests {
         #expect(filtered.map(\.id) == ["1"])
     }
 
+    @Test("Transaction groupedRecent filters before applying recent limit")
+    func transactionGroupedRecentFiltersBeforeApplyingLimit() {
+        let transactions = [
+            TransactionDTO(id: "recent-other-1", accountId: "credit", amount: 20, date: "2026-01-05", name: "Coffee", category: .foodAndDrink),
+            TransactionDTO(id: "recent-other-2", accountId: "savings", amount: 30, date: "2026-01-04", name: "Coffee", category: .foodAndDrink),
+            TransactionDTO(id: "matching-older", accountId: "checking", amount: 40, date: "2026-01-03", name: "Coffee", category: .foodAndDrink),
+            TransactionDTO(id: "matching-oldest", accountId: "checking", amount: 50, date: "2026-01-02", name: "Groceries", category: .foodAndDrink),
+        ]
+
+        let grouped = TransactionFilter.groupedRecent(
+            from: transactions,
+            criteria: TransactionFilterCriteria(accountId: "checking"),
+            maxCount: 2
+        )
+
+        #expect(grouped.map(\.0) == ["2026-01-03", "2026-01-02"])
+        #expect(grouped.flatMap(\.1).map(\.id) == ["matching-older", "matching-oldest"])
+    }
+
     @Test("Transaction filter search matches category display name")
     func transactionFilterSearchMatchesCategoryDisplayName() {
         let transactions = [
