@@ -220,10 +220,10 @@ insight math in `Sources/PlaidBarCore/Utilities/AccountDetailInsights.swift`
 
 | State | Behavior |
 |-------|----------|
-| Empty selection | No account selected: the column stays open and shows a quiet empty-selection prompt (icon + label, never color alone) so the third column reads as intentional context space |
+| Empty selection (default) | No account selected: the column hosts the **Review Inbox** (`ReviewInboxView(embedded:)` — no own surface, scrolls, shows an "Inbox Clear" prompt when the queue is empty) so the third column is always working space |
 | Selected | A row is selected: the inspector fills with that account's detail; content animates in with `MotionTokens.content` (gated by Reduce Motion). The popover width does not change — it is already the 1122pt three-column default |
 | Resolving persisted selection | A persisted selection is still loading: a brief progress placeholder holds the column until the account resolves |
-| Deselect | ✕ button, Esc, re-clicking the selected row, or switching filters reverts the content to the empty-selection prompt; the column and the 1122pt layout stay in place |
+| Deselect | ✕ button, Esc, re-clicking the selected row, or switching filters reverts the content to the **Review Inbox** (the default empty-selection state); the column and the 1122pt layout stay in place |
 | Degraded item | Status section shows recovery detail + Reconnect/Refresh action |
 | No review items / categories | Sections are omitted entirely, never shown empty |
 | Demo mode | Actions reduce to the demo-safe set (`DashboardDrillInAction.accountDrillInActions`) |
