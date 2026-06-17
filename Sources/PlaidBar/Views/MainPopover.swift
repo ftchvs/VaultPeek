@@ -362,9 +362,13 @@ struct MainPopover: View {
                     // yet); a brief placeholder holds the column until it fills in.
                     inspectorLoadingPlaceholder
                 } else {
-                    // Nothing selected: the column stays as a stable third column
-                    // with a prompt instead of collapsing to two columns.
-                    inspectorEmptySelectionState
+                    // Nothing selected: the right column hosts the Review Inbox by
+                    // default. Selecting an account swaps to its inspector and
+                    // deselecting returns here. The embedded inbox renders its own
+                    // "Inbox Clear" prompt when the queue is empty, so the column
+                    // never collapses.
+                    ReviewInboxView(embedded: true)
+                        .environment(appState)
                 }
             }
             .frame(width: Layout.flyoutWidth)
@@ -456,8 +460,9 @@ struct MainPopover: View {
                         WeeklyReviewCard()
                             .environment(appState)
 
-                        ReviewInboxView()
-                            .environment(appState)
+                        // Review Inbox moved to the right inspector column
+                        // (accountInspectorColumn) so the center stays one compact
+                        // instrument and the inbox is not shown twice.
 
                         if let presentation = appState.firstRunSnapshotPresentation {
                             FirstRunSnapshotView(

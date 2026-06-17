@@ -2,6 +2,12 @@ import PlaidBarCore
 import SwiftUI
 
 struct ReviewInboxView: View {
+    /// When true, the view is hosted inside the right inspector column: it drops
+    /// its own raised surface (the column already provides one), scrolls its rows
+    /// to fit the column height, shows more rows, and renders an empty-state
+    /// prompt instead of collapsing to nothing when the queue is clear.
+    var embedded: Bool = false
+
     @Environment(AppState.self) private var appState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var isFocused: Bool
@@ -18,11 +24,11 @@ struct ReviewInboxView: View {
     }
 
     private var items: [TransactionReviewItem] {
-        Array(snapshot.items.prefix(6))
+        Array(snapshot.items.prefix(embedded ? 20 : 6))
     }
 
     var body: some View {
-        if snapshot.totalCount > 0 || actionConfirmation != nil {
+        if embedded || snapshot.totalCount > 0 || actionConfirmation != nil {
             VStack(alignment: .leading, spacing: Spacing.sm) {
                 header
 
@@ -33,8 +39,10 @@ struct ReviewInboxView: View {
 
                 if appState.shouldMaskFinancialValues {
                     privateInboxPlaceholder
+                } else if items.isEmpty {
+                    emptyInboxPlaceholder
                 } else {
-                    VStack(spacing: 0) {
+                    rowsScroll {
                     ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                         if index > 0 {
                             Divider()
@@ -82,7 +90,7 @@ struct ReviewInboxView: View {
                 }
             }
             .padding(Spacing.sm)
-            .glassSurface(.raised)
+            .modifier(ConditionalRaisedSurface(embedded: embedded))
             .focusable()
             .focused($isFocused)
             .onAppear {
@@ -151,6 +159,29 @@ struct ReviewInboxView: View {
         .accessibilityLabel("Review inbox items hidden while VaultPeek is private")
     }
 
+    // Shown only in the embedded (right-column) layout when the queue is clear,
+    // so the column reads as intentional space instead of collapsing to nothing.
+    private var emptyInboxPlaceholder: some View {
+        ContentUnavailableView {
+            Label("Inbox Clear", systemImage: "checkmark.circle")
+        } description: {
+            Text("New or unusual transactions show up here to review, recategorize, or rename.")
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityLabel("Review inbox clear. New or unusual transactions will appear here to review.")
+    }
+
+    // Rows scroll inside the fixed-height inspector column; in the standalone
+    // layout they flow in the surrounding dashboard scroll view.
+    @ViewBuilder
+    private func rowsScroll<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        if embedded {
+            ScrollView { VStack(spacing: 0) { content() } }
+        } else {
+            VStack(spacing: 0) { content() }
+        }
+    }
+
     private func merchantDraftBinding(for item: TransactionReviewItem) -> Binding<String> {
         Binding(
             get: { merchantDraft(for: item) },
@@ -189,6 +220,21 @@ struct ReviewInboxView: View {
             try? await Task.sleep(for: .seconds(2.5))
             guard confirmationGeneration == generation else { return }
             withAnimation(MotionTokens.animation(MotionTokens.standard, reduceMotion: reduceMotion)) { actionConfirmation = nil }
+        }
+    }
+}
+
+/// In the standalone (center) layout the inbox owns a raised surface; in the
+/// embedded (right-column) layout the column already provides one, so adding a
+/// second would nest cards (the flattening AND-474 removed).
+private struct ConditionalRaisedSurface: ViewModifier {
+    let embedded: Bool
+
+    func body(content: Content) -> some View {
+        if embedded {
+            content
+        } else {
+            content.glassSurface(.raised)
         }
     }
 }
@@ -278,10 +324,13 @@ private struct ReviewInboxRow: View {
             .accessibilityLabel(accessibilitySummary)
             .accessibilityHint("Selects this transaction review row. Approve and ignore actions are also available below this summary.")
 
-            compactActionStrip
-
+            // Collapsed rows show the compact Approve / Review / Ignore strip;
+            // the selected row expands to the full controls instead of stacking
+            // both (which previously duplicated Approve and Ignore).
             if isSelected {
                 selectedControls
+            } else {
+                compactActionStrip
             }
         }
         .padding(.horizontal, Spacing.sm)
@@ -289,9 +338,14 @@ private struct ReviewInboxRow: View {
         // Flattened: no per-row card. Selection reads as a subtle inline
         // emphasis (tinted wash + leading accent) inside the single raised
         // surface, with Dividers separating rows.
-        .background(alignment: .leading) {
+        // Wash fills the row; the 2pt accent is a separate leading overlay so it
+        // sits flush on the left edge (the prior single multi-view background
+        // could place the bar mid-row).
+        .background {
+            if isSelected { SemanticColors.warning.opacity(0.08) }
+        }
+        .overlay(alignment: .leading) {
             if isSelected {
-                SemanticColors.warning.opacity(0.08)
                 Rectangle()
                     .fill(SemanticColors.warning.opacity(0.55))
                     .frame(width: 2)
@@ -424,6 +478,10 @@ private struct ReviewInboxRow: View {
             }
             .buttonStyle(.bordered)
             .controlSize(.mini)
+            // Five controls don't fit the 320pt inspector column with text, so
+            // show icons only; each keeps its Label text for VoiceOver plus a
+            // .help tooltip and a keyboard shortcut.
+            .labelStyle(.iconOnly)
 
             HStack(spacing: Spacing.xs) {
                 TextField("Merchant name", text: $merchantDraft)
