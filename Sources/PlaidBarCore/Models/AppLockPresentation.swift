@@ -22,20 +22,33 @@ public enum NotificationPrivacyMode: String, CaseIterable, Sendable, Equatable {
     }
 
     public var detail: String {
+        // VaultPeek's notification bodies are always generic — they never include
+        // a merchant, account, or amount (see NotificationTriggerSelection). So the
+        // only behavior that actually differs between modes is whether financial
+        // alerts are suppressed while App Lock is engaged (`.offWhileLocked`). These
+        // descriptions state what each mode really does rather than promising
+        // detailed copy the app does not produce.
         switch self {
-        case .detailed:
-            return "Show merchant, account, and amount details when VaultPeek is not private."
-        case .genericWhenPrivate:
-            return "Hide notification details whenever Privacy Mask or App Lock is active."
-        case .alwaysGeneric:
-            return "Never show financial details in notifications."
+        case .detailed, .genericWhenPrivate, .alwaysGeneric:
+            return "Financial notifications never include merchant, account, or amount details; alerts still arrive while VaultPeek is locked."
         case .offWhileLocked:
-            return "Suppress financial alerts until VaultPeek is unlocked."
+            return "Financial notifications stay generic and are also suppressed entirely while VaultPeek is locked, then resume once you unlock."
         }
     }
 
     public func shouldSend(isLocked: Bool) -> Bool {
         !(self == .offWhileLocked && isLocked)
+    }
+
+    /// The single behavior that actually differs between modes: whether financial
+    /// notifications are suppressed entirely while App Lock is engaged. All other
+    /// modes deliver the same always-generic copy, so this is the only meaningful
+    /// user-facing choice. Reading it collapses the three generic-equivalent cases
+    /// to `false`; writing it picks the canonical case for each side, while every
+    /// persisted raw value stays decodable.
+    public var suppressesNotificationsWhileLocked: Bool {
+        get { self == .offWhileLocked }
+        set { self = newValue ? .offWhileLocked : .alwaysGeneric }
     }
 
     public func usesGenericCopy(isPrivate: Bool) -> Bool {
@@ -126,6 +139,12 @@ public enum AppLockAuthenticationMessage: Sendable, Equatable {
     case unavailable
     case lockout
 
+    /// The default prompt shown on the locked gate before (or between) unlock
+    /// attempts — no error has occurred, so it just explains why the dashboard
+    /// is hidden and how to reveal it.
+    public static let idleSurfaceCopy =
+        "VaultPeek is locked. Authenticate to view your balances and activity."
+
     public var lockedSurfaceCopy: String {
         switch self {
         case .failed:
@@ -136,6 +155,22 @@ public enum AppLockAuthenticationMessage: Sendable, Equatable {
             return "Authentication is unavailable right now. VaultPeek will stay locked until macOS authentication is available again."
         case .lockout:
             return "Touch ID is locked. Use your Mac password to unlock VaultPeek."
+        }
+    }
+
+    /// Maps the outcome of an unlock attempt to the locked-surface message to
+    /// show, or `nil` when the attempt succeeded (the gate is dismissed). Kept in
+    /// Core so the surface copy selection is unit-testable.
+    public init?(unlockResult: AppLockAuthenticationResult) {
+        switch unlockResult {
+        case .success:
+            return nil
+        case .cancelled:
+            self = .canceled
+        case .unavailable(let reason):
+            self = reason == .biometryLockout ? .lockout : .unavailable
+        case .failure:
+            self = .failed
         }
     }
 }
