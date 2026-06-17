@@ -189,9 +189,21 @@ public enum TransactionReviewInbox {
             // category/transfer choices and the last-seen amount/name) still lives
             // under that old id, so carry it forward to reconcile the two.
             let priorPendingMetadata = transaction.pendingTransactionId.flatMap { metadataById[$0] }
-            let metadata = ownMetadata ?? priorPendingMetadata
+            // Production seeds a fresh `.needsReview` record under the posted id
+            // before this runs, so `ownMetadata` almost always exists. Treat the
+            // posted charge as resolved on its own only once the user has acted on
+            // it directly (reviewed/ignored under the posted id). Until then the
+            // own record is just the seeded baseline, so prefer the pending-phase
+            // record — otherwise the seeded `.needsReview` would mask a charge the
+            // user already reviewed while pending, dropping its status and overrides.
+            let ownResolved = ownMetadata.map { $0.status == .reviewed || $0.status == .ignored } ?? false
+            let metadata = ownResolved ? ownMetadata : (priorPendingMetadata ?? ownMetadata)
             let isAlreadyResolved = metadata?.status == .reviewed || metadata?.status == .ignored
-            let pendingBaseline = pendingBaseline(own: ownMetadata, prior: priorPendingMetadata)
+            // The pending baseline only matters until the charge is resolved under
+            // its posted id. After that, comparing the posted amount against the old
+            // pending amount would re-flag `.pendingChanged` and reopen it on every
+            // refresh, so stop falling back to the prior pending record.
+            let pendingBaseline = ownResolved ? nil : pendingBaseline(own: ownMetadata, prior: priorPendingMetadata)
             let matchedRules = rules.filter { $0.matches(transaction) }
 
             let effectiveCategory = metadata?.userCategory ?? transaction.category

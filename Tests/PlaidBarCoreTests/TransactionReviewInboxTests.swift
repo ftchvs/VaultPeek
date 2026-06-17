@@ -237,6 +237,73 @@ struct TransactionReviewInboxTests {
         #expect(snapshot.items.first?.reasonCodes.contains(.pendingChanged) == true)
     }
 
+    @Test("Posted charge that settled unchanged keeps the pending-phase review even with a seeded own record")
+    func postedUnchangedWithSeededOwnRecordStaysReviewed() {
+        // Production seeds a fresh `.needsReview` record under the posted id before
+        // the evaluator runs. A charge the user already reviewed while pending, that
+        // then posts unchanged, must stay settled — the seeded baseline must not
+        // mask the carried-forward review (regression for the lost-status bug).
+        let posted = tx(
+            id: "posted-new",
+            amount: 50,
+            name: "MERCHANT PENDING",
+            category: .shopping,
+            merchantName: "Merchant",
+            pendingTransactionId: "pending-old"
+        )
+        let seededPosted = TransactionReviewMetadata(
+            id: "posted-new",
+            lastSeenAmount: 50,
+            lastSeenName: "MERCHANT PENDING",
+            lastSeenPending: false
+        )
+        let reviewedPending = TransactionReviewMetadata(
+            id: "pending-old",
+            status: .reviewed,
+            userCategory: .foodAndDrink,
+            lastSeenAmount: 50,
+            lastSeenName: "MERCHANT PENDING",
+            lastSeenPending: true
+        )
+
+        let snapshot = evaluate([posted], metadata: [seededPosted, reviewedPending])
+
+        #expect(snapshot.totalCount == 0)
+    }
+
+    @Test("Posted charge resolved under its own id does not reopen from the stale pending baseline")
+    func resolvedPostedDoesNotReopenFromPendingBaseline() {
+        // After a changed charge posts and the user reviews it under the posted id,
+        // the old pending record (different amount, lastSeenPending) must no longer
+        // drive `.pendingChanged`, or the charge reopens on every refresh forever.
+        let posted = tx(
+            id: "posted-new",
+            amount: 58,
+            name: "MERCHANT FINAL",
+            category: .shopping,
+            merchantName: "Merchant",
+            pendingTransactionId: "pending-old"
+        )
+        let resolvedPosted = TransactionReviewMetadata(
+            id: "posted-new",
+            status: .reviewed,
+            lastSeenAmount: 58,
+            lastSeenName: "MERCHANT FINAL",
+            lastSeenPending: false
+        )
+        let pendingOld = TransactionReviewMetadata(
+            id: "pending-old",
+            status: .reviewed,
+            lastSeenAmount: 50,
+            lastSeenName: "MERCHANT PENDING",
+            lastSeenPending: true
+        )
+
+        let snapshot = evaluate([posted], metadata: [resolvedPosted, pendingOld])
+
+        #expect(snapshot.items.contains { $0.id == "posted-new" } == false)
+    }
+
     @Test("Reviewed and ignored transactions stay out of inbox")
     func reviewedAndIgnoredAreSuppressed() {
         let reviewed = tx(id: "reviewed", category: nil, merchantName: "Needs Category")
