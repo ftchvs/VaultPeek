@@ -242,6 +242,12 @@ struct PlaidTransaction: Decodable, Sendable {
     let name: String
     let merchantName: String?
     let pending: Bool
+    // Present only on posted transactions that were previously pending; links
+    // back to the now-removed pending transaction id. Decoded from
+    // `pending_transaction_id` via the client's convertFromSnakeCase strategy.
+    // `var … = nil` (not `let`) so it stays in Decodable synthesis while the
+    // synthesized memberwise init keeps it optional for call sites that omit it.
+    var pendingTransactionId: String? = nil
     let isoCurrencyCode: String?
     let personalFinanceCategory: PlaidCategory?
 }

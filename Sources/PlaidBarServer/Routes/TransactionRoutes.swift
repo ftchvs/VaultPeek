@@ -246,6 +246,7 @@ struct TransactionRoutes: Sendable {
             merchantName: plaidTx.merchantName,
             category: category,
             pending: plaidTx.pending,
+            pendingTransactionId: plaidTx.pendingTransactionId,
             isoCurrencyCode: plaidTx.isoCurrencyCode
         )
     }
