@@ -428,12 +428,16 @@ struct GeneralSettingsView: View {
                 }
                 .disabled(appState.menuBarSummaryMode == .creditUtilization || appState.menuBarSummaryMode == .iconOnly)
 
-                Picker("Refresh interval", selection: $state.refreshInterval) {
-                    Text("5 minutes").tag(TimeInterval(5 * 60))
-                    Text("15 minutes").tag(TimeInterval(15 * 60))
-                    Text("30 minutes").tag(TimeInterval(30 * 60))
-                    Text("1 hour").tag(TimeInterval(60 * 60))
+                Picker("Refresh", selection: $state.automaticRefreshPolicy) {
+                    ForEach(AutomaticRefreshPolicy.allCases, id: \.self) { policy in
+                        Text(policy.displayName).tag(policy)
+                    }
                 }
+                .accessibilityHint("How often VaultPeek refreshes from Plaid automatically")
+
+                Text("VaultPeek refreshes from Plaid automatically at most twice a day, showing cached data instantly the rest of the time. Choose Manual only to refresh solely with the refresh button. The refresh button updates on demand anytime.")
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
 
                 LabeledContent("Credit warning") {
                     HStack(spacing: Spacing.xs) {

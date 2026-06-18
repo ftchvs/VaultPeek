@@ -23,6 +23,7 @@ final class AppState {
         static let balanceFormat = "balanceFormat"
         static let creditUtilizationThreshold = "creditUtilizationThreshold"
         static let refreshInterval = "refreshInterval"
+        static let automaticRefreshPolicy = AutomaticRefreshPolicy.storageKey
         static let balanceHistory = "balanceHistory"
         static let notificationsEnabled = "notificationsEnabled"
         static let largeTransactionThreshold = "largeTransactionThreshold"
@@ -189,6 +190,22 @@ final class AppState {
             // Restart background refresh with new interval
             if refreshTask != nil { startBackgroundRefresh() }
         }
+    }
+    /// How often financial data is refreshed from Plaid AUTOMATICALLY (on
+    /// popover open and via the background loop). Manual refreshes always run.
+    /// `refreshInterval` above stays the internal self-heal tick (connectivity
+    /// re-probe + notifications); this throttles the actual Plaid data fetch.
+    var automaticRefreshPolicy: AutomaticRefreshPolicy = .twiceDaily {
+        didSet {
+            guard automaticRefreshPolicy != oldValue else { return }
+            UserDefaults.standard.set(automaticRefreshPolicy.rawValue, forKey: Keys.automaticRefreshPolicy)
+        }
+    }
+
+    /// Whether an automatic (non-user-triggered) refresh is due now, per the
+    /// refresh policy and the last successful sync. Manual refreshes bypass this.
+    var shouldAutoRefreshNow: Bool {
+        automaticRefreshPolicy.shouldAutoRefresh(lastSync: lastSyncDate, now: Date())
     }
     var notificationsEnabled: Bool = false {
         didSet {
@@ -401,6 +418,10 @@ final class AppState {
             refreshInterval = PlaidBarConstants.normalizedBackgroundRefreshInterval(
                 defaults.double(forKey: Keys.refreshInterval)
             )
+        }
+        if let rawPolicy = defaults.string(forKey: Keys.automaticRefreshPolicy),
+           let policy = AutomaticRefreshPolicy(rawValue: rawPolicy) {
+            automaticRefreshPolicy = policy
         }
         // Notification settings
         if defaults.object(forKey: Keys.notificationsEnabled) != nil {
@@ -1727,7 +1748,12 @@ final class AppState {
         loadDemoData()
     }
 
-    func refreshDashboard() async {
+    /// Refreshes the dashboard. `force` distinguishes a user-triggered refresh
+    /// (the refresh button / recovery actions — always fetches) from an
+    /// automatic one (the background loop — fetches only when due per
+    /// `automaticRefreshPolicy`). Connectivity is re-probed either way so the
+    /// loop keeps self-healing and notifications stay current.
+    func refreshDashboard(force: Bool = true) async {
         if refreshDemoDataIfNeeded() { return }
 
         if await consumePendingGlanceCommand() { return }
@@ -1736,7 +1762,7 @@ final class AppState {
         // Setup state (credentials missing) cannot refresh anything from
         // Plaid; the status surfaces guide the user instead of surfacing a
         // 503 banner on every cycle.
-        if serverConnected, serverCredentialsConfigured != false {
+        if serverConnected, serverCredentialsConfigured != false, force || shouldAutoRefreshNow {
             await refreshAccounts()
             await syncTransactions()
         }
@@ -1923,7 +1949,9 @@ final class AppState {
         refreshTask = Task {
             while !Task.isCancelled {
                 if appLockPreferences.shouldRefreshFinancialData(isAppLocked: isAppLocked) {
-                    await refreshDashboard()
+                    // Automatic tick: only fetches Plaid data when due per the
+                    // refresh policy; connectivity re-probe still runs each tick.
+                    await refreshDashboard(force: false)
                 }
                 if appLockPreferences.shouldEvaluateFinancialNotifications(isAppLocked: isAppLocked) {
                     await evaluateNotifications()
@@ -2076,8 +2104,16 @@ final class AppState {
                     await clearCachedAccounts()
                     await clearCachedTransactions()
                 }
-                await refreshAccounts()
-                await syncTransactions()
+                // Don't hit Plaid on every open: show cached data and only
+                // auto-refresh when it's actually due (twice a day by default,
+                // or never under "manual only"). `lastSyncDate` was just set
+                // from the server's persisted last sync by checkServerConnection,
+                // so this survives app restarts. The manual refresh button still
+                // updates on demand.
+                if shouldAutoRefreshNow {
+                    await refreshAccounts()
+                    await syncTransactions()
+                }
             }
             await refreshCategoryBudgets()
         } else {
