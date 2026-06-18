@@ -9,16 +9,32 @@ public enum DataExportBuilder {
 
     // MARK: - CSV
 
-    /// Escapes a single CSV field per RFC 4180: wrap in double quotes and double
-    /// any interior double quote when the value contains a comma, quote, CR, or LF.
+    /// Escapes a single CSV field per RFC 4180 and neutralizes spreadsheet
+    /// formula injection. Plaid account / transaction / merchant names are
+    /// untrusted; a value that begins with `=`, `+`, `-`, or `@` can be executed
+    /// as a formula when the CSV is opened in Excel / Numbers / Sheets. We prefix
+    /// such values with a leading apostrophe so the cell renders as literal text.
+    /// Pure numeric fields (e.g. a negative balance "-100.50") parse as a number
+    /// and are left untouched so exported figures stay machine-readable.
     public static func csvField(_ value: String) -> String {
-        let needsQuoting = value.contains(",")
-            || value.contains("\"")
-            || value.contains("\n")
-            || value.contains("\r")
-        guard needsQuoting else { return value }
-        let escaped = value.replacingOccurrences(of: "\"", with: "\"\"")
+        let neutralized = neutralizingFormula(value)
+        let needsQuoting = neutralized.contains(",")
+            || neutralized.contains("\"")
+            || neutralized.contains("\n")
+            || neutralized.contains("\r")
+        guard needsQuoting else { return neutralized }
+        let escaped = neutralized.replacingOccurrences(of: "\"", with: "\"\"")
         return "\"\(escaped)\""
+    }
+
+    /// Prefixes a leading `'` when `value` starts with a formula trigger
+    /// (`=`, `+`, `-`, `@`) and is not a plain number. Plain numbers (including
+    /// negatives) are returned unchanged so numeric columns stay parseable.
+    private static func neutralizingFormula(_ value: String) -> String {
+        guard let first = value.first, "=+-@".contains(first) else { return value }
+        // A bare numeric value like "-100.50" is safe — only neutralize text.
+        if Double(value) != nil { return value }
+        return "'\(value)"
     }
 
     private static func row(_ fields: [String]) -> String {

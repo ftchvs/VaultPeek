@@ -61,6 +61,35 @@ struct DataExportBuilderTests {
         #expect(DataExportBuilder.csvField("line1\nline2") == "\"line1\nline2\"")
     }
 
+    @Test("csvField neutralizes formula-leading text but leaves plain numbers untouched")
+    func csvFieldFormulaInjection() {
+        // Untrusted names beginning with a formula trigger get an apostrophe prefix.
+        #expect(DataExportBuilder.csvField("=SUM(A1)") == "'=SUM(A1)")
+        #expect(DataExportBuilder.csvField("@cmd") == "'@cmd")
+        #expect(DataExportBuilder.csvField("+1-555") == "'+1-555")
+        // A value needing both neutralization and quoting (contains a comma).
+        #expect(DataExportBuilder.csvField("=HYPERLINK(\"x\"),y") == "\"'=HYPERLINK(\"\"x\"\"),y\"")
+        // Plain numbers, including negatives, are left machine-readable.
+        #expect(DataExportBuilder.csvField("-100.50") == "-100.50")
+        #expect(DataExportBuilder.csvField("100.50") == "100.50")
+    }
+
+    @Test("accountsCSV neutralizes a formula-leading institution name")
+    func accountsCSVNeutralizesFormulaName() {
+        let account = AccountDTO(
+            id: "acc1", itemId: "item1", name: "=2+5",
+            type: .depository,
+            balances: BalanceDTO(available: 1, current: -2, limit: nil, isoCurrencyCode: "USD"),
+            institutionName: "@SUM"
+        )
+        let csv = DataExportBuilder.accountsCSV([account])
+        let lines = csv.split(separator: "\n", omittingEmptySubsequences: true).map(String.init)
+        let fields = lines[1].components(separatedBy: ",")
+        #expect(fields[2] == "'=2+5")     // name neutralized
+        #expect(fields[7] == "'@SUM")     // institution_name neutralized
+        #expect(fields[9] == "-2.00")     // negative current balance untouched
+    }
+
     @Test("accountsCSV renders nil officialName/mask/limit as empty fields and formats balances with fixed decimals")
     func accountsCSVNilFields() {
         let csv = DataExportBuilder.accountsCSV([
