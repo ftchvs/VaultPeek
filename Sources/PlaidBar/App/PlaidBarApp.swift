@@ -220,6 +220,9 @@ struct PlaidBarApp: App {
                     },
                     dismissPopover: {
                         appState.isPopoverPresented = false
+                    },
+                    togglePrivacyMask: {
+                        appState.togglePrivacyMask()
                     }
                 )
             )

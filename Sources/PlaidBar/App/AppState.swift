@@ -317,6 +317,16 @@ final class AppState {
         financialPrivacyDisplayMode != .normal
     }
 
+    /// Flips the lighter Privacy Mask (dots balances/amounts without requiring
+    /// authentication). Backs the quick toggles — the popover eye button, the
+    /// ⌘⇧P shortcut, and ⌥-click on the menu-bar icon — so privacy can be engaged
+    /// without opening Settings. Persisted via the `appLockPreferences` didSet.
+    /// No-op while fully locked: App Lock already masks everything and owns reveal.
+    func togglePrivacyMask() {
+        guard !isContentLocked else { return }
+        appLockPreferences.privacyMaskEnabled.toggle()
+    }
+
     /// True only in full App Lock (`.locked`) — distinct from
     /// `shouldMaskFinancialValues`, which is also true for the lighter Privacy
     /// Mask (`.masked`). When this is true the dashboard must be gated behind the
