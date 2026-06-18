@@ -7,6 +7,10 @@ import SwiftUI
 struct IncomeCategoryFlowInspector: View {
     let presentation: IncomeCategoryFlowPresentation
     var loadState: DashboardLoadState?
+    /// When true (Privacy Mask on), every income/spend amount the flow exposes is
+    /// masked so this drill-in is not a privacy-mode bypass for financial data.
+    /// The structure (source/category labels, ribbon shape) still renders.
+    var isPrivacyMasked: Bool = false
     let onClose: () -> Void
 
     var body: some View {
@@ -29,7 +33,7 @@ struct IncomeCategoryFlowInspector: View {
                 }
             } else {
                 ScrollView {
-                    IncomeCategoryFlowChart(presentation: presentation)
+                    IncomeCategoryFlowChart(presentation: presentation, isPrivacyMasked: isPrivacyMasked)
                         .padding(Spacing.md)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -90,6 +94,9 @@ struct IncomeCategoryFlowInspector: View {
 /// honestly labeled, since per-transaction income→category data does not exist.
 struct IncomeCategoryFlowChart: View {
     let presentation: IncomeCategoryFlowPresentation
+    /// When true (Privacy Mask on), the visible income/spend amounts and the
+    /// VoiceOver amounts are masked; the flow geometry and labels still render.
+    var isPrivacyMasked: Bool = false
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -102,9 +109,9 @@ struct IncomeCategoryFlowChart: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             HStack(alignment: .firstTextBaseline) {
-                columnHeader("Income", amount: presentation.totalIncomeText)
+                columnHeader("Income", amount: masked(presentation.totalIncomeText))
                 Spacer()
-                columnHeader("Spending", amount: presentation.totalSpendText)
+                columnHeader("Spending", amount: masked(presentation.totalSpendText))
             }
 
             GeometryReader { proxy in
@@ -127,6 +134,15 @@ struct IncomeCategoryFlowChart: View {
 
             // Text legend so each ribbon/node has a readable label off-color.
             legend
+
+            // Visible caveat so sighted users aren't misled into reading the
+            // ribbons as real per-transaction source→category attribution. The
+            // model only splits each source by total spend share; the chart must
+            // not overstate what the data proves (previously only in VoiceOver).
+            Text("Ribbons are aggregate-proportional, not per-transaction income-to-category attribution.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .onAppear {
             guard !reduceMotion else { revealFraction = 1; return }
@@ -136,7 +152,26 @@ struct IncomeCategoryFlowChart: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(presentation.accessibilityLabel)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    /// Mask a baked currency string when Privacy Mask is on; otherwise pass through.
+    private func masked(_ value: String) -> String {
+        PrivacyMaskPresentation.value(value, isEnabled: isPrivacyMasked)
+    }
+
+    /// VoiceOver label. When masked, the structure (source/category labels, order)
+    /// is preserved but every amount is replaced, so the drill-in never speaks
+    /// exact financial values while Privacy Mask is on.
+    private var accessibilityLabel: String {
+        guard isPrivacyMasked else { return presentation.accessibilityLabel }
+        if presentation.isEmpty {
+            return presentation.accessibilityLabel
+        }
+        let hidden = PrivacyMaskPresentation.compactValue
+        let sourceList = presentation.sources.map { "\($0.label) \(hidden)" }.joined(separator: ", ")
+        let categoryList = presentation.categories.map { "\($0.label) \(hidden)" }.joined(separator: ", ")
+        return "Income to category flow. Income: \(sourceList). Spending: \(categoryList). Flows are aggregate-proportional, not per-transaction. Amounts hidden while Privacy Mask is on."
     }
 
     private func columnHeader(_ title: String, amount: String) -> some View {
@@ -160,7 +195,7 @@ struct IncomeCategoryFlowChart: View {
                     Text(category.label)
                         .font(.caption2)
                     Spacer(minLength: Spacing.sm)
-                    Text(category.amountText)
+                    Text(masked(category.amountText))
                         .font(.caption2.weight(.medium))
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
