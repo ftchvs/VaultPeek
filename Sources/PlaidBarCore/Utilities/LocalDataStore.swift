@@ -93,6 +93,14 @@ public enum LocalDataStore {
     private static let directoryPermissions = 0o700
     private static let cacheFilePermissions = 0o600
 
+    /// Filename of the per-environment SQLite store the server writes
+    /// (`plaidbar-<env>.sqlite`). Exposed so the app can render the documented
+    /// backup path without importing the server module. Mirrors
+    /// `ServerConfig.databaseFilename(for:)`.
+    public static func sqliteFilename(for environment: PlaidEnvironment) -> String {
+        "plaidbar-\(environment.rawValue).sqlite"
+    }
+
     public static func accountHomeDirectoryURL() -> URL {
         #if os(macOS)
         if let user = getpwuid(getuid()),

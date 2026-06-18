@@ -596,6 +596,42 @@ struct GeneralSettingsView: View {
                 }
             }
 
+            Section("Export & Backup") {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    Text("Export a portable copy of your accounts, transactions, and balance history. Files are written wherever you choose and never leave this Mac.")
+                        .detailText()
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(alignment: .center, spacing: Spacing.sm) {
+                        Menu {
+                            Button("Export CSV…") { exportCSV() }
+                            Button("Export JSON…") { exportJSON() }
+                        } label: {
+                            Label("Export…", systemImage: "square.and.arrow.up")
+                        }
+                        .menuStyle(.borderlessButton)
+                        .fixedSize()
+                        .disabled(isExportDisabled)
+                    }
+
+                    if appState.appLockPreferences.privacyMaskEnabled {
+                        Label(
+                            "Export is disabled while Privacy Mask is on, so real balances are never written to disk. Turn off Privacy Mask to export.",
+                            systemImage: "eye.slash"
+                        )
+                        .detailText()
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    LabeledContent("Backup file") {
+                        Text(documentedBackupPathText)
+                            .font(.system(.caption, design: .monospaced))
+                            .multilineTextAlignment(.trailing)
+                            .textSelection(.enabled)
+                    }
+                }
+            }
+
             Section("Where your data lives") {
                 LocalTrustReceiptView(receipt: whereYourDataLivesReceipt)
             }
@@ -634,6 +670,66 @@ struct GeneralSettingsView: View {
         let url = appState.activeStorageDirectoryURL
         try? LocalDataStore.prepareStorageDirectory(at: url)
         NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    // MARK: - Export & Backup (AND-492)
+
+    private var isExportDisabled: Bool {
+        appState.appLockPreferences.privacyMaskEnabled
+    }
+
+    /// Documented backup file path, e.g. `~/.vaultpeek/plaidbar-sandbox.sqlite`.
+    /// The SQLite store is per-environment; fall back to the generic filename
+    /// when no environment is connected (demo mode).
+    private var documentedBackupPathText: String {
+        let directory = appState.activeStorageDirectoryDisplayText
+        let filename: String
+        if let environment = appState.serverEnvironment {
+            filename = LocalDataStore.sqliteFilename(for: environment)
+        } else {
+            filename = "plaidbar.sqlite"
+        }
+        let trimmed = directory.hasSuffix("/") ? directory : directory + "/"
+        return trimmed + filename
+    }
+
+    private func exportCSV() {
+        guard !isExportDisabled else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.prompt = "Export"
+        panel.message = "Choose a folder for the exported CSV files."
+        guard panel.runModal() == .OK, let directory = panel.url else { return }
+
+        let documents: [(name: String, contents: String)] = [
+            ("accounts.csv", DataExportBuilder.accountsCSV(appState.accounts)),
+            ("transactions.csv", DataExportBuilder.transactionsCSV(appState.transactions)),
+            ("balance-history.csv", DataExportBuilder.balanceHistoryCSV(appState.balanceHistory)),
+        ]
+        for document in documents {
+            let url = directory.appendingPathComponent(document.name)
+            try? Data(document.contents.utf8).write(to: url, options: [.atomic])
+        }
+    }
+
+    private func exportJSON() {
+        guard !isExportDisabled else { return }
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "vaultpeek-export.json"
+        panel.prompt = "Export"
+        panel.message = "Choose where to save the combined JSON backup."
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        guard let data = try? DataExportBuilder.combinedJSON(
+            accounts: appState.accounts,
+            transactions: appState.transactions,
+            balanceHistory: appState.balanceHistory,
+            exportedAt: Date(),
+            environment: appState.serverEnvironment?.rawValue
+        ) else { return }
+        try? data.write(to: url, options: [.atomic])
     }
 
     private func copyStoragePath() {

@@ -126,6 +126,8 @@ public enum DemoFixtures {
             TransactionDTO(id: "tx2", accountId: "demo_checking", amount: 23.50, date: today, name: "UBER TRIP", merchantName: "Uber", category: .transportation),
             TransactionDTO(id: "tx3", accountId: "demo_checking", amount: -3_200.00, date: today, name: "STRIPE TRANSFER", merchantName: "Stripe", category: .income),
             TransactionDTO(id: "tx4", accountId: "demo_amex", amount: 142.80, date: today, name: "AMAZON.COM", merchantName: "Amazon", category: .shopping),
+            // Merchant name with a comma exercises CSV quoting/escaping in exports (AND-492).
+            TransactionDTO(id: "tx4b", accountId: "demo_amex", amount: 58.10, date: today, name: "DINING PURCHASE", merchantName: "Joe's Bar, Grill & Co.", category: .foodAndDrink),
             // Yesterday
             TransactionDTO(id: "tx5", accountId: "demo_checking", amount: 15.99, date: yesterday, name: "NETFLIX.COM", merchantName: "Netflix", category: .entertainment),
             TransactionDTO(id: "tx6", accountId: "demo_checking", amount: 45.00, date: yesterday, name: "SHELL OIL 57422", merchantName: "Shell", category: .transportation),
