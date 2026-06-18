@@ -6,6 +6,8 @@ struct WealthSummaryFlyout: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let onAddAccount: () -> Void
     var onOpenSubscriptions: (() -> Void)?
+    /// Opens the Income → Category flow drill-in (AND-500).
+    var onOpenFlow: (() -> Void)?
 
     private var presentation: WealthSummaryPresentation {
         WealthSummaryPresentation.evaluate(
@@ -49,7 +51,11 @@ struct WealthSummaryFlyout: View {
                         .loadingRedaction(appState.loadState(for: .summaryCards))
                         .scrollEdgeDepth(reduceMotion: reduceMotion)
 
-                    WealthCashflowSection(cashflow: presentation.cashflow, privacyMaskEnabled: privacyMaskEnabled)
+                    WealthCashflowSection(
+                        cashflow: presentation.cashflow,
+                        privacyMaskEnabled: privacyMaskEnabled,
+                        onOpenFlow: onOpenFlow
+                    )
                         .loadingRedaction(appState.loadState(for: .transactions))
                         .scrollEdgeDepth(reduceMotion: reduceMotion)
 
@@ -440,6 +446,7 @@ private struct WealthCashflowSection: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let cashflow: WealthSummaryPresentation.CashflowSummary
     let privacyMaskEnabled: Bool
+    var onOpenFlow: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -455,6 +462,16 @@ private struct WealthCashflowSection: View {
                 WealthCashflowRow(title: "Income", amount: cashflow.income, role: .income, privacyMaskEnabled: privacyMaskEnabled, reduceMotion: reduceMotion)
                 WealthCashflowRow(title: "Spending", amount: cashflow.spending, role: .spending, privacyMaskEnabled: privacyMaskEnabled, reduceMotion: reduceMotion)
                 WealthCashflowRow(title: "Net", amount: cashflow.net, role: .net, privacyMaskEnabled: privacyMaskEnabled, reduceMotion: reduceMotion)
+            }
+
+            // Drill into the Income → Category flow (AND-500).
+            if let onOpenFlow {
+                Button(action: onOpenFlow) {
+                    Label("View income flow", systemImage: "arrow.left.arrow.right")
+                        .font(.caption.weight(.medium))
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("View income to category flow")
             }
         }
         .accessibilityElement(children: .contain)
