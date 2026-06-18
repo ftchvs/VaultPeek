@@ -14,11 +14,25 @@ struct MenuBarLabel: View {
         // down to the warning glyph and never paint attention text here.
         let presentation = appState.menuBarStatusPresentation
         HStack(spacing: Spacing.xs) {
-            // The healthy Vault style has no SF Symbol; it renders from a
-            // code-drawn monochrome template image. Degraded states still swap
-            // in their SF Symbol ladder, so the token only ever appears here in
-            // the healthy state.
-            if presentation.symbolName == MenuBarIconStyle.customGlyphToken {
+            // Glyph precedence (all monochrome template-style, meaning carried
+            // by SHAPE never color):
+            //   1. Live signal meter (AND-485) — when its toggle is on AND the
+            //      status is healthy (the meter model is non-nil only then),
+            //      draw the code-rendered template meter. The degraded glyph
+            //      ladder still wins because the meter model is nil for any
+            //      non-healthy state, so a problem is never hidden behind a meter.
+            //   2. Static Vault custom glyph (feat/menu-bar-glyph) — the healthy
+            //      Vault icon style has no SF Symbol; it renders from a code-drawn
+            //      monochrome template image. Degraded states still swap in their
+            //      SF Symbol ladder, so the token only appears here when healthy.
+            //   3. SF Symbol — every other style and every degraded state.
+            // The live-meter toggle disables the icon-style picker in Settings,
+            // so (1) and the chosen static style (2/3) never both apply — the
+            // meter simply takes precedence while active.
+            if let signalModel = appState.menuBarSignalGlyph,
+               let signalImage = SignalGlyphImage.make(model: signalModel) {
+                Image(nsImage: signalImage)
+            } else if presentation.symbolName == MenuBarIconStyle.customGlyphToken {
                 Image(nsImage: VaultMenuBarGlyph.image)
                     .symbolMotion(.replace, reduceMotion: reduceMotion)
             } else {
