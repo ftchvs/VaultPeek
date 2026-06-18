@@ -60,25 +60,46 @@ struct SignalGlyphMeterTests {
         #expect(model.fillFraction == 1)
     }
 
-    @Test("Utilization path equals MenuBarSummary.creditUtilization/100, clamped")
+    @Test("Utilization path tracks the worst single card, not the pooled aggregate")
     func utilizationMatchesSummary() {
+        // Amex: 1000/10000 = 10%; Visa: 2000/5000 = 40%. Pooled aggregate is
+        // 3000/15000 = 20% (calm), but the meter must surface the worst card
+        // (40%, over the 30% threshold) — otherwise a near-maxed card hides
+        // behind a large-limit one (Codex #499, AND-485).
         let accounts = [
             AccountDTO(id: "1", itemId: "i", name: "Checking", type: .depository, balances: BalanceDTO(available: 8_200)),
             AccountDTO(id: "2", itemId: "i", name: "Amex", type: .credit, balances: BalanceDTO(current: -1_000, limit: 10_000)),
             AccountDTO(id: "3", itemId: "i", name: "Visa", type: .credit, balances: BalanceDTO(current: -2_000, limit: 5_000)),
         ]
-        let expectedPercent = MenuBarSummary.creditUtilization(from: accounts) ?? 0 // 20%
+        let pooledPercent = MenuBarSummary.creditUtilization(from: accounts) ?? 0 // 20%
+        let highestPercent = MenuBarSummary.highestUtilization(from: accounts) ?? 0 // 40%
         let model = SignalGlyphMeter.utilization(from: accounts, thresholdPercent: 30)
-        #expect(abs(model.fillFraction - expectedPercent / 100) < 0.0001)
-        #expect(model.severity == .calm) // 20% < 30% threshold
+        // The meter follows the highest card, not the calmer pooled aggregate.
+        #expect(abs(model.fillFraction - highestPercent / 100) < 0.0001)
+        #expect(abs(model.fillFraction - pooledPercent / 100) > 0.0001)
+        #expect(model.severity == .overThreshold) // 40% >= 30% threshold
 
-        // Over-limit aggregate clamps to a full bar.
+        // Over-limit single card clamps to a full bar.
         let overLimit = [
             AccountDTO(id: "4", itemId: "i", name: "Maxed", type: .credit, balances: BalanceDTO(current: -12_000, limit: 10_000)),
         ]
         let overModel = SignalGlyphMeter.utilization(from: overLimit, thresholdPercent: 30)
         #expect(overModel.fillFraction == 1)
         #expect(overModel.severity == .overThreshold)
+    }
+
+    @Test("Accessibility description conveys value, threshold, and staleness in words")
+    func accessibilityDescriptionIsWordOnly() {
+        // Empty model announces nothing.
+        #expect(SignalGlyphMeter.SignalGlyphRenderModel.empty.accessibilityDescription == nil)
+
+        // Calm, fresh: just the rounded percent.
+        let calm = SignalGlyphMeter.bar(magnitude: 0.4, threshold: 0.6)
+        #expect(calm.accessibilityDescription == "Signal meter 40 percent")
+
+        // Over-threshold and stale both surface as words, never color.
+        let over = SignalGlyphMeter.bar(magnitude: 0.75, threshold: 0.6, isStale: true)
+        #expect(over.accessibilityDescription == "Signal meter 75 percent, over threshold, stale")
     }
 
     @Test("No-credit input degrades to the empty no-meter model, never crashes")
