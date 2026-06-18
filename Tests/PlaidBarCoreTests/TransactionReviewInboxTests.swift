@@ -16,6 +16,24 @@ struct TransactionReviewInboxTests {
         #expect(snapshot.items.first?.reasonCodes.contains(.uncategorized) == true)
     }
 
+    @Test("Low Plaid category confidence surfaces an otherwise-confident category for review")
+    func lowConfidenceCategorySurfacesForReview() {
+        // Same merchant four times so the single-occurrence newMerchant heuristic
+        // never fires; a valid category so the nil/other check never fires. Only
+        // Plaid's reported confidence differs.
+        let low = tx(id: "low", category: .shopping, merchantName: "Acme Store", categoryConfidence: "LOW")
+        let lowTwin = tx(id: "low-2", category: .shopping, merchantName: "Acme Store", categoryConfidence: "LOW")
+        let high = tx(id: "high", category: .shopping, merchantName: "Acme Store", categoryConfidence: "VERY_HIGH")
+        let highTwin = tx(id: "high-2", category: .shopping, merchantName: "Acme Store", categoryConfidence: "VERY_HIGH")
+
+        let snapshot = evaluate([low, lowTwin, high, highTwin])
+
+        // Low-confidence items surface as uncategorized; high-confidence ones,
+        // having no other reason, never enter the inbox.
+        #expect(snapshot.items.first(where: { $0.id == "low" })?.reasonCodes.contains(.uncategorized) == true)
+        #expect(snapshot.items.contains(where: { $0.id == "high" }) == false)
+    }
+
     @Test("New merchant is reviewed without exposing provider identifiers")
     func newMerchantReason() {
         let transaction = tx(id: "new-merchant", category: .shopping, merchantName: "Desk Supply")
@@ -615,7 +633,8 @@ struct TransactionReviewInboxTests {
         category: SpendingCategory?,
         merchantName: String?,
         pending: Bool = false,
-        pendingTransactionId: String? = nil
+        pendingTransactionId: String? = nil,
+        categoryConfidence: String? = nil
     ) -> TransactionDTO {
         TransactionDTO(
             id: id,
@@ -626,7 +645,8 @@ struct TransactionReviewInboxTests {
             merchantName: merchantName,
             category: category,
             pending: pending,
-            pendingTransactionId: pendingTransactionId
+            pendingTransactionId: pendingTransactionId,
+            categoryConfidence: categoryConfidence
         )
     }
 

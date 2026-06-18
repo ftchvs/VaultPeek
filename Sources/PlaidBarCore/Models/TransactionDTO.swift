@@ -16,6 +16,10 @@ public struct TransactionDTO: Codable, Sendable, Identifiable, Hashable {
     /// it out of UI and logs; it exists only to reconcile pending → posted state.
     public let pendingTransactionId: String?
     public let isoCurrencyCode: String?
+    /// Plaid Personal Finance Category v2 confidence (`VERY_HIGH`/`HIGH`/`MEDIUM`/
+    /// `LOW`/`UNKNOWN`), preserved so the Review Inbox can surface only genuinely
+    /// uncertain categorizations. Nil for cached rows or non-PFCv2 sources.
+    public let categoryConfidence: String?
 
     public init(
         id: String,
@@ -28,7 +32,8 @@ public struct TransactionDTO: Codable, Sendable, Identifiable, Hashable {
         category: SpendingCategory? = nil,
         pending: Bool = false,
         pendingTransactionId: String? = nil,
-        isoCurrencyCode: String? = nil
+        isoCurrencyCode: String? = nil,
+        categoryConfidence: String? = nil
     ) {
         self.id = id
         self.itemId = itemId
@@ -41,6 +46,7 @@ public struct TransactionDTO: Codable, Sendable, Identifiable, Hashable {
         self.pending = pending
         self.pendingTransactionId = pendingTransactionId
         self.isoCurrencyCode = isoCurrencyCode
+        self.categoryConfidence = categoryConfidence
     }
 
     /// Display name: merchantName if available, otherwise raw name
@@ -56,5 +62,15 @@ public struct TransactionDTO: Codable, Sendable, Identifiable, Hashable {
     /// Absolute display amount
     public var displayAmount: Double {
         abs(amount)
+    }
+
+    /// True only when Plaid explicitly reports LOW/UNKNOWN category confidence —
+    /// the signal the Review Inbox uses to surface uncertain categorizations.
+    /// Missing confidence (nil) is treated as confident and does not flag.
+    public var isLowConfidenceCategory: Bool {
+        switch categoryConfidence?.uppercased() {
+        case "LOW", "UNKNOWN": true
+        default: false
+        }
     }
 }
