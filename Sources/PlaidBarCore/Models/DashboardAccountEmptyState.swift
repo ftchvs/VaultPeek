@@ -6,6 +6,7 @@ public enum DashboardAccountFilterKind: String, CaseIterable, Sendable {
     case credit = "Credit"
     case savings = "Savings"
     case debt = "Debt"
+    case investment = "Investments"
     case status = "Status"
 
     public func includes(
@@ -23,6 +24,10 @@ public enum DashboardAccountFilterKind: String, CaseIterable, Sendable {
             return account.subtype?.localizedCaseInsensitiveContains("saving") == true
         case .debt:
             return AccountPresentation.isDebt(account)
+        case .investment:
+            // Brokerage / retirement accounts, surfaced as a balance line only
+            // (no holdings, performance, or allocation — explicit non-goal).
+            return account.type == .investment
         case .status:
             return degradedItemIds.contains(account.itemId)
         }
