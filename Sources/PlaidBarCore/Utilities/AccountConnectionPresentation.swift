@@ -130,6 +130,28 @@ public struct AccountConnectionPresentation: Sendable, Equatable {
                 statusFilterSubtitle: "Item error • \(itemSyncLabel)",
                 recoveryDetailLabel: errorRecoveryDetailLabel(institutionName: institutionName)
             )
+        case .providerOutage:
+            // Transient Plaid-side outage: advisory, NOT a user reconnect. No
+            // recovery actions — VaultPeek retries automatically. Rendered at the
+            // .stale (degraded-but-not-your-fault) level.
+            let itemSyncLabel = itemSyncLabel(itemLastSyncRelative)
+            let outageLabel = itemDetailLabel(
+                institutionName: institutionName,
+                fallback: "Bank temporarily unavailable",
+                suffix: "is temporarily unavailable"
+            )
+            return AccountConnectionPresentation(
+                level: .stale,
+                rowLabel: outageLabel,
+                detailLabel: outageLabel,
+                signalLabel: "Outage",
+                iconName: "wifi.exclamationmark",
+                showsRecoveryActions: false,
+                recoveryActionTitle: nil,
+                itemSyncLabel: itemSyncLabel,
+                statusFilterSubtitle: "Provider outage • \(itemSyncLabel)",
+                recoveryDetailLabel: "Your bank or Plaid is temporarily unavailable. VaultPeek will retry automatically — no action needed."
+            )
         case nil:
             return AccountConnectionPresentation.synced(
                 isSyncStale: isSyncStale,
@@ -217,7 +239,7 @@ public struct AccountConnectionPresentation: Sendable, Equatable {
             return itemDetailLabel(institutionName: institutionName, fallback: "Permission revoked", suffix: "permission revoked")
         case .newAccountsAvailable:
             return itemDetailLabel(institutionName: institutionName, fallback: "New accounts available", suffix: "new accounts available")
-        case .connected, .loginRepaired, .loginRequired, .error, nil:
+        case .connected, .loginRepaired, .loginRequired, .providerOutage, .error, nil:
             return itemDetailLabel(institutionName: institutionName, fallback: "Login required", suffix: "login required")
         }
     }
@@ -232,7 +254,7 @@ public struct AccountConnectionPresentation: Sendable, Equatable {
             "Revoked"
         case .newAccountsAvailable:
             "New"
-        case .connected, .loginRepaired, .loginRequired, .error, nil:
+        case .connected, .loginRepaired, .loginRequired, .providerOutage, .error, nil:
             "Login"
         }
     }
@@ -247,7 +269,7 @@ public struct AccountConnectionPresentation: Sendable, Equatable {
             "Permission revoked"
         case .newAccountsAvailable:
             "New accounts available"
-        case .connected, .loginRepaired, .loginRequired, .error, nil:
+        case .connected, .loginRepaired, .loginRequired, .providerOutage, .error, nil:
             "Login required"
         }
     }
@@ -260,7 +282,7 @@ public struct AccountConnectionPresentation: Sendable, Equatable {
             "hand.raised.fill"
         case .newAccountsAvailable:
             "plus.circle.fill"
-        case .connected, .loginRepaired, .loginRequired, .error, nil:
+        case .connected, .loginRepaired, .loginRequired, .providerOutage, .error, nil:
             "person.crop.circle.badge.exclamationmark.fill"
         }
     }
@@ -294,7 +316,7 @@ public struct AccountConnectionPresentation: Sendable, Equatable {
                 return "Plaid says permission was revoked. Reconnect this item to restore access."
             case .newAccountsAvailable:
                 return "New accounts are available. Update this item to choose what VaultPeek can access."
-            case .connected, .loginRepaired, .loginRequired, .error, nil:
+            case .connected, .loginRepaired, .loginRequired, .providerOutage, .error, nil:
                 return loginRecoveryDetailLabel(institutionName: nil)
             }
         }
@@ -308,7 +330,7 @@ public struct AccountConnectionPresentation: Sendable, Equatable {
             return "Plaid says \(institutionName) permission was revoked. Reconnect this item to restore access."
         case .newAccountsAvailable:
             return "\(institutionName) has newly available accounts. Update this item to choose what VaultPeek can access."
-        case .connected, .loginRepaired, .loginRequired, .error, nil:
+        case .connected, .loginRepaired, .loginRequired, .providerOutage, .error, nil:
             return loginRecoveryDetailLabel(institutionName: institutionName)
         }
     }

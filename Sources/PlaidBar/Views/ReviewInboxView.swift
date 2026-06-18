@@ -408,6 +408,10 @@ private struct ReviewInboxRow: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
 
+                    if item.isNLSuggestedCategory {
+                        suggestedBadge
+                    }
+
                     Text(Formatters.displayTransactionDate(item.transaction.date))
                         .microText()
                         .foregroundStyle(.tertiary)
@@ -417,6 +421,24 @@ private struct ReviewInboxRow: View {
                 reasonChips
             }
         }
+    }
+
+    // On-device NL inference badge (AND-507). Pairs a sparkles icon AND the
+    // word "Suggested" with the tint, so meaning is never carried by color
+    // alone (accessibility rule). Shown only when the category was backfilled
+    // by the zero-setup NL tier rather than the user or Plaid.
+    private var suggestedBadge: some View {
+        Label("Suggested", systemImage: "sparkles")
+            .font(.caption2.weight(.semibold))
+            .labelStyle(.titleAndIcon)
+            .foregroundStyle(SemanticColors.brand)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(SemanticColors.brand.opacity(0.10), in: Capsule())
+            .overlay {
+                Capsule().stroke(SemanticColors.brand.opacity(0.18), lineWidth: 1)
+            }
+            .accessibilityLabel("Category suggested on device")
     }
 
     private var reasonChips: some View {
@@ -586,7 +608,12 @@ private struct ReviewInboxRow: View {
 
     private var accessibilitySummary: String {
         let reasons = item.reasonCodes.map(\.displayName).joined(separator: ", ")
-        let category = item.effectiveCategory?.displayName ?? "Uncategorized"
+        // The row Button's label overrides the child "Suggested" badge, so fold
+        // the on-device provenance into the spoken category — otherwise VoiceOver
+        // announces an NL suggestion identically to a Plaid/user category even
+        // though the visual UI shows the "Suggested" badge.
+        let baseCategory = item.effectiveCategory?.displayName ?? "Uncategorized"
+        let category = item.isNLSuggestedCategory ? "\(baseCategory) (suggested on device)" : baseCategory
         let amount = Formatters.currency(item.transaction.displayAmount, format: .full)
         return "\(item.effectiveMerchantName), \(amount), \(category), reasons: \(reasons)"
     }

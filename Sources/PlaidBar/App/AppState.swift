@@ -20,11 +20,14 @@ final class AppState {
         static let showBalanceInMenuBar = "showBalanceInMenuBar"
         static let menuBarSummaryMode = "menuBarSummaryMode"
         static let menuBarIconStyle = "menuBarIconStyle"
+        static let summonHotkeyEnabled = "summonHotkeyEnabled"
+        static let menuBarShowSignalMeter = "menuBarShowSignalMeter"
         static let balanceFormat = "balanceFormat"
         static let creditUtilizationThreshold = "creditUtilizationThreshold"
         static let refreshInterval = "refreshInterval"
         static let automaticRefreshPolicy = AutomaticRefreshPolicy.storageKey
         static let balanceHistory = "balanceHistory"
+        static let accountBalanceLedger = "accountBalanceLedger"
         static let notificationsEnabled = "notificationsEnabled"
         static let largeTransactionThreshold = "largeTransactionThreshold"
         static let lowBalanceThreshold = "lowBalanceThreshold"
@@ -37,6 +40,8 @@ final class AppState {
         static let notifyRecurringChargeChanged = "notifyRecurringChargeChanged"
         static let notifyRecurringChargeDueSoon = "notifyRecurringChargeDueSoon"
         static let notifyBrokenConnection = "notifyBrokenConnection"
+        static let notifyWatchlist = "notifyWatchlist"
+        static let watchlistTargets = "watchlistTargets"
         static let privacyMaskEnabled = "privacyMaskEnabled"
         static let appLockEnabled = UserDefaultsAppLockSettingsStore.defaultStorageKey
         static let appLockNotificationPrivacyMode = "appLock.notificationPrivacyMode"
@@ -143,6 +148,12 @@ final class AppState {
     var isDemoStatusRecoveryScenario = false
     var lastSyncDate: Date?
     var balanceHistory: [BalanceSnapshot] = []
+    /// Per-account "what the bank said" ledger (AND-490). Each refresh appends one
+    /// dated row per account; the Time Machine surface reads from it.
+    var accountBalanceLedger = AccountBalanceLedger()
+    /// Display-safe rows describing prior-day balances Plaid restated on the most
+    /// recent sync (AND-490). Empty when no history was rewritten.
+    var syncHistoryDiffRows: [SyncHistoryDiff.Row] = []
     var notificationPermissionState: NotificationPermissionState = .notDetermined
     var weeklyReviewState: WeeklyReviewState = .empty {
         didSet {
@@ -168,6 +179,16 @@ final class AppState {
         didSet {
             guard menuBarIconStyle != oldValue else { return }
             UserDefaults.standard.set(menuBarIconStyle.rawValue, forKey: Keys.menuBarIconStyle)
+        }
+    }
+    /// Whether the healthy menu-bar glyph is replaced by the live signal meter
+    /// (AND-485). Only the healthy state is affected; the degraded glyph ladder
+    /// (error/login/offline/warning) always wins so a problem is never hidden
+    /// behind a meter. Persisted only; the render branch lives in MenuBarLabel.
+    var menuBarShowSignalMeter: Bool = false {
+        didSet {
+            guard menuBarShowSignalMeter != oldValue else { return }
+            UserDefaults.standard.set(menuBarShowSignalMeter, forKey: Keys.menuBarShowSignalMeter)
         }
     }
     var balanceFormat: CurrencyFormat = .abbreviated {
@@ -293,6 +314,57 @@ final class AppState {
             UserDefaults.standard.set(notifyBrokenConnection, forKey: Keys.notifyBrokenConnection)
         }
     }
+    /// Master gate for watchlist spend nudges (AND-501).
+    var notifyWatchlist: Bool = true {
+        didSet {
+            guard notifyWatchlist != oldValue else { return }
+            UserDefaults.standard.set(notifyWatchlist, forKey: Keys.notifyWatchlist)
+        }
+    }
+    /// User-defined per-merchant / per-category spend watches (AND-501).
+    /// Persisted app-side as Codable JSON in UserDefaults — a lightweight nudge
+    /// list, deliberately not server-side envelope budgeting.
+    var watchlistTargets: [WatchlistTarget] = [] {
+        didSet {
+            guard watchlistTargets != oldValue, !isLoadingDemoWatchlist else { return }
+            persistWatchlistTargets()
+        }
+    }
+
+    /// Guards `watchlistTargets.didSet` while demo fixtures are loaded so the
+    /// demo nudges are shown in-memory only and never overwrite the user's real,
+    /// persisted watchlist (demo exit clears accounts/transactions but does not
+    /// restore preferences, so a persisted demo list would survive — Codex P2).
+    private var isLoadingDemoWatchlist = false
+
+    func addWatchlistTarget(_ target: WatchlistTarget) {
+        watchlistTargets.append(target)
+    }
+
+    func removeWatchlistTarget(id: WatchlistTarget.ID) {
+        watchlistTargets.removeAll { $0.id == id }
+    }
+
+    private func persistWatchlistTargets() {
+        guard let data = try? JSONEncoder().encode(watchlistTargets) else { return }
+        UserDefaults.standard.set(data, forKey: Keys.watchlistTargets)
+    }
+
+    /// Restores the persisted real watchlist, or empties it when none was saved.
+    /// Called on launch and on demo exit; the in-memory demo nudges (loaded with
+    /// `isLoadingDemoWatchlist` set, so never persisted) must not linger once the
+    /// user leaves demo mode, so the no-data branch clears rather than no-ops.
+    private func loadWatchlistTargets(defaults: UserDefaults) {
+        guard let data = defaults.data(forKey: Keys.watchlistTargets),
+              let decoded = try? JSONDecoder().decode([WatchlistTarget].self, from: data)
+        else {
+            isLoadingDemoWatchlist = true
+            watchlistTargets = []
+            isLoadingDemoWatchlist = false
+            return
+        }
+        watchlistTargets = decoded
+    }
 
     var appLockPreferences = AppLockPreferences() {
         didSet {
@@ -369,6 +441,19 @@ final class AppState {
         }
     }
 
+    /// Whether the global summon hotkey (⇧⌘V) is registered (AND-487). The
+    /// register/unregister side effect is owned by the always-mounted label
+    /// scene in `PlaidBarApp`, which observes this flag; here we only persist it.
+    /// Opt-in (defaults `false`): ⇧⌘V is "Paste and Match Style" in many apps, so
+    /// claiming it globally on a fresh install would hijack that editing shortcut
+    /// before the user ever asked for the summon hotkey.
+    var summonHotkeyEnabled: Bool = false {
+        didSet {
+            guard summonHotkeyEnabled != oldValue else { return }
+            UserDefaults.standard.set(summonHotkeyEnabled, forKey: Keys.summonHotkeyEnabled)
+        }
+    }
+
     // MARK: - Services
     private let serverClient = ServerClient()
     /// Fetches + caches merchant logos via the local server's authed proxy.
@@ -435,6 +520,12 @@ final class AppState {
            let iconStyle = MenuBarIconStyle(rawValue: style) {
             menuBarIconStyle = iconStyle
         }
+        if defaults.object(forKey: Keys.summonHotkeyEnabled) != nil {
+            summonHotkeyEnabled = defaults.bool(forKey: Keys.summonHotkeyEnabled)
+        }
+        if defaults.object(forKey: Keys.menuBarShowSignalMeter) != nil {
+            menuBarShowSignalMeter = defaults.bool(forKey: Keys.menuBarShowSignalMeter)
+        }
         if let format = defaults.string(forKey: Keys.balanceFormat),
            let f = CurrencyFormat(rawValue: format) {
             balanceFormat = f
@@ -482,6 +573,10 @@ final class AppState {
         if defaults.object(forKey: Keys.notifyBrokenConnection) != nil {
             notifyBrokenConnection = defaults.bool(forKey: Keys.notifyBrokenConnection)
         }
+        if defaults.object(forKey: Keys.notifyWatchlist) != nil {
+            notifyWatchlist = defaults.bool(forKey: Keys.notifyWatchlist)
+        }
+        loadWatchlistTargets(defaults: defaults)
         loadAppLockPreferences(defaults: defaults)
         loadLocalAISettings(defaults: defaults)
         // Balance history
@@ -731,13 +826,20 @@ final class AppState {
     }
 
     var menuBarText: String {
+        // Safe-to-spend needs recurring + cashflow inputs that the pure Core
+        // text() does not take, so compute it here (only for that mode, to keep
+        // the common render path cheap) and feed the amount in.
+        let safeToSpend: Double? = menuBarSummaryMode == .safeToSpend
+            ? currentSafeToSpendAmount()
+            : nil
         let rawText = MenuBarSummary.text(
             mode: menuBarSummaryMode,
             accounts: accounts,
             transactions: transactions,
             currencyFormat: balanceFormat,
             isInitialLoad: isBootLoadInFlight,
-            privacyMaskEnabled: shouldMaskFinancialValues
+            privacyMaskEnabled: shouldMaskFinancialValues,
+            precomputedSafeToSpend: safeToSpend
         )
         return appLockPreferences.menuBarText(
             currentText: rawText,
@@ -760,6 +862,25 @@ final class AppState {
             financialAttentionText: shouldMaskFinancialValues ? nil : firstMenuBarAttentionText,
             iconStyle: menuBarIconStyle
         )
+    }
+
+    /// The live signal-meter glyph model (AND-485), or `nil` when the meter must
+    /// not draw. The degraded glyph ladder in `menuBarStatusPresentation` always
+    /// wins: the meter renders only when the status is showing the healthy glyph
+    /// (no error/login/offline/warning), so a problem is never hidden behind a
+    /// meter. Also suppressed under the privacy mask and when there is no signal.
+    var menuBarSignalGlyph: SignalGlyphMeter.SignalGlyphRenderModel? {
+        guard menuBarShowSignalMeter else { return nil }
+        guard !shouldMaskFinancialValues else { return nil }
+        // Only override the healthy glyph; defer to the degraded ladder otherwise.
+        let presentation = menuBarStatusPresentation
+        guard presentation.symbolName == menuBarIconStyle.healthySymbolName else { return nil }
+        let model = SignalGlyphMeter.utilization(
+            from: accounts,
+            thresholdPercent: creditUtilizationThreshold,
+            isStale: isSyncStale
+        )
+        return model.isEmpty ? nil : model
     }
 
     /// First attention row that actually carries menu-bar text. A higher-priority
@@ -793,8 +914,14 @@ final class AppState {
             return "VaultPeek - Total cash: \(menuBarText).\(reviewText) \(status)\(review)"
         case .creditUtilization:
             return "VaultPeek - Credit utilization: \(menuBarText).\(reviewText) \(status)\(review)"
+        case .highestUtilization:
+            return "VaultPeek - Highest card utilization: \(menuBarText).\(reviewText) \(status)\(review)"
         case .recentSpend:
             return "VaultPeek - Recent spend: \(menuBarText).\(reviewText) \(status)\(review)"
+        case .todaySpend:
+            return "VaultPeek - Today's spend: \(menuBarText).\(reviewText) \(status)\(review)"
+        case .safeToSpend:
+            return "VaultPeek - Safe to spend: \(menuBarText).\(reviewText) \(status)\(review)"
         case .iconOnly:
             return "VaultPeek.\(reviewText) \(status)\(review)"
         }
@@ -819,8 +946,14 @@ final class AppState {
             return "VaultPeek total cash \(menuBarText). \(reviewText)\(status)\(review)"
         case .creditUtilization:
             return "VaultPeek credit utilization \(menuBarText). \(reviewText)\(status)\(review)"
+        case .highestUtilization:
+            return "VaultPeek highest card utilization \(menuBarText). \(reviewText)\(status)\(review)"
         case .recentSpend:
             return "VaultPeek recent spend \(menuBarText). \(reviewText)\(status)\(review)"
+        case .todaySpend:
+            return "VaultPeek today's spend \(menuBarText). \(reviewText)\(status)\(review)"
+        case .safeToSpend:
+            return "VaultPeek safe to spend \(menuBarText). \(reviewText)\(status)\(review)"
         case .iconOnly:
             return "VaultPeek. \(reviewText)\(status)\(review)"
         }
@@ -923,6 +1056,22 @@ final class AppState {
 
     var erroredItemCount: Int {
         itemStatuses.filter { $0.status == .error }.count
+    }
+
+    /// Per-number completeness badge (AND-489): nil when data is complete and
+    /// fresh, otherwise a `.stale` or `.partial` verdict mounted under derived
+    /// numbers (net worth, utilization, cashflow, safe-to-spend).
+    var dataIntegrityBadge: DataIntegrityBadge.Result? {
+        DataIntegrityBadge.evaluate(
+            isSyncStale: isSyncStale,
+            isBootLoadInFlight: isBootLoadInFlight,
+            itemCount: statusItemCount,
+            syncedItemCount: serverSyncedItemCount ?? statusItemCount,
+            degradedItemCount: itemStatuses.filter { $0.status.isDegraded }.count,
+            needsSyncItemCount: itemStatuses.filter(\.needsSync).count,
+            lastSync: lastSyncDate,
+            lastSyncRelative: lastSyncRelative
+        )
     }
 
     var degradedItemIds: Set<String> {
@@ -1778,6 +1927,10 @@ final class AppState {
             // synthetic 60-day series. Restore persisted real history when it
             // exists so the first real snapshot cannot persist a demo trend.
             loadPersistedBalanceHistory()
+            // Same for the watchlist: loadDemoData() seeded demo nudges in memory
+            // only; restore the user's real saved watchlist (or empty) so demo
+            // Starbucks/Shopping targets never fire against real data.
+            loadWatchlistTargets(defaults: .standard)
             // Fall through into the real add-account flow: the demo readiness
             // card advertises "Connect Bank", so the first click must continue
             // into the server check + Plaid Link handoff (or surface the precise
@@ -2033,6 +2186,14 @@ final class AppState {
 
         balanceHistory = []
         UserDefaults.standard.removeObject(forKey: Keys.balanceHistory)
+        // The per-account ledger holds bank IDs and balances and feeds the Time
+        // Machine surface; the reset contract must wipe it (in memory and on
+        // disk) so old data can't reappear after relaunch/reconnect (Codex P1).
+        // Clear both the active namespaced key and the legacy global key.
+        accountBalanceLedger = AccountBalanceLedger()
+        syncHistoryDiffRows = []
+        UserDefaults.standard.removeObject(forKey: accountBalanceLedgerDefaultsKey)
+        UserDefaults.standard.removeObject(forKey: Keys.accountBalanceLedger)
         await clearGlanceSnapshot()
         UserDefaults.standard.removeObject(forKey: Keys.lastTransactionCacheContext)
         UserDefaults.standard.removeObject(forKey: Keys.weeklyReviewState)
@@ -2081,6 +2242,7 @@ final class AppState {
             staleSync: notifyBrokenConnection,
             loginRequired: notifyBrokenConnection,
             itemError: notifyBrokenConnection,
+            watchlist: notifyWatchlist,
             largeTransactionThreshold: largeTransactionThreshold,
             lowBalanceThreshold: lowBalanceThreshold,
             creditUtilizationThreshold: creditUtilizationThreshold
@@ -2090,6 +2252,7 @@ final class AppState {
             accounts: accounts,
             recurringTransactions: recurringTransactions,
             itemStatuses: itemStatuses,
+            watchlistTargets: watchlistTargets,
             isSyncStale: isSyncStale,
             config: config
         )
@@ -2938,6 +3101,27 @@ final class AppState {
         } else {
             balanceHistory = []
         }
+
+        if let data = UserDefaults.standard.data(forKey: accountBalanceLedgerDefaultsKey),
+           let ledger = try? JSONDecoder().decode(AccountBalanceLedger.self, from: data) {
+            accountBalanceLedger = ledger
+        } else {
+            accountBalanceLedger = AccountBalanceLedger()
+        }
+    }
+
+    /// Per-account ledger key, namespaced by the active Plaid environment and
+    /// storage directory exactly like `setupCompletionDefaultsKey`. The ledger
+    /// holds per-account IDs and balances, so a global key would let Time Machine
+    /// surface the previous context's data after switching production/sandbox or
+    /// changing `PLAIDBAR_DATA_DIR` (Codex P1). The legacy global
+    /// `Keys.accountBalanceLedger` is only ever cleared, never read, so stale
+    /// pre-namespacing data cannot leak across contexts.
+    private var accountBalanceLedgerDefaultsKey: String {
+        let environment = setupCompletionEnvironment.rawValue
+        let path = activeStorageDirectoryURL.standardizedFileURL.path
+        let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? path
+        return "\(Keys.accountBalanceLedger).context.\(environment).\(encodedPath)"
     }
 
     private func recordBalanceSnapshot() {
@@ -2949,7 +3133,49 @@ final class AppState {
         if let data = try? JSONEncoder().encode(balanceHistory) {
             UserDefaults.standard.set(data, forKey: Keys.balanceHistory)
         }
+        recordAccountBalanceLedger()
         writeGlanceSnapshot()
+    }
+
+    /// Appends today's per-account bank-reported balances to the ledger and
+    /// recomputes the sync-history diff against the prior ledger (AND-490).
+    private func recordAccountBalanceLedger() {
+        // Only ledger accounts the bank actually reported on THIS refresh. When a
+        // partial refresh omits a degraded item (login-required / provider
+        // outage), `accountsPreservingUnavailableItems` keeps that item's cached
+        // accounts in `accounts`; stamping them with today's date would make Time
+        // Machine show a stale cached balance as "what the bank said" today and
+        // undermine the ledger's data-integrity purpose (Codex P2).
+        let reportedAccounts = bankReportedAccountsForLedger()
+        guard !reportedAccounts.isEmpty else { return }
+        let previous = accountBalanceLedger
+        let next = previous.appending(accounts: reportedAccounts)
+        let nameByAccountId = Dictionary(
+            reportedAccounts.map { ($0.id, $0.name) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        syncHistoryDiffRows = SyncHistoryDiff.evaluate(
+            previousLedger: previous,
+            nextLedger: next,
+            displayName: { nameByAccountId[$0] }
+        )
+        accountBalanceLedger = next
+        if let data = try? JSONEncoder().encode(next) {
+            UserDefaults.standard.set(data, forKey: accountBalanceLedgerDefaultsKey)
+        }
+    }
+
+    /// Accounts whose balances were genuinely reported by the bank on the current
+    /// refresh — i.e. accounts that do NOT belong to a degraded item preserved
+    /// from cache. When item statuses are unknown (empty), every account is
+    /// treated as reported, matching the pre-AND-490 behavior.
+    private func bankReportedAccountsForLedger() -> [AccountDTO] {
+        guard !itemStatuses.isEmpty else { return accounts }
+        let degradedItemIds = Set(
+            itemStatuses.filter { $0.status.isDegraded }.map(\.id)
+        )
+        guard !degradedItemIds.isEmpty else { return accounts }
+        return accounts.filter { !degradedItemIds.contains($0.itemId) }
     }
 
     private func writeGlanceSnapshot(updatedAt: Date = Date()) {
@@ -3116,6 +3342,29 @@ final class AppState {
         transactionRules = []
         categoryBudgets = [:]
         balanceHistory = DemoFixtures.balanceHistory()
+        // Seed demo watchlist nudges (AND-501) so the Settings Watchlists section
+        // is populated and the evaluator fires against the demo transactions.
+        // Loaded in-memory only — the guard suppresses `didSet` persistence so a
+        // demo session never overwrites the user's real, saved watchlist.
+        isLoadingDemoWatchlist = true
+        watchlistTargets = DemoFixtures.watchlistTargets()
+        isLoadingDemoWatchlist = false
+
+        // Balance Time Machine (AND-490): seed a multi-day per-account ledger and
+        // a post-sync diff so the Time Machine list and the "history changed"
+        // badge are both visible without Plaid.
+        let demoLedger = DemoFixtures.accountBalanceLedger()
+        let demoPostSyncLedger = DemoFixtures.postSyncAccountBalanceLedger()
+        accountBalanceLedger = demoPostSyncLedger
+        let demoNameByAccountId = Dictionary(
+            DemoFixtures.accounts.map { ($0.id, $0.name) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        syncHistoryDiffRows = SyncHistoryDiff.evaluate(
+            previousLedger: demoLedger,
+            nextLedger: demoPostSyncLedger,
+            displayName: { demoNameByAccountId[$0] }
+        )
 
         isSetupComplete = true
         serverConnected = true
@@ -3126,16 +3375,15 @@ final class AppState {
         serverStoragePath = LocalDataStore.displayPath
         serverSyncReady = true
         serverSyncedItemCount = isDemoStatusRecoveryScenario ? 1 : serverItemCount
-        let recoveredSync = Calendar.current.date(byAdding: .minute, value: -18, to: Date()) ?? Date()
-        let needsLoginSync = Calendar.current.date(byAdding: .day, value: -3, to: Date()) ?? Date()
-        itemStatuses = isDemoStatusRecoveryScenario ? [
-            ItemStatus(id: "demo_chase", institutionName: "Chase", status: .connected, lastSync: recoveredSync),
-            ItemStatus(id: "demo_amex_item", institutionName: "American Express", status: .loginRequired, lastSync: needsLoginSync),
-        ] : [
+        // Partial-sync statuses (one connected + one degraded) come from
+        // DemoFixtures so the AND-489 data-integrity badge renders `.partial`
+        // in the recovery scenario; the happy path stays all-connected.
+        let recoveryStatuses = DemoFixtures.partialSyncItemStatuses()
+        itemStatuses = isDemoStatusRecoveryScenario ? recoveryStatuses : [
             ItemStatus(id: "demo_chase", institutionName: "Chase", status: .connected, lastSync: Date()),
             ItemStatus(id: "demo_amex_item", institutionName: "American Express", status: .connected, lastSync: Date()),
         ]
-        lastSyncDate = isDemoStatusRecoveryScenario ? recoveredSync : Date()
+        lastSyncDate = isDemoStatusRecoveryScenario ? recoveryStatuses.first?.lastSync ?? Date() : Date()
         writeGlanceSnapshot(updatedAt: lastSyncDate ?? Date())
     }
 

@@ -19,6 +19,17 @@ public struct RecurringPaymentsSurfacePresentation: Sendable, Hashable {
         public let accessibilityLabel: String
         public let needsAttention: Bool
         public let isLowConfidence: Bool
+        /// True for low-cost, long-running subscriptions the user likely forgot
+        /// about (AND-497). Drives the "You may have forgotten this" callout.
+        public let isForgotten: Bool
+        /// Link text for the cancel-help action, e.g. "How to cancel".
+        public let cancelLinkText: String
+        /// Destination for the cancel-help action: the merchant's own page when
+        /// known, otherwise a generic "how to cancel <merchant>" search.
+        public let cancelURL: URL
+        /// True when `cancelURL` points at the merchant's own cancel page rather
+        /// than a generic web search.
+        public let cancelIsSpecific: Bool
 
         public init(item: RecurringObligationsPresentation.Item) {
             id = item.id
@@ -34,6 +45,12 @@ public struct RecurringPaymentsSurfacePresentation: Sendable, Hashable {
             flagExplanations = Self.flagExplanations(for: item)
             needsAttention = item.needsAttention
             isLowConfidence = item.confidenceLevel == .low
+            isForgotten = item.isForgotten
+
+            let guidance = SubscriptionCancelGuidance.guidance(for: item.merchantName)
+            cancelLinkText = guidance.linkText
+            cancelURL = guidance.url
+            cancelIsSpecific = guidance.isSpecific
 
             var parts = [
                 merchantName,
@@ -50,6 +67,10 @@ public struct RecurringPaymentsSurfacePresentation: Sendable, Hashable {
 
         private static func flagExplanations(for item: RecurringObligationsPresentation.Item) -> [String] {
             var explanations: [String] = []
+            // Forgotten first so it leads the row, matching the surface ordering.
+            if item.isForgotten {
+                explanations.append("You may have forgotten this subscription — it's small and has charged for a while.")
+            }
             if item.hasPriceIncrease {
                 explanations.append("Latest charge is higher than the prior pattern.")
             }
@@ -70,6 +91,12 @@ public struct RecurringPaymentsSurfacePresentation: Sendable, Hashable {
     public let emptyDetail: String
     public let attentionCount: Int
     public let lowConfidenceCount: Int
+    /// Number of rows flagged as likely-forgotten subscriptions (AND-497).
+    public let forgottenCount: Int
+    /// Header callout shown when at least one subscription looks forgotten, or
+    /// nil when none do. Paired with an SF Symbol in the view so it never reads
+    /// via color alone.
+    public let forgottenCalloutText: String?
 
     public init(
         rows: [Row],
@@ -78,7 +105,9 @@ public struct RecurringPaymentsSurfacePresentation: Sendable, Hashable {
         emptyTitle: String,
         emptyDetail: String,
         attentionCount: Int,
-        lowConfidenceCount: Int
+        lowConfidenceCount: Int,
+        forgottenCount: Int = 0,
+        forgottenCalloutText: String? = nil
     ) {
         self.rows = rows
         self.estimatedMonthlyTotalText = estimatedMonthlyTotalText
@@ -87,6 +116,8 @@ public struct RecurringPaymentsSurfacePresentation: Sendable, Hashable {
         self.emptyDetail = emptyDetail
         self.attentionCount = attentionCount
         self.lowConfidenceCount = lowConfidenceCount
+        self.forgottenCount = forgottenCount
+        self.forgottenCalloutText = forgottenCalloutText
     }
 
     public var isEmpty: Bool { rows.isEmpty }
@@ -103,6 +134,7 @@ public struct RecurringPaymentsSurfacePresentation: Sendable, Hashable {
         )
         let rows = obligations.items.map(Row.init(item:))
         let lowConfidenceCount = rows.count(where: \.isLowConfidence)
+        let forgottenCount = obligations.forgottenCount
 
         return RecurringPaymentsSurfacePresentation(
             rows: rows,
@@ -110,19 +142,29 @@ public struct RecurringPaymentsSurfacePresentation: Sendable, Hashable {
             summaryText: Self.summaryText(
                 rowCount: rows.count,
                 attentionCount: obligations.attentionCount,
-                lowConfidenceCount: lowConfidenceCount
+                lowConfidenceCount: lowConfidenceCount,
+                forgottenCount: forgottenCount
             ),
             emptyTitle: "No recurring payments detected",
             emptyDetail: "VaultPeek will list subscriptions here after it sees a repeated merchant pattern in synced local transactions.",
             attentionCount: obligations.attentionCount,
-            lowConfidenceCount: lowConfidenceCount
+            lowConfidenceCount: lowConfidenceCount,
+            forgottenCount: forgottenCount,
+            forgottenCalloutText: Self.forgottenCalloutText(count: forgottenCount)
         )
+    }
+
+    private static func forgottenCalloutText(count: Int) -> String? {
+        guard count > 0 else { return nil }
+        let noun = count == 1 ? "subscription" : "subscriptions"
+        return "You may have forgotten \(count) \(noun) — small charges that have run for a while."
     }
 
     private static func summaryText(
         rowCount: Int,
         attentionCount: Int,
-        lowConfidenceCount: Int
+        lowConfidenceCount: Int,
+        forgottenCount: Int
     ) -> String {
         guard rowCount > 0 else {
             return "No recurring payments detected yet."
@@ -131,6 +173,9 @@ public struct RecurringPaymentsSurfacePresentation: Sendable, Hashable {
         var parts = [
             "\(rowCount) detected \(rowCount == 1 ? "stream" : "streams")",
         ]
+        if forgottenCount > 0 {
+            parts.append("\(forgottenCount) maybe forgotten")
+        }
         if attentionCount > 0 {
             parts.append("\(attentionCount) flagged")
         }

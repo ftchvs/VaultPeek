@@ -401,6 +401,7 @@ struct GeneralSettingsView: View {
     @State private var isShowingLocalAIProbeDetails = false
     @State private var resetResultMessage: String?
     @State private var resetErrorMessage: String?
+    @State private var exportErrorMessage: String?
 
     var body: some View {
         @Bindable var state = appState
@@ -417,16 +418,41 @@ struct GeneralSettingsView: View {
                 // states keep their distinct glyph ladder. Works with Icon only.
                 Picker("Menu bar icon", selection: $state.menuBarIconStyle) {
                     ForEach(MenuBarIconStyle.allCases) { style in
-                        Label(style.displayName, systemImage: style.healthySymbolName).tag(style)
+                        // The Vault style has no SF Symbol; show its code-drawn
+                        // template glyph so the picker row matches the menu bar.
+                        if style.usesCustomGlyph {
+                            Label {
+                                Text(style.displayName)
+                            } icon: {
+                                Image(nsImage: VaultMenuBarGlyph.image)
+                            }
+                            .tag(style)
+                        } else {
+                            Label(style.displayName, systemImage: style.healthySymbolName).tag(style)
+                        }
                     }
                 }
+                .disabled(appState.menuBarShowSignalMeter)
+
+                // AND-485: replace the healthy glyph with a live signal meter
+                // (highest credit-card utilization). Only the healthy state is
+                // affected; error/login/offline states keep their distinct glyph,
+                // so a problem is never hidden behind a meter.
+                Toggle("Show live signal meter", isOn: $state.menuBarShowSignalMeter)
+                Text("Replaces the menu bar icon with a small meter of your highest credit-card utilization. Warning and error states still show their own icon.")
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
 
                 Picker("Balance format", selection: $state.balanceFormat) {
                     Text("$12,450.32").tag(CurrencyFormat.full)
                     Text("$12.4K").tag(CurrencyFormat.abbreviated)
                     Text("$12,450").tag(CurrencyFormat.compact)
                 }
-                .disabled(appState.menuBarSummaryMode == .creditUtilization || appState.menuBarSummaryMode == .iconOnly)
+                .disabled(
+                    appState.menuBarSummaryMode == .creditUtilization
+                        || appState.menuBarSummaryMode == .highestUtilization
+                        || appState.menuBarSummaryMode == .iconOnly
+                )
 
                 Picker("Refresh", selection: $state.automaticRefreshPolicy) {
                     ForEach(AutomaticRefreshPolicy.allCases, id: \.self) { policy in
@@ -459,6 +485,13 @@ struct GeneralSettingsView: View {
                 .help("Credit cards above this utilization threshold show warning colors")
 
                 Toggle("Launch at login", isOn: $state.launchAtLogin)
+
+                // AND-487: a global hotkey that summons VaultPeek from any app.
+                // The chord is fixed for v1; only the on/off switch is exposed.
+                Toggle("Summon with \(SummonHotkeyConfiguration.summonDefault.displayString)", isOn: $state.summonHotkeyEnabled)
+                Text("Press \(SummonHotkeyConfiguration.summonDefault.displayString) from any app to bring VaultPeek to the front.")
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
 
                 // AND-384: pop the dashboard out of the menu bar into a
                 // floating desktop window the user can drag anywhere and that
@@ -595,6 +628,48 @@ struct GeneralSettingsView: View {
                     .foregroundStyle(.secondary)
                 }
             }
+
+            Section("Export & Backup") {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    Text("Export a portable copy of your accounts, transactions, and balance history. VaultPeek never uploads these files — they are written only to the folder you choose. Pick a local folder to keep them on this Mac; a synced location (iCloud Drive, Dropbox, a network share) will copy them off-device.")
+                        .detailText()
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(alignment: .center, spacing: Spacing.sm) {
+                        Menu {
+                            Button("Export CSV…") { exportCSV() }
+                            Button("Export JSON…") { exportJSON() }
+                        } label: {
+                            Label("Export…", systemImage: "square.and.arrow.up")
+                        }
+                        .menuStyle(.borderlessButton)
+                        .fixedSize()
+                        .disabled(isExportDisabled)
+                    }
+
+                    if appState.shouldMaskFinancialValues {
+                        Label(
+                            appState.isContentLocked
+                                ? "Export is disabled while App Lock is locked, so real balances, accounts, and transactions are never written to disk. Unlock VaultPeek to export."
+                                : "Export is disabled while Privacy Mask is on, so real balances are never written to disk. Turn off Privacy Mask to export.",
+                            systemImage: appState.isContentLocked ? "lock" : "eye.slash"
+                        )
+                        .detailText()
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    LabeledContent("Backup file") {
+                        Text(documentedBackupPathText)
+                            .font(.system(.caption, design: .monospaced))
+                            .multilineTextAlignment(.trailing)
+                            .textSelection(.enabled)
+                    }
+                }
+            }
+
+            Section("Where your data lives") {
+                LocalTrustReceiptView(receipt: whereYourDataLivesReceipt)
+            }
         }
         .formStyle(.grouped)
         .toggleStyle(.switch)
@@ -624,12 +699,99 @@ struct GeneralSettingsView: View {
         } message: {
             Text(resetErrorMessage ?? "")
         }
+        .alert("Export Failed", isPresented: Binding(
+            get: { exportErrorMessage != nil },
+            set: { if !$0 { exportErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(exportErrorMessage ?? "")
+        }
     }
 
     private func revealStorageDirectory() {
         let url = appState.activeStorageDirectoryURL
         try? LocalDataStore.prepareStorageDirectory(at: url)
         NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    // MARK: - Export & Backup (AND-492)
+
+    private var isExportDisabled: Bool {
+        // Gate on the effective mask state, not just the manual Privacy Mask
+        // toggle: `shouldMaskFinancialValues` is also true while App Lock is
+        // active. Settings is a separate scene reachable from the status-item
+        // menu while the dashboard is locked, so without this a locked session
+        // (Privacy Mask off) could still write the full accounts/transactions/
+        // balances export to disk, bypassing App Lock (Codex P1).
+        appState.shouldMaskFinancialValues
+    }
+
+    /// Documented backup file path, e.g. `~/.vaultpeek/plaidbar-sandbox.sqlite`.
+    /// The SQLite store is per-environment; fall back to the generic filename
+    /// when no environment is connected (demo mode).
+    private var documentedBackupPathText: String {
+        let directory = appState.activeStorageDirectoryDisplayText
+        let filename: String
+        if let environment = appState.serverEnvironment {
+            filename = LocalDataStore.sqliteFilename(for: environment)
+        } else {
+            filename = "plaidbar.sqlite"
+        }
+        let trimmed = directory.hasSuffix("/") ? directory : directory + "/"
+        return trimmed + filename
+    }
+
+    private func exportCSV() {
+        guard !isExportDisabled else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.prompt = "Export"
+        panel.message = "Choose a folder for the exported CSV files."
+        guard panel.runModal() == .OK, let directory = panel.url else { return }
+
+        let documents: [(name: String, contents: String)] = [
+            ("accounts.csv", DataExportBuilder.accountsCSV(appState.accounts)),
+            ("transactions.csv", DataExportBuilder.transactionsCSV(appState.transactions)),
+            ("balance-history.csv", DataExportBuilder.balanceHistoryCSV(appState.balanceHistory)),
+        ]
+        // Surface write failures (unwritable/unavailable folder, full disk)
+        // instead of dropping them with `try?` and leaving the user believing a
+        // backup exists when one or more files were never written (Codex P2).
+        do {
+            for document in documents {
+                let url = directory.appendingPathComponent(document.name)
+                try Data(document.contents.utf8).write(to: url, options: [.atomic])
+            }
+        } catch {
+            exportErrorMessage = "Could not write the CSV export to \(directory.path): \(error.localizedDescription)"
+        }
+    }
+
+    private func exportJSON() {
+        guard !isExportDisabled else { return }
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "vaultpeek-export.json"
+        panel.prompt = "Export"
+        panel.message = "Choose where to save the combined JSON backup."
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        // Surface encode/write failures instead of silently dropping them, so a
+        // failed JSON backup is never mistaken for a successful one (Codex P2).
+        do {
+            let data = try DataExportBuilder.combinedJSON(
+                accounts: appState.accounts,
+                transactions: appState.transactions,
+                balanceHistory: appState.balanceHistory,
+                exportedAt: Date(),
+                environment: appState.serverEnvironment?.rawValue
+            )
+            try data.write(to: url, options: [.atomic])
+        } catch {
+            exportErrorMessage = "Could not write the JSON export to \(url.path): \(error.localizedDescription)"
+        }
     }
 
     private func copyStoragePath() {
@@ -655,6 +817,10 @@ struct GeneralSettingsView: View {
 
     private var localTrustReceipt: LocalTrustReceipt {
         LocalTrustReceipt.settingsReceipt(storagePath: appState.activeStorageDirectoryDisplayText)
+    }
+
+    private var whereYourDataLivesReceipt: LocalTrustReceipt {
+        LocalTrustReceipt.whereYourDataLives(storagePath: appState.activeStorageDirectoryDisplayText)
     }
 
     private var localAIAvailabilityTint: Color {
@@ -824,6 +990,15 @@ private struct LocalTrustReceiptView: View {
             Text(receipt.footer)
                 .detailText()
                 .fixedSize(horizontal: false, vertical: true)
+
+            if let deepLink = receipt.deepLink, let url = URL(string: deepLink.urlString) {
+                Link(destination: url) {
+                    Label(deepLink.title, systemImage: deepLink.systemImage)
+                        .font(.caption.weight(.semibold))
+                }
+                .controlSize(.small)
+                .accessibilityLabel(deepLink.title)
+            }
         }
     }
 }
@@ -1131,6 +1306,44 @@ private struct PendingAccountRemoval: Identifiable {
 struct NotificationSettingsView: View {
     @Environment(AppState.self) private var appState
 
+    // Draft fields for adding a new watchlist target (AND-501).
+    @State private var newWatchKind: WatchlistTarget.Kind = .merchant
+    @State private var newWatchMerchant: String = ""
+    @State private var newWatchCategory: SpendingCategory = .shopping
+    @State private var newWatchThreshold: Double = 100
+
+    /// Categories a category-watch can actually fire on. Watchlist evaluation
+    /// sums `SpendingSummary.expenseTransactions`, which excludes income and
+    /// own-account transfers — so offering Income / Transfer In / Transfer Out
+    /// here would let the user save a watch that can never fire (Codex P2). Keep
+    /// this exclusion set in sync with `SpendingSummary.expenseTransactions`.
+    private var watchableCategories: [SpendingCategory] {
+        SpendingCategory.allCases.filter {
+            $0 != .income && $0 != .transfer && $0 != .transferOut
+        }
+    }
+
+    private var canAddWatchTarget: Bool {
+        guard newWatchThreshold > 0 else { return false }
+        if newWatchKind == .merchant {
+            return !newWatchMerchant.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        return true
+    }
+
+    private func addWatchTarget() {
+        let target: WatchlistTarget
+        switch newWatchKind {
+        case .merchant:
+            target = .merchant(newWatchMerchant, threshold: newWatchThreshold)
+        case .category:
+            target = .category(newWatchCategory, threshold: newWatchThreshold)
+        }
+        appState.addWatchlistTarget(target)
+        newWatchMerchant = ""
+        newWatchThreshold = 100
+    }
+
     private var permissionPresentation: NotificationPermissionPresentation {
         appState.notificationPermissionPresentation
     }
@@ -1248,6 +1461,8 @@ struct NotificationSettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
+            watchlistsSection(state: state)
+
             Section("Connection alerts") {
                 Toggle("Broken connection or stale sync", isOn: $state.notifyBrokenConnection)
                     .disabled(areNotificationControlsDisabled)
@@ -1261,6 +1476,114 @@ struct NotificationSettingsView: View {
         .toggleStyle(.switch)
         .task {
             await refreshPermissionStatus()
+        }
+    }
+
+    // Watchlists: per-merchant / per-category month-to-date spend nudges (AND-501).
+    @ViewBuilder
+    private func watchlistsSection(state: AppState) -> some View {
+        Section("Watchlists") {
+            Toggle("Spend nudges", isOn: Binding(
+                get: { appState.notifyWatchlist },
+                set: { appState.notifyWatchlist = $0 }
+            ))
+            .disabled(areNotificationControlsDisabled)
+
+            ForEach(appState.watchlistTargets) { target in
+                HStack(spacing: Spacing.sm) {
+                    Image(systemName: watchIcon(for: target))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 18)
+                    VStack(alignment: .leading, spacing: Spacing.xxs) {
+                        Text(target.label)
+                            .lineLimit(1)
+                        Text("\(target.kind.displayName) · over \(Formatters.currency(target.monthlyThreshold, format: .compact)) this month")
+                            .detailText()
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: Spacing.sm)
+                    Button {
+                        appState.removeWatchlistTarget(id: target.id)
+                    } label: {
+                        Image(systemName: "minus.circle")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Remove watchlist nudge")
+                    .accessibilityLabel("Remove \(target.label) watchlist nudge")
+                }
+            }
+
+            if appState.watchlistTargets.isEmpty {
+                Text("Add a merchant or category and a monthly amount to get a nudge when your month-to-date spend crosses it.")
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            // Add row.
+            Picker("Watch", selection: $newWatchKind) {
+                ForEach(WatchlistTarget.Kind.allCases, id: \.self) { kind in
+                    Text(kind.displayName).tag(kind)
+                }
+            }
+            .pickerStyle(.segmented)
+            .disabled(areNotificationControlsDisabled)
+
+            if newWatchKind == .merchant {
+                LabeledContent("Merchant") {
+                    TextField("Merchant name", text: $newWatchMerchant)
+                        .labelsHidden()
+                        .frame(width: 160)
+                        .textFieldStyle(.roundedBorder)
+                        .accessibilityLabel("Merchant name to watch")
+                }
+            } else {
+                LabeledContent("Category") {
+                    Picker("Category", selection: $newWatchCategory) {
+                        ForEach(watchableCategories, id: \.self) { category in
+                            Text(category.displayName).tag(category)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 160)
+                    .accessibilityLabel("Category to watch")
+                }
+            }
+
+            LabeledContent("Monthly threshold") {
+                HStack(spacing: Spacing.xs) {
+                    Text("$")
+                        .foregroundStyle(.secondary)
+                    TextField(
+                        "Monthly threshold",
+                        value: $newWatchThreshold,
+                        format: .number.precision(.fractionLength(0))
+                    )
+                    .labelsHidden()
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 80)
+                    .textFieldStyle(.roundedBorder)
+                    .accessibilityLabel("Monthly threshold in dollars")
+                }
+            }
+
+            Button {
+                addWatchTarget()
+            } label: {
+                Label("Add watch", systemImage: "plus.circle")
+            }
+            .buttonStyle(.borderless)
+            .disabled(areNotificationControlsDisabled || !canAddWatchTarget)
+
+            Text("You've spent $X at a merchant — or in a category — this month. Glance-only nudges, not budgets.")
+                .detailText()
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func watchIcon(for target: WatchlistTarget) -> String {
+        switch target.kind {
+        case .merchant: "bell.badge"
+        case .category: target.category?.iconName ?? "tag"
         }
     }
 

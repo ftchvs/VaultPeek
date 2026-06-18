@@ -516,6 +516,114 @@ struct PlaidBarCoreTests {
         #expect(MenuBarSummary.creditUtilization(from: accounts) == 20)
     }
 
+    // MARK: - AND-486 Menu-Bar Title Picker extensions
+
+    @Test("Menu bar highest utilization returns the worst single card")
+    func menuBarSummaryHighestUtilization() {
+        let accounts = [
+            AccountDTO(id: "1", itemId: "i", name: "Checking", type: .depository, balances: BalanceDTO(available: 8_200)),
+            // Amex: 1,847.32 / 20,000 = ~9.2%
+            AccountDTO(id: "2", itemId: "i", name: "Amex", type: .credit, balances: BalanceDTO(current: -1_847.32, limit: 20_000)),
+            // Chase Freedom: 4,210 / 5,000 = 84.2% — the worst card
+            AccountDTO(id: "3", itemId: "i", name: "Chase", type: .credit, balances: BalanceDTO(current: -4_210, limit: 5_000)),
+        ]
+        let highest = MenuBarSummary.highestUtilization(from: accounts)
+        #expect(highest != nil)
+        #expect(abs((highest ?? 0) - 84.2) < 0.001)
+        // The aggregate pools both cards, so it is much lower than the worst card.
+        let aggregate = MenuBarSummary.creditUtilization(from: accounts) ?? 0
+        #expect((highest ?? 0) > aggregate)
+    }
+
+    @Test("Menu bar highest utilization is nil when no card has a limit")
+    func menuBarSummaryHighestUtilizationNoLimit() {
+        let accounts = [
+            AccountDTO(id: "1", itemId: "i", name: "Checking", type: .depository, balances: BalanceDTO(available: 8_200)),
+            AccountDTO(id: "2", itemId: "i", name: "Charge card", type: .credit, balances: BalanceDTO(current: -500, limit: nil)),
+        ]
+        #expect(MenuBarSummary.highestUtilization(from: accounts) == nil)
+    }
+
+    @Test("Menu bar today spend equals a 1-day recent spend window")
+    func menuBarSummaryTodaySpend() {
+        let now = Formatters.parseTransactionDate("2026-03-10")!
+        let transactions = [
+            TransactionDTO(id: "1", accountId: "a", amount: 10, date: "2026-03-10", name: "Today coffee"),
+            TransactionDTO(id: "2", accountId: "a", amount: 22, date: "2026-03-10", name: "Today lunch"),
+            TransactionDTO(id: "3", accountId: "a", amount: 99, date: "2026-03-09", name: "Yesterday"),
+        ]
+        let oneDay = MenuBarSummary.recentSpend(from: transactions, now: now, days: 1)
+        #expect(oneDay == 32)
+        // The .todaySpend mode renders the same single-day window.
+        let text = MenuBarSummary.text(
+            mode: .todaySpend,
+            accounts: [],
+            transactions: transactions,
+            currencyFormat: .compact
+        )
+        #expect(!text.isEmpty)
+        #expect(text != "No spend")
+    }
+
+    @Test("Menu bar text masks every new mode under privacy mask")
+    func menuBarSummaryNewModesPrivacyMask() {
+        let accounts = [
+            AccountDTO(id: "1", itemId: "i", name: "Checking", type: .depository, balances: BalanceDTO(available: 8_200)),
+            AccountDTO(id: "2", itemId: "i", name: "Chase", type: .credit, balances: BalanceDTO(current: -4_210, limit: 5_000)),
+        ]
+        let transactions = [
+            TransactionDTO(id: "1", accountId: "a", amount: 10, date: "2026-03-10", name: "Today"),
+        ]
+        for mode in [MenuBarSummaryMode.highestUtilization, .todaySpend, .safeToSpend] {
+            let text = MenuBarSummary.text(
+                mode: mode,
+                accounts: accounts,
+                transactions: transactions,
+                currencyFormat: .compact,
+                privacyMaskEnabled: true,
+                precomputedSafeToSpend: 1_234
+            )
+            #expect(text == PrivacyMaskPresentation.heroValue)
+        }
+    }
+
+    @Test("Menu bar safe-to-spend renders the precomputed amount and degrades gracefully")
+    func menuBarSummarySafeToSpendText() {
+        let accounts = [
+            AccountDTO(id: "1", itemId: "i", name: "Checking", type: .depository, balances: BalanceDTO(available: 8_200)),
+        ]
+        let withAmount = MenuBarSummary.text(
+            mode: .safeToSpend,
+            accounts: accounts,
+            transactions: [],
+            currencyFormat: .compact,
+            precomputedSafeToSpend: 1_234
+        )
+        #expect(withAmount.contains("1") && withAmount.contains("2"))
+        #expect(withAmount != "No data")
+        // No precomputed amount once loaded: a defined fallback, never a crash.
+        let withoutAmount = MenuBarSummary.text(
+            mode: .safeToSpend,
+            accounts: accounts,
+            transactions: [],
+            currencyFormat: .compact,
+            isInitialLoad: false,
+            precomputedSafeToSpend: nil
+        )
+        #expect(withoutAmount == "No data")
+    }
+
+    @Test("MenuBarSummaryMode exposes the three new cases with display names")
+    func menuBarSummaryModeNewCases() {
+        let allCases = MenuBarSummaryMode.allCases
+        #expect(allCases.contains(.highestUtilization))
+        #expect(allCases.contains(.todaySpend))
+        #expect(allCases.contains(.safeToSpend))
+        for mode in allCases {
+            #expect(!mode.displayName.isEmpty)
+        }
+    }
+
     @Test("Menu bar summary recent spend excludes income and transfers")
     func menuBarSummaryRecentSpend() {
         let now = Formatters.parseTransactionDate("2026-01-15")!

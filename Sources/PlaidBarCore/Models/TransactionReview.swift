@@ -132,6 +132,12 @@ public struct TransactionReviewItem: Sendable, Identifiable, Equatable {
     public let isTransfer: Bool
     public let excludedFromBudgets: Bool
     public let matchedRuleIds: [UUID]
+    /// Provenance of `effectiveCategory`. `.appleNaturalLanguage` means the
+    /// zero-setup on-device NL tier (AND-507) backfilled the category because
+    /// Plaid returned nothing usable and the user hasn't overridden — the UI
+    /// pairs this with a text+icon "Suggested" badge (never color alone). Nil
+    /// when the category came straight from the user override or Plaid.
+    public let categorySource: LocalAICategoryResolutionSource?
 
     public init(
         transaction: TransactionDTO,
@@ -141,7 +147,8 @@ public struct TransactionReviewItem: Sendable, Identifiable, Equatable {
         effectiveMerchantName: String,
         isTransfer: Bool,
         excludedFromBudgets: Bool,
-        matchedRuleIds: [UUID]
+        matchedRuleIds: [UUID],
+        categorySource: LocalAICategoryResolutionSource? = nil
     ) {
         self.id = transaction.id
         self.transaction = transaction
@@ -152,6 +159,13 @@ public struct TransactionReviewItem: Sendable, Identifiable, Equatable {
         self.isTransfer = isTransfer
         self.excludedFromBudgets = excludedFromBudgets
         self.matchedRuleIds = matchedRuleIds
+        self.categorySource = categorySource
+    }
+
+    /// Whether `effectiveCategory` was filled by the on-device NL tier rather
+    /// than the user or Plaid — drives the "Suggested" badge.
+    public var isNLSuggestedCategory: Bool {
+        categorySource == .appleNaturalLanguage
     }
 }
 
@@ -175,7 +189,8 @@ public enum TransactionReviewInbox {
         metadata: [TransactionReviewMetadata],
         rules: [TransactionRule],
         recurring: [RecurringTransaction],
-        now: Date
+        now: Date,
+        nlCategorizer: NLMerchantCategorizer = NLMerchantCategorizer()
     ) -> TransactionReviewInboxSnapshot {
         let metadataById = Dictionary(uniqueKeysWithValues: metadata.map { ($0.id, $0) })
         let merchantCounts = Dictionary(grouping: transactions, by: normalizedMerchantKey)
@@ -213,7 +228,18 @@ public enum TransactionReviewInbox {
             let pendingBaseline = ownResolved ? nil : pendingBaseline(own: ownMetadata, prior: priorPendingMetadata)
             let matchedRules = rules.filter { $0.matches(transaction) }
 
-            let effectiveCategory = metadata?.userCategory ?? transaction.category
+            // Category resolution precedence: user override → Plaid → on-device
+            // NL inference (AND-507) → uncategorized. The NL tier only fills in
+            // when the user hasn't overridden AND Plaid returned nothing usable
+            // (nil/.other) or flagged its own category LOW/UNKNOWN — so the
+            // Review Inbox keeps surfacing only genuinely low-confidence items.
+            let resolvedCategory = resolveCategory(
+                transaction: transaction,
+                userCategory: metadata?.userCategory,
+                nlCategorizer: nlCategorizer
+            )
+            let effectiveCategory = resolvedCategory.category
+            let categorySource = resolvedCategory.source
             let effectiveMerchant = trimmedNonEmpty(metadata?.userMerchantName)
                 ?? trimmedNonEmpty(transaction.merchantName)
                 ?? transaction.name
@@ -230,8 +256,20 @@ public enum TransactionReviewInbox {
             // category as "needs review" when it is missing/uncategorized, or
             // when Plaid itself reports LOW/UNKNOWN confidence — but never once
             // the user has set their own category.
-            if effectiveCategory == nil || effectiveCategory == .other ||
-                (transaction.isLowConfidenceCategory && metadata?.userCategory == nil) {
+            //
+            // The on-device NL tier (AND-507) is a *suggestion*, not a persisted
+            // category: it fills `effectiveCategory` for display (with the
+            // "Suggested" badge) but downstream budget/category/export totals
+            // still group by the raw `transaction.category`. So an NL-backfilled
+            // item must STAY in the inbox flagged `.uncategorized` — otherwise a
+            // recognizable charge with no other review reason silently drops out
+            // while its spend keeps landing in "Other", and the user never gets
+            // to approve the suggestion (which persists it as `userCategory`).
+            // Only a user override clears this; NL never overrides the user.
+            if metadata?.userCategory == nil,
+                effectiveCategory == nil || effectiveCategory == .other ||
+                categorySource == .appleNaturalLanguage ||
+                transaction.isLowConfidenceCategory {
                 reasons.insert(.uncategorized)
             }
             if merchantNeedsReview(transaction: transaction, effectiveMerchant: effectiveMerchant) ||
@@ -309,7 +347,8 @@ public enum TransactionReviewInbox {
                 effectiveMerchantName: effectiveMerchant,
                 isTransfer: isTransfer,
                 excludedFromBudgets: metadata?.excludedFromBudgets ?? isTransfer,
-                matchedRuleIds: matchedRules.map(\.id)
+                matchedRuleIds: matchedRules.map(\.id),
+                categorySource: categorySource
             )
         }
         .sorted { lhs, rhs in
@@ -321,6 +360,47 @@ public enum TransactionReviewInbox {
         }
 
         return TransactionReviewInboxSnapshot(items: items)
+    }
+
+    /// Resolved category plus the provenance that produced it.
+    struct ResolvedCategory {
+        let category: SpendingCategory?
+        let source: LocalAICategoryResolutionSource?
+    }
+
+    /// Apply the category precedence chain: user override → Plaid →
+    /// on-device NL inference (AND-507) → uncategorized.
+    ///
+    /// The NL tier is consulted only when the user hasn't overridden AND Plaid
+    /// returned nothing usable: a nil/`.other` category, or a category Plaid
+    /// itself flagged LOW/UNKNOWN (`isLowConfidenceCategory`). Even then, only a
+    /// *trusted* (high/medium) inference fills the category — a `low`-confidence
+    /// inference is discarded so genuinely ambiguous merchants keep flowing to
+    /// the Review Inbox instead of getting a confident wrong guess.
+    static func resolveCategory(
+        transaction: TransactionDTO,
+        userCategory: SpendingCategory?,
+        nlCategorizer: NLMerchantCategorizer
+    ) -> ResolvedCategory {
+        if let userCategory {
+            return ResolvedCategory(category: userCategory, source: nil)
+        }
+
+        let plaidCategory = transaction.category
+        let plaidIsUsable = plaidCategory != nil
+            && plaidCategory != .other
+            && !transaction.isLowConfidenceCategory
+        if plaidIsUsable {
+            return ResolvedCategory(category: plaidCategory, source: .plaidCategory)
+        }
+
+        if let inference = nlCategorizer.infer(for: transaction), inference.isTrusted {
+            return ResolvedCategory(category: inference.category, source: .appleNaturalLanguage)
+        }
+
+        // Nothing usable: keep Plaid's (possibly nil/.other/low-confidence)
+        // category so the `.uncategorized` heuristic still surfaces it.
+        return ResolvedCategory(category: plaidCategory, source: plaidCategory == nil ? nil : .plaidCategory)
     }
 
     private static func normalizedMerchantKey(_ transaction: TransactionDTO) -> String {
