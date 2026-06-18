@@ -120,6 +120,62 @@ public enum DemoFixtures {
         }
     }
 
+    /// Deterministic multi-day per-account ledger for the Balance Time Machine
+    /// (AND-490), built from the existing `accountBalanceHistory` drift/wobble
+    /// generator so demo and tests share one source of truth. Covers the last
+    /// `dayCount` days for every demo account.
+    public static func accountBalanceLedger(
+        dayCount: Int = 14,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> AccountBalanceLedger {
+        var entries: [AccountBalanceLedger.LedgerEntry] = []
+        for account in accounts {
+            let history = accountBalanceHistory(forAccountId: account.id, now: now, calendar: calendar)
+            // Take the most recent `dayCount` days from the generated history.
+            for snapshot in history.suffix(dayCount) {
+                entries.append(
+                    AccountBalanceLedger.LedgerEntry(
+                        accountId: account.id,
+                        date: snapshot.date,
+                        current: snapshot.balance,
+                        available: account.balances.available,
+                        limit: account.balances.limit,
+                        recordedAt: snapshot.date
+                    )
+                )
+            }
+        }
+        return AccountBalanceLedger(entries: entries)
+    }
+
+    /// A "post-sync" variant of `accountBalanceLedger` that rewrites one prior-day
+    /// `current` balance for the first account, so `SyncHistoryDiff` renders a
+    /// non-empty "history changed" row in --demo (AND-490).
+    public static func postSyncAccountBalanceLedger(
+        dayCount: Int = 14,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> AccountBalanceLedger {
+        let base = accountBalanceLedger(dayCount: dayCount, now: now, calendar: calendar)
+        guard let firstAccountId = accounts.first?.id else { return base }
+        // Rewrite the entry from ~3 days ago for the first account.
+        let targetDay = calendar.date(byAdding: .day, value: -3, to: now) ?? now
+        let rewritten = base.entries.map { entry -> AccountBalanceLedger.LedgerEntry in
+            guard entry.accountId == firstAccountId,
+                  calendar.isDate(entry.date, inSameDayAs: targetDay) else { return entry }
+            return AccountBalanceLedger.LedgerEntry(
+                accountId: entry.accountId,
+                date: entry.date,
+                current: (entry.current ?? 0) + 125.50,
+                available: entry.available,
+                limit: entry.limit,
+                recordedAt: now
+            )
+        }
+        return AccountBalanceLedger(entries: rewritten)
+    }
+
     // MARK: - Explicit recent window
 
     private static func explicitTransactions(now: Date, calendar: Calendar) -> [TransactionDTO] {
