@@ -204,14 +204,22 @@ struct AccountRoutes: Sendable {
         return LiabilityDTO(
             accountId: accountId,
             purchaseAprPercentage: purchaseApr,
-            lastStatementBalance: credit.lastStatementBalance,
-            lastStatementIssueDate: credit.lastStatementIssueDate,
-            minimumPaymentAmount: credit.minimumPaymentAmount,
             nextPaymentDueDate: credit.nextPaymentDueDate,
-            lastPaymentAmount: credit.lastPaymentAmount,
-            lastPaymentDate: credit.lastPaymentDate,
-            isOverdue: credit.isOverdue ?? false
+            // Plaid's `is_overdue` is nullable / limited-availability; when it is
+            // absent, infer overdue from a due date already in the past so a
+            // past-due card still carries the "Overdue" wording.
+            isOverdue: credit.isOverdue ?? Self.isPastDue(credit.nextPaymentDueDate)
         )
+    }
+
+    private static func isPastDue(_ yyyymmdd: String?) -> Bool {
+        guard let yyyymmdd else { return false }
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        guard let due = formatter.date(from: yyyymmdd) else { return false }
+        return due < Calendar.current.startOfDay(for: Date())
     }
 
     static func deterministicItems(_ items: [ItemModel]) -> [ItemModel] {

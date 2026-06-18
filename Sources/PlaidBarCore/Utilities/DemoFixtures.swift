@@ -49,32 +49,18 @@ public enum DemoFixtures {
         ),
     ]
 
-    /// Demo liabilities for the two demo credit cards, so `--demo` exercises the
-    /// real Payments Due surface (APR + next due date) without Plaid.
-    public static let liabilities: [LiabilityDTO] = [
-        LiabilityDTO(
-            accountId: "demo_amex",
-            purchaseAprPercentage: 21.24,
-            lastStatementBalance: 1_847.32,
-            lastStatementIssueDate: "2026-06-02",
-            minimumPaymentAmount: 40.00,
-            nextPaymentDueDate: "2026-06-27",
-            lastPaymentAmount: 500.00,
-            lastPaymentDate: "2026-05-28",
-            isOverdue: false
-        ),
-        LiabilityDTO(
-            accountId: "demo_visa",
-            purchaseAprPercentage: 24.99,
-            lastStatementBalance: 4_210.00,
-            lastStatementIssueDate: "2026-06-05",
-            minimumPaymentAmount: 105.00,
-            nextPaymentDueDate: "2026-06-30",
-            lastPaymentAmount: 250.00,
-            lastPaymentDate: "2026-06-01",
-            isOverdue: false
-        ),
-    ]
+    /// Demo liabilities for the two demo credit cards, with due dates derived
+    /// from `now` so `--demo` and screenshots never go stale. Mirrors the trimmed
+    /// `LiabilityDTO` (APR + next due date + overdue).
+    public static func liabilities(now: Date = Date(), calendar: Calendar = .current) -> [LiabilityDTO] {
+        func due(inDays days: Int) -> String {
+            dateString(daysAgo: -days, now: now, calendar: calendar)
+        }
+        return [
+            LiabilityDTO(accountId: "demo_amex", purchaseAprPercentage: 21.24, nextPaymentDueDate: due(inDays: 9), isOverdue: false),
+            LiabilityDTO(accountId: "demo_visa", purchaseAprPercentage: 24.99, nextPaymentDueDate: due(inDays: 16), isOverdue: false),
+        ]
+    }
 
     /// Explicit recent transactions plus the deterministic historical series.
     public static func transactions(now: Date = Date(), calendar: Calendar = .current) -> [TransactionDTO] {

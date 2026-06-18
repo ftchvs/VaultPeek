@@ -6,6 +6,7 @@ struct PlaidLinkConfiguration: Equatable, Sendable {
 
     let clientName: String
     let products: [String]
+    let optionalProducts: [String]
     let countryCodes: [String]
     let language: String
     let webhookURL: String?
@@ -16,11 +17,13 @@ struct PlaidLinkConfiguration: Equatable, Sendable {
     static func resolved(from environment: [String: String]) throws -> PlaidLinkConfiguration {
         let config = PlaidLinkConfiguration(
             clientName: PlaidBarConstants.appName,
-            // New links request `liabilities` so credit cards return real APR /
-            // statement / due-date data. Existing items keep whatever scope they
-            // were linked under (new-links-only rollout — AND-493); the server
-            // tolerates the missing scope per item. Override via PLAID_LINK_PRODUCTS.
-            products: listValue(environment["PLAID_LINK_PRODUCTS"]) ?? ["transactions", "liabilities"],
+            products: listValue(environment["PLAID_LINK_PRODUCTS"]) ?? ["transactions"],
+            // `liabilities` is requested as an OPTIONAL product so credit cards
+            // return real APR / statement / due-date data where supported, without
+            // filtering non-liability institutions out of Link (Plaid filters by
+            // the required `products` set). New-links-only — AND-493; the server
+            // tolerates a missing scope per item. Override via PLAID_LINK_OPTIONAL_PRODUCTS.
+            optionalProducts: listValue(environment["PLAID_LINK_OPTIONAL_PRODUCTS"]) ?? ["liabilities"],
             countryCodes: listValue(environment["PLAID_LINK_COUNTRY_CODES"]) ?? ["US"],
             language: environment["PLAID_LINK_LANGUAGE"]?.trimmedLinkConfigValue ?? "en",
             webhookURL: environment["PLAID_LINK_WEBHOOK_URL"]?.trimmedLinkConfigValue,
@@ -51,6 +54,7 @@ struct PlaidLinkConfiguration: Equatable, Sendable {
             clientName: clientName,
             user: .init(clientUserId: clientUserId),
             products: products,
+            optionalProducts: optionalProducts.isEmpty ? nil : optionalProducts,
             countryCodes: countryCodes,
             language: language,
             webhook: webhookURL,
@@ -114,7 +118,7 @@ struct PlaidLinkConfiguration: Equatable, Sendable {
     }
 
     private func validateProducts() throws {
-        let unsupported = products.filter { !supportedProducts.contains($0) }
+        let unsupported = (products + optionalProducts).filter { !supportedProducts.contains($0) }
         guard unsupported.isEmpty else {
             throw PlaidLinkConfigurationError.invalidProducts(
                 "Unsupported Plaid products: \(unsupported.joined(separator: ", "))"

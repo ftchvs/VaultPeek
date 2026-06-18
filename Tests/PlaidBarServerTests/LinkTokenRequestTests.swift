@@ -37,9 +37,10 @@ struct LinkTokenRequestTests {
         let json = try encodedRequest(request)
 
         #expect(json["client_name"] as? String == "VaultPeek")
-        // Default scope now also requests liabilities (AND-493) for real APR /
-        // statement / due-date data on new links.
-        #expect(json["products"] as? [String] == ["transactions", "liabilities"])
+        #expect(json["products"] as? [String] == ["transactions"])
+        // Liabilities is requested as an OPTIONAL product (AND-493) so it never
+        // filters non-liability institutions out of Link.
+        #expect(json["optional_products"] as? [String] == ["liabilities"])
         #expect(json["country_codes"] as? [String] == ["US"])
         #expect(json["language"] as? String == "en")
         #expect(json["webhook"] == nil)
@@ -153,6 +154,7 @@ struct LinkTokenRequestTests {
             _ = try PlaidLinkConfiguration(
                 clientName: "This Name Is Far Too Long For Plaid Link",
                 products: ["transactions"],
+                optionalProducts: [],
                 countryCodes: ["US"],
                 language: "en",
                 webhookURL: nil,

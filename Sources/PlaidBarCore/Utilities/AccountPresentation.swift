@@ -94,7 +94,7 @@ public enum AccountPresentation {
         }
 
         let availableText = "\(PrivacyMaskPresentation.currency(availableBalance(for: account), format: format, isEnabled: privacyMaskEnabled)) available"
-        let dueText = creditDueMetadataText(for: account, liability: liability)
+        let dueText = creditDueMetadataText(for: account, liability: liability, privacyMaskEnabled: privacyMaskEnabled)
 
         guard let utilization = account.balances.utilizationPercent else {
             return "\(availableText) • \(dueText)"
@@ -105,7 +105,8 @@ public enum AccountPresentation {
 
     public static func creditDueMetadataText(
         for account: AccountDTO,
-        liability: LiabilityDTO? = nil
+        liability: LiabilityDTO? = nil,
+        privacyMaskEnabled: Bool = false
     ) -> String {
         guard account.type == .credit else { return "" }
 
@@ -120,7 +121,7 @@ public enum AccountPresentation {
             parts.append(liability.isOverdue ? "Overdue \(formatted)" : "Due \(formatted)")
         }
         if let apr = liability.purchaseAprPercentage {
-            parts.append("\(PrivacyMaskPresentation.percent(apr, decimals: 2, isEnabled: false)) APR")
+            parts.append("\(PrivacyMaskPresentation.percent(apr, decimals: 2, isEnabled: privacyMaskEnabled)) APR")
         }
         return parts.isEmpty ? "due not synced" : parts.joined(separator: " • ")
     }
@@ -207,7 +208,7 @@ public enum AccountPresentation {
 
         if account.type == .credit {
             components.append("\(PrivacyMaskPresentation.currency(availableBalance(for: account), isEnabled: privacyMaskEnabled)) available credit")
-            components.append(creditDueMetadataText(for: account, liability: liability))
+            components.append(creditDueMetadataText(for: account, liability: liability, privacyMaskEnabled: privacyMaskEnabled))
         }
 
         if let connectionLabel {

@@ -1554,7 +1554,7 @@ final class AppState {
     /// previous set in place and never disturbs the dashboard.
     func refreshLiabilities() async {
         if isDemoMode {
-            liabilities = DemoFixtures.liabilities
+            liabilities = DemoFixtures.liabilities()
             return
         }
         guard serverConnected, serverCredentialsConfigured != false else { return }
@@ -2163,6 +2163,7 @@ final class AppState {
                 if shouldAutoRefreshNow {
                     await refreshAccounts()
                     await syncTransactions()
+                    await refreshLiabilities()
                 }
             }
             await refreshCategoryBudgets()
@@ -3048,7 +3049,7 @@ final class AppState {
         // (no heatmap dead zone, year-round income, active savings account)
         // stay testable. See DemoFixtures and DemoFixturesTests.
         accounts = DemoFixtures.accounts
-        liabilities = DemoFixtures.liabilities
+        liabilities = DemoFixtures.liabilities()
         transactions = DemoFixtures.transactions()
         transactionReviewMetadata = []
         transactionRules = []

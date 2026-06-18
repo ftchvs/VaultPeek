@@ -8,6 +8,9 @@ struct PlaidLinkTokenRequest: Encodable, Sendable {
     let clientName: String
     let user: PlaidUser
     let products: [String]?
+    /// Products initialized at Link only when the chosen institution supports
+    /// them — unlike `products`, these never filter institutions out of Link.
+    let optionalProducts: [String]?
     let countryCodes: [String]
     let language: String
     let webhook: String?
@@ -26,6 +29,7 @@ struct PlaidLinkTokenRequest: Encodable, Sendable {
         clientName: String,
         user: PlaidUser,
         products: [String]? = nil,
+        optionalProducts: [String]? = nil,
         countryCodes: [String],
         language: String,
         webhook: String? = nil,
@@ -38,6 +42,7 @@ struct PlaidLinkTokenRequest: Encodable, Sendable {
         self.clientName = clientName
         self.user = user
         self.products = products
+        self.optionalProducts = optionalProducts
         self.countryCodes = countryCodes
         self.language = language
         self.webhook = webhook

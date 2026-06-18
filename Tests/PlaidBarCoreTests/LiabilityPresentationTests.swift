@@ -57,7 +57,7 @@ struct LiabilityPresentationTests {
 
     @Test("Demo fixtures provide liabilities for the demo credit cards")
     func demoFixturesCoverDemoCards() {
-        let ids = Set(DemoFixtures.liabilities.map(\.accountId))
+        let ids = Set(DemoFixtures.liabilities().map(\.accountId))
         #expect(ids.contains("demo_amex"))
         #expect(ids.contains("demo_visa"))
         // Every demo liability points at an existing demo credit account.
