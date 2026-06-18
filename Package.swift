@@ -25,7 +25,7 @@ let swiftTestingLinkerSettings: [LinkerSetting] = [.unsafeFlags(swiftTestingLink
 let package = Package(
     name: "PlaidBar",
     platforms: [
-        .macOS(.v15),
+        .macOS("26.0"),
     ],
     products: [
         .executable(name: "PlaidBar", targets: ["PlaidBar"]),
