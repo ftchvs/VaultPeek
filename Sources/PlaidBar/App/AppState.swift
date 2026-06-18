@@ -1702,9 +1702,12 @@ final class AppState {
             let fetchedAccounts = try await (live ? serverClient.getBalances() : serverClient.getAccounts())
             let refreshedAccounts = live ? balancesPreservingCachedCurrent(fetchedAccounts) : fetchedAccounts
             let itemStatusesAvailable = await refreshItemStatuses()
-            accounts = itemStatusesAvailable
-                ? accountsPreservingUnavailableItems(refreshedAccounts)
-                : accountsPreservingCachedAccountsMissingFromRefresh(refreshedAccounts)
+            accounts = AccountReconciliation.accountsAfterRefresh(
+                refreshedAccounts: refreshedAccounts,
+                currentAccounts: accounts,
+                itemStatusesAvailable: itemStatusesAvailable,
+                itemStatuses: itemStatuses
+            )
             let cacheAccounts = accounts
             let cacheDirectory = activeStorageDirectoryURL
             let cacheContext = transactionCacheContext
@@ -1736,9 +1739,12 @@ final class AppState {
         do {
             let refreshedAccounts = try await serverClient.getBalances()
             let itemStatusesAvailable = await refreshItemStatuses()
-            accounts = itemStatusesAvailable
-                ? accountsPreservingUnavailableItems(refreshedAccounts)
-                : accountsPreservingCachedAccountsMissingFromRefresh(refreshedAccounts)
+            accounts = AccountReconciliation.accountsAfterRefresh(
+                refreshedAccounts: refreshedAccounts,
+                currentAccounts: accounts,
+                itemStatusesAvailable: itemStatusesAvailable,
+                itemStatuses: itemStatuses
+            )
             let cacheAccounts = accounts
             let cacheDirectory = activeStorageDirectoryURL
             let cacheContext = transactionCacheContext
@@ -2145,7 +2151,14 @@ final class AppState {
                 let cacheTransactions = transactions
                 let cacheDirectory = activeStorageDirectoryURL
                 let cacheContext = transactionCacheContext
-                try await saveAccountsToCacheWithPerformance(cacheAccounts, to: cacheDirectory, context: cacheContext)
+                // The account cache write is load-bearing: if the post-delete save
+                // is lost, the next launch reloads stale JSON and the removed
+                // account reappears (GH #508). Retry once before giving up.
+                try await persistAccountCacheWithRetry(
+                    cacheAccounts,
+                    to: cacheDirectory,
+                    context: cacheContext
+                )
                 try await saveTransactionsToCacheWithPerformance(
                     cacheTransactions,
                     to: cacheDirectory,
@@ -2153,7 +2166,12 @@ final class AppState {
                 )
                 persistReviewStorage()
             } catch {
-                self.error = "Local cache failed to save: \(error.localizedDescription)"
+                // Server delete already succeeded and in-memory state is correct, so
+                // the account is gone for this session. The on-disk cache is stale,
+                // but boot-time reconciliation against the server item list drops it
+                // on the next launch, so it cannot resurrect (GH #508).
+                self.error = "Removed the account, but couldn't update the local cache: "
+                    + "\(error.localizedDescription)"
             }
             // Refresh (or clear, when the last institution is gone) the widget
             // snapshot so it never shows balances for just-removed accounts.
@@ -2673,13 +2691,40 @@ final class AppState {
 
     private func loadCachedAccounts() async {
         do {
-            accounts = try await loadAccountsFromCacheWithPerformance(
+            let cachedAccounts = try await loadAccountsFromCacheWithPerformance(
                 from: activeStorageDirectoryURL,
                 context: transactionCacheContext
             )
+            accounts = reconcileCachedAccountsAgainstServer(cachedAccounts)
+            // If a prior removal's cache write failed (GH #508), the stale account
+            // was just dropped from `accounts` above. Heal the on-disk cache so it
+            // no longer lists a deleted account on the next launch.
+            if accounts.count != cachedAccounts.count {
+                let healedAccounts = accounts
+                let cacheDirectory = activeStorageDirectoryURL
+                let cacheContext = transactionCacheContext
+                try? await saveAccountsToCacheWithPerformance(
+                    healedAccounts,
+                    to: cacheDirectory,
+                    context: cacheContext
+                )
+            }
         } catch {
             self.error = "Account cache failed to load: \(error.localizedDescription)"
         }
+    }
+
+    /// Drops cached accounts whose item the server no longer reports, using the
+    /// authoritative item list already fetched by `checkServerConnection` before
+    /// boot loads the cache. Guarded so a transient empty item-status list (e.g. a
+    /// failed `/api/items` fetch) never blanks the dashboard — only a known,
+    /// non-empty server item list prunes the cache (GH #508).
+    private func reconcileCachedAccountsAgainstServer(_ cachedAccounts: [AccountDTO]) -> [AccountDTO] {
+        guard !itemStatuses.isEmpty else { return cachedAccounts }
+        return AccountReconciliation.cachedAccountsReconciledAgainstServerItems(
+            cachedAccounts: cachedAccounts,
+            serverItemIds: itemStatuses.map(\.id)
+        )
     }
 
     private func clearCachedAccounts() async {
@@ -2831,6 +2876,21 @@ final class AppState {
         }
     }
 
+    /// Persists the account cache, retrying once on failure. Used after a
+    /// server-side account removal where a lost write would otherwise let the
+    /// deleted account resurrect from stale JSON on the next launch (GH #508).
+    private func persistAccountCacheWithRetry(
+        _ accounts: [AccountDTO],
+        to directory: URL,
+        context: TransactionCacheContext?
+    ) async throws {
+        do {
+            try await saveAccountsToCacheWithPerformance(accounts, to: directory, context: context)
+        } catch {
+            try await saveAccountsToCacheWithPerformance(accounts, to: directory, context: context)
+        }
+    }
+
     private func loadTransactionsFromCacheWithPerformance(
         from directory: URL,
         context: TransactionCacheContext?
@@ -2947,33 +3007,6 @@ final class AppState {
         serverItemCount = itemCount ?? statuses.count
         serverSyncReady = syncReady ?? !statuses.isEmpty
         updateSetupCompletion()
-    }
-
-    private func accountsPreservingUnavailableItems(_ refreshedAccounts: [AccountDTO]) -> [AccountDTO] {
-        guard !accounts.isEmpty, !itemStatuses.isEmpty else { return refreshedAccounts }
-
-        let refreshedAccountIds = Set(refreshedAccounts.map(\.id))
-        let refreshedItemIds = Set(refreshedAccounts.map(\.itemId))
-        let unavailableItemIds = Set(itemStatuses.compactMap { item -> String? in
-            guard item.status != .connected, !refreshedItemIds.contains(item.id) else { return nil }
-            return item.id
-        })
-        guard !unavailableItemIds.isEmpty else { return refreshedAccounts }
-
-        let preservedAccounts = accounts.filter { account in
-            unavailableItemIds.contains(account.itemId) && !refreshedAccountIds.contains(account.id)
-        }
-        return refreshedAccounts + preservedAccounts
-    }
-
-    private func accountsPreservingCachedAccountsMissingFromRefresh(_ refreshedAccounts: [AccountDTO]) -> [AccountDTO] {
-        guard !accounts.isEmpty else { return refreshedAccounts }
-
-        let refreshedAccountIds = Set(refreshedAccounts.map(\.id))
-        let preservedAccounts = accounts.filter { account in
-            !refreshedAccountIds.contains(account.id)
-        }
-        return refreshedAccounts + preservedAccounts
     }
 
     private func updateSetupCompletion() {
@@ -3152,8 +3185,9 @@ final class AppState {
     private func recordAccountBalanceLedger() {
         // Only ledger accounts the bank actually reported on THIS refresh. When a
         // partial refresh omits a degraded item (login-required / provider
-        // outage), `accountsPreservingUnavailableItems` keeps that item's cached
-        // accounts in `accounts`; stamping them with today's date would make Time
+        // outage), `AccountReconciliation.accountsPreservingDegradedItems` keeps
+        // that item's cached accounts in `accounts`; stamping them with today's
+        // date would make Time
         // Machine show a stale cached balance as "what the bank said" today and
         // undermine the ledger's data-integrity purpose (Codex P2).
         let reportedAccounts = bankReportedAccountsForLedger()
