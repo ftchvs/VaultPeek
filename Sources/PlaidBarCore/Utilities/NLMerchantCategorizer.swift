@@ -1,5 +1,7 @@
 import Foundation
+#if canImport(NaturalLanguage)
 import NaturalLanguage
+#endif
 
 /// Confidence band for a zero-setup NL category inference (AND-507).
 ///
@@ -69,14 +71,27 @@ public struct NLMerchantCategorizer: Sendable {
     /// Infer a category for a transaction, preferring the raw `name` (which
     /// carries the most signal, e.g. "BLUE BOTTLE COFFEE") and falling back to
     /// `merchantName`. Returns nil when nothing applies — never a guess.
+    ///
+    /// A *trusted* (lexicon) hit always wins over an untrusted (`low`) embedding
+    /// guess, regardless of which field produced it: a generic raw name like
+    /// "STORE 1234" must not short-circuit a clean `merchantName` such as
+    /// "Netflix" with only a low-confidence embedding match, which
+    /// `resolveCategory` would then discard — leaving the row uncategorized
+    /// instead of using the trusted merchant fallback.
     public func infer(for transaction: TransactionDTO) -> NLCategoryInference? {
-        if let inference = infer(rawName: transaction.name) {
-            return inference
+        let rawInference = infer(rawName: transaction.name)
+        if let rawInference, rawInference.isTrusted {
+            return rawInference
         }
-        if let merchant = transaction.merchantName {
-            return infer(rawName: merchant)
+        if let merchant = transaction.merchantName,
+            let merchantInference = infer(rawName: merchant) {
+            // A trusted merchant hit beats a low-confidence raw guess; otherwise
+            // keep whichever we have (prefer the raw one for stability).
+            if merchantInference.isTrusted || rawInference == nil {
+                return merchantInference
+            }
         }
-        return nil
+        return rawInference
     }
 
     /// Infer a category from a raw merchant string. Deterministic for any input
@@ -134,9 +149,10 @@ public struct NLMerchantCategorizer: Sendable {
         let rawTokens = normalized.split(separator: " ").map(String.init)
         guard !rawTokens.isEmpty else { return [] }
 
+        var lemmas: [String] = []
+        #if canImport(NaturalLanguage)
         let tagger = NLTagger(tagSchemes: [.lemma])
         tagger.string = normalized
-        var lemmas: [String] = []
         tagger.enumerateTags(
             in: normalized.startIndex ..< normalized.endIndex,
             unit: .word,
@@ -150,6 +166,10 @@ public struct NLMerchantCategorizer: Sendable {
             }
             return true
         }
+        #endif
+        // On toolchains without NaturalLanguage (Linux/CI server + tests),
+        // `lemmas` stays empty and we fall back to the raw tokens below, so the
+        // deterministic lexicon floor still runs everywhere.
 
         // Keep both raw and lemma forms, de-duplicated, raw first so ordering
         // (and thus the deterministic "first keyword wins") is stable.
@@ -181,6 +201,7 @@ public struct NLMerchantCategorizer: Sendable {
     /// nil when the model is unavailable so behavior degrades gracefully to the
     /// deterministic lexicon-only floor.
     static func embeddingInference(tokens: [String]) -> SpendingCategory? {
+        #if canImport(NaturalLanguage)
         guard let embedding = NLEmbedding.wordEmbedding(for: .english) else { return nil }
 
         var bestCategory: SpendingCategory?
@@ -199,5 +220,9 @@ public struct NLMerchantCategorizer: Sendable {
         // Only accept a genuinely close neighbor; cosine distance ranges 0...2.
         guard bestDistance <= 0.55 else { return nil }
         return bestCategory
+        #else
+        // No embedding model on this toolchain — degrade to the lexicon floor.
+        return nil
+        #endif
     }
 }

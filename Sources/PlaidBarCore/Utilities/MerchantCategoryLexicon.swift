@@ -133,8 +133,13 @@ public enum MerchantCategoryLexicon {
         .keyword("motel", .travel),
         .keyword("resort", .travel),
         .brand("airbnb", .travel),
-        .brand("delta", .travel),
-        .brand("united", .travel),
+        // "delta"/"united" as bare brand tokens are deliberately omitted: they
+        // collide with common non-airline merchants ("Delta Dental", "United
+        // Healthcare"), and because brand matches win immediately they would
+        // back-fill Travel before a health keyword (e.g. "dental") is even
+        // considered, suppressing the `.uncategorized` review prompt. The
+        // airline-specific phrases below ("delta air", "united air") carry the
+        // real airline signal instead.
         .brand("marriott", .travel),
         .brand("hilton", .travel),
         .brand("expedia", .travel),
@@ -165,6 +170,7 @@ public enum MerchantCategoryLexicon {
         ("con edison", Match(category: .billsAndUtilities, strength: .brand, token: "con edison")),
         ("best buy", Match(category: .shopping, strength: .brand, token: "best buy")),
         ("delta air", Match(category: .travel, strength: .brand, token: "delta air")),
+        ("united air", Match(category: .travel, strength: .brand, token: "united air")),
     ]
 
     /// Look up the best lexicon match for a set of normalized tokens and the
