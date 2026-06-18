@@ -36,6 +36,9 @@ jobs:
       - name: Secret scan
         run: PLAIDBAR_GATE_SKIP_BUILD=1 bash Scripts/pre-push-gate.sh
 
+      - name: DESIGN.md lint
+        run: ./Scripts/design-md-lint.sh
+
       - name: Version metadata alignment
         run: ./Scripts/verify-version-alignment.sh
 

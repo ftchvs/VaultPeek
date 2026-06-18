@@ -37,11 +37,14 @@ We use SwiftFormat and SwiftLint for consistent code style:
 # Format code
 swiftformat Sources/ Tests/
 
-# Lint
+# Lint Swift
 swiftlint
+
+# Lint the agent-readable design system contract
+./Scripts/design-md-lint.sh
 ```
 
-Configuration files: `.swiftformat` and `.swiftlint.yml` in the repo root.
+Configuration files: `.swiftformat`, `.swiftlint.yml`, and `DESIGN.md` in the repo root. `DESIGN.md` follows the [google-labs-code/design.md](https://github.com/google-labs-code/design.md) format so agents can consume exact tokens before reading the rationale.
 
 ## Pull Request Process (internal)
 

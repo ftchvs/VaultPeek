@@ -1,9 +1,149 @@
+---
+version: alpha
+name: VaultPeek
+description: Native macOS menu bar finance instrument with liquid-glass restraint, dense account telemetry, and privacy-first local presentation.
+colors:
+  primary: "#0066CC"
+  on-primary: "#FFFFFF"
+  secondary: "#8E8E93"
+  background: "#F5F5F7"
+  surface: "rgba(255, 255, 255, 0.72)"
+  surface-dark: "rgba(28, 28, 30, 0.72)"
+  text: "#1D1D1F"
+  text-secondary: "#6E6E73"
+  hairline: "rgba(0, 0, 0, 0.10)"
+  income: "#34C759"
+  expense: "#1D1D1F"
+  credit-debt: "#FF3B30"
+  available: "#34C759"
+  warning: "#FF9500"
+  pending: "#FF9500"
+  sparkline: "#0A84FF"
+  recurring: "#5856D6"
+typography:
+  display-balance:
+    fontFamily: SF Pro
+    fontSize: 30px
+    fontWeight: 600
+    lineHeight: 1.12
+    fontFeature: "tnum"
+  hero-balance-legacy:
+    fontFamily: SF Pro Rounded
+    fontSize: 28px
+    fontWeight: 700
+    lineHeight: 1.14
+    fontFeature: "tnum"
+  section-title:
+    fontFamily: SF Pro
+    fontSize: 12px
+    fontWeight: 500
+    lineHeight: 1.2
+    letterSpacing: 0.06em
+  data-text:
+    fontFamily: SF Pro
+    fontSize: 15px
+    fontWeight: 600
+    lineHeight: 1.25
+    fontFeature: "tnum"
+  body:
+    fontFamily: SF Pro
+    fontSize: 13px
+    fontWeight: 400
+    lineHeight: 1.3
+  detail:
+    fontFamily: SF Pro
+    fontSize: 12px
+    fontWeight: 400
+    lineHeight: 1.25
+  micro:
+    fontFamily: SF Pro
+    fontSize: 11px
+    fontWeight: 500
+    lineHeight: 1.2
+rounded:
+  cell: 2px
+  control: 6px
+  panel: 8px
+spacing:
+  xxs: 2px
+  xs: 4px
+  sm: 8px
+  md: 12px
+  lg: 16px
+  xl: 24px
+  row-vertical: 6px
+components:
+  status-item:
+    textColor: "{colors.text}"
+    typography: "{typography.data-text}"
+    padding: "{spacing.xs}"
+  popover-root:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.panel}"
+    padding: "{spacing.lg}"
+  popover-root-dark:
+    backgroundColor: "{colors.surface-dark}"
+    textColor: "{colors.on-primary}"
+    rounded: "{rounded.panel}"
+    padding: "{spacing.lg}"
+  panel-raised:
+    backgroundColor: "{colors.background}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.panel}"
+    padding: "{spacing.md}"
+  panel-inset:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.text-secondary}"
+    rounded: "{rounded.panel}"
+    padding: "{spacing.sm}"
+  row-selected:
+    backgroundColor: "{colors.primary}"
+    textColor: "{colors.on-primary}"
+    rounded: "{rounded.control}"
+    padding: "{spacing.sm}"
+  income-metric:
+    textColor: "{colors.income}"
+    typography: "{typography.data-text}"
+  expense-metric:
+    textColor: "{colors.expense}"
+    typography: "{typography.data-text}"
+  credit-debt-metric:
+    textColor: "{colors.credit-debt}"
+    typography: "{typography.data-text}"
+  available-metric:
+    textColor: "{colors.available}"
+    typography: "{typography.data-text}"
+  warning-badge:
+    backgroundColor: "{colors.warning}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.control}"
+    padding: "{spacing.xs}"
+  pending-badge:
+    backgroundColor: "{colors.pending}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.control}"
+    padding: "{spacing.xs}"
+  sparkline:
+    textColor: "{colors.sparkline}"
+    size: 20px
+  recurring-badge:
+    backgroundColor: "{colors.recurring}"
+    textColor: "{colors.on-primary}"
+    rounded: "{rounded.control}"
+    padding: "{spacing.xs}"
+  divider-hairline:
+    backgroundColor: "{colors.hairline}"
+    height: 1px
+---
 # VaultPeek Design System
+
+This file implements the [DESIGN.md](https://github.com/google-labs-code/design.md) format: YAML front matter is the machine-readable token source; the markdown below is the product/design rationale agents should preserve.
 
 Visual design spec and component catalog for VaultPeek (formerly PlaidBar;
 code paths and SwiftPM target names keep the PlaidBar prefix).
 
-## Color System
+## Colors
 
 ### Semantic Tokens
 
@@ -60,7 +200,7 @@ Category colors from `SpendingCategory.colorHex` — fixed hex values for chart 
 | `government` | Government | `#5DADE2` | `building.columns.fill` | |
 | `other` | Other | `#BDC3C7` | `questionmark.circle.fill` | Low dark-mode contrast |
 
-## Typography Scale
+## Typography
 
 Implemented as ViewModifiers in `Typography.swift`. Weights are capped at
 semibold; labels are medium — hierarchy comes from size, casing, and opacity,
@@ -99,7 +239,7 @@ not boldness.
 | Credit owed | `creditcard` | Content |
 | Search | `magnifyingglass` | Content |
 
-## Spacing
+## Layout
 
 8-point grid system via `Spacing` enum:
 
@@ -113,7 +253,7 @@ not boldness.
 | `xl` | 24pt | Hero spacing, modal padding |
 | `rowVertical` | 6pt | Row vertical padding (RecurringRow, TransactionRow) |
 
-## Native Surface System
+## Elevation & Depth
 
 VaultPeek is a macOS menu bar instrument, so surfaces should feel native,
 translucent, and compact rather than like stacked web cards. The dashboard
@@ -140,7 +280,7 @@ and `glassEffect` APIs are macOS 26+, while VaultPeek currently supports
 macOS 15+. Do not raise the minimum OS for visual polish; use availability-gated
 Liquid Glass and keep a SwiftUI material/fill fallback.
 
-## Component Catalog
+## Components
 
 ### RepoBar-Style Finance Overview
 
