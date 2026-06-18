@@ -37,7 +37,9 @@ struct LinkTokenRequestTests {
         let json = try encodedRequest(request)
 
         #expect(json["client_name"] as? String == "VaultPeek")
-        #expect(json["products"] as? [String] == ["transactions"])
+        // Default scope now also requests liabilities (AND-493) for real APR /
+        // statement / due-date data on new links.
+        #expect(json["products"] as? [String] == ["transactions", "liabilities"])
         #expect(json["country_codes"] as? [String] == ["US"])
         #expect(json["language"] as? String == "en")
         #expect(json["webhook"] == nil)

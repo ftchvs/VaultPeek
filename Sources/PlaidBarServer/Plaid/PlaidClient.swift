@@ -24,12 +24,22 @@ protocol PlaidClientProtocol: Sendable {
 
     func getBalances(accessToken: String) async throws -> PlaidAccountsResponse
 
+    func getLiabilities(accessToken: String) async throws -> PlaidLiabilitiesResponse
+
     func syncTransactions(
         accessToken: String,
         cursor: String?
     ) async throws -> PlaidTransactionsSyncResponse
 
     func removeItem(accessToken: String) async throws
+}
+
+extension PlaidClientProtocol {
+    /// Default: no liabilities. Lets test doubles and any non-Plaid provider
+    /// omit the call; only the real `PlaidClient` hits `/liabilities/get`.
+    func getLiabilities(accessToken: String) async throws -> PlaidLiabilitiesResponse {
+        PlaidLiabilitiesResponse(liabilities: nil, requestId: nil)
+    }
 }
 
 actor PlaidClient: PlaidClientProtocol {
@@ -128,6 +138,17 @@ actor PlaidClient: PlaidClientProtocol {
             accessToken: accessToken
         )
         return try await post("/accounts/balance/get", body: body)
+    }
+
+    // MARK: - Liabilities
+
+    func getLiabilities(accessToken: String) async throws -> PlaidLiabilitiesResponse {
+        let body = PlaidAuthenticatedRequest(
+            clientId: config.plaidClientId,
+            secret: config.plaidSecret,
+            accessToken: accessToken
+        )
+        return try await post("/liabilities/get", body: body)
     }
 
     // MARK: - Transactions Sync

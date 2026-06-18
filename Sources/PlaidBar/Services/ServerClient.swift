@@ -73,6 +73,13 @@ actor ServerClient {
         return try await get(url)
     }
 
+    func getLiabilities() async throws -> [LiabilityDTO] {
+        guard let url = ServerEndpoint.url(baseURL: baseURL, path: "/api/accounts/liabilities") else {
+            throw ServerClientError.requestFailed
+        }
+        return try await get(url)
+    }
+
     func listCategoryBudgets() async throws -> [CategoryBudgetDTO] {
         guard let url = ServerEndpoint.categoryBudgetsURL(baseURL: baseURL) else {
             throw ServerClientError.requestFailed

@@ -86,14 +86,15 @@ public enum AccountPresentation {
         for account: AccountDTO,
         connectionLabel: String,
         format: CurrencyFormat = .compact,
-        privacyMaskEnabled: Bool = false
+        privacyMaskEnabled: Bool = false,
+        liability: LiabilityDTO? = nil
     ) -> String {
         guard account.type == .credit else {
             return connectionLabel
         }
 
         let availableText = "\(PrivacyMaskPresentation.currency(availableBalance(for: account), format: format, isEnabled: privacyMaskEnabled)) available"
-        let dueText = creditDueMetadataText(for: account)
+        let dueText = creditDueMetadataText(for: account, liability: liability)
 
         guard let utilization = account.balances.utilizationPercent else {
             return "\(availableText) • \(dueText)"
@@ -102,13 +103,38 @@ public enum AccountPresentation {
         return "\(PrivacyMaskPresentation.percent(utilization, decimals: 0, isEnabled: privacyMaskEnabled)) • \(availableText) • \(dueText)"
     }
 
-    public static func creditDueMetadataText(for account: AccountDTO) -> String {
+    public static func creditDueMetadataText(
+        for account: AccountDTO,
+        liability: LiabilityDTO? = nil
+    ) -> String {
         guard account.type == .credit else { return "" }
 
-        // Plaid's account/balance payload does not include a card statement due
-        // date in PlaidBar's local DTO today. Keep the row honest and readable
-        // instead of implying a budgeting workflow or silently omitting due state.
-        return "due not synced"
+        // Real Plaid Liabilities data when the item carries the `liabilities`
+        // scope; otherwise stay honest with the utilization-only placeholder
+        // (items linked before the scope, or institutions that don't report it).
+        guard let liability else { return "due not synced" }
+
+        var parts: [String] = []
+        if let due = liability.nextPaymentDueDate, let formatted = formattedDueDate(due) {
+            // The word "Overdue" carries the meaning without relying on color.
+            parts.append(liability.isOverdue ? "Overdue \(formatted)" : "Due \(formatted)")
+        }
+        if let apr = liability.purchaseAprPercentage {
+            parts.append("\(PrivacyMaskPresentation.percent(apr, decimals: 2, isEnabled: false)) APR")
+        }
+        return parts.isEmpty ? "due not synced" : parts.joined(separator: " • ")
+    }
+
+    private static func formattedDueDate(_ yyyymmdd: String) -> String? {
+        let parser = DateFormatter()
+        parser.calendar = Calendar(identifier: .gregorian)
+        parser.locale = Locale(identifier: "en_US_POSIX")
+        parser.dateFormat = "yyyy-MM-dd"
+        guard let date = parser.date(from: yyyymmdd) else { return nil }
+        let display = DateFormatter()
+        display.locale = .current
+        display.setLocalizedDateFormatFromTemplate("MMMd")
+        return display.string(from: date)
     }
 
     public static func dashboardAvailableTitle(for account: AccountDTO) -> String {
@@ -151,7 +177,8 @@ public enum AccountPresentation {
         pendingCount: Int = 0,
         isSelected: Bool? = nil,
         utilizationThreshold: Double = PlaidBarConstants.creditUtilizationWarningThreshold,
-        privacyMaskEnabled: Bool = false
+        privacyMaskEnabled: Bool = false,
+        liability: LiabilityDTO? = nil
     ) -> String {
         var components = [String]()
         components.append(account.name)
@@ -180,7 +207,7 @@ public enum AccountPresentation {
 
         if account.type == .credit {
             components.append("\(PrivacyMaskPresentation.currency(availableBalance(for: account), isEnabled: privacyMaskEnabled)) available credit")
-            components.append(creditDueMetadataText(for: account))
+            components.append(creditDueMetadataText(for: account, liability: liability))
         }
 
         if let connectionLabel {

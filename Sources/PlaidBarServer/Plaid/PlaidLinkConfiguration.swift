@@ -16,7 +16,11 @@ struct PlaidLinkConfiguration: Equatable, Sendable {
     static func resolved(from environment: [String: String]) throws -> PlaidLinkConfiguration {
         let config = PlaidLinkConfiguration(
             clientName: PlaidBarConstants.appName,
-            products: listValue(environment["PLAID_LINK_PRODUCTS"]) ?? ["transactions"],
+            // New links request `liabilities` so credit cards return real APR /
+            // statement / due-date data. Existing items keep whatever scope they
+            // were linked under (new-links-only rollout — AND-493); the server
+            // tolerates the missing scope per item. Override via PLAID_LINK_PRODUCTS.
+            products: listValue(environment["PLAID_LINK_PRODUCTS"]) ?? ["transactions", "liabilities"],
             countryCodes: listValue(environment["PLAID_LINK_COUNTRY_CODES"]) ?? ["US"],
             language: environment["PLAID_LINK_LANGUAGE"]?.trimmedLinkConfigValue ?? "en",
             webhookURL: environment["PLAID_LINK_WEBHOOK_URL"]?.trimmedLinkConfigValue,

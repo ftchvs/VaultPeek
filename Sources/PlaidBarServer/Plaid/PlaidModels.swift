@@ -225,6 +225,36 @@ struct PlaidItem: Decodable, Sendable {
     let billedProducts: [String]?
 }
 
+// MARK: - Liabilities (/liabilities/get)
+
+struct PlaidLiabilitiesResponse: Decodable, Sendable {
+    let liabilities: PlaidLiabilities?
+    let requestId: String?
+}
+
+struct PlaidLiabilities: Decodable, Sendable {
+    let credit: [PlaidCreditLiability]?
+}
+
+struct PlaidCreditLiability: Decodable, Sendable {
+    let accountId: String?
+    let aprs: [PlaidApr]?
+    let isOverdue: Bool?
+    let lastPaymentAmount: Double?
+    let lastPaymentDate: String?
+    let lastStatementIssueDate: String?
+    let lastStatementBalance: Double?
+    let minimumPaymentAmount: Double?
+    let nextPaymentDueDate: String?
+}
+
+struct PlaidApr: Decodable, Sendable {
+    let aprPercentage: Double?
+    let aprType: String?
+    let balanceSubjectToApr: Double?
+    let interestChargeAmount: Double?
+}
+
 struct PlaidTransactionsSyncResponse: Decodable, Sendable {
     let added: [PlaidTransaction]
     let modified: [PlaidTransaction]

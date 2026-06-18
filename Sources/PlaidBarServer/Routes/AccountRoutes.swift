@@ -12,6 +12,7 @@ struct AccountRoutes: Sendable {
         group.group("accounts")
             .get(use: listAccounts)
             .get("balances", use: getBalances)
+            .get("liabilities", use: listLiabilities)
             .delete("{itemId}", use: removeItem)
     }
 
@@ -51,6 +52,30 @@ struct AccountRoutes: Sendable {
         }
 
         return try Self.jsonResponse(results.flatMap(\.accounts))
+    }
+
+    /// Per-card liabilities (purchase APR, statement balance, minimum payment,
+    /// next due date) from Plaid `/liabilities/get`. Best-effort: items linked
+    /// without the `liabilities` product (the new-links-only rollout) return a
+    /// Plaid product error, which we swallow per item and treat as "no
+    /// liabilities" so the card keeps its honest utilization-only view. A scope
+    /// gap never fails the whole request.
+    @Sendable
+    func listLiabilities(
+        request: Request,
+        context: some RequestContext
+    ) async throws -> Response {
+        let items = Self.deterministicItems(try await tokenStore.getAllItems())
+        let perItem = try await BoundedConcurrency.map(items, limit: maxConcurrentItemRefreshes) { item -> [LiabilityDTO] in
+            do {
+                let accessToken = try tokenStore.accessToken(for: item)
+                let response = try await plaidClient.getLiabilities(accessToken: accessToken)
+                return (response.liabilities?.credit ?? []).compactMap(Self.liabilityDTO(from:))
+            } catch {
+                return []
+            }
+        }
+        return try Self.jsonResponse(perItem.flatMap { $0 })
     }
 
     @Sendable
@@ -168,6 +193,25 @@ struct AccountRoutes: Sendable {
                 institutionName: item.institutionName
             )
         }
+    }
+
+    /// Reduces a Plaid credit liability to the fields VaultPeek surfaces,
+    /// pulling the purchase APR out of the `aprs` array (which may be empty
+    /// when the issuer does not report APR).
+    private static func liabilityDTO(from credit: PlaidCreditLiability) -> LiabilityDTO? {
+        guard let accountId = credit.accountId else { return nil }
+        let purchaseApr = credit.aprs?.first { $0.aprType == "purchase_apr" }?.aprPercentage
+        return LiabilityDTO(
+            accountId: accountId,
+            purchaseAprPercentage: purchaseApr,
+            lastStatementBalance: credit.lastStatementBalance,
+            lastStatementIssueDate: credit.lastStatementIssueDate,
+            minimumPaymentAmount: credit.minimumPaymentAmount,
+            nextPaymentDueDate: credit.nextPaymentDueDate,
+            lastPaymentAmount: credit.lastPaymentAmount,
+            lastPaymentDate: credit.lastPaymentDate,
+            isOverdue: credit.isOverdue ?? false
+        )
     }
 
     static func deterministicItems(_ items: [ItemModel]) -> [ItemModel] {
