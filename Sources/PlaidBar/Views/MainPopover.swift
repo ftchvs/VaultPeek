@@ -6,6 +6,7 @@ struct MainPopover: View {
     @Environment(AppState.self) private var appState
     @Environment(\.openSettings) private var openSettings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorScheme) private var colorScheme
     /// Whether this dashboard is hosted in the menu-bar popover or a floating
     /// desktop window (AND-384). Detached, the host window owns width/height, so
@@ -216,15 +217,26 @@ struct MainPopover: View {
             .foregroundStyle(AppearanceTextColors.primary)
             .environment(\.colorScheme, effectiveColorScheme)
             .background {
-                // The detached desktop window supplies its own behind-window
-                // vibrancy backdrop (a translucent NSVisualEffectView), so the
-                // dashboard renders a clear root there and lets the desktop show
-                // through. The menu-bar popover keeps the in-content material
-                // backdrop (its host window is not vibrant on its own).
+                // Both surfaces are real glass now: the detached desktop window
+                // has its own behind-window NSVisualEffectView, and the menu-bar
+                // popover is a native NSPopover (frosted material on its own
+                // backing). So both render a clear/overlay-only root and let the
+                // host's frost be the surface.
+                //   • Detached: fully clear (the panel owns the backdrop).
+                //   • Popover + Reduce Transparency: paint the flat in-content
+                //     material for a legible, solid surface.
+                //   • Popover (normal): overlay-only — the slider's tint wash over
+                //     the NSPopover frost — with NO second `.ultraThinMaterial`
+                //     (within-window) that would mute the desktop read-through.
                 if dashboardPresentation.isDetached {
                     Color.clear
-                } else {
+                } else if reduceTransparency {
                     PopoverMaterialBackground(transparencySetting: transparencySetting)
+                } else {
+                    PopoverMaterialBackground(
+                        transparencySetting: transparencySetting,
+                        includesMaterial: false
+                    )
                 }
             }
             // The screen-edge anchor and width reader only apply to the menu-bar
@@ -294,7 +306,7 @@ struct MainPopover: View {
                 wealthSummaryRail
 
                 Divider()
-                    .opacity(0.35)
+                    .opacity(0.5)
             }
 
             // The center flexes: the rail and inspector keep their fixed widths,
@@ -325,7 +337,11 @@ struct MainPopover: View {
             // growing the whole popover past the screen-bounded height. In the
             // detached window the panel owns the height, so the rail fills it.
             .frame(maxHeight: columnMaxHeight)
-            .leftPanelSurface()
+            // No card surface: the rail is a transparent region of the single
+            // frosted popover surface, separated from the center only by the
+            // divider hairline — so the three columns read as one sheet of glass
+            // instead of floating cards (the boxed fill+stroke+shadow was the
+            // "floating above the main component" cause).
             .transition(.move(edge: .leading).combined(with: .opacity))
     }
 
@@ -338,7 +354,7 @@ struct MainPopover: View {
     private var accountInspectorColumn: some View {
         if isInspectorColumnVisible {
             Divider()
-                .opacity(0.35)
+                .opacity(0.5)
 
             Group {
                 if let selectedAccount {
@@ -373,7 +389,8 @@ struct MainPopover: View {
             }
             .frame(width: Layout.flyoutWidth)
             .frame(maxHeight: columnMaxHeight)
-            .leftPanelSurface()
+            // Transparent region of the shared frosted surface (see wealthSummaryRail);
+            // the divider hairline is the only seam between columns.
             // The column is stable now, so this transition only plays when it
             // first appears as setup completes — not on every selection (AND-405).
             .transition(.asymmetric(
@@ -2304,7 +2321,26 @@ final class SettingsWindowActivationRestorer {
     /// so opening Settings twice does not double-count and closing releases once.
     private var holdsRegularRequest = false
 
+    /// SwiftUI entry point (uses the environment's `OpenSettingsAction`).
     func open(openSettings: OpenSettingsAction) {
+        open(invoke: { openSettings() })
+    }
+
+    /// AppKit entry point (no SwiftUI environment available, e.g. the status-item
+    /// context menu owned by `MenuBarAppDelegate`). Opens the SwiftUI `Settings`
+    /// scene via the standard responder-chain selector.
+    func open() {
+        open(invoke: { Self.sendOpenSettingsAction() })
+    }
+
+    private static func sendOpenSettingsAction() {
+        let app = NSApplication.shared
+        // macOS 14+ uses `showSettingsWindow:`; fall back to the older selector.
+        if app.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil) { return }
+        _ = app.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+    }
+
+    private func open(invoke openAction: () -> Void) {
         let app = NSApplication.shared
         removeDiscoveryObserver()
         // Elevate via the shared, refcounted coordinator (not a private save) so
@@ -2314,7 +2350,7 @@ final class SettingsWindowActivationRestorer {
             AppActivationPolicyCoordinator.shared.requestRegular()
         }
 
-        openSettings()
+        openAction()
         app.activate(ignoringOtherApps: true)
 
         if focusCurrentSettingsWindow() { return }

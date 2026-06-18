@@ -209,10 +209,14 @@ enum SurfaceTokens {
 
     static let popoverTextureOpacity = 0.12
 
+    // The persistent columns are transparent regions of one frosted surface,
+    // not raised cards — no stroke, no drop shadow. A shadowed/stroked full-height
+    // rounded rect is exactly what made the columns read as "floating above the
+    // main component". Genuinely raised inner cards use raisedDepth/insetDepth.
     static let leftPanelDepth = SurfaceDepth(
-        strokeOpacity: 0.11,
-        innerStrokeOpacity: 0.045,
-        shadow: SurfaceShadow(opacity: 0.16, radius: 14, x: 0, y: 8)
+        strokeOpacity: 0,
+        innerStrokeOpacity: 0,
+        shadow: nil
     )
     static let raisedDepth = SurfaceDepth(
         strokeOpacity: 0.08,

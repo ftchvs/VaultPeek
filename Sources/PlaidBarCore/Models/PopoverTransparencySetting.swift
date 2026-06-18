@@ -28,13 +28,17 @@ public struct PopoverTransparencySetting: Sendable, Equatable {
         return (multiplier * 100).rounded() / 100
     }
 
-    /// Solid fill layered over `.ultraThinMaterial`. Lower values produce a
-    /// more opaque panel; higher values preserve more desktop read-through.
-    /// The floor keeps text and numeric finance values legible at maximum
-    /// transparency.
+    /// Solid `windowBackgroundColor` wash layered over the popover's real frost
+    /// (the NSPopover material). At "Solid" the wash is nearly opaque and hides
+    /// the desktop; at "Glass" it nearly vanishes so the desktop reads through.
+    /// The range spans almost the full 0…1 so the difference is unmistakable —
+    /// the previous 0.06…0.32 band was calibrated to sit over an extra
+    /// within-window `.ultraThinMaterial` (now dropped in the popover), so it
+    /// looked nearly identical end to end. A small floor at maximum transparency
+    /// keeps root-level labels legible on busy desktops.
     public var materialOverlayOpacity: Double {
         let progress = (value - Self.minimumValue) / (Self.maximumValue - Self.minimumValue)
-        let opacity = 0.32 - (progress * 0.26)
+        let opacity = 0.96 - (progress * 0.92)
         return (opacity * 100).rounded() / 100
     }
 

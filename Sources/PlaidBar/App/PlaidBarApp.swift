@@ -1,18 +1,19 @@
 import AppKit
 import Combine
-import MenuBarExtraAccess
 import PlaidBarCore
 import Sparkle
 import SwiftUI
 
 @main
 struct PlaidBarApp: App {
+    // The menu-bar status item + popover are owned by an AppKit delegate so the
+    // popover can be a real NSPopover (native frosted glass — MenuBarExtra(.window)
+    // can't be made translucent). The delegate reads its dependencies from
+    // MenuBarAppContext, filled in below.
+    @NSApplicationDelegateAdaptor(MenuBarAppDelegate.self) private var appDelegate
     @State private var appState: AppState
-    /// Owns the floating desktop-window dashboard (AND-384). `@State` so it
-    /// persists across `body` recomputes for the process lifetime.
-    @State private var detachedDashboard = DetachedDashboardCoordinator()
-    @Environment(\.openSettings) private var openSettings
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Owns the floating desktop-window dashboard (AND-384).
+    private let detachedDashboard = DetachedDashboardCoordinator()
     private let updaterController: SPUStandardUpdaterController
     private let statusItemContextMenuController = StatusItemContextMenuController()
 
@@ -28,6 +29,17 @@ struct PlaidBarApp: App {
             updaterDelegate: nil,
             userDriverDelegate: nil
         )
+        // Hand the process-lifetime dependencies to the AppKit delegate (which
+        // @NSApplicationDelegateAdaptor constructs itself). App.init runs on the
+        // main thread, and the delegate reads these in applicationDidFinishLaunching
+        // (after init), so assumeIsolated is safe and the values are ready in time.
+        MainActor.assumeIsolated {
+            MenuBarAppContext.appState = state
+            MenuBarAppContext.detachedDashboard = detachedDashboard
+            MenuBarAppContext.updaterController = updaterController
+            MenuBarAppContext.contextMenuController = statusItemContextMenuController
+            MenuBarAppContext.forcedColorScheme = Self.forcedColorScheme
+        }
         if CommandLine.arguments.contains("--show-popover") {
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(700))
@@ -62,170 +74,10 @@ struct PlaidBarApp: App {
     }
 
     var body: some Scene {
-        MenuBarExtra {
-            MainPopover()
-                .environment(appState)
-                .environment(\.dashboardPresentation, .popover(detach: {
-                    detachedDashboard.detach(
-                        appState: appState,
-                        forcedColorScheme: Self.forcedColorScheme,
-                        reduceMotion: reduceMotion
-                    )
-                }))
-                .forcedAppColorScheme(Self.forcedColorScheme)
-                .appliesAppAppearance()
-        } label: {
-            MenuBarLabel()
-                .environment(appState)
-                .forcedAppColorScheme(Self.forcedColorScheme)
-                // The label is the only scene content mounted for the whole app
-                // lifetime, so it also carries the live appearance updater: with
-                // it here, flipping Light/Dark re-applies NSApp.appearance even
-                // when the popover and Settings are both closed (the popover and
-                // Settings keep their own copies for when they are the only
-                // mounted scene). Without this, a change made while only the label
-                // is up would not take effect until the popover next opened.
-                .appliesAppAppearance()
-                // The menu-bar label is the only scene content that is mounted
-                // for the whole app lifetime — `MainPopover` is mounted lazily,
-                // only while the popover/menu-extra window is presented, and
-                // `Settings` likewise. So the floating-window restore-at-launch,
-                // the persisted/toggled-intent sync, AND the click interceptor
-                // all live here: otherwise a saved `dashboard.detached = true`
-                // would not reopen the window until the user first opened the
-                // popover, a Settings-only toggle would not take effect until
-                // then, and — critically — a status-item click while detached
-                // (before the popover ever mounted) would set
-                // `isPopoverPresented = true` with no observer installed yet, so
-                // SwiftUI would open the popover instead of raising the floating
-                // window (AND-384).
-                .task {
-                    detachedDashboard.sync(
-                        appState: appState,
-                        forcedColorScheme: Self.forcedColorScheme,
-                        reduceMotion: reduceMotion
-                    )
-                    // QA/screenshot aid: "--detach" opens the floating window at
-                    // launch (parallel to "--show-popover") WITHOUT persisting the
-                    // detached intent, so a QA run never leaves a durable
-                    // `dashboard.detached` preference behind.
-                    if CommandLine.arguments.contains("--detach") {
-                        detachedDashboard.presentForLaunchOverride(
-                            appState: appState,
-                            forcedColorScheme: Self.forcedColorScheme,
-                            reduceMotion: reduceMotion
-                        )
-                    }
-                }
-                // While detached, a status-item click sets isPopoverPresented
-                // true; intercept it on the always-mounted label, snap it back to
-                // false, and raise the floating window instead of the popover.
-                // A `--detach` launch override also has a visible detached window
-                // but intentionally leaves the persisted detached preference off,
-                // so include window visibility in the intercept.
-                .onChange(of: appState.isPopoverPresented) { _, isPresented in
-                    guard isPresented, appState.isDashboardDetached || detachedDashboard.isWindowVisible else { return }
-                    appState.isPopoverPresented = false
-                    detachedDashboard.handleMenuBarActivation(
-                        appState: appState,
-                        forcedColorScheme: Self.forcedColorScheme,
-                        reduceMotion: reduceMotion
-                    )
-                }
-                .onChange(of: appState.isDashboardDetached) { _, _ in
-                    detachedDashboard.sync(
-                        appState: appState,
-                        forcedColorScheme: Self.forcedColorScheme,
-                        reduceMotion: reduceMotion
-                    )
-                }
-                .onOpenURL { url in
-                    guard url.scheme == "vaultpeek" else { return }
-                    if detachedDashboard.handleMenuBarActivation(
-                        appState: appState,
-                        forcedColorScheme: Self.forcedColorScheme,
-                        reduceMotion: reduceMotion
-                    ) {
-                        return
-                    }
-                    appState.isPopoverPresented = true
-                }
-                // The "Refresh balances" widget control opens the app via an
-                // `openAppWhenRun` App Intent that writes a pending command but,
-                // unlike the widget's deep link above, opens neither the popover
-                // nor the detached window — so neither `loadInitialData()` nor a
-                // dashboard refresh runs to consume it, and the control feels
-                // inert. Consume it here on the always-mounted label whenever the
-                // app becomes active (the intent activates it, whether it was
-                // already running or freshly launched). A no-op when no command
-                // is pending, so it is cheap on every activation (AND-385).
-                .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-                    Task { await appState.consumePendingGlanceCommand() }
-                }
-                // App Lock trigger: lock when VaultPeek loses focus (the user
-                // clicks away / the popover closes) so balances re-mask behind
-                // the lock. A cheap no-op when App Lock or lock-when-backgrounded
-                // is off. The unlock prompt is driven from the popover-open path
-                // below, not from didBecomeActive, so presenting the system auth
-                // sheet (which deactivates this app) cannot start a lock/unlock
-                // loop (AND-462).
-                .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
-                    appState.lockOnResignActiveIfNeeded()
-                }
-                // Opening the popover while locked prompts for authentication to
-                // reveal balances; `unlockApp()` is a no-op when App Lock is off
-                // or already unlocked.
-                .onChange(of: appState.isPopoverPresented) { _, isPresented in
-                    guard isPresented, appState.isAppLocked else { return }
-                    Task { await appState.unlockApp() }
-                }
-        }
-        .menuBarExtraAccess(isPresented: $appState.isPopoverPresented) { statusItem in
-            statusItemContextMenuController.configure(
-                statusItem: statusItem,
-                actions: StatusItemContextMenuActions(
-                    showDashboard: {
-                        // "Open VaultPeek" raises the floating window when
-                        // detached; otherwise it opens the popover (AND-384).
-                        if detachedDashboard.handleMenuBarActivation(
-                            appState: appState,
-                            forcedColorScheme: Self.forcedColorScheme,
-                            reduceMotion: reduceMotion
-                        ) {
-                            return
-                        }
-                        appState.isPopoverPresented = true
-                    },
-                    openInWindow: {
-                        // Detach into the floating desktop window directly, so the
-                        // window is reachable without hunting for the footer glyph.
-                        detachedDashboard.detach(
-                            appState: appState,
-                            forcedColorScheme: Self.forcedColorScheme,
-                            reduceMotion: reduceMotion
-                        )
-                    },
-                    refreshDashboard: {
-                        Task { await appState.refreshDashboard() }
-                    },
-                    openSettings: {
-                        SettingsWindowActivationRestorer.shared.open(openSettings: openSettings)
-                    },
-                    checkForUpdates: {
-                        updaterController.updater.checkForUpdates()
-                    },
-                    showAbout: {
-                        NSApplication.shared.orderFrontStandardAboutPanel(nil)
-                        NSApplication.shared.activate(ignoringOtherApps: true)
-                    },
-                    dismissPopover: {
-                        appState.isPopoverPresented = false
-                    }
-                )
-            )
-        }
-        .menuBarExtraStyle(.window)
-
+        // The menu bar status item + NSPopover live in MenuBarAppDelegate; the
+        // only SwiftUI scene is Settings. A Settings-only scene is the canonical
+        // shape for an LSUIElement/.accessory menu-bar app and keeps
+        // @Environment(\.openSettings) + SettingsWindowActivationRestorer working.
         Settings {
             SettingsView(updater: updaterController.updater)
                 .environment(appState)
@@ -366,12 +218,21 @@ enum AppAppearance {
     }
 }
 
-private extension View {
+extension View {
+    // Module-visible: also used by MenuBarAppDelegate's hosted MainPopover/MenuBarLabel.
     func forcedAppColorScheme(_ cliOverride: ColorScheme?) -> some View {
         modifier(ForcedAppColorScheme(cliOverride: cliOverride))
     }
 
     func appliesAppAppearance() -> some View {
         modifier(AppAppearanceApplier())
+    }
+}
+
+/// Lets `MenuBarAppContext` hold the Sparkle updater controller without the
+/// AppKit delegate importing Sparkle.
+extension SPUStandardUpdaterController: SPUUpdaterControlling {
+    public func checkForUpdatesFromMenu() {
+        updater.checkForUpdates()
     }
 }

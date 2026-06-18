@@ -96,6 +96,12 @@ enum SnapshotRenderer {
 
     /// Returns `true` when the PNG was written.
     private static func capturePopoverWindow(to url: URL) -> Bool {
+        // Headless contract: the popover is now a native NSPopover, whose frosted
+        // material lives in a PRIVATE backing view that `cacheDisplay` cannot
+        // rasterize. So `--render-snapshot` captures the SwiftUI content over the
+        // slider's tint wash (legible — cards carry their own fills) but WITHOUT
+        // the desktop frost. On-screen `Scripts/screenshots.sh` (CGWindowList /
+        // screencapture) composites the real frost and remains the asset source.
         guard let window = popoverWindow(),
               let contentView = window.contentView
         else {

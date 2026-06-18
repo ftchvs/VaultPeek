@@ -4,6 +4,12 @@ import SwiftUI
 
 struct PopoverMaterialBackground: View {
     let transparencySetting: PopoverTransparencySetting
+    /// Whether to paint the in-content `.ultraThinMaterial` layer. False in the
+    /// live NSPopover, which already provides the native frosted material on its
+    /// own backing — stacking a second within-window material over it would
+    /// double-frost and mute the desktop read-through. The slider's tint wash
+    /// still applies so Solid↔Glass works over the NSPopover frost.
+    var includesMaterial: Bool = true
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -28,8 +34,10 @@ struct PopoverMaterialBackground: View {
                 )
             }
 
-            Rectangle()
-                .fill(.ultraThinMaterial)
+            if includesMaterial {
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+            }
 
             Color(nsColor: .windowBackgroundColor)
                 .opacity(transparencySetting.materialOverlayOpacity)
