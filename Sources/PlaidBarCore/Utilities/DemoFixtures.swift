@@ -81,6 +81,19 @@ public enum DemoFixtures {
         }
     }
 
+    /// Partial-sync demo statuses (AND-489): one connected item plus one
+    /// degraded (`loginRequired`) item, so `syncedItemCount < itemCount` and the
+    /// data-integrity badge renders `.partial`. Used by the demo status-recovery
+    /// scenario so the badge is visible without Plaid.
+    public static func partialSyncItemStatuses(now: Date = Date(), calendar: Calendar = .current) -> [ItemStatus] {
+        let recoveredSync = calendar.date(byAdding: .minute, value: -18, to: now) ?? now
+        let needsLoginSync = calendar.date(byAdding: .day, value: -3, to: now) ?? now
+        return [
+            ItemStatus(id: "demo_chase", institutionName: "Chase", status: .connected, lastSync: recoveredSync),
+            ItemStatus(id: "demo_amex_item", institutionName: "American Express", status: .loginRequired, lastSync: needsLoginSync),
+        ]
+    }
+
     public static func accountBalanceHistory(
         forAccountId accountId: String,
         now: Date = Date(),
