@@ -53,6 +53,14 @@ jobs:
         run: swift build -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
 
       - name: Test
+        # Opt in to the Keychain-backed token-safety tests. They are gated off
+        # by default so local `swift test` never writes to a developer's login
+        # keychain (which, under ad-hoc rebuild signatures, prompts repeatedly).
+        # The CI runner has a fresh keychain and a stable per-run signature, so
+        # the tests create and delete their own items in one process without a
+        # prompt. See Tests/PlaidBarServerTests/KeychainTestSupport.swift.
+        env:
+          PLAIDBAR_TEST_KEYCHAIN: '1'
         run: swift test
 
       - name: Sandbox smoke

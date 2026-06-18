@@ -7,10 +7,19 @@ import PlaidBarCore
 actor TokenStore {
     private let fluent: Fluent
     private let logger: Logger
+    /// Keychain service the access-token bytes are stored under. Defaults to the
+    /// single production service; injectable so tests can isolate their writes
+    /// to a throwaway service and never touch real token entries.
+    private let keychainService: String
 
-    init(fluent: Fluent, logger: Logger = Logger(label: "com.ftchvs.plaidbar-server.token-store")) {
+    init(
+        fluent: Fluent,
+        logger: Logger = Logger(label: "com.ftchvs.plaidbar-server.token-store"),
+        keychainService: String = LocalDataStore.plaidAccessTokenKeychainService
+    ) {
         self.fluent = fluent
         self.logger = logger
+        self.keychainService = keychainService
     }
 
     // Serializes managed-item inserts so the institution-limit check and the
@@ -41,7 +50,8 @@ actor TokenStore {
     ) async throws {
         let storedAccessToken = try PlaidTokenVault.store(
             accessToken: accessToken,
-            itemId: id
+            itemId: id,
+            service: keychainService
         )
         let item = ItemModel(
             id: id,
@@ -170,7 +180,7 @@ actor TokenStore {
         let item = try outcome.get()
         guard let item else { return }
         do {
-            try PlaidTokenVault.delete(storedToken: item.accessToken, fallbackItemId: id)
+            try PlaidTokenVault.delete(storedToken: item.accessToken, fallbackItemId: id, service: keychainService)
         } catch {
             // Best-effort: the SQLite item/cursor rows are already gone, so a
             // Keychain-delete failure leaves only an orphaned token entry
@@ -185,7 +195,7 @@ actor TokenStore {
 
     func pruneOrphanedKeychainTokens() async throws {
         let referencedItemIds = Set(try await getAllItems().compactMap(\.id))
-        try PlaidTokenVault.deleteOrphanedTokens(referencedItemIds: referencedItemIds)
+        try PlaidTokenVault.deleteOrphanedTokens(referencedItemIds: referencedItemIds, service: keychainService)
     }
 
     func updateItemStatus(id: String, status: String) async throws {
@@ -269,7 +279,7 @@ actor TokenStore {
     }
 
     nonisolated func accessToken(for item: ItemModel) throws -> String {
-        try PlaidTokenVault.resolve(storedToken: item.accessToken)
+        try PlaidTokenVault.resolve(storedToken: item.accessToken, service: keychainService)
     }
 }
 

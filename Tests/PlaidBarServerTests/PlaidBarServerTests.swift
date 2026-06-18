@@ -49,16 +49,10 @@ private enum HostedLinkStubError: Error {
     case transientExchangeFailure
 }
 
-private let plaidTokenVaultKeychainAvailable: Bool = {
-    let itemId = "test_keychain_probe_\(UUID().uuidString)"
-    do {
-        let storedToken = try PlaidTokenVault.store(accessToken: "probe-token", itemId: itemId)
-        try PlaidTokenVault.delete(storedToken: storedToken, fallbackItemId: itemId)
-        return true
-    } catch {
-        return false
-    }
-}()
+// Gated behind `PLAIDBAR_TEST_KEYCHAIN` and routed to an isolated, swept test
+// service so the default `swift test` run never touches the login keychain.
+// See `KeychainTestSupport`.
+private let plaidTokenVaultKeychainAvailable = keychainTestSupportAvailable
 
 private actor HostedLinkStubPlaidClient: PlaidClientProtocol {
     private let linkTokenGetResponse: PlaidLinkTokenGetResponse
@@ -581,7 +575,8 @@ struct PlaidBarServerTests {
             for itemId in [loginItemId, errorItemId] {
                 try? PlaidTokenVault.delete(
                     storedToken: PlaidTokenVault.reference(for: itemId),
-                    fallbackItemId: itemId
+                    fallbackItemId: itemId,
+                    service: keychainTestService
                 )
             }
         }
@@ -1235,7 +1230,7 @@ struct PlaidBarServerTests {
         var bodyError: Error?
         do {
             try await fluent.migrate()
-            try await body(TokenStore(fluent: fluent, logger: logger), fluent)
+            try await body(TokenStore(fluent: fluent, logger: logger, keychainService: keychainTestService), fluent)
         } catch {
             bodyError = error
         }
@@ -1262,7 +1257,7 @@ struct PlaidBarServerTests {
         do {
             try await fluent.migrate()
             try await body(
-                TokenStore(fluent: fluent, logger: logger),
+                TokenStore(fluent: fluent, logger: logger, keychainService: keychainTestService),
                 BillingSubscriptionStore(fluent: fluent)
             )
         } catch {
@@ -1812,7 +1807,8 @@ struct PlaidBarServerTests {
         defer {
             try? PlaidTokenVault.delete(
                 storedToken: PlaidTokenVault.reference(for: itemId),
-                fallbackItemId: itemId
+                fallbackItemId: itemId,
+                service: keychainTestService
             )
         }
 
@@ -1867,7 +1863,8 @@ struct PlaidBarServerTests {
         defer {
             try? PlaidTokenVault.delete(
                 storedToken: PlaidTokenVault.reference(for: itemId),
-                fallbackItemId: itemId
+                fallbackItemId: itemId,
+                service: keychainTestService
             )
         }
 
@@ -1913,7 +1910,8 @@ struct PlaidBarServerTests {
             for itemId in ["a-item-ok", "z-item-loop"] {
                 try? PlaidTokenVault.delete(
                     storedToken: PlaidTokenVault.reference(for: itemId),
-                    fallbackItemId: itemId
+                    fallbackItemId: itemId,
+                    service: keychainTestService
                 )
             }
         }
@@ -2648,7 +2646,8 @@ struct PlaidBarServerTests {
         defer {
             try? PlaidTokenVault.delete(
                 storedToken: PlaidTokenVault.reference(for: itemId),
-                fallbackItemId: itemId
+                fallbackItemId: itemId,
+                service: keychainTestService
             )
         }
 
@@ -2739,7 +2738,8 @@ struct PlaidBarServerTests {
         defer {
             try? PlaidTokenVault.delete(
                 storedToken: PlaidTokenVault.reference(for: itemId),
-                fallbackItemId: itemId
+                fallbackItemId: itemId,
+                service: keychainTestService
             )
         }
 
@@ -2912,11 +2912,13 @@ struct PlaidBarServerTests {
         defer {
             try? PlaidTokenVault.delete(
                 storedToken: PlaidTokenVault.reference(for: firstItemId),
-                fallbackItemId: firstItemId
+                fallbackItemId: firstItemId,
+                service: keychainTestService
             )
             try? PlaidTokenVault.delete(
                 storedToken: PlaidTokenVault.reference(for: secondItemId),
-                fallbackItemId: secondItemId
+                fallbackItemId: secondItemId,
+                service: keychainTestService
             )
         }
 
@@ -3045,7 +3047,8 @@ struct PlaidBarServerTests {
         defer {
             try? PlaidTokenVault.delete(
                 storedToken: PlaidTokenVault.reference(for: itemId),
-                fallbackItemId: itemId
+                fallbackItemId: itemId,
+                service: keychainTestService
             )
         }
 
@@ -3203,12 +3206,13 @@ struct PlaidBarServerTests {
         let itemId = "test_item_\(UUID().uuidString)"
         let storedToken = try PlaidTokenVault.store(
             accessToken: "access-sandbox-token",
-            itemId: itemId
+            itemId: itemId,
+            service: keychainTestService
         )
-        defer { try? PlaidTokenVault.delete(storedToken: storedToken, fallbackItemId: itemId) }
+        defer { try? PlaidTokenVault.delete(storedToken: storedToken, fallbackItemId: itemId, service: keychainTestService) }
 
         #expect(PlaidTokenVault.isReference(storedToken))
-        #expect(try PlaidTokenVault.resolve(storedToken: storedToken) == "access-sandbox-token")
+        #expect(try PlaidTokenVault.resolve(storedToken: storedToken, service: keychainTestService) == "access-sandbox-token")
     }
 
     @Test(.enabled(if: plaidTokenVaultKeychainAvailable, "macOS Keychain accepts test writes"))
@@ -3216,17 +3220,19 @@ struct PlaidBarServerTests {
         let itemId = "test_item_\(UUID().uuidString)"
         let firstReference = try PlaidTokenVault.store(
             accessToken: "access-sandbox-token-old",
-            itemId: itemId
+            itemId: itemId,
+            service: keychainTestService
         )
-        defer { try? PlaidTokenVault.delete(storedToken: firstReference, fallbackItemId: itemId) }
+        defer { try? PlaidTokenVault.delete(storedToken: firstReference, fallbackItemId: itemId, service: keychainTestService) }
 
         let secondReference = try PlaidTokenVault.store(
             accessToken: "access-sandbox-token-new",
-            itemId: itemId
+            itemId: itemId,
+            service: keychainTestService
         )
 
         #expect(firstReference == secondReference)
-        #expect(try PlaidTokenVault.resolve(storedToken: secondReference) == "access-sandbox-token-new")
+        #expect(try PlaidTokenVault.resolve(storedToken: secondReference, service: keychainTestService) == "access-sandbox-token-new")
     }
 
     @Test func accountRefreshFailsOnlyWhenEveryLinkedItemFails() {
