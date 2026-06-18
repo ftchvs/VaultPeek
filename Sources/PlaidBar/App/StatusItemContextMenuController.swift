@@ -8,6 +8,9 @@ struct StatusItemContextMenuActions {
     let checkForUpdates: @MainActor () -> Void
     let showAbout: @MainActor () -> Void
     let dismissPopover: @MainActor () -> Void
+    /// ⌥-click on the menu-bar icon toggles Privacy Mask instead of opening the
+    /// popover — instant over-the-shoulder privacy without a menu.
+    let togglePrivacyMask: @MainActor () -> Void
 }
 
 @MainActor
@@ -26,23 +29,37 @@ final class StatusItemContextMenuController: NSObject, NSMenuDelegate {
     private func installLocalEventMonitorIfNeeded() {
         guard localEventMonitor == nil else { return }
 
-        localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .rightMouseDown) { [weak self] event in
+        localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown, .leftMouseDown]) { [weak self] event in
             let didHandleEvent = MainActor.assumeIsolated {
                 guard let self else { return false }
-                return self.handleRightMouseDown(event)
+                return self.handleStatusItemMouseDown(event)
             }
+            // Returning nil swallows the event so the status item never sees it
+            // (no context menu flash, no popover toggle); returning the event lets
+            // a plain left-click open the popover as usual.
             return didHandleEvent ? nil : event
         }
     }
 
-    private func handleRightMouseDown(_ event: NSEvent) -> Bool {
+    private func handleStatusItemMouseDown(_ event: NSEvent) -> Bool {
         guard let button = statusItem?.button, event.isInside(button: button) else {
             return false
         }
 
-        actions?.dismissPopover()
-        showMenu(from: button, with: event)
-        return true
+        switch event.type {
+        case .rightMouseDown:
+            actions?.dismissPopover()
+            showMenu(from: button, with: event)
+            return true
+        case .leftMouseDown:
+            // Only intercept the Option-modified click; a plain click falls
+            // through to MenuBarExtra and opens the popover normally.
+            guard event.modifierFlags.contains(.option) else { return false }
+            actions?.togglePrivacyMask()
+            return true
+        default:
+            return false
+        }
     }
 
     private func showMenu(from button: NSStatusBarButton, with event: NSEvent) {

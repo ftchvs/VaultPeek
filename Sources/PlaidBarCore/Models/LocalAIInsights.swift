@@ -233,7 +233,8 @@ public struct LocalAIInsightReceipt: Equatable, Sendable {
 
     public static func make(
         summary: LocalAIActivitySummary?,
-        availability: LocalAIAvailability
+        availability: LocalAIAvailability,
+        privacyMaskEnabled: Bool = false
     ) -> LocalAIInsightReceipt {
         guard let summary else {
             return unavailable(availability: availability)
@@ -269,7 +270,9 @@ public struct LocalAIInsightReceipt: Equatable, Sendable {
             chips.append(EvidenceChip(
                 id: "recurring",
                 label: "Recurring est.",
-                value: Formatters.currency(input.recurringSnapshot.estimatedMonthlyTotal, format: .compact),
+                value: privacyMaskEnabled
+                    ? PrivacyMaskPresentation.compactValue
+                    : Formatters.currency(input.recurringSnapshot.estimatedMonthlyTotal, format: .compact),
                 systemImage: "arrow.triangle.2.circlepath"
             ))
         }
@@ -288,7 +291,10 @@ public struct LocalAIInsightReceipt: Equatable, Sendable {
         let rawHeadline = summary.generatedSummary.isEmpty
             ? fallbackHeadline(for: input)
             : summary.generatedSummary
-        let headline = redactKnownSourceIdentifiers(in: rawHeadline, input: input)
+        let redactedHeadline = redactKnownSourceIdentifiers(in: rawHeadline, input: input)
+        // Mask any currency baked into the (possibly model-generated) headline so
+        // Privacy Mask hides "$X expenses, $Y income…" like every other value.
+        let headline = PrivacyMaskPresentation.maskCurrencyTokens(in: redactedHeadline, isEnabled: privacyMaskEnabled)
         let confidence = confidenceText(for: input, availability: availability)
         let reversibleActionCopy = reversibleActionCopy(for: input)
         let timeWindow = timeWindow(for: input)
