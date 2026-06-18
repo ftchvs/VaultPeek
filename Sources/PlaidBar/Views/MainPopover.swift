@@ -444,6 +444,9 @@ struct MainPopover: View {
                         DashboardChangeReceiptStrip()
                             .environment(appState)
 
+                        BalanceTimeMachineView()
+                            .environment(appState)
+
                         WeeklyReviewCard()
                             .environment(appState)
 

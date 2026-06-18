@@ -25,6 +25,7 @@ final class AppState {
         static let refreshInterval = "refreshInterval"
         static let automaticRefreshPolicy = AutomaticRefreshPolicy.storageKey
         static let balanceHistory = "balanceHistory"
+        static let accountBalanceLedger = "accountBalanceLedger"
         static let notificationsEnabled = "notificationsEnabled"
         static let largeTransactionThreshold = "largeTransactionThreshold"
         static let lowBalanceThreshold = "lowBalanceThreshold"
@@ -143,6 +144,12 @@ final class AppState {
     var isDemoStatusRecoveryScenario = false
     var lastSyncDate: Date?
     var balanceHistory: [BalanceSnapshot] = []
+    /// Per-account "what the bank said" ledger (AND-490). Each refresh appends one
+    /// dated row per account; the Time Machine surface reads from it.
+    var accountBalanceLedger = AccountBalanceLedger()
+    /// Display-safe rows describing prior-day balances Plaid restated on the most
+    /// recent sync (AND-490). Empty when no history was rewritten.
+    var syncHistoryDiffRows: [SyncHistoryDiff.Row] = []
     var notificationPermissionState: NotificationPermissionState = .notDetermined
     var weeklyReviewState: WeeklyReviewState = .empty {
         didSet {
@@ -2954,6 +2961,13 @@ final class AppState {
         } else {
             balanceHistory = []
         }
+
+        if let data = UserDefaults.standard.data(forKey: Keys.accountBalanceLedger),
+           let ledger = try? JSONDecoder().decode(AccountBalanceLedger.self, from: data) {
+            accountBalanceLedger = ledger
+        } else {
+            accountBalanceLedger = AccountBalanceLedger()
+        }
     }
 
     private func recordBalanceSnapshot() {
@@ -2965,7 +2979,29 @@ final class AppState {
         if let data = try? JSONEncoder().encode(balanceHistory) {
             UserDefaults.standard.set(data, forKey: Keys.balanceHistory)
         }
+        recordAccountBalanceLedger()
         writeGlanceSnapshot()
+    }
+
+    /// Appends today's per-account bank-reported balances to the ledger and
+    /// recomputes the sync-history diff against the prior ledger (AND-490).
+    private func recordAccountBalanceLedger() {
+        guard !accounts.isEmpty else { return }
+        let previous = accountBalanceLedger
+        let next = previous.appending(accounts: accounts)
+        let nameByAccountId = Dictionary(
+            accounts.map { ($0.id, $0.name) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        syncHistoryDiffRows = SyncHistoryDiff.evaluate(
+            previousLedger: previous,
+            nextLedger: next,
+            displayName: { nameByAccountId[$0] }
+        )
+        accountBalanceLedger = next
+        if let data = try? JSONEncoder().encode(next) {
+            UserDefaults.standard.set(data, forKey: Keys.accountBalanceLedger)
+        }
     }
 
     private func writeGlanceSnapshot(updatedAt: Date = Date()) {
@@ -3132,6 +3168,22 @@ final class AppState {
         transactionRules = []
         categoryBudgets = [:]
         balanceHistory = DemoFixtures.balanceHistory()
+
+        // Balance Time Machine (AND-490): seed a multi-day per-account ledger and
+        // a post-sync diff so the Time Machine list and the "history changed"
+        // badge are both visible without Plaid.
+        let demoLedger = DemoFixtures.accountBalanceLedger()
+        let demoPostSyncLedger = DemoFixtures.postSyncAccountBalanceLedger()
+        accountBalanceLedger = demoPostSyncLedger
+        let demoNameByAccountId = Dictionary(
+            DemoFixtures.accounts.map { ($0.id, $0.name) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        syncHistoryDiffRows = SyncHistoryDiff.evaluate(
+            previousLedger: demoLedger,
+            nextLedger: demoPostSyncLedger,
+            displayName: { demoNameByAccountId[$0] }
+        )
 
         isSetupComplete = true
         serverConnected = true
