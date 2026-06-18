@@ -1230,7 +1230,7 @@ struct PlaidBarServerTests {
         var bodyError: Error?
         do {
             try await fluent.migrate()
-            try await body(TokenStore(fluent: fluent, logger: logger, keychainService: keychainTestService), fluent)
+            try await body(TokenStore(fluent: fluent, logger: logger, keychainService: keychainTestService, bypassKeychain: !keychainTestsEnabled), fluent)
         } catch {
             bodyError = error
         }
@@ -1257,7 +1257,7 @@ struct PlaidBarServerTests {
         do {
             try await fluent.migrate()
             try await body(
-                TokenStore(fluent: fluent, logger: logger, keychainService: keychainTestService),
+                TokenStore(fluent: fluent, logger: logger, keychainService: keychainTestService, bypassKeychain: !keychainTestsEnabled),
                 BillingSubscriptionStore(fluent: fluent)
             )
         } catch {
