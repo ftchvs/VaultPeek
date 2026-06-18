@@ -6,9 +6,10 @@ import Foundation
 /// over-threshold cap), not color, since template images cannot tint (AND-485).
 ///
 /// All clamping, empty-history, and divide-by-zero guards live here so the
-/// drawing layer (`SignalGlyphImage`, app target) is a dumb renderer and the
-/// meter never disagrees with the popover number — both read the same
-/// `MenuBarSummary.creditUtilization` / `AccountSparkline.normalize` source.
+/// drawing layer (`SignalGlyphImage`, app target) is a dumb renderer. The bar
+/// form reads `MenuBarSummary.highestUtilization` (the worst single card, which
+/// is what the menu-bar meter promises) and the sparkline form reuses
+/// `AccountSparkline.normalize`.
 public enum SignalGlyphMeter {
 
     /// Severity band, expressed as a discrete shape cue (NOT color). The drawing
@@ -67,6 +68,27 @@ public enum SignalGlyphMeter {
             staleness: .fresh,
             isEmpty: true
         )
+
+        /// A VoiceOver phrase for the meter, conveying value, over-threshold,
+        /// and staleness in WORDS (never color). The menu-bar parent view sets
+        /// one `.accessibilityLabel`, which overrides the child glyph image, so
+        /// the meter's signal would otherwise be silent for non-utilization
+        /// title modes; the view folds this phrase into that label. Returns nil
+        /// for the empty model (nothing to announce). The fill is read back as a
+        /// rounded percent of the meter — the v1 bar's fill is the highest
+        /// credit-card utilization, so it doubles as the spoken value.
+        public var accessibilityDescription: String? {
+            guard !isEmpty else { return nil }
+            let percent = Int((fillFraction * 100).rounded())
+            var phrase = "Signal meter \(percent) percent"
+            if severity == .overThreshold {
+                phrase += ", over threshold"
+            }
+            if staleness == .stale {
+                phrase += ", stale"
+            }
+            return phrase
+        }
     }
 
     /// Maps a normalized magnitude onto a bar-fill model.
@@ -98,8 +120,11 @@ public enum SignalGlyphMeter {
     }
 
     /// Builds the v1 utilization bar model from accounts, reusing
-    /// `MenuBarSummary.creditUtilization` so the meter and the popover number
-    /// agree. Returns the `.empty` model when no credit card reports a limit.
+    /// `MenuBarSummary.highestUtilization` so the meter shows the worst single
+    /// card — the signal Settings promises ("your highest credit-card
+    /// utilization"). The pooled `creditUtilization` aggregate can read calm
+    /// while one card is near-maxed, so the meter must not use it. Returns the
+    /// `.empty` model when no credit card reports a positive limit.
     ///
     /// - Parameters:
     ///   - accounts: all accounts (credit cards are filtered internally).
@@ -111,7 +136,7 @@ public enum SignalGlyphMeter {
         thresholdPercent: Double,
         isStale: Bool = false
     ) -> SignalGlyphRenderModel {
-        guard let utilizationPercent = MenuBarSummary.creditUtilization(from: accounts) else {
+        guard let utilizationPercent = MenuBarSummary.highestUtilization(from: accounts) else {
             return .empty
         }
         return bar(
