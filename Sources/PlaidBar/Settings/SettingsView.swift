@@ -431,13 +431,27 @@ struct GeneralSettingsView: View {
                         }
                     }
                 }
+                .disabled(appState.menuBarShowSignalMeter)
+
+                // AND-485: replace the healthy glyph with a live signal meter
+                // (highest credit-card utilization). Only the healthy state is
+                // affected; error/login/offline states keep their distinct glyph,
+                // so a problem is never hidden behind a meter.
+                Toggle("Show live signal meter", isOn: $state.menuBarShowSignalMeter)
+                Text("Replaces the menu bar icon with a small meter of your highest credit-card utilization. Warning and error states still show their own icon.")
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
 
                 Picker("Balance format", selection: $state.balanceFormat) {
                     Text("$12,450.32").tag(CurrencyFormat.full)
                     Text("$12.4K").tag(CurrencyFormat.abbreviated)
                     Text("$12,450").tag(CurrencyFormat.compact)
                 }
-                .disabled(appState.menuBarSummaryMode == .creditUtilization || appState.menuBarSummaryMode == .iconOnly)
+                .disabled(
+                    appState.menuBarSummaryMode == .creditUtilization
+                        || appState.menuBarSummaryMode == .highestUtilization
+                        || appState.menuBarSummaryMode == .iconOnly
+                )
 
                 Picker("Refresh", selection: $state.automaticRefreshPolicy) {
                     ForEach(AutomaticRefreshPolicy.allCases, id: \.self) { policy in
@@ -470,6 +484,13 @@ struct GeneralSettingsView: View {
                 .help("Credit cards above this utilization threshold show warning colors")
 
                 Toggle("Launch at login", isOn: $state.launchAtLogin)
+
+                // AND-487: a global hotkey that summons VaultPeek from any app.
+                // The chord is fixed for v1; only the on/off switch is exposed.
+                Toggle("Summon with \(SummonHotkeyConfiguration.summonDefault.displayString)", isOn: $state.summonHotkeyEnabled)
+                Text("Press \(SummonHotkeyConfiguration.summonDefault.displayString) from any app to bring VaultPeek to the front.")
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
 
                 // AND-384: pop the dashboard out of the menu bar into a
                 // floating desktop window the user can drag anywhere and that

@@ -20,6 +20,8 @@ final class AppState {
         static let showBalanceInMenuBar = "showBalanceInMenuBar"
         static let menuBarSummaryMode = "menuBarSummaryMode"
         static let menuBarIconStyle = "menuBarIconStyle"
+        static let summonHotkeyEnabled = "summonHotkeyEnabled"
+        static let menuBarShowSignalMeter = "menuBarShowSignalMeter"
         static let balanceFormat = "balanceFormat"
         static let creditUtilizationThreshold = "creditUtilizationThreshold"
         static let refreshInterval = "refreshInterval"
@@ -177,6 +179,16 @@ final class AppState {
         didSet {
             guard menuBarIconStyle != oldValue else { return }
             UserDefaults.standard.set(menuBarIconStyle.rawValue, forKey: Keys.menuBarIconStyle)
+        }
+    }
+    /// Whether the healthy menu-bar glyph is replaced by the live signal meter
+    /// (AND-485). Only the healthy state is affected; the degraded glyph ladder
+    /// (error/login/offline/warning) always wins so a problem is never hidden
+    /// behind a meter. Persisted only; the render branch lives in MenuBarLabel.
+    var menuBarShowSignalMeter: Bool = false {
+        didSet {
+            guard menuBarShowSignalMeter != oldValue else { return }
+            UserDefaults.standard.set(menuBarShowSignalMeter, forKey: Keys.menuBarShowSignalMeter)
         }
     }
     var balanceFormat: CurrencyFormat = .abbreviated {
@@ -414,6 +426,16 @@ final class AppState {
         }
     }
 
+    /// Whether the global summon hotkey (⇧⌘V) is registered (AND-487). The
+    /// register/unregister side effect is owned by the always-mounted label
+    /// scene in `PlaidBarApp`, which observes this flag; here we only persist it.
+    var summonHotkeyEnabled: Bool = true {
+        didSet {
+            guard summonHotkeyEnabled != oldValue else { return }
+            UserDefaults.standard.set(summonHotkeyEnabled, forKey: Keys.summonHotkeyEnabled)
+        }
+    }
+
     // MARK: - Services
     private let serverClient = ServerClient()
     /// Fetches + caches merchant logos via the local server's authed proxy.
@@ -479,6 +501,12 @@ final class AppState {
         if let style = defaults.string(forKey: Keys.menuBarIconStyle),
            let iconStyle = MenuBarIconStyle(rawValue: style) {
             menuBarIconStyle = iconStyle
+        }
+        if defaults.object(forKey: Keys.summonHotkeyEnabled) != nil {
+            summonHotkeyEnabled = defaults.bool(forKey: Keys.summonHotkeyEnabled)
+        }
+        if defaults.object(forKey: Keys.menuBarShowSignalMeter) != nil {
+            menuBarShowSignalMeter = defaults.bool(forKey: Keys.menuBarShowSignalMeter)
         }
         if let format = defaults.string(forKey: Keys.balanceFormat),
            let f = CurrencyFormat(rawValue: format) {
@@ -780,13 +808,20 @@ final class AppState {
     }
 
     var menuBarText: String {
+        // Safe-to-spend needs recurring + cashflow inputs that the pure Core
+        // text() does not take, so compute it here (only for that mode, to keep
+        // the common render path cheap) and feed the amount in.
+        let safeToSpend: Double? = menuBarSummaryMode == .safeToSpend
+            ? currentSafeToSpendAmount()
+            : nil
         let rawText = MenuBarSummary.text(
             mode: menuBarSummaryMode,
             accounts: accounts,
             transactions: transactions,
             currencyFormat: balanceFormat,
             isInitialLoad: isBootLoadInFlight,
-            privacyMaskEnabled: shouldMaskFinancialValues
+            privacyMaskEnabled: shouldMaskFinancialValues,
+            precomputedSafeToSpend: safeToSpend
         )
         return appLockPreferences.menuBarText(
             currentText: rawText,
@@ -809,6 +844,25 @@ final class AppState {
             financialAttentionText: shouldMaskFinancialValues ? nil : firstMenuBarAttentionText,
             iconStyle: menuBarIconStyle
         )
+    }
+
+    /// The live signal-meter glyph model (AND-485), or `nil` when the meter must
+    /// not draw. The degraded glyph ladder in `menuBarStatusPresentation` always
+    /// wins: the meter renders only when the status is showing the healthy glyph
+    /// (no error/login/offline/warning), so a problem is never hidden behind a
+    /// meter. Also suppressed under the privacy mask and when there is no signal.
+    var menuBarSignalGlyph: SignalGlyphMeter.SignalGlyphRenderModel? {
+        guard menuBarShowSignalMeter else { return nil }
+        guard !shouldMaskFinancialValues else { return nil }
+        // Only override the healthy glyph; defer to the degraded ladder otherwise.
+        let presentation = menuBarStatusPresentation
+        guard presentation.symbolName == menuBarIconStyle.healthySymbolName else { return nil }
+        let model = SignalGlyphMeter.utilization(
+            from: accounts,
+            thresholdPercent: creditUtilizationThreshold,
+            isStale: isSyncStale
+        )
+        return model.isEmpty ? nil : model
     }
 
     /// First attention row that actually carries menu-bar text. A higher-priority
@@ -842,8 +896,14 @@ final class AppState {
             return "VaultPeek - Total cash: \(menuBarText).\(reviewText) \(status)\(review)"
         case .creditUtilization:
             return "VaultPeek - Credit utilization: \(menuBarText).\(reviewText) \(status)\(review)"
+        case .highestUtilization:
+            return "VaultPeek - Highest card utilization: \(menuBarText).\(reviewText) \(status)\(review)"
         case .recentSpend:
             return "VaultPeek - Recent spend: \(menuBarText).\(reviewText) \(status)\(review)"
+        case .todaySpend:
+            return "VaultPeek - Today's spend: \(menuBarText).\(reviewText) \(status)\(review)"
+        case .safeToSpend:
+            return "VaultPeek - Safe to spend: \(menuBarText).\(reviewText) \(status)\(review)"
         case .iconOnly:
             return "VaultPeek.\(reviewText) \(status)\(review)"
         }
@@ -868,8 +928,14 @@ final class AppState {
             return "VaultPeek total cash \(menuBarText). \(reviewText)\(status)\(review)"
         case .creditUtilization:
             return "VaultPeek credit utilization \(menuBarText). \(reviewText)\(status)\(review)"
+        case .highestUtilization:
+            return "VaultPeek highest card utilization \(menuBarText). \(reviewText)\(status)\(review)"
         case .recentSpend:
             return "VaultPeek recent spend \(menuBarText). \(reviewText)\(status)\(review)"
+        case .todaySpend:
+            return "VaultPeek today's spend \(menuBarText). \(reviewText)\(status)\(review)"
+        case .safeToSpend:
+            return "VaultPeek safe to spend \(menuBarText). \(reviewText)\(status)\(review)"
         case .iconOnly:
             return "VaultPeek. \(reviewText)\(status)\(review)"
         }
