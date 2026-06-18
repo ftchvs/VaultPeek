@@ -20,6 +20,9 @@ public struct TransactionDTO: Codable, Sendable, Identifiable, Hashable {
     /// `LOW`/`UNKNOWN`), preserved so the Review Inbox can surface only genuinely
     /// uncertain categorizations. Nil for cached rows or non-PFCv2 sources.
     public let categoryConfidence: String?
+    /// Plaid enriched merchant logo URL (a Plaid CDN image). The app loads it
+    /// only through the local server's authenticated logo proxy, never directly.
+    public let logoURL: String?
 
     public init(
         id: String,
@@ -33,7 +36,8 @@ public struct TransactionDTO: Codable, Sendable, Identifiable, Hashable {
         pending: Bool = false,
         pendingTransactionId: String? = nil,
         isoCurrencyCode: String? = nil,
-        categoryConfidence: String? = nil
+        categoryConfidence: String? = nil,
+        logoURL: String? = nil
     ) {
         self.id = id
         self.itemId = itemId
@@ -47,6 +51,7 @@ public struct TransactionDTO: Codable, Sendable, Identifiable, Hashable {
         self.pendingTransactionId = pendingTransactionId
         self.isoCurrencyCode = isoCurrencyCode
         self.categoryConfidence = categoryConfidence
+        self.logoURL = logoURL
     }
 
     /// Display name: merchantName if available, otherwise raw name

@@ -367,6 +367,8 @@ final class AppState {
 
     // MARK: - Services
     private let serverClient = ServerClient()
+    /// Fetches + caches merchant logos via the local server's authed proxy.
+    let merchantLogoStore = MerchantLogoStore()
     private let localDataCache = LocalDataCacheService()
     private let appLockService = AppLockService()
     private let reviewStorageWriter = ReviewStorageWriter()

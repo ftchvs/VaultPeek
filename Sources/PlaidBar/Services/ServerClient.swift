@@ -73,6 +73,20 @@ actor ServerClient {
         return try await get(url)
     }
 
+    /// Raw image bytes for a merchant logo, fetched + on-disk-cached by the local
+    /// server's authenticated proxy. The app never reaches a logo CDN directly.
+    func merchantLogoData(for logoURL: String) async throws -> Data {
+        var components = URLComponents(string: "\(baseURL)/api/merchant-logo")
+        components?.queryItems = [URLQueryItem(name: "u", value: logoURL)]
+        guard let url = components?.url else {
+            throw ServerClientError.requestFailed
+        }
+        let request = try authorizedRequest(url: url)
+        let (data, response) = try await data(for: request)
+        try Self.validateHTTPResponse(response, data: data)
+        return data
+    }
+
     func listCategoryBudgets() async throws -> [CategoryBudgetDTO] {
         guard let url = ServerEndpoint.categoryBudgetsURL(baseURL: baseURL) else {
             throw ServerClientError.requestFailed

@@ -288,7 +288,8 @@ struct TransactionRoutes: Sendable {
             pending: plaidTx.pending,
             pendingTransactionId: plaidTx.pendingTransactionId,
             isoCurrencyCode: plaidTx.isoCurrencyCode,
-            categoryConfidence: plaidTx.personalFinanceCategory?.confidenceLevel
+            categoryConfidence: plaidTx.personalFinanceCategory?.confidenceLevel,
+            logoURL: plaidTx.logoUrl
         )
     }
 
