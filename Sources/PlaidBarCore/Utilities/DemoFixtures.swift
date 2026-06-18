@@ -250,10 +250,10 @@ public enum DemoFixtures {
             // unresolvable so the genuinely-uncategorized → Review Inbox path is
             // still demonstrable. No merchantName: the raw name carries the
             // signal, exactly like an un-enriched Plaid transaction.
-            TransactionDTO(id: "tx48", accountId: "demo_checking", amount: 6.75, date: today, name: "BLUE BOTTLE COFFEE", category: nil),
-            TransactionDTO(id: "tx49", accountId: "demo_checking", amount: 52.10, date: today, name: "SHELL OIL 4821", category: nil),
-            TransactionDTO(id: "tx50", accountId: "demo_amex", amount: 18.40, date: today, name: "CVS/PHARMACY #2231", category: nil),
-            TransactionDTO(id: "tx51", accountId: "demo_visa", amount: 27.30, date: today, name: "SQ *KMNT LLC 9921", category: nil),
+            TransactionDTO(id: "tx52", accountId: "demo_checking", amount: 6.75, date: today, name: "BLUE BOTTLE COFFEE", category: nil),
+            TransactionDTO(id: "tx53", accountId: "demo_checking", amount: 52.10, date: today, name: "SHELL OIL 4821", category: nil),
+            TransactionDTO(id: "tx54", accountId: "demo_amex", amount: 18.40, date: today, name: "CVS/PHARMACY #2231", category: nil),
+            TransactionDTO(id: "tx55", accountId: "demo_visa", amount: 27.30, date: today, name: "SQ *KMNT LLC 9921", category: nil),
             // Merchant name with a comma exercises CSV quoting/escaping in exports (AND-492).
             TransactionDTO(id: "tx4b", accountId: "demo_amex", amount: 58.10, date: today, name: "DINING PURCHASE", merchantName: "Joe's Bar, Grill & Co.", category: .foodAndDrink),
             // Yesterday
