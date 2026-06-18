@@ -608,7 +608,12 @@ private struct ReviewInboxRow: View {
 
     private var accessibilitySummary: String {
         let reasons = item.reasonCodes.map(\.displayName).joined(separator: ", ")
-        let category = item.effectiveCategory?.displayName ?? "Uncategorized"
+        // The row Button's label overrides the child "Suggested" badge, so fold
+        // the on-device provenance into the spoken category — otherwise VoiceOver
+        // announces an NL suggestion identically to a Plaid/user category even
+        // though the visual UI shows the "Suggested" badge.
+        let baseCategory = item.effectiveCategory?.displayName ?? "Uncategorized"
+        let category = item.isNLSuggestedCategory ? "\(baseCategory) (suggested on device)" : baseCategory
         let amount = Formatters.currency(item.transaction.displayAmount, format: .full)
         return "\(item.effectiveMerchantName), \(amount), \(category), reasons: \(reasons)"
     }

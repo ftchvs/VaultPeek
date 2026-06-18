@@ -100,4 +100,36 @@ struct NLMerchantCategorizerTests {
         )
         #expect(categorizer.infer(for: transaction)?.category == .entertainment)
     }
+
+    @Test("A trusted merchantName hit beats a generic raw name that only embeds weakly")
+    func trustedMerchantBeatsGenericRawName() {
+        // "STORE 1234" normalizes to "store" — at best a low-confidence
+        // embedding guess. A clean "Netflix" merchantName must still win with a
+        // trusted inference, instead of being short-circuited by the raw name.
+        let transaction = TransactionDTO(
+            id: "t",
+            accountId: "a",
+            amount: 12,
+            date: "2026-06-01",
+            name: "STORE 1234",
+            merchantName: "Netflix"
+        )
+        let inference = categorizer.infer(for: transaction)
+        #expect(inference?.category == .entertainment)
+        #expect(inference?.isTrusted == true)
+    }
+
+    // MARK: - (6) Generic airline tokens must not hijack non-airline brands
+
+    @Test("Bare airline brand tokens do not auto-categorize health merchants as Travel")
+    func airlineTokensDoNotHijackHealth() {
+        // "Delta Dental" / "United Healthcare" share a word with the airlines but
+        // are health merchants; the lexicon must resolve them via the health
+        // keyword, not as a high-confidence Travel brand.
+        #expect(categorizer.infer(rawName: "DELTA DENTAL")?.category == .healthAndFitness)
+        #expect(categorizer.infer(rawName: "UNITED HEALTHCARE")?.category != .travel)
+        // The airline-specific phrases still resolve real flights to Travel.
+        #expect(categorizer.infer(rawName: "DELTA AIR LINES")?.category == .travel)
+        #expect(categorizer.infer(rawName: "UNITED AIRLINES")?.category == .travel)
+    }
 }
