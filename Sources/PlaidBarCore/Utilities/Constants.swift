@@ -53,6 +53,12 @@ public enum PlaidBarConstants {
     /// Maximum per-charge amount for a stream to count as "easy to forget".
     /// Larger charges are noticed, so they are never flagged as forgotten.
     public static let forgottenSubscriptionMaxAmount: Double = 20.0
+
+    // Projected balance forecast (AND-498).
+    /// Default forward horizon (days) for the projected-balance line.
+    public static let projectedBalanceDefaultHorizonDays: Int = 30
+    /// Minimum balance snapshots required before a forecast is shown.
+    public static let projectedBalanceMinimumHistoryPoints: Int = 2
     public static let initialSyncDays: Int = 90
     public static let maxTransactionSyncPages: Int = 100
     public static let maxTransactionSyncMutationRestarts: Int = 2

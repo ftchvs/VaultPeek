@@ -66,6 +66,19 @@ struct WealthSummaryFlyout: View {
                     .loadingRedaction(appState.loadState(for: .summaryCards))
                     .scrollEdgeDepth(reduceMotion: reduceMotion)
 
+                    // Forward cash-flow forecast (AND-498). Self-hides until
+                    // there is enough recorded balance history to anchor a line.
+                    ProjectedBalanceSection(
+                        presentation: ProjectedBalancePresentation.evaluate(
+                            history: appState.balanceHistory,
+                            recurring: appState.recurringTransactions,
+                            now: Date()
+                        ),
+                        privacyMaskEnabled: privacyMaskEnabled
+                    )
+                    .loadingRedaction(appState.loadState(for: .summaryCards))
+                    .scrollEdgeDepth(reduceMotion: reduceMotion)
+
                     // Read-only recurring obligations (AND-400). Built inline
                     // from the already-cached detector output, mirroring how the
                     // safe-to-spend card is composed above; self-hides when no
@@ -520,6 +533,43 @@ private struct WealthCashflowRow: View {
             if amount > 0 { return SemanticColors.positive }
             if amount < 0 { return SemanticColors.negative }
             return AppearanceTextColors.secondary
+        }
+    }
+}
+
+/// Forward cash-flow forecast block (AND-498). Self-hides when there isn't
+/// enough recorded balance history to anchor a line; masks the chart (which
+/// shows balance amounts) when privacy mode is on.
+private struct ProjectedBalanceSection: View {
+    let presentation: ProjectedBalancePresentation
+    let privacyMaskEnabled: Bool
+
+    var body: some View {
+        switch presentation {
+        case let .available(projection):
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack {
+                    WealthFlyoutSectionLabel("Projected balance")
+                    Spacer()
+                    Text("\(projection.series.count - 1)D")
+                        .microText()
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+
+                if privacyMaskEnabled {
+                    Label("Forecast hidden while VaultPeek is private", systemImage: "eye.slash")
+                        .detailText()
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, minHeight: 88, alignment: .leading)
+                } else {
+                    ProjectedBalanceChart(projection: projection)
+                }
+            }
+            .accessibilityElement(children: .contain)
+        case .insufficientHistory:
+            // Stay quiet until there is enough history — no empty placeholder.
+            EmptyView()
         }
     }
 }
