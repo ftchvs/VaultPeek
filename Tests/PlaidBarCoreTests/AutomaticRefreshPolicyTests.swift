@@ -39,6 +39,22 @@ struct AutomaticRefreshPolicyTests {
         #expect(AutomaticRefreshPolicy.manualOnly.shouldAutoRefresh(lastSync: longAgo, now: now) == false)
     }
 
+    @Test("Immediate refresh needs do not override manual-only policy")
+    func immediateRefreshNeedsRespectManualOnlyPolicy() {
+        let recentSync = now.addingTimeInterval(-60 * 60)
+
+        #expect(AutomaticRefreshPolicy.manualOnly.shouldAutoRefresh(
+            lastSync: recentSync,
+            now: now,
+            hasImmediateNeed: true
+        ) == false)
+        #expect(AutomaticRefreshPolicy.twiceDaily.shouldAutoRefresh(
+            lastSync: recentSync,
+            now: now,
+            hasImmediateNeed: true
+        ) == true)
+    }
+
     @Test("Display names and raw values round-trip for persistence")
     func metadataIsStable() {
         #expect(AutomaticRefreshPolicy.twiceDaily.displayName == "Twice a day")

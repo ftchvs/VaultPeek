@@ -285,6 +285,9 @@ struct PlaidTransaction: Decodable, Sendable {
     var pendingTransactionId: String? = nil
     let isoCurrencyCode: String?
     let personalFinanceCategory: PlaidCategory?
+    /// Plaid enriched merchant logo URL (a Plaid CDN PNG). `var … = nil` keeps
+    /// the synthesized memberwise init optional for test call sites.
+    var logoUrl: String? = nil
 }
 
 struct PlaidCategory: Decodable, Sendable {

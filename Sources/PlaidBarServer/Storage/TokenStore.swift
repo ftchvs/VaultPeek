@@ -7,10 +7,27 @@ import PlaidBarCore
 actor TokenStore {
     private let fluent: Fluent
     private let logger: Logger
+    /// Keychain service the access-token bytes are stored under. Defaults to the
+    /// single production service; injectable so tests can isolate their writes
+    /// to a throwaway service and never touch real token entries.
+    private let keychainService: String
+    /// When true, access-token bytes are kept inline in the SQLite row instead of
+    /// the Keychain. Test-only: lets the default `swift test` loop run
+    /// (un-opted-in) without touching the macOS login keychain at all — including
+    /// the helper-based tests that aren't gated behind the keychain-availability
+    /// check. Never set in production (defaults to false).
+    private let bypassKeychain: Bool
 
-    init(fluent: Fluent, logger: Logger = Logger(label: "com.ftchvs.plaidbar-server.token-store")) {
+    init(
+        fluent: Fluent,
+        logger: Logger = Logger(label: "com.ftchvs.plaidbar-server.token-store"),
+        keychainService: String = LocalDataStore.plaidAccessTokenKeychainService,
+        bypassKeychain: Bool = false
+    ) {
         self.fluent = fluent
         self.logger = logger
+        self.keychainService = keychainService
+        self.bypassKeychain = bypassKeychain
     }
 
     // Serializes managed-item inserts so the institution-limit check and the
@@ -39,10 +56,13 @@ actor TokenStore {
         providerID: ProviderID = .plaid,
         origin: ItemOrigin = .bringYourOwn
     ) async throws {
-        let storedAccessToken = try PlaidTokenVault.store(
-            accessToken: accessToken,
-            itemId: id
-        )
+        // In the un-opted-in test loop, keep the token inline in the (ephemeral,
+        // synthetic) SQLite row so `swift test` never writes to the login
+        // keychain. Production and opted-in keychain tests use the vault. A
+        // non-reference value resolves back as-is via `PlaidTokenVault.resolve`.
+        let storedAccessToken = bypassKeychain
+            ? accessToken
+            : try PlaidTokenVault.store(accessToken: accessToken, itemId: id, service: keychainService)
         let item = ItemModel(
             id: id,
             accessToken: storedAccessToken,
@@ -170,7 +190,9 @@ actor TokenStore {
         let item = try outcome.get()
         guard let item else { return }
         do {
-            try PlaidTokenVault.delete(storedToken: item.accessToken, fallbackItemId: id)
+            if !bypassKeychain {
+                try PlaidTokenVault.delete(storedToken: item.accessToken, fallbackItemId: id, service: keychainService)
+            }
         } catch {
             // Best-effort: the SQLite item/cursor rows are already gone, so a
             // Keychain-delete failure leaves only an orphaned token entry
@@ -184,8 +206,9 @@ actor TokenStore {
     }
 
     func pruneOrphanedKeychainTokens() async throws {
+        guard !bypassKeychain else { return }
         let referencedItemIds = Set(try await getAllItems().compactMap(\.id))
-        try PlaidTokenVault.deleteOrphanedTokens(referencedItemIds: referencedItemIds)
+        try PlaidTokenVault.deleteOrphanedTokens(referencedItemIds: referencedItemIds, service: keychainService)
     }
 
     func updateItemStatus(id: String, status: String) async throws {
@@ -269,7 +292,7 @@ actor TokenStore {
     }
 
     nonisolated func accessToken(for item: ItemModel) throws -> String {
-        try PlaidTokenVault.resolve(storedToken: item.accessToken)
+        try PlaidTokenVault.resolve(storedToken: item.accessToken, service: keychainService)
     }
 }
 

@@ -226,7 +226,12 @@ public enum TransactionReviewInbox {
             }
 
             var reasons: Set<TransactionReviewReason> = []
-            if effectiveCategory == nil || effectiveCategory == .other {
+            // Plaid PFCv2 categorizes most transactions confidently; surface a
+            // category as "needs review" when it is missing/uncategorized, or
+            // when Plaid itself reports LOW/UNKNOWN confidence — but never once
+            // the user has set their own category.
+            if effectiveCategory == nil || effectiveCategory == .other ||
+                (transaction.isLowConfidenceCategory && metadata?.userCategory == nil) {
                 reasons.insert(.uncategorized)
             }
             if merchantNeedsReview(transaction: transaction, effectiveMerchant: effectiveMerchant) ||

@@ -42,4 +42,15 @@ public enum AutomaticRefreshPolicy: String, Codable, Sendable, CaseIterable, Equ
         guard let lastSync else { return true }
         return now.timeIntervalSince(lastSync) >= minimumInterval
     }
+
+    /// Whether an automatic refresh should run when the app has detected a
+    /// correctness-critical immediate need, such as linked items with no cached
+    /// accounts yet or an item explicitly marked as needing sync. Immediate needs
+    /// bypass the time floor for time-based policies, but they must not override
+    /// the user's explicit Manual only choice.
+    public func shouldAutoRefresh(lastSync: Date?, now: Date, hasImmediateNeed: Bool) -> Bool {
+        guard minimumInterval != nil else { return false }
+        if hasImmediateNeed { return true }
+        return shouldAutoRefresh(lastSync: lastSync, now: now)
+    }
 }
