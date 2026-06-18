@@ -239,6 +239,82 @@ struct SafeToSpendCalculatorTests {
 
     // MARK: - Fixtures
 
+    @Test("Pending holds argument yields a negated pendingHolds component (AND-499)")
+    func pendingHoldsComponentIsNegated() {
+        let result = SafeToSpendCalculator.compute(
+            accounts: [checking(1_000)],
+            recurringTransactions: [],
+            inputs: SafeToSpendInputs(manualExpectedIncome: 0),
+            pendingHolds: 86.40,
+            asOf: now,
+            calendar: calendar
+        )
+        #expect(component(result, .pendingHolds) == -86.40)
+        // 1000 + 0 - 86.40 = 913.60
+        #expect(abs(result.amount - 913.60) < 0.001)
+    }
+
+    @Test("Signed components still reconcile to amount with the pending line present")
+    func pendingHoldsReconciles() {
+        let result = SafeToSpendCalculator.compute(
+            accounts: [checking(1_000)],
+            recurringTransactions: [
+                recurring("Rent", amount: 500, nextExpectedDate: "2026-06-20", category: .billsAndUtilities),
+            ],
+            inputs: SafeToSpendInputs(safetyBuffer: 100, manualExpectedIncome: 200),
+            pendingHolds: 50,
+            asOf: now,
+            calendar: calendar
+        )
+        #expect(result.components.reduce(0) { $0 + $1.amount } == result.amount)
+        #expect(result.components.contains { $0.kind == .pendingHolds })
+    }
+
+    @Test("Default pending argument leaves the result identical to today's behavior")
+    func pendingHoldsDefaultIsSourceCompatible() {
+        let accounts = [checking(900), savings(600)]
+        let recurring = [
+            recurring("Rent", amount: 500, nextExpectedDate: "2026-06-20", category: .billsAndUtilities),
+        ]
+        let inputs = SafeToSpendInputs(safetyBuffer: 200, horizon: .endOfMonth)
+
+        let withDefault = SafeToSpendCalculator.compute(
+            accounts: accounts, recurringTransactions: recurring,
+            inputs: inputs, asOf: now, calendar: calendar
+        )
+        let explicitZero = SafeToSpendCalculator.compute(
+            accounts: accounts, recurringTransactions: recurring,
+            inputs: inputs, pendingHolds: 0, asOf: now, calendar: calendar
+        )
+        #expect(withDefault.amount == explicitZero.amount)
+        // A zero pending line never appears in the visible breakdown.
+        #expect(!withDefault.visibleComponents.contains { $0.kind == .pendingHolds })
+    }
+
+    @Test("Pending holds slot in the fixed display order between income and obligations")
+    func pendingHoldsDisplayOrder() {
+        let order = SafeToSpendComponentKind.allCases
+        let incomeIdx = order.firstIndex(of: .expectedIncome)!
+        let pendingIdx = order.firstIndex(of: .pendingHolds)!
+        let obligationsIdx = order.firstIndex(of: .upcomingObligations)!
+        #expect(incomeIdx < pendingIdx)
+        #expect(pendingIdx < obligationsIdx)
+    }
+
+    @Test("Negative pending holds are clamped to zero")
+    func pendingHoldsClamped() {
+        let result = SafeToSpendCalculator.compute(
+            accounts: [checking(1_000)],
+            recurringTransactions: [],
+            inputs: SafeToSpendInputs(manualExpectedIncome: 0),
+            pendingHolds: -500,
+            asOf: now,
+            calendar: calendar
+        )
+        #expect(component(result, .pendingHolds) == 0)
+        #expect(result.amount == 1_000)
+    }
+
     private func component(_ result: SafeToSpendResult, _ kind: SafeToSpendComponentKind) -> Double {
         result.components.first { $0.kind == kind }?.amount ?? 0
     }

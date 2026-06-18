@@ -179,6 +179,10 @@ public enum DemoFixtures {
             TransactionDTO(id: "tx10", accountId: "demo_amex", amount: 320.00, date: twoDaysAgo, name: "DELTA AIR LINES", merchantName: "Delta Airlines", category: .travel),
             TransactionDTO(id: "tx11", accountId: "demo_checking", amount: 12.50, date: twoDaysAgo, name: "STARBUCKS 8823", merchantName: "Starbucks", category: .foodAndDrink),
             TransactionDTO(id: "tx12", accountId: "demo_amex", amount: 650.00, date: twoDaysAgo, name: "FURNITURE STORE", merchantName: "West Elm", category: .shopping, pending: true),
+            // Pending OUTFLOW on a depository (cash) account so the pending-aware
+            // safe-to-spend holds component is non-zero in --demo (AND-499). tx12
+            // is on a credit account and is therefore excluded from cash holds.
+            TransactionDTO(id: "tx48", accountId: "demo_checking", amount: 86.40, date: today, name: "TRADER JOES 442", merchantName: "Trader Joe's", category: .foodAndDrink, pending: true),
             // 3 days ago
             TransactionDTO(id: "tx13", accountId: "demo_visa", amount: 75.00, date: threeDaysAgo, name: "PLANET FITNESS", merchantName: "Planet Fitness", category: .healthAndFitness),
             TransactionDTO(id: "tx14", accountId: "demo_checking", amount: -1_500.00, date: threeDaysAgo, name: "VENMO PAYMENT", merchantName: "Venmo", category: .income),
