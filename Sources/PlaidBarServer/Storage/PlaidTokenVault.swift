@@ -7,39 +7,57 @@ import Security
 enum PlaidTokenVault {
     private static let referencePrefix = "keychain:"
 
-    static func store(accessToken: String, itemId: String) throws -> String {
+    /// The Keychain `kSecAttrService` under which Plaid access tokens are
+    /// stored. Production always uses the single shared service; the `service`
+    /// parameter exists so tests can write under an isolated, easily-purgeable
+    /// service and never touch the developer's real token entries.
+    static func store(
+        accessToken: String,
+        itemId: String,
+        service: String = LocalDataStore.plaidAccessTokenKeychainService
+    ) throws -> String {
         #if canImport(Security)
-        try saveToKeychain(accessToken: accessToken, itemId: itemId)
+        try saveToKeychain(accessToken: accessToken, itemId: itemId, service: service)
         return reference(for: itemId)
         #else
         return accessToken
         #endif
     }
 
-    static func resolve(storedToken: String) throws -> String {
+    static func resolve(
+        storedToken: String,
+        service: String = LocalDataStore.plaidAccessTokenKeychainService
+    ) throws -> String {
         guard let itemId = itemId(fromReference: storedToken) else {
             return storedToken
         }
 
         #if canImport(Security)
-        return try loadFromKeychain(itemId: itemId)
+        return try loadFromKeychain(itemId: itemId, service: service)
         #else
         throw PlaidTokenVaultError.keychainUnavailable
         #endif
     }
 
-    static func delete(storedToken: String, fallbackItemId: String) throws {
+    static func delete(
+        storedToken: String,
+        fallbackItemId: String,
+        service: String = LocalDataStore.plaidAccessTokenKeychainService
+    ) throws {
         let itemId = itemId(fromReference: storedToken) ?? fallbackItemId
 
         #if canImport(Security)
-        try deleteFromKeychain(itemId: itemId)
+        try deleteFromKeychain(itemId: itemId, service: service)
         #endif
     }
 
-    static func deleteOrphanedTokens(referencedItemIds: Set<String>) throws {
+    static func deleteOrphanedTokens(
+        referencedItemIds: Set<String>,
+        service: String = LocalDataStore.plaidAccessTokenKeychainService
+    ) throws {
         #if canImport(Security)
-        for itemId in try storedKeychainItemIds() where !referencedItemIds.contains(itemId) {
-            try deleteFromKeychain(itemId: itemId)
+        for itemId in try storedKeychainItemIds(service: service) where !referencedItemIds.contains(itemId) {
+            try deleteFromKeychain(itemId: itemId, service: service)
         }
         #endif
     }
@@ -59,8 +77,8 @@ enum PlaidTokenVault {
     }
 
     #if canImport(Security)
-    private static func saveToKeychain(accessToken: String, itemId: String) throws {
-        let query = keychainQuery(itemId: itemId)
+    private static func saveToKeychain(accessToken: String, itemId: String, service: String) throws {
+        let query = keychainQuery(itemId: itemId, service: service)
         let attributes: [String: Any] = [
             kSecValueData as String: Data(accessToken.utf8),
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
@@ -81,8 +99,8 @@ enum PlaidTokenVault {
         }
     }
 
-    private static func loadFromKeychain(itemId: String) throws -> String {
-        var query = keychainQuery(itemId: itemId)
+    private static func loadFromKeychain(itemId: String, service: String) throws -> String {
+        var query = keychainQuery(itemId: itemId, service: service)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
 
@@ -99,17 +117,17 @@ enum PlaidTokenVault {
         return token
     }
 
-    private static func deleteFromKeychain(itemId: String) throws {
-        let status = SecItemDelete(keychainQuery(itemId: itemId) as CFDictionary)
+    private static func deleteFromKeychain(itemId: String, service: String) throws {
+        let status = SecItemDelete(keychainQuery(itemId: itemId, service: service) as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw PlaidTokenVaultError.keychainDeleteFailed(Int32(status))
         }
     }
 
-    private static func storedKeychainItemIds() throws -> [String] {
+    private static func storedKeychainItemIds(service: String) throws -> [String] {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: LocalDataStore.plaidAccessTokenKeychainService,
+            kSecAttrService as String: service,
             kSecMatchLimit as String: kSecMatchLimitAll,
             kSecReturnAttributes as String: true
         ]
@@ -131,10 +149,10 @@ enum PlaidTokenVault {
         return []
     }
 
-    private static func keychainQuery(itemId: String) -> [String: Any] {
+    private static func keychainQuery(itemId: String, service: String) -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: LocalDataStore.plaidAccessTokenKeychainService,
+            kSecAttrService as String: service,
             kSecAttrAccount as String: itemId
         ]
     }

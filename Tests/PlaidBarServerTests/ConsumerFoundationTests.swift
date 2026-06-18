@@ -11,16 +11,10 @@ import NIOCore
 @testable import PlaidBarServer
 import Testing
 
-private let consumerTestsKeychainAvailable: Bool = {
-    let itemId = "consumer_keychain_probe_\(UUID().uuidString)"
-    do {
-        let storedToken = try PlaidTokenVault.store(accessToken: "probe-token", itemId: itemId)
-        try PlaidTokenVault.delete(storedToken: storedToken, fallbackItemId: itemId)
-        return true
-    } catch {
-        return false
-    }
-}()
+// Gated behind `PLAIDBAR_TEST_KEYCHAIN` and routed to an isolated, swept test
+// service so the default `swift test` run never touches the login keychain.
+// See `KeychainTestSupport`.
+private let consumerTestsKeychainAvailable = keychainTestSupportAvailable
 
 /// Accepting verifier for tests that exercise webhook *application* logic; the
 /// fail-closed default is asserted separately.
@@ -775,8 +769,21 @@ struct ConsumerFoundationTests {
     )
     func concurrentManagedInsertsRespectLimit() async throws {
         try await withFluent { fluent in
-            let tokenStore = TokenStore(fluent: fluent)
+            let tokenStore = TokenStore(fluent: fluent, keychainService: keychainTestService)
             let limit = SubscriptionPlan.plus.institutionLimit
+            // These managed inserts write tokens to the isolated test Keychain
+            // service and the test only asserts counts; delete exactly the ids it
+            // may have created so nothing leaks (the original leak fixed here).
+            // Per-id (not a global sweep) to stay safe under parallel tests.
+            defer {
+                for index in 0 ..< limit {
+                    try? PlaidTokenVault.delete(
+                        storedToken: PlaidTokenVault.reference(for: "race-item-\(index)"),
+                        fallbackItemId: "race-item-\(index)",
+                        service: keychainTestService
+                    )
+                }
+            }
             // Seed limit-1 managed institutions, leaving exactly one open slot.
             for index in 0 ..< (limit - 1) {
                 try await ItemModel(
@@ -823,8 +830,19 @@ struct ConsumerFoundationTests {
     )
     func concurrentManagedSameInstitutionInsertsDoNotSpendExtraSlots() async throws {
         try await withFluent { fluent in
-            let tokenStore = TokenStore(fluent: fluent)
+            let tokenStore = TokenStore(fluent: fluent, keychainService: keychainTestService)
             let limit = SubscriptionPlan.plus.institutionLimit
+            // Clean up exactly the ids these concurrent inserts may have written
+            // (per-id, not a global sweep, to stay safe under parallel tests).
+            defer {
+                for index in 0 ..< 2 {
+                    try? PlaidTokenVault.delete(
+                        storedToken: PlaidTokenVault.reference(for: "same-race-item-\(index)"),
+                        fallbackItemId: "same-race-item-\(index)",
+                        service: keychainTestService
+                    )
+                }
+            }
             // Seed limit-1 unique managed institutions, leaving one open slot.
             for index in 0 ..< (limit - 1) {
                 try await ItemModel(
