@@ -317,15 +317,6 @@ struct OAuthCallbackRoute: Sendable {
             )
         }
         let state = String(stateParam)
-        if let redirectStatus = Self.completionStatus(from: request) {
-            await hostedLinkCompletions.record(HostedLinkCompletionRecord(
-                state: state,
-                linkToken: nil,
-                linkSessionId: request.uri.queryParameters.get("link_session_id").map { String($0) },
-                status: redirectStatus
-            ))
-            return Self.completionResponse(for: redirectStatus)
-        }
         guard let pendingSession = await pendingLinkSessions.beginCompletion(state: state) else {
             return Response(
                 status: .badRequest,
@@ -334,6 +325,14 @@ struct OAuthCallbackRoute: Sendable {
                     string: Self.expiredPage()
                 ))
             )
+        }
+        if let redirectStatus = Self.completionStatus(from: request) {
+            await hostedLinkCompletions.record(HostedLinkCompletionRecord(
+                state: state,
+                linkToken: nil,
+                linkSessionId: request.uri.queryParameters.get("link_session_id").map { String($0) },
+                status: redirectStatus
+            ))
         }
 
         do {
@@ -431,6 +430,9 @@ struct OAuthCallbackRoute: Sendable {
                 headers: [.contentType: "text/html"],
                 body: .init(byteBuffer: ByteBuffer(string: Self.successPage()))
             )
+        } catch let completionError as HostedLinkCompletionError {
+            await pendingLinkSessions.releaseCompletion(state: state)
+            return Self.completionResponse(for: completionError.status)
         } catch {
             // A failure outside the per-result loop (e.g. /link/token/get) leaves
             // nothing consumed, so the session stays retryable. Keep the HTML
@@ -692,6 +694,12 @@ struct OAuthCallbackRoute: Sendable {
 
 private enum HostedLinkCompletionError: LocalizedError {
     case status(HostedLinkCompletionStatus)
+
+    var status: HostedLinkCompletionStatus {
+        switch self {
+        case let .status(status): status
+        }
+    }
 
     var errorDescription: String? {
         switch self {
