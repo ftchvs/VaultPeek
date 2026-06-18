@@ -57,7 +57,9 @@ struct SafeToSpendCard: View {
             result.amount,
             format: .full,
             isEnabled: privacyMaskEnabled,
-            style: .hero
+            // Masked value shows dots, not the word "Private" (consistent with
+            // the rest of the dashboard). `.hero` stays on the VoiceOver label.
+            style: .compact
         )
         return Text(amount)
             .dataText()

@@ -123,7 +123,10 @@ struct WealthSummaryFlyout: View {
             presentation.netWorth,
             format: .full,
             isEnabled: privacyMaskEnabled,
-            style: .hero
+            // Masked hero shows dots (consistent with every other value),
+            // not the word "Private". The `.hero` word is reserved for the
+            // VoiceOver label below and the menu-bar title.
+            style: .compact
         )
         return VStack(alignment: .leading, spacing: Spacing.sm) {
             HStack(alignment: .firstTextBaseline) {

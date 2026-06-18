@@ -64,4 +64,20 @@ public enum PrivacyMaskPresentation {
     public static func toggleActionLabel(isMasked: Bool) -> String {
         isMasked ? "Show amounts" : "Hide amounts"
     }
+
+    // MARK: - Free-text masking
+
+    /// Replaces every currency token (e.g. `$4,545`, `-$1,707`, `$2,817.50`) in
+    /// a pre-formatted string with `••••`. Used for masking generated/templated
+    /// copy — like the Local Insight Receipt headline — where the amounts are
+    /// already baked into a sentence rather than rendered as discrete values.
+    /// Non-currency numbers (counts, dates) are left intact.
+    public static func maskCurrencyTokens(in text: String, isEnabled: Bool) -> String {
+        guard isEnabled else { return text }
+        return text.replacingOccurrences(
+            of: #"-?\$[0-9][0-9,]*(?:\.[0-9]+)?"#,
+            with: compactValue,
+            options: .regularExpression
+        )
+    }
 }
