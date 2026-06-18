@@ -60,6 +60,19 @@ struct MenuBarLabel: View {
             }
         }
         .help(appState.menuBarHelpText)
-        .accessibilityLabel(appState.menuBarAccessibilityLabel)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    /// The spoken label for the whole status item. The parent `.accessibilityLabel`
+    /// replaces the child glyph image's own description, so when the live signal
+    /// meter is active its value/over-threshold/stale signal would be silent for
+    /// any non-utilization title mode. Fold the meter's word-only description
+    /// (never color) into the parent label so VoiceOver still hears it.
+    private var accessibilityLabel: String {
+        let base = appState.menuBarAccessibilityLabel
+        guard let meter = appState.menuBarSignalGlyph?.accessibilityDescription else {
+            return base
+        }
+        return "\(base) \(meter)."
     }
 }
