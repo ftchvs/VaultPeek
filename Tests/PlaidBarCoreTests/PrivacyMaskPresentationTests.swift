@@ -99,4 +99,16 @@ struct PrivacyMaskPresentationTests {
             privacyMaskEnabled: true
         ) == "No spend")
     }
+
+    @Test("Quick toggle affordance carries state by glyph shape and a verb-first label")
+    func quickToggleAffordance() {
+        // Masked -> struck-through eye + "reveal" verb; visible -> plain eye + "hide" verb.
+        #expect(PrivacyMaskPresentation.toggleSymbolName(isMasked: true) == "eye.slash")
+        #expect(PrivacyMaskPresentation.toggleSymbolName(isMasked: false) == "eye")
+        #expect(PrivacyMaskPresentation.toggleActionLabel(isMasked: true) == "Show amounts")
+        #expect(PrivacyMaskPresentation.toggleActionLabel(isMasked: false) == "Hide amounts")
+        // The glyph must differ by state so meaning never rides on color alone.
+        #expect(PrivacyMaskPresentation.toggleSymbolName(isMasked: true)
+            != PrivacyMaskPresentation.toggleSymbolName(isMasked: false))
+    }
 }

@@ -2227,6 +2227,25 @@ private struct DashboardFooter: View {
 
             detachControl
 
+            // Quick Privacy Mask toggle — engage/clear masking in one click
+            // without opening Settings. State is read from the underlying
+            // preference (not the locked-inclusive `shouldMaskFinancialValues`)
+            // so the glyph reflects exactly what the button controls; meaning is
+            // carried by the eye/eye.slash SHAPE, never color.
+            Button {
+                appState.togglePrivacyMask()
+            } label: {
+                Image(systemName: PrivacyMaskPresentation.toggleSymbolName(
+                    isMasked: appState.appLockPreferences.privacyMaskEnabled
+                ))
+                .foregroundStyle(.secondary)
+                .frame(minWidth: Sizing.hitTargetMin, minHeight: Sizing.hitTargetMin)
+            }
+            .buttonStyle(.borderless)
+            .help(PrivacyMaskPresentation.toggleActionLabel(isMasked: appState.appLockPreferences.privacyMaskEnabled))
+            .accessibilityLabel(PrivacyMaskPresentation.toggleActionLabel(isMasked: appState.appLockPreferences.privacyMaskEnabled))
+            .keyboardShortcut("p", modifiers: [.command, .shift])
+
             Button {
                 Task { await appState.refreshDashboard() }
             } label: {
