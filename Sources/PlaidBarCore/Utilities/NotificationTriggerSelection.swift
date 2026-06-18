@@ -49,6 +49,7 @@ public struct NotificationTriggers: Sendable {
 
 public enum NotificationTriggerKind: String, Codable, CaseIterable, Sendable {
     case itemError = "item-error"
+    case providerOutage = "provider-outage"
     case loginRequired = "login-required"
     case syncStale = "sync-stale"
     case highUtilization = "high-utilization"
@@ -60,7 +61,7 @@ public enum NotificationTriggerKind: String, Codable, CaseIterable, Sendable {
 
     public var clearsWhenResolved: Bool {
         switch self {
-        case .itemError, .loginRequired, .syncStale, .highUtilization, .lowBalance,
+        case .itemError, .providerOutage, .loginRequired, .syncStale, .highUtilization, .lowBalance,
              .recurringChargeChanged, .recurringChargeDueSoon:
             true
         case .largeTransaction, .recurringChargeDetected:
@@ -138,6 +139,12 @@ public enum NotificationTriggerSelection {
         if config.itemError {
             for item in itemStatuses where item.status == .error {
                 append(itemErrorDecision(for: item))
+            }
+            // Provider outages are connection-health signals but emit a distinct,
+            // non-actionable advisory kind (not itemError) — VaultPeek retries
+            // automatically, so no reconnect is prompted.
+            for item in itemStatuses where item.status == .providerOutage {
+                append(providerOutageDecision(for: item))
             }
         }
 
@@ -294,6 +301,16 @@ public enum NotificationTriggerSelection {
             title: "Institution needs attention",
             body: "A linked institution reported a sync error. Reconnect, then refresh.",
             severity: .blocking
+        )
+    }
+
+    private static func providerOutageDecision(for item: ItemStatus) -> NotificationTriggerDecision {
+        NotificationTriggerDecision(
+            kind: .providerOutage,
+            dedupKey: dedupKey(kind: .providerOutage, sourceID: item.id),
+            title: "Bank temporarily unavailable",
+            body: "A linked institution or Plaid is temporarily unavailable. VaultPeek will retry automatically — no action needed.",
+            severity: .informational
         )
     }
 

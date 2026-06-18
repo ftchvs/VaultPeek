@@ -81,16 +81,19 @@ public enum DemoFixtures {
         }
     }
 
-    /// Partial-sync demo statuses (AND-489): one connected item plus one
-    /// degraded (`loginRequired`) item, so `syncedItemCount < itemCount` and the
-    /// data-integrity badge renders `.partial`. Used by the demo status-recovery
-    /// scenario so the badge is visible without Plaid.
+    /// Partial-sync demo statuses (AND-489 / AND-488): one connected item, one
+    /// degraded (`loginRequired`) reconnect target, and one `.providerOutage`
+    /// item. This makes `syncedItemCount < itemCount` (so the data-integrity
+    /// badge renders `.partial`) and exercises all three Connection Health Strip
+    /// buckets (Connected / Reconnect-needed / Provider-outage) without Plaid.
     public static func partialSyncItemStatuses(now: Date = Date(), calendar: Calendar = .current) -> [ItemStatus] {
         let recoveredSync = calendar.date(byAdding: .minute, value: -18, to: now) ?? now
         let needsLoginSync = calendar.date(byAdding: .day, value: -3, to: now) ?? now
+        let outageSync = calendar.date(byAdding: .hour, value: -2, to: now) ?? now
         return [
             ItemStatus(id: "demo_chase", institutionName: "Chase", status: .connected, lastSync: recoveredSync),
             ItemStatus(id: "demo_amex_item", institutionName: "American Express", status: .loginRequired, lastSync: needsLoginSync),
+            ItemStatus(id: "demo_wells_fargo", institutionName: "Wells Fargo", status: .providerOutage, lastSync: outageSync),
         ]
     }
 
