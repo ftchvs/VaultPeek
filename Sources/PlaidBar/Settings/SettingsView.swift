@@ -595,6 +595,10 @@ struct GeneralSettingsView: View {
                     .foregroundStyle(.secondary)
                 }
             }
+
+            Section("Where your data lives") {
+                LocalTrustReceiptView(receipt: whereYourDataLivesReceipt)
+            }
         }
         .formStyle(.grouped)
         .toggleStyle(.switch)
@@ -655,6 +659,10 @@ struct GeneralSettingsView: View {
 
     private var localTrustReceipt: LocalTrustReceipt {
         LocalTrustReceipt.settingsReceipt(storagePath: appState.activeStorageDirectoryDisplayText)
+    }
+
+    private var whereYourDataLivesReceipt: LocalTrustReceipt {
+        LocalTrustReceipt.whereYourDataLives(storagePath: appState.activeStorageDirectoryDisplayText)
     }
 
     private var localAIAvailabilityTint: Color {
@@ -824,6 +832,15 @@ private struct LocalTrustReceiptView: View {
             Text(receipt.footer)
                 .detailText()
                 .fixedSize(horizontal: false, vertical: true)
+
+            if let deepLink = receipt.deepLink, let url = URL(string: deepLink.urlString) {
+                Link(destination: url) {
+                    Label(deepLink.title, systemImage: deepLink.systemImage)
+                        .font(.caption.weight(.semibold))
+                }
+                .controlSize(.small)
+                .accessibilityLabel(deepLink.title)
+            }
         }
     }
 }

@@ -68,6 +68,14 @@ public enum PlaidBarConstants {
     public static var plaidSandboxRedirectUri: String {
         "http://localhost:\(serverPort)/oauth/callback"
     }
+
+    /// Plaid's consumer-facing privacy portal, where users review what data a
+    /// connected app can access.
+    public static let plaidPrivacyURL: String = "https://my.plaid.com/"
+
+    /// Plaid's data deletion / connection-management portal, where users revoke
+    /// or delete the bank connections VaultPeek created.
+    public static let plaidDataDeletionURL: String = "https://my.plaid.com/"
 }
 
 private extension String {

@@ -1171,6 +1171,21 @@ private struct LocalInsightsCard: View {
                     .microText()
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+
+                Spacer(minLength: 4)
+
+                Button {
+                    openSettings()
+                } label: {
+                    Label("Where your data lives", systemImage: "externaldrive.badge.questionmark")
+                        .labelStyle(.titleAndIcon)
+                        .microText()
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("Open Settings to see where VaultPeek stores your data on this Mac.")
+                .accessibilityLabel("Where your data lives")
+                .accessibilityHint("Opens Settings to the local data section")
             }
         }
         .padding(Spacing.sm)
