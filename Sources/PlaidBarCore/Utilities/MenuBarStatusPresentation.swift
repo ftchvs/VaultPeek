@@ -12,8 +12,19 @@ public enum MenuBarIconStyle: String, CaseIterable, Codable, Sendable, Identifia
     case minimal
     /// A dashboard/insight mark for users who prefer less money imagery.
     case chart
+    /// The VaultPeek brand mark — a vault-dial glyph that ties the menu bar to
+    /// the app icon. Unlike the other styles it has no SF Symbol equivalent, so
+    /// the app renders it from a code-drawn monochrome template image (see
+    /// `healthySymbolName` / `customGlyphToken`).
+    case vault
 
     public static let defaultValue: MenuBarIconStyle = .classic
+
+    /// Sentinel returned by `healthySymbolName` for styles that render from a
+    /// custom template image rather than an SF Symbol. It is deliberately not a
+    /// valid SF Symbol name; the app maps it to the drawn vault glyph and never
+    /// passes it to `Image(systemName:)` / `NSImage(systemSymbolName:)`.
+    public static let customGlyphToken = "vaultpeek.menubar.vault"
 
     public var id: String { rawValue }
 
@@ -22,15 +33,22 @@ public enum MenuBarIconStyle: String, CaseIterable, Codable, Sendable, Identifia
         case .classic: return "Dollar"
         case .minimal: return "Minimal"
         case .chart: return "Chart"
+        case .vault: return "Vault"
         }
     }
 
-    /// SF Symbol used for the healthy/default state only.
+    /// Whether this style renders from a code-drawn template image instead of an
+    /// SF Symbol. Used by the UI to pick the right rendering path.
+    public var usesCustomGlyph: Bool { self == .vault }
+
+    /// SF Symbol used for the healthy/default state only — or `customGlyphToken`
+    /// for styles drawn from a custom template image.
     public var healthySymbolName: String {
         switch self {
         case .classic: return "dollarsign.circle"
         case .minimal: return "centsign.circle"
         case .chart: return "chart.line.uptrend.xyaxis.circle"
+        case .vault: return Self.customGlyphToken
         }
     }
 }
