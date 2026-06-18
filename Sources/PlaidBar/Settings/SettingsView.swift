@@ -464,6 +464,13 @@ struct GeneralSettingsView: View {
 
                 Toggle("Launch at login", isOn: $state.launchAtLogin)
 
+                // AND-487: a global hotkey that summons VaultPeek from any app.
+                // The chord is fixed for v1; only the on/off switch is exposed.
+                Toggle("Summon with \(SummonHotkeyConfiguration.summonDefault.displayString)", isOn: $state.summonHotkeyEnabled)
+                Text("Press \(SummonHotkeyConfiguration.summonDefault.displayString) from any app to bring VaultPeek to the front.")
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
+
                 // AND-384: pop the dashboard out of the menu bar into a
                 // floating desktop window the user can drag anywhere and that
                 // survives app-switches. Bound to AppState (single source of
