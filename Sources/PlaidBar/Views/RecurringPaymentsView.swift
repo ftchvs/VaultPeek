@@ -1,3 +1,4 @@
+import AppKit
 import PlaidBarCore
 import SwiftUI
 
@@ -84,6 +85,13 @@ struct RecurringPaymentsView: View {
                 .detailText()
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            if let forgottenCallout = presentation.forgottenCalloutText {
+                Label(forgottenCallout, systemImage: "questionmark.app.dashed")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(SemanticColors.warning)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             if presentation.attentionCount > 0 {
                 Label("\(presentation.attentionCount) changed or stale", systemImage: "exclamationmark.triangle")
@@ -182,11 +190,25 @@ private struct RecurringPaymentRow: View {
                     }
                 }
             }
+
+            // Cancel-help action (AND-497). Surfaced for every row, leading with
+            // a chevron for known merchant pages so it never reads via color alone.
+            Button {
+                NSWorkspace.shared.open(row.cancelURL)
+            } label: {
+                Label(row.cancelLinkText, systemImage: "xmark.circle")
+                    .font(.caption2.weight(.semibold))
+            }
+            .buttonStyle(.borderless)
+            .help(row.cancelIsSpecific
+                ? "Open \(row.merchantName)'s cancellation page"
+                : "Search how to cancel \(row.merchantName)")
+            .accessibilityLabel("How to cancel \(row.merchantName)")
         }
         .padding(Spacing.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassSurface(row.needsAttention ? .emphasized(SemanticColors.warning) : .raised)
-        .accessibilityElement(children: .ignore)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel(row.accessibilityLabel)
     }
 }

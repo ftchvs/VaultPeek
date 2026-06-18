@@ -66,6 +66,29 @@ public enum DemoFixtures {
     public static func transactions(now: Date = Date(), calendar: Calendar = .current) -> [TransactionDTO] {
         explicitTransactions(now: now, calendar: calendar)
             + historicalTransactions(now: now, calendar: calendar)
+            + forgottenSubscriptionTransactions(now: now, calendar: calendar)
+    }
+
+    /// A small, long-running subscription seeded so `--demo` always shows the
+    /// "You may have forgotten this" callout (AND-497). $4.99/mo "Cloud Backup"
+    /// (Netflix is in the cancel-guidance map for a non-generic link; this one is
+    /// deliberately small and obscure so it reads as easy-to-forget). Twelve
+    /// monthly occurrences land well over the forgotten min-cycle threshold, the
+    /// fixed amount keeps the detected average under the cost ceiling, and the
+    /// most recent charge is recent so it is never read as stale.
+    private static func forgottenSubscriptionTransactions(now: Date, calendar: Calendar) -> [TransactionDTO] {
+        (0..<12).map { monthsAgo in
+            let daysAgo = 4 + (monthsAgo * 30)
+            return TransactionDTO(
+                id: "demo_forgotten_cloud_\(monthsAgo)",
+                accountId: "demo_visa",
+                amount: 4.99,
+                date: dateString(daysAgo: daysAgo, now: now, calendar: calendar),
+                name: "CLOUDVAULT BACKUP",
+                merchantName: "CloudVault",
+                category: .subscriptions
+            )
+        }
     }
 
     /// Deterministic 60-day net-worth history with a gentle upward drift so the
