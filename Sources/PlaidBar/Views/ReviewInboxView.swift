@@ -27,6 +27,14 @@ struct ReviewInboxView: View {
         Array(snapshot.items.prefix(embedded ? 20 : 6))
     }
 
+    private var headerPresentation: ReviewInboxPrivacyPresentation {
+        ReviewInboxPrivacyPresentation.make(
+            totalCount: snapshot.totalCount,
+            highPriorityCount: snapshot.highPriorityCount,
+            isPrivate: appState.shouldMaskFinancialValues
+        )
+    }
+
     var body: some View {
         if embedded || snapshot.totalCount > 0 || actionConfirmation != nil {
             VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -116,7 +124,7 @@ struct ReviewInboxView: View {
             }
             .onMoveCommand(perform: moveSelection)
             .accessibilityElement(children: .contain)
-            .accessibilityLabel("Review inbox. \(snapshot.totalCount) transaction\(snapshot.totalCount == 1 ? "" : "s") need attention.")
+            .accessibilityLabel(headerPresentation.accessibilityLabel)
         }
     }
 
@@ -126,19 +134,19 @@ struct ReviewInboxView: View {
                 Text("Review Inbox")
                     .sectionTitle()
 
-                Text("\(snapshot.totalCount) item\(snapshot.totalCount == 1 ? "" : "s") need attention")
+                Text(headerPresentation.subtitle)
                     .microText()
                     .foregroundStyle(.secondary)
             }
 
             Spacer()
 
-            if snapshot.highPriorityCount > 0 {
-                Label("\(snapshot.highPriorityCount) high priority", systemImage: "exclamationmark.triangle.fill")
+            if let highPriorityBadge = headerPresentation.highPriorityBadge {
+                Label(highPriorityBadge, systemImage: "exclamationmark.triangle.fill")
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(SemanticColors.warning)
                     .labelStyle(.titleAndIcon)
-                    .accessibilityLabel("\(snapshot.highPriorityCount) high priority review item\(snapshot.highPriorityCount == 1 ? "" : "s")")
+                    .accessibilityLabel(headerPresentation.highPriorityAccessibilityLabel ?? highPriorityBadge)
             }
 
             Button {

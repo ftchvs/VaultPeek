@@ -34,6 +34,37 @@ struct AppLockPresentationTests {
         #expect(preferences.menuBarText(currentText: "$42,000", isAppLocked: false, isIconOnly: false) == "Private")
     }
 
+    @Test("private Review Inbox header does not expose queue counts")
+    func privateReviewInboxHeaderDoesNotExposeCounts() {
+        let presentation = ReviewInboxPrivacyPresentation.make(
+            totalCount: 7,
+            highPriorityCount: 3,
+            isPrivate: true
+        )
+
+        #expect(presentation.subtitle == "Items need attention")
+        #expect(presentation.highPriorityBadge == nil)
+        #expect(presentation.highPriorityAccessibilityLabel == nil)
+        #expect(presentation.accessibilityLabel == "Review inbox. Items are hidden while VaultPeek is private.")
+        #expect(!presentation.subtitle.contains("7"))
+        #expect(!presentation.accessibilityLabel.contains("7"))
+        #expect(!presentation.accessibilityLabel.contains("3"))
+    }
+
+    @Test("normal Review Inbox header keeps actionable queue counts")
+    func normalReviewInboxHeaderKeepsCounts() {
+        let presentation = ReviewInboxPrivacyPresentation.make(
+            totalCount: 2,
+            highPriorityCount: 1,
+            isPrivate: false
+        )
+
+        #expect(presentation.subtitle == "2 items need attention")
+        #expect(presentation.highPriorityBadge == "1 high priority")
+        #expect(presentation.highPriorityAccessibilityLabel == "1 high priority review item")
+        #expect(presentation.accessibilityLabel == "Review inbox. 2 transactions need attention.")
+    }
+
     @Test("locked pause settings fail closed for refresh and notifications")
     func lockedPauseSettingsFailClosed() {
         let paused = AppLockPreferences(appLockEnabled: true, notificationPrivacyMode: .offWhileLocked, pauseRefreshWhileLocked: true)
