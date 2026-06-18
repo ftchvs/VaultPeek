@@ -12,6 +12,7 @@ protocol NotificationServiceProtocol {
         accounts: [AccountDTO],
         recurringTransactions: [RecurringTransaction],
         itemStatuses: [ItemStatus],
+        watchlistTargets: [WatchlistTarget],
         isSyncStale: Bool,
         config: NotificationTriggers
     ) async
@@ -121,6 +122,7 @@ final class NotificationService: NotificationServiceProtocol {
         accounts: [AccountDTO],
         recurringTransactions: [RecurringTransaction],
         itemStatuses: [ItemStatus],
+        watchlistTargets: [WatchlistTarget] = [],
         isSyncStale: Bool,
         config: NotificationTriggers
     ) async {
@@ -129,6 +131,7 @@ final class NotificationService: NotificationServiceProtocol {
             accounts: accounts,
             recurringTransactions: recurringTransactions,
             itemStatuses: itemStatuses,
+            watchlistTargets: watchlistTargets,
             isSyncStale: isSyncStale,
             config: config,
             deliveredDedupKeys: deliveredDedupKeySet

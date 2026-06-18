@@ -306,6 +306,19 @@ public struct AttentionQueue: Equatable, Sendable {
                     targetItemId: item.id,
                     accessibilityHint: "Reconnects this institution through Plaid Link."
                 )
+            case .providerOutage:
+                // Transient Plaid-side outage: advisory only (.warning, no
+                // reconnect action) — VaultPeek retries automatically, so the
+                // user is told no action is needed rather than offered an Update.
+                return AttentionQueueRow(
+                    id: "item-outage-\(index)",
+                    severity: .warning,
+                    title: itemTitle(item, fallback: "Bank temporarily unavailable"),
+                    detail: itemDetail(item, fallback: "Your bank or Plaid is temporarily unavailable. VaultPeek will retry automatically — no action needed."),
+                    action: nil,
+                    actionTitle: nil,
+                    targetItemId: item.id
+                )
             }
         }
     }
@@ -411,6 +424,8 @@ public struct AttentionQueue: Equatable, Sendable {
             return "\(institutionName) permission revoked"
         case .newAccountsAvailable:
             return "\(institutionName) has new accounts"
+        case .providerOutage:
+            return "\(institutionName) temporarily unavailable"
         case .error:
             return "\(institutionName) needs attention"
         }
@@ -431,6 +446,8 @@ public struct AttentionQueue: Equatable, Sendable {
             return "Plaid says \(institutionName) permission was revoked. Update this item to restore access."
         case .newAccountsAvailable:
             return "\(institutionName) has newly available accounts. Update this item to choose what VaultPeek can access."
+        case .providerOutage:
+            return "Your bank or Plaid is temporarily unavailable. VaultPeek will retry automatically — no action needed."
         case .error:
             return "Plaid reported an item error for \(institutionName). Reconnect, then refresh."
         }

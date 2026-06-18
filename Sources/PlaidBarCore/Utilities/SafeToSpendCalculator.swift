@@ -23,6 +23,7 @@ public enum SafeToSpendCalculator {
         recurringTransactions: [RecurringTransaction],
         cashflow: WealthSummaryPresentation.CashflowSummary? = nil,
         inputs: SafeToSpendInputs = .default,
+        pendingHolds: Double = 0,
         asOf date: Date,
         calendar: Calendar = .current
     ) -> SafeToSpendResult {
@@ -47,9 +48,20 @@ public enum SafeToSpendCalculator {
             calendar: calendar
         )
 
+        // Pending holds are clamped to non-negative and subtracted. Defaulting to
+        // 0 keeps the result byte-identical to today's behavior unless a caller
+        // explicitly supplies holds (gated on the safe-to-spend model B decision
+        // so `available`-based starting cash never double-subtracts).
+        let pendingHoldsTotal = max(pendingHolds, 0)
+
         var components: [SafeToSpendComponent] = [
             SafeToSpendComponent(kind: .startingCash, label: "Starting cash", amount: startingCash),
             SafeToSpendComponent(kind: .expectedIncome, label: "Expected income", amount: income.amount),
+            SafeToSpendComponent(
+                kind: .pendingHolds,
+                label: "Pending holds",
+                amount: -pendingHoldsTotal
+            ),
             SafeToSpendComponent(
                 kind: .upcomingObligations,
                 label: "Upcoming bills",

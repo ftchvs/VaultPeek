@@ -23,17 +23,25 @@ struct MenuBarIconStyleTests {
         #expect(healthyDemo(.classic).symbolName == "dollarsign.circle")
         #expect(healthyDemo(.minimal).symbolName == "centsign.circle")
         #expect(healthyDemo(.chart).symbolName == "chart.line.uptrend.xyaxis.circle")
+        // Vault renders from a code-drawn template image, so its healthy glyph
+        // is the custom token, not an SF Symbol.
+        #expect(healthyDemo(.vault).symbolName == MenuBarIconStyle.customGlyphToken)
         // Healthy never carries a severity (no color-only alert).
         #expect(healthyDemo(.minimal).severity == nil)
+        #expect(healthyDemo(.vault).severity == nil)
     }
 
     @Test("healthySymbolName mapping and metadata are stable")
     func styleMetadata() {
-        #expect(MenuBarIconStyle.allCases.count == 3)
+        #expect(MenuBarIconStyle.allCases.count == 4)
         #expect(MenuBarIconStyle.defaultValue == .classic)
         #expect(MenuBarIconStyle.classic.healthySymbolName == "dollarsign.circle")
         #expect(MenuBarIconStyle.minimal.healthySymbolName == "centsign.circle")
         #expect(MenuBarIconStyle.chart.healthySymbolName == "chart.line.uptrend.xyaxis.circle")
+        // Only the Vault style uses a custom glyph token (not a real SF Symbol).
+        #expect(MenuBarIconStyle.vault.healthySymbolName == MenuBarIconStyle.customGlyphToken)
+        #expect(MenuBarIconStyle.vault.usesCustomGlyph)
+        #expect(!MenuBarIconStyle.classic.usesCustomGlyph)
         for style in MenuBarIconStyle.allCases {
             #expect(!style.displayName.isEmpty)
             // Round-trips through its raw value (used for persistence).

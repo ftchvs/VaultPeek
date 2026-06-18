@@ -19,6 +19,9 @@ struct MainPopover: View {
     @State private var dashboardContentHeight: CGFloat = 0
     @State private var activeScreenVisibleWidth: CGFloat?
     @State private var isRecurringInspectorOpen = false
+    /// Income → Category flow drill-in (AND-500), mirroring the recurring
+    /// inspector pattern. Mutually exclusive with account/recurring inspectors.
+    @State private var isFlowInspectorOpen = false
     /// True after the first render. Gates the inspector's trailing slide-in so a
     /// popover opened with a persisted selection appears directly in three-column
     /// geometry (no slide on restore); in-session selections still slide (AND-405).
@@ -69,7 +72,7 @@ struct MainPopover: View {
     }
 
     private var selectedAccount: AccountDTO? {
-        guard !isRecurringInspectorOpen else { return nil }
+        guard !isRecurringInspectorOpen, !isFlowInspectorOpen else { return nil }
         let accounts = filteredAccounts
         // A selection survives only while the account is still visible; a filter
         // change or a removed/synced-away account deselects it (AND-373/375).
@@ -122,11 +125,22 @@ struct MainPopover: View {
 
     private func openRecurringInspector() {
         selectedAccountId = ""
+        isFlowInspectorOpen = false
         isRecurringInspectorOpen = true
     }
 
     private func closeRecurringInspector() {
         isRecurringInspectorOpen = false
+    }
+
+    private func openFlowInspector() {
+        selectedAccountId = ""
+        isRecurringInspectorOpen = false
+        isFlowInspectorOpen = true
+    }
+
+    private func closeFlowInspector() {
+        isFlowInspectorOpen = false
     }
 
     private var filteredAccounts: [AccountDTO] {
@@ -281,6 +295,7 @@ struct MainPopover: View {
     /// view chain as an explicitly-typed value to keep the type-checker fast.
     private var exitCommandHandler: (() -> Void)? {
         guard !isRecurringInspectorOpen else { return { closeRecurringInspector() } }
+        guard !isFlowInspectorOpen else { return { closeFlowInspector() } }
         guard isAccountInspectorOpen else { return nil }
         return { deselectAccount() }
     }
@@ -315,7 +330,8 @@ struct MainPopover: View {
     private var wealthSummaryRail: some View {
         WealthSummaryFlyout(
             onAddAccount: openAccountSetup,
-            onOpenSubscriptions: openRecurringInspector
+            onOpenSubscriptions: openRecurringInspector,
+            onOpenFlow: openFlowInspector
         )
             .environment(appState)
             .id("wealth-summary-rail")
@@ -356,6 +372,23 @@ struct MainPopover: View {
                         ),
                         loadState: appState.loadState(for: .recurring),
                         onClose: closeRecurringInspector
+                    )
+                } else if isFlowInspectorOpen {
+                    IncomeCategoryFlowInspector(
+                        presentation: IncomeCategoryFlowPresentation.make(
+                            // Scope to the same trailing 30-day window as the
+                            // "30D cashflow" card this drill-in launches from, so
+                            // the inspector totals reconcile with that card rather
+                            // than spanning the full multi-month transaction cache.
+                            from: IncomeCategoryFlow.transactions(
+                                in: IncomeCategoryFlow.defaultWindowDays,
+                                from: appState.transactions,
+                                asOf: Date()
+                            )
+                        ),
+                        loadState: appState.loadState(for: .transactions),
+                        isPrivacyMasked: appState.shouldMaskFinancialValues,
+                        onClose: closeFlowInspector
                     )
                 } else if !selectedAccountId.isEmpty {
                     // A persisted selection is still resolving (accounts not loaded
@@ -444,6 +477,9 @@ struct MainPopover: View {
                         DashboardChangeReceiptStrip()
                             .environment(appState)
 
+                        BalanceTimeMachineView()
+                            .environment(appState)
+
                         WeeklyReviewCard()
                             .environment(appState)
 
@@ -460,6 +496,9 @@ struct MainPopover: View {
 
                         if shouldElevateStatusReadinessPanel {
                             VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
+                                ConnectionHealthStripView()
+                                    .environment(appState)
+
                                 AttentionQueueView(title: "Attention", onAddAccount: openAccountSetup)
                                     .environment(appState)
 
@@ -479,6 +518,7 @@ struct MainPopover: View {
                             selectedAccountId: selectedAccount?.id,
                             onSelectAccount: {
                                 isRecurringInspectorOpen = false
+                                isFlowInspectorOpen = false
                                 selectedAccountId = $0.id
                             },
                             onDeselectAccount: { selectedAccountId = "" },
@@ -502,6 +542,9 @@ struct MainPopover: View {
 
                         if shouldShowLowerStatusReadinessPanel {
                             VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
+                                ConnectionHealthStripView()
+                                    .environment(appState)
+
                                 AttentionQueueView(title: "Attention", onAddAccount: openAccountSetup)
                                     .environment(appState)
 
@@ -1182,6 +1225,21 @@ private struct LocalInsightsCard: View {
                     .microText()
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+
+                Spacer(minLength: 4)
+
+                Button {
+                    openSettings()
+                } label: {
+                    Label("Where your data lives", systemImage: "externaldrive.badge.questionmark")
+                        .labelStyle(.titleAndIcon)
+                        .microText()
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("Open Settings to see where VaultPeek stores your data on this Mac.")
+                .accessibilityLabel("Where your data lives")
+                .accessibilityHint("Opens Settings to the local data section")
             }
         }
         .padding(Spacing.sm)

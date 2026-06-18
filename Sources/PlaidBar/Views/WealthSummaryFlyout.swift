@@ -6,6 +6,8 @@ struct WealthSummaryFlyout: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let onAddAccount: () -> Void
     var onOpenSubscriptions: (() -> Void)?
+    /// Opens the Income → Category flow drill-in (AND-500).
+    var onOpenFlow: (() -> Void)?
 
     private var presentation: WealthSummaryPresentation {
         WealthSummaryPresentation.evaluate(
@@ -49,7 +51,11 @@ struct WealthSummaryFlyout: View {
                         .loadingRedaction(appState.loadState(for: .summaryCards))
                         .scrollEdgeDepth(reduceMotion: reduceMotion)
 
-                    WealthCashflowSection(cashflow: presentation.cashflow, privacyMaskEnabled: privacyMaskEnabled)
+                    WealthCashflowSection(
+                        cashflow: presentation.cashflow,
+                        privacyMaskEnabled: privacyMaskEnabled,
+                        onOpenFlow: onOpenFlow
+                    )
                         .loadingRedaction(appState.loadState(for: .transactions))
                         .scrollEdgeDepth(reduceMotion: reduceMotion)
 
@@ -61,6 +67,19 @@ struct WealthSummaryFlyout: View {
                             asOf: Date()
                         ),
                         lastUpdatedRelative: appState.lastSyncRelative,
+                        privacyMaskEnabled: privacyMaskEnabled
+                    )
+                    .loadingRedaction(appState.loadState(for: .summaryCards))
+                    .scrollEdgeDepth(reduceMotion: reduceMotion)
+
+                    // Forward cash-flow forecast (AND-498). Self-hides until
+                    // there is enough recorded balance history to anchor a line.
+                    ProjectedBalanceSection(
+                        presentation: ProjectedBalancePresentation.evaluate(
+                            history: appState.balanceHistory,
+                            recurring: appState.recurringTransactions,
+                            now: Date()
+                        ),
                         privacyMaskEnabled: privacyMaskEnabled
                     )
                     .loadingRedaction(appState.loadState(for: .summaryCards))
@@ -153,6 +172,10 @@ struct WealthSummaryFlyout: View {
                 if !privacyMaskEnabled {
                     WealthNetWorthTrendBlock(trend: presentation.netWorthTrend)
                 }
+
+                if let badge = appState.dataIntegrityBadge {
+                    DataIntegrityBadgeView(result: badge)
+                }
             }
             .padding(Spacing.sm)
             .heroAccentSurface()
@@ -172,7 +195,8 @@ struct WealthSummaryFlyout: View {
         let netCashflow = privacyMaskEnabled
             ? PrivacyMaskPresentation.compactValue
             : cashflowText(presentation.cashflow.net, format: .full)
-        return "Wealth summary. Net worth \(netWorth). 30 day net cashflow \(netCashflow). \(presentation.syncHealth.title). \(presentation.attention.detail)"
+        let integrity = appState.dataIntegrityBadge.map { " \($0.accessibilityLabel)" } ?? ""
+        return "Wealth summary. Net worth \(netWorth). 30 day net cashflow \(netCashflow). \(presentation.syncHealth.title). \(presentation.attention.detail)\(integrity)"
     }
 }
 
@@ -430,6 +454,7 @@ private struct WealthCashflowSection: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let cashflow: WealthSummaryPresentation.CashflowSummary
     let privacyMaskEnabled: Bool
+    var onOpenFlow: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -445,6 +470,16 @@ private struct WealthCashflowSection: View {
                 WealthCashflowRow(title: "Income", amount: cashflow.income, role: .income, privacyMaskEnabled: privacyMaskEnabled, reduceMotion: reduceMotion)
                 WealthCashflowRow(title: "Spending", amount: cashflow.spending, role: .spending, privacyMaskEnabled: privacyMaskEnabled, reduceMotion: reduceMotion)
                 WealthCashflowRow(title: "Net", amount: cashflow.net, role: .net, privacyMaskEnabled: privacyMaskEnabled, reduceMotion: reduceMotion)
+            }
+
+            // Drill into the Income → Category flow (AND-500).
+            if let onOpenFlow {
+                Button(action: onOpenFlow) {
+                    Label("View income flow", systemImage: "arrow.left.arrow.right")
+                        .font(.caption.weight(.medium))
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("View income to category flow")
             }
         }
         .accessibilityElement(children: .contain)
@@ -523,6 +558,43 @@ private struct WealthCashflowRow: View {
             if amount > 0 { return SemanticColors.positive }
             if amount < 0 { return SemanticColors.negative }
             return AppearanceTextColors.secondary
+        }
+    }
+}
+
+/// Forward cash-flow forecast block (AND-498). Self-hides when there isn't
+/// enough recorded balance history to anchor a line; masks the chart (which
+/// shows balance amounts) when privacy mode is on.
+private struct ProjectedBalanceSection: View {
+    let presentation: ProjectedBalancePresentation
+    let privacyMaskEnabled: Bool
+
+    var body: some View {
+        switch presentation {
+        case let .available(projection):
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                HStack {
+                    WealthFlyoutSectionLabel("Projected balance")
+                    Spacer()
+                    Text("\(projection.series.count - 1)D")
+                        .microText()
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+
+                if privacyMaskEnabled {
+                    Label("Forecast hidden while VaultPeek is private", systemImage: "eye.slash")
+                        .detailText()
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, minHeight: 88, alignment: .leading)
+                } else {
+                    ProjectedBalanceChart(projection: projection)
+                }
+            }
+            .accessibilityElement(children: .contain)
+        case .insufficientHistory:
+            // Stay quiet until there is enough history — no empty placeholder.
+            EmptyView()
         }
     }
 }

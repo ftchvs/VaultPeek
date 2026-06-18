@@ -678,6 +678,20 @@ struct TransactionMiniRow: View {
 
             Spacer()
 
+            if transaction.pending {
+                // Pending capsule (AND-499). Color is paired with an SF Symbol +
+                // text so the state never reads via color alone (ACCESSIBILITY.md).
+                Label("Pending", systemImage: "clock")
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(SemanticColors.pending)
+                    .padding(.horizontal, Spacing.xs)
+                    .padding(.vertical, Spacing.xxs)
+                    .background(
+                        Capsule().fill(SemanticColors.pending.opacity(0.14))
+                    )
+                    .accessibilityHidden(true)
+            }
+
             Text(amountText)
                 .dataText()
                 .rollingTabularNumber(amountText, reduceMotion: reduceMotion)
@@ -696,7 +710,8 @@ struct TransactionMiniRow: View {
 
     private var accessibilityLabel: String {
         let direction = transaction.isIncome ? "income" : "outflow"
-        return "\(transaction.displayName), \(direction), \(Formatters.currency(transaction.displayAmount, format: .full)), \(Formatters.displayTransactionDate(transaction.date))"
+        let pendingNote = transaction.pending ? ", pending" : ""
+        return "\(transaction.displayName), \(direction)\(pendingNote), \(Formatters.currency(transaction.displayAmount, format: .full)), \(Formatters.displayTransactionDate(transaction.date))"
     }
 }
 

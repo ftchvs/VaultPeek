@@ -44,6 +44,11 @@ enum ItemStatusMapping {
             return .permissionRevoked
         case "NEW_ACCOUNTS_AVAILABLE":
             return .newAccountsAvailable
+        // Transient Plaid-side outages: degraded but NOT a user-actionable
+        // reconnect (mirrors LinkRoutes.retryableProviderCodes). VaultPeek shows
+        // a "we'll retry automatically" advisory instead of an Update flow.
+        case "INSTITUTION_DOWN", "INSTITUTION_NOT_RESPONDING", "PLANNED_MAINTENANCE", "INTERNAL_SERVER_ERROR":
+            return .providerOutage
         default:
             return nil
         }

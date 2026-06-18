@@ -52,7 +52,10 @@ public enum ItemRecoveryTarget {
                 return "Plaid reported an item error for \(institutionName). Reconnect it, then refresh balances."
             }
             return "Plaid reported an item error. Reconnect the item, then refresh balances."
-        case .connected, .loginRepaired:
+        case .connected, .loginRepaired, .providerOutage:
+            // .providerOutage is a non-actionable transient outage and is never
+            // selected as a recovery target by item(from:), so it carries no
+            // reconnect detail here.
             return nil
         }
     }
@@ -61,7 +64,7 @@ public enum ItemRecoveryTarget {
         switch status {
         case .newAccountsAvailable:
             "Update"
-        case .connected, .loginRepaired, .loginRequired, .pendingExpiration, .pendingDisconnect, .permissionRevoked, .error:
+        case .connected, .loginRepaired, .loginRequired, .pendingExpiration, .pendingDisconnect, .permissionRevoked, .providerOutage, .error:
             "Reconnect"
         }
     }
@@ -70,7 +73,7 @@ public enum ItemRecoveryTarget {
         switch status {
         case .newAccountsAvailable:
             "Update Item"
-        case .connected, .loginRepaired, .loginRequired, .pendingExpiration, .pendingDisconnect, .permissionRevoked, .error:
+        case .connected, .loginRepaired, .loginRequired, .pendingExpiration, .pendingDisconnect, .permissionRevoked, .providerOutage, .error:
             "Reconnect Item"
         }
     }

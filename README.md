@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://img.icons8.com/sf-regular-filled/96/228BE6/money-bag.png" width="80" alt="VaultPeek icon"/>
+  <img src="Assets/app-icon.png" width="80" alt="VaultPeek icon"/>
 </p>
 
 <h1 align="center">VaultPeek</h1>
@@ -15,7 +15,7 @@
 <p align="center">
   <a href="https://github.com/ftchvs/VaultPeek/actions/workflows/ci.yml"><img src="https://github.com/ftchvs/VaultPeek/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/ftchvs/VaultPeek/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Proprietary-red.svg" alt="Proprietary License"></a>
-  <img src="https://img.shields.io/badge/platform-macOS%2015%2B-lightgrey.svg" alt="macOS 15+">
+  <img src="https://img.shields.io/badge/platform-macOS%2026%2B-lightgrey.svg" alt="macOS 26+">
   <img src="https://img.shields.io/badge/swift-6.0%2B-F05138.svg" alt="Swift 6.0+">
 </p>
 
@@ -398,9 +398,9 @@ status indicators, and screenshots are in [ACCESSIBILITY.md](ACCESSIBILITY.md).
 
 | Requirement | Version |
 |------------|---------|
-| macOS | 15.0 (Sequoia)+ |
+| macOS | 26.0 (Tahoe)+ |
 | Swift | 6.0+ |
-| Xcode | 16+ (or Swift toolchain) |
+| Xcode | 26+ (or Swift toolchain) |
 | Plaid account | Free for sandbox |
 
 ## Architecture
@@ -654,7 +654,7 @@ Deferred product candidates:
 - [ ] Budget alerts per category
 - [ ] Multi-currency support
 - [ ] Investment account tracking (Plaid Investments)
-- [ ] CSV/JSON export for tax/accounting
+- [x] CSV/JSON export for tax/accounting (Settings → Local data → Export & Backup)
 - [ ] Webhook support for real-time updates
 - [ ] Dark/light theme customization
 - [ ] [Teller](https://teller.io/) as alternative provider
