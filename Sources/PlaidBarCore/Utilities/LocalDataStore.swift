@@ -230,7 +230,9 @@ public enum LocalDataStore {
             isTransactionReviewMetadataFilename(filename) ||
             isTransactionRulesFilename(filename) ||
             isPendingLinkSessionsFilename(filename) ||
-            filename == linkClientUserIdFilename {
+            filename == linkClientUserIdFilename ||
+            // Merchant logo cache directory (AND-494): clear cached brand images.
+            filename == "logo-cache" {
             return true
         }
 

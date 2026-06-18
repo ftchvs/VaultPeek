@@ -662,9 +662,10 @@ struct TransactionMiniRow: View {
 
     var body: some View {
         HStack(spacing: Spacing.compactRowContentSpacing) {
-            Circle()
-                .fill(transaction.isIncome ? SemanticColors.positive : Color.secondary.opacity(0.55))
-                .frame(width: Sizing.statusDot, height: Sizing.statusDot)
+            MerchantLogoView(
+                logoURL: transaction.logoURL,
+                fallbackTint: transaction.isIncome ? SemanticColors.positive : Color.secondary.opacity(0.55)
+            )
 
             VStack(alignment: .leading, spacing: Spacing.compactRowTextSpacing) {
                 Text(transaction.displayName)
