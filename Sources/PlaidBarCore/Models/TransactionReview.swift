@@ -255,15 +255,20 @@ public enum TransactionReviewInbox {
             // Plaid PFCv2 categorizes most transactions confidently; surface a
             // category as "needs review" when it is missing/uncategorized, or
             // when Plaid itself reports LOW/UNKNOWN confidence — but never once
-            // the user has set their own category. The on-device NL tier
-            // (AND-507) backfills a trusted category for both the missing and
-            // the LOW/UNKNOWN cases, so when it succeeds the item is no longer
-            // flagged `.uncategorized` (the chip only stays for merchants the
-            // lexicon/NL could not confidently resolve). NL never overrides the
-            // user, so a user category short-circuits this regardless.
-            let nlBackfilled = categorySource == .appleNaturalLanguage
-            if metadata?.userCategory == nil, !nlBackfilled,
+            // the user has set their own category.
+            //
+            // The on-device NL tier (AND-507) is a *suggestion*, not a persisted
+            // category: it fills `effectiveCategory` for display (with the
+            // "Suggested" badge) but downstream budget/category/export totals
+            // still group by the raw `transaction.category`. So an NL-backfilled
+            // item must STAY in the inbox flagged `.uncategorized` — otherwise a
+            // recognizable charge with no other review reason silently drops out
+            // while its spend keeps landing in "Other", and the user never gets
+            // to approve the suggestion (which persists it as `userCategory`).
+            // Only a user override clears this; NL never overrides the user.
+            if metadata?.userCategory == nil,
                 effectiveCategory == nil || effectiveCategory == .other ||
+                categorySource == .appleNaturalLanguage ||
                 transaction.isLowConfidenceCategory {
                 reasons.insert(.uncategorized)
             }

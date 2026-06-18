@@ -612,7 +612,7 @@ struct TransactionReviewInboxTests {
 
     // MARK: - AND-507 on-device NL categorization precedence
 
-    @Test("A nil-category transaction whose name resolves is NL-backfilled, not flagged uncategorized")
+    @Test("A nil-category transaction whose name resolves carries the NL suggestion but stays reviewable as uncategorized")
     func nlBackfillsResolvableMissingCategory() {
         let transaction = tx(
             id: "nl-coffee",
@@ -623,10 +623,15 @@ struct TransactionReviewInboxTests {
 
         let item = evaluate([transaction]).items.first(where: { $0.id == "nl-coffee" })
 
+        // The NL tier fills `effectiveCategory` (with the "Suggested" badge), but
+        // the suggestion is not yet persisted — downstream totals still group by
+        // the raw `transaction.category`. So the row STAYS in the inbox flagged
+        // `.uncategorized` until the user approves it (which persists it as
+        // `userCategory`); otherwise the spend silently lands in "Other".
         #expect(item?.effectiveCategory == .foodAndDrink)
         #expect(item?.categorySource == .appleNaturalLanguage)
         #expect(item?.isNLSuggestedCategory == true)
-        #expect(item?.reasonCodes.contains(.uncategorized) == false)
+        #expect(item?.reasonCodes.contains(.uncategorized) == true)
     }
 
     @Test("NL never wins over a user category override")
@@ -648,7 +653,7 @@ struct TransactionReviewInboxTests {
         #expect(item?.isNLSuggestedCategory == false)
     }
 
-    @Test("A LOW-confidence Plaid category with no override gets a trusted NL backfill")
+    @Test("A LOW-confidence Plaid category with no override gets a trusted NL suggestion but stays reviewable")
     func nlBackfillsLowConfidencePlaidCategory() {
         let transaction = tx(
             id: "nl-low",
@@ -660,9 +665,12 @@ struct TransactionReviewInboxTests {
 
         let item = evaluate([transaction]).items.first(where: { $0.id == "nl-low" })
 
+        // Same as the missing-category case: the NL suggestion is surfaced but
+        // not persisted, so the item remains flagged `.uncategorized` for the
+        // user to approve rather than silently dropping out of the inbox.
         #expect(item?.effectiveCategory == .entertainment)
         #expect(item?.categorySource == .appleNaturalLanguage)
-        #expect(item?.reasonCodes.contains(.uncategorized) == false)
+        #expect(item?.reasonCodes.contains(.uncategorized) == true)
     }
 
     @Test("An unresolvable nil-category transaction still lands in the inbox as uncategorized")
