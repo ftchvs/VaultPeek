@@ -654,7 +654,7 @@ Deferred product candidates:
 - [ ] Budget alerts per category
 - [ ] Multi-currency support
 - [ ] Investment account tracking (Plaid Investments)
-- [ ] CSV/JSON export for tax/accounting
+- [x] CSV/JSON export for tax/accounting (Settings → Local data → Export & Backup)
 - [ ] Webhook support for real-time updates
 - [ ] Dark/light theme customization
 - [ ] [Teller](https://teller.io/) as alternative provider
