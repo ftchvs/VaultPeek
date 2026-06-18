@@ -12,15 +12,41 @@ struct IncomeCategoryFlowTests {
             tx(id: "c", amount: -300, merchant: "Stripe", category: .income),
             // Outflow — excluded.
             tx(id: "d", amount: 80, merchant: "Whole Foods", category: .foodAndDrink),
-            // Transfer-in — isIncome (negative) but should it count? It's an inflow.
-            // Income grouping keys on isIncome, so transfer-in inflows are included
-            // as a "source"; we assert the two real income merchants group correctly.
+            // Transfer-in — an inflow, but an own-account transfer, not real income.
+            // It must be excluded so the income side reconciles with cashflow rules.
+            tx(id: "e", amount: -2_000, merchant: "Savings", category: .transfer),
+            tx(id: "f", amount: -750, merchant: "Brokerage", category: .transferOut),
         ]
         let sources = IncomeCategoryFlow.incomeSources(from: transactions)
         let employer = sources.first { $0.label == "Employer" }
         #expect(employer?.amount == 1_500)
         #expect(sources.contains { $0.label == "Stripe" })
         #expect(!sources.contains { $0.label == "Whole Foods" })
+        // Transfer-in inflows are NOT income sources (would otherwise overstate
+        // income and be allocated across spend categories).
+        #expect(!sources.contains { $0.label == "Savings" })
+        #expect(!sources.contains { $0.label == "Brokerage" })
+    }
+
+    @Test("transactions(in:) scopes to the trailing window, dropping older rows")
+    func windowScopingDropsOlderRows() {
+        let calendar = Calendar(identifier: .gregorian)
+        let asOf = Formatters.parseTransactionDate("2026-06-15")!
+        let transactions = [
+            dated(id: "in-window-edge", date: "2026-05-17"),     // exactly 30 days back
+            dated(id: "in-window", date: "2026-06-10"),
+            dated(id: "today", date: "2026-06-15"),
+            dated(id: "too-old", date: "2026-05-16"),            // 31 days back — dropped
+            dated(id: "way-old", date: "2026-01-01"),            // dropped
+        ]
+        let scoped = IncomeCategoryFlow.transactions(
+            in: IncomeCategoryFlow.defaultWindowDays,
+            from: transactions,
+            asOf: asOf,
+            calendar: calendar
+        )
+        let ids = Set(scoped.map(\.id))
+        #expect(ids == ["in-window-edge", "in-window", "today"])
     }
 
     @Test("Source amounts use abs(amount) and sort descending")
@@ -185,6 +211,18 @@ struct IncomeCategoryFlowTests {
             name: merchant,
             merchantName: merchant,
             category: category
+        )
+    }
+
+    private func dated(id: String, date: String) -> TransactionDTO {
+        TransactionDTO(
+            id: id,
+            accountId: "checking",
+            amount: 100,
+            date: date,
+            name: "Store",
+            merchantName: "Store",
+            category: .shopping
         )
     }
 }

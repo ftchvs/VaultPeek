@@ -36,12 +36,27 @@ public enum BalanceProjector {
     ) -> BalanceProjection? {
         guard let anchor else { return nil }
         let horizon = max(horizonDays, 1)
-        let startDay = calendar.startOfDay(for: date)
-        guard let horizonEnd = calendar.date(byAdding: .day, value: horizon, to: startDay) else {
+        // Seed the line at the anchor snapshot's own date, not `asOf`. When the
+        // latest balance point is stale (older than `asOf` after offline days),
+        // relabeling it as "today" would both fake a fresh balance and skip any
+        // recurring occurrences that fell between the snapshot and now. Anchoring
+        // on the snapshot date keeps the seed honest and walks those occurrences;
+        // when the anchor is current this is identical to starting at `asOf`.
+        let asOfDay = calendar.startOfDay(for: date)
+        let startDay = min(calendar.startOfDay(for: anchor.date), asOfDay)
+        guard let horizonEnd = calendar.date(byAdding: .day, value: horizon, to: asOfDay) else {
             return nil
         }
 
-        // Per-day net delta across the horizon, keyed by day index 1...horizon.
+        // Total day span the series covers: from the (possibly stale) anchor day
+        // through the forward horizon end. Equals `horizon` when the anchor is
+        // current; larger when it is stale (the extra days back-fill the gap).
+        let totalDays = max(
+            calendar.dateComponents([.day], from: startDay, to: horizonEnd).day ?? horizon,
+            horizon
+        )
+
+        // Per-day net delta across the span, keyed by day index 1...totalDays.
         var deltasByDayIndex: [Int: Double] = [:]
         var hasSignal = false
 
@@ -71,7 +86,7 @@ public enum BalanceProjector {
 
             while occurrence <= horizonEnd {
                 if let dayIndex = calendar.dateComponents([.day], from: startDay, to: occurrence).day,
-                   dayIndex >= 1, dayIndex <= horizon {
+                   dayIndex >= 1, dayIndex <= totalDays {
                     deltasByDayIndex[dayIndex, default: 0] += signed
                 }
                 guard let next = calendar.date(byAdding: .day, value: step, to: occurrence) else { break }
@@ -79,12 +94,13 @@ public enum BalanceProjector {
             }
         }
 
-        // Build the running daily series: index 0 = anchor, 1...horizon forward.
+        // Build the running daily series: index 0 = anchor (its true snapshot
+        // day), 1...totalDays forward through the horizon end.
         var series: [BalanceSnapshot] = []
-        series.reserveCapacity(horizon + 1)
+        series.reserveCapacity(totalDays + 1)
         var running = anchor.balance
         series.append(BalanceSnapshot(date: startDay, balance: running))
-        for dayIndex in 1...horizon {
+        for dayIndex in 1...totalDays {
             running += deltasByDayIndex[dayIndex] ?? 0
             let day = calendar.date(byAdding: .day, value: dayIndex, to: startDay) ?? startDay
             series.append(BalanceSnapshot(date: day, balance: running))
@@ -101,7 +117,7 @@ public enum BalanceProjector {
             anchor: anchor.balance,
             end: running,
             low: projectedLow,
-            horizon: horizon,
+            horizon: totalDays,
             confidence: confidence,
             calendar: calendar
         )
