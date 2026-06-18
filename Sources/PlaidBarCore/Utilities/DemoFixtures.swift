@@ -91,6 +91,26 @@ public enum DemoFixtures {
         }
     }
 
+    /// Seeded watchlist nudges for demo mode (AND-501). Chosen so they cross
+    /// against the demo transactions' month-to-date spend (Starbucks coffees and
+    /// the Shopping category both clear early), populating the Settings
+    /// Watchlists section and firing the evaluator in `--demo`. Fixed UUIDs keep
+    /// the order and identity deterministic for screenshots.
+    public static func watchlistTargets() -> [WatchlistTarget] {
+        [
+            WatchlistTarget.merchant(
+                "Starbucks",
+                threshold: 10,
+                id: UUID(uuidString: "00000000-0000-0000-0000-0000000000A1")!
+            ),
+            WatchlistTarget.category(
+                .shopping,
+                threshold: 200,
+                id: UUID(uuidString: "00000000-0000-0000-0000-0000000000A2")!
+            ),
+        ]
+    }
+
     /// Deterministic 60-day net-worth history with a gentle upward drift so the
     /// header trend reads the same on every demo launch and screenshots
     /// reproduce.

@@ -1131,6 +1131,33 @@ private struct PendingAccountRemoval: Identifiable {
 struct NotificationSettingsView: View {
     @Environment(AppState.self) private var appState
 
+    // Draft fields for adding a new watchlist target (AND-501).
+    @State private var newWatchKind: WatchlistTarget.Kind = .merchant
+    @State private var newWatchMerchant: String = ""
+    @State private var newWatchCategory: SpendingCategory = .shopping
+    @State private var newWatchThreshold: Double = 100
+
+    private var canAddWatchTarget: Bool {
+        guard newWatchThreshold > 0 else { return false }
+        if newWatchKind == .merchant {
+            return !newWatchMerchant.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        return true
+    }
+
+    private func addWatchTarget() {
+        let target: WatchlistTarget
+        switch newWatchKind {
+        case .merchant:
+            target = .merchant(newWatchMerchant, threshold: newWatchThreshold)
+        case .category:
+            target = .category(newWatchCategory, threshold: newWatchThreshold)
+        }
+        appState.addWatchlistTarget(target)
+        newWatchMerchant = ""
+        newWatchThreshold = 100
+    }
+
     private var permissionPresentation: NotificationPermissionPresentation {
         appState.notificationPermissionPresentation
     }
@@ -1248,6 +1275,8 @@ struct NotificationSettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
+            watchlistsSection(state: state)
+
             Section("Connection alerts") {
                 Toggle("Broken connection or stale sync", isOn: $state.notifyBrokenConnection)
                     .disabled(areNotificationControlsDisabled)
@@ -1261,6 +1290,114 @@ struct NotificationSettingsView: View {
         .toggleStyle(.switch)
         .task {
             await refreshPermissionStatus()
+        }
+    }
+
+    // Watchlists: per-merchant / per-category month-to-date spend nudges (AND-501).
+    @ViewBuilder
+    private func watchlistsSection(state: AppState) -> some View {
+        Section("Watchlists") {
+            Toggle("Spend nudges", isOn: Binding(
+                get: { appState.notifyWatchlist },
+                set: { appState.notifyWatchlist = $0 }
+            ))
+            .disabled(areNotificationControlsDisabled)
+
+            ForEach(appState.watchlistTargets) { target in
+                HStack(spacing: Spacing.sm) {
+                    Image(systemName: watchIcon(for: target))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 18)
+                    VStack(alignment: .leading, spacing: Spacing.xxs) {
+                        Text(target.label)
+                            .lineLimit(1)
+                        Text("\(target.kind.displayName) · over \(Formatters.currency(target.monthlyThreshold, format: .compact)) this month")
+                            .detailText()
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: Spacing.sm)
+                    Button {
+                        appState.removeWatchlistTarget(id: target.id)
+                    } label: {
+                        Image(systemName: "minus.circle")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Remove watchlist nudge")
+                    .accessibilityLabel("Remove \(target.label) watchlist nudge")
+                }
+            }
+
+            if appState.watchlistTargets.isEmpty {
+                Text("Add a merchant or category and a monthly amount to get a nudge when your month-to-date spend crosses it.")
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            // Add row.
+            Picker("Watch", selection: $newWatchKind) {
+                ForEach(WatchlistTarget.Kind.allCases, id: \.self) { kind in
+                    Text(kind.displayName).tag(kind)
+                }
+            }
+            .pickerStyle(.segmented)
+            .disabled(areNotificationControlsDisabled)
+
+            if newWatchKind == .merchant {
+                LabeledContent("Merchant") {
+                    TextField("Merchant name", text: $newWatchMerchant)
+                        .labelsHidden()
+                        .frame(width: 160)
+                        .textFieldStyle(.roundedBorder)
+                        .accessibilityLabel("Merchant name to watch")
+                }
+            } else {
+                LabeledContent("Category") {
+                    Picker("Category", selection: $newWatchCategory) {
+                        ForEach(SpendingCategory.allCases, id: \.self) { category in
+                            Text(category.displayName).tag(category)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 160)
+                    .accessibilityLabel("Category to watch")
+                }
+            }
+
+            LabeledContent("Monthly threshold") {
+                HStack(spacing: Spacing.xs) {
+                    Text("$")
+                        .foregroundStyle(.secondary)
+                    TextField(
+                        "Monthly threshold",
+                        value: $newWatchThreshold,
+                        format: .number.precision(.fractionLength(0))
+                    )
+                    .labelsHidden()
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 80)
+                    .textFieldStyle(.roundedBorder)
+                    .accessibilityLabel("Monthly threshold in dollars")
+                }
+            }
+
+            Button {
+                addWatchTarget()
+            } label: {
+                Label("Add watch", systemImage: "plus.circle")
+            }
+            .buttonStyle(.borderless)
+            .disabled(areNotificationControlsDisabled || !canAddWatchTarget)
+
+            Text("You've spent $X at a merchant — or in a category — this month. Glance-only nudges, not budgets.")
+                .detailText()
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func watchIcon(for target: WatchlistTarget) -> String {
+        switch target.kind {
+        case .merchant: "bell.badge"
+        case .category: target.category?.iconName ?? "tag"
         }
     }
 
