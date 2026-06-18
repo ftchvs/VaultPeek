@@ -81,6 +81,22 @@ public enum DemoFixtures {
         }
     }
 
+    /// Partial-sync demo statuses (AND-489 / AND-488): one connected item, one
+    /// degraded (`loginRequired`) reconnect target, and one `.providerOutage`
+    /// item. This makes `syncedItemCount < itemCount` (so the data-integrity
+    /// badge renders `.partial`) and exercises all three Connection Health Strip
+    /// buckets (Connected / Reconnect-needed / Provider-outage) without Plaid.
+    public static func partialSyncItemStatuses(now: Date = Date(), calendar: Calendar = .current) -> [ItemStatus] {
+        let recoveredSync = calendar.date(byAdding: .minute, value: -18, to: now) ?? now
+        let needsLoginSync = calendar.date(byAdding: .day, value: -3, to: now) ?? now
+        let outageSync = calendar.date(byAdding: .hour, value: -2, to: now) ?? now
+        return [
+            ItemStatus(id: "demo_chase", institutionName: "Chase", status: .connected, lastSync: recoveredSync),
+            ItemStatus(id: "demo_amex_item", institutionName: "American Express", status: .loginRequired, lastSync: needsLoginSync),
+            ItemStatus(id: "demo_wells_fargo", institutionName: "Wells Fargo", status: .providerOutage, lastSync: outageSync),
+        ]
+    }
+
     public static func accountBalanceHistory(
         forAccountId accountId: String,
         now: Date = Date(),
@@ -102,6 +118,62 @@ public enum DemoFixtures {
             let wobble = daysAgo == 0 ? 0 : sin((Double(daysAgo) + Double(accountIndex)) / 5.5) * (amplitude * 0.18)
             return BalanceSnapshot(date: date, balance: currentBalance + drift + wobble)
         }
+    }
+
+    /// Deterministic multi-day per-account ledger for the Balance Time Machine
+    /// (AND-490), built from the existing `accountBalanceHistory` drift/wobble
+    /// generator so demo and tests share one source of truth. Covers the last
+    /// `dayCount` days for every demo account.
+    public static func accountBalanceLedger(
+        dayCount: Int = 14,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> AccountBalanceLedger {
+        var entries: [AccountBalanceLedger.LedgerEntry] = []
+        for account in accounts {
+            let history = accountBalanceHistory(forAccountId: account.id, now: now, calendar: calendar)
+            // Take the most recent `dayCount` days from the generated history.
+            for snapshot in history.suffix(dayCount) {
+                entries.append(
+                    AccountBalanceLedger.LedgerEntry(
+                        accountId: account.id,
+                        date: snapshot.date,
+                        current: snapshot.balance,
+                        available: account.balances.available,
+                        limit: account.balances.limit,
+                        recordedAt: snapshot.date
+                    )
+                )
+            }
+        }
+        return AccountBalanceLedger(entries: entries)
+    }
+
+    /// A "post-sync" variant of `accountBalanceLedger` that rewrites one prior-day
+    /// `current` balance for the first account, so `SyncHistoryDiff` renders a
+    /// non-empty "history changed" row in --demo (AND-490).
+    public static func postSyncAccountBalanceLedger(
+        dayCount: Int = 14,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> AccountBalanceLedger {
+        let base = accountBalanceLedger(dayCount: dayCount, now: now, calendar: calendar)
+        guard let firstAccountId = accounts.first?.id else { return base }
+        // Rewrite the entry from ~3 days ago for the first account.
+        let targetDay = calendar.date(byAdding: .day, value: -3, to: now) ?? now
+        let rewritten = base.entries.map { entry -> AccountBalanceLedger.LedgerEntry in
+            guard entry.accountId == firstAccountId,
+                  calendar.isDate(entry.date, inSameDayAs: targetDay) else { return entry }
+            return AccountBalanceLedger.LedgerEntry(
+                accountId: entry.accountId,
+                date: entry.date,
+                current: (entry.current ?? 0) + 125.50,
+                available: entry.available,
+                limit: entry.limit,
+                recordedAt: now
+            )
+        }
+        return AccountBalanceLedger(entries: rewritten)
     }
 
     // MARK: - Explicit recent window
@@ -139,6 +211,8 @@ public enum DemoFixtures {
             TransactionDTO(id: "tx49", accountId: "demo_checking", amount: 52.10, date: today, name: "SHELL OIL 4821", category: nil),
             TransactionDTO(id: "tx50", accountId: "demo_amex", amount: 18.40, date: today, name: "CVS/PHARMACY #2231", category: nil),
             TransactionDTO(id: "tx51", accountId: "demo_visa", amount: 27.30, date: today, name: "SQ *KMNT LLC 9921", category: nil),
+            // Merchant name with a comma exercises CSV quoting/escaping in exports (AND-492).
+            TransactionDTO(id: "tx4b", accountId: "demo_amex", amount: 58.10, date: today, name: "DINING PURCHASE", merchantName: "Joe's Bar, Grill & Co.", category: .foodAndDrink),
             // Yesterday
             TransactionDTO(id: "tx5", accountId: "demo_checking", amount: 15.99, date: yesterday, name: "NETFLIX.COM", merchantName: "Netflix", category: .entertainment),
             TransactionDTO(id: "tx6", accountId: "demo_checking", amount: 45.00, date: yesterday, name: "SHELL OIL 57422", merchantName: "Shell", category: .transportation),

@@ -117,8 +117,40 @@ struct SetupView: View {
                 }
             }
 
+            whereYourDataLivesDisclosure
+
             SetupSupportLinks()
         }
+    }
+
+    /// Onboarding transparency disclosure (AND-491). Reachable before any mode
+    /// choice — including the credential-less "View Demo" path — so users can see
+    /// where VaultPeek stores data before connecting anything.
+    private var whereYourDataLivesDisclosure: some View {
+        let receipt = LocalTrustReceipt.whereYourDataLives(
+            storagePath: appState.activeStorageDirectoryDisplayText
+        )
+        return DisclosureGroup {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                ForEach(receipt.rows) { row in
+                    HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+                        Image(systemName: row.systemImage)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 18)
+                        Text(row.detail)
+                            .detailText()
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("\(row.title). \(row.detail)")
+                }
+            }
+            .padding(.top, Spacing.xs)
+        } label: {
+            Label(receipt.title, systemImage: "lock.shield")
+                .font(.caption.weight(.semibold))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Link preparation
