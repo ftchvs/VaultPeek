@@ -217,8 +217,16 @@ final class AppState {
     /// needing sync. Without these the throttle would hide real, fetchable data.
     private var needsImmediateRefresh: Bool {
         if statusItemCount > 0, accounts.isEmpty { return true }
-        if let synced = serverSyncedItemCount, statusItemCount > synced { return true }
         if itemStatuses.contains(where: \.needsSync) { return true }
+        // A healthy (connected) item that hasn't synced yet — e.g. just linked.
+        // Count only CONNECTED items against the synced count so an item stuck in
+        // login-required / permission-revoked / error (which can't sync until the
+        // user repairs it) can't hold the gap open and defeat the throttle on
+        // every tick (Codex P2). Once the new item syncs, the counts converge.
+        if let synced = serverSyncedItemCount {
+            let connectedCount = itemStatuses.filter { $0.status == .connected }.count
+            if connectedCount > synced { return true }
+        }
         return false
     }
     var notificationsEnabled: Bool = false {
