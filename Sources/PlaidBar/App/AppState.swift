@@ -1479,14 +1479,18 @@ final class AppState {
         await startBundledServerIfAvailable()
     }
 
-    func refreshAccounts() async {
+    /// - Parameter live: when `true`, pull genuinely live balances via
+    ///   `/accounts/balance/get` (a fresh request at the institution) instead of
+    ///   the cached `/accounts/get`. Reserved for user-initiated ("force")
+    ///   refreshes so automatic ticks never add a billable live call.
+    func refreshAccounts(live: Bool = false) async {
         if refreshDemoDataIfNeeded() { return }
 
         let refreshStart = performanceStart()
         isLoading = true
         error = nil
         do {
-            let refreshedAccounts = try await serverClient.getAccounts()
+            let refreshedAccounts = try await (live ? serverClient.getBalances() : serverClient.getAccounts())
             let itemStatusesAvailable = await refreshItemStatuses()
             accounts = itemStatusesAvailable
                 ? accountsPreservingUnavailableItems(refreshedAccounts)
@@ -1794,7 +1798,10 @@ final class AppState {
         // Plaid; the status surfaces guide the user instead of surfacing a
         // 503 banner on every cycle.
         if serverConnected, serverCredentialsConfigured != false, force || shouldAutoRefreshNow {
-            await refreshAccounts()
+            // A user-initiated (force) refresh pulls live balances via
+            // /accounts/balance/get; automatic ticks stay on cached
+            // /accounts/get so they never add a billable live call.
+            await refreshAccounts(live: force)
             await syncTransactions()
         }
         if serverConnected {
