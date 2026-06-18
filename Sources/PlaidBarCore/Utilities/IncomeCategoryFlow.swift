@@ -101,9 +101,44 @@ public enum IncomeCategoryFlow {
         return Graph(sources: sources, categories: categories, links: links)
     }
 
+    /// Default trailing window (days) the flow is scoped to. Matches the wealth
+    /// rail's "30D cashflow" card the drill-in is launched from, so the inspector
+    /// totals reconcile with the card the user clicked rather than spanning the
+    /// full multi-month transaction cache.
+    public static let defaultWindowDays = 30
+
+    /// Restrict transactions to the trailing `windowDays`-day window ending at
+    /// `asOf` (inclusive of both ends), mirroring `WealthSummaryPresentation`'s
+    /// cashflow window so the income-flow drill-in agrees with its parent card.
+    public static func transactions(
+        in windowDays: Int,
+        from transactions: [TransactionDTO],
+        asOf date: Date,
+        calendar: Calendar = .current
+    ) -> [TransactionDTO] {
+        let normalizedWindowDays = max(windowDays, 1)
+        let referenceDay = calendar.startOfDay(for: date)
+        let windowStart = calendar.startOfDay(
+            for: calendar.date(byAdding: .day, value: -(normalizedWindowDays - 1), to: referenceDay)
+                ?? referenceDay
+        )
+        return transactions.filter { transaction in
+            guard let day = Formatters.parseTransactionDate(transaction.date)
+                .map({ calendar.startOfDay(for: $0) })
+            else { return false }
+            return day >= windowStart && day <= referenceDay
+        }
+    }
+
     /// Income sources grouped by merchant, summed (abs), sorted descending.
+    ///
+    /// Own-account transfers are excluded so the income side reconciles with the
+    /// cashflow rules (which also drop `.transfer`/`.transferOut`): a transfer-in
+    /// is not real income and must not be allocated across spend categories.
     public static func incomeSources(from transactions: [TransactionDTO]) -> [Node] {
-        let inflows = transactions.filter(\.isIncome)
+        let inflows = transactions.filter {
+            $0.isIncome && $0.category != .transfer && $0.category != .transferOut
+        }
         var totals: [String: Double] = [:]
         var order: [String] = []
         for transaction in inflows {

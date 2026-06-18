@@ -65,10 +65,15 @@ public enum SubscriptionCancelGuidance {
         name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
-    /// Generic fallback: a web search for how to cancel the named subscription.
+    /// Generic fallback: a web search for how to cancel a subscription.
+    ///
+    /// Local-first privacy: the merchant name is Plaid-derived transaction data,
+    /// so it is deliberately NOT embedded in the outbound query — only a generic
+    /// "how to cancel a subscription" search leaves the device. Merchants the user
+    /// would actually be sent to a specific page for are in `knownCancelPages`
+    /// (resolved before this fallback); everything else stays anonymous.
     static func searchURL(for merchantName: String) -> URL {
-        let trimmed = merchantName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let query = trimmed.isEmpty ? "how to cancel a subscription" : "how to cancel \(trimmed) subscription"
+        let query = "how to cancel a subscription"
         let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
             ?? "how%20to%20cancel%20a%20subscription"
         // DuckDuckGo HTML search — no tracking redirect, stable query format.

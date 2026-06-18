@@ -20,15 +20,17 @@ struct SubscriptionCancelGuidanceTests {
         #expect(spaced.url == lower.url)
     }
 
-    @Test("Unknown merchant falls back to a well-formed generic search URL")
+    @Test("Unknown merchant falls back to a generic search that omits the merchant name")
     func unknownMerchantFallsBack() {
         let result = SubscriptionCancelGuidance.guidance(for: "Obscure Gym XYZ")
         #expect(!result.isSpecific)
         #expect(result.url.scheme == "https")
         let query = result.url.query ?? ""
         #expect(query.contains("cancel"))
-        // The encoded merchant name should appear in the query.
-        #expect(query.lowercased().contains("obscure"))
+        // Local-first privacy: the Plaid-derived merchant name must NOT leak into
+        // the outbound third-party search query.
+        #expect(!query.lowercased().contains("obscure"))
+        #expect(!query.lowercased().contains("gym"))
     }
 
     @Test("Empty merchant name still yields a valid generic URL")
