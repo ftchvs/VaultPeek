@@ -56,7 +56,25 @@ struct DashboardNavBarModelTests {
         #expect(Self.count(.credit, in: items) == 1)
         #expect(Self.count(.savings, in: items) == 1)
         #expect(Self.count(.debt, in: items) == 2)
+        #expect(Self.count(.investment, in: items) == 0)
         #expect(Self.count(.status, in: items) == 1)
+    }
+
+    @Test("Investment filter matches investment-type accounts only")
+    func investmentFilterMatchesInvestmentType() {
+        let accounts = [
+            Self.makeAccount(id: "brokerage", type: .investment, subtype: "brokerage"),
+            Self.makeAccount(id: "ira", type: .investment, subtype: "ira"),
+            Self.makeAccount(id: "chk", type: .depository, subtype: "checking"),
+            Self.makeAccount(id: "cc", type: .credit, subtype: "credit card"),
+        ]
+
+        let items = DashboardNavBarModel.items(accounts: accounts)
+        #expect(Self.count(.investment, in: items) == 2)
+        // Investment accounts never fall under the cash/credit/debt filters.
+        #expect(Self.count(.cash, in: items) == 1)
+        #expect(Self.count(.credit, in: items) == 1)
+        #expect(Self.count(.debt, in: items) == 1)
     }
 
     @Test("Savings subtype matches case-insensitively")
@@ -124,12 +142,12 @@ struct DashboardNavBarModelTests {
 
     // MARK: - Shortcut ordinals
 
-    @Test("Shortcut ordinals run 1 through 6 in allCases order")
+    @Test("Shortcut ordinals run 1 through 7 in allCases order")
     func shortcutOrdinalsMatchDisplayOrder() {
         let items = DashboardNavBarModel.items(accounts: Self.mixedAccounts)
 
         #expect(items.map(\.shortcutOrdinal) == Array(1 ... DashboardAccountFilterKind.allCases.count))
-        #expect(items.map(\.shortcutOrdinal) == [1, 2, 3, 4, 5, 6])
+        #expect(items.map(\.shortcutOrdinal) == [1, 2, 3, 4, 5, 6, 7])
         #expect(items.map(\.kind) == DashboardAccountFilterKind.allCases)
     }
 
@@ -189,7 +207,8 @@ struct DashboardNavBarModelTests {
 
         #expect(items.first { $0.kind == .all }?.helpText == "Show All accounts (⌘1)")
         #expect(items.first { $0.kind == .cash }?.helpText == "Show Cash accounts (⌘2)")
-        #expect(items.first { $0.kind == .status }?.helpText == "Show Status accounts (⌘6)")
+        #expect(items.first { $0.kind == .investment }?.helpText == "Show Investments accounts (⌘6)")
+        #expect(items.first { $0.kind == .status }?.helpText == "Show Status accounts (⌘7)")
     }
 
     // MARK: - Status icon
@@ -361,7 +380,7 @@ struct DashboardNavBarModelTests {
         #expect(items.count == DashboardAccountFilterKind.allCases.count)
         #expect(items.allSatisfy { $0.count == 0 })
         #expect(items.allSatisfy { !$0.showsAttentionBadge })
-        #expect(items.map(\.shortcutOrdinal) == [1, 2, 3, 4, 5, 6])
+        #expect(items.map(\.shortcutOrdinal) == [1, 2, 3, 4, 5, 6, 7])
         #expect(DashboardNavBarModel.summary(selected: .all, items: items) == "All: 0 accounts")
         #expect(DashboardNavBarModel.summary(selected: .debt, items: items) == "Debt: 0 of 0 accounts")
     }

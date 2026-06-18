@@ -5,8 +5,9 @@ import SwiftUI
 
 /// The dashboard account filter is the core `DashboardAccountFilterKind`
 /// reused directly. The persisted `@AppStorage("dashboard.accountFilter")`
-/// raw values ("All", "Cash", "Credit", "Savings", "Debt", "Status") are the
-/// core enum's raw values, so stored selections decode exactly as before.
+/// raw values ("All", "Cash", "Credit", "Savings", "Debt", "Investments",
+/// "Status") are the core enum's raw values, so stored selections decode
+/// exactly as before.
 typealias DashboardAccountFilter = DashboardAccountFilterKind
 
 extension DashboardAccountFilterKind {
@@ -21,7 +22,7 @@ extension DashboardAccountFilterKind {
 
 /// Native segmented control for the dashboard's primary filter. Native
 /// before novel: the system control brings focus rings, vibrancy, light
-/// mode, and RTL for free. ⌘1–6 shortcuts are preserved via hidden
+/// mode, and RTL for free. ⌘1–7 shortcuts are preserved via hidden
 /// equivalents; the per-filter counts live in the rows themselves and in
 /// each segment's help/accessibility text rather than in segment labels.
 struct DashboardFilterBar: View {
