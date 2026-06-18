@@ -2622,6 +2622,100 @@ struct PlaidBarServerTests {
         }
     }
 
+    @Test("Forged state-keyed failure cannot veto a genuine hosted-link completion")
+    func forgedStateKeyedFailureCannotVetoHostedLinkCompletion() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-hosted-link-state-poison-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        // Genuine update-mode reconnection: Plaid's authoritative session lookup
+        // returns NO public token (the legitimate empty-token success path), so
+        // the callback should mark the item connected. This is the exact branch
+        // that, on a non-success completion record keyed by `state`, used to throw
+        // a forged failure instead of reporting the honest reconnection.
+        let itemId = "synthetic_state_poison_item_\(UUID().uuidString)"
+        let accessToken = "synthetic-state-poison-access-token-\(UUID().uuidString)"
+        let linkToken = "state-poison-link-token"
+        let plaidClient = HostedLinkStubPlaidClient(
+            linkTokenGetResponse: PlaidLinkTokenGetResponse(
+                linkToken: linkToken,
+                linkSessions: nil,
+                onSuccess: nil,
+                results: nil
+            ),
+            exchangeResponse: PlaidTokenExchangeResponse(
+                accessToken: accessToken,
+                itemId: itemId,
+                requestId: nil
+            ),
+            accountsResponse: PlaidAccountsResponse(
+                accounts: [],
+                item: PlaidItem(
+                    itemId: itemId,
+                    institutionId: "ins_state_poison",
+                    availableProducts: nil,
+                    billedProducts: nil
+                ),
+                requestId: nil
+            )
+        )
+        let pendingLinkSessions = PendingLinkSessionStore(
+            storageURL: directory.appendingPathComponent("pending-link-sessions.json")
+        )
+        let hostedLinkCompletions = HostedLinkCompletionStore()
+        let state = await pendingLinkSessions.issueState()
+        await pendingLinkSessions.save(state: state, linkToken: linkToken, updateItemId: itemId)
+
+        // Attacker pre-seeds a non-success completion keyed by the *genuine*
+        // single-use `state`, exactly as an unauthenticated POST to
+        // /webhooks/plaid/hosted-link could race ahead of the real redirect.
+        // The store is first-write-wins, so this is the record the empty-token
+        // path used to consult and throw on.
+        await hostedLinkCompletions.record(HostedLinkCompletionRecord(
+            state: state,
+            linkToken: nil,
+            linkSessionId: nil,
+            status: .providerFailure
+        ))
+
+        let databasePath = directory.appendingPathComponent("plaidbar-test.sqlite").path
+        let logger = Logger(label: "com.ftchvs.plaidbar-server-tests.hosted-link-state-poison")
+
+        try await withTokenStore(databasePath: databasePath, logger: logger) { store, fluent in
+            try await ItemModel(
+                id: itemId,
+                accessToken: accessToken,
+                institutionId: "ins_state_poison",
+                institutionName: "Example Bank"
+            ).save(on: fluent.db())
+            try await store.updateItemStatus(id: itemId, status: ItemConnectionStatus.loginRequired.rawValue)
+
+            let route = OAuthCallbackRoute(
+                plaidClient: plaidClient,
+                tokenStore: store,
+                pendingLinkSessions: pendingLinkSessions,
+                hostedLinkCompletions: hostedLinkCompletions
+            )
+            // The genuine redirect carries Plaid's own authoritative success
+            // signal bound to the validated `state`; that must override an
+            // unauthenticated stored failure for the same `state`.
+            let response = try await route.handleCallback(
+                request: Self.makeRequest(path: "/oauth/callback?state=\(state)&status=success"),
+                context: TestRequestContext(source: TestRequestContextSource())
+            )
+            let calls = await plaidClient.recordedCalls()
+
+            // The forged state-keyed failure must NOT veto the genuine
+            // reconnection: the item is marked connected and the success page is
+            // returned, not a "temporary problem"/user-exit failure.
+            #expect(response.status == .ok)
+            #expect(try await store.getItem(id: itemId)?.status == ItemConnectionStatus.connected.rawValue)
+            #expect(calls.linkTokens == [linkToken])
+            #expect(calls.publicTokens.isEmpty)
+        }
+    }
+
     @Test func hostedLinkCompletionStoreIsIdempotentByAnyIdentifier() async {
         let store = HostedLinkCompletionStore()
         let first = HostedLinkCompletionRecord(
@@ -2650,6 +2744,51 @@ struct PlaidBarServerTests {
         #expect(byState == first)
         #expect(byLinkToken == first)
         #expect(bySession == first)
+    }
+
+    @Test func hostedLinkCompletionStoreAuthoritativeRecordOverridesUnauthenticatedFailure() async {
+        let store = HostedLinkCompletionStore()
+
+        // An unauthenticated webhook pre-seeds a failure for a known state.
+        let forgedFailure = HostedLinkCompletionRecord(
+            state: "state-x",
+            linkToken: nil,
+            linkSessionId: nil,
+            status: .providerFailure,
+            authoritative: false,
+            receivedAt: Date(timeIntervalSince1970: 1)
+        )
+        // The genuine OAuth redirect, validated against the pending session,
+        // records an authoritative success for the same state.
+        let authoritativeSuccess = HostedLinkCompletionRecord(
+            state: "state-x",
+            linkToken: nil,
+            linkSessionId: nil,
+            status: .success,
+            authoritative: true,
+            receivedAt: Date(timeIntervalSince1970: 2)
+        )
+        // A later unauthenticated failure must NOT clobber the authoritative one.
+        let lateForgedFailure = HostedLinkCompletionRecord(
+            state: "state-x",
+            linkToken: nil,
+            linkSessionId: nil,
+            status: .providerFailure,
+            authoritative: false,
+            receivedAt: Date(timeIntervalSince1970: 3)
+        )
+
+        await store.record(forgedFailure)
+        let afterAuthoritative = await store.record(authoritativeSuccess)
+        let afterLateForgery = await store.record(lateForgedFailure)
+        let current = await store.completion(state: "state-x", linkToken: nil)
+
+        // The authoritative success wins and the later forgery cannot demote it.
+        #expect(afterAuthoritative == authoritativeSuccess)
+        #expect(afterLateForgery == authoritativeSuccess)
+        #expect(current == authoritativeSuccess)
+        #expect(current?.authoritative == true)
+        #expect(current?.status == .success)
     }
 
     @Test func oauthCallbackDistinguishesUserExitExpiredAndRetryableProviderFailure() async throws {
