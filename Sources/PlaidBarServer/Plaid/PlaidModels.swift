@@ -8,6 +8,9 @@ struct PlaidLinkTokenRequest: Encodable, Sendable {
     let clientName: String
     let user: PlaidUser
     let products: [String]?
+    /// Products initialized at Link only when the chosen institution supports
+    /// them — unlike `products`, these never filter institutions out of Link.
+    let optionalProducts: [String]?
     let countryCodes: [String]
     let language: String
     let webhook: String?
@@ -26,6 +29,7 @@ struct PlaidLinkTokenRequest: Encodable, Sendable {
         clientName: String,
         user: PlaidUser,
         products: [String]? = nil,
+        optionalProducts: [String]? = nil,
         countryCodes: [String],
         language: String,
         webhook: String? = nil,
@@ -38,6 +42,7 @@ struct PlaidLinkTokenRequest: Encodable, Sendable {
         self.clientName = clientName
         self.user = user
         self.products = products
+        self.optionalProducts = optionalProducts
         self.countryCodes = countryCodes
         self.language = language
         self.webhook = webhook
@@ -223,6 +228,36 @@ struct PlaidItem: Decodable, Sendable {
     let institutionId: String?
     let availableProducts: [String]?
     let billedProducts: [String]?
+}
+
+// MARK: - Liabilities (/liabilities/get)
+
+struct PlaidLiabilitiesResponse: Decodable, Sendable {
+    let liabilities: PlaidLiabilities?
+    let requestId: String?
+}
+
+struct PlaidLiabilities: Decodable, Sendable {
+    let credit: [PlaidCreditLiability]?
+}
+
+struct PlaidCreditLiability: Decodable, Sendable {
+    let accountId: String?
+    let aprs: [PlaidApr]?
+    let isOverdue: Bool?
+    let lastPaymentAmount: Double?
+    let lastPaymentDate: String?
+    let lastStatementIssueDate: String?
+    let lastStatementBalance: Double?
+    let minimumPaymentAmount: Double?
+    let nextPaymentDueDate: String?
+}
+
+struct PlaidApr: Decodable, Sendable {
+    let aprPercentage: Double?
+    let aprType: String?
+    let balanceSubjectToApr: Double?
+    let interestChargeAmount: Double?
 }
 
 struct PlaidTransactionsSyncResponse: Decodable, Sendable {

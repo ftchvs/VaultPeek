@@ -73,6 +73,13 @@ actor ServerClient {
         return try await get(url)
     }
 
+    func getLiabilities() async throws -> [LiabilityDTO] {
+        guard let url = ServerEndpoint.url(baseURL: baseURL, path: "/api/accounts/liabilities") else {
+            throw ServerClientError.requestFailed
+        }
+        return try await get(url)
+    }
+
     /// Raw image bytes for a merchant logo, fetched + on-disk-cached by the local
     /// server's authenticated proxy. The app never reaches a logo CDN directly.
     func merchantLogoData(for logoURL: String) async throws -> Data {

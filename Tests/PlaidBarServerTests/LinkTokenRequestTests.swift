@@ -38,6 +38,9 @@ struct LinkTokenRequestTests {
 
         #expect(json["client_name"] as? String == "VaultPeek")
         #expect(json["products"] as? [String] == ["transactions"])
+        // Liabilities is requested as an OPTIONAL product (AND-493) so it never
+        // filters non-liability institutions out of Link.
+        #expect(json["optional_products"] as? [String] == ["liabilities"])
         #expect(json["country_codes"] as? [String] == ["US"])
         #expect(json["language"] as? String == "en")
         #expect(json["webhook"] == nil)
@@ -151,6 +154,7 @@ struct LinkTokenRequestTests {
             _ = try PlaidLinkConfiguration(
                 clientName: "This Name Is Far Too Long For Plaid Link",
                 products: ["transactions"],
+                optionalProducts: [],
                 countryCodes: ["US"],
                 language: "en",
                 webhookURL: nil,
