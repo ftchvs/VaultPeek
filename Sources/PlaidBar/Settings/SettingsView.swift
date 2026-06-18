@@ -426,7 +426,11 @@ struct GeneralSettingsView: View {
                     Text("$12.4K").tag(CurrencyFormat.abbreviated)
                     Text("$12,450").tag(CurrencyFormat.compact)
                 }
-                .disabled(appState.menuBarSummaryMode == .creditUtilization || appState.menuBarSummaryMode == .iconOnly)
+                .disabled(
+                    appState.menuBarSummaryMode == .creditUtilization
+                        || appState.menuBarSummaryMode == .highestUtilization
+                        || appState.menuBarSummaryMode == .iconOnly
+                )
 
                 Picker("Refresh", selection: $state.automaticRefreshPolicy) {
                     ForEach(AutomaticRefreshPolicy.allCases, id: \.self) { policy in

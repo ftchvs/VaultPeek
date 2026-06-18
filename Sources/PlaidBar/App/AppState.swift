@@ -731,13 +731,20 @@ final class AppState {
     }
 
     var menuBarText: String {
+        // Safe-to-spend needs recurring + cashflow inputs that the pure Core
+        // text() does not take, so compute it here (only for that mode, to keep
+        // the common render path cheap) and feed the amount in.
+        let safeToSpend: Double? = menuBarSummaryMode == .safeToSpend
+            ? currentSafeToSpendAmount()
+            : nil
         let rawText = MenuBarSummary.text(
             mode: menuBarSummaryMode,
             accounts: accounts,
             transactions: transactions,
             currencyFormat: balanceFormat,
             isInitialLoad: isBootLoadInFlight,
-            privacyMaskEnabled: shouldMaskFinancialValues
+            privacyMaskEnabled: shouldMaskFinancialValues,
+            precomputedSafeToSpend: safeToSpend
         )
         return appLockPreferences.menuBarText(
             currentText: rawText,
@@ -793,8 +800,14 @@ final class AppState {
             return "VaultPeek - Total cash: \(menuBarText).\(reviewText) \(status)\(review)"
         case .creditUtilization:
             return "VaultPeek - Credit utilization: \(menuBarText).\(reviewText) \(status)\(review)"
+        case .highestUtilization:
+            return "VaultPeek - Highest card utilization: \(menuBarText).\(reviewText) \(status)\(review)"
         case .recentSpend:
             return "VaultPeek - Recent spend: \(menuBarText).\(reviewText) \(status)\(review)"
+        case .todaySpend:
+            return "VaultPeek - Today's spend: \(menuBarText).\(reviewText) \(status)\(review)"
+        case .safeToSpend:
+            return "VaultPeek - Safe to spend: \(menuBarText).\(reviewText) \(status)\(review)"
         case .iconOnly:
             return "VaultPeek.\(reviewText) \(status)\(review)"
         }
@@ -819,8 +832,14 @@ final class AppState {
             return "VaultPeek total cash \(menuBarText). \(reviewText)\(status)\(review)"
         case .creditUtilization:
             return "VaultPeek credit utilization \(menuBarText). \(reviewText)\(status)\(review)"
+        case .highestUtilization:
+            return "VaultPeek highest card utilization \(menuBarText). \(reviewText)\(status)\(review)"
         case .recentSpend:
             return "VaultPeek recent spend \(menuBarText). \(reviewText)\(status)\(review)"
+        case .todaySpend:
+            return "VaultPeek today's spend \(menuBarText). \(reviewText)\(status)\(review)"
+        case .safeToSpend:
+            return "VaultPeek safe to spend \(menuBarText). \(reviewText)\(status)\(review)"
         case .iconOnly:
             return "VaultPeek. \(reviewText)\(status)\(review)"
         }
