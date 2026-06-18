@@ -697,19 +697,26 @@ private struct DashboardChangeReceiptStrip: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
 
-                Text(receipt.summary)
-                    .font(.caption2.weight(.medium))
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.82)
+                Text(PrivacyMaskPresentation.maskCurrencyTokens(
+                    in: receipt.summary,
+                    isEnabled: appState.shouldMaskFinancialValues
+                ))
+                .font(.caption2.weight(.medium))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
 
                 Spacer(minLength: 4)
 
                 HStack(spacing: 5) {
                     ForEach(receipt.rows) { row in
-                        Text(row.value)
+                        let value = PrivacyMaskPresentation.maskCurrencyTokens(
+                            in: row.value,
+                            isEnabled: appState.shouldMaskFinancialValues
+                        )
+                        Text(value)
                             .font(.caption2.weight(.semibold))
-                            .rollingTabularNumber(row.value, reduceMotion: reduceMotion)
+                            .rollingTabularNumber(value, reduceMotion: reduceMotion)
                             .lineLimit(1)
                             .help(row.accessibilityText)
                     }
@@ -1159,7 +1166,11 @@ private struct LocalInsightsCard: View {
     }
 
     private var receipt: LocalAIInsightReceipt {
-        LocalAIInsightReceipt.make(summary: primarySummary, availability: availability)
+        LocalAIInsightReceipt.make(
+            summary: primarySummary,
+            availability: availability,
+            privacyMaskEnabled: appState.shouldMaskFinancialValues
+        )
     }
 
     var body: some View {
@@ -2284,6 +2295,25 @@ private struct DashboardFooter: View {
             .accessibilityLabel("Open recurring payments")
 
             detachControl
+
+            // Quick Privacy Mask toggle — engage/clear masking in one click
+            // without opening Settings. State is read from the underlying
+            // preference (not the locked-inclusive `shouldMaskFinancialValues`)
+            // so the glyph reflects exactly what the button controls; meaning is
+            // carried by the eye/eye.slash SHAPE, never color.
+            Button {
+                appState.togglePrivacyMask()
+            } label: {
+                Image(systemName: PrivacyMaskPresentation.toggleSymbolName(
+                    isMasked: appState.appLockPreferences.privacyMaskEnabled
+                ))
+                .foregroundStyle(.secondary)
+                .frame(minWidth: Sizing.hitTargetMin, minHeight: Sizing.hitTargetMin)
+            }
+            .buttonStyle(.borderless)
+            .help(PrivacyMaskPresentation.toggleActionLabel(isMasked: appState.appLockPreferences.privacyMaskEnabled))
+            .accessibilityLabel(PrivacyMaskPresentation.toggleActionLabel(isMasked: appState.appLockPreferences.privacyMaskEnabled))
+            .keyboardShortcut("p", modifiers: [.command, .shift])
 
             Button {
                 Task { await appState.refreshDashboard() }

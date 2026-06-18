@@ -99,4 +99,30 @@ struct PrivacyMaskPresentationTests {
             privacyMaskEnabled: true
         ) == "No spend")
     }
+
+    @Test("Quick toggle affordance carries state by glyph shape and a verb-first label")
+    func quickToggleAffordance() {
+        // Masked -> struck-through eye + "reveal" verb; visible -> plain eye + "hide" verb.
+        #expect(PrivacyMaskPresentation.toggleSymbolName(isMasked: true) == "eye.slash")
+        #expect(PrivacyMaskPresentation.toggleSymbolName(isMasked: false) == "eye")
+        #expect(PrivacyMaskPresentation.toggleActionLabel(isMasked: true) == "Show amounts")
+        #expect(PrivacyMaskPresentation.toggleActionLabel(isMasked: false) == "Hide amounts")
+        // The glyph must differ by state so meaning never rides on color alone.
+        #expect(PrivacyMaskPresentation.toggleSymbolName(isMasked: true)
+            != PrivacyMaskPresentation.toggleSymbolName(isMasked: false))
+    }
+
+    @Test("Currency-token masking hides $ amounts in pre-formatted copy, keeps counts and dates")
+    func currencyTokenMasking() {
+        let headline = "Last Month: $4,545 expenses, $2,838 income, -$1,707 net cashflow."
+        let masked = PrivacyMaskPresentation.maskCurrencyTokens(in: headline, isEnabled: true)
+        #expect(masked == "Last Month: •••• expenses, •••• income, •••• net cashflow.")
+        #expect(!masked.contains("$"))
+        // Disabled → untouched.
+        #expect(PrivacyMaskPresentation.maskCurrencyTokens(in: headline, isEnabled: false) == headline)
+        // Mask dollars (incl. decimals) but leave non-currency numbers and dates alone.
+        let mixed = "Window 2026-05-20: 29 rows, est. $2,817.50"
+        #expect(PrivacyMaskPresentation.maskCurrencyTokens(in: mixed, isEnabled: true)
+            == "Window 2026-05-20: 29 rows, est. ••••")
+    }
 }
