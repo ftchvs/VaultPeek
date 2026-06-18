@@ -1,3 +1,4 @@
+import PlaidBarCore
 import SwiftUI
 
 struct MenuBarLabel: View {
@@ -13,12 +14,21 @@ struct MenuBarLabel: View {
         // down to the warning glyph and never paint attention text here.
         let presentation = appState.menuBarStatusPresentation
         HStack(spacing: Spacing.xs) {
-            Image(systemName: presentation.symbolName)
-                // One-shot Apple-native cross-fade when the status glyph
-                // changes; meaning still lives in the symbol shape + text, so
-                // this is purely calm polish. Disabled under Reduce Motion so
-                // the glyph swaps instantly with no animation (AND-358 helper).
-                .symbolMotion(.replace, reduceMotion: reduceMotion)
+            // The healthy Vault style has no SF Symbol; it renders from a
+            // code-drawn monochrome template image. Degraded states still swap
+            // in their SF Symbol ladder, so the token only ever appears here in
+            // the healthy state.
+            if presentation.symbolName == MenuBarIconStyle.customGlyphToken {
+                Image(nsImage: VaultMenuBarGlyph.image)
+                    .symbolMotion(.replace, reduceMotion: reduceMotion)
+            } else {
+                Image(systemName: presentation.symbolName)
+                    // One-shot Apple-native cross-fade when the status glyph
+                    // changes; meaning still lives in the symbol shape + text, so
+                    // this is purely calm polish. Disabled under Reduce Motion so
+                    // the glyph swaps instantly with no animation (AND-358 helper).
+                    .symbolMotion(.replace, reduceMotion: reduceMotion)
+            }
             if let attentionText = presentation.attentionText {
                 Text(attentionText)
                     .font(.caption.weight(.medium))

@@ -417,7 +417,18 @@ struct GeneralSettingsView: View {
                 // states keep their distinct glyph ladder. Works with Icon only.
                 Picker("Menu bar icon", selection: $state.menuBarIconStyle) {
                     ForEach(MenuBarIconStyle.allCases) { style in
-                        Label(style.displayName, systemImage: style.healthySymbolName).tag(style)
+                        // The Vault style has no SF Symbol; show its code-drawn
+                        // template glyph so the picker row matches the menu bar.
+                        if style.usesCustomGlyph {
+                            Label {
+                                Text(style.displayName)
+                            } icon: {
+                                Image(nsImage: VaultMenuBarGlyph.image)
+                            }
+                            .tag(style)
+                        } else {
+                            Label(style.displayName, systemImage: style.healthySymbolName).tag(style)
+                        }
                     }
                 }
 
