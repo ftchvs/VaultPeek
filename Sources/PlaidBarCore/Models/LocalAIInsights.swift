@@ -676,12 +676,18 @@ public struct LocalAICategoryResolution: Codable, Sendable, Hashable {
 
 public enum LocalAICategoryResolutionSource: String, Codable, Sendable, Hashable {
     case localAISuggestion
+    /// Apple NaturalLanguage zero-setup inference tier (AND-507): an always-on,
+    /// on-device categorizer that fills a category when Plaid returned nothing
+    /// usable and the user hasn't overridden. Distinct from `localAISuggestion`,
+    /// which is the heavier (toggle-gated) Ollama insight path.
+    case appleNaturalLanguage
     case plaidCategory
     case fallbackOther
 
     public var displayName: String {
         switch self {
         case .localAISuggestion: "Local AI"
+        case .appleNaturalLanguage: "Suggested"
         case .plaidCategory: "Plaid"
         case .fallbackOther: "Other"
         }

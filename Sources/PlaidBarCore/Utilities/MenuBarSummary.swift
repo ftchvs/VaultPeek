@@ -5,7 +5,10 @@ public enum MenuBarSummaryMode: String, CaseIterable, Codable, Sendable {
     case netCash
     case totalCash
     case creditUtilization
+    case highestUtilization
     case recentSpend
+    case todaySpend
+    case safeToSpend
     case iconOnly
 
     public var displayName: String {
@@ -14,7 +17,10 @@ public enum MenuBarSummaryMode: String, CaseIterable, Codable, Sendable {
         case .netCash: return "Net cash"
         case .totalCash: return "Total cash"
         case .creditUtilization: return "Credit utilization"
+        case .highestUtilization: return "Highest card utilization"
         case .recentSpend: return "Recent spend"
+        case .todaySpend: return "Today's spend"
+        case .safeToSpend: return "Safe to spend"
         case .iconOnly: return "Icon only"
         }
     }
@@ -60,6 +66,22 @@ public enum MenuBarSummary {
 
         let usedCredit = creditBalances.reduce(0) { $0 + abs($1.current ?? 0) }
         return (usedCredit / totalLimit) * 100
+    }
+
+    /// Highest single-card utilization (used/limit) across all credit cards,
+    /// as a percentage. Distinct from `creditUtilization`, which pools every
+    /// card's balance and limit into one aggregate ratio: a single near-maxed
+    /// card can be invisible in the aggregate but is the number a user worried
+    /// about utilization wants in the menu bar. Returns nil when no credit card
+    /// reports a positive limit (cards without a limit are skipped, not zeroed).
+    public static func highestUtilization(from accounts: [AccountDTO]) -> Double? {
+        let ratios = accounts
+            .filter { $0.type == .credit }
+            .compactMap { account -> Double? in
+                guard let limit = account.balances.limit, limit > 0 else { return nil }
+                return (abs(account.balances.current ?? 0) / limit) * 100
+            }
+        return ratios.max()
     }
 
     public static func recentSpend(
@@ -183,7 +205,8 @@ public enum MenuBarSummary {
         transactions: [TransactionDTO],
         currencyFormat: CurrencyFormat,
         isInitialLoad: Bool = false,
-        privacyMaskEnabled: Bool = false
+        privacyMaskEnabled: Bool = false,
+        precomputedSafeToSpend: Double? = nil
     ) -> String {
         switch mode {
         case .netWorth:
@@ -203,6 +226,11 @@ public enum MenuBarSummary {
             guard let utilization = creditUtilization(from: accounts) else { return "No credit" }
             guard !privacyMaskEnabled else { return PrivacyMaskPresentation.heroValue }
             return Formatters.percent(utilization, decimals: 0)
+        case .highestUtilization:
+            guard !accounts.isEmpty else { return PlaidBarConstants.appName }
+            guard let utilization = highestUtilization(from: accounts) else { return "No credit" }
+            guard !privacyMaskEnabled else { return PrivacyMaskPresentation.heroValue }
+            return Formatters.percent(utilization, decimals: 0)
         case .recentSpend:
             // During the boot fetch an empty history is unknown, not zero:
             // show the neutral app name instead of a "No spend" verdict.
@@ -211,6 +239,24 @@ public enum MenuBarSummary {
             }
             guard !privacyMaskEnabled else { return PrivacyMaskPresentation.heroValue }
             return Formatters.currency(recentSpend(from: transactions), format: currencyFormat)
+        case .todaySpend:
+            // Today is a single-day window of recentSpend; the same boot-empty
+            // guard applies so an in-flight load reads as neutral, not "No spend".
+            guard !transactions.isEmpty else {
+                return isInitialLoad ? PlaidBarConstants.appName : "No spend"
+            }
+            guard !privacyMaskEnabled else { return PrivacyMaskPresentation.heroValue }
+            return Formatters.currency(recentSpend(from: transactions, days: 1), format: currencyFormat)
+        case .safeToSpend:
+            // Safe-to-spend needs recurring + cashflow inputs the pure Core text()
+            // does not take, so AppState computes it via SafeToSpendCalculator and
+            // feeds the amount in. A nil amount means it could not be computed yet.
+            guard !accounts.isEmpty else { return PlaidBarConstants.appName }
+            guard let amount = precomputedSafeToSpend else {
+                return isInitialLoad ? PlaidBarConstants.appName : "No data"
+            }
+            guard !privacyMaskEnabled else { return PrivacyMaskPresentation.heroValue }
+            return Formatters.currency(amount, format: currencyFormat)
         case .iconOnly:
             return ""
         }
