@@ -7,27 +7,18 @@ import Logging
 @testable import PlaidBarServer
 import Testing
 
-/// Some sandboxed test hosts cannot write to the macOS Keychain. Probe once
-/// with a synthetic item so Keychain-backed tests skip instead of failing.
-private let tokenVaultKeychainAvailable: Bool = {
-    let itemId = "test_keychain_probe_\(UUID().uuidString)"
-    do {
-        let storedToken = try PlaidTokenVault.store(accessToken: "probe-token", itemId: itemId)
-        try PlaidTokenVault.delete(storedToken: storedToken, fallbackItemId: itemId)
-        return true
-    } catch {
-        return false
-    }
-}()
+/// Keychain-backed tests are gated behind `PLAIDBAR_TEST_KEYCHAIN` and write to
+/// an isolated, swept test service so the default `swift test` run never touches
+/// the developer's login keychain. See `KeychainTestSupport`.
+private let tokenVaultKeychainAvailable = keychainTestSupportAvailable
 
 /// Token and storage safety invariants (PR-012, T056-T060): access-token
 /// bytes live only in the Keychain, SQLite rows hold only
 /// `keychain:<item_id>` references, storage files stay private, and the
 /// status payload never carries token-like values.
 ///
-/// These tests only ever create Keychain entries under synthetic
-/// `test_item_<uuid>` accounts and delete exactly those entries; they never
-/// call `pruneOrphanedKeychainTokens` or enumerate the shared service, so a
+/// These tests only ever create Keychain entries under the isolated test
+/// service (`keychainTestService`), never the production service, so a
 /// developer machine with real linked items is never touched.
 @Suite("Token and storage safety")
 struct TokenStorageSafetyTests {
@@ -46,7 +37,8 @@ struct TokenStorageSafetyTests {
         defer {
             try? PlaidTokenVault.delete(
                 storedToken: PlaidTokenVault.reference(for: itemId),
-                fallbackItemId: itemId
+                fallbackItemId: itemId,
+                service: keychainTestService
             )
         }
         let databasePath = directory.appendingPathComponent("plaidbar-sandbox.sqlite").path
@@ -104,7 +96,7 @@ struct TokenStorageSafetyTests {
         }
 
         #expect(throws: PlaidTokenVaultError.self) {
-            _ = try PlaidTokenVault.resolve(storedToken: PlaidTokenVault.reference(for: itemId))
+            _ = try PlaidTokenVault.resolve(storedToken: PlaidTokenVault.reference(for: itemId), service: keychainTestService)
         }
     }
 
@@ -119,13 +111,15 @@ struct TokenStorageSafetyTests {
         // such an item must not throw even though no Keychain entry exists.
         try PlaidTokenVault.delete(
             storedToken: "access-sandbox-legacy-plaintext",
-            fallbackItemId: itemId
+            fallbackItemId: itemId,
+            service: keychainTestService
         )
 
         // Deleting an already-deleted reference is also a no-op.
         try PlaidTokenVault.delete(
             storedToken: PlaidTokenVault.reference(for: itemId),
-            fallbackItemId: itemId
+            fallbackItemId: itemId,
+            service: keychainTestService
         )
     }
 
@@ -145,7 +139,8 @@ struct TokenStorageSafetyTests {
             for itemId in [plaidItemId, fixtureItemId] {
                 try? PlaidTokenVault.delete(
                     storedToken: PlaidTokenVault.reference(for: itemId),
-                    fallbackItemId: itemId
+                    fallbackItemId: itemId,
+                    service: keychainTestService
                 )
             }
         }
@@ -277,7 +272,7 @@ struct TokenStorageSafetyTests {
         var bodyError: Error?
         do {
             try await fluent.migrate()
-            try await body(TokenStore(fluent: fluent, logger: logger))
+            try await body(TokenStore(fluent: fluent, logger: logger, keychainService: keychainTestService))
         } catch {
             bodyError = error
         }
