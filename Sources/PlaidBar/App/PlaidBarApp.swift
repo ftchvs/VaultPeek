@@ -11,6 +11,9 @@ struct PlaidBarApp: App {
     /// Owns the floating desktop-window dashboard (AND-384). `@State` so it
     /// persists across `body` recomputes for the process lifetime.
     @State private var detachedDashboard = DetachedDashboardCoordinator()
+    /// Owns the global summon hotkey (⇧⌘V, AND-487). `@State` so the Carbon
+    /// registration survives `body` recomputes for the process lifetime.
+    @State private var summonHotkeyMonitor = SummonHotkeyMonitor()
     @Environment(\.openSettings) private var openSettings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let updaterController: SPUStandardUpdaterController
@@ -105,6 +108,9 @@ struct PlaidBarApp: App {
                         forcedColorScheme: Self.forcedColorScheme,
                         reduceMotion: reduceMotion
                     )
+                    // Register the global summon hotkey (⇧⌘V) on first mount when
+                    // enabled; the .onChange below keeps it in sync afterward.
+                    applySummonHotkeyState()
                     // QA/screenshot aid: "--detach" opens the floating window at
                     // launch (parallel to "--show-popover") WITHOUT persisting the
                     // detached intent, so a QA run never leaves a durable
@@ -138,6 +144,11 @@ struct PlaidBarApp: App {
                         forcedColorScheme: Self.forcedColorScheme,
                         reduceMotion: reduceMotion
                     )
+                }
+                // Register/unregister the global summon hotkey when the user
+                // toggles it in Settings (AND-487).
+                .onChange(of: appState.summonHotkeyEnabled) { _, _ in
+                    applySummonHotkeyState()
                 }
                 .onOpenURL { url in
                     guard url.scheme == "vaultpeek" else { return }
@@ -232,6 +243,33 @@ struct PlaidBarApp: App {
                 .forcedAppColorScheme(Self.forcedColorScheme)
                 .appliesAppAppearance()
         }
+    }
+
+    /// Registers or unregisters the global summon hotkey to match the persisted
+    /// `summonHotkeyEnabled` preference (AND-487). Idempotent.
+    @MainActor
+    private func applySummonHotkeyState() {
+        if appState.summonHotkeyEnabled {
+            summonHotkeyMonitor.start { summonDashboard() }
+        } else {
+            summonHotkeyMonitor.stop()
+        }
+    }
+
+    /// Brings VaultPeek to the front and shows the dashboard — raising the
+    /// floating window when detached, otherwise activating the app and opening
+    /// the popover. Mirrors the `vaultpeek://` deep-link summon path.
+    @MainActor
+    private func summonDashboard() {
+        if detachedDashboard.handleMenuBarActivation(
+            appState: appState,
+            forcedColorScheme: Self.forcedColorScheme,
+            reduceMotion: reduceMotion
+        ) {
+            return
+        }
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        appState.isPopoverPresented = true
     }
 
     /// QA aid: "--appearance light|dark" pins the whole app to one appearance

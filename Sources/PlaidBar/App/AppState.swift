@@ -20,6 +20,7 @@ final class AppState {
         static let showBalanceInMenuBar = "showBalanceInMenuBar"
         static let menuBarSummaryMode = "menuBarSummaryMode"
         static let menuBarIconStyle = "menuBarIconStyle"
+        static let summonHotkeyEnabled = "summonHotkeyEnabled"
         static let balanceFormat = "balanceFormat"
         static let creditUtilizationThreshold = "creditUtilizationThreshold"
         static let refreshInterval = "refreshInterval"
@@ -369,6 +370,16 @@ final class AppState {
         }
     }
 
+    /// Whether the global summon hotkey (⇧⌘V) is registered (AND-487). The
+    /// register/unregister side effect is owned by the always-mounted label
+    /// scene in `PlaidBarApp`, which observes this flag; here we only persist it.
+    var summonHotkeyEnabled: Bool = true {
+        didSet {
+            guard summonHotkeyEnabled != oldValue else { return }
+            UserDefaults.standard.set(summonHotkeyEnabled, forKey: Keys.summonHotkeyEnabled)
+        }
+    }
+
     // MARK: - Services
     private let serverClient = ServerClient()
     /// Fetches + caches merchant logos via the local server's authed proxy.
@@ -434,6 +445,9 @@ final class AppState {
         if let style = defaults.string(forKey: Keys.menuBarIconStyle),
            let iconStyle = MenuBarIconStyle(rawValue: style) {
             menuBarIconStyle = iconStyle
+        }
+        if defaults.object(forKey: Keys.summonHotkeyEnabled) != nil {
+            summonHotkeyEnabled = defaults.bool(forKey: Keys.summonHotkeyEnabled)
         }
         if let format = defaults.string(forKey: Keys.balanceFormat),
            let f = CurrencyFormat(rawValue: format) {
