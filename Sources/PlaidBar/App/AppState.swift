@@ -21,6 +21,7 @@ final class AppState {
         static let menuBarSummaryMode = "menuBarSummaryMode"
         static let menuBarIconStyle = "menuBarIconStyle"
         static let summonHotkeyEnabled = "summonHotkeyEnabled"
+        static let menuBarShowSignalMeter = "menuBarShowSignalMeter"
         static let balanceFormat = "balanceFormat"
         static let creditUtilizationThreshold = "creditUtilizationThreshold"
         static let refreshInterval = "refreshInterval"
@@ -169,6 +170,16 @@ final class AppState {
         didSet {
             guard menuBarIconStyle != oldValue else { return }
             UserDefaults.standard.set(menuBarIconStyle.rawValue, forKey: Keys.menuBarIconStyle)
+        }
+    }
+    /// Whether the healthy menu-bar glyph is replaced by the live signal meter
+    /// (AND-485). Only the healthy state is affected; the degraded glyph ladder
+    /// (error/login/offline/warning) always wins so a problem is never hidden
+    /// behind a meter. Persisted only; the render branch lives in MenuBarLabel.
+    var menuBarShowSignalMeter: Bool = false {
+        didSet {
+            guard menuBarShowSignalMeter != oldValue else { return }
+            UserDefaults.standard.set(menuBarShowSignalMeter, forKey: Keys.menuBarShowSignalMeter)
         }
     }
     var balanceFormat: CurrencyFormat = .abbreviated {
@@ -448,6 +459,9 @@ final class AppState {
         }
         if defaults.object(forKey: Keys.summonHotkeyEnabled) != nil {
             summonHotkeyEnabled = defaults.bool(forKey: Keys.summonHotkeyEnabled)
+        }
+        if defaults.object(forKey: Keys.menuBarShowSignalMeter) != nil {
+            menuBarShowSignalMeter = defaults.bool(forKey: Keys.menuBarShowSignalMeter)
         }
         if let format = defaults.string(forKey: Keys.balanceFormat),
            let f = CurrencyFormat(rawValue: format) {
@@ -781,6 +795,25 @@ final class AppState {
             financialAttentionText: shouldMaskFinancialValues ? nil : firstMenuBarAttentionText,
             iconStyle: menuBarIconStyle
         )
+    }
+
+    /// The live signal-meter glyph model (AND-485), or `nil` when the meter must
+    /// not draw. The degraded glyph ladder in `menuBarStatusPresentation` always
+    /// wins: the meter renders only when the status is showing the healthy glyph
+    /// (no error/login/offline/warning), so a problem is never hidden behind a
+    /// meter. Also suppressed under the privacy mask and when there is no signal.
+    var menuBarSignalGlyph: SignalGlyphMeter.SignalGlyphRenderModel? {
+        guard menuBarShowSignalMeter else { return nil }
+        guard !shouldMaskFinancialValues else { return nil }
+        // Only override the healthy glyph; defer to the degraded ladder otherwise.
+        let presentation = menuBarStatusPresentation
+        guard presentation.symbolName == menuBarIconStyle.healthySymbolName else { return nil }
+        let model = SignalGlyphMeter.utilization(
+            from: accounts,
+            thresholdPercent: creditUtilizationThreshold,
+            isStale: isSyncStale
+        )
+        return model.isEmpty ? nil : model
     }
 
     /// First attention row that actually carries menu-bar text. A higher-priority

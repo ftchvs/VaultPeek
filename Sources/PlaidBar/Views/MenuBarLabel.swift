@@ -13,12 +13,23 @@ struct MenuBarLabel: View {
         // down to the warning glyph and never paint attention text here.
         let presentation = appState.menuBarStatusPresentation
         HStack(spacing: Spacing.xs) {
-            Image(systemName: presentation.symbolName)
-                // One-shot Apple-native cross-fade when the status glyph
-                // changes; meaning still lives in the symbol shape + text, so
-                // this is purely calm polish. Disabled under Reduce Motion so
-                // the glyph swaps instantly with no animation (AND-358 helper).
-                .symbolMotion(.replace, reduceMotion: reduceMotion)
+            // When the live signal meter is active AND the status is healthy
+            // (the meter model is non-nil only then), draw the code-rendered
+            // template meter instead of the SF Symbol. The degraded glyph ladder
+            // still wins because the meter model is nil for any non-healthy
+            // state — meaning stays in the symbol/meter SHAPE, never color
+            // (AND-485).
+            if let signalModel = appState.menuBarSignalGlyph,
+               let signalImage = SignalGlyphImage.make(model: signalModel) {
+                Image(nsImage: signalImage)
+            } else {
+                Image(systemName: presentation.symbolName)
+                    // One-shot Apple-native cross-fade when the status glyph
+                    // changes; meaning still lives in the symbol shape + text, so
+                    // this is purely calm polish. Disabled under Reduce Motion so
+                    // the glyph swaps instantly with no animation (AND-358 helper).
+                    .symbolMotion(.replace, reduceMotion: reduceMotion)
+            }
             if let attentionText = presentation.attentionText {
                 Text(attentionText)
                     .font(.caption.weight(.medium))

@@ -420,6 +420,16 @@ struct GeneralSettingsView: View {
                         Label(style.displayName, systemImage: style.healthySymbolName).tag(style)
                     }
                 }
+                .disabled(appState.menuBarShowSignalMeter)
+
+                // AND-485: replace the healthy glyph with a live signal meter
+                // (highest credit-card utilization). Only the healthy state is
+                // affected; error/login/offline states keep their distinct glyph,
+                // so a problem is never hidden behind a meter.
+                Toggle("Show live signal meter", isOn: $state.menuBarShowSignalMeter)
+                Text("Replaces the menu bar icon with a small meter of your highest credit-card utilization. Warning and error states still show their own icon.")
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
 
                 Picker("Balance format", selection: $state.balanceFormat) {
                     Text("$12,450.32").tag(CurrencyFormat.full)
