@@ -49,6 +49,19 @@ public enum DemoFixtures {
         ),
     ]
 
+    /// Demo liabilities for the two demo credit cards, with due dates derived
+    /// from `now` so `--demo` and screenshots never go stale. Mirrors the trimmed
+    /// `LiabilityDTO` (APR + next due date + overdue).
+    public static func liabilities(now: Date = Date(), calendar: Calendar = .current) -> [LiabilityDTO] {
+        func due(inDays days: Int) -> String {
+            dateString(daysAgo: -days, now: now, calendar: calendar)
+        }
+        return [
+            LiabilityDTO(accountId: "demo_amex", purchaseAprPercentage: 21.24, nextPaymentDueDate: due(inDays: 9), isOverdue: false),
+            LiabilityDTO(accountId: "demo_visa", purchaseAprPercentage: 24.99, nextPaymentDueDate: due(inDays: 16), isOverdue: false),
+        ]
+    }
+
     /// Explicit recent transactions plus the deterministic historical series.
     public static func transactions(now: Date = Date(), calendar: Calendar = .current) -> [TransactionDTO] {
         explicitTransactions(now: now, calendar: calendar)

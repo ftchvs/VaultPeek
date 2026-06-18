@@ -1803,7 +1803,8 @@ private struct AccountRowWithDrilldown: View {
             pendingCount: pendingCount,
             isSelected: isSelected,
             utilizationThreshold: appState.creditUtilizationThreshold,
-            privacyMaskEnabled: appState.shouldMaskFinancialValues
+            privacyMaskEnabled: appState.shouldMaskFinancialValues,
+            liability: appState.liabilities.first { $0.accountId == account.id }
         )
         guard let demoTrend else { return label }
         return "\(label). \(accountTrendAccessibility(demoTrend))"
@@ -2135,7 +2136,8 @@ private struct DashboardAccountRow: View {
         AccountPresentation.dashboardTrailingDetailText(
             for: account,
             connectionLabel: statusText,
-            privacyMaskEnabled: privacyMaskEnabled
+            privacyMaskEnabled: privacyMaskEnabled,
+            liability: appState.liabilities.first { $0.accountId == account.id }
         )
     }
 

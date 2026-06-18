@@ -57,6 +57,10 @@ final class AppState {
     var accounts: [AccountDTO] = [] {
         didSet { invalidateLocalAIActivitySummaries() }
     }
+    /// Latest per-account credit-card liabilities (APR, statement, due date)
+    /// from Plaid Liabilities, refreshed alongside accounts. Empty for items
+    /// linked without the `liabilities` scope. Latest-only — no history.
+    var liabilities: [LiabilityDTO] = []
     var transactions: [TransactionDTO] = [] {
         didSet {
             _cachedTransactionDerivedIndex = nil
@@ -1596,6 +1600,20 @@ final class AppState {
         isLoading = false
     }
 
+    /// Fetches the latest per-card liabilities. Best-effort and supplementary:
+    /// a failure (e.g. items linked without the `liabilities` scope) leaves the
+    /// previous set in place and never disturbs the dashboard.
+    func refreshLiabilities() async {
+        if isDemoMode {
+            liabilities = DemoFixtures.liabilities()
+            return
+        }
+        guard serverConnected, serverCredentialsConfigured != false else { return }
+        if let fetched = try? await serverClient.getLiabilities() {
+            liabilities = fetched
+        }
+    }
+
     func syncTransactions() async {
         if refreshDemoDataIfNeeded() { return }
 
@@ -1853,6 +1871,7 @@ final class AppState {
             if useLive { lastLiveBalanceRefreshAt = Date() }
             await refreshAccounts(live: useLive)
             await syncTransactions()
+            await refreshLiabilities()
         }
         if serverConnected {
             await refreshCategoryBudgets()
@@ -2201,6 +2220,7 @@ final class AppState {
                 if shouldAutoRefreshNow {
                     await refreshAccounts()
                     await syncTransactions()
+                    await refreshLiabilities()
                 }
             }
             await refreshCategoryBudgets()
@@ -3090,6 +3110,7 @@ final class AppState {
         // (no heatmap dead zone, year-round income, active savings account)
         // stay testable. See DemoFixtures and DemoFixturesTests.
         accounts = DemoFixtures.accounts
+        liabilities = DemoFixtures.liabilities()
         transactions = DemoFixtures.transactions()
         transactionReviewMetadata = []
         transactionRules = []
