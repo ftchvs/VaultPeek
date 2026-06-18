@@ -1479,6 +1479,50 @@ final class AppState {
         await startBundledServerIfAvailable()
     }
 
+    /// Minimum interval between billable live `/accounts/balance/get` refreshes,
+    /// so rapid clicks of the refresh button/control can't run up per-call Plaid
+    /// balance fees.
+    private static let liveBalanceRefreshCooldown: TimeInterval = 30
+    private var lastLiveBalanceRefreshAt: Date?
+
+    /// True when a live balance refresh is allowed (first time, or past the
+    /// cooldown window since the last live call).
+    private func liveBalanceRefreshAllowed() -> Bool {
+        guard let last = lastLiveBalanceRefreshAt else { return true }
+        return Date().timeIntervalSince(last) >= Self.liveBalanceRefreshCooldown
+    }
+
+    /// `/accounts/balance/get` can return `current: nil` (with only `available`
+    /// set) for some institutions. The UI derives debt and utilization from
+    /// `current ?? 0`, so backfill nil `current`/`limit` from the cached balance
+    /// — a live refresh must never zero those out.
+    private func balancesPreservingCachedCurrent(_ refreshed: [AccountDTO]) -> [AccountDTO] {
+        guard !accounts.isEmpty else { return refreshed }
+        let cachedById = Dictionary(accounts.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
+        return refreshed.map { account in
+            let balances = account.balances
+            guard balances.current == nil || balances.limit == nil,
+                  let cached = cachedById[account.id]
+            else { return account }
+            return AccountDTO(
+                id: account.id,
+                itemId: account.itemId,
+                name: account.name,
+                officialName: account.officialName,
+                type: account.type,
+                subtype: account.subtype,
+                mask: account.mask,
+                balances: BalanceDTO(
+                    available: balances.available,
+                    current: balances.current ?? cached.balances.current,
+                    limit: balances.limit ?? cached.balances.limit,
+                    isoCurrencyCode: balances.isoCurrencyCode ?? cached.balances.isoCurrencyCode
+                ),
+                institutionName: account.institutionName
+            )
+        }
+    }
+
     /// - Parameter live: when `true`, pull genuinely live balances via
     ///   `/accounts/balance/get` (a fresh request at the institution) instead of
     ///   the cached `/accounts/get`. Reserved for user-initiated ("force")
@@ -1490,7 +1534,8 @@ final class AppState {
         isLoading = true
         error = nil
         do {
-            let refreshedAccounts = try await (live ? serverClient.getBalances() : serverClient.getAccounts())
+            let fetchedAccounts = try await (live ? serverClient.getBalances() : serverClient.getAccounts())
+            let refreshedAccounts = live ? balancesPreservingCachedCurrent(fetchedAccounts) : fetchedAccounts
             let itemStatusesAvailable = await refreshItemStatuses()
             accounts = itemStatusesAvailable
                 ? accountsPreservingUnavailableItems(refreshedAccounts)
@@ -1504,7 +1549,7 @@ final class AppState {
             recordBalanceSnapshot()
             updateSetupCompletion()
             recordPerformance(
-                .accountsRefresh,
+                live ? .balancesRefresh : .accountsRefresh,
                 startedAt: refreshStart,
                 counts: [.accountCount: accounts.count],
                 outcome: .success
@@ -1512,7 +1557,7 @@ final class AppState {
         } catch {
             await refreshItemStatuses()
             self.error = error.localizedDescription
-            recordPerformance(.accountsRefresh, startedAt: refreshStart, outcome: .failure)
+            recordPerformance(live ? .balancesRefresh : .accountsRefresh, startedAt: refreshStart, outcome: .failure)
         }
         isLoading = false
     }
@@ -1799,9 +1844,12 @@ final class AppState {
         // 503 banner on every cycle.
         if serverConnected, serverCredentialsConfigured != false, force || shouldAutoRefreshNow {
             // A user-initiated (force) refresh pulls live balances via
-            // /accounts/balance/get; automatic ticks stay on cached
-            // /accounts/get so they never add a billable live call.
-            await refreshAccounts(live: force)
+            // /accounts/balance/get, but at most once per cooldown window so
+            // rapid clicks can't run up per-call Plaid balance fees. Automatic
+            // ticks always stay on cached /accounts/get.
+            let useLive = force && liveBalanceRefreshAllowed()
+            if useLive { lastLiveBalanceRefreshAt = Date() }
+            await refreshAccounts(live: useLive)
             await syncTransactions()
         }
         if serverConnected {
@@ -2980,7 +3028,11 @@ final class AppState {
             // last-success snapshot (and its real timestamp) in place.
             return
         }
-        await refreshAccounts()
+        // The macOS "Refresh balances" control should reflect live balances too,
+        // still gated by the cooldown so it can't run up paid Plaid calls.
+        let useLive = liveBalanceRefreshAllowed()
+        if useLive { lastLiveBalanceRefreshAt = Date() }
+        await refreshAccounts(live: useLive)
         await syncTransactions()
     }
 
