@@ -65,6 +65,15 @@ struct RecurringStreamFlagTests {
         ])
     }
 
+    @Test("Every flag carries color-independent label, icon, and accessibility text")
+    func everyFlagIsColorIndependent() {
+        for flag in RecurringStreamFlag.allCases {
+            #expect(!flag.label.isEmpty)
+            #expect(!flag.iconName.isEmpty)
+            #expect(!flag.accessibilityDescription.isEmpty)
+        }
+    }
+
     @Test("Estimated monthly total can exclude stale streams")
     func estimatedMonthlyTotalCanExcludeStaleStreams() {
         let active = Self.recurring(

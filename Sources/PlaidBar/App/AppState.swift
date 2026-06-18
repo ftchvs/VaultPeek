@@ -38,6 +38,8 @@ final class AppState {
         static let notifyRecurringChargeChanged = "notifyRecurringChargeChanged"
         static let notifyRecurringChargeDueSoon = "notifyRecurringChargeDueSoon"
         static let notifyBrokenConnection = "notifyBrokenConnection"
+        static let notifyWatchlist = "notifyWatchlist"
+        static let watchlistTargets = "watchlistTargets"
         static let privacyMaskEnabled = "privacyMaskEnabled"
         static let appLockEnabled = UserDefaultsAppLockSettingsStore.defaultStorageKey
         static let appLockNotificationPrivacyMode = "appLock.notificationPrivacyMode"
@@ -300,6 +302,42 @@ final class AppState {
             UserDefaults.standard.set(notifyBrokenConnection, forKey: Keys.notifyBrokenConnection)
         }
     }
+    /// Master gate for watchlist spend nudges (AND-501).
+    var notifyWatchlist: Bool = true {
+        didSet {
+            guard notifyWatchlist != oldValue else { return }
+            UserDefaults.standard.set(notifyWatchlist, forKey: Keys.notifyWatchlist)
+        }
+    }
+    /// User-defined per-merchant / per-category spend watches (AND-501).
+    /// Persisted app-side as Codable JSON in UserDefaults — a lightweight nudge
+    /// list, deliberately not server-side envelope budgeting.
+    var watchlistTargets: [WatchlistTarget] = [] {
+        didSet {
+            guard watchlistTargets != oldValue else { return }
+            persistWatchlistTargets()
+        }
+    }
+
+    func addWatchlistTarget(_ target: WatchlistTarget) {
+        watchlistTargets.append(target)
+    }
+
+    func removeWatchlistTarget(id: WatchlistTarget.ID) {
+        watchlistTargets.removeAll { $0.id == id }
+    }
+
+    private func persistWatchlistTargets() {
+        guard let data = try? JSONEncoder().encode(watchlistTargets) else { return }
+        UserDefaults.standard.set(data, forKey: Keys.watchlistTargets)
+    }
+
+    private func loadWatchlistTargets(defaults: UserDefaults) {
+        guard let data = defaults.data(forKey: Keys.watchlistTargets),
+              let decoded = try? JSONDecoder().decode([WatchlistTarget].self, from: data)
+        else { return }
+        watchlistTargets = decoded
+    }
 
     var appLockPreferences = AppLockPreferences() {
         didSet {
@@ -489,6 +527,10 @@ final class AppState {
         if defaults.object(forKey: Keys.notifyBrokenConnection) != nil {
             notifyBrokenConnection = defaults.bool(forKey: Keys.notifyBrokenConnection)
         }
+        if defaults.object(forKey: Keys.notifyWatchlist) != nil {
+            notifyWatchlist = defaults.bool(forKey: Keys.notifyWatchlist)
+        }
+        loadWatchlistTargets(defaults: defaults)
         loadAppLockPreferences(defaults: defaults)
         loadLocalAISettings(defaults: defaults)
         // Balance history
@@ -2104,6 +2146,7 @@ final class AppState {
             staleSync: notifyBrokenConnection,
             loginRequired: notifyBrokenConnection,
             itemError: notifyBrokenConnection,
+            watchlist: notifyWatchlist,
             largeTransactionThreshold: largeTransactionThreshold,
             lowBalanceThreshold: lowBalanceThreshold,
             creditUtilizationThreshold: creditUtilizationThreshold
@@ -2113,6 +2156,7 @@ final class AppState {
             accounts: accounts,
             recurringTransactions: recurringTransactions,
             itemStatuses: itemStatuses,
+            watchlistTargets: watchlistTargets,
             isSyncStale: isSyncStale,
             config: config
         )
@@ -3168,6 +3212,9 @@ final class AppState {
         transactionRules = []
         categoryBudgets = [:]
         balanceHistory = DemoFixtures.balanceHistory()
+        // Seed demo watchlist nudges (AND-501) so the Settings Watchlists section
+        // is populated and the evaluator fires against the demo transactions.
+        watchlistTargets = DemoFixtures.watchlistTargets()
 
         // Balance Time Machine (AND-490): seed a multi-day per-account ledger and
         // a post-sync diff so the Time Machine list and the "history changed"

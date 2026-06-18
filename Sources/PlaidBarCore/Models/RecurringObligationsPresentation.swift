@@ -58,9 +58,13 @@ public struct RecurringObligationsPresentation: Sendable, Hashable {
         public var needsAttention: Bool { !flags.isEmpty }
         public var hasPriceIncrease: Bool { flags.contains(.priceIncrease) }
         public var isStale: Bool { flags.contains(.stale) }
+        /// True for low-cost, long-running subscriptions the user likely forgot
+        /// about (AND-497). These rank to the very top.
+        public var isForgotten: Bool { flags.contains(.forgotten) }
     }
 
-    /// Detected obligations, attention-first then soonest-due (see `make`).
+    /// Detected obligations, forgotten-first then attention then soonest-due
+    /// (see `make`).
     public let items: [Item]
     /// Monthly-equivalent cost of the *active* (non-stale) obligations — matches
     /// `RecurringSummary.estimatedMonthlyTotal(asOf:)` so the section header and
@@ -68,11 +72,19 @@ public struct RecurringObligationsPresentation: Sendable, Hashable {
     public let estimatedMonthlyTotal: Double
     /// Count of obligations carrying at least one flag.
     public let attentionCount: Int
+    /// Count of obligations flagged as likely-forgotten subscriptions (AND-497).
+    public let forgottenCount: Int
 
-    public init(items: [Item], estimatedMonthlyTotal: Double, attentionCount: Int) {
+    public init(
+        items: [Item],
+        estimatedMonthlyTotal: Double,
+        attentionCount: Int,
+        forgottenCount: Int = 0
+    ) {
         self.items = items
         self.estimatedMonthlyTotal = estimatedMonthlyTotal
         self.attentionCount = attentionCount
+        self.forgottenCount = forgottenCount
     }
 
     public var isEmpty: Bool { items.isEmpty }
@@ -80,10 +92,12 @@ public struct RecurringObligationsPresentation: Sendable, Hashable {
 
     /// Build the presentation from detected recurring series.
     ///
-    /// Ordering: items needing attention first (so price increases / missing
-    /// charges surface at the top), then soonest `nextExpectedDate`, then
-    /// merchant name for a stable tiebreak. ISO `yyyy-MM-dd` strings sort
-    /// lexicographically, so a plain string compare is the date order.
+    /// Ordering: likely-forgotten subscriptions first (so "you may have forgotten
+    /// this" surfaces at the very top — AND-497), then items needing any other
+    /// attention (price increases / missing charges), then soonest
+    /// `nextExpectedDate`, then merchant name for a stable tiebreak. ISO
+    /// `yyyy-MM-dd` strings sort lexicographically, so a plain string compare is
+    /// the date order.
     public static func make(
         from recurring: [RecurringTransaction],
         asOf date: Date,
@@ -105,6 +119,9 @@ public struct RecurringObligationsPresentation: Sendable, Hashable {
             )
         }
         .sorted { lhs, rhs in
+            if lhs.isForgotten != rhs.isForgotten {
+                return lhs.isForgotten && !rhs.isForgotten
+            }
             if lhs.needsAttention != rhs.needsAttention {
                 return lhs.needsAttention && !rhs.needsAttention
             }
@@ -121,7 +138,8 @@ public struct RecurringObligationsPresentation: Sendable, Hashable {
                 asOf: date,
                 calendar: calendar
             ),
-            attentionCount: items.reduce(0) { $0 + ($1.needsAttention ? 1 : 0) }
+            attentionCount: items.reduce(0) { $0 + ($1.needsAttention ? 1 : 0) },
+            forgottenCount: items.reduce(0) { $0 + ($1.isForgotten ? 1 : 0) }
         )
     }
 }
