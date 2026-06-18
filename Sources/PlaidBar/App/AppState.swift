@@ -205,16 +205,16 @@ final class AppState {
     /// Whether an automatic (non-user-triggered) refresh is due now, per the
     /// refresh policy and the last successful sync. Manual refreshes bypass this.
     var shouldAutoRefreshNow: Bool {
-        // Some conditions must refresh regardless of the throttle (even "manual
-        // only") because waiting would leave the UI blank/stale-wrong:
-        if needsImmediateRefresh { return true }
-        return automaticRefreshPolicy.shouldAutoRefresh(lastSync: lastSyncDate, now: Date())
+        automaticRefreshPolicy.shouldAutoRefresh(
+            lastSync: lastSyncDate,
+            now: Date(),
+            hasImmediateNeed: needsImmediateRefresh
+        )
     }
 
-    /// Refresh-now conditions the time-based throttle must not suppress:
-    /// linked items with nothing cached (blank dashboard), a freshly linked item
-    /// the server hasn't synced yet, or a Plaid webhook that flagged an item as
-    /// needing sync. Without these the throttle would hide real, fetchable data.
+    /// Refresh-now conditions the time-based throttle must not suppress. These
+    /// bypass the twice-daily floor, but AutomaticRefreshPolicy still honors
+    /// Manual only before any automatic Plaid-backed fetch is allowed.
     private var needsImmediateRefresh: Bool {
         if statusItemCount > 0, accounts.isEmpty { return true }
         if itemStatuses.contains(where: \.needsSync) { return true }
