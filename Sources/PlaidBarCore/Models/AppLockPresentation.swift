@@ -182,3 +182,37 @@ public enum AppLockAuthenticationMessage: Sendable, Equatable {
         }
     }
 }
+
+public struct ReviewInboxPrivacyPresentation: Sendable, Equatable {
+    public let subtitle: String
+    public let highPriorityBadge: String?
+    public let highPriorityAccessibilityLabel: String?
+    public let accessibilityLabel: String
+
+    public static func make(
+        totalCount: Int,
+        highPriorityCount: Int,
+        isPrivate: Bool
+    ) -> ReviewInboxPrivacyPresentation {
+        if isPrivate {
+            return ReviewInboxPrivacyPresentation(
+                subtitle: "Items need attention",
+                highPriorityBadge: nil,
+                highPriorityAccessibilityLabel: nil,
+                accessibilityLabel: "Review inbox. Items are hidden while VaultPeek is private."
+            )
+        }
+
+        let itemSuffix = totalCount == 1 ? "item" : "items"
+        let transactionSuffix = totalCount == 1 ? "transaction" : "transactions"
+        let highPrioritySuffix = highPriorityCount == 1 ? "item" : "items"
+        return ReviewInboxPrivacyPresentation(
+            subtitle: "\(totalCount) \(itemSuffix) need attention",
+            highPriorityBadge: highPriorityCount > 0 ? "\(highPriorityCount) high priority" : nil,
+            highPriorityAccessibilityLabel: highPriorityCount > 0
+                ? "\(highPriorityCount) high priority review \(highPrioritySuffix)"
+                : nil,
+            accessibilityLabel: "Review inbox. \(totalCount) \(transactionSuffix) need attention."
+        )
+    }
+}
