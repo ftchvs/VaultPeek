@@ -925,6 +925,22 @@ final class AppState {
         itemStatuses.filter { $0.status == .error }.count
     }
 
+    /// Per-number completeness badge (AND-489): nil when data is complete and
+    /// fresh, otherwise a `.stale` or `.partial` verdict mounted under derived
+    /// numbers (net worth, utilization, cashflow, safe-to-spend).
+    var dataIntegrityBadge: DataIntegrityBadge.Result? {
+        DataIntegrityBadge.evaluate(
+            isSyncStale: isSyncStale,
+            isBootLoadInFlight: isBootLoadInFlight,
+            itemCount: statusItemCount,
+            syncedItemCount: serverSyncedItemCount ?? statusItemCount,
+            degradedItemCount: itemStatuses.filter { $0.status.isDegraded }.count,
+            needsSyncItemCount: itemStatuses.filter(\.needsSync).count,
+            lastSync: lastSyncDate,
+            lastSyncRelative: lastSyncRelative
+        )
+    }
+
     var degradedItemIds: Set<String> {
         Set(
             itemStatuses
@@ -3126,16 +3142,15 @@ final class AppState {
         serverStoragePath = LocalDataStore.displayPath
         serverSyncReady = true
         serverSyncedItemCount = isDemoStatusRecoveryScenario ? 1 : serverItemCount
-        let recoveredSync = Calendar.current.date(byAdding: .minute, value: -18, to: Date()) ?? Date()
-        let needsLoginSync = Calendar.current.date(byAdding: .day, value: -3, to: Date()) ?? Date()
-        itemStatuses = isDemoStatusRecoveryScenario ? [
-            ItemStatus(id: "demo_chase", institutionName: "Chase", status: .connected, lastSync: recoveredSync),
-            ItemStatus(id: "demo_amex_item", institutionName: "American Express", status: .loginRequired, lastSync: needsLoginSync),
-        ] : [
+        // Partial-sync statuses (one connected + one degraded) come from
+        // DemoFixtures so the AND-489 data-integrity badge renders `.partial`
+        // in the recovery scenario; the happy path stays all-connected.
+        let recoveryStatuses = DemoFixtures.partialSyncItemStatuses()
+        itemStatuses = isDemoStatusRecoveryScenario ? recoveryStatuses : [
             ItemStatus(id: "demo_chase", institutionName: "Chase", status: .connected, lastSync: Date()),
             ItemStatus(id: "demo_amex_item", institutionName: "American Express", status: .connected, lastSync: Date()),
         ]
-        lastSyncDate = isDemoStatusRecoveryScenario ? recoveredSync : Date()
+        lastSyncDate = isDemoStatusRecoveryScenario ? recoveryStatuses.first?.lastSync ?? Date() : Date()
         writeGlanceSnapshot(updatedAt: lastSyncDate ?? Date())
     }
 

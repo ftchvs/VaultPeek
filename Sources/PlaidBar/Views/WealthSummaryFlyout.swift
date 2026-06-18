@@ -150,6 +150,10 @@ struct WealthSummaryFlyout: View {
                 if !privacyMaskEnabled {
                     WealthNetWorthTrendBlock(trend: presentation.netWorthTrend)
                 }
+
+                if let badge = appState.dataIntegrityBadge {
+                    DataIntegrityBadgeView(result: badge)
+                }
             }
             .padding(Spacing.sm)
             .heroAccentSurface()
@@ -169,7 +173,8 @@ struct WealthSummaryFlyout: View {
         let netCashflow = privacyMaskEnabled
             ? PrivacyMaskPresentation.compactValue
             : cashflowText(presentation.cashflow.net, format: .full)
-        return "Wealth summary. Net worth \(netWorth). 30 day net cashflow \(netCashflow). \(presentation.syncHealth.title). \(presentation.attention.detail)"
+        let integrity = appState.dataIntegrityBadge.map { " \($0.accessibilityLabel)" } ?? ""
+        return "Wealth summary. Net worth \(netWorth). 30 day net cashflow \(netCashflow). \(presentation.syncHealth.title). \(presentation.attention.detail)\(integrity)"
     }
 }
 
