@@ -36,18 +36,29 @@ public enum SyncHistoryDiff {
 
     /// Compares `previousLedger` against `nextLedger`. Only prior-day rewrites
     /// count: a purely-additive newer day (a new date not present in the prior
-    /// ledger) is not "history changed" and produces no row. `displayName`
-    /// resolves an accountId to a privacy-safe display name; when it returns nil,
-    /// a neutral "An account" label is used (never the id).
+    /// ledger) is not "history changed" and produces no row. The current sync day
+    /// (`now`) is excluded entirely: `AccountBalanceLedger.appending` replaces
+    /// today's entry in place, so an ordinary same-day balance movement must not
+    /// be reported as a "prior day restated" rewrite. `displayName` resolves an
+    /// accountId to a privacy-safe display name; when it returns nil, a neutral
+    /// "An account" label is used (never the id).
     public static func evaluate(
         previousLedger: AccountBalanceLedger,
         nextLedger: AccountBalanceLedger,
+        now: Date = Date(),
         displayName: (String) -> String?
     ) -> [Row] {
-        // Index prior entries by (accountId, dayKey) -> current balance.
+        let currentDayKey = AccountBalanceLedger.dayKey(now)
+
+        // Index prior entries by (accountId, dayKey) -> current balance, skipping
+        // the current sync day so today's in-place replacement isn't a "rewrite".
+        // Use updateValue so an explicit nil prior balance (institutions that
+        // previously reported `current == nil`) is preserved as a stored key
+        // rather than removed by the subscript — otherwise a later nil→value
+        // restatement would look like a brand-new day and be suppressed.
         var priorByKey: [String: Double?] = [:]
-        for entry in previousLedger.entries {
-            priorByKey[key(entry.accountId, entry.date)] = entry.current
+        for entry in previousLedger.entries where AccountBalanceLedger.dayKey(entry.date) != currentDayKey {
+            priorByKey.updateValue(entry.current, forKey: key(entry.accountId, entry.date))
         }
 
         // Accumulate per-account rewrite stats.
@@ -58,7 +69,7 @@ public enum SyncHistoryDiff {
         var perAccount: [String: Accumulator] = [:]
         var accountOrder: [String] = []
 
-        for entry in nextLedger.entries {
+        for entry in nextLedger.entries where AccountBalanceLedger.dayKey(entry.date) != currentDayKey {
             let entryKey = key(entry.accountId, entry.date)
             // Only a day that already existed in the prior ledger can be a
             // "history changed" rewrite; a brand-new day is additive, not a diff.
@@ -90,6 +101,26 @@ public enum SyncHistoryDiff {
                 accessibilityText: accessibilityText
             )
         }
+    }
+
+    /// Replaces every signed currency token baked into a row's summary /
+    /// accessibility prose (e.g. "Chase: 1 prior day restated (+$30.00)") with
+    /// the Privacy Mask placeholder, leaving the surrounding text intact. These
+    /// strings interleave currency with prose, so the per-value `currency(_:)`
+    /// mask can't be applied — the call site uses this when masking is on.
+    /// No-op when `isEnabled` is false.
+    public static func maskCurrencyTokens(in text: String, isEnabled: Bool) -> String {
+        guard isEnabled else { return text }
+        // Optional leading sign, currency symbol, then a grouped/decimal number:
+        // covers "$30.00", "+$1,234.56", "-$0.50".
+        let pattern = "[+-]?\\$[0-9][0-9,]*(?:\\.[0-9]+)?"
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return text }
+        let range = NSRange(text.startIndex..., in: text)
+        return regex.stringByReplacingMatches(
+            in: text,
+            range: range,
+            withTemplate: NSRegularExpression.escapedTemplate(for: PrivacyMaskPresentation.compactValue)
+        )
     }
 
     private static func key(_ accountId: String, _ date: Date) -> String {
