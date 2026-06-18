@@ -401,6 +401,7 @@ struct GeneralSettingsView: View {
     @State private var isShowingLocalAIProbeDetails = false
     @State private var resetResultMessage: String?
     @State private var resetErrorMessage: String?
+    @State private var exportErrorMessage: String?
 
     var body: some View {
         @Bindable var state = appState
@@ -630,7 +631,7 @@ struct GeneralSettingsView: View {
 
             Section("Export & Backup") {
                 VStack(alignment: .leading, spacing: Spacing.sm) {
-                    Text("Export a portable copy of your accounts, transactions, and balance history. Files are written wherever you choose and never leave this Mac.")
+                    Text("Export a portable copy of your accounts, transactions, and balance history. VaultPeek never uploads these files — they are written only to the folder you choose. Pick a local folder to keep them on this Mac; a synced location (iCloud Drive, Dropbox, a network share) will copy them off-device.")
                         .detailText()
                         .fixedSize(horizontal: false, vertical: true)
 
@@ -646,10 +647,12 @@ struct GeneralSettingsView: View {
                         .disabled(isExportDisabled)
                     }
 
-                    if appState.appLockPreferences.privacyMaskEnabled {
+                    if appState.shouldMaskFinancialValues {
                         Label(
-                            "Export is disabled while Privacy Mask is on, so real balances are never written to disk. Turn off Privacy Mask to export.",
-                            systemImage: "eye.slash"
+                            appState.isContentLocked
+                                ? "Export is disabled while App Lock is locked, so real balances, accounts, and transactions are never written to disk. Unlock VaultPeek to export."
+                                : "Export is disabled while Privacy Mask is on, so real balances are never written to disk. Turn off Privacy Mask to export.",
+                            systemImage: appState.isContentLocked ? "lock" : "eye.slash"
                         )
                         .detailText()
                         .fixedSize(horizontal: false, vertical: true)
@@ -696,6 +699,14 @@ struct GeneralSettingsView: View {
         } message: {
             Text(resetErrorMessage ?? "")
         }
+        .alert("Export Failed", isPresented: Binding(
+            get: { exportErrorMessage != nil },
+            set: { if !$0 { exportErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(exportErrorMessage ?? "")
+        }
     }
 
     private func revealStorageDirectory() {
@@ -707,7 +718,13 @@ struct GeneralSettingsView: View {
     // MARK: - Export & Backup (AND-492)
 
     private var isExportDisabled: Bool {
-        appState.appLockPreferences.privacyMaskEnabled
+        // Gate on the effective mask state, not just the manual Privacy Mask
+        // toggle: `shouldMaskFinancialValues` is also true while App Lock is
+        // active. Settings is a separate scene reachable from the status-item
+        // menu while the dashboard is locked, so without this a locked session
+        // (Privacy Mask off) could still write the full accounts/transactions/
+        // balances export to disk, bypassing App Lock (Codex P1).
+        appState.shouldMaskFinancialValues
     }
 
     /// Documented backup file path, e.g. `~/.vaultpeek/plaidbar-sandbox.sqlite`.
@@ -740,9 +757,16 @@ struct GeneralSettingsView: View {
             ("transactions.csv", DataExportBuilder.transactionsCSV(appState.transactions)),
             ("balance-history.csv", DataExportBuilder.balanceHistoryCSV(appState.balanceHistory)),
         ]
-        for document in documents {
-            let url = directory.appendingPathComponent(document.name)
-            try? Data(document.contents.utf8).write(to: url, options: [.atomic])
+        // Surface write failures (unwritable/unavailable folder, full disk)
+        // instead of dropping them with `try?` and leaving the user believing a
+        // backup exists when one or more files were never written (Codex P2).
+        do {
+            for document in documents {
+                let url = directory.appendingPathComponent(document.name)
+                try Data(document.contents.utf8).write(to: url, options: [.atomic])
+            }
+        } catch {
+            exportErrorMessage = "Could not write the CSV export to \(directory.path): \(error.localizedDescription)"
         }
     }
 
@@ -754,14 +778,20 @@ struct GeneralSettingsView: View {
         panel.message = "Choose where to save the combined JSON backup."
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
-        guard let data = try? DataExportBuilder.combinedJSON(
-            accounts: appState.accounts,
-            transactions: appState.transactions,
-            balanceHistory: appState.balanceHistory,
-            exportedAt: Date(),
-            environment: appState.serverEnvironment?.rawValue
-        ) else { return }
-        try? data.write(to: url, options: [.atomic])
+        // Surface encode/write failures instead of silently dropping them, so a
+        // failed JSON backup is never mistaken for a successful one (Codex P2).
+        do {
+            let data = try DataExportBuilder.combinedJSON(
+                accounts: appState.accounts,
+                transactions: appState.transactions,
+                balanceHistory: appState.balanceHistory,
+                exportedAt: Date(),
+                environment: appState.serverEnvironment?.rawValue
+            )
+            try data.write(to: url, options: [.atomic])
+        } catch {
+            exportErrorMessage = "Could not write the JSON export to \(url.path): \(error.localizedDescription)"
+        }
     }
 
     private func copyStoragePath() {
@@ -1282,6 +1312,17 @@ struct NotificationSettingsView: View {
     @State private var newWatchCategory: SpendingCategory = .shopping
     @State private var newWatchThreshold: Double = 100
 
+    /// Categories a category-watch can actually fire on. Watchlist evaluation
+    /// sums `SpendingSummary.expenseTransactions`, which excludes income and
+    /// own-account transfers — so offering Income / Transfer In / Transfer Out
+    /// here would let the user save a watch that can never fire (Codex P2). Keep
+    /// this exclusion set in sync with `SpendingSummary.expenseTransactions`.
+    private var watchableCategories: [SpendingCategory] {
+        SpendingCategory.allCases.filter {
+            $0 != .income && $0 != .transfer && $0 != .transferOut
+        }
+    }
+
     private var canAddWatchTarget: Bool {
         guard newWatchThreshold > 0 else { return false }
         if newWatchKind == .merchant {
@@ -1498,7 +1539,7 @@ struct NotificationSettingsView: View {
             } else {
                 LabeledContent("Category") {
                     Picker("Category", selection: $newWatchCategory) {
-                        ForEach(SpendingCategory.allCases, id: \.self) { category in
+                        ForEach(watchableCategories, id: \.self) { category in
                             Text(category.displayName).tag(category)
                         }
                     }

@@ -326,10 +326,16 @@ final class AppState {
     /// list, deliberately not server-side envelope budgeting.
     var watchlistTargets: [WatchlistTarget] = [] {
         didSet {
-            guard watchlistTargets != oldValue else { return }
+            guard watchlistTargets != oldValue, !isLoadingDemoWatchlist else { return }
             persistWatchlistTargets()
         }
     }
+
+    /// Guards `watchlistTargets.didSet` while demo fixtures are loaded so the
+    /// demo nudges are shown in-memory only and never overwrite the user's real,
+    /// persisted watchlist (demo exit clears accounts/transactions but does not
+    /// restore preferences, so a persisted demo list would survive — Codex P2).
+    private var isLoadingDemoWatchlist = false
 
     func addWatchlistTarget(_ target: WatchlistTarget) {
         watchlistTargets.append(target)
@@ -344,10 +350,19 @@ final class AppState {
         UserDefaults.standard.set(data, forKey: Keys.watchlistTargets)
     }
 
+    /// Restores the persisted real watchlist, or empties it when none was saved.
+    /// Called on launch and on demo exit; the in-memory demo nudges (loaded with
+    /// `isLoadingDemoWatchlist` set, so never persisted) must not linger once the
+    /// user leaves demo mode, so the no-data branch clears rather than no-ops.
     private func loadWatchlistTargets(defaults: UserDefaults) {
         guard let data = defaults.data(forKey: Keys.watchlistTargets),
               let decoded = try? JSONDecoder().decode([WatchlistTarget].self, from: data)
-        else { return }
+        else {
+            isLoadingDemoWatchlist = true
+            watchlistTargets = []
+            isLoadingDemoWatchlist = false
+            return
+        }
         watchlistTargets = decoded
     }
 
@@ -429,7 +444,10 @@ final class AppState {
     /// Whether the global summon hotkey (⇧⌘V) is registered (AND-487). The
     /// register/unregister side effect is owned by the always-mounted label
     /// scene in `PlaidBarApp`, which observes this flag; here we only persist it.
-    var summonHotkeyEnabled: Bool = true {
+    /// Opt-in (defaults `false`): ⇧⌘V is "Paste and Match Style" in many apps, so
+    /// claiming it globally on a fresh install would hijack that editing shortcut
+    /// before the user ever asked for the summon hotkey.
+    var summonHotkeyEnabled: Bool = false {
         didSet {
             guard summonHotkeyEnabled != oldValue else { return }
             UserDefaults.standard.set(summonHotkeyEnabled, forKey: Keys.summonHotkeyEnabled)
@@ -1909,6 +1927,10 @@ final class AppState {
             // synthetic 60-day series. Restore persisted real history when it
             // exists so the first real snapshot cannot persist a demo trend.
             loadPersistedBalanceHistory()
+            // Same for the watchlist: loadDemoData() seeded demo nudges in memory
+            // only; restore the user's real saved watchlist (or empty) so demo
+            // Starbucks/Shopping targets never fire against real data.
+            loadWatchlistTargets(defaults: .standard)
             // Fall through into the real add-account flow: the demo readiness
             // card advertises "Connect Bank", so the first click must continue
             // into the server check + Plaid Link handoff (or surface the precise
@@ -2164,6 +2186,14 @@ final class AppState {
 
         balanceHistory = []
         UserDefaults.standard.removeObject(forKey: Keys.balanceHistory)
+        // The per-account ledger holds bank IDs and balances and feeds the Time
+        // Machine surface; the reset contract must wipe it (in memory and on
+        // disk) so old data can't reappear after relaunch/reconnect (Codex P1).
+        // Clear both the active namespaced key and the legacy global key.
+        accountBalanceLedger = AccountBalanceLedger()
+        syncHistoryDiffRows = []
+        UserDefaults.standard.removeObject(forKey: accountBalanceLedgerDefaultsKey)
+        UserDefaults.standard.removeObject(forKey: Keys.accountBalanceLedger)
         await clearGlanceSnapshot()
         UserDefaults.standard.removeObject(forKey: Keys.lastTransactionCacheContext)
         UserDefaults.standard.removeObject(forKey: Keys.weeklyReviewState)
@@ -3072,12 +3102,26 @@ final class AppState {
             balanceHistory = []
         }
 
-        if let data = UserDefaults.standard.data(forKey: Keys.accountBalanceLedger),
+        if let data = UserDefaults.standard.data(forKey: accountBalanceLedgerDefaultsKey),
            let ledger = try? JSONDecoder().decode(AccountBalanceLedger.self, from: data) {
             accountBalanceLedger = ledger
         } else {
             accountBalanceLedger = AccountBalanceLedger()
         }
+    }
+
+    /// Per-account ledger key, namespaced by the active Plaid environment and
+    /// storage directory exactly like `setupCompletionDefaultsKey`. The ledger
+    /// holds per-account IDs and balances, so a global key would let Time Machine
+    /// surface the previous context's data after switching production/sandbox or
+    /// changing `PLAIDBAR_DATA_DIR` (Codex P1). The legacy global
+    /// `Keys.accountBalanceLedger` is only ever cleared, never read, so stale
+    /// pre-namespacing data cannot leak across contexts.
+    private var accountBalanceLedgerDefaultsKey: String {
+        let environment = setupCompletionEnvironment.rawValue
+        let path = activeStorageDirectoryURL.standardizedFileURL.path
+        let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? path
+        return "\(Keys.accountBalanceLedger).context.\(environment).\(encodedPath)"
     }
 
     private func recordBalanceSnapshot() {
@@ -3096,11 +3140,18 @@ final class AppState {
     /// Appends today's per-account bank-reported balances to the ledger and
     /// recomputes the sync-history diff against the prior ledger (AND-490).
     private func recordAccountBalanceLedger() {
-        guard !accounts.isEmpty else { return }
+        // Only ledger accounts the bank actually reported on THIS refresh. When a
+        // partial refresh omits a degraded item (login-required / provider
+        // outage), `accountsPreservingUnavailableItems` keeps that item's cached
+        // accounts in `accounts`; stamping them with today's date would make Time
+        // Machine show a stale cached balance as "what the bank said" today and
+        // undermine the ledger's data-integrity purpose (Codex P2).
+        let reportedAccounts = bankReportedAccountsForLedger()
+        guard !reportedAccounts.isEmpty else { return }
         let previous = accountBalanceLedger
-        let next = previous.appending(accounts: accounts)
+        let next = previous.appending(accounts: reportedAccounts)
         let nameByAccountId = Dictionary(
-            accounts.map { ($0.id, $0.name) },
+            reportedAccounts.map { ($0.id, $0.name) },
             uniquingKeysWith: { first, _ in first }
         )
         syncHistoryDiffRows = SyncHistoryDiff.evaluate(
@@ -3110,8 +3161,21 @@ final class AppState {
         )
         accountBalanceLedger = next
         if let data = try? JSONEncoder().encode(next) {
-            UserDefaults.standard.set(data, forKey: Keys.accountBalanceLedger)
+            UserDefaults.standard.set(data, forKey: accountBalanceLedgerDefaultsKey)
         }
+    }
+
+    /// Accounts whose balances were genuinely reported by the bank on the current
+    /// refresh — i.e. accounts that do NOT belong to a degraded item preserved
+    /// from cache. When item statuses are unknown (empty), every account is
+    /// treated as reported, matching the pre-AND-490 behavior.
+    private func bankReportedAccountsForLedger() -> [AccountDTO] {
+        guard !itemStatuses.isEmpty else { return accounts }
+        let degradedItemIds = Set(
+            itemStatuses.filter { $0.status.isDegraded }.map(\.id)
+        )
+        guard !degradedItemIds.isEmpty else { return accounts }
+        return accounts.filter { !degradedItemIds.contains($0.itemId) }
     }
 
     private func writeGlanceSnapshot(updatedAt: Date = Date()) {
@@ -3280,7 +3344,11 @@ final class AppState {
         balanceHistory = DemoFixtures.balanceHistory()
         // Seed demo watchlist nudges (AND-501) so the Settings Watchlists section
         // is populated and the evaluator fires against the demo transactions.
+        // Loaded in-memory only — the guard suppresses `didSet` persistence so a
+        // demo session never overwrites the user's real, saved watchlist.
+        isLoadingDemoWatchlist = true
         watchlistTargets = DemoFixtures.watchlistTargets()
+        isLoadingDemoWatchlist = false
 
         // Balance Time Machine (AND-490): seed a multi-day per-account ledger and
         // a post-sync diff so the Time Machine list and the "history changed"
