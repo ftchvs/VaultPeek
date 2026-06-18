@@ -66,6 +66,49 @@ public enum DemoFixtures {
     public static func transactions(now: Date = Date(), calendar: Calendar = .current) -> [TransactionDTO] {
         explicitTransactions(now: now, calendar: calendar)
             + historicalTransactions(now: now, calendar: calendar)
+            + forgottenSubscriptionTransactions(now: now, calendar: calendar)
+    }
+
+    /// A small, long-running subscription seeded so `--demo` always shows the
+    /// "You may have forgotten this" callout (AND-497). $4.99/mo "Cloud Backup"
+    /// (Netflix is in the cancel-guidance map for a non-generic link; this one is
+    /// deliberately small and obscure so it reads as easy-to-forget). Twelve
+    /// monthly occurrences land well over the forgotten min-cycle threshold, the
+    /// fixed amount keeps the detected average under the cost ceiling, and the
+    /// most recent charge is recent so it is never read as stale.
+    private static func forgottenSubscriptionTransactions(now: Date, calendar: Calendar) -> [TransactionDTO] {
+        (0..<12).map { monthsAgo in
+            let daysAgo = 4 + (monthsAgo * 30)
+            return TransactionDTO(
+                id: "demo_forgotten_cloud_\(monthsAgo)",
+                accountId: "demo_visa",
+                amount: 4.99,
+                date: dateString(daysAgo: daysAgo, now: now, calendar: calendar),
+                name: "CLOUDVAULT BACKUP",
+                merchantName: "CloudVault",
+                category: .subscriptions
+            )
+        }
+    }
+
+    /// Seeded watchlist nudges for demo mode (AND-501). Chosen so they cross
+    /// against the demo transactions' month-to-date spend (Starbucks coffees and
+    /// the Shopping category both clear early), populating the Settings
+    /// Watchlists section and firing the evaluator in `--demo`. Fixed UUIDs keep
+    /// the order and identity deterministic for screenshots.
+    public static func watchlistTargets() -> [WatchlistTarget] {
+        [
+            WatchlistTarget.merchant(
+                "Starbucks",
+                threshold: 10,
+                id: UUID(uuidString: "00000000-0000-0000-0000-0000000000A1")!
+            ),
+            WatchlistTarget.category(
+                .shopping,
+                threshold: 200,
+                id: UUID(uuidString: "00000000-0000-0000-0000-0000000000A2")!
+            ),
+        ]
     }
 
     /// Deterministic 60-day net-worth history with a gentle upward drift so the
@@ -223,6 +266,10 @@ public enum DemoFixtures {
             TransactionDTO(id: "tx10", accountId: "demo_amex", amount: 320.00, date: twoDaysAgo, name: "DELTA AIR LINES", merchantName: "Delta Airlines", category: .travel),
             TransactionDTO(id: "tx11", accountId: "demo_checking", amount: 12.50, date: twoDaysAgo, name: "STARBUCKS 8823", merchantName: "Starbucks", category: .foodAndDrink),
             TransactionDTO(id: "tx12", accountId: "demo_amex", amount: 650.00, date: twoDaysAgo, name: "FURNITURE STORE", merchantName: "West Elm", category: .shopping, pending: true),
+            // Pending OUTFLOW on a depository (cash) account so the pending-aware
+            // safe-to-spend holds component is non-zero in --demo (AND-499). tx12
+            // is on a credit account and is therefore excluded from cash holds.
+            TransactionDTO(id: "tx48", accountId: "demo_checking", amount: 86.40, date: today, name: "TRADER JOES 442", merchantName: "Trader Joe's", category: .foodAndDrink, pending: true),
             // 3 days ago
             TransactionDTO(id: "tx13", accountId: "demo_visa", amount: 75.00, date: threeDaysAgo, name: "PLANET FITNESS", merchantName: "Planet Fitness", category: .healthAndFitness),
             TransactionDTO(id: "tx14", accountId: "demo_checking", amount: -1_500.00, date: threeDaysAgo, name: "VENMO PAYMENT", merchantName: "Venmo", category: .income),

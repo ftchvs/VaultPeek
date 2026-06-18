@@ -264,6 +264,11 @@ struct NotificationTriggerEvaluationTests {
             itemStatuses: [
                 ItemStatus(id: rawItemID, institutionName: institutionName, status: .error),
             ],
+            watchlistTargets: [
+                // A watchlist nudge whose label/key is the sensitive merchant —
+                // its lock-screen copy must still avoid that name and the amount.
+                WatchlistTarget.merchant(merchantName, threshold: 10),
+            ],
             isSyncStale: true,
             now: fixedNow,
             config: testConfig

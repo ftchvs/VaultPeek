@@ -11,6 +11,8 @@ public struct NotificationTriggers: Sendable {
     public var staleSync: Bool
     public var loginRequired: Bool
     public var itemError: Bool
+    /// Gate for watchlist spend nudges (AND-501).
+    public var watchlist: Bool
     public var largeTransactionThreshold: Double
     public var lowBalanceThreshold: Double
     public var creditUtilizationThreshold: Double
@@ -26,6 +28,7 @@ public struct NotificationTriggers: Sendable {
         staleSync: Bool = true,
         loginRequired: Bool = true,
         itemError: Bool = true,
+        watchlist: Bool = true,
         largeTransactionThreshold: Double = 500,
         lowBalanceThreshold: Double = 100,
         creditUtilizationThreshold: Double = 30,
@@ -40,6 +43,7 @@ public struct NotificationTriggers: Sendable {
         self.staleSync = staleSync
         self.loginRequired = loginRequired
         self.itemError = itemError
+        self.watchlist = watchlist
         self.largeTransactionThreshold = largeTransactionThreshold
         self.lowBalanceThreshold = lowBalanceThreshold
         self.creditUtilizationThreshold = creditUtilizationThreshold
@@ -58,13 +62,18 @@ public enum NotificationTriggerKind: String, Codable, CaseIterable, Sendable {
     case recurringChargeDetected = "recurring-charge-detected"
     case recurringChargeChanged = "recurring-charge-changed"
     case recurringChargeDueSoon = "recurring-charge-due-soon"
+    case merchantWatch = "merchant-watch"
+    case categoryWatch = "category-watch"
 
     public var clearsWhenResolved: Bool {
         switch self {
         case .itemError, .providerOutage, .loginRequired, .syncStale, .highUtilization, .lowBalance,
              .recurringChargeChanged, .recurringChargeDueSoon:
             true
-        case .largeTransaction, .recurringChargeDetected:
+        // A crossed watchlist threshold is a one-shot like largeTransaction:
+        // the spend already happened, so it should not auto-clear when the
+        // month-to-date sum later changes.
+        case .largeTransaction, .recurringChargeDetected, .merchantWatch, .categoryWatch:
             false
         }
     }
@@ -122,6 +131,7 @@ public enum NotificationTriggerSelection {
         accounts: [AccountDTO] = [],
         recurringTransactions: [RecurringTransaction] = [],
         itemStatuses: [ItemStatus] = [],
+        watchlistTargets: [WatchlistTarget] = [],
         isSyncStale: Bool = false,
         now: Date = Date(),
         calendar: Calendar = .current,
@@ -202,6 +212,17 @@ public enum NotificationTriggerSelection {
                 threshold: config.largeTransactionThreshold
             ) {
                 append(largeTransactionDecision(for: transaction))
+            }
+        }
+
+        if config.watchlist {
+            for match in WatchlistEvaluator.evaluate(
+                transactions: transactions,
+                targets: watchlistTargets,
+                now: now,
+                calendar: calendar
+            ) {
+                append(watchlistDecision(for: match))
             }
         }
 
@@ -410,6 +431,31 @@ public enum NotificationTriggerSelection {
             ),
             title: "Recurring charge due soon",
             body: "An inferred recurring charge is expected soon.",
+            severity: .informational
+        )
+    }
+
+    private static func watchlistDecision(
+        for match: WatchlistEvaluator.Match
+    ) -> NotificationTriggerDecision {
+        let target = match.target
+        let kind: NotificationTriggerKind = target.kind == .merchant ? .merchantWatch : .categoryWatch
+        // Key on target + month + threshold (in cents) so each month re-arms the
+        // nudge and raising the limit re-notifies once the higher bar is crossed.
+        let thresholdCents = Int((target.monthlyThreshold * 100).rounded())
+        let sourceID = "\(target.kind.rawValue):\(target.key)#\(match.monthKey)#\(thresholdCents)"
+        // Lock-screen copy stays generic — no merchant name, category, or amount
+        // (privacy hard rule, see NotificationTriggerEvaluationTests). The exact
+        // "$X at Y this month" framing lives in-app where the device is unlocked.
+        let body: String = switch target.kind {
+        case .merchant: "A merchant you're watching crossed its monthly spend limit. Open VaultPeek for details."
+        case .category: "A spending category you're watching crossed its monthly limit. Open VaultPeek for details."
+        }
+        return NotificationTriggerDecision(
+            kind: kind,
+            dedupKey: dedupKey(kind: kind, sourceID: sourceID),
+            title: "Watchlist nudge",
+            body: body,
             severity: .informational
         )
     }
