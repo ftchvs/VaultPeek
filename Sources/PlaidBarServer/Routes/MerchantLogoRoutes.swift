@@ -68,6 +68,12 @@ struct MerchantLogoRoutes: Sendable {
         else {
             throw HTTPError(.notFound, message: "Logo unavailable")
         }
+        // URLSession follows redirects, so an allowed Plaid URL could redirect
+        // elsewhere; re-validate the FINAL host so the allowlist applies to the
+        // bytes actually served, never caching from a non-allowlisted host.
+        guard let finalHost = http.url?.host, Self.allowedHosts.contains(finalHost) else {
+            throw HTTPError(.notFound, message: "Logo redirected to a disallowed host")
+        }
 
         try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
         try? data.write(to: file, options: .atomic)

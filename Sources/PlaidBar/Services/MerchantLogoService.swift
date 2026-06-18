@@ -34,10 +34,12 @@ final class MerchantLogoStore {
             if let image = NSImage(data: data) {
                 images[logoURL] = image
             } else {
+                // Invalid image bytes won't change on retry — cache as failed.
                 failed.insert(logoURL)
             }
         } catch {
-            failed.insert(logoURL)
+            // Transport / server-still-starting / 5xx: do NOT mark failed, so a
+            // later `.task` retries once the local server or network recovers.
         }
     }
 }

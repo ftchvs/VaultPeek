@@ -646,7 +646,7 @@ struct TransactionReviewInboxTests {
             category: category,
             pending: pending,
             pendingTransactionId: pendingTransactionId,
-            categoryConfidence: categoryConfidence
+            isLowConfidenceCategory: ["LOW", "UNKNOWN"].contains(categoryConfidence?.uppercased() ?? "")
         )
     }
 

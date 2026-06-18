@@ -288,9 +288,17 @@ struct TransactionRoutes: Sendable {
             pending: plaidTx.pending,
             pendingTransactionId: plaidTx.pendingTransactionId,
             isoCurrencyCode: plaidTx.isoCurrencyCode,
-            categoryConfidence: plaidTx.personalFinanceCategory?.confidenceLevel,
+            isLowConfidenceCategory: Self.isLowConfidence(plaidTx.personalFinanceCategory?.confidenceLevel),
             logoURL: plaidTx.logoUrl
         )
     }
 
+    /// Maps Plaid PFCv2 `confidence_level` to the app-owned low-confidence flag,
+    /// keeping the raw Plaid enum string inside the server.
+    private static func isLowConfidence(_ confidenceLevel: String?) -> Bool {
+        switch confidenceLevel?.uppercased() {
+        case "LOW", "UNKNOWN": return true
+        default: return false
+        }
+    }
 }
