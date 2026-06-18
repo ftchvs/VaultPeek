@@ -205,7 +205,21 @@ final class AppState {
     /// Whether an automatic (non-user-triggered) refresh is due now, per the
     /// refresh policy and the last successful sync. Manual refreshes bypass this.
     var shouldAutoRefreshNow: Bool {
-        automaticRefreshPolicy.shouldAutoRefresh(lastSync: lastSyncDate, now: Date())
+        // Some conditions must refresh regardless of the throttle (even "manual
+        // only") because waiting would leave the UI blank/stale-wrong:
+        if needsImmediateRefresh { return true }
+        return automaticRefreshPolicy.shouldAutoRefresh(lastSync: lastSyncDate, now: Date())
+    }
+
+    /// Refresh-now conditions the time-based throttle must not suppress:
+    /// linked items with nothing cached (blank dashboard), a freshly linked item
+    /// the server hasn't synced yet, or a Plaid webhook that flagged an item as
+    /// needing sync. Without these the throttle would hide real, fetchable data.
+    private var needsImmediateRefresh: Bool {
+        if statusItemCount > 0, accounts.isEmpty { return true }
+        if let synced = serverSyncedItemCount, statusItemCount > synced { return true }
+        if itemStatuses.contains(where: \.needsSync) { return true }
+        return false
     }
     var notificationsEnabled: Bool = false {
         didSet {
@@ -1198,7 +1212,16 @@ final class AppState {
         // staleness measured after the check completes.
         if isBootLoadInFlight { return false }
         guard let lastSyncDate else { return true }
-        let staleAfter = max(refreshInterval * 2, PlaidBarConstants.transactionSyncInterval * 2)
+        // Align the stale threshold with the automatic-refresh floor so a normally
+        // behaving install (now refreshing at most ~twice a day) doesn't flag
+        // "stale"/broken-connection between refreshes. Manual-only has no floor,
+        // so allow a full day before nagging.
+        let policyFloor = automaticRefreshPolicy.minimumInterval ?? (24 * 60 * 60)
+        let staleAfter = max(
+            refreshInterval * 2,
+            PlaidBarConstants.transactionSyncInterval * 2,
+            policyFloor + 60 * 60
+        )
         return Date().timeIntervalSince(lastSyncDate) > staleAfter
     }
 
