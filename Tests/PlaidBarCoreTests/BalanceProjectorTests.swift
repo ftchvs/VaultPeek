@@ -142,6 +142,47 @@ struct BalanceProjectorTests {
         #expect(projection2.confidence == .lowConfidence) // it is still a signal
     }
 
+    @Test("Stale anchor is seeded at its own date, not relabeled as today")
+    func staleAnchorKeepsItsDate() {
+        // Anchor snapshot is 10 days older than asOf (offline/stale sync).
+        let anchorDate = Formatters.parseTransactionDate("2026-05-22")!
+        let anchor = BalanceSnapshot(date: anchorDate, balance: 1_000)
+        // A one-off-ish outflow due BETWEEN the snapshot and asOf must still be
+        // walked, not skipped — otherwise the line overstates available cash.
+        let backfill = Self.recurring(
+            "Bill", amount: 200, frequency: .annual, nextExpectedDate: "2026-05-25", category: .billsAndUtilities
+        )
+        let projection = BalanceProjector.project(
+            anchor: anchor,
+            recurring: [backfill],
+            asOf: Self.asOf, // 2026-06-01
+            horizonDays: 30,
+            calendar: Self.calendar
+        )!
+        // The series starts at the true snapshot date, not asOf.
+        #expect(projection.series.first?.date == Self.calendar.startOfDay(for: anchorDate))
+        // The first point still carries the snapshot balance (not faked forward).
+        #expect(projection.series.first?.balance == 1_000)
+        // The obligation between the snapshot and now is applied, so the end
+        // balance reflects the back-filled charge.
+        #expect(projection.series.last?.balance == 800)
+        #expect(projection.projectedLow.balance == 800)
+    }
+
+    @Test("Current anchor keeps the horizon + 1 series length")
+    func currentAnchorKeepsLength() {
+        let anchor = BalanceSnapshot(date: Self.asOf, balance: 1_000)
+        let projection = BalanceProjector.project(
+            anchor: anchor,
+            recurring: [],
+            asOf: Self.asOf,
+            horizonDays: 30,
+            calendar: Self.calendar
+        )!
+        #expect(projection.series.count == 31)
+        #expect(projection.series.first?.date == Self.calendar.startOfDay(for: Self.asOf))
+    }
+
     @Test("Deterministic across two calls with the same inputs")
     func deterministic() {
         let anchor = BalanceSnapshot(date: Self.asOf, balance: 1_000)

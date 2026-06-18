@@ -376,9 +376,18 @@ struct MainPopover: View {
                 } else if isFlowInspectorOpen {
                     IncomeCategoryFlowInspector(
                         presentation: IncomeCategoryFlowPresentation.make(
-                            from: appState.transactions
+                            // Scope to the same trailing 30-day window as the
+                            // "30D cashflow" card this drill-in launches from, so
+                            // the inspector totals reconcile with that card rather
+                            // than spanning the full multi-month transaction cache.
+                            from: IncomeCategoryFlow.transactions(
+                                in: IncomeCategoryFlow.defaultWindowDays,
+                                from: appState.transactions,
+                                asOf: Date()
+                            )
                         ),
                         loadState: appState.loadState(for: .transactions),
+                        isPrivacyMasked: appState.shouldMaskFinancialValues,
                         onClose: closeFlowInspector
                     )
                 } else if !selectedAccountId.isEmpty {
