@@ -9,7 +9,7 @@ actor HostedLinkCompletionStore {
     @discardableResult
     func record(_ record: HostedLinkCompletionRecord) -> HostedLinkCompletionRecord {
         purgeEmptyIndexes()
-        if let existing = existingRecord(for: record) {
+        if let existing = existingRecord(for: record), !record.canOverride(existing) {
             return existing
         }
 
@@ -64,6 +64,13 @@ struct HostedLinkCompletionRecord: Equatable, Sendable {
     let linkToken: String?
     let linkSessionId: String?
     let status: HostedLinkCompletionStatus
+    /// Whether this record arrived over a trusted, `state`-bound channel — the
+    /// Plaid OAuth redirect validated against the single-use pending session —
+    /// rather than the unauthenticated `/webhooks/plaid/hosted-link` receiver.
+    /// Webhook records are advisory: a local same-user process can POST them, so
+    /// they default to `authoritative == false` and can never override a record
+    /// from the trusted redirect channel.
+    let authoritative: Bool
     let receivedAt: Date
 
     init(
@@ -71,13 +78,25 @@ struct HostedLinkCompletionRecord: Equatable, Sendable {
         linkToken: String?,
         linkSessionId: String?,
         status: HostedLinkCompletionStatus,
+        authoritative: Bool = false,
         receivedAt: Date = Date()
     ) {
         self.state = state?.trimmedCompletionIdentifier
         self.linkToken = linkToken?.trimmedCompletionIdentifier
         self.linkSessionId = linkSessionId?.trimmedCompletionIdentifier
         self.status = status
+        self.authoritative = authoritative
         self.receivedAt = receivedAt
+    }
+
+    /// A new record may overwrite an existing one only when it carries strictly
+    /// more trust. An authoritative (redirect-bound) record overrides a prior
+    /// unauthenticated (webhook) one — so a forged failure can never lock in
+    /// first and veto a genuine completion. Two unauthenticated records keep
+    /// first-write-wins (no thrashing between competing local POSTs), and an
+    /// authoritative record is never overridden by an unauthenticated one.
+    func canOverride(_ existing: HostedLinkCompletionRecord) -> Bool {
+        authoritative && !existing.authoritative
     }
 
     var identity: String {

@@ -327,11 +327,17 @@ struct OAuthCallbackRoute: Sendable {
             )
         }
         if let redirectStatus = Self.completionStatus(from: request) {
+            // This status rides Plaid's OAuth redirect, which only reaches here
+            // after `beginCompletion` validated the unguessable, single-use
+            // `state`. It is therefore authoritative and overrides any failure a
+            // local process may have pre-seeded via the unauthenticated webhook
+            // for the same `state` (see `HostedLinkCompletionRecord.canOverride`).
             await hostedLinkCompletions.record(HostedLinkCompletionRecord(
                 state: state,
                 linkToken: nil,
                 linkSessionId: request.uri.queryParameters.get("link_session_id").map { String($0) },
-                status: redirectStatus
+                status: redirectStatus,
+                authoritative: true
             ))
         }
 
@@ -505,17 +511,24 @@ struct OAuthCallbackRoute: Sendable {
         }
 
         // Plaid returned no public token. Only then consult completion metadata to
-        // surface a precise failure message — and ONLY when it is bound to the
-        // unguessable, single-use `state`. The `link_token`/`link_session_id` keys
-        // are handed to the client and surfaced by Plaid's UI, so trusting them
-        // here would let any local caller poison the shared completion store to
-        // grief a known link session.
+        // surface a precise failure message — and ONLY a record that is both bound
+        // to the unguessable, single-use `state` AND authoritative (captured from
+        // this very OAuth redirect, not the unauthenticated webhook). A stored
+        // record that is merely advisory (an unauthenticated `/webhooks/plaid/
+        // hosted-link` POST) must never drive a terminal failure: a local
+        // same-user process could pre-seed a `state`-keyed failure to grief a
+        // genuine session. The `link_token`/`link_session_id` keys are likewise
+        // untrusted here — they are handed to the client and surfaced by Plaid's
+        // UI, so any local caller could poison the shared completion store with
+        // them. Only the redirect-bound, authoritative status — written above
+        // after the `state` was validated against the pending session — may veto.
         if let state = request.uri.queryParameters.get("state").map({ String($0) }),
            let completion = await hostedLinkCompletions.completion(
                state: state,
                linkToken: nil,
                linkSessionId: nil
            ),
+           completion.authoritative,
            completion.status != HostedLinkCompletionStatus.success {
             throw HostedLinkCompletionError.status(completion.status)
         }
