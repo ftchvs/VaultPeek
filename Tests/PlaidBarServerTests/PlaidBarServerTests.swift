@@ -1668,6 +1668,18 @@ struct PlaidBarServerTests {
         #expect(ItemStatusMapping.status(forWebhookCode: "LOGIN_REPAIRED", currentStatus: .error) == .error)
     }
 
+    @Test("Provider-outage codes map to .providerOutage, login-required stays actionable")
+    func itemStatusMappingRoutesProviderOutageCodes() {
+        // Transient Plaid-side outages map to the non-actionable .providerOutage
+        // state (AND-488), not to .error / .loginRequired.
+        #expect(ItemStatusMapping.status(forWebhookCode: "INSTITUTION_DOWN", currentStatus: .connected) == .providerOutage)
+        #expect(ItemStatusMapping.status(forWebhookCode: "INSTITUTION_NOT_RESPONDING", currentStatus: .connected) == .providerOutage)
+        #expect(ItemStatusMapping.status(forWebhookCode: "PLANNED_MAINTENANCE", currentStatus: .connected) == .providerOutage)
+        #expect(ItemStatusMapping.status(forWebhookCode: "INTERNAL_SERVER_ERROR", currentStatus: .connected) == .providerOutage)
+        // ITEM_LOGIN_REQUIRED still maps to the actionable reconnect state.
+        #expect(ItemStatusMapping.status(forWebhookCode: "ITEM_LOGIN_REQUIRED", currentStatus: .connected) == .loginRequired)
+    }
+
     @Test("Webhook ERROR and repaired-with-new-accounts codes map correctly and preserve hard errors")
     func webhookItemStatusMappingHandlesErrorAndRepairedWithNewAccounts() {
         // A bare ITEM `ERROR` keeps the item degraded (login needed) rather than

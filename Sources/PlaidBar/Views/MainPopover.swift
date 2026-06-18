@@ -460,6 +460,9 @@ struct MainPopover: View {
 
                         if shouldElevateStatusReadinessPanel {
                             VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
+                                ConnectionHealthStripView()
+                                    .environment(appState)
+
                                 AttentionQueueView(title: "Attention", onAddAccount: openAccountSetup)
                                     .environment(appState)
 
@@ -502,6 +505,9 @@ struct MainPopover: View {
 
                         if shouldShowLowerStatusReadinessPanel {
                             VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
+                                ConnectionHealthStripView()
+                                    .environment(appState)
+
                                 AttentionQueueView(title: "Attention", onAddAccount: openAccountSetup)
                                     .environment(appState)
 
