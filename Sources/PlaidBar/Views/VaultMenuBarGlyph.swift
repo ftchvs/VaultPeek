@@ -13,6 +13,12 @@ import PlaidBarCore
 /// menu-bar glyph size where fine detail (bolts, concentric rings) would
 /// dissolve. State is still never carried by color alone — the degraded glyph
 /// ladder (SF Symbols) overrides this mark, per the menu-bar status rules.
+///
+/// `@MainActor`-isolated because it caches and vends `NSImage`, a non-`Sendable`
+/// AppKit class; the only callers are main-actor SwiftUI views, so isolating the
+/// glyph API keeps the cached image out of shared global state and satisfies the
+/// strict-concurrency build gate.
+@MainActor
 enum VaultMenuBarGlyph {
     /// Default glyph height, matched to the SF Symbol menu-bar glyphs it sits
     /// beside in `MenuBarLabel`.
