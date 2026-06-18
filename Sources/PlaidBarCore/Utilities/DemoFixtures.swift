@@ -126,6 +126,19 @@ public enum DemoFixtures {
             TransactionDTO(id: "tx2", accountId: "demo_checking", amount: 23.50, date: today, name: "UBER TRIP", merchantName: "Uber", category: .transportation),
             TransactionDTO(id: "tx3", accountId: "demo_checking", amount: -3_200.00, date: today, name: "STRIPE TRANSFER", merchantName: "Stripe", category: .income),
             TransactionDTO(id: "tx4", accountId: "demo_amex", amount: 142.80, date: today, name: "AMAZON.COM", merchantName: "Amazon", category: .shopping),
+
+            // === AND-507: zero-setup on-device NL categorization tier ===
+            // These arrive with NO Plaid category so the always-on NL tier is
+            // visible in --demo. The first three have recognizable raw names the
+            // lexicon resolves with a "Suggested" badge (foodAndDrink /
+            // transportation / healthAndFitness); the fourth is deliberately
+            // unresolvable so the genuinely-uncategorized → Review Inbox path is
+            // still demonstrable. No merchantName: the raw name carries the
+            // signal, exactly like an un-enriched Plaid transaction.
+            TransactionDTO(id: "tx48", accountId: "demo_checking", amount: 6.75, date: today, name: "BLUE BOTTLE COFFEE", category: nil),
+            TransactionDTO(id: "tx49", accountId: "demo_checking", amount: 52.10, date: today, name: "SHELL OIL 4821", category: nil),
+            TransactionDTO(id: "tx50", accountId: "demo_amex", amount: 18.40, date: today, name: "CVS/PHARMACY #2231", category: nil),
+            TransactionDTO(id: "tx51", accountId: "demo_visa", amount: 27.30, date: today, name: "SQ *KMNT LLC 9921", category: nil),
             // Yesterday
             TransactionDTO(id: "tx5", accountId: "demo_checking", amount: 15.99, date: yesterday, name: "NETFLIX.COM", merchantName: "Netflix", category: .entertainment),
             TransactionDTO(id: "tx6", accountId: "demo_checking", amount: 45.00, date: yesterday, name: "SHELL OIL 57422", merchantName: "Shell", category: .transportation),

@@ -610,6 +610,93 @@ struct TransactionReviewInboxTests {
         return fixture
     }
 
+    // MARK: - AND-507 on-device NL categorization precedence
+
+    @Test("A nil-category transaction whose name resolves is NL-backfilled, not flagged uncategorized")
+    func nlBackfillsResolvableMissingCategory() {
+        let transaction = tx(
+            id: "nl-coffee",
+            name: "BLUE BOTTLE COFFEE",
+            category: nil,
+            merchantName: nil
+        )
+
+        let item = evaluate([transaction]).items.first(where: { $0.id == "nl-coffee" })
+
+        #expect(item?.effectiveCategory == .foodAndDrink)
+        #expect(item?.categorySource == .appleNaturalLanguage)
+        #expect(item?.isNLSuggestedCategory == true)
+        #expect(item?.reasonCodes.contains(.uncategorized) == false)
+    }
+
+    @Test("NL never wins over a user category override")
+    func userOverrideBeatsNLInference() {
+        let transaction = tx(
+            id: "nl-user",
+            name: "BLUE BOTTLE COFFEE",
+            category: nil,
+            merchantName: nil
+        )
+        let metadata = TransactionReviewMetadata(id: "nl-user", userCategory: .shopping)
+
+        let item = evaluate([transaction], metadata: [metadata]).items.first(where: { $0.id == "nl-user" })
+
+        // The user's choice stands; the NL tier neither overrides it nor tags
+        // the row as a suggestion.
+        #expect(item?.effectiveCategory == .shopping)
+        #expect(item?.categorySource == nil)
+        #expect(item?.isNLSuggestedCategory == false)
+    }
+
+    @Test("A LOW-confidence Plaid category with no override gets a trusted NL backfill")
+    func nlBackfillsLowConfidencePlaidCategory() {
+        let transaction = tx(
+            id: "nl-low",
+            name: "NETFLIX.COM",
+            category: .other,
+            merchantName: nil,
+            categoryConfidence: "LOW"
+        )
+
+        let item = evaluate([transaction]).items.first(where: { $0.id == "nl-low" })
+
+        #expect(item?.effectiveCategory == .entertainment)
+        #expect(item?.categorySource == .appleNaturalLanguage)
+        #expect(item?.reasonCodes.contains(.uncategorized) == false)
+    }
+
+    @Test("An unresolvable nil-category transaction still lands in the inbox as uncategorized")
+    func unresolvableMissingCategoryStaysInInbox() {
+        let transaction = tx(
+            id: "nl-unknown",
+            name: "SQ *KMNT LLC 9921",
+            category: nil,
+            merchantName: nil
+        )
+
+        let item = evaluate([transaction]).items.first(where: { $0.id == "nl-unknown" })
+
+        #expect(item != nil)
+        #expect(item?.reasonCodes.contains(.uncategorized) == true)
+        #expect(item?.categorySource != .appleNaturalLanguage)
+        #expect(item?.isNLSuggestedCategory == false)
+    }
+
+    @Test("A confident Plaid category is not overridden by the NL tier")
+    func confidentPlaidCategoryWins() {
+        let transaction = tx(
+            id: "nl-plaid",
+            name: "BLUE BOTTLE COFFEE",
+            category: .shopping,
+            merchantName: nil
+        )
+
+        let item = evaluate([transaction]).items.first(where: { $0.id == "nl-plaid" })
+
+        #expect(item?.effectiveCategory == .shopping)
+        #expect(item?.isNLSuggestedCategory == false)
+    }
+
     private func evaluate(
         _ transactions: [TransactionDTO],
         metadata: [TransactionReviewMetadata] = [],
