@@ -66,6 +66,49 @@ public enum DemoFixtures {
     public static func transactions(now: Date = Date(), calendar: Calendar = .current) -> [TransactionDTO] {
         explicitTransactions(now: now, calendar: calendar)
             + historicalTransactions(now: now, calendar: calendar)
+            + forgottenSubscriptionTransactions(now: now, calendar: calendar)
+    }
+
+    /// A small, long-running subscription seeded so `--demo` always shows the
+    /// "You may have forgotten this" callout (AND-497). $4.99/mo "Cloud Backup"
+    /// (Netflix is in the cancel-guidance map for a non-generic link; this one is
+    /// deliberately small and obscure so it reads as easy-to-forget). Twelve
+    /// monthly occurrences land well over the forgotten min-cycle threshold, the
+    /// fixed amount keeps the detected average under the cost ceiling, and the
+    /// most recent charge is recent so it is never read as stale.
+    private static func forgottenSubscriptionTransactions(now: Date, calendar: Calendar) -> [TransactionDTO] {
+        (0..<12).map { monthsAgo in
+            let daysAgo = 4 + (monthsAgo * 30)
+            return TransactionDTO(
+                id: "demo_forgotten_cloud_\(monthsAgo)",
+                accountId: "demo_visa",
+                amount: 4.99,
+                date: dateString(daysAgo: daysAgo, now: now, calendar: calendar),
+                name: "CLOUDVAULT BACKUP",
+                merchantName: "CloudVault",
+                category: .subscriptions
+            )
+        }
+    }
+
+    /// Seeded watchlist nudges for demo mode (AND-501). Chosen so they cross
+    /// against the demo transactions' month-to-date spend (Starbucks coffees and
+    /// the Shopping category both clear early), populating the Settings
+    /// Watchlists section and firing the evaluator in `--demo`. Fixed UUIDs keep
+    /// the order and identity deterministic for screenshots.
+    public static func watchlistTargets() -> [WatchlistTarget] {
+        [
+            WatchlistTarget.merchant(
+                "Starbucks",
+                threshold: 10,
+                id: UUID(uuidString: "00000000-0000-0000-0000-0000000000A1")!
+            ),
+            WatchlistTarget.category(
+                .shopping,
+                threshold: 200,
+                id: UUID(uuidString: "00000000-0000-0000-0000-0000000000A2")!
+            ),
+        ]
     }
 
     /// Deterministic 60-day net-worth history with a gentle upward drift so the
@@ -79,6 +122,22 @@ public enum DemoFixtures {
             let wobble = sin(Double(daysAgo) / 4.5) * 180
             return BalanceSnapshot(date: date, balance: netWorth + drift + wobble)
         }
+    }
+
+    /// Partial-sync demo statuses (AND-489 / AND-488): one connected item, one
+    /// degraded (`loginRequired`) reconnect target, and one `.providerOutage`
+    /// item. This makes `syncedItemCount < itemCount` (so the data-integrity
+    /// badge renders `.partial`) and exercises all three Connection Health Strip
+    /// buckets (Connected / Reconnect-needed / Provider-outage) without Plaid.
+    public static func partialSyncItemStatuses(now: Date = Date(), calendar: Calendar = .current) -> [ItemStatus] {
+        let recoveredSync = calendar.date(byAdding: .minute, value: -18, to: now) ?? now
+        let needsLoginSync = calendar.date(byAdding: .day, value: -3, to: now) ?? now
+        let outageSync = calendar.date(byAdding: .hour, value: -2, to: now) ?? now
+        return [
+            ItemStatus(id: "demo_chase", institutionName: "Chase", status: .connected, lastSync: recoveredSync),
+            ItemStatus(id: "demo_amex_item", institutionName: "American Express", status: .loginRequired, lastSync: needsLoginSync),
+            ItemStatus(id: "demo_wells_fargo", institutionName: "Wells Fargo", status: .providerOutage, lastSync: outageSync),
+        ]
     }
 
     public static func accountBalanceHistory(
@@ -104,6 +163,62 @@ public enum DemoFixtures {
         }
     }
 
+    /// Deterministic multi-day per-account ledger for the Balance Time Machine
+    /// (AND-490), built from the existing `accountBalanceHistory` drift/wobble
+    /// generator so demo and tests share one source of truth. Covers the last
+    /// `dayCount` days for every demo account.
+    public static func accountBalanceLedger(
+        dayCount: Int = 14,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> AccountBalanceLedger {
+        var entries: [AccountBalanceLedger.LedgerEntry] = []
+        for account in accounts {
+            let history = accountBalanceHistory(forAccountId: account.id, now: now, calendar: calendar)
+            // Take the most recent `dayCount` days from the generated history.
+            for snapshot in history.suffix(dayCount) {
+                entries.append(
+                    AccountBalanceLedger.LedgerEntry(
+                        accountId: account.id,
+                        date: snapshot.date,
+                        current: snapshot.balance,
+                        available: account.balances.available,
+                        limit: account.balances.limit,
+                        recordedAt: snapshot.date
+                    )
+                )
+            }
+        }
+        return AccountBalanceLedger(entries: entries)
+    }
+
+    /// A "post-sync" variant of `accountBalanceLedger` that rewrites one prior-day
+    /// `current` balance for the first account, so `SyncHistoryDiff` renders a
+    /// non-empty "history changed" row in --demo (AND-490).
+    public static func postSyncAccountBalanceLedger(
+        dayCount: Int = 14,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> AccountBalanceLedger {
+        let base = accountBalanceLedger(dayCount: dayCount, now: now, calendar: calendar)
+        guard let firstAccountId = accounts.first?.id else { return base }
+        // Rewrite the entry from ~3 days ago for the first account.
+        let targetDay = calendar.date(byAdding: .day, value: -3, to: now) ?? now
+        let rewritten = base.entries.map { entry -> AccountBalanceLedger.LedgerEntry in
+            guard entry.accountId == firstAccountId,
+                  calendar.isDate(entry.date, inSameDayAs: targetDay) else { return entry }
+            return AccountBalanceLedger.LedgerEntry(
+                accountId: entry.accountId,
+                date: entry.date,
+                current: (entry.current ?? 0) + 125.50,
+                available: entry.available,
+                limit: entry.limit,
+                recordedAt: now
+            )
+        }
+        return AccountBalanceLedger(entries: rewritten)
+    }
+
     // MARK: - Explicit recent window
 
     private static func explicitTransactions(now: Date, calendar: Calendar) -> [TransactionDTO] {
@@ -126,6 +241,21 @@ public enum DemoFixtures {
             TransactionDTO(id: "tx2", accountId: "demo_checking", amount: 23.50, date: today, name: "UBER TRIP", merchantName: "Uber", category: .transportation),
             TransactionDTO(id: "tx3", accountId: "demo_checking", amount: -3_200.00, date: today, name: "STRIPE TRANSFER", merchantName: "Stripe", category: .income),
             TransactionDTO(id: "tx4", accountId: "demo_amex", amount: 142.80, date: today, name: "AMAZON.COM", merchantName: "Amazon", category: .shopping),
+
+            // === AND-507: zero-setup on-device NL categorization tier ===
+            // These arrive with NO Plaid category so the always-on NL tier is
+            // visible in --demo. The first three have recognizable raw names the
+            // lexicon resolves with a "Suggested" badge (foodAndDrink /
+            // transportation / healthAndFitness); the fourth is deliberately
+            // unresolvable so the genuinely-uncategorized → Review Inbox path is
+            // still demonstrable. No merchantName: the raw name carries the
+            // signal, exactly like an un-enriched Plaid transaction.
+            TransactionDTO(id: "tx52", accountId: "demo_checking", amount: 6.75, date: today, name: "BLUE BOTTLE COFFEE", category: nil),
+            TransactionDTO(id: "tx53", accountId: "demo_checking", amount: 52.10, date: today, name: "SHELL OIL 4821", category: nil),
+            TransactionDTO(id: "tx54", accountId: "demo_amex", amount: 18.40, date: today, name: "CVS/PHARMACY #2231", category: nil),
+            TransactionDTO(id: "tx55", accountId: "demo_visa", amount: 27.30, date: today, name: "SQ *KMNT LLC 9921", category: nil),
+            // Merchant name with a comma exercises CSV quoting/escaping in exports (AND-492).
+            TransactionDTO(id: "tx4b", accountId: "demo_amex", amount: 58.10, date: today, name: "DINING PURCHASE", merchantName: "Joe's Bar, Grill & Co.", category: .foodAndDrink),
             // Yesterday
             TransactionDTO(id: "tx5", accountId: "demo_checking", amount: 15.99, date: yesterday, name: "NETFLIX.COM", merchantName: "Netflix", category: .entertainment),
             TransactionDTO(id: "tx6", accountId: "demo_checking", amount: 45.00, date: yesterday, name: "SHELL OIL 57422", merchantName: "Shell", category: .transportation),
@@ -136,6 +266,10 @@ public enum DemoFixtures {
             TransactionDTO(id: "tx10", accountId: "demo_amex", amount: 320.00, date: twoDaysAgo, name: "DELTA AIR LINES", merchantName: "Delta Airlines", category: .travel),
             TransactionDTO(id: "tx11", accountId: "demo_checking", amount: 12.50, date: twoDaysAgo, name: "STARBUCKS 8823", merchantName: "Starbucks", category: .foodAndDrink),
             TransactionDTO(id: "tx12", accountId: "demo_amex", amount: 650.00, date: twoDaysAgo, name: "FURNITURE STORE", merchantName: "West Elm", category: .shopping, pending: true),
+            // Pending OUTFLOW on a depository (cash) account so the pending-aware
+            // safe-to-spend holds component is non-zero in --demo (AND-499). tx12
+            // is on a credit account and is therefore excluded from cash holds.
+            TransactionDTO(id: "tx48", accountId: "demo_checking", amount: 86.40, date: today, name: "TRADER JOES 442", merchantName: "Trader Joe's", category: .foodAndDrink, pending: true),
             // 3 days ago
             TransactionDTO(id: "tx13", accountId: "demo_visa", amount: 75.00, date: threeDaysAgo, name: "PLANET FITNESS", merchantName: "Planet Fitness", category: .healthAndFitness),
             TransactionDTO(id: "tx14", accountId: "demo_checking", amount: -1_500.00, date: threeDaysAgo, name: "VENMO PAYMENT", merchantName: "Venmo", category: .income),

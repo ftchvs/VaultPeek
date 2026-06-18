@@ -42,6 +42,23 @@ public enum PlaidBarConstants {
     // Display
     public static let creditUtilizationWarningThreshold: Double = 30.0
     public static let maxRecentTransactions: Int = 50
+
+    // Forgotten-subscription heuristic (AND-497).
+    // A recurring stream is "easy to forget" when it has run for many cycles
+    // (so it has slipped into the background) yet costs little each cycle (so it
+    // never draws attention on a statement). Tuned for monthly-or-rarer streams.
+    /// Minimum number of observed charges before a stream is old enough to have
+    /// been forgotten.
+    public static let forgottenSubscriptionMinimumCycles: Int = 6
+    /// Maximum per-charge amount for a stream to count as "easy to forget".
+    /// Larger charges are noticed, so they are never flagged as forgotten.
+    public static let forgottenSubscriptionMaxAmount: Double = 20.0
+
+    // Projected balance forecast (AND-498).
+    /// Default forward horizon (days) for the projected-balance line.
+    public static let projectedBalanceDefaultHorizonDays: Int = 30
+    /// Minimum balance snapshots required before a forecast is shown.
+    public static let projectedBalanceMinimumHistoryPoints: Int = 2
     public static let initialSyncDays: Int = 90
     public static let maxTransactionSyncPages: Int = 100
     public static let maxTransactionSyncMutationRestarts: Int = 2
@@ -68,6 +85,14 @@ public enum PlaidBarConstants {
     public static var plaidSandboxRedirectUri: String {
         "http://localhost:\(serverPort)/oauth/callback"
     }
+
+    /// Plaid's consumer-facing privacy portal, where users review what data a
+    /// connected app can access.
+    public static let plaidPrivacyURL: String = "https://my.plaid.com/"
+
+    /// Plaid's data deletion / connection-management portal, where users revoke
+    /// or delete the bank connections VaultPeek created.
+    public static let plaidDataDeletionURL: String = "https://my.plaid.com/"
 }
 
 private extension String {

@@ -1,26 +1,40 @@
 #!/usr/bin/env bash
-# Regenerate Sources/PlaidBar/Resources/AppIcon.icns from code.
+# Regenerate Sources/PlaidBar/Resources/AppIcon.icns from the VaultPeek master.
 #
-# Draws the 1024px master with CoreGraphics (rounded-rect macOS icon,
-# SemanticColors.brand blue gradient, white dollar glyph over a rising
-# sparkline), then emits every iconset size via sips and packs the
-# .icns with iconutil. No binary design sources required.
+# The master art is Assets/app-icon-source.png — a full-bleed 1024px vault-door
+# glyph (white on black), the literal VaultPeek mark. macOS does NOT round
+# .icns corners for the Dock, so this script bakes in a continuous rounded
+# (squircle) mask, then emits every iconset size via sips and packs the .icns
+# with iconutil. It also exports Assets/app-icon.png (a 512px rounded preview)
+# for the README hero, so the repo's public face matches the shipped icon.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+SOURCE_PNG="$PROJECT_DIR/Assets/app-icon-source.png"
 OUTPUT_ICNS="$PROJECT_DIR/Sources/PlaidBar/Resources/AppIcon.icns"
-WORK_DIR="$(mktemp -d /tmp/plaidbar-appicon.XXXXXX)"
+README_PNG="$PROJECT_DIR/Assets/app-icon.png"
+WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/plaidbar-appicon.XXXXXX")"
 MASTER_PNG="$WORK_DIR/master-1024.png"
 ICONSET_DIR="$WORK_DIR/AppIcon.iconset"
 
 trap 'rm -rf "$WORK_DIR"' EXIT
 
-swift - "$MASTER_PNG" <<'SWIFT'
+if [ ! -f "$SOURCE_PNG" ]; then
+    echo "Missing icon master at $SOURCE_PNG" >&2
+    exit 1
+fi
+
+swift - "$SOURCE_PNG" "$MASTER_PNG" <<'SWIFT'
 import AppKit
 
-let outputPath = CommandLine.arguments[1]
+let sourcePath = CommandLine.arguments[1]
+let outputPath = CommandLine.arguments[2]
 let canvas = 1024
+
+guard let source = NSImage(contentsOfFile: sourcePath) else {
+    fatalError("Could not load icon master at \(sourcePath)")
+}
 
 guard let rep = NSBitmapImageRep(
     bitmapDataPlanes: nil,
@@ -41,57 +55,23 @@ rep.size = NSSize(width: canvas, height: canvas)
 NSGraphicsContext.saveGraphicsState()
 NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
 
-// Apple icon grid: 824x824 rounded rect centered on a 1024 canvas.
-let plate = NSRect(x: 100, y: 100, width: 824, height: 824)
-let platePath = NSBezierPath(roundedRect: plate, xRadius: 185, yRadius: 185)
+// Full-bleed continuous-corner (squircle) mask. macOS app icons must bake in
+// their own corners; ~22.4% of the canvas is the platform's rounded-rect
+// radius, and `.continuous` style matches the system squircle silhouette so
+// the dark plate doesn't read as a hard square in the Dock.
+let bounds = NSRect(x: 0, y: 0, width: canvas, height: canvas)
+let radius = CGFloat(canvas) * 0.2237
+let mask = NSBezierPath(roundedRect: bounds, xRadius: radius, yRadius: radius)
+mask.addClip()
 
-// SemanticColors.brand is system blue; gradient keeps it recognizably so.
-let topBlue = NSColor(calibratedRed: 0.36, green: 0.67, blue: 1.00, alpha: 1.0)
-let bottomBlue = NSColor(calibratedRed: 0.00, green: 0.40, blue: 0.90, alpha: 1.0)
-NSGradient(starting: bottomBlue, ending: topBlue)?.draw(in: platePath, angle: 90)
-
-platePath.addClip()
-
-// Rising sparkline across the lower third — the "chart" half of the motif.
-let line = NSBezierPath()
-line.move(to: NSPoint(x: 60, y: 268))
-line.line(to: NSPoint(x: 280, y: 352))
-line.line(to: NSPoint(x: 452, y: 286))
-line.line(to: NSPoint(x: 640, y: 430))
-line.line(to: NSPoint(x: 800, y: 372))
-line.line(to: NSPoint(x: 980, y: 520))
-
-let area = line.copy() as! NSBezierPath
-area.line(to: NSPoint(x: 980, y: 60))
-area.line(to: NSPoint(x: 60, y: 60))
-area.close()
-NSColor(calibratedWhite: 1.0, alpha: 0.22).setFill()
-area.fill()
-
-line.lineWidth = 26
-line.lineJoinStyle = .round
-line.lineCapStyle = .round
-NSColor(calibratedWhite: 1.0, alpha: 0.85).setStroke()
-line.stroke()
-
-// Dollar glyph — must stay legible at 16pt, so it dominates the plate.
-let shadow = NSShadow()
-shadow.shadowColor = NSColor.black.withAlphaComponent(0.20)
-shadow.shadowBlurRadius = 22
-shadow.shadowOffset = NSSize(width: 0, height: -10)
-
-let glyph = "$" as NSString
-let attributes: [NSAttributedString.Key: Any] = [
-    .font: NSFont.systemFont(ofSize: 580, weight: .bold),
-    .foregroundColor: NSColor.white,
-    .shadow: shadow,
-]
-let glyphSize = glyph.size(withAttributes: attributes)
-glyph.draw(
-    at: NSPoint(x: (CGFloat(canvas) - glyphSize.width) / 2,
-                y: (CGFloat(canvas) - glyphSize.height) / 2 + 60),
-    withAttributes: attributes
-)
+// The master is already a finished full-bleed composition (white vault on a
+// black field), so it fills the masked canvas 1:1 — only the corners change.
+source.draw(in: bounds,
+            from: .zero,
+            operation: .copy,
+            fraction: 1.0,
+            respectFlipped: true,
+            hints: [.interpolation: NSImageInterpolation.high.rawValue])
 
 NSGraphicsContext.current?.flushGraphics()
 NSGraphicsContext.restoreGraphicsState()
@@ -113,4 +93,8 @@ done
 
 iconutil -c icns "$ICONSET_DIR" -o "$OUTPUT_ICNS"
 
+# README hero export — a rounded 512px preview kept in lockstep with the icon.
+sips -z 512 512 "$MASTER_PNG" --out "$README_PNG" >/dev/null
+
 echo "Wrote $OUTPUT_ICNS"
+echo "Wrote $README_PNG"

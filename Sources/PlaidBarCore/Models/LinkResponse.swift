@@ -71,13 +71,17 @@ public enum ItemConnectionStatus: String, Codable, Sendable {
     case permissionRevoked = "permission_revoked"
     case newAccountsAvailable = "new_accounts_available"
     case loginRepaired = "login_repaired"
+    /// A transient Plaid-side outage (institution down, planned maintenance, or
+    /// an internal Plaid error). Degraded but NOT a user-actionable reconnect —
+    /// VaultPeek retries automatically rather than prompting an update flow.
+    case providerOutage = "provider_outage"
     case error
 
     public var needsUpdateMode: Bool {
         switch self {
         case .loginRequired, .pendingExpiration, .pendingDisconnect, .permissionRevoked, .newAccountsAvailable:
             true
-        case .connected, .loginRepaired, .error:
+        case .connected, .loginRepaired, .providerOutage, .error:
             false
         }
     }
@@ -86,16 +90,22 @@ public enum ItemConnectionStatus: String, Codable, Sendable {
         switch self {
         case .connected, .loginRepaired:
             false
-        case .loginRequired, .pendingExpiration, .pendingDisconnect, .permissionRevoked, .newAccountsAvailable, .error:
+        case .loginRequired, .pendingExpiration, .pendingDisconnect, .permissionRevoked, .newAccountsAvailable, .providerOutage, .error:
             true
         }
+    }
+
+    /// A non-actionable transient outage: degraded, but the user cannot fix it —
+    /// the connection recovers on its own once Plaid/the institution is back.
+    public var isProviderOutage: Bool {
+        self == .providerOutage
     }
 
     public func applyingLoginRepaired() -> ItemConnectionStatus {
         switch self {
         case .loginRequired, .pendingExpiration, .pendingDisconnect, .permissionRevoked:
             .loginRepaired
-        case .connected, .newAccountsAvailable, .loginRepaired, .error:
+        case .connected, .newAccountsAvailable, .loginRepaired, .providerOutage, .error:
             self
         }
     }

@@ -84,6 +84,10 @@ public struct SafeToSpendComponent: Sendable, Equatable, Identifiable {
 public enum SafeToSpendComponentKind: String, Sendable, CaseIterable, Hashable {
     case startingCash
     case expectedIncome
+    /// Money already authorized but not yet posted (pending outflow holds).
+    /// Subtracted so it is not double-counted as spendable cash (AND-499).
+    /// Slotted right after income and before upcoming obligations.
+    case pendingHolds
     case upcomingObligations
     case loanPayments
     case budgetReservations
@@ -95,6 +99,7 @@ public enum SafeToSpendComponentKind: String, Sendable, CaseIterable, Hashable {
         switch self {
         case .startingCash: "banknote"
         case .expectedIncome: "arrow.down.circle"
+        case .pendingHolds: "clock.badge"
         case .upcomingObligations: "calendar.badge.clock"
         case .loanPayments: "creditcard"
         case .budgetReservations: "tray.full"
