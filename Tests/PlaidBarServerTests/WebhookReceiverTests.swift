@@ -260,7 +260,7 @@ struct WebhookReceiverTests {
             // constraint. The store must translate that into `.duplicate`, never
             // surface the throw.
             let hash = "concurrent-\(UUID().uuidString)"
-            func makeSignal() -> WebhookItemSignal {
+            @Sendable func makeSignal() -> WebhookItemSignal {
                 WebhookItemSignal(
                     itemId: "item-webhook",
                     webhookType: "TRANSACTIONS",
