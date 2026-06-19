@@ -53,6 +53,19 @@ Use GitHub private vulnerability reporting if available, or contact the reposito
   stores only a `keychain:<item_id>` reference. Build/test environments without
   Keychain support may fall back to local SQLite token storage, so release
   claims must distinguish runtime Keychain behavior from fallback builds.
+- Keychain access-token items are hardened to stay on the user's machine. Each
+  item is written with the `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`
+  data-protection class and `kSecAttrSynchronizable = false`, so the token is
+  **never** copied to iCloud Keychain or any paired device, yet remains readable
+  by the headless companion server after the first post-boot unlock (including
+  while the screen is locked, which is required for background refresh). The
+  weaker `WhenUnlockedThisDeviceOnly` class is intentionally avoided because it
+  would block background reads on a locked screen, and the default
+  iCloud-syncable classes (`WhenUnlocked`, `AfterFirstUnlock`) are avoided
+  because they would let tokens leave the device. The protection is re-asserted
+  on every write, so items created by older builds are upgraded in place. The
+  accessibility-class decision is centralized in `KeychainAccessPolicy`
+  (`PlaidBarCore`) and unit-tested in CI without requiring a live Keychain.
 - Existing legacy `plaidbar.sqlite` data, SQLite sidecar files, and matching transaction cache are copied into a scoped database only when the legacy environment is explicit (`PLAIDBAR_MIGRATE_LEGACY_DATABASE=sandbox|production`) or can be inferred from the existing transaction-cache context. Ambiguous legacy databases are left untouched to avoid sandbox/production token crossover. Explicit migration can replace an existing scoped store, backs up the previous scoped SQLite store and transaction cache before copying legacy data, and writes a migration marker so restarts do not reapply stale legacy data.
 - The app/server auth token is generated locally under `~/.vaultpeek/auth-token`
   (or `$PLAIDBAR_DATA_DIR/auth-token`).
