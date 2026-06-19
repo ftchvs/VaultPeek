@@ -96,10 +96,20 @@ enum PlaidTokenVault {
 
     private static func saveToKeychain(accessToken: String, itemId: String, service: String) throws {
         let query = keychainQuery(itemId: itemId, service: service)
-        // Re-assert the hardened protection on every write so an item created by
-        // an older build (or whose policy drifted) is upgraded in place: the
-        // accessibility class is pinned device-only and synchronization stays
-        // off, which keeps the token out of iCloud Keychain.
+        // Re-assert the hardened accessibility on every write. The query omits
+        // `kSecAttrSynchronizable`, so it matches only the existing
+        // non-synchronizable item (Keychain's default search semantics), and
+        // `SecItemUpdate` rewrites `kSecAttrAccessible` in place — refreshing
+        // the device-only protection class for tokens an older build may have
+        // written under a weaker class.
+        //
+        // `kSecAttrSynchronizable = false` below is redundant with the Keychain
+        // default (omitting the key already yields a non-synchronizable item;
+        // it can never be paired with a `ThisDeviceOnly` accessibility class).
+        // It is kept only as an explicit, self-documenting assertion of the
+        // on-device-only policy — it does not, and cannot, migrate a token that
+        // was somehow already synced to iCloud Keychain, because such an item
+        // would not match this query in the first place.
         let attributes: [String: Any] = [
             kSecValueData as String: Data(accessToken.utf8),
             kSecAttrAccessible as String: accessibleClass,
