@@ -43,6 +43,13 @@ public enum PlaidBarConstants {
     public static let creditUtilizationWarningThreshold: Double = 30.0
     public static let maxRecentTransactions: Int = 50
 
+    /// Page size for the virtualized large-history transaction list (AND-567).
+    /// One page of rows is read at a time from the disposable per-transaction
+    /// cache; the next page loads when the user scrolls near the end. Chosen large
+    /// enough that a single page fills the visible list yet small enough that a
+    /// multi-thousand-row history never materializes all rows at once.
+    public static let transactionPageSize: Int = 50
+
     // Forgotten-subscription heuristic (AND-497).
     // A recurring stream is "easy to forget" when it has run for many cycles
     // (so it has slipped into the background) yet costs little each cycle (so it

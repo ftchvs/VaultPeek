@@ -88,6 +88,7 @@ struct AccountDetailFlyout: View {
                         }
                         activitySection(
                             recent: recent,
+                            fullFeed: snapshot.transactions,
                             emptyState: emptyState(snapshot: snapshot, connection: connection)
                         )
                         .scrollEdgeDepth(reduceMotion: reduceMotion)
@@ -315,16 +316,26 @@ struct AccountDetailFlyout: View {
 
     private func activitySection(
         recent: [TransactionDTO],
+        fullFeed: [TransactionDTO],
         emptyState: AccountActivityEmptyState?
     ) -> some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             FlyoutSectionLabel("Recent activity")
 
-            if recent.isEmpty {
+            if fullFeed.isEmpty {
                 if let emptyState {
                     AccountActivityEmptyStateView(presentation: emptyState)
                 }
+            } else if appState.readModelCacheEnabled, !appState.isDemoMode {
+                // Large-history virtualization (AND-567): render the full per-account
+                // feed through a lazy `LazyVStack` so a multi-thousand-row account
+                // history never materializes all rows at once. In-memory source —
+                // per-account scope, so it stays on the fallback (in-memory) path and
+                // virtualizes today's rows without paging the global cache.
+                PagedTransactionListView(source: .inMemory(fullFeed))
             } else {
+                // Fallback path (kill-switch off / demo): byte-for-byte today's
+                // rendering — the capped recent list in a plain VStack. No regression.
                 VStack(alignment: .leading, spacing: Spacing.rowVertical) {
                     ForEach(recent) { transaction in
                         TransactionMiniRow(transaction: transaction)
