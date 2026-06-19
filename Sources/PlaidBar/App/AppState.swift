@@ -3241,6 +3241,11 @@ final class AppState {
             // empty path so Spotlight/Siri/Shortcuts stop reporting removed-account
             // figures (AND-512).
             try? AppGroupSnapshotStore.clear()
+            // No accounts left to surface in search — drop the display-only
+            // Spotlight account index too so removed-account names don't linger
+            // (AND-513). `writeFinanceSnapshot` is skipped on this empty path, so
+            // the index clear must happen here explicitly.
+            AccountSpotlightIndexer.clear()
             Task {
                 await clearGlanceSnapshot()
                 await MainActor.run {
@@ -3333,6 +3338,14 @@ final class AppState {
                 )
             }
         }
+        // Keep the display-only Spotlight account index in lockstep with the
+        // finance snapshot: this is the shared seam for account load/refresh
+        // (via `writeGlanceSnapshot`), demo data, and the Privacy Mask / App Lock
+        // transitions (`togglePrivacyMask` / `lockApp`). `refresh` clears the
+        // index when masked, so masking removes account names from system search
+        // immediately; the empty-accounts clear lives in `writeGlanceSnapshot` /
+        // `clearGlanceSnapshot` (AND-513).
+        AccountSpotlightIndexer.refresh(accounts: accounts, isMasked: shouldMaskFinancialValues)
     }
 
     private func clearGlanceSnapshot() async {
@@ -3343,6 +3356,9 @@ final class AppState {
         // wipe it on every glance clear (reset / last-institution removal) so it
         // can't keep answering with pre-clear figures (AND-512).
         try? AppGroupSnapshotStore.clear()
+        // Drop the display-only Spotlight account index on the same reset /
+        // data-wipe path so removed-account names don't linger in search (AND-513).
+        AccountSpotlightIndexer.clear()
         // Tell WidgetKit to drop the already-issued timeline entry so the widget
         // surface stops showing pre-clear balances immediately. This covers
         // every clear path — the explicit reset/data-wipe (`resetLocalData`) and

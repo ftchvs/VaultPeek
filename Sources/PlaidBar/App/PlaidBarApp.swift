@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import CoreSpotlight
 import MenuBarExtraAccess
 import PlaidBarCore
 import Sparkle
@@ -152,14 +153,18 @@ struct PlaidBarApp: App {
                 }
                 .onOpenURL { url in
                     guard url.scheme == "vaultpeek" else { return }
-                    if detachedDashboard.handleMenuBarActivation(
-                        appState: appState,
-                        forcedColorScheme: Self.forcedColorScheme,
-                        reduceMotion: reduceMotion
-                    ) {
-                        return
-                    }
-                    appState.isPopoverPresented = true
+                    openDashboardFromDeepLink()
+                }
+                // Selecting an indexed account in Spotlight does NOT arrive via
+                // `.onOpenURL` even though the searchable item carries a
+                // `contentURL`: Core Spotlight delivers the tap as an
+                // `NSUserActivity` of type `CSSearchableItemActionType` instead.
+                // All account results point at the shared `vaultpeek://dashboard`
+                // deep link (no per-account payload — see AccountSpotlightIndexer),
+                // so route every selection through the same open-dashboard path
+                // the deep link uses (AND-513).
+                .onContinueUserActivity(CSSearchableItemActionType) { _ in
+                    openDashboardFromDeepLink()
                 }
                 // The "Refresh balances" widget control opens the app via an
                 // `openAppWhenRun` App Intent that writes a pending command but,
@@ -172,6 +177,16 @@ struct PlaidBarApp: App {
                 // is pending, so it is cheap on every activation (AND-385).
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
                     Task { await appState.consumePendingGlanceCommand() }
+                    // Apply the Control Center "Privacy Mask" toggle (AND-513).
+                    // Like the refresh control above, the toggle runs in the
+                    // WidgetKit extension and cannot mutate app state directly —
+                    // it drops a command file the app consumes on activation.
+                    // Synchronous and a cheap no-op when nothing is pending, so it
+                    // is safe to run on every activation. Routes through the same
+                    // `appLockPreferences.privacyMaskEnabled` path as the in-app
+                    // eye toggle, so persistence and the masked-snapshot rewrite
+                    // happen through the existing flow.
+                    appState.applyPendingPrivacyMaskControlCommand()
                 }
                 // App Lock trigger: lock when VaultPeek loses focus (the user
                 // clicks away / the popover closes) so balances re-mask behind
@@ -257,6 +272,23 @@ struct PlaidBarApp: App {
         } else {
             summonHotkeyMonitor.stop()
         }
+    }
+
+    /// Opens the dashboard for a `vaultpeek://` deep link — raising the floating
+    /// window when detached, otherwise opening the popover. Shared by the
+    /// `.onOpenURL` handler (widget / control deep links) and the Spotlight
+    /// `CSSearchableItemActionType` continuation (tapping an indexed account),
+    /// since both resolve to the same dashboard target (AND-513).
+    @MainActor
+    private func openDashboardFromDeepLink() {
+        if detachedDashboard.handleMenuBarActivation(
+            appState: appState,
+            forcedColorScheme: Self.forcedColorScheme,
+            reduceMotion: reduceMotion
+        ) {
+            return
+        }
+        appState.isPopoverPresented = true
     }
 
     /// Brings VaultPeek to the front and shows the dashboard — raising the
