@@ -26,6 +26,11 @@ struct MainPopover: View {
     /// popover opened with a persisted selection appears directly in three-column
     /// geometry (no slide on restore); in-session selections still slide (AND-405).
     @State private var hasAppeared = false
+    /// Namespace for Liquid Glass morphing (AND-511): the trailing inspector
+    /// column carries a stable `glassEffectID` in this namespace so its glass
+    /// surface morphs in/out of the shared `GlassEffectContainer` around the
+    /// columns instead of hard-cutting when an account/drill-in is selected.
+    @Namespace private var glassNamespace
 
     private enum Layout {
         // Column widths and the screen-edge margin are owned by the shared,
@@ -321,6 +326,12 @@ struct MainPopover: View {
 
             accountInspectorColumn
         }
+        // One GlassEffectContainer spans the columns so the trailing inspector's
+        // glass surface morphs (via its glassEffectID) when it shows/hides on a
+        // drill-in, instead of hard-cutting (AND-511). The merge radius is small
+        // (SurfaceTokens.glassMergeRadius), so the rail and inspector glass do
+        // not fuse across the wide center — only the morph is shared.
+        .glassGroup()
     }
 
     // LEFT: the Wealth Summary rail is mounted unconditionally once setup is
@@ -407,6 +418,12 @@ struct MainPopover: View {
             .frame(width: Layout.flyoutWidth)
             .frame(maxHeight: columnMaxHeight)
             .leftPanelSurface()
+            // Liquid Glass morph (AND-511): a stable id in the columns'
+            // GlassEffectContainer lets the inspector's glass surface fluidly
+            // morph in/out when a drill-in opens or closes, rather than just
+            // sliding a hard-edged panel. Pairs with the existing slide/opacity
+            // transition for the non-glass content.
+            .glassEffectID("account-inspector-column", in: glassNamespace)
             // The column is stable now, so this transition only plays when it
             // first appears as setup completes — not on every selection (AND-405).
             .transition(.asymmetric(
@@ -573,6 +590,11 @@ struct MainPopover: View {
                     }
                 }
                 .scrollContentBackground(.hidden)
+                // Glass-aware scroll edge effect (AND-511): the soft edge style
+                // lets content fade under the popover's top/bottom glass chrome as
+                // it scrolls, so the scroll column reads as one continuous glass
+                // surface rather than content abruptly clipping at a hard edge.
+                .scrollEdgeEffectStyle(.soft, for: .vertical)
                 .frame(maxWidth: .infinity)
                 .modifier(DashboardScrollHeightModifier(
                     isDetached: dashboardPresentation.isDetached,
@@ -664,7 +686,10 @@ private struct AppLockedGateView: View {
                     Label("Unlock", systemImage: "lock.open.fill")
                         .frame(minWidth: 120)
                 }
-                .buttonStyle(.borderedProminent)
+                // The primary unlock CTA uses prominent Liquid Glass (AND-511):
+                // it is the highest-signal action on the lock surface and reads
+                // as a tinted glass capsule consistent with the glass chrome.
+                .buttonStyle(.glassProminent)
                 .controlSize(.large)
                 .keyboardShortcut(.defaultAction)
             }
