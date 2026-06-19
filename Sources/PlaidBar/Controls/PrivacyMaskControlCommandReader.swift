@@ -64,14 +64,14 @@ enum PrivacyMaskControlCommandReader {
 
 // MARK: - AppState integration
 //
-// TODO(AND-513): wire `applyPendingPrivacyMaskControlCommand()` into the app's
-// activation hook so the toggle takes effect the next time VaultPeek activates.
-// The privacy control deliberately does NOT open the app (silent masking), so the
-// natural call site is the existing `didBecomeActive` handler in `PlaidBarApp`
-// alongside `consumePendingGlanceCommand()` (that file is owned by Epic D — add the
-// one-line `appState.applyPendingPrivacyMaskControlCommand()` there when the stack
-// merges). Until then the command file accumulates the latest desired state and is
-// applied on the next dashboard refresh / activation that calls this method.
+// `applyPendingPrivacyMaskControlCommand()` is wired into the app's activation
+// hook (`PlaidBarApp`'s `didBecomeActive` handler, alongside
+// `consumePendingGlanceCommand()`), so the Control Center toggle takes effect the
+// next time VaultPeek activates. The privacy control deliberately does NOT open
+// the app (silent masking), so it relies on the next natural activation — opening
+// the popover, summoning the window, or any focus change — to consume the pending
+// command. The reader is consume-and-delete, so a stale file never lingers and
+// re-running on every activation is a cheap no-op when nothing is pending.
 
 extension AppState {
     /// Applies a pending Control Center privacy-mask command, if any. Drives the
