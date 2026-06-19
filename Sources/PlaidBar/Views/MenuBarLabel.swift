@@ -33,6 +33,16 @@ struct MenuBarLabel: View {
                let signalImage = SignalGlyphImage.make(model: signalModel) {
                 Image(nsImage: signalImage)
             } else if presentation.symbolName == MenuBarIconStyle.customGlyphToken {
+                // SF Symbols 7 motion review (AND-514, F3): the new symbol
+                // primitives (`.drawOn`/`.drawOff`, `.breathe`, `.wiggle`,
+                // magic `.replace`) animate genuine SF Symbols via
+                // `symbolEffect`; they do not apply to a custom `NSImage`. The
+                // Vault mark is a static template image, so it gains nothing
+                // here. `.replace` is kept as the SwiftUI-level cross-fade for
+                // the glyph swap; the richer primitives would only ever land on
+                // the SF Symbol ladder below, and broadening the shared
+                // `SymbolMotion` vocabulary belongs in SharedModifiers (Epic C),
+                // so no new motion is added in this epic.
                 Image(nsImage: VaultMenuBarGlyph.image)
                     .symbolMotion(.replace, reduceMotion: reduceMotion)
             } else {
