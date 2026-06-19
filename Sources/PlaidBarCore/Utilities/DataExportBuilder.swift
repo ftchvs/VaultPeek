@@ -70,11 +70,54 @@ public enum DataExportBuilder {
         return ([header] + rows).joined(separator: "\n") + "\n"
     }
 
-    public static func transactionsCSV(_ transactions: [TransactionDTO]) -> String {
+    /// CSV of transactions. `metadata`/`rules` (AND-527) are optional and default
+    /// to `nil`, which writes the raw Plaid `category` column unchanged (legacy
+    /// behavior — existing importers and tests keep working). When supplied, the
+    /// `category` column reflects the *effective* category (user override → rule →
+    /// raw Plaid → empty) via the persisted-only `EffectiveCategoryResolver`, so an
+    /// exported file matches what the user reviewed in-app rather than the raw Plaid
+    /// guess. NL suggestions are display-only and never exported. Pending-phase
+    /// review metadata stored under a charge's `pendingTransactionId` is carried
+    /// into its posted replacement (mirrors `CategoryBudgetPlanner`). The row count
+    /// and every other column are unchanged — only the `category` cell may differ.
+    public static func transactionsCSV(
+        _ transactions: [TransactionDTO],
+        metadata: [TransactionReviewMetadata]? = nil,
+        rules: [TransactionRule]? = nil
+    ) -> String {
         let header = row([
             "transaction_id", "account_id", "date", "name", "merchant_name",
             "amount", "currency", "category", "pending",
         ])
+
+        // Legacy path: no review state supplied → raw Plaid category.
+        let resolveCategory: (TransactionDTO) -> String
+        if metadata == nil, rules == nil {
+            resolveCategory = { $0.category?.rawValue ?? "" }
+        } else {
+            let metadataById = Dictionary(
+                (metadata ?? []).map { ($0.id, $0) },
+                uniquingKeysWith: { first, _ in first }
+            )
+            let activeRules = rules ?? []
+            resolveCategory = { transaction in
+                // Carry pending-phase review metadata into the posted charge
+                // (mirrors `CategoryBudgetPlanner.netSpendByCategory`).
+                let effectiveMetadata = metadataById[transaction.id]
+                    ?? transaction.pendingTransactionId.flatMap { metadataById[$0] }
+                let resolution = EffectiveCategoryResolver.resolve(
+                    transaction: transaction,
+                    metadata: effectiveMetadata,
+                    rules: activeRules
+                )
+                // The effective budget category (override/rule/confident Plaid);
+                // when none resolved, fall back to the raw Plaid category so the
+                // export keeps a genuinely-categorized row's bucket and leaves a
+                // truly-uncategorized row blank — an NL suggestion is never written.
+                return (resolution.category ?? transaction.category)?.rawValue ?? ""
+            }
+        }
+
         let rows = transactions.map { transaction in
             row([
                 transaction.id,
@@ -84,7 +127,7 @@ public enum DataExportBuilder {
                 transaction.merchantName ?? "",
                 decimalString(transaction.amount),
                 transaction.isoCurrencyCode ?? "",
-                transaction.category?.rawValue ?? "",
+                resolveCategory(transaction),
                 transaction.pending ? "true" : "false",
             ])
         }
