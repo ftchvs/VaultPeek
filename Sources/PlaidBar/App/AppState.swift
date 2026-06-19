@@ -3313,9 +3313,17 @@ final class AppState {
         accounts = DemoFixtures.accounts
         liabilities = DemoFixtures.liabilities()
         transactions = DemoFixtures.transactions()
-        transactionReviewMetadata = []
-        transactionRules = []
-        categoryBudgets = [:]
+        // Seed review metadata, categorization rules, and category budgets so
+        // --demo actually surfaces the Review Inbox + budget/category state
+        // (AND-543) instead of empty placeholders. Held in-memory only: these
+        // assignments invalidate the inbox/budget caches via `didSet` but never
+        // persist, so a demo session never overwrites the user's real saved data.
+        transactionReviewMetadata = DemoFixtures.demoReviewMetadata()
+        transactionRules = DemoFixtures.demoTransactionRules()
+        categoryBudgets = Dictionary(
+            DemoFixtures.demoBudgets().map { ($0.category, $0.monthlyLimit) },
+            uniquingKeysWith: { first, _ in first }
+        )
         balanceHistory = DemoFixtures.balanceHistory()
         // Seed demo watchlist nudges (AND-501) so the Settings Watchlists section
         // is populated and the evaluator fires against the demo transactions.
