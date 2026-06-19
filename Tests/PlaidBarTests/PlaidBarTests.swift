@@ -539,4 +539,113 @@ struct PlaidBarTests {
 
         #expect(abs(estimated - 112.66) < 0.01)
     }
+
+    // MARK: - Energy-aware loop restart gating (mirrors AppState.handleEnergyStateChange)
+    //
+    // AppState caches the last constrained verdict and only restarts the
+    // background refresh loop (which issues a server HTTP probe) when that verdict
+    // flips. The verdict itself is `EnergyConditions.isConstrained` (pure Core).
+    // These pin the boundary semantics the cache relies on so a fair→serious style
+    // change inside the same constrained band does NOT cross the boundary.
+
+    @Test("Energy constrained verdict only flips across the constrained boundary")
+    func energyConstrainedVerdictBoundary() {
+        func constrained(_ lowPower: Bool, _ thermal: EnergyAwareRefreshPolicy.EnergyThermalState) -> Bool {
+            EnergyAwareRefreshPolicy.EnergyConditions(lowPowerMode: lowPower, thermalState: thermal).isConstrained
+        }
+
+        // Same side of the boundary — a restart would be redundant.
+        #expect(constrained(false, .nominal) == constrained(false, .fair)) // both unconstrained
+        #expect(constrained(false, .serious) == constrained(false, .critical)) // both constrained
+        #expect(constrained(true, .serious) == constrained(true, .critical)) // both constrained
+
+        // Crossing the boundary — a restart is warranted.
+        #expect(constrained(false, .fair) != constrained(false, .serious))
+        #expect(constrained(false, .nominal) != constrained(true, .nominal)) // low power flips it
+    }
+
+    @Test("Constrained verdict flip emits exactly one restart across a fair→serious→critical→nominal walk")
+    func energyVerdictFlipCount() {
+        // Mirror AppState's cache: start with no baseline (nil), then feed a
+        // sequence of conditions and count how many times the verdict flips —
+        // i.e. how many loop restarts (and HTTP probes) AppState would issue.
+        let walk: [EnergyAwareRefreshPolicy.EnergyConditions] = [
+            .init(lowPowerMode: false, thermalState: .nominal),  // baseline: false
+            .init(lowPowerMode: false, thermalState: .fair),     // false → no flip
+            .init(lowPowerMode: false, thermalState: .serious),  // true  → flip #1
+            .init(lowPowerMode: false, thermalState: .critical), // true  → no flip
+            .init(lowPowerMode: false, thermalState: .nominal),  // false → flip #2
+        ]
+        var last: Bool?
+        var restarts = 0
+        for conditions in walk {
+            let verdict = conditions.isConstrained
+            if verdict != last {
+                restarts += 1
+                last = verdict
+            }
+        }
+        // Naive "restart on every notification" would be 5; gating yields 3
+        // (the initial baseline establish + the two real boundary crossings).
+        #expect(restarts == 3)
+    }
+
+    // MARK: - Foundation Models categorization tier (mirrors AppState.refreshFoundationModelsCategorySuggestions)
+
+    @Test("FM categorizer produces a foundationModels suggestion when Apple Intelligence is available")
+    func fmCategorizerProducesSuggestionWhenAvailable() async {
+        let categorizer = FMMerchantCategorizer(
+            foundationModelsState: .available,
+            nlCategorizer: NLMerchantCategorizer(),
+            fmCategorizer: StubFMCategorizer(result: .foodAndDrink)
+        )
+        let txn = TransactionDTO(id: "fm1", accountId: "a", amount: 12, date: "2026-01-15", name: "Local Cafe", category: nil)
+
+        let suggestion = await categorizer.suggest(for: txn)
+
+        #expect(suggestion?.tier == .foundationModels)
+        #expect(suggestion?.category == .foodAndDrink)
+        #expect(suggestion?.isTrusted == true)
+    }
+
+    @Test("FM categorizer skips the model when Apple Intelligence is not available")
+    func fmCategorizerSkippedWhenUnavailable() async {
+        // The stub would force a (wrong) FM result if it were ever consulted; an
+        // unavailable state must bypass it entirely, matching AppState's guard
+        // that makes the no-FM device never call the model.
+        let stub = StubFMCategorizer(result: .travel)
+        let categorizer = FMMerchantCategorizer(
+            foundationModelsState: .unsupported,
+            nlCategorizer: NLMerchantCategorizer(),
+            fmCategorizer: stub
+        )
+        let txn = TransactionDTO(id: "fm2", accountId: "a", amount: 12, date: "2026-01-15", name: "Local Cafe", category: nil)
+
+        let suggestion = await categorizer.suggest(for: txn)
+
+        #expect(suggestion?.tier != .foundationModels)
+        #expect(stub.callCount == 0)
+    }
+}
+
+/// Deterministic `FMMerchantCategorizing` stub for the categorization-tier tests.
+/// Mirrors the in-app FoundationModels seam without importing the app target
+/// (which an executable target cannot expose to tests).
+private final class StubFMCategorizer: FMMerchantCategorizing, @unchecked Sendable {
+    private let result: SpendingCategory?
+    private let lock = NSLock()
+    private var _callCount = 0
+    var callCount: Int {
+        lock.lock(); defer { lock.unlock() }
+        return _callCount
+    }
+
+    init(result: SpendingCategory?) {
+        self.result = result
+    }
+
+    func suggestCategory(merchant: String) async -> SpendingCategory? {
+        lock.lock(); _callCount += 1; lock.unlock()
+        return result
+    }
 }

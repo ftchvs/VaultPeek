@@ -529,6 +529,19 @@ final class AppState {
     /// notifications that drive energy-aware background refresh (AND-568).
     /// Retained so they can be removed in `deinit`.
     private var energyStateObservers: [NSObjectProtocol] = []
+    /// The last energy-constrained verdict the power/thermal observers acted on.
+    /// Cached so a power/thermal notification only restarts the refresh loop (and
+    /// issues its connectivity probe) when the constrained verdict actually flips
+    /// — not on every transition that stays on the same side of the boundary
+    /// (e.g. `.nominal` → `.fair`, both unconstrained). `nil` until the first
+    /// notification establishes a baseline.
+    private var lastEnergyConstrainedVerdict: Bool?
+    /// Observer token for `NSApplication.didBecomeActiveNotification`, used to
+    /// re-probe Apple Foundation Models availability when the app reactivates so a
+    /// transient FM state (model still downloading, Apple Intelligence just turned
+    /// on in System Settings) recovers within the session instead of requiring a
+    /// relaunch (AND-563/564). Retained so it can be removed in `deinit`.
+    private var appActivationObserver: NSObjectProtocol?
     private let glanceSnapshotWriteDebouncer = GlanceSnapshotWriteDebouncer()
     private var glanceSnapshotWriteGeneration = 0
     private var reviewUndoStack: [(metadata: [TransactionReviewMetadata], rules: [TransactionRule])] = []
@@ -1588,12 +1601,79 @@ final class AppState {
     /// Apple Intelligence in System Settings) and rebuild the insight service so a
     /// now-available FM tier starts generating insights (AND-564) — or a
     /// now-unavailable one disengages and the existing engine resumes unchanged.
+    ///
+    /// Wired to `NSApplication.didBecomeActiveNotification` (see
+    /// `startEnergyStateObservers`) so a transient FM state — the model still
+    /// downloading (`.modelNotReady`), or Apple Intelligence only just enabled in
+    /// System Settings (`.appleIntelligenceNotEnabled`) — recovers the next time
+    /// the app reactivates, instead of being stuck until the user relaunches. The
+    /// `previous == current` guard makes the common no-change reactivation a cheap
+    /// no-op.
     func refreshFoundationModelsAvailability() {
         let previous = foundationModelsTierState
         foundationModelsTierState = foundationModelsProbe.currentState()
         guard foundationModelsTierState != previous else { return }
         rebuildLocalAIInsightsService()
         invalidateLocalAIActivitySummaries()
+        // The FM categorization tier just flipped availability; any cached FM
+        // category suggestions were computed against the prior state, so drop them
+        // and let the Review Inbox recompute on its next appearance.
+        _foundationModelsCategorySuggestions = [:]
+    }
+
+    /// Display-only Foundation Models category *suggestions*, keyed by transaction
+    /// id (AND-565). Populated by `refreshFoundationModelsCategorySuggestions()`
+    /// only on an `.available` FM device; empty everywhere else, so the no-FM path
+    /// is unchanged. These are SUGGESTIONS, never persisted categories: they never
+    /// touch `transactionReviewMetadata.userCategory`, never feed budget/export
+    /// totals, and never bypass the review/override flow — exactly the contract the
+    /// NL "Suggested" badge already follows.
+    private var _foundationModelsCategorySuggestions: [String: MerchantCategorySuggestion] = [:]
+
+    /// The on-device Foundation Models category suggestion for a transaction, if
+    /// one has been computed this session. `nil` on every non-`.available` device
+    /// (the dictionary stays empty there), so callers degrade to the existing NL
+    /// path with no change.
+    func foundationModelsCategorySuggestion(for transactionID: String) -> MerchantCategorySuggestion? {
+        _foundationModelsCategorySuggestions[transactionID]
+    }
+
+    /// Drive the live Foundation Models categorization tier (AND-565): for the
+    /// current Review Inbox items that still need a category, ask the wired
+    /// categorizer for an on-device suggestion and cache the `.foundationModels`
+    /// results for display. A no-op unless the FM probe reports `.available`, so
+    /// the no-FM device never makes a model call and behaves exactly as before.
+    ///
+    /// Only the redaction-safe merchant string crosses into the model (the
+    /// categorizer enforces this); no identifiers, amounts, or Plaid payloads.
+    /// Results are display-only suggestions — they are never auto-applied and never
+    /// bypass the review/override flow (`EffectiveCategoryResolver` stays the
+    /// source of truth for persisted categories).
+    func refreshFoundationModelsCategorySuggestions() async {
+        guard foundationModelsTierState.isAvailable else { return }
+        let categorizer = merchantCategorizer
+        // Only items still flagged as needing a category benefit from a
+        // suggestion; a row the user already categorized must not be second-
+        // guessed. Skip ones already suggested this session to avoid redundant
+        // model calls on every inbox reopen.
+        let pending = transactionReviewInboxSnapshot.items.filter { item in
+            item.reasonCodes.contains(.uncategorized)
+                && _foundationModelsCategorySuggestions[item.id] == nil
+        }
+        guard !pending.isEmpty else { return }
+
+        var produced: [String: MerchantCategorySuggestion] = [:]
+        for item in pending {
+            guard let suggestion = await categorizer.suggest(for: item.transaction),
+                  suggestion.tier == .foundationModels else { continue }
+            produced[item.id] = suggestion
+        }
+        guard !produced.isEmpty else { return }
+        // Merge rather than replace: concurrent passes (e.g. a refresh landing
+        // mid-iteration) must not clobber suggestions another pass already wrote.
+        for (id, suggestion) in produced {
+            _foundationModelsCategorySuggestions[id] = suggestion
+        }
     }
 
     /// Cached local summaries — invalidated via accounts.didSet and transactions.didSet.
@@ -2560,6 +2640,18 @@ final class AppState {
             }
         }
         energyStateObservers = [powerObserver, thermalObserver]
+        // Re-probe Apple Foundation Models availability on app reactivation so a
+        // transient FM state recovers within the session (AND-563/564). The probe
+        // is cheap and the refresh self-guards against no-change reactivations.
+        appActivationObserver = center.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.refreshFoundationModelsAvailability()
+            }
+        }
     }
 
     private func stopEnergyStateObservers() {
@@ -2568,14 +2660,30 @@ final class AppState {
             center.removeObserver(observer)
         }
         energyStateObservers = []
+        if let appActivationObserver {
+            center.removeObserver(appActivationObserver)
+            self.appActivationObserver = nil
+        }
     }
 
     /// Re-evaluates the background cadence after a power/thermal transition by
     /// restarting the loop (only when one is already running, so we never spin a
     /// loop up before boot). The restart re-reads `currentEnergyConditions` for
     /// both the gate and the sleep length.
+    ///
+    /// Restarting the loop also tears down the current sleep and immediately runs
+    /// a refresh tick, which issues a server connectivity probe (HTTP). The energy
+    /// cadence only changes when the *constrained* verdict crosses its boundary
+    /// (Low Power Mode on/off, or thermal entering/leaving `.serious`/`.critical`),
+    /// so a transition that stays on the same side — e.g. `.nominal` → `.fair`, or
+    /// `.serious` → `.critical`, both already constrained — would have produced the
+    /// same next-tick delay. Restart (and probe) ONLY when the verdict actually
+    /// flips; otherwise this is a cheap no-op (AND-568 perf).
     private func handleEnergyStateChange() {
         guard refreshTask != nil else { return }
+        let constrained = currentEnergyConditions.isConstrained
+        guard constrained != lastEnergyConstrainedVerdict else { return }
+        lastEnergyConstrainedVerdict = constrained
         startBackgroundRefresh()
     }
 
