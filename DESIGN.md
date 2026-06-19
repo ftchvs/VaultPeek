@@ -275,10 +275,10 @@ nest more than two ranks below the popover root.
 | `.hoverHighlight()` | Rounded, 120ms-animated hover wash for rows |
 | `.nativePanelSurface(...)` / `.nativeInsetSurface(...)` | Legacy fill+stroke treatment still used by setup/attention surfaces |
 
-Liquid Glass is a progressive enhancement only. Apple SwiftUI's `Glass.regular`
-and `glassEffect` APIs are macOS 26+, while VaultPeek currently supports
-macOS 15+. Do not raise the minimum OS for visual polish; use availability-gated
-Liquid Glass and keep a SwiftUI material/fill fallback.
+Liquid Glass is the baseline surface treatment. VaultPeek's minimum floor is
+macOS 26 (Tahoe), so Apple SwiftUI's `Glass.regular` and `glassEffect` APIs are
+always available and used directly. No availability gates or SwiftUI
+material/fill fallback are required for these surfaces.
 
 ## Components
 

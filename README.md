@@ -638,8 +638,8 @@ Post-1.0 priorities:
 
 - [ ] Tighten the dashboard into a more compact RepoBar-style finance
       instrument
-- [ ] Keep Liquid Glass as a macOS 26+ progressive enhancement with macOS 15
-      material fallback
+- [ ] Build on Liquid Glass as the macOS 26 baseline surface treatment (no
+      material fallback path)
 - [ ] Converge dashboard/settings recovery actions for server, Plaid item,
       empty-data, stale-sync, and notification-permission states
 - [ ] Add local AI summaries for financial activity over the last 7 days, last
