@@ -947,12 +947,7 @@ final class AppState {
     }
 
     var statusModeText: String {
-        if isDemoMode { return "Demo" }
-        switch serverEnvironment {
-        case .sandbox: return "Sandbox"
-        case .production: return "Production"
-        case nil: return "Unknown"
-        }
+        StatusPanelText.mode(isDemoMode: isDemoMode, environment: serverEnvironment)
     }
 
     var statusServerText: String {
@@ -1013,19 +1008,23 @@ final class AppState {
     }
 
     var serverCredentialsText: String {
-        if isDemoMode { return "Not required" }
-        guard serverConnected else { return "Unknown" }
-        return serverCredentialsConfigured == true ? "Ready" : "Missing"
+        StatusPanelText.serverCredentials(
+            isDemoMode: isDemoMode,
+            serverConnected: serverConnected,
+            credentialsConfigured: serverCredentialsConfigured
+        )
     }
 
     var serverSyncReadinessText: String {
-        if isDemoMode { return "Demo data" }
-        guard serverConnected else { return "Unknown" }
-        return serverSyncReady == true ? "Ready" : "No items"
+        StatusPanelText.serverSyncReadiness(
+            isDemoMode: isDemoMode,
+            serverConnected: serverConnected,
+            syncReady: serverSyncReady
+        )
     }
 
     var refreshCadenceText: String {
-        "\(Int(refreshInterval / 60)) min"
+        StatusPanelText.refreshCadence(interval: refreshInterval)
     }
 
     var connectedItemCount: Int {
@@ -1065,23 +1064,14 @@ final class AppState {
     }
 
     var diagnosticsSummary: String {
-        if isDemoStatusRecoveryScenario {
-            if erroredItemCount > 0 { return "\(erroredItemCount) demo item\(erroredItemCount == 1 ? "" : "s") need attention" }
-            if needsLoginItemCount > 0 { return "\(needsLoginItemCount) demo item\(needsLoginItemCount == 1 ? "" : "s") need update" }
-        }
-        let serverPresentation = serverConnectionPresentation
-        if isDemoMode { return serverPresentation.diagnosticsSummary }
-        switch serverPresentation.issue {
-        case .offline, .localAuthMissing, .localAuthRejected, .serverModeMismatch:
-            return serverPresentation.diagnosticsSummary
-        case .demo, .syncing, .connected, .error:
-            break
-        }
-        if statusItemCount == 0 { return "No Plaid items connected" }
-        if erroredItemCount > 0 { return "\(erroredItemCount) item\(erroredItemCount == 1 ? "" : "s") need attention" }
-        if needsLoginItemCount > 0 { return "\(needsLoginItemCount) item\(needsLoginItemCount == 1 ? "" : "s") need update" }
-        if serverPresentation.issue == .error { return serverPresentation.diagnosticsSummary }
-        return "Plaid connection healthy"
+        StatusPanelText.diagnosticsSummary(
+            isDemoStatusRecoveryScenario: isDemoStatusRecoveryScenario,
+            isDemoMode: isDemoMode,
+            serverConnection: serverConnectionPresentation,
+            statusItemCount: statusItemCount,
+            erroredItemCount: erroredItemCount,
+            needsLoginItemCount: needsLoginItemCount
+        )
     }
 
     private var serverConnectionPresentation: ServerConnectionPresentation {
