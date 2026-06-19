@@ -153,6 +153,28 @@ struct EnergyAwareRefreshPolicyTests {
         }
     }
 
+    @Test("Constrained back-off never overflows to infinity for a finite-but-huge base interval")
+    func constrainedDelayNeverOverflowsToInfinity() {
+        let constrained = EnergyAwareRefreshPolicy.EnergyConditions(lowPowerMode: true, thermalState: .nominal)
+        // A finite, positive base that overflows once multiplied by the backoff
+        // multiplier: the product is no longer finite, so the policy must fall
+        // back to the (finite) sanitized base rather than sleeping forever.
+        let hugeBase = Double.greatestFiniteMagnitude
+        let result = EnergyAwareRefreshPolicy.nextTickDelay(baseInterval: hugeBase, conditions: constrained)
+        #expect(result.isFinite)
+        #expect(result > 0)
+        #expect(result == hugeBase)
+    }
+
+    @Test("Constrained back-off keeps multiplying for a normal finite base interval")
+    func constrainedDelayMultipliesForNormalBase() {
+        let constrained = EnergyAwareRefreshPolicy.EnergyConditions(lowPowerMode: true, thermalState: .nominal)
+        let baseInterval: TimeInterval = 120
+        let result = EnergyAwareRefreshPolicy.nextTickDelay(baseInterval: baseInterval, conditions: constrained)
+        #expect(result == baseInterval * EnergyAwareRefreshPolicy.constrainedBackoffMultiplier)
+        #expect(result.isFinite)
+    }
+
     // MARK: - EnergyConditions.isConstrained
 
     @Test("Energy conditions are constrained when either low power or hot thermal holds")
