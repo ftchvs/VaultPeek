@@ -183,6 +183,32 @@ struct AppLockServiceTests {
         #expect(authenticator.authenticateCallCount == 1)
         #expect(service.state == .unlocked)
     }
+
+    @Test("lock locks an enabled service and stays unlocked when disabled")
+    func lockBehavior() {
+        let enabled = AppLockService(
+            settingsStore: InMemoryAppLockSettingsStore(isLockEnabled: true),
+            authenticator: StubAppLockAuthenticator(capability: .available(biometry: .touchID))
+        )
+        enabled.lock()
+        #expect(enabled.state == .locked)
+
+        let disabled = AppLockService(
+            settingsStore: InMemoryAppLockSettingsStore(isLockEnabled: false),
+            authenticator: StubAppLockAuthenticator()
+        )
+        disabled.lock()
+        #expect(disabled.state == .unlocked)
+    }
+
+    @Test("authenticationCapability surfaces the authenticator capability")
+    func capabilityPassthrough() {
+        let service = AppLockService(
+            settingsStore: InMemoryAppLockSettingsStore(isLockEnabled: false),
+            authenticator: StubAppLockAuthenticator(capability: .available(biometry: .faceID))
+        )
+        #expect(service.authenticationCapability() == .available(biometry: .faceID))
+    }
 }
 
 @MainActor
