@@ -120,7 +120,14 @@ public struct CategoryDashboardPresentation: Sendable, Hashable {
                 self.fractionUsed = fraction
                 self.status = CategoryBudgetStatus(fractionUsed: fraction)
             }
-            let totalCommitted = leaves.compactMap(\.committed).reduce(0, +)
+            // Only budgeted leaves contribute to the group's committed total: the
+            // group denominator is the sum of *budgeted* leaves' limits, and an
+            // unbudgeted leaf hides its own ghost, so counting its commitment here
+            // would overstate group budget pressure (addresses Codex review on #573).
+            let totalCommitted = leaves
+                .filter(\.isBudgeted)
+                .compactMap(\.committed)
+                .reduce(0, +)
             self.committed = totalCommitted > 0 ? totalCommitted : nil
         }
 

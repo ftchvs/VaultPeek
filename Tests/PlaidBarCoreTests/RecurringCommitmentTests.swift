@@ -91,4 +91,41 @@ struct RecurringCommitmentTests {
     func emptyInput() {
         #expect(RecurringCommitment.monthlyByCategory([]).isEmpty)
     }
+
+    // MARK: - Codex review follow-ups (override-aware + stale)
+
+    @Test("Stale streams are dropped when a reference date is supplied")
+    func staleDropped() {
+        // Monthly stream last charged 2026-01-01; as of 2026-06-01 it is >60 days
+        // past its expected cadence, so the detector flags it stale (canceled).
+        let stale = RecurringTransaction(
+            merchantName: "Cancelled", frequency: .monthly, averageAmount: 20,
+            lastDate: "2026-01-01", nextExpectedDate: "2026-02-01",
+            category: .subscriptions, transactionCount: 6, confidence: 0.9
+        )
+        let asOf = Formatters.parseTransactionDate("2026-06-01")!
+        #expect(RecurringCommitment.monthlyByCategory([stale], asOf: asOf).isEmpty)
+        // Without a reference date there is no stale filtering — it still counts.
+        #expect(RecurringCommitment.monthlyByCategory([stale])[.subscriptions] == 20)
+    }
+
+    @Test("A rule recategorizes the committed ghost like it recategorizes spend")
+    func ruleOverrideMovesCommitment() {
+        let gym = stream("Gym", amount: 40, frequency: .monthly, category: .subscriptions)
+        let rule = TransactionRule(matchMerchantContains: "Gym", category: .healthAndFitness)
+        let result = RecurringCommitment.monthlyByCategory([gym], rules: [rule])
+        #expect(result[.healthAndFitness] == 40)
+        #expect(result[.subscriptions] == nil)
+    }
+
+    @Test("A rule that excludes or marks transfer drops the commitment")
+    func ruleExcludeDropsCommitment() {
+        let move = stream("Transfer to savings", amount: 500, frequency: .monthly, category: .subscriptions)
+
+        let excludeRule = TransactionRule(matchMerchantContains: "Transfer", excludedFromBudgets: true)
+        #expect(RecurringCommitment.monthlyByCategory([move], rules: [excludeRule]).isEmpty)
+
+        let transferRule = TransactionRule(matchMerchantContains: "Transfer", isTransfer: true)
+        #expect(RecurringCommitment.monthlyByCategory([move], rules: [transferRule]).isEmpty)
+    }
 }

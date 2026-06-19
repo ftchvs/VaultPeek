@@ -74,7 +74,16 @@ public enum CategoryDashboardBuilder {
 
         // Committed monthly recurring spend per category (AND-559). Empty when no
         // recurring streams were supplied, so every leaf's `committed` stays nil.
-        let committedByCategory = recurring.map(RecurringCommitment.monthlyByCategory) ?? [:]
+        // Pass `asOf`/`rules` so stale streams are dropped and the ghost follows the
+        // same override-aware category mapping as spend (addresses Codex review).
+        let committedByCategory = recurring.map {
+            RecurringCommitment.monthlyByCategory(
+                $0,
+                asOf: date,
+                calendar: calendar,
+                rules: rules ?? []
+            )
+        } ?? [:]
 
         // Every leaf that has spend OR a budget appears. Floor net spend at 0 for
         // display so a net-refund leaf reads as 0, not a negative bar — and so leaf,
