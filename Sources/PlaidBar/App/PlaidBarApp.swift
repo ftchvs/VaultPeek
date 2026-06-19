@@ -22,6 +22,11 @@ struct PlaidBarApp: App {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let updaterController: SPUStandardUpdaterController
     private let statusItemContextMenuController = StatusItemContextMenuController()
+    /// Draws the unreviewed review-inbox count badge on the menu-bar status item
+    /// (AND-534). Configured with the live `NSStatusItem` in `menuBarExtraAccess`;
+    /// updated from the always-mounted `MenuBarLabel` whenever the count or
+    /// Privacy Mask changes.
+    private let statusItemBadgeController = StatusItemBadgeController()
 
     init() {
         Self.applyForcedAppearance()
@@ -136,6 +141,27 @@ struct PlaidBarApp: App {
                         )
                     }
                 }
+                // Keep the menu-bar count badge in sync from the always-mounted
+                // label (the only scene content live for the whole app lifetime,
+                // so the badge updates even when the popover has never opened).
+                // The visibility/text rule (hidden at zero, withheld under Privacy
+                // Mask) lives in the pure `MenuBarReviewBadge`; the controller only
+                // renders it. The badge view itself is attached lazily in
+                // `menuBarExtraAccess` once the status item exists, so these only
+                // take visible effect after that callback has fired — the
+                // configure-time `update` covers the first appearance (AND-534).
+                .onChange(of: appState.transactionReviewCount) { _, count in
+                    statusItemBadgeController.update(
+                        unreviewedCount: count,
+                        isMasked: appState.shouldMaskFinancialValues
+                    )
+                }
+                .onChange(of: appState.shouldMaskFinancialValues) { _, isMasked in
+                    statusItemBadgeController.update(
+                        unreviewedCount: appState.transactionReviewCount,
+                        isMasked: isMasked
+                    )
+                }
                 // While detached, a status-item click sets isPopoverPresented
                 // true; intercept it on the always-mounted label, snap it back to
                 // false, and raise the floating window instead of the popover.
@@ -219,6 +245,16 @@ struct PlaidBarApp: App {
                 }
         }
         .menuBarExtraAccess(isPresented: $appState.isPopoverPresented) { statusItem in
+            // Attach the unreviewed-count badge to the live status item, then
+            // paint the current count immediately so it is correct on first
+            // appearance (not only after the next count/mask change). The button
+            // can be recreated when the menu-bar item rebuilds, so configure is
+            // idempotent and re-pins the overlay (AND-534).
+            statusItemBadgeController.configure(statusItem: statusItem)
+            statusItemBadgeController.update(
+                unreviewedCount: appState.transactionReviewCount,
+                isMasked: appState.shouldMaskFinancialValues
+            )
             statusItemContextMenuController.configure(
                 statusItem: statusItem,
                 actions: StatusItemContextMenuActions(
