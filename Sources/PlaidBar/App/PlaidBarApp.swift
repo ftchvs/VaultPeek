@@ -15,6 +15,9 @@ struct PlaidBarApp: App {
     /// Owns the detached full Category Dashboard window (AND-539). `@State` so the
     /// lazily-built window survives `body` recomputes for the process lifetime.
     @State private var categoryDashboardWindow = CategoryDashboardWindowCoordinator()
+    /// Owns the detached multi-select review Table window (AND-532). `@State` so the
+    /// lazily-built window survives `body` recomputes for the process lifetime.
+    @State private var reviewTableWindow = ReviewTableWindowCoordinator()
     /// Owns the global summon hotkey (⇧⌘V, AND-487). `@State` so the Carbon
     /// registration survives `body` recomputes for the process lifetime.
     @State private var summonHotkeyMonitor = SummonHotkeyMonitor()
@@ -89,6 +92,15 @@ struct PlaidBarApp: App {
                 // view never touches AppKit window lifecycle.
                 .environment(\.openCategoryDashboard, {
                     categoryDashboardWindow.open(
+                        appState: appState,
+                        forcedColorScheme: Self.forcedColorScheme
+                    )
+                })
+                // The Review Inbox header's "Open review table" affordance opens the
+                // detached multi-select review Table window (AND-532). Wired here so
+                // the view never touches AppKit window lifecycle.
+                .environment(\.openReviewTable, {
+                    reviewTableWindow.open(
                         appState: appState,
                         forcedColorScheme: Self.forcedColorScheme
                     )

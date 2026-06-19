@@ -10,6 +10,9 @@ struct ReviewInboxView: View {
 
     @Environment(AppState.self) private var appState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Opens the detached multi-select review Table window for power review (AND-532).
+    /// Injected by the app scene; a no-op in previews / headless renders.
+    @Environment(\.openReviewTable) private var openReviewTable
     @FocusState private var isFocused: Bool
     @State private var selectedIndex = 0
     @State private var merchantDrafts: [String: String] = [:]
@@ -302,6 +305,22 @@ struct ReviewInboxView: View {
                 .help("Review all \(listedBulkPlan.count) listed transactions at once")
                 .accessibilityLabel("Mark \(listedBulkPlan.count) listed transactions reviewed")
                 .accessibilityHint("Shows which transactions will be marked reviewed before applying.")
+            }
+
+            // Power-review entry point (AND-532): opens the detached multi-select
+            // review Table window. Shown only when there is something to review, so
+            // it never clutters a clear inbox.
+            if snapshot.totalCount > 0 {
+                Button {
+                    openReviewTable()
+                } label: {
+                    Label("Open review table", systemImage: "tablecells")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.mini)
+                .help("Open the multi-select review table in a window")
+                .accessibilityLabel("Open review table in a window")
             }
 
             Button {
