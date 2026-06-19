@@ -71,6 +71,7 @@ final class AppState {
             _cachedTransactionDerivedIndex = nil
             _cachedRecurringTransactions = nil
             _cachedCategoryBudgetPresentation = nil
+            _cachedCategoryDashboardPresentation = nil
             _cachedTransactionReviewInboxSnapshot = nil
             invalidateLocalAIActivitySummaries()
         }
@@ -80,16 +81,21 @@ final class AppState {
             _cachedTransactionReviewInboxSnapshot = nil
             // Spend math is now override-aware (AND-526/554): an approve /
             // recategorize / exclude edits this metadata, so the budget
-            // presentation must recompute too — not only the inbox.
+            // presentation must recompute too — not only the inbox. The category
+            // dashboard rollup shares the same override-aware aggregation
+            // (AND-539), so it is invalidated on the same edits.
             _cachedCategoryBudgetPresentation = nil
+            _cachedCategoryDashboardPresentation = nil
         }
     }
     var transactionRules: [TransactionRule] = [] {
         didSet {
             _cachedTransactionReviewInboxSnapshot = nil
             // A new/changed rule recategorizes or excludes spend, so invalidate
-            // the budget presentation alongside the inbox (AND-526/554).
+            // the budget presentation and the category dashboard rollup alongside
+            // the inbox (AND-526/554, AND-539).
             _cachedCategoryBudgetPresentation = nil
+            _cachedCategoryDashboardPresentation = nil
         }
     }
     var hasLoadedTransactionReviewStorage = false
@@ -153,7 +159,10 @@ final class AppState {
     /// Suggestions remain a local fallback/complement, but this cache wins for
     /// categories the user explicitly saved on the server.
     var categoryBudgets: [SpendingCategory: Double] = [:] {
-        didSet { _cachedCategoryBudgetPresentation = nil }
+        didSet {
+            _cachedCategoryBudgetPresentation = nil
+            _cachedCategoryDashboardPresentation = nil
+        }
     }
     var isDemoMode = false
     var isDemoStatusRecoveryScenario = false
@@ -1252,6 +1261,38 @@ final class AppState {
             rules: transactionRules
         )
         _cachedCategoryBudgetPresentation = presentation
+        return presentation
+    }
+
+    /// Cached category dashboard rollup (AND-539) — the override-aware, 2-level
+    /// group/leaf presentation the donut, status-bar tree, and flat table all
+    /// render. Invalidated via the same `didSet`s as
+    /// `categoryBudgetPresentation` (`transactions`, `categoryBudgets`,
+    /// `transactionReviewMetadata`, `transactionRules`), so recategorizing /
+    /// excluding / re-budgeting moves the dashboard immediately — never stale
+    /// until an unrelated refresh.
+    private var _cachedCategoryDashboardPresentation: CategoryDashboardPresentation?
+
+    /// Override-aware current-month category rollup for the Category Dashboard card
+    /// and detached window (AND-539). Built by ``CategoryDashboardBuilder`` from the
+    /// same live inputs the budget presentation uses, so the two surfaces can never
+    /// disagree on a category's spend.
+    var categoryDashboardPresentation: CategoryDashboardPresentation {
+        if let cached = _cachedCategoryDashboardPresentation { return cached }
+        // Mirror `categoryBudgetPresentation`: in demo mode score against the
+        // dedicated current-month-anchored rows so the under/near/over spread is
+        // stable regardless of launch day (AND-543); otherwise use live transactions.
+        let scoringTransactions = isDemoMode
+            ? DemoFixtures.demoBudgetScoringTransactions()
+            : transactions
+        let presentation = CategoryDashboardBuilder.build(
+            transactions: scoringTransactions,
+            budgets: categoryBudgets,
+            asOf: Date(),
+            metadata: transactionReviewMetadata,
+            rules: transactionRules
+        )
+        _cachedCategoryDashboardPresentation = presentation
         return presentation
     }
 

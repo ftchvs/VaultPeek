@@ -12,6 +12,9 @@ struct PlaidBarApp: App {
     /// Owns the floating desktop-window dashboard (AND-384). `@State` so it
     /// persists across `body` recomputes for the process lifetime.
     @State private var detachedDashboard = DetachedDashboardCoordinator()
+    /// Owns the detached full Category Dashboard window (AND-539). `@State` so the
+    /// lazily-built window survives `body` recomputes for the process lifetime.
+    @State private var categoryDashboardWindow = CategoryDashboardWindowCoordinator()
     /// Owns the global summon hotkey (⇧⌘V, AND-487). `@State` so the Carbon
     /// registration survives `body` recomputes for the process lifetime.
     @State private var summonHotkeyMonitor = SummonHotkeyMonitor()
@@ -76,6 +79,15 @@ struct PlaidBarApp: App {
                         reduceMotion: reduceMotion
                     )
                 }))
+                // The Category Dashboard card's "Open dashboard" affordance opens
+                // the detached full dashboard window (AND-539). Wired here so the
+                // view never touches AppKit window lifecycle.
+                .environment(\.openCategoryDashboard, {
+                    categoryDashboardWindow.open(
+                        appState: appState,
+                        forcedColorScheme: Self.forcedColorScheme
+                    )
+                })
                 .forcedAppColorScheme(Self.forcedColorScheme)
                 .appliesAppAppearance()
         } label: {

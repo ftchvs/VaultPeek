@@ -516,6 +516,13 @@ struct MainPopover: View {
                         WeeklyReviewCard()
                             .environment(appState)
 
+                        // The Copilot-style Category Dashboard surface (AND-539):
+                        // donut + top group rollups inline, with an "Open dashboard"
+                        // affordance that launches the full detached window. Reads
+                        // the override-aware rollup `AppState` caches — no recompute.
+                        CategoryDashboardCard()
+                            .environment(appState)
+
                         // Review Inbox moved to the right inspector column
                         // (accountInspectorColumn) so the center stays one compact
                         // instrument and the inbox is not shown twice.
