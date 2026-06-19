@@ -599,10 +599,12 @@ private struct ReviewInboxRow: View {
                 }
 
                 HStack(spacing: Spacing.xs) {
-                    Text(item.effectiveCategory?.displayName ?? "Uncategorized")
-                        .microText()
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                    // Colored icon+text category pill (AND-530). Color is a
+                    // redundant layer only: the pill always shows the category
+                    // name as text + a glyph, so meaning never rides on color
+                    // (ACCESSIBILITY.md). The pure CategoryPillModel owns the
+                    // category→{title, glyph, accent} mapping.
+                    CategoryPill(model: CategoryPillModel.make(category: item.effectiveCategory))
 
                     if item.isNLSuggestedCategory {
                         suggestedBadge
@@ -828,5 +830,42 @@ private struct ReviewInboxRow: View {
 
     private func tint(for reason: TransactionReviewReason) -> Color {
         reason.isHighPriority ? SemanticColors.warning : .secondary
+    }
+}
+
+/// A colored icon+text category pill for a review row (AND-530).
+///
+/// Renders the category glyph + name in a tinted capsule. The accent is a
+/// **redundant** layer only — the title text and the glyph always carry the
+/// meaning, so the pill never conveys the category by color alone
+/// (ACCESSIBILITY.md). The category→{title, glyph, accent} mapping lives in the
+/// pure, unit-tested `CategoryPillModel` in PlaidBarCore; this view is a thin
+/// renderer that resolves the accent through the app's `CategoryAccentTokens`
+/// (falling back to a neutral secondary tint for the uncategorized case).
+///
+/// Privacy: the pill carries only a category label and glyph — never a merchant,
+/// amount, or other sensitive figure — and the inbox never renders rows at all
+/// while masked (it shows `privateInboxPlaceholder` instead), so nothing leaks.
+private struct CategoryPill: View {
+    let model: CategoryPillModel
+
+    private var accent: Color {
+        model.category.map(CategoryAccentTokens.color(for:)) ?? .secondary
+    }
+
+    var body: some View {
+        Label(model.title, systemImage: model.glyph)
+            .font(.caption2.weight(.semibold))
+            .labelStyle(.titleAndIcon)
+            .foregroundStyle(accent)
+            .lineLimit(1)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(accent.opacity(0.10), in: Capsule())
+            .overlay {
+                Capsule().stroke(accent.opacity(0.18), lineWidth: 1)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Category: \(model.title)")
     }
 }
