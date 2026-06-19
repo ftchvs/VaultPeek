@@ -13,12 +13,9 @@ import SwiftUI
 /// genuinely-adjacent glass merges; distant glass islands in a tall scroll column
 /// stay visually distinct, which is why wrapping a whole scroll body is safe.
 ///
-/// macOS-26 / SwiftUI-7 only; on macOS 15 (and the Swift <6.3 CI toolchain where
-/// the glass APIs aren't compiled at all) this is a transparent passthrough — the
-/// wrapped content renders byte-for-byte as it does today, so the fallback look
-/// never regresses. Glass is chrome only: wrap regions that *contain* glass
-/// surfaces; `GlassEffectContainer` only samples/merges its `glassEffect`
-/// descendants, so non-glass content/text inside is unaffected.
+/// Glass is chrome only: wrap regions that *contain* glass surfaces;
+/// `GlassEffectContainer` only samples/merges its `glassEffect` descendants, so
+/// non-glass content/text inside is unaffected.
 struct GlassGroup<Content: View>: View {
     var spacing: CGFloat
     @ViewBuilder var content: () -> Content
@@ -29,26 +26,17 @@ struct GlassGroup<Content: View>: View {
     }
 
     var body: some View {
-        #if compiler(>=6.3) && canImport(SwiftUI, _version: 7.0)
-            if #available(macOS 26.0, *) {
-                GlassEffectContainer(spacing: spacing) {
-                    content()
-                }
-            } else {
-                content()
-            }
-        #else
+        GlassEffectContainer(spacing: spacing) {
             content()
-        #endif
+        }
     }
 }
 
 extension View {
     /// Group this region's descendant `glassSurface(...)` shapes into one
-    /// `GlassEffectContainer` sampling region on macOS 26 (passthrough on macOS 15
-    /// / pre-6.3 CI). `spacing` is the glass merge radius, default
-    /// `SurfaceTokens.glassMergeRadius` — apply at the smallest ancestor that
-    /// contains the coexisting glass shapes.
+    /// `GlassEffectContainer` sampling region. `spacing` is the glass merge
+    /// radius, default `SurfaceTokens.glassMergeRadius` — apply at the smallest
+    /// ancestor that contains the coexisting glass shapes.
     func glassGroup(spacing: CGFloat = SurfaceTokens.glassMergeRadius) -> some View {
         GlassGroup(spacing: spacing) { self }
     }

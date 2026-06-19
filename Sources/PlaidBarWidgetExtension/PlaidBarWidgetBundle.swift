@@ -175,7 +175,6 @@ private struct SparklineView: View {
     }
 }
 
-@available(macOS 15.0, *)
 struct RefreshBalancesIntent: AppIntent {
     static let title: LocalizedStringResource = "Refresh balances"
     static let description = IntentDescription("Ask VaultPeek to refresh local balances.")
@@ -190,7 +189,6 @@ struct RefreshBalancesIntent: AppIntent {
     }
 }
 
-@available(macOS 26.0, *)
 private struct PlaidBarRefreshControl: ControlWidget {
     let kind = "PlaidBarRefreshControl"
 
@@ -209,8 +207,6 @@ private struct PlaidBarRefreshControl: ControlWidget {
 struct PlaidBarWidgetBundle: WidgetBundle {
     var body: some Widget {
         PlaidBarGlanceWidget()
-        if #available(macOS 26.0, *) {
-            PlaidBarRefreshControl()
-        }
+        PlaidBarRefreshControl()
     }
 }
