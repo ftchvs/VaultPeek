@@ -8,6 +8,16 @@ This is the single source of truth for **what blocks the public VaultPeek MVP la
 
 This is a decision log, not a task tracker. When the board changes, update the classifications here first.
 
+## 2026-06-19 — Gate 0 ratified: window-first hybrid (ADR-001)
+
+Felipe ratified **[ADR-001](strategy/macos26-migration/ADR-001-window-first-architecture.md): VaultPeek Window-First Hybrid Architecture** at Gate 0 ([AND-578](https://linear.app/andeslab/issue/AND-578)).
+
+- **ADR-001 Accepted.** A primary `Window` / `NavigationSplitView` workspace becomes the main experience; the `MenuBarExtra` glance is retained as a first-class **reduced read+route** surface.
+- **Supersedes** the AND-384 "popover-primary, polish-only (no `Window` scene)" decision and the v1.0-roadmap "Menu Bar First" guardrail **to the extent they forbid a primary window**. Security, concurrency, and local-first decisions are **preserved unchanged**.
+- **Session-workflow scope stays in-product** (the condition distinguishing "migrate" from "delete the drift"): review / budgeting / planning / reconciliation become first-class window destinations rather than being removed.
+- **macOS 26 ("Tahoe") floor approved** and already reflected in `Package.swift` (`.macOS("26.0")`).
+- **Execution:** Epics 1–10 (AND-579…618). Critical path `Gate 0 → Epic 1 → Epic 2 → Epic 3 → (Epics 4/5/6 parallel) → Epic 7 → Epic 9`; Epic 9 (menu-bar simplification) **ships last**, gated on window parity; Epics 1–8 dual-run behind a feature flag (window hidden / popover default until parity). See [`migration-roadmap.md`](strategy/macos26-migration/migration-roadmap.md).
+
 ## Current product truth
 
 VaultPeek 1.0 **already shipped** under its former name, PlaidBar, as a privately-distributed, ad-hoc-signed drag-install DMG for licensed macOS users (`docs/v1.0-roadmap.md` §"Current Product Truth"; `docs/release.md` "Current Release: v1.0.0"). The product is real, stable, and in users' hands today.
