@@ -1482,6 +1482,42 @@ final class AppState {
         transactionReviewInboxSnapshot.totalCount
     }
 
+    // MARK: - Window-first sidebar (ADR-001 / AND-595)
+
+    /// Items needing reconnect — the actionable degraded items the connection
+    /// health strip surfaces in its reconnect-needed bucket (IA §3.2). Drives the
+    /// Accounts sidebar badge; excludes provider-outage items, which are
+    /// non-actionable (VaultPeek retries them automatically).
+    var sidebarReconnectNeededCount: Int {
+        ConnectionHealthStrip.evaluate(itemStatuses)
+            .buckets
+            .first { $0.state == .reconnectNeeded }?
+            .count ?? 0
+    }
+
+    /// Unacknowledged "alerts" backing the Alerts sidebar badge (IA §3.2 /
+    /// §5.8). The dedicated Alerts feed lands in Epic 6; until then this is the
+    /// count of non-healthy `AttentionQueue` rows — the same "do I need to act?"
+    /// rollup the menu-bar glance and Dashboard already key off (IA §1.3), so the
+    /// badge stays truthful and consistent across all three surfaces.
+    var sidebarUnacknowledgedAlertCount: Int {
+        attentionQueue.rows.filter { $0.severity != .healthy }.count
+    }
+
+    /// The per-destination textual count badges for the window-first sidebar
+    /// (ADR-001, IA §3.2). Pure assembly lives in `SidebarBadgeModel.make`
+    /// (PlaidBarCore) so the view stays thin and the hide-when-zero / a11y-phrase
+    /// policy is unit-tested; this just feeds it the live counts. Window-first
+    /// surface only — the menu-bar popover never reads it.
+    var sidebarBadgeModel: SidebarBadgeModel {
+        SidebarBadgeModel.make(
+            unreviewedCount: transactionReviewCount,
+            overBudgetCount: categoryBudgetPresentation.overBudgetCount,
+            unacknowledgedAlertCount: sidebarUnacknowledgedAlertCount,
+            reconnectNeededCount: sidebarReconnectNeededCount
+        )
+    }
+
     var notificationPermissionPresentation: NotificationPermissionPresentation {
         NotificationPermissionPresentation.evaluate(kind: notificationPermissionState.presentationKind)
     }
