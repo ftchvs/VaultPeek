@@ -31,6 +31,21 @@ struct ReviewInboxView: View {
         Array(snapshot.items.prefix(embedded ? 20 : 6))
     }
 
+    /// The listed rows bucketed into recency sections (Today / Yesterday / This
+    /// Week / Earlier) by the pure Core helper (AND-529). `asOf` is the live now
+    /// captured at render; the Core helper owns the bucketing so it stays
+    /// deterministic and testable. Empty sections are omitted.
+    private var sections: [ReviewInboxDateSections.Section] {
+        ReviewInboxDateSections.sections(items: items, asOf: Date())
+    }
+
+    /// Rows in section-render order — the flattened order the keyboard selection
+    /// index walks, so arrow keys move down a section then into the next, matching
+    /// what the user sees (the priority-sorted `items` order can differ).
+    private var orderedItems: [TransactionReviewItem] {
+        sections.flatMap(\.items)
+    }
+
     /// The blast radius of a bulk "Mark N reviewed" over the rows currently
     /// listed. No explicit selection: the radius is every unresolved row the user
     /// can see in this surface (the list is already truncated to the visible
@@ -66,52 +81,7 @@ struct ReviewInboxView: View {
                     emptyInboxPlaceholder
                 } else {
                     rowsScroll {
-                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                        if index > 0 {
-                            Divider()
-                        }
-                        ReviewInboxRow(
-                            item: item,
-                            isSelected: index == selectedIndex,
-                            merchantDraft: merchantDraftBinding(for: item),
-                            onSelect: { selectedIndex = index },
-                            onApprove: {
-                                recordAction(.approved, for: item)
-                                animatingResolution { appState.approveReviewItem(item.id) }
-                            },
-                            onCategory: { category in
-                                recordAction(.categorized(category), for: item)
-                                animatingResolution { appState.updateReviewCategory(item.id, category: category) }
-                            },
-                            onRename: {
-                                recordAction(.renamed, for: item)
-                                animatingResolution { appState.renameReviewMerchant(item.id, merchantName: merchantDraft(for: item)) }
-                            },
-                            onTransfer: {
-                                recordAction(.markedTransfer, for: item)
-                                animatingResolution { appState.markReviewItemTransfer(item.id) }
-                            },
-                            onNotTransfer: {
-                                recordAction(.markedSpend, for: item)
-                                animatingResolution { appState.markReviewItemTransfer(item.id, isTransfer: false) }
-                            },
-                            onCategoryRule: { category in
-                                recordAction(.ruleCreated, for: item)
-                                animatingResolution { appState.createRule(from: item, category: category) }
-                            },
-                            onTransferRule: {
-                                recordAction(.ruleCreated, for: item)
-                                animatingResolution { appState.createRule(from: item, markTransfer: true) }
-                            },
-                            onIgnore: {
-                                recordAction(.ignored, for: item)
-                                animatingResolution { appState.ignoreReviewItem(item.id) }
-                            }
-                        )
-                        // Resolved rows animate out (and the rest slide up) when
-                        // the action removes them from the snapshot.
-                        .transition(reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity))
-                    }
+                        sectionedRows
                     }
                 }
             }
@@ -163,6 +133,135 @@ struct ReviewInboxView: View {
             get: { bulkReviewPlan != nil },
             set: { presented in if !presented { bulkReviewPlan = nil } }
         )
+    }
+
+    /// The listed rows rendered as date-grouped sections (AND-529): each section
+    /// gets a header (label + count + per-section "approve all") and its rows. The
+    /// running `globalIndex` keeps the single keyboard selection index consistent
+    /// across sections (it walks `orderedItems`, the flattened section order).
+    @ViewBuilder
+    private var sectionedRows: some View {
+        let sections = sections
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            ForEach(Array(sectionStartOffsets(sections).enumerated()), id: \.element.section.id) { sectionIndex, entry in
+                if sectionIndex > 0 {
+                    Divider().padding(.vertical, Spacing.xxs)
+                }
+                sectionHeader(entry.section)
+
+                VStack(spacing: 0) {
+                    ForEach(Array(entry.section.items.enumerated()), id: \.element.id) { rowIndex, item in
+                        if rowIndex > 0 {
+                            Divider()
+                        }
+                        reviewRow(item: item, globalIndex: entry.startOffset + rowIndex)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Pairs each section with its starting offset in `orderedItems`, so a row's
+    /// global selection index is `startOffset + rowIndex`.
+    private func sectionStartOffsets(
+        _ sections: [ReviewInboxDateSections.Section]
+    ) -> [(section: ReviewInboxDateSections.Section, startOffset: Int)] {
+        var offset = 0
+        return sections.map { section in
+            let entry = (section: section, startOffset: offset)
+            offset += section.items.count
+            return entry
+        }
+    }
+
+    /// A date-group header: the section label, its row count, and a per-section
+    /// "approve all in section" affordance. The count rides the text (never color
+    /// alone); the affordance stages the same blast-radius confirmation the global
+    /// bulk bar uses, scoped to this section's rows, and applies via the shared
+    /// bulk-review path. No sensitive figures appear — labels and counts only.
+    @ViewBuilder
+    private func sectionHeader(_ section: ReviewInboxDateSections.Section) -> some View {
+        let plan = ReviewBulkActionPlan.markReviewed(items: section.items)
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+            Text(section.label)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            Text("\(section.count)")
+                .font(.caption2.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(.tertiary)
+                .accessibilityLabel("\(section.count) \(section.count == 1 ? "transaction" : "transactions")")
+
+            Spacer(minLength: Spacing.xs)
+
+            // Per-section approve: only when the section has unresolved rows. Stages
+            // the section-scoped plan so the existing confirmation dialog states the
+            // exact count + which merchants before anything resolves.
+            if !plan.isEmpty {
+                Button {
+                    bulkReviewPlan = plan
+                } label: {
+                    Label("Approve \(plan.count)", systemImage: "checkmark.circle")
+                        .font(.caption2.weight(.semibold))
+                        .labelStyle(.titleAndIcon)
+                }
+                .buttonStyle(.borderless)
+                .controlSize(.mini)
+                .help("Approve all \(plan.count) transactions in \(section.label)")
+                .accessibilityLabel("Approve all \(plan.count) transactions in \(section.label)")
+                .accessibilityHint("Shows which transactions will be marked reviewed before applying.")
+            }
+        }
+        .padding(.horizontal, Spacing.xs)
+        .accessibilityElement(children: .combine)
+    }
+
+    /// One review row wired to the shared single-action AppState paths. Factored
+    /// out so the sectioned layout (AND-529) and the selection index can drive it
+    /// without duplicating the per-row action wiring.
+    private func reviewRow(item: TransactionReviewItem, globalIndex: Int) -> some View {
+        ReviewInboxRow(
+            item: item,
+            isSelected: globalIndex == selectedIndex,
+            merchantDraft: merchantDraftBinding(for: item),
+            onSelect: { selectedIndex = globalIndex },
+            onApprove: {
+                recordAction(.approved, for: item)
+                animatingResolution { appState.approveReviewItem(item.id) }
+            },
+            onCategory: { category in
+                recordAction(.categorized(category), for: item)
+                animatingResolution { appState.updateReviewCategory(item.id, category: category) }
+            },
+            onRename: {
+                recordAction(.renamed, for: item)
+                animatingResolution { appState.renameReviewMerchant(item.id, merchantName: merchantDraft(for: item)) }
+            },
+            onTransfer: {
+                recordAction(.markedTransfer, for: item)
+                animatingResolution { appState.markReviewItemTransfer(item.id) }
+            },
+            onNotTransfer: {
+                recordAction(.markedSpend, for: item)
+                animatingResolution { appState.markReviewItemTransfer(item.id, isTransfer: false) }
+            },
+            onCategoryRule: { category in
+                recordAction(.ruleCreated, for: item)
+                animatingResolution { appState.createRule(from: item, category: category) }
+            },
+            onTransferRule: {
+                recordAction(.ruleCreated, for: item)
+                animatingResolution { appState.createRule(from: item, markTransfer: true) }
+            },
+            onIgnore: {
+                recordAction(.ignored, for: item)
+                animatingResolution { appState.ignoreReviewItem(item.id) }
+            }
+        )
+        // Resolved rows animate out (and the rest slide up) when the action
+        // removes them from the snapshot.
+        .transition(reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity))
     }
 
     private var header: some View {
