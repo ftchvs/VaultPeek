@@ -331,6 +331,132 @@ struct GlanceSnapshotTests {
         #expect(try GlanceSnapshotStore.consumeCommand(directory: directory) == nil)
     }
 
+    @Test("Change direction maps sign to glyph for up, down, and flat")
+    func changeDirectionGlyphs() {
+        #expect(GlanceSnapshot.ChangeDirection.evaluate(5) == .up)
+        #expect(GlanceSnapshot.ChangeDirection.evaluate(-5) == .down)
+        #expect(GlanceSnapshot.ChangeDirection.evaluate(0) == .flat)
+        #expect(GlanceSnapshot.ChangeDirection.up.glyph == "▲")
+        #expect(GlanceSnapshot.ChangeDirection.down.glyph == "▼")
+        #expect(GlanceSnapshot.ChangeDirection.flat.glyph == "■")
+    }
+
+    @Test("Signed change text prefixes a plus only for positive changes")
+    func signedChangeText() {
+        func snapshot(todayChange: Double) -> GlanceSnapshot {
+            GlanceSnapshot(netWorth: 1_000, todayChange: todayChange, updatedAt: Date(timeIntervalSince1970: 0), sparkline: [], isDemo: false)
+        }
+        #expect(snapshot(todayChange: 250).signedChangeText.hasPrefix("+"))
+        #expect(!snapshot(todayChange: -250).signedChangeText.hasPrefix("+"))
+        #expect(!snapshot(todayChange: 0).signedChangeText.hasPrefix("+"))
+        #expect(snapshot(todayChange: -250).changeDirection == .down)
+        #expect(snapshot(todayChange: 0).changeDirection == .flat)
+    }
+
+    @Test("Accessibility summary prefixes a demo notice only in demo mode")
+    func accessibilitySummaryDemoPrefix() {
+        let demo = GlanceSnapshot(netWorth: 1_000, todayChange: 10, updatedAt: Date(timeIntervalSince1970: 0), sparkline: [], isDemo: true)
+        let live = GlanceSnapshot(netWorth: 1_000, todayChange: 10, updatedAt: Date(timeIntervalSince1970: 0), sparkline: [], isDemo: false)
+        #expect(demo.accessibilitySummary.hasPrefix("Demo data. "))
+        #expect(!live.accessibilitySummary.hasPrefix("Demo data. "))
+        #expect(live.accessibilitySummary.contains("Net worth"))
+    }
+
+    @Test("Today change is zero when no prior-day balance exists")
+    func todayChangeNoPriorDay() throws {
+        let now = try #require(Formatters.parseTransactionDate("2026-06-14"))
+        let snapshot = GlanceSnapshot.make(
+            netWorth: 1_250,
+            balanceHistory: [BalanceSnapshot(date: now, balance: 1_000)],
+            updatedAt: now,
+            isDemo: false
+        )
+        #expect(snapshot.todayChange == 0)
+    }
+
+    @Test("Sparkline does not duplicate the current net worth when history already ends on it")
+    func sparklineNoDuplicate() throws {
+        let now = try #require(Formatters.parseTransactionDate("2026-06-14"))
+        let prior = try #require(Calendar.current.date(byAdding: .day, value: -1, to: now))
+        let snapshot = GlanceSnapshot.make(
+            netWorth: 1_250,
+            balanceHistory: [BalanceSnapshot(date: prior, balance: 1_000), BalanceSnapshot(date: now, balance: 1_250)],
+            updatedAt: now,
+            isDemo: false
+        )
+        #expect(snapshot.sparkline.count == 2)
+    }
+
+    @Test("Sparkline appends the current net worth when history ends on a different value")
+    func sparklineAppendsCurrent() throws {
+        let now = try #require(Formatters.parseTransactionDate("2026-06-14"))
+        let prior = try #require(Calendar.current.date(byAdding: .day, value: -1, to: now))
+        let snapshot = GlanceSnapshot.make(
+            netWorth: 1_300,
+            balanceHistory: [BalanceSnapshot(date: prior, balance: 1_000), BalanceSnapshot(date: now, balance: 1_250)],
+            updatedAt: now,
+            isDemo: false
+        )
+        #expect(snapshot.sparkline.count == 3)
+    }
+
+    @Test("Placeholder is a zeroed, non-demo snapshot")
+    func placeholder() {
+        let placeholder = GlanceSnapshot.placeholder(updatedAt: Date(timeIntervalSince1970: 0))
+        #expect(placeholder.netWorth == 0)
+        #expect(placeholder.todayChange == 0)
+        #expect(placeholder.sparkline.isEmpty)
+        #expect(!placeholder.isDemo)
+    }
+
+    @Test("hasSameDisplayContent compares every display field")
+    func hasSameDisplayContent() {
+        let base = GlanceSnapshot(netWorth: 100, todayChange: 1, updatedAt: Date(timeIntervalSince1970: 0), sparkline: [0, 1], isDemo: false)
+        let same = base
+        let differentBalance = GlanceSnapshot(netWorth: 200, todayChange: 1, updatedAt: Date(timeIntervalSince1970: 0), sparkline: [0, 1], isDemo: false)
+        #expect(base.hasSameDisplayContent(as: same))
+        #expect(!base.hasSameDisplayContent(as: differentBalance))
+    }
+
+    @Test("saveIfChanged is a no-op when display content is identical")
+    func saveIfChangedNoOp() throws {
+        let directory = temporaryDirectory()
+        let snapshot = GlanceSnapshot(netWorth: 100, todayChange: 1, updatedAt: Date(timeIntervalSince1970: 0), sparkline: [0, 1], isDemo: false)
+        #expect(try GlanceSnapshotStore.saveIfChanged(snapshot, directory: directory))
+        #expect(try GlanceSnapshotStore.saveIfChanged(snapshot, directory: directory) == false)
+    }
+
+    @Test("clear removes a saved snapshot and is safe to call when absent")
+    func clearRemovesSnapshot() throws {
+        let directory = temporaryDirectory()
+        let snapshot = GlanceSnapshot(netWorth: 100, todayChange: 1, updatedAt: Date(timeIntervalSince1970: 0), sparkline: [0, 1], isDemo: false)
+        try GlanceSnapshotStore.save(snapshot, directory: directory)
+        try GlanceSnapshotStore.clear(directory: directory)
+        #expect(throws: (any Error).self) {
+            try GlanceSnapshotStore.load(directory: directory)
+        }
+        // Clearing again with nothing present must not throw.
+        try GlanceSnapshotStore.clear(directory: directory)
+    }
+
+    @Test("System debounce scheduler sleeps for the requested duration")
+    func systemDebounceSchedulerSleeps() async throws {
+        let scheduler = SystemDebounceScheduler()
+        try await scheduler.sleep(for: .milliseconds(1))
+    }
+
+    @Test("Debouncer cancel clears pending work without writing")
+    func debouncerCancelClearsPendingWork() async {
+        let debouncer = GlanceSnapshotWriteDebouncer(delay: .milliseconds(1), scheduler: ManualDebounceScheduler())
+        await debouncer.schedule(firstSnapshot(netWorth: 1)) { _ in }
+        await debouncer.cancel()
+    }
+
+    @Test("Snapshot directory resolves to a usable URL")
+    func snapshotDirectoryResolves() {
+        #expect(!GlanceSnapshotStore.snapshotDirectory().path.isEmpty)
+    }
+
     private func temporaryDirectory() -> URL {
         FileManager.default.temporaryDirectory
             .appendingPathComponent("GlanceSnapshotTests-\(UUID().uuidString)", isDirectory: true)

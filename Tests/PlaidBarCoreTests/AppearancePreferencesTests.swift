@@ -81,4 +81,67 @@ struct AppearancePreferencesTests {
         #expect(DecorativeEffectsPreference.defaultValue == .followSystem)
         #expect(AppDensityPreference.defaultValue == .comfortable)
     }
+
+    // MARK: Human-readable titles
+
+    @Test("Each preference exposes a stable human-readable title")
+    func titles() {
+        #expect(AppAppearanceMode.followSystem.title == "Follow System")
+        #expect(AppAppearanceMode.light.title == "Light")
+        #expect(AppAppearanceMode.dark.title == "Dark")
+
+        #expect(AppContrastPreference.followSystem.title == "Follow System")
+        #expect(AppContrastPreference.standard.title == "Standard")
+        #expect(AppContrastPreference.increased.title == "Increased")
+
+        #expect(DecorativeEffectsPreference.followSystem.title == "Follow System")
+        #expect(DecorativeEffectsPreference.on.title == "On")
+        #expect(DecorativeEffectsPreference.reduced.title == "Reduced")
+
+        #expect(AppDensityPreference.comfortable.title == "Comfortable")
+        #expect(AppDensityPreference.compact.title == "Compact")
+    }
+
+    // MARK: Identifiable + storage keys
+
+    @Test("Identifiable id mirrors the persisted raw value for every case")
+    func identifiersMatchRawValues() {
+        for mode in AppAppearanceMode.allCases { #expect(mode.id == mode.rawValue) }
+        for contrast in AppContrastPreference.allCases { #expect(contrast.id == contrast.rawValue) }
+        for effects in DecorativeEffectsPreference.allCases { #expect(effects.id == effects.rawValue) }
+        for density in AppDensityPreference.allCases { #expect(density.id == density.rawValue) }
+    }
+
+    @Test("Storage keys are namespaced under appearance.* and are distinct")
+    func storageKeys() {
+        #expect(AppAppearanceMode.storageKey == "appearance.appColorScheme")
+        #expect(AppContrastPreference.storageKey == "appearance.contrast")
+        #expect(DecorativeEffectsPreference.storageKey == "appearance.decorativeEffects")
+        #expect(AppDensityPreference.storageKey == "appearance.density")
+
+        let keys = Set([
+            AppAppearanceMode.storageKey,
+            AppContrastPreference.storageKey,
+            DecorativeEffectsPreference.storageKey,
+            AppDensityPreference.storageKey,
+        ])
+        #expect(keys.count == 4)
+    }
+
+    @Test("CaseIterable exposes every option")
+    func caseCounts() {
+        #expect(AppAppearanceMode.allCases.count == 3)
+        #expect(AppContrastPreference.allCases.count == 3)
+        #expect(DecorativeEffectsPreference.allCases.count == 3)
+        #expect(AppDensityPreference.allCases.count == 2)
+    }
+
+    @Test("Raw values round-trip through the persisted string representation")
+    func rawValueRoundTrip() {
+        #expect(AppAppearanceMode(rawValue: "dark") == .dark)
+        #expect(AppContrastPreference(rawValue: "increased") == .increased)
+        #expect(DecorativeEffectsPreference(rawValue: "reduced") == .reduced)
+        #expect(AppDensityPreference(rawValue: "compact") == .compact)
+        #expect(ForcedColorScheme(rawValue: "light") == .light)
+    }
 }

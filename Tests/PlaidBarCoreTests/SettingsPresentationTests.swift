@@ -199,4 +199,74 @@ struct SettingsPresentationTests {
 
         #expect(message.contains("Left 1 config or unrelated item untouched."))
     }
+
+    // MARK: Remediation category mapping
+
+    private func availability(
+        _ state: LocalAIAvailabilityState,
+        _ detail: String,
+        probe: String? = nil
+    ) -> LocalAIAvailability {
+        LocalAIAvailability(state: state, runtimeName: "ollama", detail: detail, probeErrorText: probe)
+    }
+
+    @Test("Remediation category is derived from state and detail keywords")
+    func remediationCategoryMapping() {
+        let cases: [(LocalAIAvailability, LocalAIRemediationCategory)] = [
+            (availability(.available, "Producing summaries on-device"), .none),
+            (availability(.disabled, "Local AI is off"), .disabled),
+            (availability(.disabled, "Cloud endpoint not supported"), .unsupportedConfiguration),
+            (availability(.checking, "Verifying local runtime"), .checking),
+            (availability(.unavailable, "No installed local model"), .noInstalledModel),
+            (availability(.unavailable, "Configured with a non-local endpoint"), .unsupportedConfiguration),
+            (availability(.unavailable, "Ollama is not reachable"), .runtimeUnavailable),
+            (availability(.unavailable, "Probe returned an error"), .modelError),
+            (availability(.unavailable, "Some unexpected failure"), .runtimeUnavailable),
+        ]
+        for (item, expected) in cases {
+            #expect(LocalAIAvailabilityPresentation.remediationCategory(for: item) == expected)
+        }
+    }
+
+    @Test("Probe error text participates in the unavailable keyword match")
+    func remediationUsesProbeErrorText() {
+        let item = availability(.unavailable, "On-device summary failed", probe: "connection refused")
+        #expect(LocalAIAvailabilityPresentation.remediationCategory(for: item) == .runtimeUnavailable)
+    }
+
+    @Test("Every remediation category yields non-empty settings, popover, and help copy")
+    func remediationCopyForAllCategories() {
+        let representatives: [LocalAIAvailability] = [
+            availability(.available, "ok"),
+            availability(.disabled, "off"),
+            availability(.disabled, "not supported"),
+            availability(.checking, "verifying"),
+            availability(.unavailable, "no installed local model"),
+            availability(.unavailable, "non-local endpoint"),
+            availability(.unavailable, "not reachable"),
+            availability(.unavailable, "returned an error"),
+        ]
+        for item in representatives {
+            #expect(!LocalAIAvailabilityPresentation.settingsLabel(for: item).isEmpty)
+            #expect(!LocalAIAvailabilityPresentation.popoverLabel(for: item).isEmpty)
+            #expect(!LocalAIAvailabilityPresentation.helpText(for: item).isEmpty)
+        }
+    }
+
+    @Test("Cause label is present only for actionable failure categories")
+    func causeLabelPresence() {
+        #expect(LocalAIAvailabilityPresentation.causeLabel(for: availability(.available, "ok")) == nil)
+        #expect(LocalAIAvailabilityPresentation.causeLabel(for: availability(.disabled, "off")) == nil)
+        #expect(LocalAIAvailabilityPresentation.causeLabel(for: availability(.checking, "verifying")) == nil)
+        #expect(LocalAIAvailabilityPresentation.causeLabel(for: availability(.unavailable, "no installed local model")) == "No local model installed")
+        #expect(LocalAIAvailabilityPresentation.causeLabel(for: availability(.unavailable, "non-local endpoint")) == "Unsupported local setup")
+        #expect(LocalAIAvailabilityPresentation.causeLabel(for: availability(.unavailable, "not reachable")) == "Ollama not reachable")
+        #expect(LocalAIAvailabilityPresentation.causeLabel(for: availability(.unavailable, "returned an error")) == "Probe returned an error")
+    }
+
+    @Test("Help text for failure categories embeds the underlying detail")
+    func helpTextEmbedsDetail() {
+        let missingModel = availability(.unavailable, "no installed local model")
+        #expect(LocalAIAvailabilityPresentation.helpText(for: missingModel).contains("no installed local model"))
+    }
 }
