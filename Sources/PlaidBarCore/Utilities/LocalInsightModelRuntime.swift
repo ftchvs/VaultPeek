@@ -416,25 +416,34 @@ public enum LocalInsightModelRuntime {
         nanoseconds: UInt64,
         operation: @escaping @Sendable () async throws -> T
     ) async throws -> T {
-        try await withCheckedThrowingContinuation { continuation in
-            let race = LocalInsightModelTimeoutRace(continuation: continuation)
-            let operationTask = Task {
-                do {
-                    let result = try await operation()
-                    race.complete(.success(result))
-                } catch {
-                    race.complete(.failure(error))
+        let race = LocalInsightModelTimeoutRace<T>()
+
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let operationTask = Task {
+                    do {
+                        let result = try await operation()
+                        race.complete(.success(result))
+                    } catch {
+                        race.complete(.failure(error))
+                    }
                 }
-            }
-            let timeoutTask = Task {
-                do {
-                    try await Task.sleep(nanoseconds: nanoseconds)
-                    race.complete(.failure(LocalInsightModelTimeoutError()))
-                } catch {
-                    race.cancelTimeout()
+                let timeoutTask = Task {
+                    do {
+                        try await Task.sleep(nanoseconds: nanoseconds)
+                        race.complete(.failure(LocalInsightModelTimeoutError()))
+                    } catch {
+                        race.cancelTimeout()
+                    }
                 }
+                race.start(
+                    continuation: continuation,
+                    operationTask: operationTask,
+                    timeoutTask: timeoutTask
+                )
             }
-            race.setTasks(operationTask: operationTask, timeoutTask: timeoutTask)
+        } onCancel: {
+            race.complete(.failure(CancellationError()))
         }
     }
 }
@@ -444,26 +453,31 @@ private final class LocalInsightModelTimeoutRace<T: Sendable>: @unchecked Sendab
     private var continuation: CheckedContinuation<T, Error>?
     private var operationTask: Task<Void, Never>?
     private var timeoutTask: Task<Void, Never>?
+    private var completedResult: Result<T, Error>?
 
-    init(continuation: CheckedContinuation<T, Error>) {
-        self.continuation = continuation
-    }
+    func start(
+        continuation: CheckedContinuation<T, Error>,
+        operationTask: Task<Void, Never>,
+        timeoutTask: Task<Void, Never>
+    ) {
+        let resultToResume: Result<T, Error>?
 
-    func setTasks(operationTask: Task<Void, Never>, timeoutTask: Task<Void, Never>) {
-        var shouldCancel = false
         lock.lock()
-        if continuation == nil {
-            shouldCancel = true
-        } else {
+        resultToResume = completedResult
+        if resultToResume == nil {
+            self.continuation = continuation
             self.operationTask = operationTask
             self.timeoutTask = timeoutTask
         }
         lock.unlock()
 
-        if shouldCancel {
-            operationTask.cancel()
-            timeoutTask.cancel()
+        guard let resultToResume else {
+            return
         }
+
+        operationTask.cancel()
+        timeoutTask.cancel()
+        resume(continuation, with: resultToResume)
     }
 
     func complete(_ result: Result<T, Error>) {
@@ -472,6 +486,11 @@ private final class LocalInsightModelTimeoutRace<T: Sendable>: @unchecked Sendab
         let timeoutTaskToCancel: Task<Void, Never>?
 
         lock.lock()
+        guard completedResult == nil else {
+            lock.unlock()
+            return
+        }
+        completedResult = result
         continuationToResume = continuation
         continuation = nil
         operationTaskToCancel = operationTask
@@ -480,18 +499,11 @@ private final class LocalInsightModelTimeoutRace<T: Sendable>: @unchecked Sendab
         timeoutTask = nil
         lock.unlock()
 
-        guard let continuationToResume else {
-            return
-        }
-
         operationTaskToCancel?.cancel()
         timeoutTaskToCancel?.cancel()
 
-        switch result {
-        case .success(let value):
-            continuationToResume.resume(returning: value)
-        case .failure(let error):
-            continuationToResume.resume(throwing: error)
+        if let continuationToResume {
+            resume(continuationToResume, with: result)
         }
     }
 
@@ -504,6 +516,15 @@ private final class LocalInsightModelTimeoutRace<T: Sendable>: @unchecked Sendab
         lock.unlock()
 
         timeoutTaskToCancel?.cancel()
+    }
+
+    private func resume(_ continuation: CheckedContinuation<T, Error>, with result: Result<T, Error>) {
+        switch result {
+        case .success(let value):
+            continuation.resume(returning: value)
+        case .failure(let error):
+            continuation.resume(throwing: error)
+        }
     }
 }
 
