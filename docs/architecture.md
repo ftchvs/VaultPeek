@@ -118,6 +118,70 @@ during the storage migration so existing linked items keep resolving.
 Fallback builds without Keychain support may store token bytes locally in the
 SQLite store, so release/security docs must stay explicit about that boundary.
 
+## Glance Surfaces: App Group, Widget, Control Center, App Intents (AND-515)
+
+On the macOS 26 floor, VaultPeek ships out-of-process "glance" surfaces that run
+in a separate widget extension: a Notification Center / desktop widget, a
+Control Center control, and App Intents reachable from Spotlight, Siri, and
+Shortcuts. The extension cannot reach the app's `AppState` or the companion
+server, so the app publishes a small display-only snapshot through a shared App
+Group container.
+
+| Element | Module | Responsibility | Must Not Do |
+|---------|--------|----------------|-------------|
+| `GlanceSnapshot` + `GlanceSnapshotStore` | `PlaidBarCore` | Define and read/write the shared display contract (App Group file, atomic, `0600`) | Carry tokens, account IDs, merchants, or transaction rows |
+| `PlaidBarWidgetExtension` | widget extension | Render the widget, host the Control Center control, and expose the `Refresh balances` App Intent | Call Plaid, call the companion server, read the bearer token, or hold credentials |
+| `AppState` glance writer | `PlaidBar` | Debounce-write the snapshot on data change, clear on reset, consume queued commands | Write sensitive values into the snapshot |
+
+### Snapshot and command contract
+
+- **App Group:** `group.com.ftchvs.PlaidBar`. `GlanceSnapshotStore` resolves it
+  via `containerURL(forSecurityApplicationGroupIdentifier:)` and falls back to
+  the local data directory when no App Group entitlement is present (the widget
+  then shows an "Open VaultPeek" unavailable state).
+- **`glance-snapshot.json`** holds *only* net worth, today's change, a
+  normalized sparkline, `updatedAt`, and an `isDemo` flag. Writes are atomic and
+  debounced (`GlanceSnapshotWriteDebouncer`, ~400 ms) and skipped when the
+  display content is unchanged.
+- **`glance-command.json`** is a one-shot queue. The `RefreshBalancesIntent`
+  writes a single typed `GlanceCommandRequest` (`refreshBalances` + timestamp)
+  and opens the app; the running app consumes and deletes it, then performs the
+  real refresh through `ServerClient`. The extension never refreshes data
+  itself.
+- **Deep link:** the widget opens `vaultpeek://dashboard`.
+
+### Security boundary
+
+The App Group is a second trust boundary and follows the same rule as the status
+endpoint: only display-ready, low-sensitivity values cross it. The snapshot must
+never contain Plaid access tokens, the local bearer token, Plaid client secrets,
+account IDs, item IDs, account masks, merchant names, or transaction rows, and
+the command channel carries no data-bearing parameters.
+
+**Privacy Mask / App Lock contract.** While Privacy Mask or App Lock is active,
+the app re-writes the shared `FinanceSnapshot` (the value-bearing contract read
+by the App Intents / Siri / Spotlight surfaces, the widget, and the Control
+Center control) in a redacted, value-free form: no balances, safe-to-spend,
+per-account figures, bills, or utilization — only `isMasked == true`. Redaction
+happens at *write* time as defense-in-depth, on top of the *read*-time gate where
+each reader independently checks `isMasked` (e.g. the widget gates on
+`AppGroupSnapshotStore.loadIfAvailable()?.isMasked`) and withholds values or
+shows placeholders. With both gates a reader that ignored `isMasked` would still
+find no real figures to leak.
+
+The widget's net-worth path additionally reads `glance-snapshot.json`. That file
+is *not* re-written or cleared on a mask/lock transition today — its net-worth,
+today's-change, and sparkline values persist on disk while masked. The masked
+widget guarantee therefore rests on `FinanceSnapshot.isMasked` (the widget shows
+its placeholder/unavailable state when masked) rather than on clearing the glance
+snapshot. Redacting or clearing `glance-snapshot.json` on mask transitions is a
+tracked follow-up; until it lands, do not claim the glance file is cleared while
+masked.
+
+If a future change adds any field to `GlanceSnapshot` or `FinanceSnapshot`, it
+must be reviewed against this boundary, `SECURITY.md`, and the status-endpoint
+contract.
+
 ## Naming Compatibility
 
 VaultPeek was renamed from PlaidBar at the product level. The following
