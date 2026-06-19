@@ -13,6 +13,11 @@ struct ReviewInboxView: View {
     /// Opens the detached multi-select review Table window for power review (AND-532).
     /// Injected by the app scene; a no-op in previews / headless renders.
     @Environment(\.openReviewTable) private var openReviewTable
+    /// Whether direct-manipulation haptics fire (AND-576). Read here so the
+    /// review actions — the highest-value direct manipulations in the app — give
+    /// a tactile confirmation on Force Touch trackpads when enabled. Off-state is
+    /// a no-op (behavior equals today). The pure mapping lives in Core.
+    @AppStorage(HapticFeedbackPreference.storageKey) private var hapticRaw = HapticFeedbackPreference.defaultValue.rawValue
     @FocusState private var isFocused: Bool
     @State private var selectedIndex = 0
     @State private var merchantDrafts: [String: String] = [:]
@@ -487,7 +492,17 @@ struct ReviewInboxView: View {
         AccessibilityNotification.Announcement("Marked \(plan.count) \(noun) reviewed").post()
     }
 
+    /// Resolved haptic preference (default on). Off makes every `play` a no-op,
+    /// so behavior with haptics disabled equals today.
+    private var hapticsEnabled: Bool {
+        (HapticFeedbackPreference(rawValue: hapticRaw) ?? .on).isEnabled
+    }
+
     private func recordBulkAction(count: Int) {
+        // Bulk "mark N reviewed" is a committed positive resolution — same
+        // tactile confirmation as a single-row approve (AND-576). No-op when the
+        // preference is off or the hardware lacks a haptic engine.
+        HapticFeedback.play(.reviewResolved, enabled: hapticsEnabled)
         confirmationGeneration &+= 1
         let generation = confirmationGeneration
         withAnimation(MotionTokens.animation(MotionTokens.standard, reduceMotion: reduceMotion)) {
@@ -501,6 +516,12 @@ struct ReviewInboxView: View {
     }
 
     private func recordAction(_ action: ReviewActionConfirmation.Action, for item: TransactionReviewItem) {
+        // Every committed single-row review action is a direct manipulation that
+        // resolves or recategorizes a row — give a tactile confirmation on Force
+        // Touch trackpads (AND-576). Ignore reads as a softer "removed" click;
+        // all other resolutions share the positive confirmation. No-op when the
+        // preference is off, matching today's behavior exactly.
+        HapticFeedback.play(action.hapticInteraction, enabled: hapticsEnabled)
         confirmationGeneration &+= 1
         let generation = confirmationGeneration
         withAnimation(MotionTokens.animation(MotionTokens.standard, reduceMotion: reduceMotion)) {
@@ -606,6 +627,18 @@ private struct ReviewActionConfirmation: Equatable {
                 "Rule created"
             case let .bulkReviewed(count):
                 "Marked \(count) reviewed"
+            }
+        }
+
+        /// The haptic interaction kind this action plays (AND-576). Ignore is the
+        /// one "removed" gesture that gets the softer level-change click; every
+        /// other committed resolution shares the positive confirmation. The pure
+        /// `HapticFeedbackPolicy` maps these kinds to concrete patterns.
+        var hapticInteraction: HapticInteraction {
+            switch self {
+            case .ignored: .reviewIgnored
+            case .approved, .categorized, .renamed, .markedTransfer, .markedSpend, .ruleCreated, .bulkReviewed:
+                .reviewResolved
             }
         }
     }

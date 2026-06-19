@@ -2372,6 +2372,10 @@ private func accountTrendAccessibility(_ trend: BalanceTrend) -> String {
 private struct DashboardFooter: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dashboardPresentation) private var dashboardPresentation
+    /// Direct-manipulation haptics preference (AND-576). Drives the quick
+    /// Privacy Mask toggle's tactile confirmation; off-state is a no-op. The
+    /// pure mapping lives in Core.
+    @AppStorage(HapticFeedbackPreference.storageKey) private var hapticRaw = HapticFeedbackPreference.defaultValue.rawValue
     let settingsActivation: SettingsWindowActivationRestorer
     let openSettings: OpenSettingsAction
     let onAddAccount: () -> Void
@@ -2416,6 +2420,14 @@ private struct DashboardFooter: View {
             // so the glyph reflects exactly what the button controls; meaning is
             // carried by the eye/eye.slash SHAPE, never color.
             Button {
+                // Tactile confirmation for the in-popover mask/reveal flip
+                // (AND-576) — a binary direct manipulation. No-op when the
+                // preference is off or the trackpad lacks a haptic engine, so
+                // behavior matches today.
+                HapticFeedback.play(
+                    .toggle,
+                    enabled: (HapticFeedbackPreference(rawValue: hapticRaw) ?? .on).isEnabled
+                )
                 appState.togglePrivacyMask()
             } label: {
                 Image(systemName: PrivacyMaskPresentation.toggleSymbolName(
