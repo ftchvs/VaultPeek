@@ -100,12 +100,19 @@ public enum CategoryBudgetPlanner {
     /// Score `budgets` against the current month's spend. Non-positive limits are
     /// dropped. Items are ordered attention-first (over, then nearing), then by
     /// spend pressure, then category name.
+    ///
+    /// `metadata`/`rules` are forwarded to `netSpendByCategory` so user overrides,
+    /// rule recategorizations, and exclusions move the scored spend (AND-526). Both
+    /// default to `nil`, preserving the legacy raw-category scoring for existing
+    /// callers.
     public static func presentation(
         budgets: [SpendingCategory: Double],
         transactions: [TransactionDTO],
         asOf date: Date,
         calendar: Calendar = .current,
-        areSuggested: Bool = false
+        areSuggested: Bool = false,
+        metadata: [TransactionReviewMetadata]? = nil,
+        rules: [TransactionRule]? = nil
     ) -> CategoryBudgetPresentation {
         let positiveBudgets = budgets.filter { $0.value > 0 }
         guard
@@ -117,7 +124,9 @@ public enum CategoryBudgetPlanner {
         let spendByCategory = netSpendByCategory(
             from: transactions,
             startKey: Formatters.transactionDateString(monthStart),
-            endKey: Formatters.transactionDateString(nextMonthStart)
+            endKey: Formatters.transactionDateString(nextMonthStart),
+            metadata: metadata,
+            rules: rules
         )
 
         let items = positiveBudgets
@@ -171,11 +180,20 @@ public enum CategoryBudgetPlanner {
     /// appear, history-derived suggestions fill only the categories the user has
     /// not explicitly budgeted, and the union is re-ranked together. With no
     /// explicit budgets the suggestions stand alone.
+    ///
+    /// `metadata`/`rules` (AND-526) are forwarded to the current-month spend
+    /// scoring of both the explicit and suggested halves so overrides /
+    /// recategorizations / exclusions move the dashboard totals. The
+    /// *suggested limits* themselves still derive from raw trailing history (a
+    /// guardrail baseline), but the spend they are scored against is
+    /// override-aware. Both default to `nil`, preserving legacy scoring.
     public static func mergedPresentation(
         explicitBudgets: [SpendingCategory: Double],
         transactions: [TransactionDTO],
         asOf date: Date,
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        metadata: [TransactionReviewMetadata]? = nil,
+        rules: [TransactionRule]? = nil
     ) -> CategoryBudgetPresentation {
         let suggested = presentation(
             budgets: suggestedBudgets(from: transactions, asOf: date, calendar: calendar)
@@ -183,7 +201,9 @@ public enum CategoryBudgetPlanner {
             transactions: transactions,
             asOf: date,
             calendar: calendar,
-            areSuggested: true
+            areSuggested: true,
+            metadata: metadata,
+            rules: rules
         )
 
         guard !explicitBudgets.isEmpty else { return suggested }
@@ -192,7 +212,9 @@ public enum CategoryBudgetPlanner {
             budgets: explicitBudgets,
             transactions: transactions,
             asOf: date,
-            calendar: calendar
+            calendar: calendar,
+            metadata: metadata,
+            rules: rules
         )
         return merge(explicit: explicit, suggested: suggested)
     }
@@ -231,16 +253,85 @@ public enum CategoryBudgetPlanner {
     /// and transfers. Pending transactions are included — they represent committed
     /// spend, and the sync layer (`TransactionSyncReducer`) reconciles a pending
     /// row into its posted form, so there is no double-count here.
+    ///
+    /// ## Override-aware aggregation (AND-526)
+    ///
+    /// When `metadata` and/or `rules` are supplied, spend is bucketed by each
+    /// transaction's *effective* (override-aware) budget category rather than its
+    /// raw Plaid category, via `EffectiveCategoryResolver.resolve`:
+    /// - a user `userCategory` override (or a matching rule's category) moves the
+    ///   spend to the chosen category;
+    /// - a row the user (or a rule) `excludedFromBudgets`, or a row resolved as a
+    ///   transfer, is dropped entirely;
+    /// - a row with no confident effective category (uncategorized — an on-device
+    ///   NL suggestion is display-only and never counted) is dropped, so an
+    ///   unreviewed guess never silently inflates a bucket.
+    ///
+    /// Both params **default to `nil`, which preserves the legacy behavior
+    /// exactly** (bucket by `transaction.category ?? .other`, drop income /
+    /// transfers) — so existing callers and tests are unchanged. Passing a
+    /// non-nil-but-empty collection opts into resolved mode, where a transaction
+    /// with no metadata and no matching rule resolves to its confident Plaid
+    /// category (matching the legacy bucket for confidently-categorized rows).
+    ///
+    /// Review metadata stored under a charge's `pendingTransactionId` is carried
+    /// into its posted replacement (mirrors `TransactionReviewInbox.evaluate`), so
+    /// a category/transfer decision made while a charge was pending survives the
+    /// pending→posted id change. The NL categorizer is intentionally *not* invoked
+    /// — the budget surface excludes NL suggestions — so this stays pure and
+    /// cheap.
     static func netSpendByCategory(
         from transactions: [TransactionDTO],
         startKey: String,
-        endKey: String
+        endKey: String,
+        metadata: [TransactionReviewMetadata]? = nil,
+        rules: [TransactionRule]? = nil
     ) -> [SpendingCategory: Double] {
+        // Legacy path: no review state supplied → bucket by raw Plaid category.
+        guard metadata != nil || rules != nil else {
+            var totals: [SpendingCategory: Double] = [:]
+            for transaction in transactions {
+                if transaction.date < startKey || transaction.date >= endKey { continue }
+                let category = transaction.category ?? .other
+                if excludedCategories.contains(category) { continue }
+                totals[category, default: 0] += transaction.amount
+            }
+            return totals
+        }
+
+        let metadataById = Dictionary(
+            (metadata ?? []).map { ($0.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let activeRules = rules ?? []
+
         var totals: [SpendingCategory: Double] = [:]
         for transaction in transactions {
             if transaction.date < startKey || transaction.date >= endKey { continue }
-            let category = transaction.category ?? .other
+
+            // Carry pending-phase review metadata into the posted charge: Plaid
+            // re-posts a previously-pending charge under a new id that links back
+            // via `pendingTransactionId`. Prefer the transaction's own record;
+            // fall back to the carried-forward pending record (mirrors
+            // `TransactionReviewInbox.evaluate`).
+            let effectiveMetadata = metadataById[transaction.id]
+                ?? transaction.pendingTransactionId.flatMap { metadataById[$0] }
+
+            let resolution = EffectiveCategoryResolver.resolve(
+                transaction: transaction,
+                metadata: effectiveMetadata,
+                rules: activeRules
+            )
+
+            // Drop excluded rows (explicit user/rule exclusion or transfers).
+            if resolution.excludedFromBudgets || resolution.isTransfer { continue }
+            // Drop rows with no confident budget category (NL suggestions are
+            // display-only and never counted before approval).
+            guard let category = resolution.category else { continue }
+            // Income never counts as category spend even if it survived resolution
+            // (the resolver does not classify income as transfer/excluded).
             if excludedCategories.contains(category) { continue }
+
             totals[category, default: 0] += transaction.amount
         }
         return totals
