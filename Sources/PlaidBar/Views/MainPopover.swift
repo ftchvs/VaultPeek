@@ -26,6 +26,11 @@ struct MainPopover: View {
     /// popover opened with a persisted selection appears directly in three-column
     /// geometry (no slide on restore); in-session selections still slide (AND-405).
     @State private var hasAppeared = false
+    /// Namespace for Liquid Glass morphing (AND-511): the trailing inspector
+    /// column carries a stable `glassEffectID` in this namespace so its glass
+    /// surface morphs in/out of the shared `GlassEffectContainer` around the
+    /// columns instead of hard-cutting when an account/drill-in is selected.
+    @Namespace private var glassNamespace
 
     private enum Layout {
         // Column widths and the screen-edge margin are owned by the shared,
@@ -321,6 +326,12 @@ struct MainPopover: View {
 
             accountInspectorColumn
         }
+        // One GlassEffectContainer spans the columns so the trailing inspector's
+        // glass surface morphs (via its glassEffectID) when it shows/hides on a
+        // drill-in, instead of hard-cutting (AND-511). The merge radius is small
+        // (SurfaceTokens.glassMergeRadius), so the rail and inspector glass do
+        // not fuse across the wide center — only the morph is shared.
+        .glassGroup()
     }
 
     // LEFT: the Wealth Summary rail is mounted unconditionally once setup is
@@ -406,15 +417,37 @@ struct MainPopover: View {
             }
             .frame(width: Layout.flyoutWidth)
             .frame(maxHeight: columnMaxHeight)
-            .leftPanelSurface()
-            // The column is stable now, so this transition only plays when it
-            // first appears as setup completes — not on every selection (AND-405).
+            // Liquid Glass morph (AND-511): the surface treatment and the
+            // morph id are applied by ONE modifier so `.glassEffectID` lands
+            // immediately after the `.glassEffect` on the SAME view, inside the
+            // columns' shared GlassEffectContainer (`.glassGroup()`). Applying
+            // `.glassEffectID` to the composed result of `leftPanelSurface()`
+            // (as before) bound it to a wrapper view, not to the glass-bearing
+            // view buried in the modifier, so the show/hide morph silently
+            // no-op'd. A stable id across content swaps lets the inspector's
+            // glass fluidly morph as drill-ins open/close instead of hard-cutting.
+            .modifier(InspectorGlassMorphSurface(
+                morphID: Self.inspectorMorphID,
+                namespace: glassNamespace
+            ))
+            // The column is stable once setup completes, so this transition only
+            // plays when the whole column first appears at setup completion — not
+            // on every selection. Content swaps inside the column animate via the
+            // glass morph above plus the `MotionTokens.content` animation keyed on
+            // the selection, so there is no competing trailing-slide on drill-ins
+            // (AND-405/511). On removal (setup re-entered) it slides out.
             .transition(.asymmetric(
                 insertion: inspectorInsertionTransition,
                 removal: .move(edge: .trailing).combined(with: .opacity)
             ))
         }
     }
+
+    /// Stable Liquid Glass morph identity for the inspector column. A single id
+    /// held across every content swap (account / recurring / flow / inbox / empty)
+    /// is what lets the system fluidly morph the one glass surface rather than
+    /// tearing it down and rebuilding it per selection (AND-511).
+    private static let inspectorMorphID = "account-inspector-column"
 
     private var inspectorInsertionTransition: AnyTransition {
         hasAppeared ? .move(edge: .trailing).combined(with: .opacity) : .identity
@@ -573,6 +606,11 @@ struct MainPopover: View {
                     }
                 }
                 .scrollContentBackground(.hidden)
+                // Glass-aware scroll edge effect (AND-511): the soft edge style
+                // lets content fade under the popover's top/bottom glass chrome as
+                // it scrolls, so the scroll column reads as one continuous glass
+                // surface rather than content abruptly clipping at a hard edge.
+                .scrollEdgeEffectStyle(.soft, for: .vertical)
                 .frame(maxWidth: .infinity)
                 .modifier(DashboardScrollHeightModifier(
                     isDetached: dashboardPresentation.isDetached,
@@ -623,6 +661,57 @@ struct MainPopover: View {
     }
 }
 
+/// The inspector column's left-panel glass surface, with the Liquid Glass morph
+/// id bound on the SAME view as the glass effect (AND-511).
+///
+/// This mirrors the visual of `leftPanelSurface()` (the shared `.leftPanel`
+/// `SurfaceRank`: fill + `.glassEffect(.regular)` + stroke + shadow) but applies
+/// `.glassEffectID` *immediately after* the `.glassEffect`, on the same `content`,
+/// so the morph identity actually binds. The previous code applied
+/// `.glassEffectID` to the composed output of `leftPanelSurface()`, which is a
+/// wrapper view — not the glass-bearing view inside the modifier — so the
+/// show/hide morph silently no-op'd. The merge radius of the enclosing
+/// `GlassEffectContainer` (`SurfaceTokens.glassMergeRadius`, small) keeps this
+/// panel's glass from fusing with the rail across the wide center column.
+private struct InspectorGlassMorphSurface: ViewModifier {
+    let morphID: String
+    let namespace: Namespace.ID
+
+    @AppStorage(PopoverTransparencySetting.storageKey)
+    private var popoverTransparency = PopoverTransparencySetting.defaultValue
+
+    private let rank = SurfaceRank.leftPanel
+    private var cornerRadius: CGFloat { SurfaceTokens.panelCornerRadius }
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius)
+        let multiplier = PopoverTransparencySetting(value: popoverTransparency).surfaceDepthMultiplier
+
+        content
+            .background(rank.fill, in: shape)
+            // `.glassEffect` and `.glassEffectID` are adjacent on this same view,
+            // inside the columns' GlassEffectContainer — the binding the morph
+            // requires (AND-511).
+            .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
+            .glassEffectID(morphID, in: namespace)
+            .overlay {
+                shape
+                    .stroke(rank.stroke(multiplier: multiplier), lineWidth: 1)
+                    .overlay {
+                        shape
+                            .inset(by: 1)
+                            .stroke(rank.innerStroke(multiplier: multiplier), lineWidth: 0.5)
+                    }
+            }
+            .shadow(
+                color: Color.black.opacity((rank.depth.shadow?.opacity ?? 0) * multiplier),
+                radius: rank.depth.shadow?.radius ?? 0,
+                x: rank.depth.shadow?.x ?? 0,
+                y: rank.depth.shadow?.y ?? 0
+            )
+    }
+}
+
 /// Full-surface gate shown when App Lock is engaged (LOCKED, not just masked).
 /// It paints an opaque material over the entire dashboard so no real value,
 /// account, or institution name behind it can be read, and offers a single
@@ -664,7 +753,10 @@ private struct AppLockedGateView: View {
                     Label("Unlock", systemImage: "lock.open.fill")
                         .frame(minWidth: 120)
                 }
-                .buttonStyle(.borderedProminent)
+                // The primary unlock CTA uses prominent Liquid Glass (AND-511):
+                // it is the highest-signal action on the lock surface and reads
+                // as a tinted glass capsule consistent with the glass chrome.
+                .buttonStyle(.glassProminent)
                 .controlSize(.large)
                 .keyboardShortcut(.defaultAction)
             }

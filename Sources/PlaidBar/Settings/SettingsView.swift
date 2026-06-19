@@ -215,17 +215,19 @@ struct AppearanceSettingsView: View {
 
     @ViewBuilder
     private func presetButton(_ preset: PopoverTransparencySetting.Preset) -> some View {
-        // The active preset is filled (prominent) and inactive ones are bordered,
-        // so the current quick-pick reads as selected without relying on tint
-        // alone; VoiceOver also gets the selected trait.
+        // The active preset is filled (prominent glass) and inactive ones are
+        // plain glass, so the current quick-pick reads as selected without
+        // relying on tint alone; VoiceOver also gets the selected trait. The
+        // transparency presets adjust the glass surface, so glass-styled buttons
+        // keep the control consistent with what they tune (AND-511).
         if transparencySetting.matchingPreset == preset {
             Button(preset.title) { popoverTransparency = preset.value }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.glassProminent)
                 .controlSize(.small)
                 .accessibilityAddTraits(.isSelected)
         } else {
             Button(preset.title) { popoverTransparency = preset.value }
-                .buttonStyle(.bordered)
+                .buttonStyle(.glass)
                 .controlSize(.small)
         }
     }
