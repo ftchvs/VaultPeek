@@ -31,6 +31,13 @@ public struct GlanceSnapshot: Codable, Sendable, Equatable {
     public let updatedAt: Date
     public let sparkline: [Double]
     public let isDemo: Bool
+    /// True when App Lock / Privacy Mask was active at build time, so the figures
+    /// above were zeroed/cleared before they ever reached disk. Mirrors
+    /// ``FinanceSnapshot/isMasked``: defense in depth so a masked snapshot is
+    /// value-free *in the file*, not merely dotted at read time. The widget reads
+    /// this so it can self-mask even if the sibling ``FinanceSnapshot`` is missing
+    /// or stale (AND-517).
+    public let isRedacted: Bool
 
     public var changeDirection: ChangeDirection {
         ChangeDirection.evaluate(todayChange)
@@ -53,7 +60,8 @@ public struct GlanceSnapshot: Codable, Sendable, Equatable {
             todayChange == other.todayChange &&
             updatedAt == other.updatedAt &&
             sparkline == other.sparkline &&
-            isDemo == other.isDemo
+            isDemo == other.isDemo &&
+            isRedacted == other.isRedacted
     }
 
     public init(
@@ -61,13 +69,32 @@ public struct GlanceSnapshot: Codable, Sendable, Equatable {
         todayChange: Double,
         updatedAt: Date,
         sparkline: [Double],
-        isDemo: Bool
+        isDemo: Bool,
+        isRedacted: Bool = false
     ) {
         self.netWorth = netWorth
         self.todayChange = todayChange
         self.updatedAt = updatedAt
         self.sparkline = sparkline
         self.isDemo = isDemo
+        self.isRedacted = isRedacted
+    }
+
+    // Decode `isRedacted` defensively: a snapshot written by an older build (no
+    // `isRedacted` key) decodes as `false`, so upgrades never spuriously treat a
+    // real snapshot as redacted.
+    private enum CodingKeys: String, CodingKey {
+        case netWorth, todayChange, updatedAt, sparkline, isDemo, isRedacted
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        netWorth = try container.decode(Double.self, forKey: .netWorth)
+        todayChange = try container.decode(Double.self, forKey: .todayChange)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        sparkline = try container.decode([Double].self, forKey: .sparkline)
+        isDemo = try container.decode(Bool.self, forKey: .isDemo)
+        isRedacted = try container.decodeIfPresent(Bool.self, forKey: .isRedacted) ?? false
     }
 
     public static func make(
@@ -75,14 +102,32 @@ public struct GlanceSnapshot: Codable, Sendable, Equatable {
         balanceHistory: [BalanceSnapshot],
         updatedAt: Date,
         isDemo: Bool,
+        isMasked: Bool = false,
         calendar: Calendar = .current
     ) -> GlanceSnapshot {
-        GlanceSnapshot(
+        let snapshot = GlanceSnapshot(
             netWorth: netWorth,
             todayChange: todayChange(from: balanceHistory, currentNetWorth: netWorth, now: updatedAt, calendar: calendar),
             updatedAt: updatedAt,
             sparkline: normalizedSparkline(from: balanceHistory, currentNetWorth: netWorth),
             isDemo: isDemo
+        )
+        return isMasked ? snapshot.redacted() : snapshot
+    }
+
+    /// Returns a copy with every real financial value cleared — net worth, today's
+    /// change, and the sparkline are zeroed/emptied and `isRedacted` is set — while
+    /// preserving the non-sensitive `updatedAt`/`isDemo` metadata. Used when App
+    /// Lock or Privacy Mask is active so the on-disk `glance-snapshot.json` carries
+    /// no balances for a widget or Control Center surface to leak (AND-517).
+    public func redacted() -> GlanceSnapshot {
+        GlanceSnapshot(
+            netWorth: 0,
+            todayChange: 0,
+            updatedAt: updatedAt,
+            sparkline: [],
+            isDemo: isDemo,
+            isRedacted: true
         )
     }
 

@@ -50,8 +50,13 @@ private struct GlanceTimelineProvider: TimelineProvider {
         // The richer FinanceSnapshot (Epic D) carries the live privacy-mask flag
         // toggled by the Control Center control; honor it so the widget hides
         // figures the moment the user masks the app, without waiting for a glance
-        // snapshot rewrite.
-        let isMasked = AppGroupSnapshotStore.loadIfAvailable()?.isMasked ?? false
+        // snapshot rewrite. The glance snapshot also carries its own `isRedacted`
+        // flag (set when the app wrote it while masked/locked); honoring either
+        // means the widget stays masked even if the sibling FinanceSnapshot is
+        // missing or stale — and a redacted glance file already holds no figures
+        // (AND-517).
+        let financeMasked = AppGroupSnapshotStore.loadIfAvailable()?.isMasked ?? false
+        let isMasked = financeMasked || snapshot.isRedacted
         return GlanceEntry(date: snapshot.updatedAt, snapshot: snapshot, isMasked: isMasked)
     }
 }
