@@ -397,10 +397,14 @@ final class AppState {
     func togglePrivacyMask() {
         guard !isContentLocked else { return }
         appLockPreferences.privacyMaskEnabled.toggle()
-        // Re-emit the App Intents snapshot so the masked/unmasked state takes
+        // Re-emit both App Group snapshots so the masked/unmasked state takes
         // effect on disk immediately: enabling the mask overwrites any prior real
-        // figures with a value-free snapshot; disabling restores the real values.
-        writeFinanceSnapshot()
+        // figures with value-free snapshots; disabling restores the real values.
+        // `writeGlanceSnapshot` also rewrites the App Intents `FinanceSnapshot`
+        // (via `writeFinanceSnapshot`), so the widget glance snapshot and the
+        // intents snapshot are redacted together — no stale real glance file is
+        // left on disk while the app is masked (AND-517).
+        writeGlanceSnapshot()
     }
 
     /// True only in full App Lock (`.locked`) — distinct from
@@ -690,10 +694,13 @@ final class AppState {
         // stale message from a prior cancelled/failed unlock attempt.
         if isAppLocked {
             lastUnlockMessage = nil
-            // Locking masks financial values, so immediately overwrite the App
-            // Intents snapshot with a value-free one — no figures leak past the
-            // lock via Spotlight / Siri / Shortcuts.
-            writeFinanceSnapshot()
+            // Locking masks financial values, so immediately overwrite both App
+            // Group snapshots with value-free ones — no figures leak past the lock
+            // via the widget / Control Center (glance snapshot) or Spotlight / Siri
+            // / Shortcuts (App Intents snapshot). `writeGlanceSnapshot` redacts the
+            // glance file and also re-emits the redacted `FinanceSnapshot` through
+            // `writeFinanceSnapshot` (AND-517).
+            writeGlanceSnapshot()
         }
     }
 
@@ -726,6 +733,14 @@ final class AppState {
             reason: "Unlock VaultPeek to view your balances."
         )
         isAppLocked = appLockService.isLocked
+        // A successful unlock that fully clears the masked state must restore the
+        // real figures on disk immediately, rather than leaving the value-free
+        // snapshots written at lock time until the next data refresh. Mirrors the
+        // disable path in `togglePrivacyMask`; guarded on `shouldMaskFinancialValues`
+        // so a still-active Privacy Mask keeps the snapshots redacted (AND-517).
+        if !shouldMaskFinancialValues {
+            writeGlanceSnapshot()
+        }
         // Surface the outcome on the locked gate: `nil` on success (the gate is
         // about to be dismissed), otherwise the cancelled / failed / unavailable
         // message so the user sees why it stayed locked.
@@ -3104,11 +3119,17 @@ final class AppState {
         writeFinanceSnapshot(updatedAt: updatedAt)
         glanceSnapshotWriteGeneration += 1
         let generation = glanceSnapshotWriteGeneration
+        // When Privacy Mask / App Lock is active, build a value-free snapshot so
+        // the on-disk glance-snapshot.json carries no balances, today's change, or
+        // sparkline for a widget / Control Center surface to leak (AND-517). The
+        // widget view already dots figures at read time via the FinanceSnapshot
+        // mask flag; this is defense in depth at the file level.
         let snapshot = GlanceSnapshot.make(
             netWorth: netBalance,
             balanceHistory: balanceHistory,
             updatedAt: updatedAt,
-            isDemo: isDemoMode
+            isDemo: isDemoMode,
+            isMasked: shouldMaskFinancialValues
         )
         let debouncer = glanceSnapshotWriteDebouncer
         Task { [snapshot, debouncer, generation] in
