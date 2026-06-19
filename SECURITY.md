@@ -69,6 +69,21 @@ Use GitHub private vulnerability reporting if available, or contact the reposito
 - Existing legacy `plaidbar.sqlite` data, SQLite sidecar files, and matching transaction cache are copied into a scoped database only when the legacy environment is explicit (`PLAIDBAR_MIGRATE_LEGACY_DATABASE=sandbox|production`) or can be inferred from the existing transaction-cache context. Ambiguous legacy databases are left untouched to avoid sandbox/production token crossover. Explicit migration can replace an existing scoped store, backs up the previous scoped SQLite store and transaction cache before copying legacy data, and writes a migration marker so restarts do not reapply stale legacy data.
 - The app/server auth token is generated locally under `~/.vaultpeek/auth-token`
   (or `$PLAIDBAR_DATA_DIR/auth-token`).
+- The disposable SwiftData read-model cache (AND-566) accelerates cold render and
+  offline reads. It holds financial values and Plaid identifiers, so — like the
+  existing `accounts.json` / `transactions.json` caches — it is written **only**
+  into the local private data dir (`~/.vaultpeek/dashboard-read-model-cache-v1.store`,
+  or `$PLAIDBAR_DATA_DIR`), with the directory at `0o700` and the store file (and
+  its `-wal`/`-shm` sidecars) tightened to `0o600`. It uses
+  `ModelConfiguration(..., cloudKitDatabase: .none)`, so it is **never** synced to
+  iCloud, and it is **never** written to the world-readable App Group container —
+  that boundary remains exclusive to the redacted glance / `FinanceSnapshot`
+  payloads. The cache is a **disposable** read-model: rebuildable from the
+  authoritative in-memory/JSON data, never a source of truth, scoped per Plaid
+  environment, deleted on local reset and when the last institution is removed,
+  and safe to delete at any time. If SwiftData is unavailable or the store fails
+  to open/read/write, the app falls back to its existing JSON/UserDefaults cold
+  path with no behavior change.
 - `/api/status` is authenticated and exposes readiness metadata: version,
   environment, credential availability, storage path, linked item count,
   synced item count, sync readiness, and last sync time. With the opt-in
