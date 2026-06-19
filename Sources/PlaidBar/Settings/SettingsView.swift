@@ -599,6 +599,25 @@ struct GeneralSettingsView: View {
                 }
                 .accessibilityElement(children: .combine)
 
+                LabeledContent("Preferred tier") {
+                    VStack(alignment: .trailing, spacing: Spacing.xxs) {
+                        Text(appState.localAIPreferredTier.displayName)
+                            .font(.body.weight(.medium))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+
+                        if let cause = appState.foundationModelsAvailability.causeLabel {
+                            Text(cause)
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                                .multilineTextAlignment(.trailing)
+                        }
+                    }
+                }
+                .accessibilityElement(children: .combine)
+                .help("Highest-preference on-device AI tier. Apple Intelligence (Foundation Models) is used when available; otherwise VaultPeek uses the existing local tiers.")
+
                 LabeledContent("Runtime") {
                     VStack(alignment: .trailing, spacing: Spacing.xxs) {
                         Text(appState.localAIAvailability.runtimeName ?? "None configured")
