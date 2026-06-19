@@ -65,6 +65,7 @@ local storage, notifications, and distribution.
 | Privacy Mask accessibility | VoiceOver labels use generic hidden-value copy instead of reading raw masked balances, account endings, merchants, or transaction details |
 | App Lock accessibility | Locked state, unlock action, authentication failure, and cancellation are reachable and announced without exposing financial details |
 | Reduced motion | Animations do not block comprehension |
+| Dynamic Type (AND-515) | Raise System Settings text size and Accessibility text sizes (up to AX3): the hero net-worth and balance figures scale, numeric columns stay tabular/aligned (`monospacedDigit`), and no critical row truncates or clips the value |
 | Screenshot readability | README screenshots remain legible at documented widths |
 
 ## Visual QA: Appearance and Transparency Matrix
@@ -188,6 +189,42 @@ committed renders under `docs/qa/` (demo data only):
   per-process — re-run `PLAIDBAR_QA_MATRIX_SUFFIX="-reduce-transparency" ./Scripts/qa-appearance-matrix.sh`
   after toggling System Settings → Accessibility → Display. These rows are honestly marked
   "Needs human eyes" in the table above.
+
+## macOS 26 Platform QA (AND-515)
+
+VaultPeek's deployment floor is macOS 26 (Tahoe). Liquid Glass is the baseline
+surface treatment (no material fallback) and the product now ships an App
+Intents bundle, a Control Center control, and a home-screen / Notification
+Center widget driven by an App Group snapshot. These rows verify the macOS 26
+surfaces that did not exist in prior releases. They are manual because they
+depend on system appearance, accessibility toggles, Spotlight/Siri, and Control
+Center — none of which the headless render path can reach.
+
+| Area | Scenario | Expected Result |
+|------|----------|-----------------|
+| Liquid Glass over light wallpaper | Open popover (dashboard + inspector) on a light desktop wallpaper | Glass material tints from the bright backdrop; text, numbers, and chart strokes stay legible; no washed-out or unreadable foreground over the brightest region |
+| Liquid Glass over dark wallpaper | Same on a dark/high-contrast wallpaper | Glass darkens with the backdrop; foreground stays legible; the leading-edge anchor and three-column layout are unchanged by wallpaper |
+| Liquid Glass over busy/photo wallpaper | Open popover over a high-detail photo wallpaper | Material blur keeps content readable; no per-region illegibility where the wallpaper is brightest or busiest |
+| Reduce Transparency | Enable System Settings → Accessibility → Display → Reduce transparency, then open every release surface | Glass falls back to an opaque surface; all balances, rows, charts, and controls stay legible in light and dark; no transparent text-over-text |
+| Increase Contrast | Enable System Settings → Accessibility → Display → Increase contrast | Borders/separators strengthen; text meets contrast over glass; focus rings and selected-row state remain visible |
+| App Intents in Spotlight | Search the `Refresh balances` intent in Spotlight | The intent is discoverable, runs, opens the app (`openAppWhenRun`), and the app picks up the queued refresh command; no Plaid data appears in Spotlight |
+| App Intents via Siri / Shortcuts | Invoke `Refresh balances` from Shortcuts (and Siri) | Same as Spotlight: queues the command file, reloads widget timelines, opens the app; no financial values are spoken or shown by the intent |
+| Control Center control | Add the VaultPeek `Refresh balances` control to Control Center and tap it | The control fires `RefreshBalancesIntent`, the app opens and refreshes; the control surfaces no balances or account details |
+| Widget (small/medium) | Add the VaultPeek widget to Notification Center / desktop | Shows net worth + today's change + sparkline from the App Group snapshot; first install / post-reset shows the "Open VaultPeek" unavailable state, not a misleading `$0`; gallery preview is redacted |
+| Widget deep link | Tap the widget | Opens VaultPeek via `vaultpeek://dashboard` to the dashboard |
+| Transparent Tahoe menu bar | View the menu-bar item against a transparent Tahoe menu bar over light and dark wallpapers | The menu-bar glyph/text stays legible against the translucent menu bar; icon-only (Privacy Mask) menu bar stays blank and legible |
+| Privacy under widget/control | Enable Privacy Mask / App Lock, then check the widget and Control Center control | Widget shows the unavailable/placeholder state (no real net worth) and the control exposes no financial values; the App Group snapshot does not leak masked values |
+
+### macOS 26 screenshot note (AND-515, G3)
+
+README screenshots (`Scripts/screenshots.sh`) and the appearance-matrix renders
+(`Scripts/qa-appearance-matrix.sh`) must be **recaptured on macOS 26 (Tahoe)**
+before a release. The shipped assets must show the Liquid Glass surface
+treatment as it renders on macOS 26 (not a pre-26 material fallback). Capturing
+needs a GUI session and Screen Recording permission, so it is a manual,
+GUI-only step — it cannot run in CI or a headless agent. After recapture,
+re-verify the appearance matrix rows above and the committed renders under
+`docs/qa/`.
 
 ## Security and Privacy QA
 
