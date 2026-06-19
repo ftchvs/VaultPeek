@@ -503,6 +503,10 @@ final class AppState {
     private let notificationService: any NotificationServiceProtocol
     private var refreshTask: Task<Void, Never>?
     private var localAISummaryRefreshTask: Task<Void, Never>?
+    /// Observer tokens for the OS power-state / thermal-state change
+    /// notifications that drive energy-aware background refresh (AND-568).
+    /// Retained so they can be removed in `deinit`.
+    private var energyStateObservers: [NSObjectProtocol] = []
     private let glanceSnapshotWriteDebouncer = GlanceSnapshotWriteDebouncer()
     private var glanceSnapshotWriteGeneration = 0
     private var reviewUndoStack: [(metadata: [TransactionReviewMetadata], rules: [TransactionRule])] = []
@@ -558,6 +562,20 @@ final class AppState {
         if CommandLine.arguments.contains("--demo") {
             loadDemoData()
         }
+        // Begin watching OS power/thermal transitions so the background refresh
+        // cadence re-evaluates the moment Low Power Mode or thermal pressure
+        // changes (AND-568). The observers only restart an already-running loop,
+        // so registering here (before the loop starts in `loadInitialData`) is
+        // safe and idempotent.
+        startEnergyStateObservers()
+    }
+
+    // `isolated deinit` (SE-0371) so teardown runs on the main actor and can read
+    // the actor-isolated observer tokens. Block-based NotificationCenter observers
+    // must be explicitly removed; doing it here avoids leaking the two energy
+    // observers if an AppState is ever torn down (e.g. in tests).
+    isolated deinit {
+        stopEnergyStateObservers()
     }
 
     private func loadSettings() {
@@ -2067,10 +2085,21 @@ final class AppState {
         if await consumePendingGlanceCommand() { return }
         let dashboardStart = performanceStart()
         await checkServerConnection()
+        // Energy-aware gate (AND-568): a `force` refresh is user-initiated and
+        // always pulls Plaid data; an automatic tick additionally backs off the
+        // network-and-CPU-heavy Plaid fetch while the device is in Low Power Mode
+        // or under serious/critical thermal pressure. The connectivity re-probe
+        // above and the category-budget recompute below still run every tick, so
+        // only the Plaid round-trip is deferred — never the cheap local work.
+        let plaidFetchAllowed = EnergyAwareRefreshPolicy.shouldRunAutomaticRefresh(
+            conditions: currentEnergyConditions,
+            automaticRefreshIsDue: shouldAutoRefreshNow,
+            isManual: force
+        )
         // Setup state (credentials missing) cannot refresh anything from
         // Plaid; the status surfaces guide the user instead of surfacing a
         // 503 banner on every cycle.
-        if serverConnected, serverCredentialsConfigured != false, force || shouldAutoRefreshNow {
+        if serverConnected, serverCredentialsConfigured != false, plaidFetchAllowed {
             // A user-initiated (force) refresh pulls live balances via
             // /accounts/balance/get, but at most once per cooldown window so
             // rapid clicks can't run up per-call Plaid balance fees. Automatic
@@ -2287,12 +2316,26 @@ final class AppState {
                 if appLockPreferences.shouldRefreshFinancialData(isAppLocked: isAppLocked) {
                     // Automatic tick: only fetches Plaid data when due per the
                     // refresh policy; connectivity re-probe still runs each tick.
+                    // `refreshDashboard(force: false)` additionally defers the
+                    // Plaid round-trip while the device is energy-constrained
+                    // (AND-568).
                     await refreshDashboard(force: false)
                 }
                 if appLockPreferences.shouldEvaluateFinancialNotifications(isAppLocked: isAppLocked) {
                     await evaluateNotifications()
                 }
-                try? await Task.sleep(for: .seconds(refreshInterval))
+                // Energy-aware cadence (AND-568): lengthen the sleep while the
+                // device is in Low Power Mode or under serious/critical thermal
+                // pressure so a throttled / battery-saving machine wakes the app
+                // less often. A power/thermal change posts a notification that
+                // restarts this loop, so the longer sleep is re-evaluated as soon
+                // as conditions return to normal — it never strands the app on a
+                // stale long delay.
+                let delay = EnergyAwareRefreshPolicy.nextTickDelay(
+                    baseInterval: refreshInterval,
+                    conditions: currentEnergyConditions
+                )
+                try? await Task.sleep(for: .seconds(delay))
             }
         }
     }
@@ -2392,6 +2435,82 @@ final class AppState {
     func stopBackgroundRefresh() {
         refreshTask?.cancel()
         refreshTask = nil
+    }
+
+    // MARK: - Energy-aware refresh (AND-568)
+
+    /// Live device energy/thermal snapshot read from `ProcessInfo`, mapped onto
+    /// the framework-light `EnergyAwareRefreshPolicy` inputs. Read at the top of
+    /// each automatic refresh decision and when sizing the next loop sleep, so
+    /// the policy always sees the current Low Power Mode / thermal state.
+    var currentEnergyConditions: EnergyAwareRefreshPolicy.EnergyConditions {
+        let info = ProcessInfo.processInfo
+        return EnergyAwareRefreshPolicy.EnergyConditions(
+            lowPowerMode: info.isLowPowerModeEnabled,
+            thermalState: Self.energyThermalState(from: info.thermalState)
+        )
+    }
+
+    /// Maps the live `ProcessInfo.ThermalState` onto the pure Core mirror enum so
+    /// the decision logic stays testable without a real device.
+    nonisolated static func energyThermalState(
+        from state: ProcessInfo.ThermalState
+    ) -> EnergyAwareRefreshPolicy.EnergyThermalState {
+        switch state {
+        case .nominal: .nominal
+        case .fair: .fair
+        case .serious: .serious
+        case .critical: .critical
+        @unknown default: .nominal
+        }
+    }
+
+    /// Subscribes to the OS Low Power Mode and thermal-state change
+    /// notifications. When either changes we restart the background loop so the
+    /// next-tick delay and the automatic-refresh gate are re-evaluated against
+    /// the new conditions immediately — e.g. when the user plugs in and Low Power
+    /// Mode turns off, the loop drops back from the constrained cadence to the
+    /// normal interval without waiting out a stale long sleep. Idempotent: a
+    /// second call removes the prior observers first.
+    func startEnergyStateObservers() {
+        stopEnergyStateObservers()
+        let center = NotificationCenter.default
+        let powerObserver = center.addObserver(
+            forName: .NSProcessInfoPowerStateDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.handleEnergyStateChange()
+            }
+        }
+        let thermalObserver = center.addObserver(
+            forName: ProcessInfo.thermalStateDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.handleEnergyStateChange()
+            }
+        }
+        energyStateObservers = [powerObserver, thermalObserver]
+    }
+
+    private func stopEnergyStateObservers() {
+        let center = NotificationCenter.default
+        for observer in energyStateObservers {
+            center.removeObserver(observer)
+        }
+        energyStateObservers = []
+    }
+
+    /// Re-evaluates the background cadence after a power/thermal transition by
+    /// restarting the loop (only when one is already running, so we never spin a
+    /// loop up before boot). The restart re-reads `currentEnergyConditions` for
+    /// both the gate and the sleep length.
+    private func handleEnergyStateChange() {
+        guard refreshTask != nil else { return }
+        startBackgroundRefresh()
     }
 
     func loadInitialData() async {
