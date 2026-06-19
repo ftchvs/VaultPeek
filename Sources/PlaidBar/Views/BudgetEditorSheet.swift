@@ -51,6 +51,14 @@ struct BudgetEditorSheet: View {
                 } footer: {
                     validationFooter
                 }
+
+                if let suggestedItem {
+                    Section {
+                        suggestedRow(suggestedItem)
+                    } header: {
+                        Text("Suggested")
+                    }
+                }
             } else {
                 Section {
                     Label(
@@ -117,6 +125,29 @@ struct BudgetEditorSheet: View {
         }
     }
 
+    /// "Ghost guardrail" row: shows the history-derived suggested limit (and its
+    /// current-month spend, carried by text) with a one-tap accept that promotes it
+    /// to a saved budget. Tapping also seeds the field so the value is visible.
+    private func suggestedRow(_ item: CategoryBudgetPresentation.Item) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Based on recent spending")
+                    .font(.callout)
+                Text(
+                    "\(Formatters.currency(item.spent)) spent so far this month"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: Spacing.sm)
+            SuggestedBudgetAcceptButton(
+                item: item,
+                existingBudgets: appState.categoryBudgets
+            )
+        }
+        .accessibilityElement(children: .contain)
+    }
+
     @ViewBuilder
     private var validationFooter: some View {
         switch outcome {
@@ -159,6 +190,21 @@ struct BudgetEditorSheet: View {
     /// The category's currently-saved (explicit, non-suggested) limit, if any.
     private var currentLimit: Double? {
         appState.categoryBudgets[category]
+    }
+
+    /// The history-derived suggested guardrail for this category, if the dashboard
+    /// is offering one and the user has not already saved a limit. Read from the
+    /// live merged budget presentation (suggestions are flagged `isSuggested`); the
+    /// pure `SuggestedBudgetAcceptance` decides whether a one-tap accept is legal.
+    private var suggestedItem: CategoryBudgetPresentation.Item? {
+        guard (currentLimit ?? 0) <= 0 else { return nil }
+        return appState.categoryBudgetPresentation.items.first { item in
+            item.category == category
+                && SuggestedBudgetAcceptance.evaluate(
+                    item: item,
+                    existingBudgets: appState.categoryBudgets
+                ).isAcceptable
+        }
     }
 
     private var saveButtonTitle: String {
