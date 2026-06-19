@@ -508,6 +508,13 @@ final class AppState {
     /// `AppState+ReadModelCache.swift` can read/mutate it; still module-scoped.
     var readModelCacheStore: ReadModelCacheStore?
     var readModelCacheStoreDirectoryPath: String?
+    /// Disposable per-transaction SwiftData cache for large-history paging
+    /// (AND-567). Like ``readModelCacheStore`` it is lazily opened, scoped to the
+    /// active data directory, never the source of truth, and gated by
+    /// ``readModelCacheEnabled``. The AND-567 wiring extension in
+    /// `AppState+TransactionCache.swift` reads/mutates it.
+    var transactionCacheStore: TransactionCacheStore?
+    var transactionCacheStoreDirectoryPath: String?
     /// Set false to disable the disposable read-model cache entirely; the app
     /// then renders exactly as it did before AND-566 (no hydrate, no persist).
     /// Plumbed for kill-switch/test parity, not surfaced in Settings.
@@ -2335,6 +2342,9 @@ final class AppState {
         // Wipe the disposable read-model cache alongside the JSON/SQLite caches
         // so a post-reset cold start never paints pre-reset balances (AND-566).
         await clearReadModelCache()
+        // Wipe the disposable per-transaction cache too so the paged list never
+        // surfaces pre-reset transactions (AND-567).
+        await clearTransactionCache()
         UserDefaults.standard.set(false, forKey: resetSetupCompletionDefaultsKey)
         UserDefaults.standard.removeObject(forKey: firstRunSnapshotDismissalDefaultsKey)
         isSetupComplete = false
@@ -3431,6 +3441,10 @@ final class AppState {
             // cold start after the last institution was removed does not paint
             // stale balances from the cache (AND-566).
             Task { await clearReadModelCache() }
+            // Drop the disposable per-transaction cache on the same empty path so
+            // the paged list never surfaces transactions for a removed institution
+            // (AND-567).
+            Task { await clearTransactionCache() }
             Task {
                 await clearGlanceSnapshot()
                 await MainActor.run {
@@ -3447,6 +3461,10 @@ final class AppState {
         // single post-refresh/mutation seam, so the cache always reflects the
         // latest accounts/transactions. Best-effort, detached, never blocks.
         persistReadModelCache()
+        // Mirror the live transactions into the disposable per-transaction cache so
+        // the virtualized large-history list can page on the next open (AND-567).
+        // Same seam, same best-effort/detached contract; fallback-safe.
+        persistTransactionCache()
         glanceSnapshotWriteGeneration += 1
         let generation = glanceSnapshotWriteGeneration
         // When Privacy Mask / App Lock is active, build a value-free snapshot so
