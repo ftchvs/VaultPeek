@@ -59,6 +59,183 @@ struct GlanceSnapshotTests {
         #expect(!json.contains("accounts"))
     }
 
+    // MARK: - Privacy Mask / App Lock redaction (AND-517)
+
+    @Test("Masked build zeroes every financial value")
+    func maskedBuildZeroesEveryFinancialValue() throws {
+        let now = try #require(Formatters.parseTransactionDate("2026-06-14"))
+        let previous = try #require(Calendar.current.date(byAdding: .day, value: -1, to: now))
+        let history = [
+            BalanceSnapshot(date: previous, balance: 1_000),
+            BalanceSnapshot(date: now, balance: 1_250),
+        ]
+
+        let masked = GlanceSnapshot.make(
+            netWorth: 1_250,
+            balanceHistory: history,
+            updatedAt: now,
+            isDemo: false,
+            isMasked: true
+        )
+
+        #expect(masked.isRedacted)
+        #expect(masked.netWorth == 0)
+        #expect(masked.todayChange == 0)
+        #expect(masked.changeDirection == .flat)
+        #expect(masked.sparkline.isEmpty)
+        // Non-sensitive metadata is preserved so the widget can still render an
+        // "updated"/demo state without exposing balances.
+        #expect(masked.updatedAt == now)
+        #expect(!masked.isDemo)
+    }
+
+    @Test("Unmasked build is unchanged and carries real values")
+    func unmaskedBuildIsUnchanged() throws {
+        let now = try #require(Formatters.parseTransactionDate("2026-06-14"))
+        let previous = try #require(Calendar.current.date(byAdding: .day, value: -1, to: now))
+        let history = [
+            BalanceSnapshot(date: previous, balance: 1_000),
+            BalanceSnapshot(date: now, balance: 1_250),
+        ]
+
+        let masked = GlanceSnapshot.make(
+            netWorth: 1_250,
+            balanceHistory: history,
+            updatedAt: now,
+            isDemo: false,
+            isMasked: false
+        )
+        // Default (no `isMasked` argument) must match the explicit-unmasked build,
+        // so existing callers keep their behavior.
+        let defaulted = GlanceSnapshot.make(
+            netWorth: 1_250,
+            balanceHistory: history,
+            updatedAt: now,
+            isDemo: false
+        )
+
+        #expect(!masked.isRedacted)
+        #expect(masked.netWorth == 1_250)
+        #expect(masked.todayChange == 250)
+        #expect(masked.changeDirection == .up)
+        #expect(masked.sparkline.count >= 2)
+        #expect(masked == defaulted)
+    }
+
+    @Test("redacted() clears figures but keeps metadata")
+    func redactedClearsFiguresButKeepsMetadata() throws {
+        let updatedAt = Date(timeIntervalSince1970: 1_780_000_000)
+        let real = GlanceSnapshot(
+            netWorth: 17_604.24,
+            todayChange: -42,
+            updatedAt: updatedAt,
+            sparkline: [0, 0.5, 1],
+            isDemo: true
+        )
+
+        let redacted = real.redacted()
+
+        #expect(redacted.isRedacted)
+        #expect(redacted.netWorth == 0)
+        #expect(redacted.todayChange == 0)
+        #expect(redacted.sparkline.isEmpty)
+        #expect(redacted.updatedAt == updatedAt)
+        #expect(redacted.isDemo)
+    }
+
+    @Test("Redacted snapshot JSON on disk carries no real figures")
+    func redactedSnapshotJSONOnDiskCarriesNoRealFigures() throws {
+        let directory = temporaryDirectory()
+        let masked = GlanceSnapshot(
+            netWorth: 17_604.24,
+            todayChange: -421.55,
+            updatedAt: Date(timeIntervalSince1970: 1_780_000_000),
+            sparkline: [0.12, 0.48, 0.97],
+            isDemo: false
+        ).redacted()
+
+        try GlanceSnapshotStore.save(masked, directory: directory)
+        let json = try String(
+            contentsOf: GlanceSnapshotStore.snapshotURL(directory: directory),
+            encoding: .utf8
+        )
+
+        // The redaction flag is recorded and the on-disk figures are zeroed —
+        // not the real values written before masking.
+        #expect(json.contains("\"isRedacted\":true"))
+        #expect(!json.contains("17604"))
+        #expect(!json.contains("421.55"))
+        #expect(!json.contains("0.48"))
+        #expect(json.contains("\"netWorth\":0"))
+        #expect(json.contains("\"todayChange\":0"))
+        #expect(json.contains("\"sparkline\":[]"))
+
+        // Round-trips back as a redacted, value-free snapshot.
+        let reloaded = try GlanceSnapshotStore.load(directory: directory)
+        #expect(reloaded.isRedacted)
+        #expect(reloaded.netWorth == 0)
+        #expect(reloaded.sparkline.isEmpty)
+    }
+
+    @Test("Enabling mask redacts the persisted snapshot (transition)")
+    func enablingMaskRedactsPersistedSnapshot() throws {
+        let directory = temporaryDirectory()
+        let now = try #require(Formatters.parseTransactionDate("2026-06-14"))
+        let previous = try #require(Calendar.current.date(byAdding: .day, value: -1, to: now))
+        let history = [
+            BalanceSnapshot(date: previous, balance: 1_000),
+            BalanceSnapshot(date: now, balance: 1_250),
+        ]
+
+        // 1. Unmasked: the real snapshot lands on disk with live figures.
+        let real = GlanceSnapshot.make(
+            netWorth: 1_250,
+            balanceHistory: history,
+            updatedAt: now,
+            isDemo: false,
+            isMasked: false
+        )
+        #expect(try GlanceSnapshotStore.saveIfChanged(real, directory: directory))
+        #expect(try GlanceSnapshotStore.load(directory: directory).netWorth == 1_250)
+
+        // 2. Mask turns on — the writer rebuilds and the persisted file is
+        // rewritten value-free (the change in `isRedacted`/figures defeats the
+        // saveIfChanged short-circuit).
+        let masked = GlanceSnapshot.make(
+            netWorth: 1_250,
+            balanceHistory: history,
+            updatedAt: now,
+            isDemo: false,
+            isMasked: true
+        )
+        #expect(try GlanceSnapshotStore.saveIfChanged(masked, directory: directory))
+
+        let onDisk = try GlanceSnapshotStore.load(directory: directory)
+        #expect(onDisk.isRedacted)
+        #expect(onDisk.netWorth == 0)
+        #expect(onDisk.todayChange == 0)
+        #expect(onDisk.sparkline.isEmpty)
+    }
+
+    @Test("Legacy snapshot without isRedacted decodes as not redacted")
+    func legacySnapshotWithoutIsRedactedDecodesAsNotRedacted() throws {
+        // A glance-snapshot.json written by a pre-AND-517 build has no
+        // `isRedacted` key. It must decode as a normal, non-redacted snapshot so
+        // upgrades never treat a real snapshot as masked.
+        let legacyJSON = """
+        {"isDemo":false,"netWorth":17604.24,"sparkline":[0,0.5,1],\
+        "todayChange":-42,"updatedAt":"2026-06-14T00:00:00Z"}
+        """
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let snapshot = try decoder.decode(GlanceSnapshot.self, from: Data(legacyJSON.utf8))
+
+        #expect(!snapshot.isRedacted)
+        #expect(snapshot.netWorth == 17_604.24)
+        #expect(snapshot.todayChange == -42)
+        #expect(snapshot.sparkline == [0, 0.5, 1])
+    }
+
     @Test("Timestamp display changes rewrite the file")
     func timestampDisplayChangesRewriteFile() throws {
         let directory = temporaryDirectory()
