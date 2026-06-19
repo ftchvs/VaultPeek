@@ -71,6 +71,12 @@ public enum ChartAudioGraph {
         /// True when the series is a continuous line (trend); false for discrete
         /// bars/sectors (donut, heatmap) — maps to `AXDataSeriesDescriptor.isContinuous`.
         public let isContinuous: Bool
+        /// True when Privacy Mask is on. The descriptor's point labels + summary are
+        /// already built masked by the relevant builder; this flag lets the SwiftUI
+        /// bridge also redact the y-axis *value descriptions* VoiceOver speaks while
+        /// scrubbing the audio graph (see `yAxisValueDescription(_:isMasked:)`), so a
+        /// masked chart never announces an exact figure through any channel (AND-569).
+        public let isPrivacyMasked: Bool
         public let points: [Point]
 
         public init(
@@ -80,6 +86,7 @@ public enum ChartAudioGraph {
             yAxis: NumericAxis,
             seriesName: String,
             isContinuous: Bool,
+            isPrivacyMasked: Bool = false,
             points: [Point]
         ) {
             self.title = title
@@ -88,11 +95,33 @@ public enum ChartAudioGraph {
             self.yAxis = yAxis
             self.seriesName = seriesName
             self.isContinuous = isContinuous
+            self.isPrivacyMasked = isPrivacyMasked
             self.points = points
         }
 
         /// No points to sonify.
         public var isEmpty: Bool { points.isEmpty }
+    }
+
+    // MARK: - Y-axis value description (privacy-aware)
+
+    /// The spoken description for a y-axis value in the audio graph.
+    ///
+    /// VoiceOver reads these as it scrubs the audio graph's value axis, so this is
+    /// a *third* place an exact amount can leak — alongside the per-point labels and
+    /// the summary, both of which the builders already redact under Privacy Mask.
+    /// When `isMasked` is true we return the masked placeholder instead of a
+    /// formatted currency figure; the audio graph's *pitch* still conveys relative
+    /// magnitude (that's not a figure), so the graph stays usable without speaking a
+    /// dollar amount (AND-569).
+    public static func yAxisValueDescription(
+        _ value: Double,
+        isMasked: Bool,
+        currencyCode: String = "USD"
+    ) -> String {
+        isMasked
+            ? PrivacyMaskPresentation.compactValue
+            : Formatters.currency(value, format: .full, currencyCode: currencyCode)
     }
 
     // MARK: - Net-worth trend
@@ -185,6 +214,7 @@ public enum ChartAudioGraph {
             yAxis: yAxis,
             seriesName: "Spend by category",
             isContinuous: false,
+            isPrivacyMasked: isPrivacyMasked,
             points: points
         )
     }
@@ -242,6 +272,7 @@ public enum ChartAudioGraph {
             yAxis: yAxis,
             seriesName: layout.mode.shortLabel,
             isContinuous: false,
+            isPrivacyMasked: isPrivacyMasked,
             points: points
         )
     }

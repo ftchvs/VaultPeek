@@ -32,12 +32,17 @@ struct ChartAudioGraphRepresentable: AXChartDescriptorRepresentable {
             String(Int(value.rounded()))
         }
 
+        let isMasked = model.isPrivacyMasked
         let yAxis = AXNumericDataAxisDescriptor(
             title: model.yAxis.title,
             range: model.yAxis.lowerBound ... model.yAxis.upperBound,
             gridlinePositions: []
         ) { value in
-            Formatters.currency(value, format: .full)
+            // VoiceOver speaks this while scrubbing the value axis — a third place an
+            // exact amount can leak past Privacy Mask, alongside the (already-masked)
+            // point labels and summary. Redact here too; pitch still conveys relative
+            // magnitude (AND-569).
+            ChartAudioGraph.yAxisValueDescription(value, isMasked: isMasked)
         }
 
         let dataPoints = model.points.map { point in

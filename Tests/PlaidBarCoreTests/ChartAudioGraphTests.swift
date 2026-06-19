@@ -214,4 +214,70 @@ struct ChartAudioGraphTests {
         #expect(descriptor.isEmpty)
         #expect(descriptor.points.isEmpty)
     }
+
+    // MARK: - Y-axis value description (Privacy Mask)
+
+    // This is the value description VoiceOver speaks while scrubbing the audio
+    // graph's value axis — the SwiftUI representable's `yAxis` provider calls this
+    // exact function, so testing it here covers the representable-level masking
+    // without a host view.
+
+    @Test("y-axis value description carries the exact amount when unmasked")
+    func yAxisValueUnmaskedHasAmount() {
+        let description = ChartAudioGraph.yAxisValueDescription(1234.56, isMasked: false)
+        #expect(description == Formatters.currency(1234.56, format: .full))
+        #expect(description.contains("1,234"))
+        #expect(description.contains("$"))
+    }
+
+    @Test("y-axis value description redacts the amount when masked")
+    func yAxisValueMaskedHidesAmount() {
+        let description = ChartAudioGraph.yAxisValueDescription(1234.56, isMasked: true)
+        // No exact figure / currency leaks through the spoken value axis.
+        #expect(!description.contains("$"))
+        #expect(!description.contains("1,234"))
+        #expect(!description.contains("1234"))
+        #expect(description == PrivacyMaskPresentation.compactValue)
+    }
+
+    @Test("donut descriptor carries the mask flag so the y-axis provider can redact")
+    func donutDescriptorPropagatesMaskFlag() {
+        let model = donutModel([(.foodAndDining, .foodAndDrink, 400)])
+
+        let unmasked = ChartAudioGraph.donut(model, isPrivacyMasked: false)
+        #expect(!unmasked.isPrivacyMasked)
+        #expect(ChartAudioGraph.yAxisValueDescription(unmasked.points[0].yValue, isMasked: unmasked.isPrivacyMasked).contains("$400"))
+
+        let masked = ChartAudioGraph.donut(model, isPrivacyMasked: true)
+        #expect(masked.isPrivacyMasked)
+        // y values are intact for pitch...
+        #expect(masked.points.map(\.yValue) == [400])
+        // ...but the spoken value description leaks no amount.
+        #expect(!ChartAudioGraph.yAxisValueDescription(masked.points[0].yValue, isMasked: masked.isPrivacyMasked).contains("$"))
+    }
+
+    @Test("heatmap descriptor carries the mask flag so the y-axis provider can redact")
+    func heatmapDescriptorPropagatesMaskFlag() {
+        let calendar = Calendar.current
+        let end = calendar.startOfDay(for: Date())
+        let day = Formatters.transactionDateString(calendar.date(byAdding: .day, value: -2, to: end)!)
+        let layout = heatmapLayout([transaction(day, amount: 75)])
+
+        let unmasked = ChartAudioGraph.heatmap(layout, isPrivacyMasked: false)
+        #expect(!unmasked.isPrivacyMasked)
+        #expect(ChartAudioGraph.yAxisValueDescription(unmasked.points[0].yValue, isMasked: unmasked.isPrivacyMasked).contains("$"))
+
+        let masked = ChartAudioGraph.heatmap(layout, isPrivacyMasked: true)
+        #expect(masked.isPrivacyMasked)
+        #expect(!ChartAudioGraph.yAxisValueDescription(masked.points[0].yValue, isMasked: masked.isPrivacyMasked).contains("$"))
+    }
+
+    @Test("trend descriptor is unmasked (trend chart is not privacy-masked)")
+    func trendDescriptorIsUnmasked() {
+        let now = Date()
+        let history = [snapshot(1, 1000, now: now), snapshot(0, 2000, now: now)]
+        let trend = try! #require(BalanceTrend.evaluate(history: history, now: now, windowDays: 90))
+        let descriptor = ChartAudioGraph.trend(trend)
+        #expect(!descriptor.isPrivacyMasked)
+    }
 }
