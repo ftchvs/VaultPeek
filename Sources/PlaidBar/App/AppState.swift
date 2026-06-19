@@ -506,6 +506,11 @@ final class AppState {
     private let glanceSnapshotWriteDebouncer = GlanceSnapshotWriteDebouncer()
     private var glanceSnapshotWriteGeneration = 0
     private var reviewUndoStack: [(metadata: [TransactionReviewMetadata], rules: [TransactionRule])] = []
+    /// While true, the per-row review mutators skip pushing their own undo snapshot
+    /// because a single combined snapshot was already captured for the whole batch
+    /// (see `withBatchedReviewUndo`). Lets bulk / multi-row actions collapse into one
+    /// ⌘Z, matching the AND-528 bulk "Mark N reviewed" contract.
+    private var isBatchingReviewUndo = false
     private var localAIEnabledPreference: Bool?
     private var localAIModelNamePreference: String?
     private var localAIProbeAvailability: LocalAIAvailability?
@@ -3618,10 +3623,33 @@ final class AppState {
     }
 
     private func pushReviewUndoState() {
+        // Inside a batch, the combined snapshot was already captured up front; the
+        // per-row mutators must not each push their own or one ⌘Z would only revert
+        // the last row of a bulk action.
+        guard !isBatchingReviewUndo else { return }
         reviewUndoStack.append((transactionReviewMetadata, transactionRules))
         if reviewUndoStack.count > 20 {
             reviewUndoStack.removeFirst(reviewUndoStack.count - 20)
         }
+    }
+
+    /// Runs `body` as a single undoable review batch: captures one combined undo
+    /// snapshot up front, suppresses the per-row snapshots the inner mutators would
+    /// otherwise push, and persists once. A single ⌘Z then reverts the whole batch.
+    ///
+    /// Reuses the exact per-row review paths (`updateReviewCategory`,
+    /// `markReviewItemTransfer`, `createRule`, …) so bulk and single-row actions can
+    /// never diverge in meaning — only their undo granularity differs. Re-entrancy is
+    /// a no-op for the inner call: the outermost batch owns the one snapshot.
+    func withBatchedReviewUndo(_ body: () -> Void) {
+        guard !isBatchingReviewUndo else {
+            body()
+            return
+        }
+        pushReviewUndoState()
+        isBatchingReviewUndo = true
+        defer { isBatchingReviewUndo = false }
+        body()
     }
 
     private func persistReviewStorage() {
