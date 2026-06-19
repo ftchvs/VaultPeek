@@ -93,7 +93,7 @@ public enum SyncHistoryDiff {
             let summary = "\(name): \(stats.changedDays) prior \(dayWord) restated (\(deltaText))"
             let accessibilityText = "\(name) had \(stats.changedDays) prior \(dayWord) restated by your bank, a net change of \(deltaText)."
             return Row(
-                id: stableHash(accountId),
+                id: StableHash.hexPadded(accountId),
                 accountDisplayName: name,
                 changedDayCount: stats.changedDays,
                 netDelta: stats.netDelta,
@@ -132,14 +132,5 @@ public enum SyncHistoryDiff {
         if amount > 0 { return "+\(formatted)" }
         if amount < 0 { return "-\(formatted)" }
         return formatted
-    }
-
-    private static func stableHash(_ value: String) -> String {
-        var hash: UInt64 = 14_695_981_039_346_656_037
-        for byte in value.utf8 {
-            hash ^= UInt64(byte)
-            hash &*= 1_099_511_628_211
-        }
-        return String(format: "%016llx", hash)
     }
 }

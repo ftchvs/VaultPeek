@@ -759,14 +759,14 @@ public enum LocalDataStore {
         guard let context else { return accountCacheFilename }
 
         let key = "\(context.environment.rawValue)|\(context.storagePath)"
-        return "accounts-\(context.environment.rawValue)-\(stableHashHex(key)).json"
+        return "accounts-\(context.environment.rawValue)-\(StableHash.hexPadded(key)).json"
     }
 
     private static func transactionCacheFilename(for context: TransactionCacheContext?) -> String {
         guard let context else { return transactionCacheFilename }
 
         let key = "\(context.environment.rawValue)|\(context.storagePath)"
-        return "transactions-\(context.environment.rawValue)-\(stableHashHex(key)).json"
+        return "transactions-\(context.environment.rawValue)-\(StableHash.hexPadded(key)).json"
     }
 
     // Review metadata and merchant rules are scoped to the active cache context
@@ -779,14 +779,14 @@ public enum LocalDataStore {
         guard let context else { return transactionReviewMetadataFilename }
 
         let key = "\(context.environment.rawValue)|\(context.storagePath)"
-        return "\(transactionReviewMetadataScopedPrefix)-\(context.environment.rawValue)-\(stableHashHex(key)).json"
+        return "\(transactionReviewMetadataScopedPrefix)-\(context.environment.rawValue)-\(StableHash.hexPadded(key)).json"
     }
 
     private static func transactionRulesFilename(for context: TransactionCacheContext?) -> String {
         guard let context else { return transactionRulesFilename }
 
         let key = "\(context.environment.rawValue)|\(context.storagePath)"
-        return "\(transactionRulesScopedPrefix)-\(context.environment.rawValue)-\(stableHashHex(key)).json"
+        return "\(transactionRulesScopedPrefix)-\(context.environment.rawValue)-\(StableHash.hexPadded(key)).json"
     }
 
     private static func isTransactionReviewMetadataFilename(_ filename: String) -> Bool {
@@ -803,15 +803,6 @@ public enum LocalDataStore {
             legacyFilename: transactionRulesFilename,
             prefix: transactionRulesScopedPrefix
         )
-    }
-
-    private static func stableHashHex(_ value: String) -> String {
-        var hash: UInt64 = 14_695_981_039_346_656_037
-        for byte in value.utf8 {
-            hash ^= UInt64(byte)
-            hash &*= 1_099_511_628_211
-        }
-        return String(format: "%016llx", hash)
     }
 
     private static func ensurePrivateDirectory(
