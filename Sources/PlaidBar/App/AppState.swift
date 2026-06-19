@@ -1204,71 +1204,13 @@ final class AppState {
 
     var categoryBudgetPresentation: CategoryBudgetPresentation {
         if let cached = _cachedCategoryBudgetPresentation { return cached }
-        let presentation = computeCategoryBudgetPresentation()
+        let presentation = CategoryBudgetPlanner.mergedPresentation(
+            explicitBudgets: categoryBudgets,
+            transactions: transactions,
+            asOf: Date()
+        )
         _cachedCategoryBudgetPresentation = presentation
         return presentation
-    }
-
-    private func computeCategoryBudgetPresentation() -> CategoryBudgetPresentation {
-        let now = Date()
-        let suggestedBudgets = CategoryBudgetPlanner.suggestedBudgets(
-            from: transactions,
-            asOf: now
-        )
-        let suggestedPresentation = CategoryBudgetPlanner.presentation(
-            budgets: suggestedBudgets.filter { categoryBudgets[$0.key] == nil },
-            transactions: transactions,
-            asOf: now,
-            areSuggested: true
-        )
-
-        guard !categoryBudgets.isEmpty else { return suggestedPresentation }
-
-        let serverPresentation = CategoryBudgetPlanner.presentation(
-            budgets: categoryBudgets,
-            transactions: transactions,
-            asOf: now
-        )
-        return Self.mergeCategoryBudgetPresentations(
-            serverPresentation,
-            suggestedPresentation
-        )
-    }
-
-    private static func mergeCategoryBudgetPresentations(
-        _ explicit: CategoryBudgetPresentation,
-        _ suggested: CategoryBudgetPresentation
-    ) -> CategoryBudgetPresentation {
-        let explicitCategoryIds = Set(explicit.items.map(\.id))
-        let items = (explicit.items + suggested.items.filter { !explicitCategoryIds.contains($0.id) })
-            .sorted { lhs, rhs in
-                if lhs.status != rhs.status {
-                    return categoryBudgetStatusRank(lhs.status) < categoryBudgetStatusRank(rhs.status)
-                }
-                if lhs.fractionUsed != rhs.fractionUsed {
-                    return lhs.fractionUsed > rhs.fractionUsed
-                }
-                if lhs.isSuggested != rhs.isSuggested {
-                    return !lhs.isSuggested
-                }
-                return lhs.category.displayName < rhs.category.displayName
-            }
-
-        return CategoryBudgetPresentation(
-            items: items,
-            totalLimit: items.reduce(0) { $0 + $1.monthlyLimit },
-            totalSpent: items.reduce(0) { $0 + $1.spent },
-            overBudgetCount: items.reduce(0) { $0 + ($1.status == .over ? 1 : 0) },
-            nearingCount: items.reduce(0) { $0 + ($1.status == .nearing ? 1 : 0) }
-        )
-    }
-
-    private static func categoryBudgetStatusRank(_ status: CategoryBudgetStatus) -> Int {
-        switch status {
-        case .over: 0
-        case .nearing: 1
-        case .under: 2
-        }
     }
 
     private var weeklyReviewTransactionState: WeeklyReviewTransactionState? {
