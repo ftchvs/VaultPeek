@@ -213,7 +213,7 @@ Center — none of which the headless render path can reach.
 | Widget (small/medium) | Add the VaultPeek widget to Notification Center / desktop | Shows net worth + today's change + sparkline from the App Group snapshot; first install / post-reset shows the "Open VaultPeek" unavailable state, not a misleading `$0`; gallery preview is redacted |
 | Widget deep link | Tap the widget | Opens VaultPeek via `vaultpeek://dashboard` to the dashboard |
 | Transparent Tahoe menu bar | View the menu-bar item against a transparent Tahoe menu bar over light and dark wallpapers | The menu-bar glyph/text stays legible against the translucent menu bar; icon-only (Privacy Mask) menu bar stays blank and legible |
-| Privacy under widget/control | Enable Privacy Mask / App Lock, then check the widget and Control Center control | Widget shows the unavailable/placeholder state (no real net worth) and the control exposes no financial values; the App Group snapshot does not leak masked values |
+| Privacy under widget/control | Enable Privacy Mask / App Lock, then check the widget and Control Center control | Widget shows the unavailable/placeholder state (no real net worth) and the control exposes no financial values, because the shared `FinanceSnapshot` is re-written redacted (`isMasked == true`, value-free) and every reader gates on `isMasked`. Note: `glance-snapshot.json` itself is not yet cleared on mask, so verify the widget's masked behavior comes from the `isMasked` gate, not from a cleared glance file |
 
 ### macOS 26 screenshot note (AND-515, G3)
 
