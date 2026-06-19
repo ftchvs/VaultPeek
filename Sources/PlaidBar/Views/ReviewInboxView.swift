@@ -130,6 +130,15 @@ struct ReviewInboxView: View {
                 isFocused = true
                 clampSelection()
             }
+            // Drive the live on-device Foundation Models categorization tier
+            // (AND-565). A no-op unless Apple Intelligence is `.available`, so the
+            // no-FM device makes no model call. Re-runs when the queue changes so
+            // newly-arrived uncategorized rows get a suggestion. Results are
+            // display-only suggestions surfaced via the "Suggested" badge; they
+            // never auto-apply.
+            .task(id: snapshot.totalCount) {
+                await appState.refreshFoundationModelsCategorySuggestions()
+            }
             .onChange(of: snapshot.totalCount) { _, newCount in
                 clampSelection()
                 // When the queue drains to empty, drop any lingering confirmation
@@ -259,6 +268,7 @@ struct ReviewInboxView: View {
     private func reviewRow(item: TransactionReviewItem, globalIndex: Int) -> some View {
         ReviewInboxRow(
             item: item,
+            foundationModelsSuggestion: appState.foundationModelsCategorySuggestion(for: item.id),
             isSelected: globalIndex == selectedIndex,
             merchantDraft: merchantDraftBinding(for: item),
             onSelect: { selectedIndex = globalIndex },
@@ -751,6 +761,12 @@ private struct InlineCategoryRulePromptBanner: View {
 
 private struct ReviewInboxRow: View {
     let item: TransactionReviewItem
+    /// On-device Foundation Models category *suggestion* for this row, when an
+    /// `.available` FM device produced one (AND-565). Display-only: it badges the
+    /// row but never auto-applies — the user still approves through the existing
+    /// review flow. `nil` on every non-FM device and for rows the model skipped,
+    /// so the row renders exactly as before there.
+    var foundationModelsSuggestion: MerchantCategorySuggestion?
     let isSelected: Bool
     @Binding var merchantDraft: String
     let onSelect: () -> Void
@@ -831,9 +847,9 @@ private struct ReviewInboxRow: View {
                     // name as text + a glyph, so meaning never rides on color
                     // (ACCESSIBILITY.md). The pure CategoryPillModel owns the
                     // category→{title, glyph, accent} mapping.
-                    CategoryPill(model: CategoryPillModel.make(category: item.effectiveCategory))
+                    CategoryPill(model: CategoryPillModel.make(category: displayCategory))
 
-                    if item.isNLSuggestedCategory {
+                    if isShowingSuggestion {
                         suggestedBadge
                     }
 
@@ -1031,14 +1047,32 @@ private struct ReviewInboxRow: View {
         item.reasonCodes.contains(where: \.isHighPriority) ? SemanticColors.warning : .secondary
     }
 
+    /// The category the row displays. Prefers the persisted/Plaid/NL effective
+    /// category; only when none exists does it fall back to a display-only
+    /// Foundation Models *suggestion* so an `.available` FM device fills the pill
+    /// instead of showing "Uncategorized". This is display-only — it never
+    /// persists and never bypasses the review/override flow (AND-565).
+    private var displayCategory: SpendingCategory? {
+        item.effectiveCategory ?? foundationModelsSuggestion?.category
+    }
+
+    /// Whether the displayed category is an on-device *suggestion* (NL backfill or
+    /// a Foundation Models fill of an otherwise-uncategorized row) and so should
+    /// carry the "Suggested" badge. A real Plaid/user category never badges, even
+    /// if FM also produced a (now-unused) suggestion.
+    private var isShowingSuggestion: Bool {
+        item.isNLSuggestedCategory
+            || (item.effectiveCategory == nil && foundationModelsSuggestion != nil)
+    }
+
     private var accessibilitySummary: String {
         let reasons = item.reasonCodes.map(\.displayName).joined(separator: ", ")
         // The row Button's label overrides the child "Suggested" badge, so fold
         // the on-device provenance into the spoken category — otherwise VoiceOver
-        // announces an NL suggestion identically to a Plaid/user category even
-        // though the visual UI shows the "Suggested" badge.
-        let baseCategory = item.effectiveCategory?.displayName ?? "Uncategorized"
-        let category = item.isNLSuggestedCategory ? "\(baseCategory) (suggested on device)" : baseCategory
+        // announces a suggestion identically to a Plaid/user category even though
+        // the visual UI shows the "Suggested" badge.
+        let baseCategory = displayCategory?.displayName ?? "Uncategorized"
+        let category = isShowingSuggestion ? "\(baseCategory) (suggested on device)" : baseCategory
         let amount = Formatters.currency(item.transaction.displayAmount, format: .full)
         return "\(item.effectiveMerchantName), \(amount), \(category), reasons: \(reasons)"
     }
