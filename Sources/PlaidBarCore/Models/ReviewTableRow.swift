@@ -183,6 +183,23 @@ public struct ReviewBulkRecategorizePlan: Sendable, Equatable {
         )
     }
 
+    /// Re-resolves a staged plan against the *currently* listed rows at apply time.
+    ///
+    /// A plan is captured when the confirmation dialog opens, but the inbox can
+    /// change while the dialog sits open (a row gets approved from the popover, a
+    /// refresh removes it). Re-running the same intersection drops any id that no
+    /// longer exists, so confirming can never recategorize a transaction the user
+    /// can no longer see (consistent with how AND-528's bulk path re-resolves stale
+    /// ids before applying). The category is preserved; merchant names are re-read
+    /// from the surviving rows so the recorded "which" stays in sync.
+    public func reResolved(against rows: [ReviewTableRow]) -> ReviewBulkRecategorizePlan {
+        ReviewBulkRecategorizePlan.make(
+            rows: rows,
+            selection: Set(affectedIDs),
+            category: category
+        )
+    }
+
     /// Plain-language description of which rows resolve and to which category —
     /// count first, then the category, then a bounded list of merchant names — for a
     /// confirmation prompt and a VoiceOver announcement, so meaning never rides on a
@@ -196,6 +213,79 @@ public struct ReviewBulkRecategorizePlan: Sendable, Equatable {
         let names = affectedMerchantNames.prefix(max(previewLimit, 0))
         let remainder = count - names.count
         let head = "Set \(count) \(noun) to \(category.displayName)"
+        guard !names.isEmpty else { return head }
+        var preview = names.joined(separator: ", ")
+        if remainder > 0 {
+            preview += ", and \(remainder) more"
+        }
+        return "\(head): \(preview)"
+    }
+}
+
+/// Pure description of the *blast radius* of a bulk **mark-transfer** across a
+/// multi-select review `Table` selection (AND-532, Codex follow-up).
+///
+/// Marking a transfer sets `excludedFromBudgets = true`, so a bulk transfer quietly
+/// removes several transactions from budget/spend math. Like
+/// ``ReviewBulkRecategorizePlan``, this surfaces the scope — how many rows and which
+/// merchants — *before* applying, so a single accidental click can never drop more
+/// from the budget than the user can see. It has no SwiftUI / AppState dependency,
+/// so the "which rows" decision is unit-testable, and the application reuses the
+/// existing per-row `markReviewItemTransfer` path (state blast radius) so bulk and
+/// single transfer marking can never diverge in meaning.
+///
+/// Scope rule mirrors the recategorize plan: the radius is the intersection of the
+/// explicit selection with the currently-listed rows, in **list order**, so a stale
+/// id can never mark a transaction that is no longer shown.
+public struct ReviewBulkTransferPlan: Sendable, Equatable {
+    /// Transaction ids that will be marked as transfers, in table-list order.
+    public let affectedIDs: [String]
+    /// Merchant names of the affected rows, list order, for the "which" preview.
+    public let affectedMerchantNames: [String]
+
+    public var count: Int { affectedIDs.count }
+    public var isEmpty: Bool { affectedIDs.isEmpty }
+
+    public init(affectedIDs: [String], affectedMerchantNames: [String]) {
+        self.affectedIDs = affectedIDs
+        self.affectedMerchantNames = affectedMerchantNames
+    }
+
+    /// Computes the mark-transfer blast radius for a `Table` selection.
+    ///
+    /// - Parameters:
+    ///   - rows: the rows currently listed in the table (already the visible set).
+    ///   - selection: the user's multi-select set of row ids.
+    public static func make(
+        rows: [ReviewTableRow],
+        selection: Set<String>
+    ) -> ReviewBulkTransferPlan {
+        let scoped = rows.filter { selection.contains($0.id) }
+        return ReviewBulkTransferPlan(
+            affectedIDs: scoped.map(\.id),
+            affectedMerchantNames: scoped.map(\.merchantName)
+        )
+    }
+
+    /// Re-resolves a staged plan against the *currently* listed rows at apply time,
+    /// dropping any id that is no longer shown (same staleness guard the
+    /// recategorize plan uses).
+    public func reResolved(against rows: [ReviewTableRow]) -> ReviewBulkTransferPlan {
+        ReviewBulkTransferPlan.make(rows: rows, selection: Set(affectedIDs))
+    }
+
+    /// Plain-language description of which rows will be marked as transfers — count
+    /// first, then a bounded list of merchant names — for a confirmation prompt and
+    /// a VoiceOver announcement, so meaning never rides on a bare number or color.
+    ///
+    /// - Parameter previewLimit: how many merchant names to spell out before
+    ///   collapsing the rest into "and N more".
+    public func blastRadiusDescription(previewLimit: Int = 3) -> String {
+        guard count > 0 else { return "No transactions to mark as transfers" }
+        let noun = count == 1 ? "transaction" : "transactions"
+        let names = affectedMerchantNames.prefix(max(previewLimit, 0))
+        let remainder = count - names.count
+        let head = "Mark \(count) \(noun) as transfers and exclude from budgets"
         guard !names.isEmpty else { return head }
         var preview = names.joined(separator: ", ")
         if remainder > 0 {
