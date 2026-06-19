@@ -76,10 +76,21 @@ final class AppState {
         }
     }
     var transactionReviewMetadata: [TransactionReviewMetadata] = [] {
-        didSet { _cachedTransactionReviewInboxSnapshot = nil }
+        didSet {
+            _cachedTransactionReviewInboxSnapshot = nil
+            // Spend math is now override-aware (AND-526/554): an approve /
+            // recategorize / exclude edits this metadata, so the budget
+            // presentation must recompute too — not only the inbox.
+            _cachedCategoryBudgetPresentation = nil
+        }
     }
     var transactionRules: [TransactionRule] = [] {
-        didSet { _cachedTransactionReviewInboxSnapshot = nil }
+        didSet {
+            _cachedTransactionReviewInboxSnapshot = nil
+            // A new/changed rule recategorizes or excludes spend, so invalidate
+            // the budget presentation alongside the inbox (AND-526/554).
+            _cachedCategoryBudgetPresentation = nil
+        }
     }
     var hasLoadedTransactionReviewStorage = false
     var isLoading = false
@@ -1204,10 +1215,16 @@ final class AppState {
 
     var categoryBudgetPresentation: CategoryBudgetPresentation {
         if let cached = _cachedCategoryBudgetPresentation { return cached }
+        // Pass the live review metadata + rules so recategorizing / excluding a
+        // transaction in the inbox actually moves the budget totals (AND-526/554).
+        // The cache is invalidated whenever transactions, categoryBudgets,
+        // transactionReviewMetadata, or transactionRules change.
         let presentation = CategoryBudgetPlanner.mergedPresentation(
             explicitBudgets: categoryBudgets,
             transactions: transactions,
-            asOf: Date()
+            asOf: Date(),
+            metadata: transactionReviewMetadata,
+            rules: transactionRules
         )
         _cachedCategoryBudgetPresentation = presentation
         return presentation
