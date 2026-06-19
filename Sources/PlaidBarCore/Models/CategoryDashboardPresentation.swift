@@ -30,8 +30,18 @@ public struct CategoryDashboardPresentation: Sendable, Hashable {
         public let fractionUsed: Double?
         /// Budget band (under/nearing/over); `nil` when there is no budget.
         public let status: CategoryBudgetStatus?
+        /// Monthly-equivalent committed recurring spend mapped to this category
+        /// (``RecurringCommitment``), when at least one recurring stream maps here.
+        /// `nil` = no recurring stream for this category, so no ghost segment
+        /// (AND-559). Always strictly positive when present.
+        public let committed: Double?
 
-        public init(category: SpendingCategory, spent: Double, monthlyLimit: Double?) {
+        public init(
+            category: SpendingCategory,
+            spent: Double,
+            monthlyLimit: Double?,
+            committed: Double? = nil
+        ) {
             self.id = category.rawValue
             self.category = category
             let netSpent = max(0, spent)
@@ -46,11 +56,21 @@ public struct CategoryDashboardPresentation: Sendable, Hashable {
                 self.fractionUsed = nil
                 self.status = nil
             }
+            // Only a positive commitment is meaningful; treat 0/negative as none.
+            self.committed = committed.flatMap { $0 > 0 ? $0 : nil }
         }
 
         /// `monthlyLimit - spent` when budgeted; `nil` otherwise.
         public var remaining: Double? {
             monthlyLimit.map { $0 - spent }
+        }
+
+        /// Share of the budget already committed to recurring bills, clamped to
+        /// `0...1`. `nil` when unbudgeted or no recurring stream maps here — so the
+        /// dashed ghost segment is hidden (AND-559).
+        public var committedFraction: Double? {
+            guard let limit = monthlyLimit, limit > 0, let committed else { return nil }
+            return min(1, max(0, committed / limit))
         }
 
         public var isBudgeted: Bool { monthlyLimit != nil }
@@ -76,6 +96,9 @@ public struct CategoryDashboardPresentation: Sendable, Hashable {
         /// limit, so a group can be over while every leaf is individually under
         /// (spec §7). `nil` when the group has no budget.
         public let status: CategoryBudgetStatus?
+        /// Sum of the group's leaves' committed recurring spend; `nil` when no leaf
+        /// has a recurring stream (AND-559). Always strictly positive when present.
+        public let committed: Double?
 
         public init(group: CategoryGroup, leaves: [Leaf]) {
             self.id = group.rawValue
@@ -97,11 +120,27 @@ public struct CategoryDashboardPresentation: Sendable, Hashable {
                 self.fractionUsed = fraction
                 self.status = CategoryBudgetStatus(fractionUsed: fraction)
             }
+            // Only budgeted leaves contribute to the group's committed total: the
+            // group denominator is the sum of *budgeted* leaves' limits, and an
+            // unbudgeted leaf hides its own ghost, so counting its commitment here
+            // would overstate group budget pressure (addresses Codex review on #573).
+            let totalCommitted = leaves
+                .filter(\.isBudgeted)
+                .compactMap(\.committed)
+                .reduce(0, +)
+            self.committed = totalCommitted > 0 ? totalCommitted : nil
         }
 
         /// `monthlyLimit - spent` when budgeted; `nil` otherwise.
         public var remaining: Double? {
             monthlyLimit.map { $0 - spent }
+        }
+
+        /// Share of the group budget committed to recurring bills, clamped to
+        /// `0...1`; `nil` when unbudgeted or no leaf has a recurring stream.
+        public var committedFraction: Double? {
+            guard let limit = monthlyLimit, limit > 0, let committed else { return nil }
+            return min(1, max(0, committed / limit))
         }
 
         public var isBudgeted: Bool { monthlyLimit != nil }

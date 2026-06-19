@@ -408,4 +408,152 @@ struct CategoryDashboardBuilderTests {
         #expect(result.group(.shopping)?.spent == 100)
         #expect(result.totalSpent == 100)
     }
+
+    // MARK: - Committed recurring ghost segment (AND-559)
+
+    private func monthlyStream(
+        _ merchant: String,
+        amount: Double,
+        category: SpendingCategory
+    ) -> RecurringTransaction {
+        RecurringTransaction(
+            merchantName: merchant,
+            frequency: .monthly,
+            averageAmount: amount,
+            lastDate: "2026-06-01",
+            nextExpectedDate: "2026-07-01",
+            category: category,
+            transactionCount: 6,
+            confidence: 0.9
+        )
+    }
+
+    @Test("Recurring streams thread committed spend onto the matching leaf and its group")
+    func committedThreadedToLeafAndGroup() {
+        let transactions = [tx(200, "2026-06-03", .subscriptions)]
+        let result = CategoryDashboardBuilder.build(
+            transactions: transactions,
+            budgets: [.subscriptions: 100],
+            asOf: now,
+            calendar: calendar,
+            recurring: [monthlyStream("Netflix", amount: 30, category: .subscriptions)]
+        )
+
+        let leaf = result.leaf(.subscriptions)
+        #expect(leaf?.committed == 30)
+        // 30 committed against a 100 budget = 0.3 of the bar.
+        #expect(leaf?.committedFraction == 0.3)
+
+        // The group rollup sums its leaves' commitments.
+        let group = result.group(SpendingCategory.subscriptions.group)
+        #expect(group?.committed == 30)
+    }
+
+    @Test("Committed is capped at the full bar even when recurring exceeds the budget")
+    func committedClampedToFullBar() {
+        let result = CategoryDashboardBuilder.build(
+            transactions: [tx(50, "2026-06-03", .subscriptions)],
+            budgets: [.subscriptions: 20],
+            asOf: now,
+            calendar: calendar,
+            recurring: [monthlyStream("Bundle", amount: 40, category: .subscriptions)]
+        )
+        let leaf = result.leaf(.subscriptions)
+        #expect(leaf?.committed == 40)            // raw amount preserved
+        #expect(leaf?.committedFraction == 1.0)   // fraction clamped to the bar
+    }
+
+    @Test("An unbudgeted leaf has no committed fraction even with a recurring stream")
+    func committedFractionNilWhenUnbudgeted() {
+        let result = CategoryDashboardBuilder.build(
+            transactions: [tx(80, "2026-06-03", .subscriptions)],
+            budgets: [:],
+            asOf: now,
+            calendar: calendar,
+            recurring: [monthlyStream("Netflix", amount: 30, category: .subscriptions)]
+        )
+        let leaf = result.leaf(.subscriptions)
+        #expect(leaf?.committed == 30)
+        #expect(leaf?.committedFraction == nil)
+    }
+
+    @Test("No recurring input leaves committed nil (backward compatible)")
+    func committedNilWithoutRecurring() {
+        let result = CategoryDashboardBuilder.build(
+            transactions: [tx(200, "2026-06-03", .subscriptions)],
+            budgets: [.subscriptions: 100],
+            asOf: now,
+            calendar: calendar
+        )
+        #expect(result.leaf(.subscriptions)?.committed == nil)
+        #expect(result.leaf(.subscriptions)?.committedFraction == nil)
+    }
+
+    @Test("A category with no recurring stream keeps a nil ghost segment")
+    func committedNilForUnmappedCategory() {
+        let result = CategoryDashboardBuilder.build(
+            transactions: [tx(120, "2026-06-03", .foodAndDrink)],
+            budgets: [.foodAndDrink: 300],
+            asOf: now,
+            calendar: calendar,
+            recurring: [monthlyStream("Netflix", amount: 30, category: .subscriptions)]
+        )
+        #expect(result.leaf(.foodAndDrink)?.committed == nil)
+        #expect(result.leaf(.foodAndDrink)?.committedFraction == nil)
+    }
+
+    @Test("A rule moves the committed ghost to the recategorized leaf in the dashboard")
+    func committedFollowsRuleRecategorization() {
+        let result = CategoryDashboardBuilder.build(
+            transactions: [tx(200, "2026-06-03", .healthAndFitness, name: "Gym")],
+            budgets: [.healthAndFitness: 100],
+            asOf: now,
+            calendar: calendar,
+            rules: [TransactionRule(matchMerchantContains: "Gym", category: .healthAndFitness)],
+            recurring: [RecurringTransaction(
+                merchantName: "Gym", frequency: .monthly, averageAmount: 30,
+                lastDate: "2026-06-01", nextExpectedDate: "2026-07-01",
+                category: .subscriptions, transactionCount: 6, confidence: 0.9
+            )]
+        )
+        // Ghost follows the rule onto healthAndFitness, not the raw subscriptions leaf.
+        #expect(result.leaf(.healthAndFitness)?.committed == 30)
+        #expect(result.leaf(.subscriptions) == nil)
+    }
+
+    @Test("Stale recurring streams are dropped from dashboard commitments")
+    func committedDropsStaleStreams() {
+        let result = CategoryDashboardBuilder.build(
+            transactions: [tx(80, "2026-06-03", .subscriptions)],
+            budgets: [.subscriptions: 100],
+            asOf: now,
+            calendar: calendar,
+            recurring: [RecurringTransaction(
+                merchantName: "Cancelled", frequency: .monthly, averageAmount: 25,
+                lastDate: "2026-01-01", nextExpectedDate: "2026-02-01",
+                category: .subscriptions, transactionCount: 6, confidence: 0.9
+            )]
+        )
+        #expect(result.leaf(.subscriptions)?.committed == nil)
+    }
+
+    @Test("Group committed counts only budgeted leaves, excludes unbudgeted ones")
+    func groupCommittedExcludesUnbudgetedLeaves() {
+        // Hand-built rollup: a budgeted leaf (limit 300, committed 50) plus an
+        // unbudgeted leaf carrying its own commitment (30). The group denominator is
+        // only the budgeted limit (300), so the group's committed must be 50 — the
+        // unbudgeted leaf's 30 is excluded so it can't overstate group pressure.
+        let budgeted = CategoryDashboardPresentation.Leaf(
+            category: .foodAndDrink, spent: 100, monthlyLimit: 300, committed: 50
+        )
+        let unbudgeted = CategoryDashboardPresentation.Leaf(
+            category: .shopping, spent: 40, monthlyLimit: nil, committed: 30
+        )
+        let group = CategoryDashboardPresentation.GroupRollup(
+            group: .foodAndDining, leaves: [budgeted, unbudgeted]
+        )
+        #expect(group.monthlyLimit == 300)
+        #expect(group.committed == 50)
+        #expect(group.committedFraction == 50.0 / 300.0)
+    }
 }
