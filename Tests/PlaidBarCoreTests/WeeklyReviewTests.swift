@@ -184,6 +184,62 @@ struct WeeklyReviewTests {
         #expect(state.trustedTransactionIds == ["grocery-0", "grocery-1"])
     }
 
+    /// Demo trust model: a non-pending transaction with no metadata is trusted
+    /// (so the checklist stays exercisable without seeding metadata for every
+    /// fixture), a pending one is unreviewed, and — the AND-543 fix — an
+    /// *explicitly* seeded `.needsReview` row is counted unreviewed so the
+    /// Weekly Review agrees with the Review Inbox.
+    @Test("Demo derived state honors seeded needs-review rows alongside pending")
+    func demoDerivedHonorsSeededNeedsReview() {
+        let transactions = [
+            transaction(id: "trusted-default", date: "2026-06-14"),
+            TransactionDTO(
+                id: "pending-row", accountId: "acct", amount: 10,
+                date: "2026-06-14", name: "Synthetic", pending: true
+            ),
+            transaction(id: "seeded-needs-review", date: "2026-06-14"),
+        ]
+        let state = WeeklyReviewTransactionState.demoDerived(
+            from: transactions,
+            metadata: [
+                // Only the inbox row is seeded; the trusted row has no metadata.
+                TransactionReviewMetadata(id: "seeded-needs-review", status: .needsReview),
+            ]
+        )
+
+        #expect(state.trustedTransactionIds == ["trusted-default"])
+        #expect(state.unreviewedTransactionIds == ["pending-row", "seeded-needs-review"])
+    }
+
+    /// End-to-end regression against the real demo fixtures: the seeded
+    /// uncategorized `tx55` must surface as an unreviewed weekly-review item in
+    /// `--demo`, matching its Review Inbox row, instead of being silently trusted.
+    @Test("Demo fixtures surface the seeded inbox row in the weekly review")
+    func demoFixturesSurfaceSeededInboxRowInWeeklyReview() {
+        let transactions = DemoFixtures.transactions(now: now)
+        let metadata = DemoFixtures.demoReviewMetadata(now: now)
+
+        let state = WeeklyReviewTransactionState.demoDerived(
+            from: transactions,
+            metadata: metadata
+        )
+        #expect(state.unreviewedTransactionIds.contains("tx55"))
+
+        let presentation = WeeklyReviewBuilder.evaluate(
+            state: .empty,
+            transactionState: state,
+            transactions: transactions,
+            recurringTransactions: [],
+            safeToSpend: safeToSpend(amount: 1_000),
+            asOf: now,
+            calendar: calendar
+        )
+        #expect(
+            presentation.items.contains { $0.kind == .transactionReview },
+            "weekly review hid the open demo inbox row"
+        )
+    }
+
     @Test("Reviewed and ignored transaction metadata unblock weekly review")
     func reviewedAndIgnoredTransactionMetadataUnblocksWeeklyReview() {
         let transactions = [
