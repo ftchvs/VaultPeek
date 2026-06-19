@@ -299,3 +299,71 @@ Suite size is not hard-coded in these docs; derive the current count with `swift
 - **Multiple providers**: Abstract the Plaid client behind a protocol only if it
   strengthens the local menu-bar instrument instead of becoming a generic
   provider playground
+
+## macOS 26 Glance Surfaces (App Group, App Intents, Control Center, Widget) — AND-515
+
+macOS 26 (Tahoe) is the deployment floor, so VaultPeek ships first-class
+"glance" surfaces that live *outside* the app process: a home-screen /
+Notification Center widget, a Control Center control, and App Intents
+(Spotlight/Siri/Shortcuts). These run in a separate extension process and
+cannot reach the app's in-memory `AppState` or the companion server, so the app
+publishes a tiny, display-only snapshot through a shared App Group container.
+
+### Components
+
+| Component | Target | Role |
+|-----------|--------|------|
+| `GlanceSnapshot` / `GlanceSnapshotStore` | `PlaidBarCore` | The shared data contract and its file-backed reader/writer, used by both the app and the extension |
+| `GlanceSnapshotWriteDebouncer` | `PlaidBarCore` | Coalesces rapid app-side writes (default 400 ms) so frequent refreshes don't thrash the App Group file |
+| `PlaidBarWidgetExtension` (`PlaidBarWidgetBundle`) | widget extension | `WidgetBundle` hosting the `PlaidBarGlanceWidget` (small/medium), the `PlaidBarRefreshControl` (`ControlWidget`), and the `RefreshBalancesIntent` (`AppIntent`) |
+| `AppState` glance writer | `PlaidBar` | Builds and debounce-writes the snapshot on data change, clears it on reset, and consumes queued commands |
+
+### Snapshot data flow
+
+```
+PlaidBar.app (AppState)
+  build GlanceSnapshot from net worth + balance history
+        │ debounced saveIfChanged()
+        ▼
+App Group container  group.com.ftchvs.PlaidBar
+  glance-snapshot.json   ← display values only (atomic, 0600)
+  glance-command.json    ← one-shot command queue
+        │ GlanceSnapshotStore.load()
+        ▼
+PlaidBarWidgetExtension
+  widget (net worth, today's change, sparkline)
+  Control Center control + App Intent (Refresh balances)
+```
+
+The widget/control/intent **only read** the snapshot; they never call the
+companion server or Plaid. The refresh path is intentionally indirect: the
+`RefreshBalancesIntent` writes a `GlanceCommandRequest` to
+`glance-command.json` and opens the app (`openAppWhenRun = true`); the running
+app consumes (and deletes) that command and performs the real refresh through
+`ServerClient`. The extension therefore needs no Plaid credentials and no
+localhost bearer token. The deep link `vaultpeek://dashboard` summons the
+popover.
+
+### Storage location and degradation
+
+`GlanceSnapshotStore.snapshotDirectory()` resolves the App Group container via
+`containerURL(forSecurityApplicationGroupIdentifier:)`. When that is
+unavailable (e.g. an unsigned/source build with no App Group entitlement), it
+falls back to the normal local data directory; the widget then shows its
+unavailable ("Open VaultPeek") state rather than stale or misleading data.
+Snapshot and command files are written atomically with `0600` permissions on
+macOS, consistent with the rest of `~/.vaultpeek/`.
+
+### Security boundary (display values only — no tokens in the App Group)
+
+The App Group widens the trust boundary to a second process, so it carries the
+same hard rule as `/api/status`: **only display-ready, low-sensitivity values
+cross it.** `GlanceSnapshot` is limited to net worth, today's change, a
+normalized sparkline, an `updatedAt` timestamp, and an `isDemo` flag. It must
+**never** contain Plaid access tokens, the local bearer token, client secrets,
+account IDs, item IDs, account numbers/masks, merchant names, or transaction
+rows. The command channel is similarly minimal — a single typed enum
+(`refreshBalances`) plus a timestamp, with no parameters that could carry data
+out of the app. Privacy Mask / App Lock keep the snapshot from publishing real
+values: while masked or locked the app clears or withholds the snapshot so the
+widget and Control Center control fall back to the placeholder state.
