@@ -177,6 +177,10 @@ final class CategoryDashboardWindowController: NSObject, NSWindowDelegate {
             CategoryDashboardWindow()
                 .environment(appState)
                 .forcedCategoryDashboardColorScheme(forcedColorScheme)
+                // Apply the in-app text-size preference here too so the detached
+                // Category Dashboard scales with the same control as the popover
+                // (AND-570). Reads @AppStorage, so it tracks live changes.
+                .appliesAppTextSize()
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         )
     }
