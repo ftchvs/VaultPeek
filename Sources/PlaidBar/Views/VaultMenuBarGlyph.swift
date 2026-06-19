@@ -8,6 +8,18 @@ import PlaidBarCore
 /// Symbol, and bundling an asset would mean an SPM resource bundle + packaging
 /// changes; a code-drawn template avoids both while staying fully accessible.
 ///
+/// SF Symbols 7 review (AND-514, macOS 26 catalog, 8302 symbols audited
+/// 2026-06-18): the catalog still ships no `safe`/`vault`/`strongbox` glyph.
+/// The nearest neighbours — `lock`, `lock.shield`, `shield`,
+/// `building.columns`, `banknote`, `dial.*` — read as a padlock, a bank
+/// building, a banknote, or a dial, none of which depict the vault-dial mark
+/// that ties the menu bar to the app icon. A padlock would also collide with
+/// the degraded login/auth glyph ladder. No strong (or even weak) match
+/// exists, so the custom template is kept deliberately rather than forced onto
+/// an off-brand system symbol. Re-audit when SF Symbols ships a safe/vault
+/// glyph; switching `MenuBarIconStyle.vault` to a system symbol would then let
+/// this type be deprecated and the bespoke drawing deleted.
+///
 /// The shape is a deliberately bolder, simplified vault dial than the app icon:
 /// a thick door ring plus a four-spoke wheel handle, sized to read at the ~16pt
 /// menu-bar glyph size where fine detail (bolts, concentric rings) would
