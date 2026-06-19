@@ -1919,6 +1919,28 @@ struct PlaidBarCoreTests {
         #expect(grouped.flatMap(\.1).map(\.id) == ["matching-older", "matching-oldest"])
     }
 
+    @Test("Transaction groupedRecent applies search criteria before the recent limit (AND-478)")
+    func transactionGroupedRecentAppliesSearchBeforeLimit() {
+        // The newest `maxCount` rows do NOT match the search term; an older row does.
+        // The matching older row must still surface, proving the criteria filter runs
+        // before the display prefix/limit rather than after it.
+        let transactions = [
+            TransactionDTO(id: "recent-nonmatch-1", accountId: "checking", amount: 20, date: "2026-01-05", name: "Coffee", category: .foodAndDrink),
+            TransactionDTO(id: "recent-nonmatch-2", accountId: "checking", amount: 30, date: "2026-01-04", name: "Groceries", category: .foodAndDrink),
+            TransactionDTO(id: "matching-older", accountId: "checking", amount: 40, date: "2026-01-03", name: "Uber Ride", category: .transportation),
+            TransactionDTO(id: "matching-oldest", accountId: "checking", amount: 50, date: "2026-01-02", name: "Lyft Ride", category: .transportation),
+        ]
+
+        let grouped = TransactionFilter.groupedRecent(
+            from: transactions,
+            criteria: TransactionFilterCriteria(searchText: "ride"),
+            maxCount: 2
+        )
+
+        #expect(grouped.map(\.0) == ["2026-01-03", "2026-01-02"])
+        #expect(grouped.flatMap(\.1).map(\.id) == ["matching-older", "matching-oldest"])
+    }
+
     @Test("Transaction filter search matches category display name")
     func transactionFilterSearchMatchesCategoryDisplayName() {
         let transactions = [
