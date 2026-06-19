@@ -263,9 +263,15 @@ public enum CategoryBudgetPlanner {
     ///   spend to the chosen category;
     /// - a row the user (or a rule) `excludedFromBudgets`, or a row resolved as a
     ///   transfer, is dropped entirely;
-    /// - a row with no confident effective category (uncategorized — an on-device
-    ///   NL suggestion is display-only and never counted) is dropped, so an
-    ///   unreviewed guess never silently inflates a bucket.
+    /// - a row with no confident effective category (no override/rule, and a
+    ///   `.other`/absent/low-confidence Plaid category) **falls back** to its raw
+    ///   Plaid bucket — or `.other` when Plaid gave nothing — rather than being
+    ///   dropped, matching the legacy bucket and the spend precedence (user
+    ///   override → rule → raw Plaid → `.other`). An on-device NL suggestion is
+    ///   still display-only and never counted: it stays on
+    ///   `Resolution.suggestedCategory`, so an unreviewed guess never inflates a
+    ///   bucket — the row simply keeps its raw-Plaid/`.other` attribution until the
+    ///   user approves the suggestion.
     ///
     /// Both params **default to `nil`, which preserves the legacy behavior
     /// exactly** (bucket by `transaction.category ?? .other`, drop income /
@@ -325,9 +331,15 @@ public enum CategoryBudgetPlanner {
 
             // Drop excluded rows (explicit user/rule exclusion or transfers).
             if resolution.excludedFromBudgets || resolution.isTransfer { continue }
-            // Drop rows with no confident budget category (NL suggestions are
-            // display-only and never counted before approval).
-            guard let category = resolution.category else { continue }
+            // No *confident* override/rule/Plaid category (the row is `.other`, has
+            // no Plaid category, or Plaid flagged it low/unknown). Per the spend
+            // precedence (user override → rule → raw Plaid → `.other`, spec §4/§5),
+            // such a row must **fall back** to its raw Plaid bucket — or `.other`
+            // when Plaid gave nothing — not vanish from totals. A display-only NL
+            // suggestion is still never counted here: it lives on
+            // `resolution.suggestedCategory`, not on the aggregation category, so an
+            // unapproved guess keeps the row in raw-Plaid/`.other` until approved.
+            let category = resolution.category ?? (transaction.category ?? .other)
             // Income never counts as category spend even if it survived resolution
             // (the resolver does not classify income as transfer/excluded).
             if excludedCategories.contains(category) { continue }

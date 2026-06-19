@@ -287,12 +287,19 @@ struct OverrideAwareSpendMathTests {
         #expect(resolved[.foodAndDrink] == nil)
     }
 
-    // MARK: - Uncategorized rows stay out (NL excluded from budget)
+    // MARK: - Nil-effective-category rows fall back to raw Plaid / .other
 
-    @Test("An uncategorized row with no override/rule does not enter the totals")
-    func uncategorizedStaysOut() {
-        // Nil category, no override, no rule → resolver returns nil budget
-        // category (NL is display-only), so it must not appear in the totals.
+    // Previously `uncategorizedStaysOut`, which asserted `resolved.isEmpty`. That
+    // codified a live regression: an uncategorized row whose budget category
+    // resolved to nil (no override, no rule, no confident Plaid category) was
+    // *dropped* from every bucket. Per the spend precedence (user override → rule →
+    // raw Plaid → `.other`, spec §4/§5) such a row must **fall back** to its raw
+    // Plaid bucket — or `.other` when Plaid gave nothing — not vanish. So a nil-
+    // category row now lands under `.other`, matching the legacy raw-category total.
+    @Test("An uncategorized (nil-category) row with no override/rule falls back to .other")
+    func uncategorizedFallsBackToOther() {
+        // Nil category, no override, no rule → resolver returns nil budget category,
+        // which must fall back to `.other` (Plaid gave nothing), matching legacy.
         let transaction = tx(
             30, "2026-06-05", nil,
             id: "mystery", name: "SQ *KMNT LLC 9921", merchantName: nil
@@ -304,7 +311,99 @@ struct OverrideAwareSpendMathTests {
             metadata: [],
             rules: []
         )
-        #expect(resolved.isEmpty)
+        #expect(resolved[.other] == 30)
+
+        // It must match the legacy raw-category bucket for the same row.
+        let legacy = CategoryBudgetPlanner.netSpendByCategory(
+            from: [transaction],
+            startKey: startKey,
+            endKey: endKey
+        )
+        #expect(resolved == legacy)
+    }
+
+    @Test("An .other row with no override/rule counts under .other (matches legacy)")
+    func otherCategoryFallsBackToOther() {
+        // Codex regression repro: a $400 `.other` charge. The resolver's budget
+        // category is nil for `.other` (it is not a *confident* Plaid category), so
+        // before the fix this row vanished — a user budgeting `.other` saw spent==0
+        // instead of 400. It must now count under `.other`, matching legacy.
+        let transaction = tx(400, "2026-06-05", .other, id: "uncat")
+        let resolved = CategoryBudgetPlanner.netSpendByCategory(
+            from: [transaction],
+            startKey: startKey,
+            endKey: endKey,
+            metadata: [],
+            rules: []
+        )
+        #expect(resolved[.other] == 400)
+
+        let legacy = CategoryBudgetPlanner.netSpendByCategory(
+            from: [transaction],
+            startKey: startKey,
+            endKey: endKey
+        )
+        #expect(legacy[.other] == 400)
+        #expect(resolved == legacy)
+    }
+
+    @Test("A low-confidence Plaid row keeps its raw Plaid bucket (not dropped)")
+    func lowConfidencePlaidRowKeepsRawBucket() {
+        // Plaid returned Food & Drink but flagged it low/unknown confidence. The
+        // resolver treats that as no *confident* category (budget category nil), but
+        // the row must still fall back to its raw Plaid bucket — Food & Drink — not
+        // disappear. (Before the fix every low-confidence row was dropped.)
+        let transaction = tx(
+            85, "2026-06-05", .foodAndDrink,
+            id: "lowconf", name: "UNKNOWN CAFE", merchantName: nil,
+            lowConfidence: true
+        )
+        let resolved = CategoryBudgetPlanner.netSpendByCategory(
+            from: [transaction],
+            startKey: startKey,
+            endKey: endKey,
+            metadata: [],
+            rules: []
+        )
+        #expect(resolved[.foodAndDrink] == 85)
+        #expect(resolved[.other] == nil)
+
+        // Matches the legacy raw-category bucket (legacy ignores confidence).
+        let legacy = CategoryBudgetPlanner.netSpendByCategory(
+            from: [transaction],
+            startKey: startKey,
+            endKey: endKey
+        )
+        #expect(resolved == legacy)
+    }
+
+    @Test("Excluded and transfer rows are still skipped even with the nil-category fallback")
+    func excludedAndTransferStillSkippedWithFallback() {
+        // The nil-category fallback must not resurrect excluded/transfer rows. Mix a
+        // kept `.other` row, an income row (excludedCategories), a transfer-override
+        // row, and a rule-excluded row — only the kept `.other` should remain.
+        let transactions = [
+            tx(120, "2026-06-05", .other, id: "keep"),
+            tx(-900, "2026-06-02", .income, id: "salary"),       // excludedCategories
+            tx(200, "2026-06-06", .other, id: "xfer"),           // transfer override
+            tx(
+                75, "2026-06-07", nil,
+                id: "venmo", name: "VENMO PAYMENT", merchantName: "Venmo"
+            ),                                                   // rule-excluded
+        ]
+        let metadata = [TransactionReviewMetadata(id: "xfer", isTransferOverride: true)]
+        let rules = [TransactionRule(matchOriginalNameContains: "VENMO", excludedFromBudgets: true)]
+        let resolved = CategoryBudgetPlanner.netSpendByCategory(
+            from: transactions,
+            startKey: startKey,
+            endKey: endKey,
+            metadata: metadata,
+            rules: rules
+        )
+        #expect(resolved[.other] == 120)
+        #expect(resolved[.income] == nil)
+        #expect(resolved[.transfer] == nil)
+        #expect(resolved.count == 1)
     }
 
     // MARK: - End-to-end presentation wiring
