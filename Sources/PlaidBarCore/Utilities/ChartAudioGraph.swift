@@ -101,6 +101,33 @@ public enum ChartAudioGraph {
 
         /// No points to sonify.
         public var isEmpty: Bool { points.isEmpty }
+
+        /// Every string this descriptor will make VoiceOver speak through the
+        /// audio graph, gathered in one place: the chart `summary`, each point's
+        /// spoken `label`, and the y-axis *value descriptions* VoiceOver reads
+        /// while scrubbing the value axis (sampled at the axis bounds + midpoint).
+        ///
+        /// This is the **single masking surface** for the audio graph. The SwiftUI
+        /// bridge (`ChartAudioGraphRepresentable`) builds *and* updates the
+        /// `AXChartDescriptor` from exactly these strings, so build-time and
+        /// update-time masking cannot diverge: if this collection is free of exact
+        /// amounts, so is everything VoiceOver can announce. That invariant is what
+        /// the unit tests assert — covering the otherwise un-unit-testable
+        /// representable, whose `update` path was the AND-569 staleness leak (a
+        /// descriptor built unmasked kept speaking amounts after Privacy Mask
+        /// engaged because `updateChartDescriptor` was a no-op).
+        public func axSpokenStrings(currencyCode: String = "USD") -> [String] {
+            var strings = [summary]
+            strings.append(contentsOf: points.map(\.label))
+            // The value-axis provider is a closure VoiceOver invokes per scrub
+            // position; sample the bounds + midpoint so the test exercises the
+            // same masking the closure applies for any value it's asked about.
+            let samples = [yAxis.lowerBound, (yAxis.lowerBound + yAxis.upperBound) / 2, yAxis.upperBound]
+            strings.append(contentsOf: samples.map {
+                ChartAudioGraph.yAxisValueDescription($0, isMasked: isPrivacyMasked, currencyCode: currencyCode)
+            })
+            return strings
+        }
     }
 
     // MARK: - Y-axis value description (privacy-aware)
