@@ -180,24 +180,29 @@ struct LocalInsightModelRuntimeTests {
 
     @Test("Runtime timeout returns without waiting for cancellation-ignoring models")
     func runtimeTimeoutDoesNotWaitForCancellationIgnoringModel() async {
-        let model = CancellationIgnoringLocalInsightModel(
+        let state = BlockingCancellationIgnoringLocalInsightModel.State()
+        let model = BlockingCancellationIgnoringLocalInsightModel(
             output: "Food spending was the largest driver this month.",
-            delaySeconds: 0.2
+            state: state
         )
-        let startedAt = Date()
 
-        let result = await LocalInsightModelRuntime.generateSummary(
-            input: input(),
-            model: model,
-            fallbackSummary: { _ in "deterministic fallback" },
-            configuration: LocalInsightModelGenerationConfiguration(timeoutNanoseconds: 1_000_000)
-        )
-        let elapsed = Date().timeIntervalSince(startedAt)
+        let runtimeTask = Task {
+            await LocalInsightModelRuntime.generateSummary(
+                input: input(),
+                model: model,
+                fallbackSummary: { _ in "deterministic fallback" },
+                configuration: LocalInsightModelGenerationConfiguration(timeoutNanoseconds: 1_000_000)
+            )
+        }
+
+        await state.waitUntilStarted()
+        let result = await runtimeTask.value
+        #expect(!state.wasReleased)
+        state.release()
 
         #expect(result.summary == "deterministic fallback")
         #expect(result.usedModelOutput == false)
         #expect(result.fallbackReason == .timeout)
-        #expect(elapsed < 0.15)
     }
 
     private func input() -> LocalAIActivitySummaryInput {
@@ -272,15 +277,76 @@ private struct DelayedLocalInsightModel: LocalInsightModel {
     }
 }
 
-private struct CancellationIgnoringLocalInsightModel: LocalInsightModel {
+private struct BlockingCancellationIgnoringLocalInsightModel: LocalInsightModel {
+    final class State: @unchecked Sendable {
+        private let lock = NSLock()
+        private let semaphore = DispatchSemaphore(value: 0)
+        private var startedContinuation: CheckedContinuation<Void, Never>?
+        private var hasStarted = false
+        private var isReleased = false
+
+        var wasReleased: Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            return isReleased
+        }
+
+        func waitUntilStarted() async {
+            if hasStartedSnapshot() { return }
+
+            await withCheckedContinuation { continuation in
+                if installStartedContinuation(continuation) {
+                    continuation.resume()
+                }
+            }
+        }
+
+        private func hasStartedSnapshot() -> Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            return hasStarted
+        }
+
+        private func installStartedContinuation(_ continuation: CheckedContinuation<Void, Never>) -> Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            if hasStarted { return true }
+            startedContinuation = continuation
+            return false
+        }
+
+        func markStarted() {
+            let continuation: CheckedContinuation<Void, Never>?
+            lock.lock()
+            hasStarted = true
+            continuation = startedContinuation
+            startedContinuation = nil
+            lock.unlock()
+            continuation?.resume()
+        }
+
+        func release() {
+            lock.lock()
+            guard !isReleased else {
+                lock.unlock()
+                return
+            }
+            isReleased = true
+            lock.unlock()
+            semaphore.signal()
+        }
+
+        func waitUntilReleased() {
+            semaphore.wait()
+        }
+    }
+
     let output: String
-    let delaySeconds: TimeInterval
+    let state: State
 
     func summarize(_ prompt: LocalInsightModelPrompt, maxTokens: Int) async throws -> String {
-        let deadline = Date().addingTimeInterval(delaySeconds)
-        while Date() < deadline {
-            _ = 1 + 1
-        }
+        state.markStarted()
+        state.waitUntilReleased()
         return output
     }
 }
