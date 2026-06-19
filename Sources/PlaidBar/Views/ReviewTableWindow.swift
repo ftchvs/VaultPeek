@@ -343,8 +343,10 @@ struct ReviewTableWindow: View {
         pendingBulkPlan = nil
         guard !plan.isEmpty else { return }
         animatingResolution {
-            for id in plan.affectedIDs {
-                appState.updateReviewCategory(id, category: plan.category)
+            appState.withBatchedReviewUndo {
+                for id in plan.affectedIDs {
+                    appState.updateReviewCategory(id, category: plan.category)
+                }
             }
         }
         selection.subtract(plan.affectedIDs)
@@ -355,10 +357,14 @@ struct ReviewTableWindow: View {
     }
 
     /// Recategorize a scoped set of rows (single from a context-menu, or many).
+    /// The whole scope is one undo unit — for a single row that is exactly one
+    /// snapshot, matching the inbox's per-row behavior.
     private func recategorize(rows scoped: [ReviewTableRow], to category: SpendingCategory) {
         animatingResolution {
-            for row in scoped {
-                appState.updateReviewCategory(row.id, category: category)
+            appState.withBatchedReviewUndo {
+                for row in scoped {
+                    appState.updateReviewCategory(row.id, category: category)
+                }
             }
         }
         selection.subtract(scoped.map(\.id))
@@ -366,8 +372,10 @@ struct ReviewTableWindow: View {
 
     private func markTransfer(rows scoped: [ReviewTableRow]) {
         animatingResolution {
-            for row in scoped {
-                appState.markReviewItemTransfer(row.id)
+            appState.withBatchedReviewUndo {
+                for row in scoped {
+                    appState.markReviewItemTransfer(row.id)
+                }
             }
         }
         selection.subtract(scoped.map(\.id))
@@ -393,9 +401,11 @@ struct ReviewTableWindow: View {
     /// reusing the existing `createRule(from:category:)` path.
     private func createCategoryRules(rows scoped: [ReviewTableRow], category: SpendingCategory) {
         animatingResolution {
-            for row in scoped {
-                if let item = item(for: row.id) {
-                    appState.createRule(from: item, category: category)
+            appState.withBatchedReviewUndo {
+                for row in scoped {
+                    if let item = item(for: row.id) {
+                        appState.createRule(from: item, category: category)
+                    }
                 }
             }
         }
@@ -405,9 +415,11 @@ struct ReviewTableWindow: View {
     /// Create a per-merchant "always mark transfer" rule for each scoped row.
     private func createTransferRules(rows scoped: [ReviewTableRow]) {
         animatingResolution {
-            for row in scoped {
-                if let item = item(for: row.id) {
-                    appState.createRule(from: item, markTransfer: true)
+            appState.withBatchedReviewUndo {
+                for row in scoped {
+                    if let item = item(for: row.id) {
+                        appState.createRule(from: item, markTransfer: true)
+                    }
                 }
             }
         }
