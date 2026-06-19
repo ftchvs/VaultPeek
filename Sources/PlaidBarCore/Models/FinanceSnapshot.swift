@@ -107,9 +107,14 @@ public struct FinanceSnapshot: Codable, Sendable, Equatable {
         )
     }
 
-    /// True when the snapshot carries no usable figures (no accounts and no
-    /// bills). Used to drive a setup/unavailable intent response.
+    /// True when the snapshot carries no usable figures. Used to drive a
+    /// setup/unavailable intent response. A credit-only user (paid-off cards, no
+    /// cash accounts, no bills) still has a usable `creditUtilization`, so a
+    /// non-nil utilization keeps the snapshot non-empty.
     public var isEmpty: Bool {
-        accountBalances.isEmpty && nextRecurringBills.isEmpty && totalBalance == 0
+        accountBalances.isEmpty
+            && nextRecurringBills.isEmpty
+            && totalBalance == 0
+            && creditUtilization == nil
     }
 }
