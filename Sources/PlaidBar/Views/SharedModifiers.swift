@@ -86,23 +86,14 @@ private struct GlassSurface: ViewModifier {
         let shape = RoundedRectangle(cornerRadius: cornerRadius)
         let multiplier = PopoverTransparencySetting(value: popoverTransparency).surfaceDepthMultiplier
 
-        // Liquid Glass is a macOS 26+ progressive enhancement. Raised/inset
-        // ranks carry no underlay fill so the material reads clean, but the
-        // emphasized rank keeps its tinted wash — attention states must
-        // survive the glass path.
-        #if compiler(>=6.3) && canImport(SwiftUI, _version: 7.0)
-            if #available(macOS 26.0, *) {
-                content
-                    .background(liquidGlassFill, in: shape)
-                    .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
-                    .overlay { surfaceStroke(shape: shape, multiplier: multiplier) }
-                    .surfaceShadow(rank.depth.shadow, multiplier: multiplier)
-            } else {
-                fallback(content: content, shape: shape, multiplier: multiplier)
-            }
-        #else
-            fallback(content: content, shape: shape, multiplier: multiplier)
-        #endif
+        // Raised/inset ranks carry no underlay fill so the Liquid Glass material
+        // reads clean, but the emphasized rank keeps its tinted wash — attention
+        // states must survive the glass path.
+        content
+            .background(liquidGlassFill, in: shape)
+            .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
+            .overlay { surfaceStroke(shape: shape, multiplier: multiplier) }
+            .surfaceShadow(rank.depth.shadow, multiplier: multiplier)
     }
 
     private var liquidGlassFill: AnyShapeStyle {
@@ -112,13 +103,6 @@ private struct GlassSurface: ViewModifier {
         case .leftPanel, .hero, .emphasized:
             rank.fill
         }
-    }
-
-    private func fallback(content: Content, shape: RoundedRectangle, multiplier: Double) -> some View {
-        content
-            .background(rank.fill, in: shape)
-            .overlay { surfaceStroke(shape: shape, multiplier: multiplier) }
-            .surfaceShadow(rank.depth.shadow, multiplier: multiplier)
     }
 
     private func surfaceStroke(shape: RoundedRectangle, multiplier: Double) -> some View {
@@ -184,34 +168,19 @@ struct NativePanelSurface: ViewModifier {
         let shape = RoundedRectangle(cornerRadius: cornerRadius)
 
         if useLiquidGlass {
-            // Keep every reference to Liquid Glass APIs inside this compile-time
-            // gate. PlaidBar supports macOS 15, where the fallback fill/material
-            // surface below must remain the active type-checked path.
-            #if compiler(>=6.3) && canImport(SwiftUI, _version: 7.0)
-                if #available(macOS 26.0, *) {
-                    content
-                        .background(fill, in: shape)
-                        .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
-                        .overlay {
-                            shape.stroke(stroke, lineWidth: 1)
-                        }
-                } else {
-                    fallback(content: content, shape: shape)
+            content
+                .background(fill, in: shape)
+                .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
+                .overlay {
+                    shape.stroke(stroke, lineWidth: 1)
                 }
-            #else
-                fallback(content: content, shape: shape)
-            #endif
         } else {
-            fallback(content: content, shape: shape)
+            content
+                .background(fill, in: shape)
+                .overlay {
+                    shape.stroke(stroke, lineWidth: 1)
+                }
         }
-    }
-
-    private func fallback(content: Content, shape: RoundedRectangle) -> some View {
-        content
-            .background(fill, in: shape)
-            .overlay {
-                shape.stroke(stroke, lineWidth: 1)
-            }
     }
 }
 
