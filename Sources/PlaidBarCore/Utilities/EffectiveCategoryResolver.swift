@@ -17,14 +17,25 @@ import Foundation
 public enum EffectiveCategoryResolver {
     /// The fully-resolved spend attributes of a transaction.
     public struct Resolution: Sendable, Equatable {
-        /// The category to attribute spend to. `nil` means genuinely
-        /// uncategorized (no override, no usable Plaid category, no trusted NL
-        /// inference, no rule) — the row keeps surfacing for review.
+        /// The category to attribute spend to *for budget aggregation*. `nil` means
+        /// genuinely uncategorized (no override, no rule, no confident Plaid
+        /// category) — the row keeps surfacing for review. An unapproved on-device
+        /// NL inference is deliberately **not** used here (see `suggestedCategory`):
+        /// the review flow treats NL categories as display-only until the user
+        /// persists them as a `userCategory`, so counting one as spend before
+        /// approval would silently mis-attribute budgets.
         public let category: SpendingCategory?
-        /// Provenance of `category`. `.appleNaturalLanguage` is the on-device NL
-        /// suggestion tier (AND-507); `nil` when the category came from the user
-        /// override or a rule. Mirrors `TransactionReviewItem.categorySource`.
+        /// Provenance of `category`. Always `nil` (user override / rule) or
+        /// `.plaidCategory` here — never `.appleNaturalLanguage`, since the NL tier
+        /// no longer feeds the budget `category`.
         public let source: LocalAICategoryResolutionSource?
+        /// The display-only on-device NL suggestion (AND-507), when one exists and
+        /// the budget `category` came from neither the user nor a rule. This is the
+        /// same "Suggested" badge the Review Inbox shows; it is exposed here purely
+        /// so a display consumer of `Resolution` can surface the hint, but it is
+        /// **never** the aggregation category. `nil` when there is no trusted NL
+        /// suggestion (or the category was already settled by user/rule).
+        public let suggestedCategory: SpendingCategory?
         /// Whether this row is a transfer (own-account move / card payment) and so
         /// must never count as category spend.
         public let isTransfer: Bool
@@ -35,11 +46,13 @@ public enum EffectiveCategoryResolver {
         public init(
             category: SpendingCategory?,
             source: LocalAICategoryResolutionSource?,
+            suggestedCategory: SpendingCategory? = nil,
             isTransfer: Bool,
             excludedFromBudgets: Bool
         ) {
             self.category = category
             self.source = source
+            self.suggestedCategory = suggestedCategory
             self.isTransfer = isTransfer
             self.excludedFromBudgets = excludedFromBudgets
         }
@@ -107,14 +120,21 @@ public enum EffectiveCategoryResolver {
     /// calls to make spend math override-aware.
     ///
     /// Precedence:
-    /// - **Category:** user override → matching rule's category → Plaid →
-    ///   on-device NL → uncategorized. (The user-override / Plaid / NL chain is
-    ///   identical to `resolveCategory`; a rule's category slots in just below the
-    ///   user override, since a rule is an explicit user intent too.)
+    /// - **Category (budget):** user override → matching rule's category → a
+    ///   *confident* Plaid category → uncategorized. Unlike `resolveCategory`, the
+    ///   budget surface deliberately **stops before the NL tier**: an unapproved
+    ///   on-device NL suggestion must not be counted as that category before the
+    ///   user approves it (the review flow treats NL categories as display-only
+    ///   until persisted as a `userCategory`). The NL suggestion is still computed
+    ///   and exposed on `Resolution.suggestedCategory` for display consumers.
     /// - **Transfer:** user `isTransferOverride` → matching rule's `isTransfer` →
     ///   transfer-category inference (`TRANSFER_IN`/`TRANSFER_OUT`).
-    /// - **Excluded from budgets:** user `excludedFromBudgets` → matching rule's
-    ///   `excludedFromBudgets` → transfers are excluded by default.
+    /// - **Excluded from budgets:** OR-combined positive exclude signals — the row
+    ///   is excluded if the user explicitly excluded it (`excludedFromBudgets ==
+    ///   true`), OR a matching rule excludes it, OR it is a transfer. (A first
+    ///   non-nil chain can't be used: seeded metadata stores a non-optional
+    ///   `false`, which would otherwise short-circuit and suppress both rule-based
+    ///   and transfer-default exclusion.)
     ///
     /// When several rules match, the earliest in `rules` order with a value for a
     /// given field wins (callers keep rules in their intended priority order).
@@ -126,36 +146,67 @@ public enum EffectiveCategoryResolver {
     ) -> Resolution {
         let matchedRules = rules.filter { $0.matches(transaction) }
 
-        // Category: user override wins outright; otherwise a matching rule's
-        // category is an explicit user intent that beats Plaid/NL; otherwise fall
-        // back to the verbatim Plaid → NL → uncategorized chain.
-        let resolvedCategory: ResolvedCategory
+        // Budget category: user override wins outright; otherwise a matching rule's
+        // category is an explicit user intent; otherwise a *confident* Plaid
+        // category; otherwise uncategorized. The NL tier is intentionally excluded
+        // here so an unapproved suggestion never becomes the aggregation category.
+        let budgetCategory: SpendingCategory?
+        let budgetSource: LocalAICategoryResolutionSource?
         if let userCategory = metadata?.userCategory {
-            resolvedCategory = ResolvedCategory(category: userCategory, source: nil)
+            budgetCategory = userCategory
+            budgetSource = nil
         } else if let ruleCategory = firstRuleValue(matchedRules, \.category) {
-            resolvedCategory = ResolvedCategory(category: ruleCategory, source: nil)
+            budgetCategory = ruleCategory
+            budgetSource = nil
+        } else if let plaidCategory = confidentPlaidCategory(transaction) {
+            budgetCategory = plaidCategory
+            budgetSource = .plaidCategory
         } else {
-            resolvedCategory = resolveCategory(
+            budgetCategory = nil
+            budgetSource = nil
+        }
+
+        // Display-only NL suggestion: only meaningful when the budget category was
+        // not already settled by the user or a rule. Mirrors the inbox's "Suggested"
+        // badge but never feeds the aggregation category above.
+        let suggestedCategory: SpendingCategory?
+        if metadata?.userCategory == nil,
+           firstRuleValue(matchedRules, \.category) == nil {
+            let display = resolveCategory(
                 transaction: transaction,
                 userCategory: nil,
                 nlCategorizer: nlCategorizer
             )
+            suggestedCategory = display.source == .appleNaturalLanguage ? display.category : nil
+        } else {
+            suggestedCategory = nil
         }
 
         // Transfer: explicit metadata override → rule → category-derived.
         let isTransfer = metadata?.isTransferOverride
             ?? firstRuleValue(matchedRules, \.isTransfer)
-            ?? resolvedCategory.category.map(isTransferCategory)
+            ?? budgetCategory.map(isTransferCategory)
             ?? false
 
-        // Exclusion: explicit metadata flag → rule → transfers excluded by default.
-        let excludedFromBudgets = metadataExclusion(metadata)
-            ?? firstRuleValue(matchedRules, \.excludedFromBudgets)
-            ?? isTransfer
+        // Exclusion: OR-combine the positive exclude signals. A non-optional `false`
+        // from seeded metadata is treated as "no opinion", NOT an explicit choice.
+        //
+        // v1 limitation: because the persisted `excludedFromBudgets` Bool can't
+        // distinguish an explicit user "false" from the default "false", an explicit
+        // user "include this transfer" expressed via the metadata bool *alone* is
+        // not honored in v1 — a transfer stays excluded. The explicit-include path
+        // that *is* honored is `isTransferOverride == false` (un-transfer the row),
+        // which clears the transfer-default exclusion below. Revisit if a dedicated
+        // tri-state include flag is needed.
+        let excludedFromBudgets =
+            (metadata?.excludedFromBudgets == true)
+            || (firstRuleValue(matchedRules, \.excludedFromBudgets) == true)
+            || isTransfer
 
         return Resolution(
-            category: resolvedCategory.category,
-            source: resolvedCategory.source,
+            category: budgetCategory,
+            source: budgetSource,
+            suggestedCategory: suggestedCategory,
             isTransfer: isTransfer,
             excludedFromBudgets: excludedFromBudgets
         )
@@ -180,15 +231,16 @@ public enum EffectiveCategoryResolver {
         return nil
     }
 
-    /// The user's explicit budget-exclusion choice, or `nil` when they never set
-    /// one. `excludedFromBudgets` is a non-optional `false` default on the model,
-    /// so an unset choice is indistinguishable from an explicit `false` — we treat
-    /// an unset metadata as "no opinion" (let rules / the transfer default decide)
-    /// and a present metadata as the user's stated choice. This preserves the
-    /// inbox's `metadata?.excludedFromBudgets ?? isTransfer` semantics: when
-    /// metadata exists, its value (incl. `false`) is honored over the default.
-    private static func metadataExclusion(_ metadata: TransactionReviewMetadata?) -> Bool? {
-        guard let metadata else { return nil }
-        return metadata.excludedFromBudgets
+    /// The transaction's Plaid category when it is usable for budgeting: present,
+    /// not `.other`, and not flagged low/unknown confidence. `nil` otherwise — the
+    /// budget surface treats anything less as "no confident category" and falls
+    /// through to uncategorized (NL suggestions stay display-only). Same usability
+    /// test as the verbatim `resolveCategory` lift, minus the NL tier.
+    private static func confidentPlaidCategory(_ transaction: TransactionDTO) -> SpendingCategory? {
+        let plaidCategory = transaction.category
+        let usable = plaidCategory != nil
+            && plaidCategory != .other
+            && !transaction.isLowConfidenceCategory
+        return usable ? plaidCategory : nil
     }
 }
