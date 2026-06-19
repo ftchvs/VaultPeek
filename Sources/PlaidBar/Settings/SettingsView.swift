@@ -77,6 +77,7 @@ struct AppearanceSettingsView: View {
     @AppStorage(DecorativeEffectsPreference.storageKey) private var decorativeRaw = DecorativeEffectsPreference.defaultValue.rawValue
     @AppStorage(AppDensityPreference.storageKey) private var densityRaw = AppDensityPreference.defaultValue.rawValue
     @AppStorage(TextSizePreference.storageKey) private var textSizeRaw = TextSizePreference.defaultValue.rawValue
+    @AppStorage(HapticFeedbackPreference.storageKey) private var hapticRaw = HapticFeedbackPreference.defaultValue.rawValue
     @Environment(\.colorSchemeContrast) private var systemContrast
 
     private var transparencySetting: PopoverTransparencySetting {
@@ -88,6 +89,7 @@ struct AppearanceSettingsView: View {
     private var decorativePreference: DecorativeEffectsPreference { DecorativeEffectsPreference(rawValue: decorativeRaw) ?? .followSystem }
     private var density: AppDensityPreference { AppDensityPreference(rawValue: densityRaw) ?? .comfortable }
     private var textSize: TextSizePreference { TextSizePreference(rawValue: textSizeRaw) ?? .default }
+    private var hapticPreference: HapticFeedbackPreference { HapticFeedbackPreference(rawValue: hapticRaw) ?? .on }
 
     /// Increased contrast applies when the app pref asks for it OR the system
     /// Increase Contrast accessibility setting is on (system always wins).
@@ -239,6 +241,24 @@ struct AppearanceSettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 Text("macOS ignores the system Dynamic Type setting for apps, so use this to make VaultPeek's text larger everywhere. The largest steps reflow some layouts to keep numbers legible.")
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Section("Feedback") {
+                // Direct-manipulation haptics (AND-576). On by default; a no-op on
+                // Macs without a Force Touch haptic engine, so this only affects
+                // hardware that can play feedback. Committed direct manipulations —
+                // resolving/ignoring a review row, the quick Privacy Mask toggle —
+                // get a small tactile confirmation. It is intentionally limited to
+                // those committed gestures, never every minor state change.
+                Toggle("Haptic feedback", isOn: Binding(
+                    get: { hapticPreference.isEnabled },
+                    set: { hapticRaw = ($0 ? HapticFeedbackPreference.on : .off).rawValue }
+                ))
+                .accessibilityHint("Plays a small trackpad click when you approve, ignore, or toggle directly.")
+
+                Text("Plays a subtle Force Touch trackpad click when you directly approve, ignore, or toggle. No effect on Macs without a haptic trackpad.")
                     .detailText()
                     .fixedSize(horizontal: false, vertical: true)
             }
