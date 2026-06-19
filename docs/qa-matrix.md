@@ -54,6 +54,42 @@ local storage, notifications, and distribution.
 | Notification privacy | Trigger financial notification evaluation while masked or locked | Notifications use generic copy or are suppressed per policy; no account names, balances, merchants, utilization status, or recovery details appear |
 | Reconnect | Item is `login_required` | Reconnect action is visible from status/account surfaces |
 
+## Review Inbox, Category Dashboard & Budget QA (AND-518 … AND-523)
+
+These rows cover the Copilot-parity surfaces: the Review Inbox triage flow, the
+global Category Dashboard (card + detached window), category-budget editing, and
+the menu-bar / Control Center / Focus signals that drive them. Run them in
+`--demo` first — the demo fixtures seed budgets, review metadata, and rules
+(`DemoFixtures.demoBudgets()/demoReviewMetadata()/demoTransactionRules()`) so all
+of these surfaces are demoable without Plaid. Spend math is override-aware
+(`EffectiveCategoryResolver` + `CategoryBudgetPlanner`, persisted-only mode), so
+a category/transfer/exclude decision made in the inbox must move the dashboard
+and budget totals.
+
+| Area | Scenario | Expected Result |
+|------|----------|-----------------|
+| Review Inbox date sections | Open the Review Inbox (popover right-inspector) in demo | Rows are bucketed into recency sections (Today / Yesterday / This Week / Earlier) by `ReviewInboxDateSections`; each section header shows its label and row count |
+| Review Inbox category pill | Inspect a review row's category | The category is shown as a colored icon + text pill (not color alone); the icon/label survive Privacy Mask as generic copy |
+| Review Inbox bulk mark-reviewed (listed) | Tap "Mark N reviewed" on the listed rows | A blast-radius confirmation names the exact count (`Mark N Reviewed`); confirming marks all listed rows reviewed via the shared bulk path; the inbox count drops by N |
+| Review Inbox bulk mark-reviewed (per section) | Tap a section header's bulk affordance | Only that section's rows are staged and confirmed; other sections are unaffected; counts are scoped to the section |
+| Review Inbox → downstream totals | Recategorize, mark transfer/exclude, or approve a row, then open the Category Dashboard | The dashboard donut, status tree, and budget SPENT/LEFT update immediately (the budget-presentation cache invalidates on review/rule change, AND-526/AND-554) — no stale "review changes no number" |
+| Review Inbox privacy masking | Enable Privacy Mask / App Lock with the inbox open | Review items, merchants, and amounts are hidden; the bulk "Mark N reviewed" affordance and per-section counts are hidden (no count leaks the number of unreviewed transactions); an explanatory hidden-state message replaces the rows |
+| Review Inbox pending → posted | A category/transfer decision made on a pending charge, then the charge re-posts under a new id | The decision carries forward via `pendingTransactionId` so the posted row keeps the category/transfer choice and totals do not change when it re-posts |
+| Category Dashboard card | Open the demo dashboard center column | The Category Dashboard card renders the spend donut (with a center total) plus top spending-group rollups, all from the override-aware `CategoryDashboardPresentation` |
+| Category Dashboard donut | Inspect the donut segments and center | Segments are labeled (not color alone); the center shows the period spend total; masked state replaces figures with placeholders |
+| Category Dashboard detached window | Tap "Open dashboard" on the card | A detached desktop window opens with the same donut, the two-level status-bar tree (`CategoryTreeView`), and a flat sortable SPENT / BUDGET / LEFT `Table` of every leaf category; status uses glyph + text, not color alone |
+| Category Dashboard status tree | Expand a group with a leaf over budget but the group under budget | Leaf and group budget status are independent; each row pairs a status glyph + label (e.g. "Over", "On track") with the redundant color tint |
+| Category Dashboard override-aware totals | Exclude a transfer / credit-card payment via an inbox override | The excluded row drops out of the donut, tree, and budget totals (persisted-only resolution skips excluded/transfer rows); an unreviewed NL-suggested category stays under raw Plaid/`.other` until approved |
+| Budget editing — set | Open `BudgetEditorSheet` for a category with no budget, enter an amount, save | The monthly limit is set via `AppState.setCategoryBudget`; the dashboard status bar for that category switches from suggestion-only to a real budget |
+| Budget editing — edit | Open the sheet for a category that already has a limit, change the amount, save | The saved limit updates; SPENT/LEFT recompute against the new limit |
+| Budget editing — clear | Save 0 (or use "Remove budget") | The budget is removed via `AppState.removeCategoryBudget`; the row falls back to "No budget set" / suggestion-only |
+| Budget editing — suggested budget | Open the sheet for a category with a history-derived suggestion | The suggested (ghost) limit row appears with a one-tap accept (`SuggestedBudgetAcceptButton`); accepting persists it as an explicit budget only when `SuggestedBudgetAcceptance` allows it |
+| Menu-bar review badge | Have unreviewed transactions in demo | The menu-bar item surfaces the unreviewed count signal; masked / icon-only menu bar stays blank (no count leak) |
+| Control Center — Refresh balances | Add and tap the VaultPeek `Refresh balances` control | The control fires `RefreshBalancesIntent`, opens and refreshes the app; no balances or account details appear in the control |
+| Control Center — Privacy Mask toggle | Add the VaultPeek `Privacy Mask` control and toggle it | The toggle writes a `PrivacyMaskCommandRequest`; on next app activation the mask state matches the toggle; the control exposes no financial values |
+| Focus filter (Privacy Mask) | Attach VaultPeek's Focus filter to a Focus and turn that Focus on/off | Turning the Focus on hides balances (mask on); turning it off restores the previous setting (`FocusPrivacyMaskDecision` + remembered state); no figures are exposed by the filter UI |
+| Glance-snapshot redaction (AND-517) | Enable Privacy Mask / App Lock, then inspect `glance-snapshot.json` and the widget | The on-disk glance file is re-written redacted — net worth, today's change, and sparkline are zeroed and `isRedacted` is set; the widget shows its placeholder/unavailable state from the redacted file AND the `isMasked` read-time gate |
+
 ## Accessibility QA
 
 | Check | Expected Result |
@@ -213,7 +249,7 @@ Center — none of which the headless render path can reach.
 | Widget (small/medium) | Add the VaultPeek widget to Notification Center / desktop | Shows net worth + today's change + sparkline from the App Group snapshot; first install / post-reset shows the "Open VaultPeek" unavailable state, not a misleading `$0`; gallery preview is redacted |
 | Widget deep link | Tap the widget | Opens VaultPeek via `vaultpeek://dashboard` to the dashboard |
 | Transparent Tahoe menu bar | View the menu-bar item against a transparent Tahoe menu bar over light and dark wallpapers | The menu-bar glyph/text stays legible against the translucent menu bar; icon-only (Privacy Mask) menu bar stays blank and legible |
-| Privacy under widget/control | Enable Privacy Mask / App Lock, then check the widget and Control Center control | Widget shows the unavailable/placeholder state (no real net worth) and the control exposes no financial values, because the shared `FinanceSnapshot` is re-written redacted (`isMasked == true`, value-free) and every reader gates on `isMasked`. Note: `glance-snapshot.json` itself is not yet cleared on mask, so verify the widget's masked behavior comes from the `isMasked` gate, not from a cleared glance file |
+| Privacy under widget/control | Enable Privacy Mask / App Lock, then check the widget and Control Center control | Widget shows the unavailable/placeholder state (no real net worth) and the control exposes no financial values, because the shared `FinanceSnapshot` is re-written redacted (`isMasked == true`, value-free) and every reader gates on `isMasked`. Defense in depth: `glance-snapshot.json` is ALSO re-written redacted on the mask transition (AND-517) — `GlanceSnapshot.make(isMasked:)` zeroes net worth, today's change, and the sparkline and sets `isRedacted`, so the on-disk glance file carries no figures while masked, not only the `isMasked` read-time gate |
 
 ### macOS 26 screenshot note (AND-515, G3)
 

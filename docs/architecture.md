@@ -170,13 +170,16 @@ shows placeholders. With both gates a reader that ignored `isMasked` would still
 find no real figures to leak.
 
 The widget's net-worth path additionally reads `glance-snapshot.json`. That file
-is *not* re-written or cleared on a mask/lock transition today — its net-worth,
-today's-change, and sparkline values persist on disk while masked. The masked
-widget guarantee therefore rests on `FinanceSnapshot.isMasked` (the widget shows
-its placeholder/unavailable state when masked) rather than on clearing the glance
-snapshot. Redacting or clearing `glance-snapshot.json` on mask transitions is a
-tracked follow-up; until it lands, do not claim the glance file is cleared while
-masked.
+is now re-written redacted on every mask/lock transition (AND-517):
+`GlanceSnapshot.make(isMasked:)` calls `redacted()`, which zeroes net worth,
+today's change, and the sparkline and sets `isRedacted`, while keeping only the
+non-sensitive `updatedAt`/`isDemo` metadata. `AppState.writeGlanceSnapshot`
+passes `shouldMaskFinancialValues`, so the on-disk glance file carries no real
+figures while masked. The masked widget guarantee therefore now rests on two
+independent gates — the redacted-at-write glance file **and** the read-time
+`FinanceSnapshot.isMasked` check (the widget shows its placeholder/unavailable
+state when masked) — so a reader that ignored `isMasked` would still find no real
+net-worth, today's-change, or sparkline values on disk to leak.
 
 If a future change adds any field to `GlanceSnapshot` or `FinanceSnapshot`, it
 must be reviewed against this boundary, `SECURITY.md`, and the status-endpoint
