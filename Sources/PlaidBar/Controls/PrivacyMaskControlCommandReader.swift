@@ -37,6 +37,13 @@ enum PrivacyMaskControlCommandReader {
         return decoder
     }
 
+    private static var encoder: JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.sortedKeys]
+        return encoder
+    }
+
     /// Resolves the shared command directory, reusing the glance store's
     /// container-or-local-fallback logic so the reader and the control agree on a
     /// single App Group location.
@@ -59,6 +66,30 @@ enum PrivacyMaskControlCommandReader {
         let data = try Data(contentsOf: url)
         try fileManager.removeItem(at: url)
         return try decoder.decode(PrivacyMaskControlCommand.self, from: data)
+    }
+
+    /// Writes a pending privacy command into the shared container so it is applied
+    /// on the next `applyPendingPrivacyMaskControlCommand()` activation — the same
+    /// channel the Control Center toggle uses (`WidgetControlCommandStore`), but
+    /// from the **app** side. The Focus filter intent (AND-506) uses this so it
+    /// drives the existing apply path instead of new state machinery. Writes
+    /// atomically with owner-only permissions, byte-identical to the extension's
+    /// writer so the contract stays in sync.
+    static func write(
+        _ command: PrivacyMaskControlCommand,
+        directory: URL = directory(),
+        fileManager: FileManager = .default
+    ) throws {
+        let url = commandURL(directory: directory)
+        try fileManager.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let data = try encoder.encode(command)
+        try data.write(to: url, options: [.atomic])
+        #if os(macOS)
+        try? fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+        #endif
     }
 }
 
