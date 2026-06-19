@@ -155,4 +155,77 @@ struct CategoryStatusBarModelTests {
         // The verdict + percent still read; only the currency is dots.
         #expect(masked == "•••• of ••••, 40% of budget. On track.")
     }
+
+    // MARK: - Committed recurring ghost segment (AND-559)
+
+    @Test("Committed fraction is the recurring share of the budget, clamped to 0...1")
+    func committedFractionBudgeted() {
+        // $150 committed against a $500 budget = 30% of the bar.
+        let model = CategoryStatusBarModel(
+            spent: 200, monthlyLimit: 500, fractionUsed: 0.4, status: .under, committed: 150
+        )
+        #expect(model.committedFraction == 0.3)
+        #expect(model.committedPercentText() == "30%")
+    }
+
+    @Test("Committed beyond the budget pins the ghost segment full, never overflows")
+    func committedFractionClamped() {
+        let model = CategoryStatusBarModel(
+            spent: 600, monthlyLimit: 500, fractionUsed: 1.2, status: .over, committed: 800
+        )
+        #expect(model.committedFraction == 1.0)
+    }
+
+    @Test("No ghost segment when unbudgeted or when no recurring stream maps")
+    func committedFractionHidden() {
+        let unbudgeted = CategoryStatusBarModel(
+            spent: 120, monthlyLimit: nil, fractionUsed: nil, status: nil, committed: 50
+        )
+        #expect(unbudgeted.committedFraction == nil)
+        #expect(unbudgeted.committedPercentText() == nil)
+
+        let noStream = CategoryStatusBarModel(
+            spent: 200, monthlyLimit: 500, fractionUsed: 0.4, status: .under, committed: nil
+        )
+        #expect(noStream.committedFraction == nil)
+
+        let zeroCommitted = CategoryStatusBarModel(
+            spent: 200, monthlyLimit: 500, fractionUsed: 0.4, status: .under, committed: 0
+        )
+        #expect(zeroCommitted.committedFraction == nil)
+    }
+
+    @Test("Committed model is built from the leaf and group rollups")
+    func committedFromRollups() {
+        let leaf = CategoryDashboardPresentation.Leaf(
+            category: .subscriptions, spent: 90, monthlyLimit: 300, committed: 60
+        )
+        let leafModel = CategoryStatusBarModel(leaf: leaf)
+        #expect(leafModel.committed == 60)
+        #expect(leafModel.committedFraction == 0.2)
+
+        let group = CategoryDashboardPresentation.GroupRollup(group: leaf.category.group, leaves: [leaf])
+        let groupModel = CategoryStatusBarModel(group: group)
+        #expect(groupModel.committed == 60)
+        #expect(groupModel.committedFraction == 0.2)
+    }
+
+    @Test("Accessibility sentence voices the committed share as text, Privacy-Mask safe")
+    func accessibilityCommitted() {
+        let leaf = CategoryDashboardPresentation.Leaf(
+            category: .subscriptions, spent: 200, monthlyLimit: 500, committed: 150
+        )
+        let model = CategoryStatusBarModel(leaf: leaf)
+        let sentence = model.accessibilityDescription(spentText: "$200", limitText: "$500")
+
+        #expect(
+            sentence == "$200 of $500, 40% of budget. On track. 30% of the budget is committed to recurring bills."
+        )
+
+        // Under Privacy Mask the committed clause is a percent, so it still reads.
+        let masked = model.accessibilityDescription(spentText: "••••", limitText: "••••")
+        #expect(
+            masked == "•••• of ••••, 40% of budget. On track. 30% of the budget is committed to recurring bills."
+        )
+    }
 }

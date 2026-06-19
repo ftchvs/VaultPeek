@@ -25,17 +25,22 @@ public struct CategoryStatusBarModel: Sendable, Hashable {
     public let fractionUsed: Double?
     /// Budget band; `nil` when there is no budget.
     public let status: CategoryBudgetStatus?
+    /// Monthly-equivalent committed recurring spend for the row; `nil` when no
+    /// recurring stream maps here, so the dashed ghost segment is hidden (AND-559).
+    public let committed: Double?
 
     public init(
         spent: Double,
         monthlyLimit: Double?,
         fractionUsed: Double?,
-        status: CategoryBudgetStatus?
+        status: CategoryBudgetStatus?,
+        committed: Double? = nil
     ) {
         self.spent = spent
         self.monthlyLimit = monthlyLimit
         self.fractionUsed = fractionUsed
         self.status = status
+        self.committed = committed
     }
 
     /// Build from a dashboard leaf rollup.
@@ -44,7 +49,8 @@ public struct CategoryStatusBarModel: Sendable, Hashable {
             spent: leaf.spent,
             monthlyLimit: leaf.monthlyLimit,
             fractionUsed: leaf.fractionUsed,
-            status: leaf.status
+            status: leaf.status,
+            committed: leaf.committed
         )
     }
 
@@ -54,7 +60,8 @@ public struct CategoryStatusBarModel: Sendable, Hashable {
             spent: group.spent,
             monthlyLimit: group.monthlyLimit,
             fractionUsed: group.fractionUsed,
-            status: group.status
+            status: group.status,
+            committed: group.committed
         )
     }
 
@@ -98,6 +105,21 @@ public struct CategoryStatusBarModel: Sendable, Hashable {
         fractionUsed.map { Formatters.percent($0 * 100, decimals: decimals) }
     }
 
+    /// Share of the budget already committed to recurring bills, clamped to
+    /// `0...1`. `nil` when unbudgeted or no recurring stream maps here — so the
+    /// view hides the dashed ghost segment and the accessibility sentence omits it
+    /// (AND-559).
+    public var committedFraction: Double? {
+        guard let limit = monthlyLimit, limit > 0, let committed, committed > 0 else { return nil }
+        return min(1, max(0, committed / limit))
+    }
+
+    /// `"30%"`-style label for the committed-recurring share; `nil` when there is
+    /// no ghost segment. Percent (not currency) keeps it safe under Privacy Mask.
+    public func committedPercentText(decimals: Int = 0) -> String? {
+        committedFraction.map { Formatters.percent($0 * 100, decimals: decimals) }
+    }
+
     /// A single VoiceOver sentence describing the whole row: the spend, the
     /// budget context, and the verdict. The caller prefixes the row's name
     /// (category or group) and may substitute masked currency strings.
@@ -112,6 +134,11 @@ public struct CategoryStatusBarModel: Sendable, Hashable {
             return "\(spentText) spent. No budget set."
         }
         let percentClause = percentUsedText().map { ", \($0) of budget" } ?? ""
-        return "\(spentText) of \(limitText)\(percentClause). \(status.label)."
+        // The dashed ghost segment is also voiced as text so it never reads through
+        // pattern alone (ACCESSIBILITY.md). Percent keeps it Privacy-Mask safe.
+        let committedClause = committedPercentText().map {
+            " \($0) of the budget is committed to recurring bills."
+        } ?? ""
+        return "\(spentText) of \(limitText)\(percentClause). \(status.label).\(committedClause)"
     }
 }

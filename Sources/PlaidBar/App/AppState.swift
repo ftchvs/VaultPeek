@@ -1362,7 +1362,8 @@ final class AppState {
             budgets: categoryBudgets,
             asOf: Date(),
             metadata: transactionReviewMetadata,
-            rules: transactionRules
+            rules: transactionRules,
+            recurring: recurringTransactions
         )
         _cachedCategoryDashboardPresentation = presentation
         return presentation

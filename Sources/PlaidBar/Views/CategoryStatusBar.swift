@@ -48,6 +48,25 @@ struct CategoryStatusBar: View {
                             )
                     }
                 }
+                // Committed-recurring "ghost" segment (AND-559): a dashed outline
+                // spanning the share of the budget already spoken-for by detected
+                // recurring bills. The dash *pattern* — not a color — distinguishes
+                // it from the solid actual-spend fill; the amount is also voiced in
+                // the accessibility sentence, so it never reads by color alone.
+                .overlay(alignment: .leading) {
+                    if let committedFraction = model.committedFraction {
+                        Capsule()
+                            .strokeBorder(
+                                .secondary,
+                                style: StrokeStyle(lineWidth: 1.5, dash: [3, 2])
+                            )
+                            .frame(width: max(proxy.size.width * committedFraction, 3))
+                            .animation(
+                                MotionTokens.animation(MotionTokens.content, reduceMotion: reduceMotion),
+                                value: committedFraction
+                            )
+                    }
+                }
         }
         .frame(height: 4)
         .accessibilityHidden(true)

@@ -38,13 +38,19 @@ public enum CategoryDashboardBuilder {
     ///     bucketed by each row's *effective* override-aware category. Defaults to
     ///     `nil`, which preserves raw-Plaid-category bucketing.
     ///   - rules: optional recategorization rules, applied the same way.
+    ///   - recurring: optional detected recurring streams. When supplied, each
+    ///     leaf carries the monthly-equivalent committed recurring spend mapped to
+    ///     its category (``RecurringCommitment``), surfaced as the dashed "committed"
+    ///     ghost segment on the status bars (AND-559). Defaults to `nil`, so a row
+    ///     with no recurring data simply has no ghost segment.
     public static func build(
         transactions: [TransactionDTO],
         budgets: [SpendingCategory: Double],
         asOf date: Date,
         calendar: Calendar = .current,
         metadata: [TransactionReviewMetadata]? = nil,
-        rules: [TransactionRule]? = nil
+        rules: [TransactionRule]? = nil,
+        recurring: [RecurringTransaction]? = nil
     ) -> CategoryDashboardPresentation {
         guard
             let monthStart = CategoryBudgetPlanner.monthStartDate(asOf: date, calendar: calendar),
@@ -66,6 +72,10 @@ public enum CategoryDashboardBuilder {
         // budget" — it must not band a category as over on zero spend (first run).
         let positiveBudgets = budgets.filter { $0.value > 0 }
 
+        // Committed monthly recurring spend per category (AND-559). Empty when no
+        // recurring streams were supplied, so every leaf's `committed` stays nil.
+        let committedByCategory = recurring.map(RecurringCommitment.monthlyByCategory) ?? [:]
+
         // Every leaf that has spend OR a budget appears. Floor net spend at 0 for
         // display so a net-refund leaf reads as 0, not a negative bar — and so leaf,
         // group, and overall totals all sum from the same floored figures.
@@ -85,7 +95,8 @@ public enum CategoryDashboardBuilder {
             let leaf = CategoryDashboardPresentation.Leaf(
                 category: category,
                 spent: spent,
-                monthlyLimit: limit
+                monthlyLimit: limit,
+                committed: committedByCategory[category]
             )
             leavesByGroup[category.group, default: []].append(leaf)
         }

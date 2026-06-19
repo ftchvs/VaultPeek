@@ -408,4 +408,97 @@ struct CategoryDashboardBuilderTests {
         #expect(result.group(.shopping)?.spent == 100)
         #expect(result.totalSpent == 100)
     }
+
+    // MARK: - Committed recurring ghost segment (AND-559)
+
+    private func monthlyStream(
+        _ merchant: String,
+        amount: Double,
+        category: SpendingCategory
+    ) -> RecurringTransaction {
+        RecurringTransaction(
+            merchantName: merchant,
+            frequency: .monthly,
+            averageAmount: amount,
+            lastDate: "2026-06-01",
+            nextExpectedDate: "2026-07-01",
+            category: category,
+            transactionCount: 6,
+            confidence: 0.9
+        )
+    }
+
+    @Test("Recurring streams thread committed spend onto the matching leaf and its group")
+    func committedThreadedToLeafAndGroup() {
+        let transactions = [tx(200, "2026-06-03", .subscriptions)]
+        let result = CategoryDashboardBuilder.build(
+            transactions: transactions,
+            budgets: [.subscriptions: 100],
+            asOf: now,
+            calendar: calendar,
+            recurring: [monthlyStream("Netflix", amount: 30, category: .subscriptions)]
+        )
+
+        let leaf = result.leaf(.subscriptions)
+        #expect(leaf?.committed == 30)
+        // 30 committed against a 100 budget = 0.3 of the bar.
+        #expect(leaf?.committedFraction == 0.3)
+
+        // The group rollup sums its leaves' commitments.
+        let group = result.group(SpendingCategory.subscriptions.group)
+        #expect(group?.committed == 30)
+    }
+
+    @Test("Committed is capped at the full bar even when recurring exceeds the budget")
+    func committedClampedToFullBar() {
+        let result = CategoryDashboardBuilder.build(
+            transactions: [tx(50, "2026-06-03", .subscriptions)],
+            budgets: [.subscriptions: 20],
+            asOf: now,
+            calendar: calendar,
+            recurring: [monthlyStream("Bundle", amount: 40, category: .subscriptions)]
+        )
+        let leaf = result.leaf(.subscriptions)
+        #expect(leaf?.committed == 40)            // raw amount preserved
+        #expect(leaf?.committedFraction == 1.0)   // fraction clamped to the bar
+    }
+
+    @Test("An unbudgeted leaf has no committed fraction even with a recurring stream")
+    func committedFractionNilWhenUnbudgeted() {
+        let result = CategoryDashboardBuilder.build(
+            transactions: [tx(80, "2026-06-03", .subscriptions)],
+            budgets: [:],
+            asOf: now,
+            calendar: calendar,
+            recurring: [monthlyStream("Netflix", amount: 30, category: .subscriptions)]
+        )
+        let leaf = result.leaf(.subscriptions)
+        #expect(leaf?.committed == 30)
+        #expect(leaf?.committedFraction == nil)
+    }
+
+    @Test("No recurring input leaves committed nil (backward compatible)")
+    func committedNilWithoutRecurring() {
+        let result = CategoryDashboardBuilder.build(
+            transactions: [tx(200, "2026-06-03", .subscriptions)],
+            budgets: [.subscriptions: 100],
+            asOf: now,
+            calendar: calendar
+        )
+        #expect(result.leaf(.subscriptions)?.committed == nil)
+        #expect(result.leaf(.subscriptions)?.committedFraction == nil)
+    }
+
+    @Test("A category with no recurring stream keeps a nil ghost segment")
+    func committedNilForUnmappedCategory() {
+        let result = CategoryDashboardBuilder.build(
+            transactions: [tx(120, "2026-06-03", .foodAndDrink)],
+            budgets: [.foodAndDrink: 300],
+            asOf: now,
+            calendar: calendar,
+            recurring: [monthlyStream("Netflix", amount: 30, category: .subscriptions)]
+        )
+        #expect(result.leaf(.foodAndDrink)?.committed == nil)
+        #expect(result.leaf(.foodAndDrink)?.committedFraction == nil)
+    }
 }
