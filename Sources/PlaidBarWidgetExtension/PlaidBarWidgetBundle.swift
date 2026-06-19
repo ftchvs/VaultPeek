@@ -331,11 +331,95 @@ private struct PlaidBarPrivacyMaskControl: ControlWidget {
     }
 }
 
+// MARK: - Value controls (AND-503, Epic E)
+//
+// Two read-only Control Center value displays: Safe-to-Spend and Credit
+// Utilization. Unlike the Refresh button and Privacy-Mask toggle, these render a
+// *number* pinned to Control Center / the menu bar. Each reads the shared
+// `FinanceSnapshot` (the same App-Group payload the App Intents use) and renders
+// it through `ControlValuePresentation` — the pure PlaidBarCore helper that owns
+// the masked-vs-real decision so the figure is withheld the instant App Lock /
+// Privacy Mask is on, mirroring `FinanceSnapshotBuilder`'s value-free behavior.
+//
+// Tapping a value control opens the app to the dashboard via an `OpenURLIntent`
+// pointed at `vaultpeek://dashboard` (handled by the app's `.onOpenURL`), the same
+// deep link the glance widget uses. State is never conveyed by color alone — the
+// SF Symbol shape changes between the value, masked, and unavailable states.
+
+/// Supplies the rendered Safe-to-Spend display string for the value control.
+struct SafeToSpendValueProvider: ControlValueProvider {
+    var previewValue: ControlValuePresentation.ControlValueDisplay {
+        ControlValuePresentation.safeToSpend(from: nil)
+    }
+
+    func currentValue() async throws -> ControlValuePresentation.ControlValueDisplay {
+        ControlValuePresentation.safeToSpend(from: AppGroupSnapshotStore.loadIfAvailable())
+    }
+}
+
+private struct PlaidBarSafeToSpendControl: ControlWidget {
+    let kind = "PlaidBarSafeToSpendControl"
+
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(
+            kind: kind,
+            provider: SafeToSpendValueProvider()
+        ) { display in
+            ControlWidgetButton(action: openDashboardIntent()) {
+                Label(display.value, systemImage: display.systemImage)
+                    .accessibilityLabel(display.accessibilityLabel)
+            }
+        }
+        .displayName("Safe to Spend")
+        .description("Show your VaultPeek safe-to-spend amount in Control Center.")
+    }
+}
+
+/// Supplies the rendered Credit-Utilization display string for the value control.
+struct CreditUtilizationValueProvider: ControlValueProvider {
+    var previewValue: ControlValuePresentation.ControlValueDisplay {
+        ControlValuePresentation.creditUtilization(from: nil)
+    }
+
+    func currentValue() async throws -> ControlValuePresentation.ControlValueDisplay {
+        ControlValuePresentation.creditUtilization(from: AppGroupSnapshotStore.loadIfAvailable())
+    }
+}
+
+private struct PlaidBarCreditUtilizationControl: ControlWidget {
+    let kind = "PlaidBarCreditUtilizationControl"
+
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(
+            kind: kind,
+            provider: CreditUtilizationValueProvider()
+        ) { display in
+            ControlWidgetButton(action: openDashboardIntent()) {
+                Label(display.value, systemImage: display.systemImage)
+                    .accessibilityLabel(display.accessibilityLabel)
+            }
+        }
+        .displayName("Credit Utilization")
+        .description("Show your VaultPeek credit utilization in Control Center.")
+    }
+}
+
+/// The deep-link action shared by both value controls: opens VaultPeek to the
+/// dashboard via the system `OpenURLIntent` pointed at `vaultpeek://dashboard`
+/// (handled by the app's `.onOpenURL`), the same link the glance widget uses.
+/// `GlanceSnapshot.deepLinkURL` is a compile-time constant, so the fallback URL
+/// is unreachable in practice — it only satisfies the non-optional initializer.
+private func openDashboardIntent() -> OpenURLIntent {
+    OpenURLIntent(URL(string: GlanceSnapshot.deepLinkURL) ?? URL(fileURLWithPath: "/"))
+}
+
 @main
 struct PlaidBarWidgetBundle: WidgetBundle {
     var body: some Widget {
         PlaidBarGlanceWidget()
         PlaidBarRefreshControl()
         PlaidBarPrivacyMaskControl()
+        PlaidBarSafeToSpendControl()
+        PlaidBarCreditUtilizationControl()
     }
 }
