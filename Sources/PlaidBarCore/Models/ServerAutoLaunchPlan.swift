@@ -83,7 +83,7 @@ public struct ServerAutoLaunchPlan: Equatable, Sendable {
 
     public static func containsBlockedManagedConfigKey(in contents: String) -> Bool {
         contents.components(separatedBy: .newlines).contains { rawLine in
-            guard let entry = parseConfigLine(rawLine) else { return false }
+            guard let entry = ServerConfigLine.parse(rawLine) else { return false }
             return blockedManagedConfigKeys.contains(entry.key)
         }
     }
@@ -95,42 +95,12 @@ public struct ServerAutoLaunchPlan: Equatable, Sendable {
     public static func configProvidesCredentials(in contents: String) -> Bool {
         var values: [String: String] = [:]
         for rawLine in contents.components(separatedBy: .newlines) {
-            guard let entry = parseConfigLine(rawLine) else { continue }
+            guard let entry = ServerConfigLine.parse(rawLine) else { continue }
             values[entry.key] = entry.value
         }
         return ["PLAID_CLIENT_ID", "PLAID_SECRET"].allSatisfy { key in
             guard let value = values[key] else { return false }
-            return !unquote(value).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            return !ServerConfigLine.unquote(value).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
-    }
-
-    /// Mirrors the server's `server.conf` line syntax: comments, blank lines,
-    /// an optional `export ` prefix, and `KEY=value` pairs.
-    private static func parseConfigLine(_ rawLine: String) -> (key: String, value: String)? {
-        var line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !line.isEmpty, !line.hasPrefix("#") else { return nil }
-
-        if line.hasPrefix("export ") {
-            line.removeFirst("export ".count)
-            line = line.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-
-        guard let separator = line.firstIndex(of: "=") else { return nil }
-        let key = String(line[..<separator]).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !key.isEmpty else { return nil }
-        let value = String(line[line.index(after: separator)...])
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return (key, value)
-    }
-
-    private static func unquote(_ value: String) -> String {
-        guard value.count >= 2,
-              let first = value.first,
-              let last = value.last,
-              (first == "\"" && last == "\"") || (first == "'" && last == "'")
-        else {
-            return value
-        }
-        return String(value.dropFirst().dropLast())
     }
 }

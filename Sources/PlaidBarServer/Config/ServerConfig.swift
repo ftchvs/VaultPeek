@@ -493,38 +493,17 @@ struct ServerConfig: Sendable {
         var values: [String: String] = [:]
 
         for (offset, rawLine) in contents.components(separatedBy: .newlines).enumerated() {
-            var line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !line.isEmpty, !line.hasPrefix("#") else { continue }
-
-            if line.hasPrefix("export ") {
-                line.removeFirst("export ".count)
-                line = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-
-            guard let separator = line.firstIndex(of: "=") else {
+            switch ServerConfigLine.classify(rawLine) {
+            case .ignored:
+                continue
+            case .malformed:
                 throw ServerConfigError.invalidConfigLine(path: expandedPath, line: offset + 1)
+            case let .pair(key, value):
+                values[key] = ServerConfigLine.unquote(value)
             }
-
-            let key = String(line[..<separator]).trimmingCharacters(in: .whitespacesAndNewlines)
-            let rawValue = String(line[line.index(after: separator)...]).trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !key.isEmpty else {
-                throw ServerConfigError.invalidConfigLine(path: expandedPath, line: offset + 1)
-            }
-            values[key] = unquote(rawValue)
         }
 
         return values
-    }
-
-    private static func unquote(_ value: String) -> String {
-        guard value.count >= 2,
-              let first = value.first,
-              let last = value.last,
-              (first == "\"" && last == "\"") || (first == "'" && last == "'")
-        else {
-            return value
-        }
-        return String(value.dropFirst().dropLast())
     }
 
     private static func shouldMigrateLegacyDatabase(

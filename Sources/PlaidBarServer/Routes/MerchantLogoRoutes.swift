@@ -1,6 +1,7 @@
 import Foundation
 import Hummingbird
 import NIOCore
+import PlaidBarCore
 #if canImport(FoundationNetworking)
     import FoundationNetworking
 #endif
@@ -83,11 +84,6 @@ struct MerchantLogoRoutes: Sendable {
     /// Deterministic, dependency-free FNV-1a hash of the URL for a cache
     /// filename (avoids unsafe characters and stays well under path limits).
     private static func cacheKey(for url: String) -> String {
-        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
-        for byte in url.utf8 {
-            hash ^= UInt64(byte)
-            hash = hash &* 0x0000_0100_0000_01b3
-        }
-        return String(hash, radix: 16) + ".img"
+        StableHash.hex(url) + ".img"
     }
 }

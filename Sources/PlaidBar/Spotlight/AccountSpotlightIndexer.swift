@@ -58,18 +58,8 @@ struct AccountSpotlightEntry: Sendable, Equatable {
     /// for the (unindexed) Plaid identifiers.
     var searchableIdentifier: String {
         let material = "\(AccountSpotlightIndexer.domainIdentifier)|\(displayName)|\(mask ?? "")|\(institutionName ?? "")"
-        return "vaultpeek.account.\(stableHash(material))"
-    }
-
-    private func stableHash(_ string: String) -> String {
-        // FNV-1a 64-bit: dependency-free and stable across launches (Swift's
-        // `Hasher` is per-process salted, so it cannot be persisted).
-        var hash: UInt64 = 0xCBF2_9CE4_8422_2325
-        for byte in string.utf8 {
-            hash ^= UInt64(byte)
-            hash = hash &* 0x100_0000_01B3
-        }
-        return String(hash, radix: 16)
+        // Spotlight identifiers use the minimal-width hex form (historical format).
+        return "vaultpeek.account.\(StableHash.hex(material))"
     }
 }
 

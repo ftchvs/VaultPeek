@@ -918,63 +918,27 @@ final class AppState {
     }
 
     var menuBarHelpText: String {
-        let reviewText = transactionReviewCount > 0
-            ? " \(transactionReviewCount) transaction\(transactionReviewCount == 1 ? "" : "s") need review."
-            : ""
-        let status = "Status: \(diagnosticsSummary)"
-        let review = weeklyReviewPresentation.menuBarPrompt.map { " Weekly review: \($0)." } ?? ""
-        switch menuBarSummaryMode {
-        case .netWorth:
-            return "VaultPeek - Net worth: \(menuBarText).\(reviewText) \(status)\(review)"
-        case .netCash:
-            return "VaultPeek - Net cash: \(menuBarText).\(reviewText) \(status)\(review)"
-        case .totalCash:
-            return "VaultPeek - Total cash: \(menuBarText).\(reviewText) \(status)\(review)"
-        case .creditUtilization:
-            return "VaultPeek - Credit utilization: \(menuBarText).\(reviewText) \(status)\(review)"
-        case .highestUtilization:
-            return "VaultPeek - Highest card utilization: \(menuBarText).\(reviewText) \(status)\(review)"
-        case .recentSpend:
-            return "VaultPeek - Recent spend: \(menuBarText).\(reviewText) \(status)\(review)"
-        case .todaySpend:
-            return "VaultPeek - Today's spend: \(menuBarText).\(reviewText) \(status)\(review)"
-        case .safeToSpend:
-            return "VaultPeek - Safe to spend: \(menuBarText).\(reviewText) \(status)\(review)"
-        case .iconOnly:
-            return "VaultPeek.\(reviewText) \(status)\(review)"
-        }
+        MenuBarAnnouncement.helpText(
+            mode: menuBarSummaryMode,
+            valueText: menuBarText,
+            reviewCount: transactionReviewCount,
+            diagnosticsSummary: diagnosticsSummary,
+            weeklyReviewPrompt: weeklyReviewPresentation.menuBarPrompt
+        )
     }
 
     var menuBarAccessibilityLabel: String {
-        let reviewText = transactionReviewCount > 0
-            ? "\(transactionReviewCount) transaction\(transactionReviewCount == 1 ? "" : "s") need review. "
-            : ""
-        // diagnosticsSummary stays "healthy" for finance warnings, so fold the
-        // visible finance badge (Cash/Credit/Spend) into the spoken status to
-        // keep VoiceOver in sync with the badge sighted users see.
-        let attention = menuBarAttentionText.map { ". Attention \($0)" } ?? ""
-        let status = "Status \(diagnosticsSummary)\(attention)"
-        let review = weeklyReviewPresentation.menuBarPrompt.map { " Weekly review \($0)." } ?? ""
-        switch menuBarSummaryMode {
-        case .netWorth:
-            return "VaultPeek net worth \(menuBarText). \(reviewText)\(status)\(review)"
-        case .netCash:
-            return "VaultPeek net cash \(menuBarText). \(reviewText)\(status)\(review)"
-        case .totalCash:
-            return "VaultPeek total cash \(menuBarText). \(reviewText)\(status)\(review)"
-        case .creditUtilization:
-            return "VaultPeek credit utilization \(menuBarText). \(reviewText)\(status)\(review)"
-        case .highestUtilization:
-            return "VaultPeek highest card utilization \(menuBarText). \(reviewText)\(status)\(review)"
-        case .recentSpend:
-            return "VaultPeek recent spend \(menuBarText). \(reviewText)\(status)\(review)"
-        case .todaySpend:
-            return "VaultPeek today's spend \(menuBarText). \(reviewText)\(status)\(review)"
-        case .safeToSpend:
-            return "VaultPeek safe to spend \(menuBarText). \(reviewText)\(status)\(review)"
-        case .iconOnly:
-            return "VaultPeek. \(reviewText)\(status)\(review)"
-        }
+        // diagnosticsSummary stays "healthy" for finance warnings, so the spoken
+        // label folds the visible finance badge (Cash/Credit/Spend) into the
+        // status to keep VoiceOver in sync with the badge sighted users see.
+        MenuBarAnnouncement.accessibilityLabel(
+            mode: menuBarSummaryMode,
+            valueText: menuBarText,
+            reviewCount: transactionReviewCount,
+            diagnosticsSummary: diagnosticsSummary,
+            attentionText: menuBarAttentionText,
+            weeklyReviewPrompt: weeklyReviewPresentation.menuBarPrompt
+        )
     }
 
     var lastSyncRelative: String? {
@@ -983,12 +947,7 @@ final class AppState {
     }
 
     var statusModeText: String {
-        if isDemoMode { return "Demo" }
-        switch serverEnvironment {
-        case .sandbox: return "Sandbox"
-        case .production: return "Production"
-        case nil: return "Unknown"
-        }
+        StatusPanelText.mode(isDemoMode: isDemoMode, environment: serverEnvironment)
     }
 
     var statusServerText: String {
@@ -1049,19 +1008,23 @@ final class AppState {
     }
 
     var serverCredentialsText: String {
-        if isDemoMode { return "Not required" }
-        guard serverConnected else { return "Unknown" }
-        return serverCredentialsConfigured == true ? "Ready" : "Missing"
+        StatusPanelText.serverCredentials(
+            isDemoMode: isDemoMode,
+            serverConnected: serverConnected,
+            credentialsConfigured: serverCredentialsConfigured
+        )
     }
 
     var serverSyncReadinessText: String {
-        if isDemoMode { return "Demo data" }
-        guard serverConnected else { return "Unknown" }
-        return serverSyncReady == true ? "Ready" : "No items"
+        StatusPanelText.serverSyncReadiness(
+            isDemoMode: isDemoMode,
+            serverConnected: serverConnected,
+            syncReady: serverSyncReady
+        )
     }
 
     var refreshCadenceText: String {
-        "\(Int(refreshInterval / 60)) min"
+        StatusPanelText.refreshCadence(interval: refreshInterval)
     }
 
     var connectedItemCount: Int {
@@ -1101,23 +1064,14 @@ final class AppState {
     }
 
     var diagnosticsSummary: String {
-        if isDemoStatusRecoveryScenario {
-            if erroredItemCount > 0 { return "\(erroredItemCount) demo item\(erroredItemCount == 1 ? "" : "s") need attention" }
-            if needsLoginItemCount > 0 { return "\(needsLoginItemCount) demo item\(needsLoginItemCount == 1 ? "" : "s") need update" }
-        }
-        let serverPresentation = serverConnectionPresentation
-        if isDemoMode { return serverPresentation.diagnosticsSummary }
-        switch serverPresentation.issue {
-        case .offline, .localAuthMissing, .localAuthRejected, .serverModeMismatch:
-            return serverPresentation.diagnosticsSummary
-        case .demo, .syncing, .connected, .error:
-            break
-        }
-        if statusItemCount == 0 { return "No Plaid items connected" }
-        if erroredItemCount > 0 { return "\(erroredItemCount) item\(erroredItemCount == 1 ? "" : "s") need attention" }
-        if needsLoginItemCount > 0 { return "\(needsLoginItemCount) item\(needsLoginItemCount == 1 ? "" : "s") need update" }
-        if serverPresentation.issue == .error { return serverPresentation.diagnosticsSummary }
-        return "Plaid connection healthy"
+        StatusPanelText.diagnosticsSummary(
+            isDemoStatusRecoveryScenario: isDemoStatusRecoveryScenario,
+            isDemoMode: isDemoMode,
+            serverConnection: serverConnectionPresentation,
+            statusItemCount: statusItemCount,
+            erroredItemCount: erroredItemCount,
+            needsLoginItemCount: needsLoginItemCount
+        )
     }
 
     private var serverConnectionPresentation: ServerConnectionPresentation {
@@ -1250,71 +1204,13 @@ final class AppState {
 
     var categoryBudgetPresentation: CategoryBudgetPresentation {
         if let cached = _cachedCategoryBudgetPresentation { return cached }
-        let presentation = computeCategoryBudgetPresentation()
+        let presentation = CategoryBudgetPlanner.mergedPresentation(
+            explicitBudgets: categoryBudgets,
+            transactions: transactions,
+            asOf: Date()
+        )
         _cachedCategoryBudgetPresentation = presentation
         return presentation
-    }
-
-    private func computeCategoryBudgetPresentation() -> CategoryBudgetPresentation {
-        let now = Date()
-        let suggestedBudgets = CategoryBudgetPlanner.suggestedBudgets(
-            from: transactions,
-            asOf: now
-        )
-        let suggestedPresentation = CategoryBudgetPlanner.presentation(
-            budgets: suggestedBudgets.filter { categoryBudgets[$0.key] == nil },
-            transactions: transactions,
-            asOf: now,
-            areSuggested: true
-        )
-
-        guard !categoryBudgets.isEmpty else { return suggestedPresentation }
-
-        let serverPresentation = CategoryBudgetPlanner.presentation(
-            budgets: categoryBudgets,
-            transactions: transactions,
-            asOf: now
-        )
-        return Self.mergeCategoryBudgetPresentations(
-            serverPresentation,
-            suggestedPresentation
-        )
-    }
-
-    private static func mergeCategoryBudgetPresentations(
-        _ explicit: CategoryBudgetPresentation,
-        _ suggested: CategoryBudgetPresentation
-    ) -> CategoryBudgetPresentation {
-        let explicitCategoryIds = Set(explicit.items.map(\.id))
-        let items = (explicit.items + suggested.items.filter { !explicitCategoryIds.contains($0.id) })
-            .sorted { lhs, rhs in
-                if lhs.status != rhs.status {
-                    return categoryBudgetStatusRank(lhs.status) < categoryBudgetStatusRank(rhs.status)
-                }
-                if lhs.fractionUsed != rhs.fractionUsed {
-                    return lhs.fractionUsed > rhs.fractionUsed
-                }
-                if lhs.isSuggested != rhs.isSuggested {
-                    return !lhs.isSuggested
-                }
-                return lhs.category.displayName < rhs.category.displayName
-            }
-
-        return CategoryBudgetPresentation(
-            items: items,
-            totalLimit: items.reduce(0) { $0 + $1.monthlyLimit },
-            totalSpent: items.reduce(0) { $0 + $1.spent },
-            overBudgetCount: items.reduce(0) { $0 + ($1.status == .over ? 1 : 0) },
-            nearingCount: items.reduce(0) { $0 + ($1.status == .nearing ? 1 : 0) }
-        )
-    }
-
-    private static func categoryBudgetStatusRank(_ status: CategoryBudgetStatus) -> Int {
-        switch status {
-        case .over: 0
-        case .nearing: 1
-        case .under: 2
-        }
     }
 
     private var weeklyReviewTransactionState: WeeklyReviewTransactionState? {
@@ -2587,13 +2483,16 @@ final class AppState {
             .appendingPathComponent(LocalDataStore.serverConfigFilename)
         if let configContents = try? String(contentsOf: configURL, encoding: .utf8) {
             for rawLine in configContents.components(separatedBy: .newlines) {
-                guard let entry = parseServerConfigLine(rawLine) else { continue }
-                environment[entry.key] = entry.value
+                guard let entry = ServerConfigLine.parse(rawLine) else { continue }
+                environment[entry.key] = ServerConfigLine.unquote(entry.value)
             }
         }
 
         let rawEnvironment = trimmedNonEmpty(environment["PLAID_ENV"]) ?? PlaidEnvironment.production.rawValue
-        guard let plaidEnvironment = PlaidEnvironment(rawValue: unquoteConfigValue(rawEnvironment)) else {
+        // Unquoted a second time on purpose: file-sourced values were unquoted in
+        // the loop above, but a PLAID_ENV inherited from the process environment
+        // bypasses it, so this normalizes a quoted value from either source.
+        guard let plaidEnvironment = PlaidEnvironment(rawValue: ServerConfigLine.unquote(rawEnvironment)) else {
             return nil
         }
 
@@ -2613,36 +2512,10 @@ final class AppState {
         )
     }
 
-    private func parseServerConfigLine(_ rawLine: String) -> (key: String, value: String)? {
-        var line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !line.isEmpty, !line.hasPrefix("#") else { return nil }
-        if line.hasPrefix("export ") {
-            line.removeFirst("export ".count)
-            line = line.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        guard let separator = line.firstIndex(of: "=") else { return nil }
-        let key = String(line[..<separator]).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !key.isEmpty else { return nil }
-        let value = String(line[line.index(after: separator)...])
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return (key, unquoteConfigValue(value))
-    }
-
     private func trimmedNonEmpty(_ value: String?) -> String? {
         guard let value else { return nil }
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
-    }
-
-    private func unquoteConfigValue(_ value: String) -> String {
-        guard value.count >= 2,
-              let first = value.first,
-              let last = value.last,
-              (first == "\"" && last == "\"") || (first == "'" && last == "'")
-        else {
-            return value
-        }
-        return String(value.dropFirst().dropLast())
     }
 
     private func persistedTransactionCacheContext() -> TransactionCacheContext? {
@@ -3095,8 +2968,8 @@ final class AppState {
         let configURL = localStorageDirectoryURL.appendingPathComponent(LocalDataStore.serverConfigFilename)
         if let contents = try? String(contentsOf: configURL, encoding: .utf8) {
             for line in contents.components(separatedBy: .newlines) {
-                guard let entry = Self.parseConfigLine(line) else { continue }
-                values[entry.key] = Self.unquotedConfigValue(entry.value)
+                guard let entry = ServerConfigLine.parse(line) else { continue }
+                values[entry.key] = ServerConfigLine.unquote(entry.value)
             }
         }
 
@@ -3107,34 +2980,6 @@ final class AppState {
             return nil
         }
         return PlaidEnvironment(rawValue: rawValue)
-    }
-
-    private static func parseConfigLine(_ rawLine: String) -> (key: String, value: String)? {
-        var line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !line.isEmpty, !line.hasPrefix("#") else { return nil }
-
-        if line.hasPrefix("export ") {
-            line.removeFirst("export ".count)
-            line = line.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-
-        guard let separator = line.firstIndex(of: "=") else { return nil }
-        let key = String(line[..<separator]).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !key.isEmpty else { return nil }
-        let value = String(line[line.index(after: separator)...])
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return (key, value)
-    }
-
-    private static func unquotedConfigValue(_ value: String) -> String {
-        guard value.count >= 2,
-              let first = value.first,
-              let last = value.last,
-              (first == "\"" && last == "\"") || (first == "'" && last == "'")
-        else {
-            return value
-        }
-        return String(value.dropFirst().dropLast())
     }
 
     @discardableResult

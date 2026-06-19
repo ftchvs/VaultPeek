@@ -139,13 +139,7 @@ public enum CategoryBudgetPlanner {
                 return lhs.category.displayName < rhs.category.displayName
             }
 
-        return CategoryBudgetPresentation(
-            items: items,
-            totalLimit: items.reduce(0) { $0 + $1.monthlyLimit },
-            totalSpent: items.reduce(0) { $0 + $1.spent },
-            overBudgetCount: items.reduce(0) { $0 + ($1.status == .over ? 1 : 0) },
-            nearingCount: items.reduce(0) { $0 + ($1.status == .nearing ? 1 : 0) }
-        )
+        return CategoryBudgetPresentation(items: items)
     }
 
     /// Convenience for the read-only slice: suggest limits from history and score
@@ -171,6 +165,64 @@ public enum CategoryBudgetPlanner {
             calendar: calendar,
             areSuggested: true
         )
+    }
+
+    /// The dashboard's combined view: explicit (user/server) budgets always
+    /// appear, history-derived suggestions fill only the categories the user has
+    /// not explicitly budgeted, and the union is re-ranked together. With no
+    /// explicit budgets the suggestions stand alone.
+    public static func mergedPresentation(
+        explicitBudgets: [SpendingCategory: Double],
+        transactions: [TransactionDTO],
+        asOf date: Date,
+        calendar: Calendar = .current
+    ) -> CategoryBudgetPresentation {
+        let suggested = presentation(
+            budgets: suggestedBudgets(from: transactions, asOf: date, calendar: calendar)
+                .filter { explicitBudgets[$0.key] == nil },
+            transactions: transactions,
+            asOf: date,
+            calendar: calendar,
+            areSuggested: true
+        )
+
+        guard !explicitBudgets.isEmpty else { return suggested }
+
+        let explicit = presentation(
+            budgets: explicitBudgets,
+            transactions: transactions,
+            asOf: date,
+            calendar: calendar
+        )
+        return merge(explicit: explicit, suggested: suggested)
+    }
+
+    /// Combine an explicit-budget presentation with a suggestion presentation:
+    /// explicit items win on identity, suggestions fill the rest, and the union
+    /// is re-ranked attention-first, then by spend pressure, then explicit-before-
+    /// suggested, then category name. `internal` so the ranking is unit-testable.
+    static func merge(
+        explicit: CategoryBudgetPresentation,
+        suggested: CategoryBudgetPresentation
+    ) -> CategoryBudgetPresentation {
+        let explicitCategoryIds = Set(explicit.items.map(\.id))
+        let items = (explicit.items + suggested.items.filter { !explicitCategoryIds.contains($0.id) })
+            .sorted { lhs, rhs in
+                if lhs.status != rhs.status {
+                    return statusRank(lhs.status) < statusRank(rhs.status)
+                }
+                // Spend pressure: heavier first. The `!=` guard is an exact Double
+                // compare, which is intentional — only items whose fractions are
+                // bit-equal fall through to the explicit-before-suggested tiebreaker.
+                if lhs.fractionUsed != rhs.fractionUsed {
+                    return lhs.fractionUsed > rhs.fractionUsed
+                }
+                if lhs.isSuggested != rhs.isSuggested {
+                    return !lhs.isSuggested
+                }
+                return lhs.category.displayName < rhs.category.displayName
+            }
+        return CategoryBudgetPresentation(items: items)
     }
 
     // MARK: - Internals
