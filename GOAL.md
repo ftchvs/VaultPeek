@@ -38,6 +38,8 @@ The public repo should prove three things:
 
 ## Design Direction
 
+> **Architecture:** VaultPeek is **window-first hybrid** per [ADR-001](docs/strategy/macos26-migration/ADR-001-window-first-architecture.md) (accepted at Gate 0 / AND-578). The principles below describe the **menu-bar glance**; the primary window workspace is the main experience for session workflows. Both surfaces share this visual system.
+
 VaultPeek should feel like a compact financial instrument, not a bank website squeezed into a popover.
 
 The near-term visual target is RepoBar-style density adapted to finance:
