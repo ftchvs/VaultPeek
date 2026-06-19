@@ -3501,6 +3501,29 @@ final class AppState {
         persistReviewStorage()
     }
 
+    /// Marks a batch of inbox rows reviewed in a single, undoable step (AND-528).
+    ///
+    /// The blast radius — exactly which transaction ids resolve — is decided by the
+    /// pure `ReviewBulkActionPlan` (computed in the view and surfaced to the user
+    /// before this is called), so this method just applies the already-vetted ids.
+    /// Each id flows through the SAME per-item approve logic as the single-row
+    /// Approve button (`approveReviewItemWithoutUndo`) so the two paths can never
+    /// diverge in what "reviewed" means. The whole batch shares one undo snapshot
+    /// (a single ⌘Z restores the entire bulk action) and one persistence write.
+    @discardableResult
+    func bulkMarkReviewed(ids: [String]) -> Int {
+        // Resolve against current transactions so a stale id (a row already gone
+        // from the snapshot) is skipped rather than seeding orphan metadata.
+        let resolvableIDs = ids.filter { id in transactions.contains(where: { $0.id == id }) }
+        guard !resolvableIDs.isEmpty else { return 0 }
+        pushReviewUndoState()
+        for id in resolvableIDs {
+            approveReviewItemWithoutUndo(id)
+        }
+        persistReviewStorage()
+        return resolvableIDs.count
+    }
+
     func undoLastReviewAction() {
         guard let previous = reviewUndoStack.popLast() else { return }
         transactionReviewMetadata = previous.metadata
