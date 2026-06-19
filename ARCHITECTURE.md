@@ -148,6 +148,8 @@ All Plaid requests use `snake_case` JSON encoding/decoding to match Plaid's API 
 
 A menu bar-only app (`LSUIElement = true`) using `MenuBarExtra` with `.window` style.
 
+**Platform floor:** macOS 26 (Tahoe) is the minimum deployment target across `Package.swift`, `Info.plist`, and `Config/Shared.xcconfig`. Liquid Glass (`Glass.regular`, `glassEffect`) is the baseline surface treatment, used directly rather than behind availability gates with a material fallback.
+
 **State Management:**
 
 ```swift
