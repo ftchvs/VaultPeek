@@ -38,3 +38,12 @@ access tokens, account numbers, or private transaction details.
 UI changes should include a keyboard pass, VoiceOver spot check, visible-focus
 check, and color-independent review of balances, charts, warnings, and errors.
 Use synthetic or sandbox financial data in screenshots, tests, and examples.
+
+## App Store Accessibility Nutrition Labels
+
+[docs/accessibility-nutrition-labels.md](docs/accessibility-nutrition-labels.md)
+audits which App Store Accessibility Nutrition Label categories VaultPeek
+supports today — mapping each (VoiceOver, Larger Text, Dark Interface,
+Differentiate Without Color Alone, Reduced Motion, Sufficient Contrast, Voice
+Control; Captions and Audio Descriptions are N/A) to `file:line` evidence and the
+gaps to close before declaring it in App Store Connect.

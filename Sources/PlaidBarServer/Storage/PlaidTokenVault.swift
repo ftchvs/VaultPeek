@@ -77,11 +77,33 @@ enum PlaidTokenVault {
     }
 
     #if canImport(Security)
+    /// Concrete `kSecAttrAccessible` CFString for the hardened policy
+    /// (`KeychainAccessPolicy`). Tokens are pinned to this device, readable by
+    /// the background server after the first post-boot unlock, and never synced
+    /// to iCloud Keychain (AND-572).
+    private static var accessibleClass: CFString {
+        switch KeychainAccessPolicy.accessibility {
+        case .afterFirstUnlockThisDeviceOnly:
+            kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        case .whenUnlockedThisDeviceOnly:
+            kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        case .afterFirstUnlock:
+            kSecAttrAccessibleAfterFirstUnlock
+        case .whenUnlocked:
+            kSecAttrAccessibleWhenUnlocked
+        }
+    }
+
     private static func saveToKeychain(accessToken: String, itemId: String, service: String) throws {
         let query = keychainQuery(itemId: itemId, service: service)
+        // Re-assert the hardened protection on every write so an item created by
+        // an older build (or whose policy drifted) is upgraded in place: the
+        // accessibility class is pinned device-only and synchronization stays
+        // off, which keeps the token out of iCloud Keychain.
         let attributes: [String: Any] = [
             kSecValueData as String: Data(accessToken.utf8),
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            kSecAttrAccessible as String: accessibleClass,
+            kSecAttrSynchronizable as String: KeychainAccessPolicy.isSynchronizable
         ]
 
         let updateStatus = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
