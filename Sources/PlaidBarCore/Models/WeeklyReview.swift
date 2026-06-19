@@ -75,6 +75,36 @@ public struct WeeklyReviewTransactionState: Sendable, Equatable {
             unreviewedTransactionIds: unreviewedTransactionIds
         )
     }
+
+    /// Demo-mode trust model. Unlike production (`derived`), demo mode does not
+    /// seed review metadata for every fixture, so a transaction with no metadata
+    /// is trusted as long as it is not pending — keeping the weekly-review
+    /// checklist locally exercisable without a full metadata seed. It must still
+    /// honor *explicitly* seeded `.needsReview` metadata, though, so a demo
+    /// Review Inbox row (e.g. an uncategorized fixture) is counted as unreviewed
+    /// here and the Weekly Review agrees with the inbox instead of reading clear.
+    public static func demoDerived(
+        from transactions: [TransactionDTO],
+        metadata: [TransactionReviewMetadata]
+    ) -> WeeklyReviewTransactionState {
+        let metadataById = Dictionary(metadata.map { ($0.id, $0) }) { _, latest in latest }
+        var trustedTransactionIds = Set<String>()
+        var unreviewedTransactionIds = Set<String>()
+
+        for transaction in transactions {
+            let seededNeedsReview = metadataById[transaction.id]?.status == .needsReview
+            if transaction.pending || seededNeedsReview {
+                unreviewedTransactionIds.insert(transaction.id)
+            } else {
+                trustedTransactionIds.insert(transaction.id)
+            }
+        }
+
+        return WeeklyReviewTransactionState(
+            trustedTransactionIds: trustedTransactionIds,
+            unreviewedTransactionIds: unreviewedTransactionIds
+        )
+    }
 }
 
 public enum WeeklyReviewOutcome: String, Sendable, Equatable {

@@ -544,3 +544,20 @@ public enum TransactionReviewInbox {
         return trimmed.isEmpty ? nil : trimmed
     }
 }
+
+/// Decides whether review-inbox metadata and categorization rules may be written
+/// to the on-disk cache.
+///
+/// In `--demo`, synthetic fixtures are seeded into the live AppState, so a review
+/// action there must NOT persist: `activeStorageDirectoryURL` is the
+/// sandbox-scoped real cache, and a later real connection on the same storage
+/// path would reload the synthetic `tx*`/Starbucks/Venmo records. This is a pure,
+/// testable predicate so the security-relevant guard does not live only in the
+/// (untestable, `@main`) app target.
+public enum ReviewStoragePersistencePolicy {
+    /// `true` only when the current review/rule state may be saved to disk.
+    /// Demo mode is never persisted.
+    public static func shouldPersist(isDemoMode: Bool) -> Bool {
+        !isDemoMode
+    }
+}

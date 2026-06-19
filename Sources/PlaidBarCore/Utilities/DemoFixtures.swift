@@ -111,6 +111,163 @@ public enum DemoFixtures {
         ]
     }
 
+    // MARK: - Budgets / review / rules (AND-543)
+
+    /// Synthetic category budgets so `--demo` shows a populated Category
+    /// Dashboard with a spread of status bands (under / near / over) instead of
+    /// an empty budgets section. Limits are hand-tuned against the demo spend so
+    /// the high-traffic categories (Food & Drink, Shopping) read as at-or-over
+    /// plan while the lighter ones stay comfortably under — making every status
+    /// bar demoable without Plaid. Matches the persisted `CategoryBudgetDTO`
+    /// shape used by the server budget store and `CategoryBudgetPlanner`.
+    ///
+    /// Never budgets income/transfer pseudo-categories. All amounts invented.
+    public static func demoBudgets() -> [CategoryBudgetDTO] {
+        [
+            CategoryBudgetDTO(category: .foodAndDrink, monthlyLimit: 400),
+            CategoryBudgetDTO(category: .shopping, monthlyLimit: 500),
+            CategoryBudgetDTO(category: .transportation, monthlyLimit: 150),
+            CategoryBudgetDTO(category: .entertainment, monthlyLimit: 120),
+            CategoryBudgetDTO(category: .billsAndUtilities, monthlyLimit: 2_400),
+            CategoryBudgetDTO(category: .travel, monthlyLimit: 600),
+            CategoryBudgetDTO(category: .healthAndFitness, monthlyLimit: 200),
+        ]
+    }
+
+    /// Current-month-anchored spend rows used **only** to score `demoBudgets`
+    /// against `CategoryBudgetPlanner` in `--demo`.
+    ///
+    /// The Category Dashboard scorer counts only transactions dated in the
+    /// current calendar month. The main demo set anchors dates relative to
+    /// `now` (`daysAgo`), so when `--demo` opens on the 1st/2nd the high-spend
+    /// rows that produce the intended under/near/over spread roll into the
+    /// previous month and the dashboard renders mostly under budget. These rows
+    /// are instead anchored to the **start of the current month** (day-of-month
+    /// 1...5), so the status mix survives every month boundary:
+    ///
+    /// - Shopping over budget (≈ 933 of 500)
+    /// - Food & Drink / Bills / Travel near their limits (≈ 89% / 88% / 90%)
+    /// - Transportation / Entertainment / Health comfortably under
+    ///
+    /// Kept separate from the main transaction list so the heatmap/recurring
+    /// continuity contract (which depends on the `daysAgo` cadence) is untouched.
+    /// All amounts invented.
+    public static func demoBudgetScoringTransactions(
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> [TransactionDTO] {
+        let monthStart = calendar.date(
+            from: calendar.dateComponents([.year, .month], from: now)
+        ) ?? now
+        func dayOfMonth(_ offset: Int) -> String {
+            let date = calendar.date(byAdding: .day, value: offset, to: monthStart) ?? monthStart
+            return Formatters.transactionDateString(date)
+        }
+        // (category, amount, day-of-month offset). Offsets stay within 0...4 so
+        // every row lands in the current month regardless of launch day.
+        let rows: [(SpendingCategory, Double, Int)] = [
+            // Shopping → over budget (500): West Elm + Costco + Nordstrom + Target.
+            (.shopping, 650.00, 0), (.shopping, 142.80, 1),
+            (.shopping, 85.00, 2), (.shopping, 55.00, 3),
+            // Food & Drink → near (400): ≈ 355.
+            (.foodAndDrink, 142.80, 0), (.foodAndDrink, 134.62, 2), (.foodAndDrink, 78.00, 4),
+            // Bills & Utilities → near (2400): rent + utilities ≈ 2100.
+            (.billsAndUtilities, 1_850.00, 1), (.billsAndUtilities, 250.00, 3),
+            // Travel → near (600): ≈ 540.
+            (.travel, 320.00, 1), (.travel, 220.00, 3),
+            // Transportation → under (150): ≈ 68.
+            (.transportation, 23.50, 0), (.transportation, 45.00, 2),
+            // Entertainment → under (120): ≈ 50.
+            (.entertainment, 15.99, 1), (.entertainment, 34.50, 3),
+            // Health & Fitness → under (200): ≈ 75.
+            (.healthAndFitness, 75.00, 2),
+        ]
+        return rows.enumerated().map { index, row in
+            let (category, amount, offset) = row
+            return TransactionDTO(
+                id: "demo_budget_\(index)",
+                accountId: "demo_checking",
+                amount: amount,
+                date: dayOfMonth(offset),
+                name: "DEMO BUDGET \(category.rawValue.uppercased())",
+                category: category
+            )
+        }
+    }
+
+    /// Seeded transaction-review metadata so the Review Inbox is populated in
+    /// `--demo` and a user override visibly flows into budget/category math.
+    /// Every id references an explicit demo transaction (see `explicitTransactions`):
+    ///
+    /// - `tx55` (SQ *KMNT LLC) — left `.needsReview`: deliberately unresolvable
+    ///   by the NL tier, so the genuinely-uncategorized inbox row is always
+    ///   present.
+    /// - `tx52` (Blue Bottle Coffee) — `.reviewed` with a `foodAndDrink`
+    ///   override, demonstrating an NL suggestion the user approved; its spend
+    ///   now counts under Food & Drink downstream.
+    /// - `tx14` (Venmo payment, an inflow) — `.reviewed`, marked a transfer and
+    ///   excluded from budgets, so the transfer-override path is demoable.
+    ///
+    /// Fixed (no `reviewedAt: Date()`) timestamps are derived from `now` so the
+    /// records stay deterministic across launches and screenshots.
+    public static func demoReviewMetadata(now: Date = Date(), calendar: Calendar = .current) -> [TransactionReviewMetadata] {
+        let reviewedAt = calendar.date(byAdding: .hour, value: -3, to: now) ?? now
+        return [
+            // Genuinely uncategorized — stays in the inbox.
+            TransactionReviewMetadata(
+                id: "tx55",
+                status: .needsReview,
+                reviewReasonCodes: [.uncategorized, .newMerchant]
+            ),
+            // Approved NL suggestion — persisted as a user category override.
+            TransactionReviewMetadata(
+                id: "tx52",
+                status: .reviewed,
+                userCategory: .foodAndDrink,
+                reviewedAt: reviewedAt,
+                lastSeenAmount: 6.75,
+                lastSeenName: "BLUE BOTTLE COFFEE"
+            ),
+            // User-confirmed transfer, excluded from spend/budget totals.
+            TransactionReviewMetadata(
+                id: "tx14",
+                status: .reviewed,
+                isTransferOverride: true,
+                excludedFromBudgets: true,
+                reviewedAt: reviewedAt,
+                lastSeenAmount: -1_500.00,
+                lastSeenName: "VENMO PAYMENT"
+            ),
+        ]
+    }
+
+    /// A couple of synthetic categorization rules so `--demo` shows the rules
+    /// surface working and rule-driven recategorization flowing into totals.
+    ///
+    /// - Starbucks → Food & Drink (matches `tx11`, `tx42`).
+    /// - Venmo → transfer, excluded from budgets (matches `tx14`), mirroring the
+    ///   transfer override above as a reusable rule.
+    ///
+    /// Fixed UUIDs keep order and identity deterministic for screenshots.
+    public static func demoTransactionRules(now: Date = Date(), calendar: Calendar = .current) -> [TransactionRule] {
+        let createdAt = calendar.date(byAdding: .day, value: -10, to: now) ?? now
+        return [
+            TransactionRule(
+                id: UUID(uuidString: "00000000-0000-0000-0000-0000000000B1")!,
+                matchMerchantContains: "Starbucks",
+                category: .foodAndDrink,
+                createdAt: createdAt
+            ),
+            TransactionRule(
+                id: UUID(uuidString: "00000000-0000-0000-0000-0000000000B2")!,
+                matchMerchantContains: "Venmo",
+                isTransfer: true,
+                excludedFromBudgets: true,
+                createdAt: createdAt
+            ),
+        ]
+    }
+
     /// Deterministic 60-day net-worth history with a gentle upward drift so the
     /// header trend reads the same on every demo launch and screenshots
     /// reproduce.
