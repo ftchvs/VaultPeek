@@ -515,6 +515,12 @@ final class AppState {
     private var localAIModelNamePreference: String?
     private var localAIProbeAvailability: LocalAIAvailability?
     private var localAIProbeGeneration = 0
+    /// Detection-only Foundation Models (Apple Intelligence) tier state (AND-563).
+    /// Probed cheaply via `FoundationModelsAvailabilityProbe`; `.unsupported` on
+    /// any OS/build without Foundation Models, so the tier order is unchanged
+    /// there. No insight generation is routed through Foundation Models yet.
+    private let foundationModelsProbe = FoundationModelsAvailabilityProbe()
+    private var foundationModelsTierState: LocalAIFoundationModelsTierState = .unsupported
     private var isLoadingLocalAISettings = false
     private var isLoadingAppLockPreferences = false
     private var isUpgradingManagedServer = false
@@ -527,6 +533,10 @@ final class AppState {
         _ = try? LocalDataStore.migrateLegacyDefaultStorageIfNeeded()
         self.notificationService = notificationService ?? NotificationService.shared
         loadSettings()
+        // Detection-only: record whether Apple Foundation Models is available so
+        // the tier resolver can prefer it. No model session is created and no
+        // prompt is routed through it (AND-563). Cheap + synchronous.
+        foundationModelsTierState = foundationModelsProbe.currentState()
         // Engage launch App Lock synchronously before the first SwiftUI body is
         // ever evaluated. Deferring this to `loadInitialData()` leaks one frame
         // of cached/demo account names and activity because `.task` runs after
@@ -1469,6 +1479,43 @@ final class AppState {
             return generatedAvailability
         }
         return localAIInsightsService.availability
+    }
+
+    /// Detection-only Foundation Models tier state for Settings surfacing
+    /// (AND-563). `.unsupported` whenever Apple Intelligence can't be probed on
+    /// this OS/build.
+    var foundationModelsAvailability: LocalAIFoundationModelsTierState {
+        foundationModelsTierState
+    }
+
+    /// The on-device AI tier VaultPeek would currently prefer, highest first.
+    /// Apple Foundation Models sits on top WHEN available; otherwise this is
+    /// exactly the tier order that existed before AND-563. Detection/ordering
+    /// only — insight generation still runs on the existing path.
+    var localAIPreferredTier: LocalAIRuntimeTier {
+        LocalAITierResolver.resolvePreferredTier(
+            facts: LocalAITierFacts(
+                foundationModels: foundationModelsTierState,
+                ollamaEngaged: LocalAIRuntimeResolution.usesModel(for: localAIAvailability.state),
+                naturalLanguageReady: Self.naturalLanguageTierReady
+            )
+        )
+    }
+
+    /// The always-on NaturalLanguage categorizer (AND-507) ships whenever the
+    /// framework is importable, which on macOS is always.
+    private static var naturalLanguageTierReady: Bool {
+        #if canImport(NaturalLanguage)
+        true
+        #else
+        false
+        #endif
+    }
+
+    /// Re-probe Apple Foundation Models availability (e.g. after the user enables
+    /// Apple Intelligence in System Settings). Detection only.
+    func refreshFoundationModelsAvailability() {
+        foundationModelsTierState = foundationModelsProbe.currentState()
     }
 
     /// Cached local summaries — invalidated via accounts.didSet and transactions.didSet.
