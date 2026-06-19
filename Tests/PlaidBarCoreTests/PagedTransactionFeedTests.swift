@@ -130,6 +130,58 @@ struct PagedTransactionFeedTests {
         #expect(rendered == [tx(1)])
     }
 
+    // MARK: - Regression: stale captured total must not drop a transaction (Finding B)
+
+    /// Reproduces the `PagedTransactionSource.loadNextPageIfNeeded` regression: the
+    /// feed's `total` is captured when the first page loads, so a concurrent
+    /// re-sync that grows the history would make the window math believe paging is
+    /// done — silently dropping the newly added newest rows — unless the next-page
+    /// path re-reads `count()` and calls `updateTotal` first.
+    @Test("re-reading total before the next window recovers rows a concurrent re-sync added")
+    func staleTotalDoesNotDropRows() {
+        // Initial paging session over a 10-row history at 10/page: one full page.
+        var feed = PagedTransactionFeed(pageSize: 10, total: 10)
+        let firstWindow = feed.nextWindow!
+        feed.appendPage(fetch(firstWindow), window: firstWindow)
+        #expect(feed.loaded.count == 10)
+        #expect(!feed.hasMore, "with the captured total, the feed thinks it is done")
+
+        // A concurrent re-sync grew the cache to 15 rows. The OLD behavior (no
+        // re-read) would stop here and never surface rows 10..14.
+        let liveTotalAfterResync = 15
+
+        // NEW behavior: loadNextPageIfNeeded re-reads count() and updates the feed
+        // before asking for the next window.
+        feed.updateTotal(liveTotalAfterResync)
+        #expect(feed.hasMore, "after re-reading the grown total, a new page is available")
+
+        guard let recoveredWindow = feed.nextWindow else {
+            Issue.record("expected a next window after the total grew")
+            return
+        }
+        feed.appendPage(fetch(recoveredWindow), window: recoveredWindow)
+
+        #expect(feed.loaded.count == 15, "the 5 newly synced rows are no longer dropped")
+        #expect(feed.loaded.map(\.id) == (0..<15).map { "tx_\($0)" }, "newest-first order preserved")
+        #expect(!feed.hasMore, "paging completes once the live total is fully covered")
+    }
+
+    @Test("re-reading an unchanged total is a stable no-op (next page still loads)")
+    func reReadingUnchangedTotalIsStable() {
+        var feed = PagedTransactionFeed(pageSize: 10, total: 25)
+        let page0 = feed.nextWindow!
+        feed.appendPage(fetch(page0), window: page0)
+
+        // Simulate loadNextPageIfNeeded re-reading the same total each call.
+        feed.updateTotal(25)
+        let page1 = feed.nextWindow
+        #expect(page1?.pageIndex == 1, "an unchanged total still advances to the next page")
+        feed.appendPage(fetch(page1!), window: page1!)
+        feed.updateTotal(25)
+        #expect(feed.nextWindow?.pageIndex == 2)
+        #expect(feed.loaded.count == 20)
+    }
+
     @Test("last partial page loads the remaining rows then stops")
     func lastPartialPage() {
         var feed = PagedTransactionFeed(pageSize: 10, total: 23)

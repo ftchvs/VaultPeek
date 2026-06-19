@@ -13,16 +13,25 @@ import Testing
 ///      regression guard for the reversible, availability-gated design.
 @Suite("FM Merchant Categorizer Tests")
 struct FMMerchantCategorizerTests {
-    // A deterministic FM stub that returns a fixed category (or nil = a miss),
-    // and records every merchant string it was asked about so privacy/redaction
-    // can be asserted.
+    // A deterministic FM stub that returns a fixed constrained string (or nil =
+    // a miss), and records every merchant string it was asked about so
+    // privacy/redaction can be asserted. The live boundary returns the constrained
+    // `SpendingCategory.rawValue` string (resolved back to an enum by
+    // `FMSpendingCategoryMapper` inside `FMMerchantCategorizer`), so the stub
+    // mirrors that contract.
     final class StubFMCategorizer: FMMerchantCategorizing, @unchecked Sendable {
-        let fixedCategory: SpendingCategory?
+        let fixedRawCategory: String?
         private let lock = NSLock()
         private var _seenMerchants: [String] = []
 
         init(returning category: SpendingCategory?) {
-            fixedCategory = category
+            fixedRawCategory = category?.rawValue
+        }
+
+        /// Return an arbitrary raw string (incl. malformed values) to exercise the
+        /// mapper-resolution boundary.
+        init(returningRaw raw: String?) {
+            fixedRawCategory = raw
         }
 
         var seenMerchants: [String] {
@@ -30,11 +39,11 @@ struct FMMerchantCategorizerTests {
             return _seenMerchants
         }
 
-        func suggestCategory(merchant: String) async -> SpendingCategory? {
+        func suggestCategory(merchant: String) async -> String? {
             lock.lock()
             _seenMerchants.append(merchant)
             lock.unlock()
-            return fixedCategory
+            return fixedRawCategory
         }
     }
 
@@ -142,6 +151,32 @@ struct FMMerchantCategorizerTests {
         let suggestion = await categorizer.suggest(for: txn)
         let nlOnly = categorizer.nlSuggestion(for: txn)
         #expect(suggestion == nlOnly)
+        #expect(suggestion?.tier == .naturalLanguage)
+    }
+
+    @Test("FM raw string is resolved through FMSpendingCategoryMapper at the boundary")
+    func fmRawStringResolvedThroughMapper() async {
+        // The live seam returns the constrained SpendingCategory.rawValue string;
+        // FMMerchantCategorizer must resolve it via FMSpendingCategoryMapper.
+        let stub = StubFMCategorizer(returningRaw: SpendingCategory.shopping.rawValue)
+        let categorizer = FMMerchantCategorizer(foundationModelsState: .available, fmCategorizer: stub)
+        let txn = transaction(name: "NETFLIX.COM", merchantName: "Netflix")
+
+        let suggestion = await categorizer.suggest(for: txn)
+        #expect(suggestion?.category == .shopping)
+        #expect(suggestion?.tier == .foundationModels)
+    }
+
+    @Test("An unparseable FM string degrades to the NaturalLanguage fallback, never a wrong guess")
+    func fmUnparseableStringFallsBackToNL() async {
+        // A malformed value that the mapper cannot resolve must not become an FM
+        // suggestion; the categorizer falls back to NL exactly as on a miss.
+        let stub = StubFMCategorizer(returningRaw: "NOT_A_REAL_CATEGORY")
+        let categorizer = FMMerchantCategorizer(foundationModelsState: .available, fmCategorizer: stub)
+        let txn = transaction(name: "NETFLIX.COM", merchantName: "Netflix")
+
+        let suggestion = await categorizer.suggest(for: txn)
+        #expect(suggestion == categorizer.nlSuggestion(for: txn))
         #expect(suggestion?.tier == .naturalLanguage)
     }
 
