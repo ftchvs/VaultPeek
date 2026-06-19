@@ -122,12 +122,11 @@ enum AccountSpotlightIndexer {
     /// Convenience entry point from app state: index display-safe entries derived
     /// from the live accounts, or clear the index when figures are masked.
     ///
-    /// TODO(AND-513): call this from `AppState` after accounts load/refresh and
-    /// whenever `shouldMaskFinancialValues` flips, e.g.:
-    ///   `AccountSpotlightIndexer.refresh(accounts: accounts, isMasked: shouldMaskFinancialValues)`
-    /// (the call site lives in `AppState`/`SyncService`, owned by another epic —
-    /// add the one-liner there when the stack merges). Indexing is display-only,
-    /// so deferring the wiring leaves zero data exposed in the meantime.
+    /// Wired from `AppState.writeFinanceSnapshot()` — the shared seam for account
+    /// load/refresh, demo data, and the Privacy Mask / App Lock transitions — so
+    /// the index stays in lockstep with the App Group snapshot (AND-513). The
+    /// empty-accounts and reset clears live alongside it in `AppState`
+    /// (`writeGlanceSnapshot` / `clearGlanceSnapshot`).
     static func refresh(accounts: [AccountDTO], isMasked: Bool) {
         guard !isMasked else {
             clear()
