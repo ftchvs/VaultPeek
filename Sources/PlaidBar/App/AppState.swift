@@ -1371,29 +1371,21 @@ final class AppState {
     }
 
     var isSyncStale: Bool {
-        // Staleness is a verdict about completed syncs. During the boot
-        // handshake the first sync is still in flight, so stale warnings
-        // (menu bar badge, row tints, status strip) stay reserved for real
-        // staleness measured after the check completes.
-        if isBootLoadInFlight { return false }
-        guard let lastSyncDate else { return true }
-        // Align the stale threshold with the automatic-refresh floor so a normally
-        // behaving install (now refreshing at most ~twice a day) doesn't flag
-        // "stale"/broken-connection between refreshes. Manual-only has no floor,
-        // so allow a full day before nagging.
-        let policyFloor = automaticRefreshPolicy.minimumInterval ?? (24 * 60 * 60)
-        let staleAfter = max(
-            refreshInterval * 2,
-            PlaidBarConstants.transactionSyncInterval * 2,
-            policyFloor + 60 * 60
+        SyncStaleness.isStale(
+            isBootLoadInFlight: isBootLoadInFlight,
+            lastSyncDate: lastSyncDate,
+            refreshInterval: refreshInterval,
+            refreshPolicy: automaticRefreshPolicy,
+            asOf: Date()
         )
-        return Date().timeIntervalSince(lastSyncDate) > staleAfter
     }
 
     var statusSyncText: String {
-        if isBootLoadInFlight { return "Syncing" }
-        guard let lastSyncRelative else { return "Never synced" }
-        return isSyncStale ? "Stale \(lastSyncRelative)" : "Synced \(lastSyncRelative)"
+        SyncStaleness.statusText(
+            isBootLoadInFlight: isBootLoadInFlight,
+            lastSyncRelative: lastSyncRelative,
+            isStale: isSyncStale
+        )
     }
 
     var creditAccounts: [AccountDTO] {
