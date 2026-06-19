@@ -918,63 +918,27 @@ final class AppState {
     }
 
     var menuBarHelpText: String {
-        let reviewText = transactionReviewCount > 0
-            ? " \(transactionReviewCount) transaction\(transactionReviewCount == 1 ? "" : "s") need review."
-            : ""
-        let status = "Status: \(diagnosticsSummary)"
-        let review = weeklyReviewPresentation.menuBarPrompt.map { " Weekly review: \($0)." } ?? ""
-        switch menuBarSummaryMode {
-        case .netWorth:
-            return "VaultPeek - Net worth: \(menuBarText).\(reviewText) \(status)\(review)"
-        case .netCash:
-            return "VaultPeek - Net cash: \(menuBarText).\(reviewText) \(status)\(review)"
-        case .totalCash:
-            return "VaultPeek - Total cash: \(menuBarText).\(reviewText) \(status)\(review)"
-        case .creditUtilization:
-            return "VaultPeek - Credit utilization: \(menuBarText).\(reviewText) \(status)\(review)"
-        case .highestUtilization:
-            return "VaultPeek - Highest card utilization: \(menuBarText).\(reviewText) \(status)\(review)"
-        case .recentSpend:
-            return "VaultPeek - Recent spend: \(menuBarText).\(reviewText) \(status)\(review)"
-        case .todaySpend:
-            return "VaultPeek - Today's spend: \(menuBarText).\(reviewText) \(status)\(review)"
-        case .safeToSpend:
-            return "VaultPeek - Safe to spend: \(menuBarText).\(reviewText) \(status)\(review)"
-        case .iconOnly:
-            return "VaultPeek.\(reviewText) \(status)\(review)"
-        }
+        MenuBarAnnouncement.helpText(
+            mode: menuBarSummaryMode,
+            valueText: menuBarText,
+            reviewCount: transactionReviewCount,
+            diagnosticsSummary: diagnosticsSummary,
+            weeklyReviewPrompt: weeklyReviewPresentation.menuBarPrompt
+        )
     }
 
     var menuBarAccessibilityLabel: String {
-        let reviewText = transactionReviewCount > 0
-            ? "\(transactionReviewCount) transaction\(transactionReviewCount == 1 ? "" : "s") need review. "
-            : ""
-        // diagnosticsSummary stays "healthy" for finance warnings, so fold the
-        // visible finance badge (Cash/Credit/Spend) into the spoken status to
-        // keep VoiceOver in sync with the badge sighted users see.
-        let attention = menuBarAttentionText.map { ". Attention \($0)" } ?? ""
-        let status = "Status \(diagnosticsSummary)\(attention)"
-        let review = weeklyReviewPresentation.menuBarPrompt.map { " Weekly review \($0)." } ?? ""
-        switch menuBarSummaryMode {
-        case .netWorth:
-            return "VaultPeek net worth \(menuBarText). \(reviewText)\(status)\(review)"
-        case .netCash:
-            return "VaultPeek net cash \(menuBarText). \(reviewText)\(status)\(review)"
-        case .totalCash:
-            return "VaultPeek total cash \(menuBarText). \(reviewText)\(status)\(review)"
-        case .creditUtilization:
-            return "VaultPeek credit utilization \(menuBarText). \(reviewText)\(status)\(review)"
-        case .highestUtilization:
-            return "VaultPeek highest card utilization \(menuBarText). \(reviewText)\(status)\(review)"
-        case .recentSpend:
-            return "VaultPeek recent spend \(menuBarText). \(reviewText)\(status)\(review)"
-        case .todaySpend:
-            return "VaultPeek today's spend \(menuBarText). \(reviewText)\(status)\(review)"
-        case .safeToSpend:
-            return "VaultPeek safe to spend \(menuBarText). \(reviewText)\(status)\(review)"
-        case .iconOnly:
-            return "VaultPeek. \(reviewText)\(status)\(review)"
-        }
+        // diagnosticsSummary stays "healthy" for finance warnings, so the spoken
+        // label folds the visible finance badge (Cash/Credit/Spend) into the
+        // status to keep VoiceOver in sync with the badge sighted users see.
+        MenuBarAnnouncement.accessibilityLabel(
+            mode: menuBarSummaryMode,
+            valueText: menuBarText,
+            reviewCount: transactionReviewCount,
+            diagnosticsSummary: diagnosticsSummary,
+            attentionText: menuBarAttentionText,
+            weeklyReviewPrompt: weeklyReviewPresentation.menuBarPrompt
+        )
     }
 
     var lastSyncRelative: String? {
