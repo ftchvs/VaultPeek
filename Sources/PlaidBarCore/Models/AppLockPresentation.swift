@@ -216,3 +216,26 @@ public struct ReviewInboxPrivacyPresentation: Sendable, Equatable {
         )
     }
 }
+
+public struct ReviewActionConfirmationPrivacyPresentation: Sendable, Equatable {
+    public let message: String
+    public let accessibilityLabel: String
+
+    public static func make(
+        actionMessage: String,
+        merchantName: String,
+        isPrivate: Bool
+    ) -> ReviewActionConfirmationPrivacyPresentation {
+        if isPrivate {
+            return ReviewActionConfirmationPrivacyPresentation(
+                message: "Review action completed",
+                accessibilityLabel: "Review action completed. Details are hidden while VaultPeek is private."
+            )
+        }
+
+        return ReviewActionConfirmationPrivacyPresentation(
+            message: "\(actionMessage): \(merchantName)",
+            accessibilityLabel: "Review action completed: \(actionMessage) for \(merchantName)"
+        )
+    }
+}

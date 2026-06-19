@@ -41,7 +41,10 @@ struct ReviewInboxView: View {
                 header
 
                 if let actionConfirmation {
-                    ReviewActionConfirmationBanner(confirmation: actionConfirmation)
+                    ReviewActionConfirmationBanner(
+                        confirmation: actionConfirmation,
+                        isPrivate: appState.shouldMaskFinancialValues
+                    )
                         .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
                 }
 
@@ -296,18 +299,23 @@ private struct ReviewActionConfirmation: Equatable {
 
     let action: Action
     let merchantName: String
-
-    var accessibilityLabel: String {
-        "Review action completed: \(action.message) for \(merchantName)"
-    }
 }
 
 private struct ReviewActionConfirmationBanner: View {
     let confirmation: ReviewActionConfirmation
+    let isPrivate: Bool
+
+    private var presentation: ReviewActionConfirmationPrivacyPresentation {
+        ReviewActionConfirmationPrivacyPresentation.make(
+            actionMessage: confirmation.action.message,
+            merchantName: confirmation.merchantName,
+            isPrivate: isPrivate
+        )
+    }
 
     var body: some View {
         Label {
-            Text("\(confirmation.action.message): \(confirmation.merchantName)")
+            Text(presentation.message)
                 .font(.caption.weight(.semibold))
                 .lineLimit(2)
         } icon: {
@@ -322,7 +330,7 @@ private struct ReviewActionConfirmationBanner: View {
             RoundedRectangle(cornerRadius: 10).stroke(SemanticColors.positive.opacity(0.20), lineWidth: 1)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(confirmation.accessibilityLabel)
+        .accessibilityLabel(presentation.accessibilityLabel)
     }
 }
 

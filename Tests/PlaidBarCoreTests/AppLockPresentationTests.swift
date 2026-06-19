@@ -65,6 +65,33 @@ struct AppLockPresentationTests {
         #expect(presentation.accessibilityLabel == "Review inbox. 2 transactions need attention.")
     }
 
+    @Test("private Review Inbox confirmation hides merchant details")
+    func privateReviewInboxConfirmationHidesMerchantDetails() {
+        let presentation = ReviewActionConfirmationPrivacyPresentation.make(
+            actionMessage: "Approved",
+            merchantName: "Sensitive Merchant",
+            isPrivate: true
+        )
+
+        #expect(presentation.message == "Review action completed")
+        #expect(presentation.accessibilityLabel == "Review action completed. Details are hidden while VaultPeek is private.")
+        #expect(!presentation.message.contains("Approved"))
+        #expect(!presentation.message.contains("Sensitive Merchant"))
+        #expect(!presentation.accessibilityLabel.contains("Sensitive Merchant"))
+    }
+
+    @Test("normal Review Inbox confirmation keeps merchant details")
+    func normalReviewInboxConfirmationKeepsMerchantDetails() {
+        let presentation = ReviewActionConfirmationPrivacyPresentation.make(
+            actionMessage: "Ignored",
+            merchantName: "Local Grocer",
+            isPrivate: false
+        )
+
+        #expect(presentation.message == "Ignored: Local Grocer")
+        #expect(presentation.accessibilityLabel == "Review action completed: Ignored for Local Grocer")
+    }
+
     @Test("locked pause settings fail closed for refresh and notifications")
     func lockedPauseSettingsFailClosed() {
         let paused = AppLockPreferences(appLockEnabled: true, notificationPrivacyMode: .offWhileLocked, pauseRefreshWhileLocked: true)
