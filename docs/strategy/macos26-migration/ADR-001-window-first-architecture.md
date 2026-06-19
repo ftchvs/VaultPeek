@@ -1,6 +1,6 @@
 # ADR-001: VaultPeek Window-First Hybrid Architecture
 
-- **Status:** Proposed (awaiting ratification by Felipe Chaves at Gate 0)
+- **Status:** Accepted — ratified by Felipe Chaves at Gate 0 ([AND-578](https://linear.app/andeslab/issue/AND-578)) on 2026-06-19. Session-workflow scope confirmed in-product; macOS 26 floor approved.
 - **Date:** 2026-06-19
 - **Supersedes:** the product-model decision in AND-384 ("popover-primary, polish
   only; NOT desktop-first / Window scene") and the v1.0 roadmap "Menu Bar First"

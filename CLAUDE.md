@@ -63,7 +63,9 @@ Data flow: `PlaidBar.app` → HTTP `localhost:8484` → `PlaidBarServer` → HTT
 ### App internals (`Sources/PlaidBar/`)
 - `App/` — `@main` `PlaidBarApp`, `AppState`.
 - `Services/` — `ServerClient` (HTTP), `RefreshService`, `SyncService`, `NotificationService`, `LaunchService`, `LocalAIInsightsService`.
-- `Views/` — `MainPopover` is the dashboard-first surface; filter states (Cash/Credit/Savings/Debt/Status) reuse the same visual system. `Charts/` holds Swift Charts components.
+- `Views/` — `MainPopover` is the menu-bar glance surface; filter states (Cash/Credit/Savings/Debt/Status) reuse the same visual system. `Charts/` holds Swift Charts components.
+
+**Architecture doctrine: window-first hybrid** ([ADR-001](docs/strategy/macos26-migration/ADR-001-window-first-architecture.md), accepted at Gate 0 / AND-578, 2026-06-19). The main experience is a primary `Window` / `NavigationSplitView` workspace (Dashboard, Transactions, Budgets, Planning, Goals, Review Inbox, Insights, Alerts, Accounts, Settings). The `MenuBarExtra` glance is retained as a first-class **reduced read+route surface** (status, glance metrics, attention chips that deep-link into the window). Do **not** "revert" window surfaces to popover-only citing older docs — that doctrine is superseded. `PlaidBarCore`, the server, the Plaid client, and the Keychain/localhost boundary are unchanged by this migration. Execution: Epics AND-579…618 (`docs/strategy/macos26-migration/migration-roadmap.md`).
 - `Theme/` — `DesignTokens`, `Typography` (semantic tokens + 8pt grid). See `DESIGN.md`.
 
 ## Conventions (enforced — see CONTRIBUTING.md)

@@ -8,6 +8,7 @@ This is the one-page narrative for what VaultPeek builds *after* the public MVP 
 
 - [`docs/v1.0-roadmap.md`](v1.0-roadmap.md) is the long-term product brief — the constitution. This roadmap inherits its North Star, Horizons, and Product Boundaries.
 - [`docs/mvp-launch-decision-log.md`](mvp-launch-decision-log.md) is the launch cutline — the single source of truth for what ships in the MVP. This roadmap treats that cutline's six blockers as "Now" and does not re-derive them.
+- [`docs/strategy/macos26-migration/ADR-001-window-first-architecture.md`](strategy/macos26-migration/ADR-001-window-first-architecture.md) is the ratified **window-first hybrid** architecture (Gate 0 / AND-578). The post-MVP window-first migration (Epics AND-579…618, [`migration-roadmap.md`](strategy/macos26-migration/migration-roadmap.md)) executes against it.
 
 A reader should finish this page understanding the *order* of the next several phases, *why* each one must precede the next, and which Linear milestone owns each. It is a narrative, not a task tracker; when a phase begins, the work is planned in its Linear milestone, not here.
 
