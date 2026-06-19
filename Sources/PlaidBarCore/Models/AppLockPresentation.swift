@@ -189,6 +189,22 @@ public struct ReviewInboxPrivacyPresentation: Sendable, Equatable {
     public let highPriorityAccessibilityLabel: String?
     public let accessibilityLabel: String
 
+    /// The discrete at-a-glance unreviewed-count badge chip shown next to the
+    /// "Review Inbox" title (AND-533). Returns the VoiceOver phrasing "N to
+    /// review", or `nil` when there is nothing to badge: an empty queue, or
+    /// while Privacy Mask / App Lock is active (so the count never leaks — the
+    /// AND-483 contract). The badge is purely additive — it does not replace the
+    /// `subtitle` ("N items need attention") or the `highPriorityBadge`; it is
+    /// the compact chip the header carries on the title row.
+    ///
+    /// The chip's visible glyph is the count itself; this string is the
+    /// accessibility label only, so meaning never rides on color or shape alone
+    /// (ACCESSIBILITY.md).
+    public static func unreviewedBadge(count: Int, isMasked: Bool) -> String? {
+        guard !isMasked, count > 0 else { return nil }
+        return "\(count) to review"
+    }
+
     public static func make(
         totalCount: Int,
         highPriorityCount: Int,

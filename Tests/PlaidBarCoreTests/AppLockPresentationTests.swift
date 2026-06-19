@@ -74,6 +74,25 @@ struct AppLockPresentationTests {
         #expect(presentation.accessibilityLabel == "Review inbox. 2 transactions need attention.")
     }
 
+    @Test("unreviewed count badge shows 'N to review' when unmasked with a non-empty queue")
+    func unreviewedBadgeShowsCountWhenUnmasked() {
+        #expect(ReviewInboxPrivacyPresentation.unreviewedBadge(count: 5, isMasked: false) == "5 to review")
+        #expect(ReviewInboxPrivacyPresentation.unreviewedBadge(count: 1, isMasked: false) == "1 to review")
+    }
+
+    @Test("unreviewed count badge is hidden under Privacy Mask so no count leaks")
+    func unreviewedBadgeHiddenWhileMasked() {
+        // AND-483: the masked surface must never expose the queue size.
+        #expect(ReviewInboxPrivacyPresentation.unreviewedBadge(count: 7, isMasked: true) == nil)
+    }
+
+    @Test("unreviewed count badge is hidden when the queue is empty")
+    func unreviewedBadgeHiddenWhenEmpty() {
+        #expect(ReviewInboxPrivacyPresentation.unreviewedBadge(count: 0, isMasked: false) == nil)
+        // Masked-and-empty also yields nil (no count to leak, nothing to badge).
+        #expect(ReviewInboxPrivacyPresentation.unreviewedBadge(count: 0, isMasked: true) == nil)
+    }
+
     @Test("private Review Inbox confirmation hides merchant details")
     func privateReviewInboxConfirmationHidesMerchantDetails() {
         let presentation = ReviewActionConfirmationPrivacyPresentation.make(
