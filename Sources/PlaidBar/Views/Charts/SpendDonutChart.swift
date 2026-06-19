@@ -60,6 +60,9 @@ struct SpendDonutChart: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(chartAccessibilityLabel)
+        // VoiceOver audio graph: walk each category's spend as pitch. Honors
+        // Privacy Mask — pitch conveys relative magnitude, labels hide amounts.
+        .audioGraph(ChartAudioGraph.donut(model, isPrivacyMasked: isPrivacyMasked))
         .onAppear(perform: animateReveal)
     }
 

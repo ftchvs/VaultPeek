@@ -1060,6 +1060,21 @@ private struct BalanceActivityHeatmap: View {
                 ? (loadState?.loadingAccessibilityLabel ?? "Loading activity heatmap.")
                 : "\(layout.mode.summaryTitle) heatmap for the last 365 days with \(layout.activeDayCount) active days. \(layout.mode.semanticDescription). Select a day to see its detail."
         )
+        // VoiceOver audio graph over the active days. Suppressed during the first
+        // sync (placeholder grid) and honors Privacy Mask (AND-569).
+        .audioGraph(
+            isInitialLoad
+                ? ChartAudioGraph.Descriptor(
+                    title: layout.mode.summaryTitle,
+                    summary: "Loading activity heatmap.",
+                    xAxis: .init(title: "Active day", lowerBound: 0, upperBound: 0),
+                    yAxis: .init(title: layout.mode.shortLabel, lowerBound: 0, upperBound: 0),
+                    seriesName: layout.mode.shortLabel,
+                    isContinuous: false,
+                    points: []
+                )
+                : ChartAudioGraph.heatmap(layout, isPrivacyMasked: appState.shouldMaskFinancialValues)
+        )
     }
 
     @ViewBuilder
