@@ -14,6 +14,10 @@ struct ReviewInboxView: View {
     @State private var selectedIndex = 0
     @State private var merchantDrafts: [String: String] = [:]
     @State private var actionConfirmation: ReviewActionConfirmation?
+    /// Set when the user taps "Mark N reviewed"; holds the pre-computed blast
+    /// radius so the confirmation dialog can state exactly how many and which
+    /// rows resolve before anything is applied (AND-528).
+    @State private var bulkReviewPlan: ReviewBulkActionPlan?
     /// Monotonic token so a queued auto-dismiss only clears the banner it was
     /// scheduled for — a newer action (which bumps the token) is never wiped by
     /// an older timer.
@@ -25,6 +29,14 @@ struct ReviewInboxView: View {
 
     private var items: [TransactionReviewItem] {
         Array(snapshot.items.prefix(embedded ? 20 : 6))
+    }
+
+    /// The blast radius of a bulk "Mark N reviewed" over the rows currently
+    /// listed. No explicit selection: the radius is every unresolved row the user
+    /// can see in this surface (the list is already truncated to the visible
+    /// rows), so the action never resolves more than is on screen.
+    private var listedBulkPlan: ReviewBulkActionPlan {
+        ReviewBulkActionPlan.markReviewed(items: items)
     }
 
     private var headerPresentation: ReviewInboxPrivacyPresentation {
@@ -125,7 +137,29 @@ struct ReviewInboxView: View {
             .onMoveCommand(perform: moveSelection)
             .accessibilityElement(children: .contain)
             .accessibilityLabel(headerPresentation.accessibilityLabel)
+            .confirmationDialog(
+                bulkReviewPlan.map { "Mark \($0.count) reviewed?" } ?? "Mark reviewed?",
+                isPresented: bulkReviewConfirmationBinding,
+                titleVisibility: .visible,
+                presenting: bulkReviewPlan
+            ) { plan in
+                Button("Mark \(plan.count) Reviewed") { applyBulkReview(plan) }
+                Button("Cancel", role: .cancel) {}
+            } message: { plan in
+                // State the blast radius in full so the user sees how many and
+                // which rows resolve before confirming — never a bare count.
+                Text(plan.blastRadiusDescription())
+            }
         }
+    }
+
+    /// Drives the confirmation dialog: presented while a plan is staged, and
+    /// clearing the plan when dismissed.
+    private var bulkReviewConfirmationBinding: Binding<Bool> {
+        Binding(
+            get: { bulkReviewPlan != nil },
+            set: { presented in if !presented { bulkReviewPlan = nil } }
+        )
     }
 
     private var header: some View {
@@ -147,6 +181,25 @@ struct ReviewInboxView: View {
                     .foregroundStyle(SemanticColors.warning)
                     .labelStyle(.titleAndIcon)
                     .accessibilityLabel(headerPresentation.highPriorityAccessibilityLabel ?? highPriorityBadge)
+            }
+
+            // Bulk "Mark N reviewed": staging a plan opens the blast-radius
+            // confirmation. Hidden while masked (rows hidden) or when the inbox
+            // has nothing to resolve. The N rides the label text + icon, never
+            // color alone.
+            if !appState.shouldMaskFinancialValues, !listedBulkPlan.isEmpty {
+                Button {
+                    bulkReviewPlan = listedBulkPlan
+                } label: {
+                    Label("Mark \(listedBulkPlan.count) reviewed", systemImage: "checklist")
+                        .font(.caption2.weight(.semibold))
+                        .labelStyle(.titleAndIcon)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.mini)
+                .help("Review all \(listedBulkPlan.count) listed transactions at once")
+                .accessibilityLabel("Mark \(listedBulkPlan.count) listed transactions reviewed")
+                .accessibilityHint("Shows which transactions will be marked reviewed before applying.")
             }
 
             Button {
@@ -233,6 +286,34 @@ struct ReviewInboxView: View {
         }
     }
 
+    /// Applies a confirmed bulk review: marks the plan's rows reviewed via the
+    /// shared AppState path, animates the resolved rows out, announces the count
+    /// and result to VoiceOver, and surfaces the same confirmation banner the
+    /// single-row actions use. Clears the staged plan either way.
+    private func applyBulkReview(_ plan: ReviewBulkActionPlan) {
+        bulkReviewPlan = nil
+        guard !plan.isEmpty else { return }
+        recordBulkAction(count: plan.count)
+        animatingResolution { appState.bulkMarkReviewed(ids: plan.affectedIDs) }
+        // Announce the outcome with the count spelled out, so the result is not
+        // conveyed only by rows silently vanishing from the list.
+        let noun = plan.count == 1 ? "transaction" : "transactions"
+        AccessibilityNotification.Announcement("Marked \(plan.count) \(noun) reviewed").post()
+    }
+
+    private func recordBulkAction(count: Int) {
+        confirmationGeneration &+= 1
+        let generation = confirmationGeneration
+        withAnimation(MotionTokens.animation(MotionTokens.standard, reduceMotion: reduceMotion)) {
+            actionConfirmation = ReviewActionConfirmation(action: .bulkReviewed(count), merchantName: nil)
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2.5))
+            guard confirmationGeneration == generation else { return }
+            withAnimation(MotionTokens.animation(MotionTokens.standard, reduceMotion: reduceMotion)) { actionConfirmation = nil }
+        }
+    }
+
     private func recordAction(_ action: ReviewActionConfirmation.Action, for item: TransactionReviewItem) {
         confirmationGeneration &+= 1
         let generation = confirmationGeneration
@@ -273,6 +354,7 @@ private struct ReviewActionConfirmation: Equatable {
         case markedTransfer
         case markedSpend
         case ruleCreated
+        case bulkReviewed(Int)
 
         var message: String {
             switch self {
@@ -290,15 +372,29 @@ private struct ReviewActionConfirmation: Equatable {
                 "Marked as spend"
             case .ruleCreated:
                 "Rule created"
+            case let .bulkReviewed(count):
+                "Marked \(count) reviewed"
             }
         }
     }
 
     let action: Action
-    let merchantName: String
+    /// The single merchant a row-level action resolved. Nil for batch actions
+    /// (bulk review), where the subject is a count, not one merchant.
+    let merchantName: String?
+
+    var bannerText: String {
+        if let merchantName {
+            return "\(action.message): \(merchantName)"
+        }
+        return action.message
+    }
 
     var accessibilityLabel: String {
-        "Review action completed: \(action.message) for \(merchantName)"
+        if let merchantName {
+            return "Review action completed: \(action.message) for \(merchantName)"
+        }
+        return "Review action completed: \(action.message)"
     }
 }
 
@@ -307,7 +403,7 @@ private struct ReviewActionConfirmationBanner: View {
 
     var body: some View {
         Label {
-            Text("\(confirmation.action.message): \(confirmation.merchantName)")
+            Text(confirmation.bannerText)
                 .font(.caption.weight(.semibold))
                 .lineLimit(2)
         } icon: {
