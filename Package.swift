@@ -33,6 +33,7 @@ let package = Package(
         .executable(name: "PlaidBarWidgetExtension", targets: ["PlaidBarWidgetExtension"]),
         .executable(name: "plaidbar-cli", targets: ["PlaidBarCLI"]),
         .library(name: "PlaidBarCore", targets: ["PlaidBarCore"]),
+        .library(name: "PlaidBarCache", targets: ["PlaidBarCache"]),
     ],
     dependencies: [
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.8.0"),
@@ -55,6 +56,7 @@ let package = Package(
             name: "PlaidBar",
             dependencies: [
                 "PlaidBarCore",
+                "PlaidBarCache",
                 .product(name: "Sparkle", package: "Sparkle"),
                 .product(name: "MenuBarExtraAccess", package: "MenuBarExtraAccess"),
                 .product(name: "KeychainAccess", package: "KeychainAccess"),
@@ -114,6 +116,17 @@ let package = Package(
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
 
+        // MARK: - PlaidBarCache (Disposable SwiftData read-model cache, AND-566)
+        // App-only library so the SwiftData dependency never reaches the lean
+        // server / CLI / widget targets. Holds the @Model + @ModelActor store;
+        // the pure read-model + mapper live in PlaidBarCore.
+        .target(
+            name: "PlaidBarCache",
+            dependencies: ["PlaidBarCore"],
+            path: "Sources/PlaidBarCache",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+
         // MARK: - Tests
         .testTarget(
             name: "PlaidBarTests",
@@ -138,6 +151,13 @@ let package = Package(
             name: "PlaidBarCoreTests",
             dependencies: ["PlaidBarCore", swiftTestingTestDependency],
             path: "Tests/PlaidBarCoreTests",
+            swiftSettings: [.swiftLanguageMode(.v5)],
+            linkerSettings: swiftTestingLinkerSettings
+        ),
+        .testTarget(
+            name: "PlaidBarCacheTests",
+            dependencies: ["PlaidBarCache", "PlaidBarCore", swiftTestingTestDependency],
+            path: "Tests/PlaidBarCacheTests",
             swiftSettings: [.swiftLanguageMode(.v5)],
             linkerSettings: swiftTestingLinkerSettings
         ),
