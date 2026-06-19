@@ -78,6 +78,15 @@ struct LocalAIInsightsService: Sendable {
     private let environment: [String: String]
     private let enabledPreference: Bool?
     private let generationConfiguration: LocalInsightModelGenerationConfiguration
+    /// AND-564: the Foundation Models (Apple Intelligence) insight engine, injected
+    /// by the app when Apple Intelligence is available. `nil` whenever Foundation
+    /// Models cannot generate (older OS, no SDK, not opted into wiring), which is
+    /// the default — so the legacy generation path is untouched there.
+    private let foundationModelsModel: (any LocalInsightModel)?
+    /// AND-564: the probed Foundation Models availability state used by the pure
+    /// routing decision. `.unsupported` by default, so FM never engages unless the
+    /// app explicitly wires an `.available` state — preserving today's behavior.
+    private let foundationModelsState: LocalAIFoundationModelsTierState
 
     init(
         model: (any LocalInsightModel)? = nil,
@@ -85,7 +94,9 @@ struct LocalAIInsightsService: Sendable {
         enabledPreference: Bool? = nil,
         modelNamePreference: String? = nil,
         autoDiscoverModel: Bool = true,
-        generationConfiguration: LocalInsightModelGenerationConfiguration = .default
+        generationConfiguration: LocalInsightModelGenerationConfiguration = .default,
+        foundationModelsModel: (any LocalInsightModel)? = nil,
+        foundationModelsState: LocalAIFoundationModelsTierState = .unsupported
     ) {
         self.environment = environment
         self.enabledPreference = enabledPreference
@@ -95,6 +106,43 @@ struct LocalAIInsightsService: Sendable {
             modelNamePreference: modelNamePreference
         ) : nil)
         self.generationConfiguration = generationConfiguration
+        self.foundationModelsModel = foundationModelsModel
+        self.foundationModelsState = foundationModelsState
+    }
+
+    /// The on-device AI tier this service would prefer to *generate* insights
+    /// with, given the FM probe state and whether the opted-in Ollama runtime is
+    /// engaged. Mirrors the tier resolver AppState surfaces in Settings.
+    private var preferredTier: LocalAIRuntimeTier {
+        LocalAITierResolver.resolvePreferredTier(
+            facts: LocalAITierFacts(
+                foundationModels: foundationModelsState,
+                ollamaEngaged: LocalAIRuntimeResolution.usesModel(for: availability.state),
+                naturalLanguageReady: Self.naturalLanguageTierReady
+            )
+        )
+    }
+
+    /// Whether Foundation Models is the active, available generation engine for
+    /// this service (AND-564). When `false`, the existing engine path runs exactly
+    /// as it did before FM existed. Delegates to the pure, unit-tested selector so
+    /// the runtime and the regression tests share one decision.
+    private var foundationModelsActive: Bool {
+        FoundationModelsInsightEngineSelector.selectEngine(
+            foundationModelsModelWired: foundationModelsModel != nil,
+            preferredTier: preferredTier,
+            foundationModelsState: foundationModelsState
+        ) == .foundationModels
+    }
+
+    /// The NaturalLanguage categorizer ships whenever the framework imports, which
+    /// on macOS is always.
+    private static var naturalLanguageTierReady: Bool {
+        #if canImport(NaturalLanguage)
+        true
+        #else
+        false
+        #endif
     }
 
     var availability: LocalAIAvailability {
@@ -239,7 +287,25 @@ struct LocalAIInsightsService: Sendable {
         var summaries: [LocalAIActivitySummary] = []
         summaries.reserveCapacity(inputs.count)
         let currentAvailability = availability
-        let configuredModel = LocalAIRuntimeResolution.usesModel(for: currentAvailability.state) ? model : nil
+        // AND-564: route generation through Foundation Models ONLY when it is the
+        // active, available tier; otherwise feed the existing engine exactly as
+        // before. When FM is inactive, `foundationModelsActive` is false and this
+        // collapses to the pre-AND-564 selection — the regression guard.
+        let useFoundationModels = foundationModelsActive
+        let configuredModel: (any LocalInsightModel)?
+        // The base availability `resolved(...)` upgrades from. For FM we synthesize
+        // a `.checking` base so a successful FM generation reports `.available`
+        // even when the Ollama runtime is `.disabled`/unconfigured (a user can have
+        // Apple Intelligence without ever opting into Ollama). Non-FM keeps the
+        // exact pre-AND-564 base.
+        let baseAvailability: LocalAIAvailability
+        if useFoundationModels {
+            configuredModel = foundationModelsModel
+            baseAvailability = Self.foundationModelsBaseAvailability
+        } else {
+            configuredModel = LocalAIRuntimeResolution.usesModel(for: currentAvailability.state) ? model : nil
+            baseAvailability = currentAvailability
+        }
 
         for input in inputs {
             // Cooperative cancellation: a multi-page sync reschedules this work
@@ -257,7 +323,7 @@ struct LocalAIInsightsService: Sendable {
                 configuration: generationConfiguration
             )
             let summaryAvailability = LocalAIRuntimeResolution.resolved(
-                base: currentAvailability,
+                base: baseAvailability,
                 usedModelOutput: generated.usedModelOutput,
                 fallbackReason: generated.fallbackReason,
                 fallbackDiagnostic: generated.fallbackDiagnostic
@@ -276,6 +342,16 @@ struct LocalAIInsightsService: Sendable {
 
         return summaries
     }
+
+    /// Base availability used when Foundation Models generates the summary
+    /// (AND-564). `.checking` so a successful generation upgrades to `.available`
+    /// via `resolved(...)`, and a failed one degrades to `.unavailable` with the
+    /// Apple Intelligence runtime name — never silently reading as `.disabled`.
+    private static let foundationModelsBaseAvailability = LocalAIAvailability(
+        state: .checking,
+        runtimeName: LocalAIRuntimeTier.foundationModels.shortStatusLabel,
+        detail: "Verifying Apple Intelligence on-device generation. VaultPeek keeps the data on this Mac, validates output, and falls back to deterministic local summaries."
+    )
 
     /// Construct the on-device model ONLY when the user has explicitly opted in
     /// via persisted app settings or (`PLAIDBAR_LOCAL_AI_RUNTIME=ollama`/`auto`)
