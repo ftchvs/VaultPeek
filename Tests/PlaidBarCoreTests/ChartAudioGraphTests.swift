@@ -280,4 +280,80 @@ struct ChartAudioGraphTests {
         let descriptor = ChartAudioGraph.trend(trend)
         #expect(!descriptor.isPrivacyMasked)
     }
+
+    // MARK: - Single masking surface (update-path staleness, AND-569 follow-up)
+
+    // `axSpokenStrings()` is the one collection the SwiftUI representable feeds
+    // into the `AXChartDescriptor` from BOTH `makeChartDescriptor` and
+    // `updateChartDescriptor`. Asserting it is fully masked proves the
+    // representable cannot speak an amount once Privacy Mask is on — including
+    // through the previously-leaking update path, where a descriptor built while
+    // unmasked stayed live after the mask engaged.
+
+    @Test("masked donut's full spoken surface (summary + labels + value axis) leaks no amount")
+    func donutAxSpokenStringsFullyMasked() {
+        let model = donutModel([
+            (.foodAndDining, .foodAndDrink, 400),
+            (.shopping, .shopping, 100),
+        ])
+        let masked = ChartAudioGraph.donut(model, isPrivacyMasked: true)
+
+        let spoken = masked.axSpokenStrings()
+        // Summary + every point label + every sampled y-axis value description.
+        #expect(spoken.count == 1 + masked.points.count + 3)
+        for line in spoken {
+            #expect(!line.contains("$"))
+            #expect(!line.contains("400"))
+            #expect(!line.contains("100"))
+        }
+        // Pitch data is untouched — the graph is still usable, just silent on figures.
+        #expect(masked.points.map(\.yValue) == [400, 100])
+    }
+
+    @Test("unmasked donut's spoken surface still carries amounts (masking is conditional)")
+    func donutAxSpokenStringsUnmaskedHasAmounts() {
+        let model = donutModel([(.foodAndDining, .foodAndDrink, 400)])
+        let unmasked = ChartAudioGraph.donut(model, isPrivacyMasked: false)
+        let spoken = unmasked.axSpokenStrings()
+        #expect(spoken.contains { $0.contains("$400") })
+    }
+
+    @Test("toggling Privacy Mask on a live chart re-masks the whole spoken surface")
+    func togglingMaskReMasksSpokenSurface() {
+        // Models the exact AND-569 leak: a descriptor built UNMASKED is on screen,
+        // then Privacy Mask engages and the view rebuilds the descriptor MASKED.
+        // The representable's update path must adopt the masked surface — so the
+        // masked descriptor's spoken strings must contain none of the amounts the
+        // unmasked one exposed.
+        let model = donutModel([
+            (.foodAndDining, .foodAndDrink, 400),
+            (.shopping, .shopping, 100),
+        ])
+
+        let beforeToggle = ChartAudioGraph.donut(model, isPrivacyMasked: false)
+        let afterToggle = ChartAudioGraph.donut(model, isPrivacyMasked: true)
+
+        // Before: amounts are spoken somewhere in the surface.
+        #expect(beforeToggle.axSpokenStrings().contains { $0.contains("$400") })
+
+        // After the toggle: no figure from the unmasked surface survives anywhere.
+        let leaked = afterToggle.axSpokenStrings().filter { line in
+            line.contains("$") || line.contains("400") || line.contains("100")
+        }
+        #expect(leaked.isEmpty)
+    }
+
+    @Test("masked heatmap's full spoken surface leaks no amount")
+    func heatmapAxSpokenStringsFullyMasked() {
+        let calendar = Calendar.current
+        let end = calendar.startOfDay(for: Date())
+        let day = Formatters.transactionDateString(calendar.date(byAdding: .day, value: -2, to: end)!)
+        let layout = heatmapLayout([transaction(day, amount: 75)])
+
+        let masked = ChartAudioGraph.heatmap(layout, isPrivacyMasked: true)
+        for line in masked.axSpokenStrings() {
+            #expect(!line.contains("$"))
+            #expect(!line.contains("75"))
+        }
+    }
 }
