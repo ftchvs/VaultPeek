@@ -22,7 +22,18 @@ struct PlaidBarApp: App {
     /// registration survives `body` recomputes for the process lifetime.
     @State private var summonHotkeyMonitor = SummonHotkeyMonitor()
     @Environment(\.openSettings) private var openSettings
+    @Environment(\.openWindow) private var openWindow
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Identifier of the window-first primary workspace `Window` scene (ADR-001,
+    /// Epic 1 / AND-591). Shared by the scene declaration and the
+    /// `openWindow(id:)` affordances so they never drift.
+    private static let mainWindowID = "main"
+    /// Window-first hybrid opt-in (`WindowFirstFeatureFlag`, default OFF). Resolved
+    /// once at launch from the CLI override / stored preference. While OFF the
+    /// "Open VaultPeek" affordance never targets the `Window` scene, so the app
+    /// behaves byte-identically to the popover-first build (the scene itself uses
+    /// `.defaultLaunchBehavior(.suppressed)`, so an unopened window is inert).
+    private let isWindowFirstEnabled = WindowFirstFeatureFlag.resolved()
     private let updaterController: SPUStandardUpdaterController
     private let statusItemContextMenuController = StatusItemContextMenuController()
     /// Draws the unreviewed review-inbox count badge on the menu-bar status item
@@ -321,6 +332,23 @@ struct PlaidBarApp: App {
         }
         .menuBarExtraStyle(.window)
 
+        .commands {
+            // "Open VaultPeek" affordance in the app menu, gated by the
+            // window-first flag (ADR-001, Epic 1 / AND-591). When the flag is OFF
+            // this command is not added, so the menu — and the whole app — is
+            // identical to today's popover-first build. When ON it raises the
+            // primary `Window` workspace via `openWindow(id:)`. The empty `if`
+            // produces no commands, satisfying the `Commands` builder.
+            if isWindowFirstEnabled {
+                CommandGroup(after: .windowList) {
+                    Button("Open VaultPeek") {
+                        openWindow(id: Self.mainWindowID)
+                    }
+                    .keyboardShortcut("0", modifiers: .command)
+                }
+            }
+        }
+
         Settings {
             SettingsView(updater: updaterController.updater)
                 .environment(appState)
@@ -330,6 +358,36 @@ struct PlaidBarApp: App {
                 // change reflected in the very control they are adjusting (AND-570).
                 .appliesAppTextSize()
         }
+
+        // Window-first primary workspace (ADR-001, Epic 1 / AND-591). The scene is
+        // always declared so the scene graph is stable, but it is inert until
+        // explicitly opened: `.defaultLaunchBehavior(.suppressed)` keeps it from
+        // appearing at launch, and the only affordance that opens it (the
+        // "Open VaultPeek" command above) is gated behind the window-first flag.
+        // So with the flag OFF — the shipping default — the window never appears
+        // and the app behaves byte-identically to the popover-first build. The
+        // shell is an empty `NavigationSplitView` skeleton; routing/destinations
+        // and the activation-policy/appearance wiring land in later Epic 1/2 PRs.
+        Window("VaultPeek", id: Self.mainWindowID) {
+            AppShellView()
+                .environment(appState)
+                .forcedAppColorScheme(Self.forcedColorScheme)
+                .appliesAppAppearance()
+                .appliesAppTextSize()
+                // Liquid Glass on chrome only (ADR-001): the window background is
+                // the ultra-thin material; data surfaces inside stay opaque. This
+                // is a content modifier (it walks up to the window), so it lives on
+                // the scene's root view, not on the `Window` scene itself.
+                .containerBackground(.ultraThinMaterial, for: .window)
+        }
+        // Do not steal launch/activation: the window only appears when opened.
+        .defaultLaunchBehavior(.suppressed)
+        // Let macOS restore the window across launches once the user opts in.
+        .restorationBehavior(.automatic)
+        // Content-driven sizing with a sensible floor so the 3-column workspace
+        // never collapses below a usable width.
+        .windowResizability(.contentMinSize)
+        .defaultSize(width: 1080, height: 720)
     }
 
     /// Registers or unregisters the global summon hotkey to match the persisted
