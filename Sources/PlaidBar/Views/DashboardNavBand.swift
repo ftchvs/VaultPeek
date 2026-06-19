@@ -4,10 +4,10 @@ import SwiftUI
 // MARK: - Account Filters
 
 /// The dashboard account filter is the core `DashboardAccountFilterKind`
-/// reused directly. The persisted `@AppStorage("dashboard.accountFilter")`
-/// raw values ("All", "Cash", "Credit", "Savings", "Debt", "Investments",
-/// "Status") are the core enum's raw values, so stored selections decode
-/// exactly as before.
+/// reused directly. It is persisted by the per-window `NavigationModel` under the
+/// `dashboard.accountFilter` key (AND-594) using the core enum's raw values
+/// ("All", "Cash", "Credit", "Savings", "Debt", "Investments", "Status"), so
+/// stored selections decode exactly as the previous view-level `@AppStorage` did.
 typealias DashboardAccountFilter = DashboardAccountFilterKind
 
 extension DashboardAccountFilterKind {

@@ -590,6 +590,70 @@ struct PlaidBarTests {
         #expect(restarts == 3)
     }
 
+    // MARK: - Navigation state migration (mirrors AppState/NavigationModel façade, AND-594)
+    //
+    // The app's `NavigationModel` (app target, not @testable-importable here)
+    // persists the dashboard filter / account selection / heatmap metric to the
+    // SAME UserDefaults keys the retired view-level `@AppStorage` used, so a
+    // relaunch restores identically. These pin the migrated-key contract at the
+    // pure layer: the raw values stored are the enum raw values MainPopover read.
+
+    @Test("Migrated NavigationState raw values match the retired @AppStorage keys' encoding")
+    func navigationStateMatchesAppStorageEncoding() {
+        // The popover read DashboardAccountFilter.rawValue ("Cash" …),
+        // SpendingHeatmapMode.rawValue ("netCashflow"), and a "" account-id
+        // sentinel. A persisted NavigationState carries exactly those raw values.
+        let state = NavigationState(
+            destination: .dashboard,
+            dashboardFilter: .credit,
+            selectedAccountID: "demo_visa",
+            heatmapMode: .netCashflow
+        )
+        #expect(state.dashboardFilter.rawValue == "Credit")
+        #expect(state.heatmapMode.rawValue == "netCashflow")
+        #expect(state.selectedAccountID == "demo_visa")
+
+        // Defaults match the popover's old @AppStorage defaults exactly.
+        let defaults = NavigationState()
+        #expect(defaults.dashboardFilter.rawValue == DashboardAccountFilterKind.all.rawValue)
+        #expect(defaults.dashboardFilter.rawValue == "All")
+        #expect(defaults.selectedAccountID == "")
+        #expect(defaults.heatmapMode.rawValue == SpendingHeatmapMode.spending.rawValue)
+    }
+
+    @Test("Persisted raw values restore the same NavigationState (relaunch parity)")
+    func navigationStateRestoreParity() {
+        // Simulate the model's hydrate(): decode the three stored raw values into
+        // a NavigationState exactly as NavigationModel.hydrate does, proving a
+        // round-trip through the migrated keys preserves the user's selection.
+        let storedFilter = "Debt"
+        let storedAccountID = "demo_checking"
+        let storedHeatmap = "netCashflow"
+
+        var restored = NavigationState()
+        if let filter = DashboardAccountFilterKind(rawValue: storedFilter) {
+            restored.dashboardFilter = filter
+        }
+        restored.selectedAccountID = storedAccountID
+        if let mode = SpendingHeatmapMode(rawValue: storedHeatmap) {
+            restored.heatmapMode = mode
+        }
+
+        #expect(restored.dashboardFilter == .debt)
+        #expect(restored.selectedAccountID == "demo_checking")
+        #expect(restored.heatmapMode == .netCashflow)
+    }
+
+    @Test("Filter-change-clears-selection holds through the façade contract")
+    func facadeFilterChangeClearsSelection() {
+        // The popover relied on `.onChange(of: filter) { selectedAccountId = "" }`;
+        // the migrated model folds that rule into setDashboardFilter, so the
+        // façade behaves identically without the view-level onChange.
+        var state = NavigationState(dashboardFilter: .all, selectedAccountID: "demo_visa")
+        state.setDashboardFilter(.credit)
+        #expect(state.selectedAccountID == "")
+    }
+
     // MARK: - Foundation Models categorization tier (mirrors AppState.refreshFoundationModelsCategorySuggestions)
 
     @Test("FM categorizer produces a foundationModels suggestion when Apple Intelligence is available")
