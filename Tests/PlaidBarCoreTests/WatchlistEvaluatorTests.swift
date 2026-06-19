@@ -148,8 +148,11 @@ struct WatchlistEvaluatorTests {
             calendar: Self.calendar,
             config: config
         )
-        let decision = try? #require(first.decisions.first { $0.kind == .merchantWatch })
-        #expect(decision != nil)
+        guard let decision = first.decisions.first(where: { $0.kind == .merchantWatch }) else {
+            Issue.record("expected merchant watch decision")
+            return
+        }
+        #expect(decision.kind == .merchantWatch)
 
         let second = NotificationTriggerSelection.evaluate(
             transactions: transactions,
@@ -157,9 +160,9 @@ struct WatchlistEvaluatorTests {
             now: Self.now,
             calendar: Self.calendar,
             config: config,
-            deliveredDedupKeys: [decision!.dedupKey]
+            deliveredDedupKeys: [decision.dedupKey]
         )
-        #expect(!second.decisions.contains { $0.dedupKey == decision!.dedupKey })
+        #expect(!second.decisions.contains { $0.dedupKey == decision.dedupKey })
     }
 
     @Test("dedupKey is stable per target+month+threshold but changes when any of them changes")
