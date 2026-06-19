@@ -537,10 +537,13 @@ final class AppState {
         _ = try? LocalDataStore.migrateLegacyDefaultStorageIfNeeded()
         self.notificationService = notificationService ?? NotificationService.shared
         loadSettings()
-        // Detection-only: record whether Apple Foundation Models is available so
-        // the tier resolver can prefer it. No model session is created and no
-        // prompt is routed through it (AND-563). Cheap + synchronous.
+        // Record whether Apple Foundation Models is available so the tier resolver
+        // can prefer it (AND-563) and, when available, the insight service routes
+        // generation through it (AND-564). Cheap + synchronous. `loadSettings()`
+        // already built the service with `.unsupported`; rebuild now that the probe
+        // ran so the FM engine is wired on launch when Apple Intelligence is ready.
         foundationModelsTierState = foundationModelsProbe.currentState()
+        rebuildLocalAIInsightsService()
         // Engage launch App Lock synchronously before the first SwiftUI body is
         // ever evaluated. Deferring this to `loadInitialData()` leaks one frame
         // of cached/demo account names and activity because `.task` runs after
@@ -832,9 +835,19 @@ final class AppState {
     private func rebuildLocalAIInsightsService() {
         localAIProbeGeneration += 1
         localAIProbeAvailability = nil
+        // AND-564: wire the Foundation Models insight engine ONLY when Apple
+        // Intelligence is available, so the service's pure routing decision can
+        // prefer it. On any OS/build without an available FM tier the model stays
+        // nil and the state stays `.unsupported`, leaving the existing generation
+        // path byte-identical to before AND-564.
+        let foundationModelsModel: (any LocalInsightModel)? = foundationModelsTierState.isAvailable
+            ? FoundationModelsInsightModel()
+            : nil
         localAIInsightsService = LocalAIInsightsService(
             enabledPreference: localAIEnabledPreference,
-            modelNamePreference: localAIModelNamePreference
+            modelNamePreference: localAIModelNamePreference,
+            foundationModelsModel: foundationModelsModel,
+            foundationModelsState: foundationModelsTierState
         )
     }
 
@@ -1531,9 +1544,15 @@ final class AppState {
     }
 
     /// Re-probe Apple Foundation Models availability (e.g. after the user enables
-    /// Apple Intelligence in System Settings). Detection only.
+    /// Apple Intelligence in System Settings) and rebuild the insight service so a
+    /// now-available FM tier starts generating insights (AND-564) — or a
+    /// now-unavailable one disengages and the existing engine resumes unchanged.
     func refreshFoundationModelsAvailability() {
+        let previous = foundationModelsTierState
         foundationModelsTierState = foundationModelsProbe.currentState()
+        guard foundationModelsTierState != previous else { return }
+        rebuildLocalAIInsightsService()
+        invalidateLocalAIActivitySummaries()
     }
 
     /// Cached local summaries — invalidated via accounts.didSet and transactions.didSet.
