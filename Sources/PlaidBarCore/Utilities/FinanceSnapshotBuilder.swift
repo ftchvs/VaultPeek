@@ -6,7 +6,9 @@ import Foundation
 ///
 /// Math reuse (no duplication):
 /// - `safeToSpend` ← ``SafeToSpendCalculator/compute(accounts:recurringTransactions:cashflow:inputs:pendingHolds:asOf:calendar:)``
-/// - `totalBalance` ← ``MenuBarSummary/netCash(from:)``
+/// - `totalBalance` ← sum of the included cash/depository balances (the same set
+///   used to build `accountBalances`), matching the intent's "spendable balance
+///   across linked accounts" — not net worth.
 /// - `creditUtilization` ← ``WealthSummaryPresentation`` credit-utilization rule
 ///   (recomputed from the same depository/credit balances)
 /// - `nextRecurringBills` ← the supplied recurring streams, filtered to dated
@@ -37,10 +39,17 @@ public enum FinanceSnapshotBuilder {
             calendar: calendar
         )
 
-        let totalBalance = MenuBarSummary.netCash(from: accounts)
-
-        let accountBalances = accounts
+        // Only the included cash/depository accounts — the same set that powers
+        // `accountBalances` below. The balance intent describes "spendable balance
+        // across linked accounts", so this deliberately excludes investments and
+        // does NOT subtract credit/loan debt (that would be net worth, not cash).
+        let includedCashAccounts = accounts
             .filter { safeToSpendInputs.includedCashAccountTypes.contains($0.type) }
+
+        let totalBalance = includedCashAccounts
+            .reduce(0) { $0 + $1.balances.effectiveBalance }
+
+        let accountBalances = includedCashAccounts
             .map { account in
                 FinanceSnapshot.AccountBalance(
                     displayName: account.name,
@@ -61,6 +70,23 @@ public enum FinanceSnapshotBuilder {
         let currencyCode = accounts
             .compactMap { $0.balances.isoCurrencyCode }
             .first ?? "USD"
+
+        // Defense in depth: a masked snapshot must be value-free *on disk*, not
+        // merely withheld at read time. If anyone bypasses the read-time gate
+        // (`FinanceIntentQueries`) the file itself carries no real figures — only
+        // the flag, timestamp, and currency code survive.
+        if isMasked {
+            return FinanceSnapshot(
+                safeToSpend: 0,
+                totalBalance: 0,
+                accountBalances: [],
+                nextRecurringBills: [],
+                creditUtilization: nil,
+                isoCurrencyCode: currencyCode,
+                generatedAt: generatedAt,
+                isMasked: true
+            )
+        }
 
         return FinanceSnapshot(
             safeToSpend: safeToSpend.amount,

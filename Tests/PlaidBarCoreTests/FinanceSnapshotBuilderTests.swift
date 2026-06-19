@@ -28,7 +28,10 @@ struct FinanceSnapshotBuilderTests {
             asOf: asOf
         )
         #expect(snapshot.safeToSpend == expectedSafeToSpend.amount)
-        #expect(snapshot.totalBalance == MenuBarSummary.netCash(from: accounts))
+        // totalBalance is the sum of included cash accounts (spendable balance),
+        // NOT net worth — investments are excluded and credit debt is not
+        // subtracted. Here: 3_000 + 5_000 = 8_000.
+        #expect(snapshot.totalBalance == 8_000)
         // Two depository accounts surface as display-safe balances.
         #expect(snapshot.accountBalances.count == 2)
         #expect(snapshot.accountBalances.contains { $0.displayName == "Checking" })
@@ -38,15 +41,52 @@ struct FinanceSnapshotBuilderTests {
         #expect(snapshot.creditUtilization == 20) // 400 / 2000 * 100
     }
 
-    @Test("Masked flag propagates into the snapshot")
-    func maskedFlagPropagates() {
+    @Test("Masked snapshot is value-free on disk (defense in depth)")
+    func maskedSnapshotIsValueFree() {
+        // Even with real accounts, credit, and bills, a masked snapshot must carry
+        // no real figures — only the flag, timestamp, and currency survive.
+        let referenceDay = Calendar.current.startOfDay(for: asOf)
+        let recurring = [
+            recurringStream(
+                merchant: "Rent",
+                amount: 1_800,
+                next: dateString(byAdding: 1, to: referenceDay),
+                category: .billsAndUtilities
+            ),
+        ]
         let snapshot = FinanceSnapshotBuilder.make(
-            accounts: [depository(name: "Checking", available: 1_000)],
-            recurringTransactions: [],
+            accounts: [
+                depository(name: "Checking", available: 1_000),
+                credit(name: "Card", current: 400, limit: 2_000),
+            ],
+            recurringTransactions: recurring,
+            safeToSpendInputs: SafeToSpendInputs(horizon: .days(2)),
             isMasked: true,
             generatedAt: asOf
         )
         #expect(snapshot.isMasked)
+        #expect(snapshot.safeToSpend == 0)
+        #expect(snapshot.totalBalance == 0)
+        #expect(snapshot.accountBalances.isEmpty)
+        #expect(snapshot.nextRecurringBills.isEmpty)
+        #expect(snapshot.creditUtilization == nil)
+        #expect(snapshot.generatedAt == asOf)
+    }
+
+    @Test("Credit-only snapshot is not considered empty")
+    func creditOnlySnapshotIsNotEmpty() {
+        // A paid-off credit user has no cash accounts and no bills, but a usable
+        // utilization — the intents must not treat that as "no data".
+        let snapshot = FinanceSnapshotBuilder.make(
+            accounts: [credit(name: "Card", current: 400, limit: 2_000)],
+            recurringTransactions: [],
+            isMasked: false,
+            generatedAt: asOf
+        )
+        #expect(snapshot.accountBalances.isEmpty)
+        #expect(snapshot.totalBalance == 0)
+        #expect(snapshot.creditUtilization == 20)
+        #expect(!snapshot.isEmpty)
     }
 
     @Test("Upcoming bills include dated outflows in-window and exclude income")

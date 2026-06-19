@@ -397,6 +397,10 @@ final class AppState {
     func togglePrivacyMask() {
         guard !isContentLocked else { return }
         appLockPreferences.privacyMaskEnabled.toggle()
+        // Re-emit the App Intents snapshot so the masked/unmasked state takes
+        // effect on disk immediately: enabling the mask overwrites any prior real
+        // figures with a value-free snapshot; disabling restores the real values.
+        writeFinanceSnapshot()
     }
 
     /// True only in full App Lock (`.locked`) — distinct from
@@ -686,6 +690,10 @@ final class AppState {
         // stale message from a prior cancelled/failed unlock attempt.
         if isAppLocked {
             lastUnlockMessage = nil
+            // Locking masks financial values, so immediately overwrite the App
+            // Intents snapshot with a value-free one — no figures leak past the
+            // lock via Spotlight / Siri / Shortcuts.
+            writeFinanceSnapshot()
         }
     }
 
@@ -2175,6 +2183,7 @@ final class AppState {
             }
             // Refresh (or clear, when the last institution is gone) the widget
             // snapshot so it never shows balances for just-removed accounts.
+            // `writeGlanceSnapshot` also refreshes/clears the App Intents snapshot.
             writeGlanceSnapshot()
         } catch {
             self.error = error.localizedDescription

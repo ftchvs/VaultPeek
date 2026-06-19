@@ -31,8 +31,9 @@ private func valueResult(
         return .result(value: value, dialog: IntentDialog(stringLiteral: spokenDialog))
     case let .message(text):
         // A value intent received a non-numeric answer (e.g. "no credit cards").
-        // Surface it as dialog with a zero value rather than failing.
-        return .result(value: 0, dialog: IntentDialog(stringLiteral: text))
+        // Throw `unavailable` rather than returning a fabricated 0: Shortcuts
+        // automations would otherwise see a real-looking 0% / $0 and act on it.
+        throw FinanceIntentError.unavailable(text)
     case let .withheld(spokenDialog):
         throw FinanceIntentError.locked(spokenDialog)
     case let .unavailable(spokenDialog):
