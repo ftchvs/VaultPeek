@@ -299,11 +299,44 @@ struct ReviewInboxView: View {
         .transition(reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity))
     }
 
+    /// The discrete Copilot-style unreviewed-count chip sat next to the title
+    /// (AND-533). Sourced from the pure Core helper, which returns nil when the
+    /// queue is empty or while Privacy Mask / App Lock is active (so the count
+    /// never leaks — the AND-483 contract). Nil here hides the chip entirely.
+    private var unreviewedBadgeText: String? {
+        ReviewInboxPrivacyPresentation.unreviewedBadge(
+            count: snapshot.totalCount,
+            isMasked: appState.shouldMaskFinancialValues
+        )
+    }
+
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
             VStack(alignment: .leading, spacing: Spacing.xxs) {
-                Text("Review Inbox")
-                    .sectionTitle()
+                HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+                    Text("Review Inbox")
+                        .sectionTitle()
+
+                    // Discrete at-a-glance unreviewed-count chip (AND-533). The
+                    // meaning rides the number itself plus the VoiceOver label
+                    // "N to review" — never color alone (ACCESSIBILITY.md). Hidden
+                    // at 0 and under Privacy Mask (Core helper returns nil), so no
+                    // count leaks (AND-483). This is additive: the subtitle below
+                    // and the high-priority badge are unchanged.
+                    if let unreviewedBadgeText {
+                        Text("\(snapshot.totalCount)")
+                            .font(.caption2.weight(.semibold))
+                            .monospacedDigit()
+                            .foregroundStyle(SemanticColors.brand)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 2)
+                            .background(SemanticColors.brand.opacity(0.12), in: Capsule())
+                            .overlay {
+                                Capsule().stroke(SemanticColors.brand.opacity(0.20), lineWidth: 1)
+                            }
+                            .accessibilityLabel(unreviewedBadgeText)
+                    }
+                }
 
                 Text(headerPresentation.subtitle)
                     .microText()
