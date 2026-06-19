@@ -15,6 +15,18 @@ import SwiftUI
 /// the screen's visible edge it is shifted back on-screen — the leading edge
 /// wins so the Wealth Summary rail always stays visible (AND-374 primary
 /// fallback).
+///
+/// macOS 26 window-scene review (AND-514, SPIKE F2): SwiftUI 7 still offers no
+/// declarative hook for a `MenuBarExtra(.window)` host window's frame origin —
+/// the framework owns that window and re-centers it on the status item across
+/// width changes. The leading-edge pin therefore still requires reaching the
+/// real `NSWindow` through an `NSViewRepresentable` bridge and calling
+/// `setFrameOrigin` after resize, exactly as below. There is no clean
+/// SwiftUI-only replacement that preserves the unit-tested
+/// `PopoverGeometry.clampedLeadingX` anchoring math (see
+/// `PopoverGeometryTests`), so the AppKit bridge is kept intentionally rather
+/// than rewritten for the sake of newness. Re-evaluate if a future SwiftUI
+/// release exposes a window-anchor / placement API for menu-bar windows.
 struct PopoverLeadingEdgeAnchor: NSViewRepresentable {
     /// True while the trailing account inspector is shown (popover is in its
     /// widened three-column state).
