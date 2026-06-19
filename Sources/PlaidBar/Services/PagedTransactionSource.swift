@@ -117,11 +117,23 @@ final class PagedTransactionSource {
 
     /// Loads the next page when the list scrolls near the end. No-op outside the
     /// paged path, when a fetch is already running, or when there is nothing more.
+    ///
+    /// Before computing the next window it re-reads the cache `count()` and feeds
+    /// it back via `updateTotal`. The feed's `total` is captured when the first
+    /// page loads, so without this a concurrent re-sync that *grows* the history
+    /// would leave the window math believing there is nothing more to load and
+    /// silently drop the newly added newest transactions. Re-reading keeps the
+    /// window bound to the current size; the feed's per-id dedup keeps a row that
+    /// shifted between pages from rendering twice.
     func loadNextPageIfNeeded() async {
         guard mode == .paged, let store, let cacheKey, !isLoadingPage else { return }
-        guard let window = feed.nextWindow else { return }
         isLoadingPage = true
         defer { isLoadingPage = false }
+
+        if let currentTotal = try? await store.count(cacheKey: cacheKey) {
+            feed.updateTotal(currentTotal)
+        }
+        guard let window = feed.nextWindow else { return }
         guard let page = try? await store.page(cacheKey: cacheKey, window: window), !page.isEmpty else {
             // A failed page read just stops paging; already-loaded rows remain.
             return

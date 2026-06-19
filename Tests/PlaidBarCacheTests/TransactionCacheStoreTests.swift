@@ -139,4 +139,103 @@ struct TransactionCacheStoreTests {
         #expect(plan.writeCount == 0)
         #expect(try await store.count(cacheKey: key) == 0)
     }
+
+    // MARK: - Bounded ordering cache + invalidation (Finding A)
+
+    /// The newest-first ordering is memoized per data generation so a multi-page
+    /// scroll sorts once. Repeated page reads with no intervening write must return
+    /// stable, correct slices — the cache must not corrupt or stale the ordering.
+    @Test("repeated page reads reuse the cached ordering and stay correct")
+    func cachedOrderingStableAcrossPages() async throws {
+        let store = try TransactionCacheStore(inMemory: true)
+        let all = transactions(count: 30)
+        try await store.upsert(cacheKey: key, transactions: all)
+        let total = try await store.count(cacheKey: key)
+        let expected = all.sorted { $0.date > $1.date }.map(\.id)
+
+        let pageSize = 7
+        // Read every page twice in interleaved order; the memoized order must give
+        // identical, non-overlapping slices each time.
+        for round in 0..<2 {
+            var collected: [String] = []
+            var window: TransactionPageWindow? = .make(pageIndex: 0, pageSize: pageSize, total: total)
+            while let w = window {
+                let page = try await store.page(cacheKey: key, window: w)
+                collected.append(contentsOf: page.map(\.id))
+                window = w.next(pageSize: pageSize, total: total)
+            }
+            #expect(collected == expected, "round \(round): cached ordering yields the full newest-first history")
+        }
+    }
+
+    /// A write must bump the data generation and invalidate the memoized ordering,
+    /// so a later read reflects the new rows rather than serving a stale sort. This
+    /// is the cache-correctness guarantee behind the bounded paging path.
+    @Test("a write invalidates the cached ordering so later reads see new rows")
+    func writeInvalidatesCachedOrdering() async throws {
+        let store = try TransactionCacheStore(inMemory: true)
+        try await store.upsert(cacheKey: key, transactions: transactions(count: 5))
+
+        // Prime the order cache with a read.
+        #expect(try await store.count(cacheKey: key) == 5)
+        let firstPage = try await store.page(
+            cacheKey: key,
+            window: .make(pageIndex: 0, pageSize: 50, total: 5)
+        )
+        #expect(firstPage.count == 5)
+
+        // Grow the history (a concurrent re-sync). The generation must bump.
+        try await store.upsert(cacheKey: key, transactions: transactions(count: 12))
+        #expect(try await store.count(cacheKey: key) == 12, "count reflects the grown history, not the cached 5")
+
+        let afterGrowth = try await store.page(
+            cacheKey: key,
+            window: .make(pageIndex: 0, pageSize: 50, total: 12)
+        )
+        #expect(afterGrowth.count == 12, "the page read sees the new rows after invalidation")
+        let expected = transactions(count: 12).sorted { $0.date > $1.date }.map(\.id)
+        #expect(afterGrowth.map(\.id) == expected, "ordering is rebuilt correctly, newest-first")
+    }
+
+    /// The memoized ordering is keyed by `cacheKey`, not just generation: reading
+    /// two environments back-to-back within one generation must not serve the first
+    /// key's ordering for the second key.
+    @Test("the ordering cache does not bleed across cache keys within one generation")
+    func cachedOrderingScopedPerKey() async throws {
+        let store = try TransactionCacheStore(inMemory: true)
+        try await store.upsert(cacheKey: "sandbox|/x", transactions: transactions(count: 4))
+        try await store.upsert(cacheKey: "production|/x", transactions: transactions(count: 6))
+
+        // Read sandbox first (primes the cache for the current generation), then
+        // production in the same generation — production must not reuse sandbox's order.
+        #expect(try await store.count(cacheKey: "sandbox|/x") == 4)
+        #expect(try await store.count(cacheKey: "production|/x") == 6)
+        // And back again, exercising the cache miss-on-key-change in both directions.
+        #expect(try await store.count(cacheKey: "sandbox|/x") == 4)
+
+        let prodPage = try await store.page(
+            cacheKey: "production|/x",
+            window: .make(pageIndex: 0, pageSize: 100, total: 6)
+        )
+        #expect(prodPage.count == 6, "production page reads its own rows, not sandbox's cached order")
+    }
+
+    /// An updated payload (same id) must be reflected by a subsequent page read —
+    /// proving the cache is invalidated on update, not just on insert/delete, and
+    /// that the page path faults in the fresh blob rather than a stale one.
+    @Test("an in-place update is reflected after cache invalidation")
+    func updateReflectedAfterInvalidation() async throws {
+        let store = try TransactionCacheStore(inMemory: true)
+        let original = TransactionDTO(id: "t1", accountId: "chk", amount: 10, date: "2026-01-10", name: "Old")
+        try await store.upsert(cacheKey: key, transactions: [original])
+        // Prime the cache.
+        _ = try await store.page(cacheKey: key, window: .make(pageIndex: 0, pageSize: 10, total: 1))
+
+        let updated = TransactionDTO(id: "t1", accountId: "chk", amount: 99, date: "2026-01-10", name: "New")
+        try await store.upsert(cacheKey: key, transactions: [updated])
+
+        let page = try await store.page(cacheKey: key, window: .make(pageIndex: 0, pageSize: 10, total: 1))
+        #expect(page.first?.amount == 99, "the cached ordering did not serve the stale payload")
+        #expect(page.first?.name == "New")
+    }
 }

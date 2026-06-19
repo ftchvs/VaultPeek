@@ -22,14 +22,32 @@ import SwiftData
 ///
 /// ## Paging
 /// A page is the `TransactionPageWindow` slice (`offset`/`limit` from the pure
-/// page-window math) of the newest-first ordering. Ordering and slicing run in
-/// Swift over the lightweight stored scalar columns (`sortDate` then
-/// `transactionId`, both descending), and **only the page's JSON payloads are
-/// decoded** — so a multi-thousand-row history decodes just one page of
-/// `TransactionDTO`s at a time. Both the sort and the cacheKey scope are done in
-/// Swift rather than via `FetchDescriptor(sortBy:)`/`#Predicate`, because those
-/// capture a non-`Sendable` `KeyPath` — an error under the project's Swift 6
-/// strict-concurrency gate, the same constraint ``ReadModelCacheStore`` documents.
+/// page-window math) of the newest-first ordering.
+///
+/// `FetchDescriptor(sortBy:)` and `#Predicate` are **not** usable here: both
+/// capture a non-`Sendable` `KeyPath`, which is an error under the project's
+/// Swift 6 strict-concurrency gate (the same constraint ``ReadModelCacheStore``
+/// documents). So the cacheKey scoping and the newest-first ordering (`sortDate`
+/// then `transactionId`, both descending) are done in Swift. To keep that from
+/// re-loading every payload blob and re-sorting on every page request, two
+/// bounds apply:
+///
+/// 1. **Scalar-only ordering fetch.** The fetch that builds the order sets
+///    `propertiesToFetch` to the lightweight scalar columns (`cacheKey`,
+///    `sortDate`, `transactionId`) and *excludes* the heavy `payload` blob.
+///    `propertiesToFetch` takes `PartialKeyPath`s, which — unlike `sortBy:` /
+///    `#Predicate` — do compile under strict concurrency, so the JSON blobs stay
+///    faulted out of memory while the order is computed.
+/// 2. **Cached ordering per data generation.** The sorted row references are
+///    memoized against a monotonically increasing generation counter that every
+///    write bumps. Consecutive `page()`/`count()` calls within one paging
+///    session reuse the sort instead of redoing `O(N log N)` each time; the
+///    first write invalidates it.
+///
+/// Only the requested page's `payload` blobs are then faulted in and decoded —
+/// so a multi-thousand-row history decodes just one page of `TransactionDTO`s at
+/// a time regardless of history size.
+///
 /// The store file is opened per data directory and the active environment is the
 /// only one seeded into it (an environment switch calls
 /// ``replaceAll(cacheKey:transactions:)`` which wipes first).
@@ -43,6 +61,19 @@ public actor TransactionCacheStore {
     /// Filename of the disposable per-transaction store. `v1` is namespaced so a
     /// future incompatible store can ship beside it and the old file be deleted.
     public static let storeFilename = "transaction-cache-v1.store"
+
+    /// Monotonic data generation, bumped by every write (`upsert`/`replaceAll`/
+    /// `clearAll`). The cached ordering (``orderCache``) is keyed off this so a
+    /// write invalidates the memoized sort without needing to clear it eagerly.
+    private var dataGeneration: UInt64 = 0
+
+    /// Memoized newest-first row ordering for one `cacheKey`, plus the generation
+    /// it was built for. Reused across consecutive reads of the same key within one
+    /// paging session so the `O(N log N)` filter+sort runs once per data
+    /// generation, not per page. Keyed by `cacheKey` as well as generation because
+    /// a single store file can briefly hold more than one environment (e.g. before
+    /// an environment switch wipes via `replaceAll`).
+    private var orderCache: (generation: UInt64, cacheKey: String, rows: [CachedTransaction])?
 
     private static var encoder: JSONEncoder {
         let encoder = JSONEncoder()
@@ -150,6 +181,7 @@ public actor TransactionCacheStore {
             }
         }
         try modelContext.save()
+        invalidateOrderCache()
         return plan
     }
 
@@ -168,40 +200,44 @@ public actor TransactionCacheStore {
     public func clearAll() throws {
         try modelContext.delete(model: CachedTransaction.self)
         try modelContext.save()
+        invalidateOrderCache()
     }
 
     // MARK: - Reads
 
     /// Total cached transactions for `cacheKey`.
+    ///
+    /// Reuses the memoized newest-first ordering (rebuilt only when a write bumped
+    /// the data generation), so a `count()` adjacent to `page()` calls in the same
+    /// paging session shares one scalar-only fetch+sort rather than redoing it.
     public func count(cacheKey: String) throws -> Int {
-        try existingTransactionIds(cacheKey: cacheKey).count
+        try orderedRows(cacheKey: cacheKey).count
     }
 
     /// Reads one newest-first page of transactions for `cacheKey`.
     ///
-    /// The DB does the heavy lifting: a `FetchDescriptor` sorted by `sortDate`
-    /// (then `transactionId`) descending with `fetchOffset`/`fetchLimit` taken from
-    /// `window`, so only up to `window.limit` rows are materialized. The decoded
-    /// DTOs are returned newest-first. A zero-limit window short-circuits to an
-    /// empty page without touching the store.
+    /// `FetchDescriptor(sortBy:)` + `fetchOffset/fetchLimit` is unavailable: the
+    /// `SortDescriptor(\.keyPath)` captures the model's `KeyPath`, which is
+    /// non-`Sendable` and an error under the project's Swift 6 strict-concurrency
+    /// gate — the same class of constraint AND-566 hit with `#Predicate`. So the
+    /// scope filter and newest-first ordering run in Swift instead, but bounded:
+    ///
+    /// - The ordering fetch sets `propertiesToFetch` to the scalar columns only,
+    ///   so the JSON `payload` blobs stay faulted out while the order is built.
+    /// - That ordering is memoized per data generation (``orderedRows``), so a
+    ///   multi-page scroll sorts once, not once per page.
+    /// - Only the requested page's rows have their `payload` faulted in and
+    ///   decoded — so a multi-thousand-row history still decodes just one page of
+    ///   `TransactionDTO`s.
+    ///
+    /// A zero-limit window short-circuits to an empty page without touching the
+    /// store.
     public func page(cacheKey: String, window: TransactionPageWindow) throws -> [TransactionDTO] {
         guard window.limit > 0 else { return [] }
-        // Why not `FetchDescriptor(sortBy:)` + `fetchOffset/fetchLimit`: a SwiftData
-        // `SortDescriptor(\.keyPath)` captures the model's `KeyPath`, which is
-        // non-`Sendable` and an error under the project's Swift 6 strict-concurrency
-        // gate — the same class of constraint AND-566 hit with `#Predicate`. So the
-        // ordering is done in Swift over the stored scalar columns instead.
-        //
-        // The sort key is the lightweight `(sortDate, transactionId)` columns, not
-        // the JSON blob, and crucially **only the requested page's payloads are
-        // decoded** — so a multi-thousand-row history still decodes just one page of
-        // `TransactionDTO`s, keeping per-page work bounded even though the row
-        // *references* are sorted in memory.
-        let rows = try modelContext.fetch(FetchDescriptor<CachedTransaction>())
-        let ordered = rows
-            .filter { $0.cacheKey == cacheKey }
-            .sorted(by: Self.isNewerFirst)
+        let ordered = try orderedRows(cacheKey: cacheKey)
         let pageSlice = ordered.dropFirst(window.offset).prefix(window.limit)
+        // `payload` was excluded from the ordering fetch; accessing it here faults
+        // in only this page's blobs — bounded to `window.limit` rows.
         return try pageSlice.map { try Self.decoder.decode(TransactionDTO.self, from: $0.payload) }
     }
 
@@ -218,8 +254,49 @@ public actor TransactionCacheStore {
 
     // MARK: - Private
 
+    /// A `FetchDescriptor` that materializes only the lightweight scalar columns
+    /// used for scoping/ordering and leaves the heavy `payload` blob faulted.
+    ///
+    /// `propertiesToFetch` takes `PartialKeyPath`s; unlike `sortBy:` / `#Predicate`
+    /// it compiles cleanly under the project's strict-concurrency gate, so this is
+    /// the one SwiftData lever available to keep the JSON blobs out of memory while
+    /// the order is computed.
+    private static func scalarOnlyDescriptor() -> FetchDescriptor<CachedTransaction> {
+        var descriptor = FetchDescriptor<CachedTransaction>()
+        descriptor.propertiesToFetch = [\.cacheKey, \.sortDate, \.transactionId]
+        return descriptor
+    }
+
+    /// The newest-first ordered rows for `cacheKey`, memoized per data generation.
+    ///
+    /// Built from a scalar-only fetch (no `payload`), filtered to `cacheKey`, and
+    /// sorted by ``isNewerFirst``. The result is cached against `(dataGeneration,
+    /// cacheKey)` so repeated reads of the same key in a paging session reuse it; a
+    /// read for a different key (or after a write) rebuilds.
+    private func orderedRows(cacheKey: String) throws -> [CachedTransaction] {
+        if let cached = orderCache, cached.generation == dataGeneration, cached.cacheKey == cacheKey {
+            return cached.rows
+        }
+        let rows = try modelContext.fetch(Self.scalarOnlyDescriptor())
+        let ordered = rows
+            .filter { $0.cacheKey == cacheKey }
+            .sorted(by: Self.isNewerFirst)
+        orderCache = (dataGeneration, cacheKey, ordered)
+        return ordered
+    }
+
+    /// Invalidates the memoized ordering by advancing the data generation. Called
+    /// after every write so the next read rebuilds the sort.
+    private func invalidateOrderCache() {
+        dataGeneration &+= 1
+        orderCache = nil
+    }
+
+    /// The transaction ids currently stored for `cacheKey`. Used inside `upsert`
+    /// to decide insert-vs-update, so it always reads live (scalar-only) rather
+    /// than the memoized ordering, which a half-applied write may not reflect.
     private func existingTransactionIds(cacheKey: String) throws -> Set<String> {
-        let rows = try modelContext.fetch(FetchDescriptor<CachedTransaction>())
+        let rows = try modelContext.fetch(Self.scalarOnlyDescriptor())
         return Set(rows.filter { $0.cacheKey == cacheKey }.map(\.transactionId))
     }
 }
