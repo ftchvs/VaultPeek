@@ -25,6 +25,18 @@ struct ReviewInboxView: View {
     /// scheduled for — a newer action (which bumps the token) is never wiped by
     /// an older timer.
     @State private var confirmationGeneration = 0
+    /// The inline "always categorize <merchant> as <category>?" offer staged the
+    /// moment the user recategorizes a row (AND-531). One at a time, dismissible;
+    /// a newer correction replaces an older offer. Accepting routes through the
+    /// existing `AppState.createRule` path. Nil when no offer is pending. The pure
+    /// `InlineCategoryRulePrompt` decides whether an offer is even worth showing
+    /// (suppressed for a blank merchant or a duplicate rule), so this stays
+    /// non-nagging.
+    @State private var rulePrompt: InlineCategoryRulePrompt?
+    /// The row the staged `rulePrompt` was offered for, captured so an Accept can
+    /// route through the existing `AppState.createRule(from:category:)` path even
+    /// after the recategorization removed the row from the live snapshot.
+    @State private var rulePromptItem: TransactionReviewItem?
 
     private var snapshot: TransactionReviewInboxSnapshot {
         appState.transactionReviewInboxSnapshot
@@ -78,6 +90,18 @@ struct ReviewInboxView: View {
                         .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
                 }
 
+                // Inline "always categorize …?" offer (AND-531). Suppressed while
+                // masked — the offer names the merchant, a value the Privacy Mask
+                // hides — so it appears only when rows themselves are visible.
+                if !appState.shouldMaskFinancialValues, let rulePrompt {
+                    InlineCategoryRulePromptBanner(
+                        prompt: rulePrompt,
+                        onCreate: { acceptRulePrompt(rulePrompt) },
+                        onDismiss: { dismissRulePrompt() }
+                    )
+                    .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
+                }
+
                 if appState.shouldMaskFinancialValues {
                     privateInboxPlaceholder
                 } else if items.isEmpty {
@@ -107,7 +131,11 @@ struct ReviewInboxView: View {
                 // banner so the inbox can collapse out of the popover instead of
                 // sitting in an empty "0 items" state with a stuck banner.
                 if newCount == 0 {
-                    withAnimation(MotionTokens.animation(MotionTokens.standard, reduceMotion: reduceMotion)) { actionConfirmation = nil }
+                    withAnimation(MotionTokens.animation(MotionTokens.standard, reduceMotion: reduceMotion)) {
+                        actionConfirmation = nil
+                        rulePrompt = nil
+                        rulePromptItem = nil
+                    }
                 }
             }
             .onMoveCommand(perform: moveSelection)
@@ -236,6 +264,10 @@ struct ReviewInboxView: View {
             onCategory: { category in
                 recordAction(.categorized(category), for: item)
                 animatingResolution { appState.updateReviewCategory(item.id, category: category) }
+                // Offer to promote this one-off correction into a durable rule
+                // (AND-531). The pure model suppresses the offer for a blank
+                // merchant or a rule that already exists, so this never nags.
+                stageRulePrompt(for: item, category: category)
             },
             onRename: {
                 recordAction(.renamed, for: item)
@@ -449,6 +481,52 @@ struct ReviewInboxView: View {
             withAnimation(MotionTokens.animation(MotionTokens.standard, reduceMotion: reduceMotion)) { actionConfirmation = nil }
         }
     }
+
+    /// Stages the inline "always categorize <merchant> as <category>?" offer for a
+    /// just-recategorized row (AND-531). The pure `InlineCategoryRulePrompt.make`
+    /// decides whether an offer is even worth showing — it returns nil for a blank
+    /// merchant or a category rule that already exists — so a no-op or duplicate
+    /// correction never produces a prompt. A newer correction replaces any older
+    /// pending offer (one prompt at a time, non-nagging).
+    private func stageRulePrompt(for item: TransactionReviewItem, category: SpendingCategory) {
+        let prompt = InlineCategoryRulePrompt.make(
+            transactionID: item.id,
+            merchantName: item.effectiveMerchantName,
+            category: category,
+            existingRules: appState.transactionRules
+        )
+        withAnimation(MotionTokens.animation(MotionTokens.standard, reduceMotion: reduceMotion)) {
+            rulePrompt = prompt
+            rulePromptItem = prompt == nil ? nil : item
+        }
+    }
+
+    /// Accepts the inline offer: creates the merchant→category rule through the
+    /// EXISTING `AppState.createRule(from:category:)` path (so the rule flows into
+    /// the override-aware spend math like any other rule), announces it, and clears
+    /// the offer. Routing through the captured row keeps the matcher/merchant/
+    /// exclusion context identical to a rule made from the row's Rule menu.
+    private func acceptRulePrompt(_ prompt: InlineCategoryRulePrompt) {
+        defer { clearRulePrompt() }
+        guard let item = rulePromptItem, item.id == prompt.transactionID else { return }
+        appState.createRule(from: item, category: prompt.category)
+        AccessibilityNotification.Announcement(
+            "Created rule: always categorize \(prompt.merchantName) as \(prompt.category.displayName)"
+        ).post()
+    }
+
+    /// Dismisses the inline offer without creating a rule. The one-off correction
+    /// already applied stands; only the durable-rule offer is declined.
+    private func dismissRulePrompt() {
+        clearRulePrompt()
+    }
+
+    private func clearRulePrompt() {
+        withAnimation(MotionTokens.animation(MotionTokens.standard, reduceMotion: reduceMotion)) {
+            rulePrompt = nil
+            rulePromptItem = nil
+        }
+    }
 }
 
 /// In the standalone (center) layout the inbox owns a raised surface; in the
@@ -538,6 +616,70 @@ private struct ReviewActionConfirmationBanner: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(presentation.accessibilityLabel)
+    }
+}
+
+/// The inline, dismissible "always categorize <merchant> as <category>?" offer
+/// shown the moment the user recategorizes a review row (AND-531).
+///
+/// Turning a one-off correction into a durable `TransactionRule` is the whole
+/// value of Copilot-style review — but the offer must never nag, so it is a
+/// single inline banner (one at a time), it is dismissible, and accepting routes
+/// through the same `AppState.createRule` path the row's Rule menu uses. The
+/// banner names the merchant and category as text (never color alone — the
+/// "Create rule" affordance always carries its label + glyph), matching the
+/// ACCESSIBILITY rule. Privacy: the parent suppresses this banner entirely while
+/// Privacy Mask / App Lock is active, so the merchant name never renders masked.
+private struct InlineCategoryRulePromptBanner: View {
+    let prompt: InlineCategoryRulePrompt
+    let onCreate: () -> Void
+    let onDismiss: () -> Void
+
+    private var message: String {
+        "Always categorize \(prompt.merchantName) as \(prompt.category.displayName)?"
+    }
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+            Label {
+                Text(message)
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            } icon: {
+                Image(systemName: "wand.and.stars")
+            }
+            .foregroundStyle(SemanticColors.brand)
+
+            Spacer(minLength: Spacing.xs)
+
+            Button(action: onCreate) {
+                Label("Create rule", systemImage: "checkmark")
+                    .labelStyle(.titleAndIcon)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.mini)
+            .help("Always categorize \(prompt.merchantName) as \(prompt.category.displayName) from now on")
+            .accessibilityHint("Creates a rule so future transactions from this merchant are categorized automatically.")
+
+            Button(action: onDismiss) {
+                Label("Dismiss", systemImage: "xmark")
+                    .labelStyle(.iconOnly)
+            }
+            .buttonStyle(.borderless)
+            .controlSize(.mini)
+            .help("Dismiss without creating a rule")
+            .accessibilityLabel("Dismiss rule suggestion")
+        }
+        .padding(.horizontal, Spacing.sm)
+        .padding(.vertical, Spacing.xs)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(SemanticColors.brand.opacity(0.10), in: RoundedRectangle(cornerRadius: 10))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10).stroke(SemanticColors.brand.opacity(0.20), lineWidth: 1)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(message)
     }
 }
 
