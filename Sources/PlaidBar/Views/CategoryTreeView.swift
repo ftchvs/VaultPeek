@@ -18,15 +18,24 @@ struct CategoryTreeView: View {
     let presentation: CategoryDashboardPresentation
     /// When true, every currency figure is masked (Privacy Mask / App Lock).
     var privacyMaskEnabled: Bool = false
+    /// Opens `BudgetEditorSheet` for a leaf category (AND-541). Supplied by the
+    /// host (popover card / dashboard window); a no-op default keeps previews and
+    /// headless renders inert and means the affordance simply doesn't show.
+    var onEditBudget: ((SpendingCategory) -> Void)?
 
     /// Group IDs currently expanded. Budgeted-or-pressured groups start open so
     /// the rows that need attention are visible without a click.
     @State private var expandedGroupIDs: Set<String>
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    init(presentation: CategoryDashboardPresentation, privacyMaskEnabled: Bool = false) {
+    init(
+        presentation: CategoryDashboardPresentation,
+        privacyMaskEnabled: Bool = false,
+        onEditBudget: ((SpendingCategory) -> Void)? = nil
+    ) {
         self.presentation = presentation
         self.privacyMaskEnabled = privacyMaskEnabled
+        self.onEditBudget = onEditBudget
         // Open groups that are over/nearing so attention rows are visible up front.
         let openByDefault = presentation.groups
             .filter { $0.status != nil && $0.status != .under }
@@ -122,6 +131,7 @@ struct CategoryTreeView: View {
                     .font(.caption.weight(.medium))
                     .foregroundStyle(CategoryAccentTokens.color(for: leaf.category))
                     .frame(width: Sizing.iconInline)
+                    .accessibilityHidden(true)
 
                 Text(leaf.category.displayName)
                     .font(.caption)
@@ -129,6 +139,8 @@ struct CategoryTreeView: View {
                     .lineLimit(1)
 
                 Spacer(minLength: Spacing.sm)
+
+                budgetAffordance(for: leaf)
             }
 
             CategoryStatusBar(
@@ -138,8 +150,32 @@ struct CategoryTreeView: View {
                 accent: CategoryAccentTokens.color(for: leaf.category)
             )
         }
-        .accessibilityElement(children: .ignore)
+        // The status bar describes the row; the affordance is a separate, labeled
+        // control so VoiceOver lands on it as its own actionable element.
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("\(leaf.category.displayName). \(model.accessibilityDescription(spentText: currency(leaf.spent), limitText: leaf.monthlyLimit.map(currency)))")
+    }
+
+    /// The per-leaf "Set a budget" / "Edit" control (AND-541). Hidden entirely for
+    /// categories that can't carry a budget (income / transfer) or when the host
+    /// supplies no handler. The verb + label come from the pure
+    /// ``BudgetRowAffordance`` so the rules are tested without this view.
+    @ViewBuilder
+    private func budgetAffordance(for leaf: CategoryDashboardPresentation.Leaf) -> some View {
+        let affordance = BudgetRowAffordance(leaf: leaf)
+        if affordance.isAvailable, let onEditBudget {
+            Button {
+                onEditBudget(leaf.category)
+            } label: {
+                Label(affordance.title, systemImage: affordance.systemImage)
+                    .font(.caption2.weight(.semibold))
+                    .labelStyle(.titleAndIcon)
+                    .lineLimit(1)
+            }
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+            .accessibilityLabel(affordance.accessibilityLabel)
+        }
     }
 
     private var emptyState: some View {
