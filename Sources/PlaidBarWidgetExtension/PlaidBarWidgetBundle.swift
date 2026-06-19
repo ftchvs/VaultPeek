@@ -10,6 +10,11 @@ private struct GlanceEntry: TimelineEntry {
     /// failed app-group read). The view shows a setup/unavailable state instead
     /// of a misleading "$0 · Updated now".
     var isUnavailable = false
+    /// True when App Lock / Privacy Mask is active (read from the richer
+    /// `FinanceSnapshot.isMasked` in the shared App Group). The widget then dots
+    /// out every figure so balances never leak onto a shared/visible desktop
+    /// while the user has explicitly masked the app (AND-513 / AND-462).
+    var isMasked = false
 }
 
 private struct GlanceTimelineProvider: TimelineProvider {
@@ -42,7 +47,12 @@ private struct GlanceTimelineProvider: TimelineProvider {
         guard let snapshot = try? GlanceSnapshotStore.load() else {
             return GlanceEntry(date: Date(), snapshot: .placeholder(), isUnavailable: true)
         }
-        return GlanceEntry(date: snapshot.updatedAt, snapshot: snapshot)
+        // The richer FinanceSnapshot (Epic D) carries the live privacy-mask flag
+        // toggled by the Control Center control; honor it so the widget hides
+        // figures the moment the user masks the app, without waiting for a glance
+        // snapshot rewrite.
+        let isMasked = AppGroupSnapshotStore.loadIfAvailable()?.isMasked ?? false
+        return GlanceEntry(date: snapshot.updatedAt, snapshot: snapshot, isMasked: isMasked)
     }
 }
 
@@ -52,7 +62,20 @@ private struct PlaidBarGlanceWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: GlanceTimelineProvider()) { entry in
             GlanceWidgetView(entry: entry)
-                .containerBackground(.background, for: .widget)
+                // macOS 26 renders widget container backgrounds with the system
+                // glass material; a faint tinted gradient over `.background` gives
+                // depth under that glass without competing with the headline number
+                // or relying on color to convey meaning (AND-513).
+                .containerBackground(for: .widget) {
+                    LinearGradient(
+                        colors: [
+                            Color(.windowBackgroundColor).opacity(0.92),
+                            Color(.controlBackgroundColor).opacity(0.96),
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                }
                 .widgetURL(URL(string: GlanceSnapshot.deepLinkURL))
         }
         .configurationDisplayName("VaultPeek")
@@ -100,7 +123,7 @@ private struct GlanceWidgetView: View {
     private var dataState: some View {
         VStack(alignment: .leading, spacing: family == .systemSmall ? 8 : 10) {
             HStack(spacing: 6) {
-                Image(systemName: "lock.shield")
+                Image(systemName: entry.isMasked ? "eye.slash" : "lock.shield")
                     .imageScale(.small)
                 Text(entry.snapshot.isDemo ? "VaultPeek Demo" : "VaultPeek")
                     .font(.caption.weight(.semibold))
@@ -108,16 +131,18 @@ private struct GlanceWidgetView: View {
                 Spacer(minLength: 0)
             }
 
-            Text(Formatters.currency(entry.snapshot.netWorth, format: .compact))
+            Text(PrivacyMaskPresentation.currency(entry.snapshot.netWorth, format: .compact, isEnabled: entry.isMasked))
                 .font(family == .systemSmall ? .system(size: 30, weight: .bold) : .system(size: 36, weight: .bold))
                 .minimumScaleFactor(0.72)
                 .lineLimit(1)
-                .accessibilityLabel("Net worth \(Formatters.currency(entry.snapshot.netWorth, format: .full))")
+                .accessibilityLabel(netWorthAccessibilityLabel)
 
             HStack(spacing: 5) {
-                Text(entry.snapshot.changeDirection.glyph)
-                    .font(.caption.weight(.bold))
-                Text(entry.snapshot.signedChangeText)
+                if !entry.isMasked {
+                    Text(entry.snapshot.changeDirection.glyph)
+                        .font(.caption.weight(.bold))
+                }
+                Text(entry.isMasked ? PrivacyMaskPresentation.compactValue : entry.snapshot.signedChangeText)
                     .font(.callout.weight(.semibold))
                     .lineLimit(1)
                     .minimumScaleFactor(0.78)
@@ -126,9 +151,9 @@ private struct GlanceWidgetView: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
-            .accessibilityLabel("Today's change \(entry.snapshot.changeDirection.glyph) \(entry.snapshot.signedChangeText)")
+            .accessibilityLabel(changeAccessibilityLabel)
 
-            if family == .systemMedium {
+            if family == .systemMedium, !entry.isMasked {
                 SparklineView(values: entry.snapshot.sparkline)
                     .frame(height: 38)
                     .accessibilityLabel("Net worth sparkline")
@@ -142,7 +167,28 @@ private struct GlanceWidgetView: View {
                 .lineLimit(1)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(entry.snapshot.accessibilitySummary + " Updated \(entry.snapshot.updatedAt.formatted(date: .omitted, time: .shortened)).")
+        .accessibilityLabel(summaryAccessibilityLabel)
+    }
+
+    private var netWorthAccessibilityLabel: String {
+        entry.isMasked
+            ? "Net worth hidden while Privacy Mask is on"
+            : "Net worth \(Formatters.currency(entry.snapshot.netWorth, format: .full))"
+    }
+
+    private var changeAccessibilityLabel: String {
+        entry.isMasked
+            ? "Today's change hidden while Privacy Mask is on"
+            : "Today's change \(entry.snapshot.changeDirection.glyph) \(entry.snapshot.signedChangeText)"
+    }
+
+    private var summaryAccessibilityLabel: String {
+        let updated = " Updated \(entry.snapshot.updatedAt.formatted(date: .omitted, time: .shortened))."
+        if entry.isMasked {
+            let source = entry.snapshot.isDemo ? "Demo data. " : ""
+            return "\(source)Figures hidden while Privacy Mask is on." + updated
+        }
+        return entry.snapshot.accessibilitySummary + updated
     }
 }
 
@@ -175,6 +221,16 @@ private struct SparklineView: View {
     }
 }
 
+// MARK: - Control Center controls (AND-513, Epic E)
+//
+// macOS 26 lets users pin app controls to Control Center / the menu bar. A
+// control runs in this extension, *not* the app, so it cannot mutate app state
+// directly — it drops a command file in the shared App Group container and nudges
+// the app, which consumes the command on activation (see `WidgetControlCommandStore`
+// and the app's `consumePending*Command`). Two controls ship:
+//   1. Refresh balances — a button (existing scaffold, retained).
+//   2. Privacy Mask — a toggle that hides/reveals figures across the app.
+
 struct RefreshBalancesIntent: AppIntent {
     static let title: LocalizedStringResource = "Refresh balances"
     static let description = IntentDescription("Ask VaultPeek to refresh local balances.")
@@ -203,10 +259,78 @@ private struct PlaidBarRefreshControl: ControlWidget {
     }
 }
 
+// MARK: - Privacy Mask toggle control
+
+/// Sets the privacy-mask state from a Control Center toggle. Receives the desired
+/// `value` (on = masked) from the system and records it as a command for the app
+/// to apply. `openAppWhenRun` is intentionally **false**: hiding figures should be
+/// silent and not yank the app to the foreground; the app applies the pending
+/// command the next time it activates or refreshes.
+struct SetPrivacyMaskIntent: SetValueIntent {
+    static let title: LocalizedStringResource = "Privacy Mask"
+    static let description = IntentDescription("Hide or reveal VaultPeek figures.")
+
+    @Parameter(title: "Privacy Mask")
+    var value: Bool
+
+    init() {}
+
+    init(value: Bool) {
+        self.value = value
+    }
+
+    func perform() async throws -> some IntentResult {
+        try WidgetControlCommandStore.savePrivacyCommand(
+            PrivacyMaskCommandRequest(maskEnabled: value, requestedAt: Date())
+        )
+        // Reload the controls so the toggle reflects its new state even before the
+        // app has applied the command and rewritten the snapshot.
+        ControlCenter.shared.reloadAllControls()
+        return .result()
+    }
+}
+
+/// Supplies the toggle's current on/off state. Reads `FinanceSnapshot.isMasked`
+/// from the shared App Group snapshot (Epic D) so the control mirrors whatever
+/// the app last persisted — no balances are read, only the boolean mask flag.
+struct PrivacyMaskValueProvider: ControlValueProvider {
+    let previewValue = false
+
+    func currentValue() async throws -> Bool {
+        AppGroupSnapshotStore.loadIfAvailable()?.isMasked ?? false
+    }
+}
+
+private struct PlaidBarPrivacyMaskControl: ControlWidget {
+    let kind = "PlaidBarPrivacyMaskControl"
+
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(
+            kind: kind,
+            provider: PrivacyMaskValueProvider()
+        ) { isMasked in
+            ControlWidgetToggle(
+                "Privacy Mask",
+                isOn: isMasked,
+                action: SetPrivacyMaskIntent()
+            ) { isOn in
+                Label(
+                    isOn ? "Figures hidden" : "Figures visible",
+                    systemImage: isOn ? "eye.slash" : "eye"
+                )
+            }
+            .tint(.indigo)
+        }
+        .displayName("Privacy Mask")
+        .description("Hide or reveal VaultPeek balances from Control Center.")
+    }
+}
+
 @main
 struct PlaidBarWidgetBundle: WidgetBundle {
     var body: some Widget {
         PlaidBarGlanceWidget()
         PlaidBarRefreshControl()
+        PlaidBarPrivacyMaskControl()
     }
 }
