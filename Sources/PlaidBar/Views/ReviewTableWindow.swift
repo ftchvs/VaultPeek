@@ -37,9 +37,13 @@ struct ReviewTableWindow: View {
     /// unit-tested ``ReviewTableSort/sorted(_:)`` comparator instead, and chosen via
     /// a `Picker` rather than `Table`'s `sortOrder:` binding.
     @State private var sort: ReviewTableSort = .amountDescending
-    /// Staged bulk-recategorize plan — set when the user picks a category for the
-    /// selection; drives the blast-radius confirmation before anything is applied.
-    @State private var pendingBulkPlan: ReviewBulkRecategorizePlan?
+    /// Staged blast-radius action — set when the user picks a bulk/multi-row
+    /// recategorize or transfer; drives the confirmation dialog before anything is
+    /// applied. A single piece of state so every multi-row action (selection bar OR
+    /// context menu) routes through the same confirm-then-apply path, and so the
+    /// masked-state guard can clear it in one place (cached merchant names in the
+    /// dialog must never render under Privacy Mask / App Lock).
+    @State private var pendingBulkAction: PendingReviewBulkAction?
 
     private var isMasked: Bool { appState.shouldMaskFinancialValues }
 
@@ -69,15 +73,22 @@ struct ReviewTableWindow: View {
         .frame(minWidth: 560, minHeight: 420, alignment: .topLeading)
         .accessibilityElement(children: .contain)
         .confirmationDialog(
-            pendingBulkPlan.map { "Set \($0.count) to \($0.category.displayName)?" } ?? "Recategorize?",
+            pendingBulkAction?.confirmationTitle ?? "Confirm?",
             isPresented: bulkConfirmationBinding,
             titleVisibility: .visible,
-            presenting: pendingBulkPlan
-        ) { plan in
-            Button("Set \(plan.count) to \(plan.category.displayName)") { applyBulkRecategorize(plan) }
+            presenting: pendingBulkAction
+        ) { action in
+            Button(action.confirmButtonTitle) { applyBulkAction(action) }
             Button("Cancel", role: .cancel) {}
-        } message: { plan in
-            Text(plan.blastRadiusDescription())
+        } message: { action in
+            Text(action.blastRadiusDescription())
+        }
+        // Privacy Mask / App Lock can engage mid-flow. The dialog message echoes
+        // cached merchant names, so withhold (drop) any staged action the instant
+        // the window starts masking — the masked placeholder must never sit behind
+        // a dialog that spells out merchants (SECURITY.md).
+        .onChange(of: isMasked) { _, masked in
+            if masked { pendingBulkAction = nil }
         }
     }
 
@@ -132,7 +143,7 @@ struct ReviewTableWindow: View {
                 bulkRecategorizeMenu
 
                 Button {
-                    bulkMarkTransfer()
+                    stageBulkMarkTransfer(ids: selection)
                 } label: {
                     Label("Mark transfer", systemImage: "arrow.left.arrow.right")
                 }
@@ -277,7 +288,11 @@ struct ReviewTableWindow: View {
             Menu("Recategorize") {
                 ForEach(SpendingCategory.allCases, id: \.self) { category in
                     Button {
-                        recategorize(rows: scoped, to: category)
+                        // A multi-row recategorize goes through the SAME blast-radius
+                        // confirmation as the selection bar (count + which merchants +
+                        // category) so a context-menu bulk change is never silent; a
+                        // single row applies directly.
+                        recategorizeOrStage(ids: ids, to: category)
                     } label: {
                         Label(category.displayName, systemImage: category.iconName)
                     }
@@ -301,12 +316,30 @@ struct ReviewTableWindow: View {
             }
 
             Button {
-                markTransfer(rows: scoped)
+                // Multi-row transfer marking confirms first (it excludes rows from
+                // budgets); a single row applies directly.
+                markTransferOrStage(ids: ids)
             } label: {
                 Label(
                     ids.count == 1 ? "Mark transfer" : "Mark \(scoped.count) transfers",
                     systemImage: "arrow.left.arrow.right"
                 )
+            }
+
+            // The inverse of "Mark transfer" — restores a mistaken/misclassified
+            // transfer to spend (clears the transfer override + budget exclusion).
+            // Recategorizing alone does NOT clear an explicit transfer override, so
+            // this is the only way to fix the budget exclusion from this window.
+            // Offered only when at least one scoped row is actually a transfer.
+            if scoped.contains(where: \.isTransfer) {
+                Button {
+                    markNotTransfer(rows: scoped)
+                } label: {
+                    Label(
+                        ids.count == 1 ? "Mark not transfer" : "Mark \(scoped.count) not transfers",
+                        systemImage: "arrow.uturn.left"
+                    )
+                }
             }
 
             Divider()
@@ -333,14 +366,60 @@ struct ReviewTableWindow: View {
             category: category
         )
         guard !plan.isEmpty else { return }
-        pendingBulkPlan = plan
+        pendingBulkAction = .recategorize(plan)
     }
 
-    /// Apply a confirmed bulk recategorize: route every affected id through the SAME
-    /// per-row `updateReviewCategory` path the inbox uses, inside one animation, then
-    /// announce the count + category (never a silent change) and clear the selection.
-    private func applyBulkRecategorize(_ plan: ReviewBulkRecategorizePlan) {
-        pendingBulkPlan = nil
+    /// Context-menu recategorize: a single row applies directly (one undo snapshot,
+    /// matching the inbox), but more than one row routes through the SAME
+    /// blast-radius confirmation as the selection bar so a context-menu bulk change
+    /// is never silent.
+    private func recategorizeOrStage(ids: Set<ReviewTableRow.ID>, to category: SpendingCategory) {
+        let plan = ReviewBulkRecategorizePlan.make(rows: rows, selection: ids, category: category)
+        guard !plan.isEmpty else { return }
+        if plan.count > 1 {
+            pendingBulkAction = .recategorize(plan)
+        } else {
+            applyRecategorize(plan)
+        }
+    }
+
+    /// Context-menu transfer marking: a single row applies directly, but more than
+    /// one row confirms first (it removes rows from budget/spend math).
+    private func markTransferOrStage(ids: Set<ReviewTableRow.ID>) {
+        let plan = ReviewBulkTransferPlan.make(rows: rows, selection: ids)
+        guard !plan.isEmpty else { return }
+        if plan.count > 1 {
+            pendingBulkAction = .markTransfer(plan)
+        } else {
+            applyMarkTransfer(plan)
+        }
+    }
+
+    /// Selection-bar "Mark transfer": always confirms (it is a multi-row affordance
+    /// and excludes rows from budgets).
+    private func stageBulkMarkTransfer(ids: Set<ReviewTableRow.ID>) {
+        let plan = ReviewBulkTransferPlan.make(rows: rows, selection: ids)
+        guard !plan.isEmpty else { return }
+        pendingBulkAction = .markTransfer(plan)
+    }
+
+    /// Apply a confirmed bulk action. Re-resolves the staged plan against the
+    /// *current* rows first (a row may have left the inbox while the dialog sat
+    /// open), so a stale id can never act on a transaction the user no longer sees.
+    private func applyBulkAction(_ action: PendingReviewBulkAction) {
+        pendingBulkAction = nil
+        switch action {
+        case let .recategorize(plan):
+            applyRecategorize(plan.reResolved(against: rows))
+        case let .markTransfer(plan):
+            applyMarkTransfer(plan.reResolved(against: rows))
+        }
+    }
+
+    /// Route every affected id through the SAME per-row `updateReviewCategory` path
+    /// the inbox uses, inside one undo-batched animation, then announce the count +
+    /// category (never a silent change) and clear the selection.
+    private func applyRecategorize(_ plan: ReviewBulkRecategorizePlan) {
         guard !plan.isEmpty else { return }
         animatingResolution {
             appState.withBatchedReviewUndo {
@@ -356,33 +435,40 @@ struct ReviewTableWindow: View {
         ).post()
     }
 
-    /// Recategorize a scoped set of rows (single from a context-menu, or many).
-    /// The whole scope is one undo unit — for a single row that is exactly one
-    /// snapshot, matching the inbox's per-row behavior.
-    private func recategorize(rows scoped: [ReviewTableRow], to category: SpendingCategory) {
+    /// Route every affected id through the existing per-row `markReviewItemTransfer`
+    /// path, inside one undo-batched animation, then announce + clear the selection.
+    private func applyMarkTransfer(_ plan: ReviewBulkTransferPlan) {
+        guard !plan.isEmpty else { return }
         animatingResolution {
             appState.withBatchedReviewUndo {
-                for row in scoped {
-                    appState.updateReviewCategory(row.id, category: category)
+                for id in plan.affectedIDs {
+                    appState.markReviewItemTransfer(id)
                 }
             }
         }
-        selection.subtract(scoped.map(\.id))
+        selection.subtract(plan.affectedIDs)
+        let noun = plan.count == 1 ? "transaction" : "transactions"
+        AccessibilityNotification.Announcement(
+            "Marked \(plan.count) \(noun) as transfers"
+        ).post()
     }
 
-    private func markTransfer(rows scoped: [ReviewTableRow]) {
+    /// Restore scoped transfer rows to spend — the inverse of "Mark transfer".
+    /// Clears the explicit transfer override + budget exclusion via the existing
+    /// `markReviewItemTransfer(_:isTransfer:)` path (the same call the inbox row's
+    /// "Not transfer" uses), so a misclassified transfer can be fixed from this
+    /// window. One undo unit; a single row is exactly one snapshot.
+    private func markNotTransfer(rows scoped: [ReviewTableRow]) {
+        let affected = scoped.filter(\.isTransfer)
+        guard !affected.isEmpty else { return }
         animatingResolution {
             appState.withBatchedReviewUndo {
-                for row in scoped {
-                    appState.markReviewItemTransfer(row.id)
+                for row in affected {
+                    appState.markReviewItemTransfer(row.id, isTransfer: false)
                 }
             }
         }
-        selection.subtract(scoped.map(\.id))
-    }
-
-    private func bulkMarkTransfer() {
-        markTransfer(rows: scopedRows(selection))
+        selection.subtract(affected.map(\.id))
     }
 
     private func approve(rows scoped: [ReviewTableRow]) {
@@ -448,8 +534,8 @@ struct ReviewTableWindow: View {
 
     private var bulkConfirmationBinding: Binding<Bool> {
         Binding(
-            get: { pendingBulkPlan != nil },
-            set: { presented in if !presented { pendingBulkPlan = nil } }
+            get: { pendingBulkAction != nil },
+            set: { presented in if !presented { pendingBulkAction = nil } }
         )
     }
 
@@ -479,5 +565,48 @@ struct ReviewTableWindow: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityLabel("Review inbox clear. New or unusual transactions will appear here.")
+    }
+}
+
+/// A staged multi-row review action awaiting blast-radius confirmation. Both bulk
+/// affordances that change budget-relevant state — recategorize and mark-transfer —
+/// flow through this one piece of state so every multi-row change confirms count +
+/// merchants first (never silent), and so the masked-state guard can clear all of
+/// them in one place. Single-row context actions apply directly and never stage.
+private enum PendingReviewBulkAction {
+    case recategorize(ReviewBulkRecategorizePlan)
+    case markTransfer(ReviewBulkTransferPlan)
+
+    /// Affected-row count, for the confirm button.
+    var count: Int {
+        switch self {
+        case let .recategorize(plan): plan.count
+        case let .markTransfer(plan): plan.count
+        }
+    }
+
+    /// Short dialog title.
+    var confirmationTitle: String {
+        switch self {
+        case let .recategorize(plan): "Set \(plan.count) to \(plan.category.displayName)?"
+        case .markTransfer: count == 1 ? "Mark transfer?" : "Mark \(count) transfers?"
+        }
+    }
+
+    /// Confirm-button label (the destructive verb + count).
+    var confirmButtonTitle: String {
+        switch self {
+        case let .recategorize(plan): "Set \(plan.count) to \(plan.category.displayName)"
+        case .markTransfer: count == 1 ? "Mark transfer" : "Mark \(count) transfers"
+        }
+    }
+
+    /// Plain-language "which rows + what changes" message (delegates to the pure
+    /// plan), so the dialog spells out the blast radius, never a bare count.
+    func blastRadiusDescription() -> String {
+        switch self {
+        case let .recategorize(plan): plan.blastRadiusDescription()
+        case let .markTransfer(plan): plan.blastRadiusDescription()
+        }
     }
 }

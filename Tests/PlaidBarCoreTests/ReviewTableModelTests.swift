@@ -158,6 +158,88 @@ struct ReviewTableModelTests {
         #expect(plan.blastRadiusDescription(previewLimit: 3).contains("and 2 more"))
     }
 
+    // MARK: - Re-resolving a staged recategorize plan against current rows
+
+    @Test("Re-resolving a recategorize plan drops rows that left the table")
+    func recategorizeReResolveDropsVanishedRows() {
+        let staged = ReviewBulkRecategorizePlan(
+            affectedIDs: ["a", "b", "c"],
+            affectedMerchantNames: ["A", "B", "C"],
+            category: .foodAndDrink
+        )
+        // Between staging and applying, "b" left the inbox (approved elsewhere).
+        let current = [
+            ReviewTableRow(item: item(id: "a", merchant: "A", amount: 1, date: "d", category: nil, reasons: [.uncategorized])),
+            ReviewTableRow(item: item(id: "c", merchant: "C", amount: 3, date: "d", category: nil, reasons: [.uncategorized])),
+        ]
+
+        let reResolved = staged.reResolved(against: current)
+        #expect(reResolved.affectedIDs == ["a", "c"])
+        #expect(reResolved.affectedMerchantNames == ["A", "C"])
+        // Category survives re-resolution.
+        #expect(reResolved.category == .foodAndDrink)
+    }
+
+    @Test("Re-resolving a recategorize plan against an empty table yields an empty plan")
+    func recategorizeReResolveAllGone() {
+        let staged = ReviewBulkRecategorizePlan(affectedIDs: ["a"], affectedMerchantNames: ["A"], category: .foodAndDrink)
+        #expect(staged.reResolved(against: []).isEmpty)
+    }
+
+    // MARK: - Bulk transfer blast radius
+
+    @Test("Bulk transfer scopes to the selection intersected with listed rows, list order")
+    func bulkTransferScopes() {
+        let rows = [
+            ReviewTableRow(item: item(id: "a", merchant: "A", amount: 1, date: "d", category: nil, reasons: [.uncategorized])),
+            ReviewTableRow(item: item(id: "b", merchant: "B", amount: 2, date: "d", category: nil, reasons: [.uncategorized])),
+            ReviewTableRow(item: item(id: "c", merchant: "C", amount: 3, date: "d", category: nil, reasons: [.uncategorized])),
+        ]
+
+        let plan = ReviewBulkTransferPlan.make(rows: rows, selection: ["c", "a"])
+        #expect(plan.affectedIDs == ["a", "c"])
+        #expect(plan.affectedMerchantNames == ["A", "C"])
+        #expect(plan.count == 2)
+        #expect(!plan.isEmpty)
+    }
+
+    @Test("Bulk transfer drops a stale id and an empty selection")
+    func bulkTransferStaleAndEmpty() {
+        let rows = [ReviewTableRow(item: item(id: "a", merchant: "A", amount: 1, date: "d", category: nil, reasons: [.uncategorized]))]
+        #expect(ReviewBulkTransferPlan.make(rows: rows, selection: ["ghost"]).isEmpty)
+        #expect(ReviewBulkTransferPlan.make(rows: rows, selection: []).isEmpty)
+    }
+
+    @Test("Bulk transfer description states count, budget exclusion, and which merchants")
+    func bulkTransferDescription() {
+        let rows = [
+            ReviewTableRow(item: item(id: "a", merchant: "Corner Store", amount: 1, date: "d", category: nil, reasons: [.uncategorized])),
+            ReviewTableRow(item: item(id: "b", merchant: "Coffee Shop", amount: 2, date: "d", category: nil, reasons: [.uncategorized])),
+        ]
+        let plan = ReviewBulkTransferPlan.make(rows: rows, selection: ["a", "b"])
+        let description = plan.blastRadiusDescription()
+        #expect(description.contains("2"))
+        #expect(description.contains("budgets"))
+        #expect(description.contains("Corner Store"))
+        #expect(description.contains("Coffee Shop"))
+    }
+
+    @Test("Bulk transfer uses singular noun for a single row")
+    func bulkTransferSingular() {
+        let rows = [ReviewTableRow(item: item(id: "a", merchant: "Corner Store", amount: 1, date: "d", category: nil, reasons: [.uncategorized]))]
+        let plan = ReviewBulkTransferPlan.make(rows: rows, selection: ["a"])
+        #expect(plan.blastRadiusDescription().contains("1 transaction "))
+    }
+
+    @Test("Re-resolving a transfer plan drops rows that left the table")
+    func bulkTransferReResolveDropsVanishedRows() {
+        let staged = ReviewBulkTransferPlan(affectedIDs: ["a", "b"], affectedMerchantNames: ["A", "B"])
+        let current = [ReviewTableRow(item: item(id: "a", merchant: "A", amount: 1, date: "d", category: nil, reasons: [.uncategorized]))]
+        let reResolved = staged.reResolved(against: current)
+        #expect(reResolved.affectedIDs == ["a"])
+        #expect(reResolved.affectedMerchantNames == ["A"])
+    }
+
     // MARK: - Sorting
 
     @Test("Amount descending sorts by largest spend first; id breaks ties")
