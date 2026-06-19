@@ -126,6 +126,11 @@ public enum EnergyAwareRefreshPolicy: Sendable {
             ? baseInterval
             : PlaidBarConstants.backgroundRefreshInterval
         guard conditions.isConstrained else { return sanitizedBase }
-        return sanitizedBase * constrainedBackoffMultiplier
+        // Sanitize the *product*, not just the base: a finite-but-very-large base
+        // (e.g. near `.greatestFiniteMagnitude`) can overflow to `.infinity` once
+        // multiplied, which would break the "never sleep forever" guarantee. When
+        // that happens, fall back to the finite sanitized base.
+        let constrained = sanitizedBase * constrainedBackoffMultiplier
+        return (constrained.isFinite && constrained > 0) ? constrained : sanitizedBase
     }
 }
