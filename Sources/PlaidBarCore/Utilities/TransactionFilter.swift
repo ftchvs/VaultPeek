@@ -1,6 +1,8 @@
 import Foundation
 
-public struct TransactionFilterCriteria: Equatable, Sendable {
+// `Codable` is added so this can ride inside the typed `Route.transactions`
+// deep-link (AND-594); all members are already Codable, so synthesis is free.
+public struct TransactionFilterCriteria: Equatable, Sendable, Codable, Hashable {
     public let searchText: String
     public let category: SpendingCategory?
     public let accountId: String?

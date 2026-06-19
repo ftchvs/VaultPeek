@@ -1,6 +1,8 @@
 import Foundation
 
-public enum DashboardAccountFilterKind: String, CaseIterable, Sendable {
+// `Codable`/`Hashable` added so the filter can be persisted as part of the
+// routable `NavigationState` (AND-594); free for a `String`-raw enum.
+public enum DashboardAccountFilterKind: String, CaseIterable, Sendable, Codable, Hashable {
     case all = "All"
     case cash = "Cash"
     case credit = "Credit"

@@ -11,9 +11,32 @@ struct MainPopover: View {
     /// desktop window (AND-384). Detached, the host window owns width/height, so
     /// the popover's fixed-width frame and screen-edge anchor are skipped.
     @Environment(\.dashboardPresentation) private var dashboardPresentation
-    @AppStorage("dashboard.accountFilter") private var selectedFilterRawValue = DashboardAccountFilter.all.rawValue
-    @AppStorage("dashboard.selectedAccountId") private var selectedAccountId = ""
+    // Dashboard filter + account selection moved out of view-level `@AppStorage`
+    // into the per-window `NavigationModel` behind the `AppState` façade (AND-594).
+    // These computed accessors keep the rest of this view byte-identical while the
+    // state and its persistence now live in one routable model. Persistence is
+    // unchanged: the model writes the same `dashboard.accountFilter` /
+    // `dashboard.selectedAccountId` keys, so a relaunch restores the same filter
+    // and selection the popover always did.
     @AppStorage(PopoverTransparencySetting.storageKey) private var popoverTransparency = PopoverTransparencySetting.defaultValue
+
+    /// The persisted filter raw value, delegated to the navigation model. Kept as
+    /// a raw `String` so the existing `.onChange(of: selectedFilterRawValue)` and
+    /// `filterBinding` call sites are unchanged.
+    private var selectedFilterRawValue: String {
+        get { appState.dashboardFilter.rawValue }
+        nonmutating set {
+            appState.dashboardFilter = DashboardAccountFilter(rawValue: newValue) ?? .all
+        }
+    }
+
+    /// The persisted selected-account id (""=none), delegated to the navigation
+    /// model. `nonmutating set` mirrors `@AppStorage`'s settable-from-`let`-view
+    /// semantics so the assignment sites below (`= ""`, `= $0.id`) are unchanged.
+    private var selectedAccountId: String {
+        get { appState.dashboardSelectedAccountID }
+        nonmutating set { appState.dashboardSelectedAccountID = newValue }
+    }
     @State private var isShowingAccountSetup = false
     @State private var shouldShowSetupRecoveryDashboard = false
     @State private var dashboardContentHeight: CGFloat = 0
@@ -885,7 +908,15 @@ private struct BalanceActivityHeatmap: View {
     let transactions: [TransactionDTO]
     var loadState: DashboardLoadState?
 
-    @AppStorage("dashboard.heatmapMode") private var modeRawValue = SpendingHeatmapMode.spending.rawValue
+    // Heatmap metric moved out of view-level `@AppStorage` into the per-window
+    // `NavigationModel` behind the `AppState` façade (AND-594). Persistence is
+    // unchanged: the model writes the same `dashboard.heatmapMode` key.
+    private var modeRawValue: String {
+        get { appState.dashboardHeatmapMode.rawValue }
+        nonmutating set {
+            appState.dashboardHeatmapMode = SpendingHeatmapMode(rawValue: newValue) ?? .spending
+        }
+    }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Day key (yyyy-MM-dd) of the selected cell, or nil when none is selected.

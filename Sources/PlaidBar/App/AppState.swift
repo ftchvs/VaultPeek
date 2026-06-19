@@ -116,6 +116,40 @@ final class AppState {
     }
     var isPopoverPresented = false
 
+    /// Per-window navigation model (ADR-001 / AND-594). Owns the destination plus
+    /// the dashboard filter / account selection / heatmap metric that previously
+    /// lived as scattered view-level `@AppStorage` keys in `MainPopover`. This is
+    /// the menu-bar popover's window's model; a window-first `Window` scene
+    /// constructs its own, so two windows hold independent selection (R-10).
+    ///
+    /// `AppState` exposes this as a façade (R-02): the popover reads
+    /// `appState.dashboardFilter` / `dashboardSelectedAccountID` /
+    /// `dashboardHeatmapMode`, which delegate here and persist to the original
+    /// UserDefaults keys — so popover behavior and on-disk persistence are
+    /// unchanged.
+    let navigationModel: NavigationModel
+
+    /// The dashboard's account filter, persisted under `dashboard.accountFilter`.
+    /// Setting a *new* filter clears the account selection, exactly as the
+    /// popover's `.onChange(of:)` did (AND-373/375).
+    var dashboardFilter: DashboardAccountFilterKind {
+        get { navigationModel.dashboardFilter }
+        set { navigationModel.dashboardFilter = newValue }
+    }
+
+    /// The selected account id ("" when none), persisted under
+    /// `dashboard.selectedAccountId`.
+    var dashboardSelectedAccountID: String {
+        get { navigationModel.selectedAccountID }
+        set { navigationModel.selectedAccountID = newValue }
+    }
+
+    /// The 365-day heatmap metric, persisted under `dashboard.heatmapMode`.
+    var dashboardHeatmapMode: SpendingHeatmapMode {
+        get { navigationModel.heatmapMode }
+        set { navigationModel.heatmapMode = newValue }
+    }
+
     /// When true, the dashboard lives in a floating desktop window instead of
     /// the menu-bar popover (AND-384). Persisted so the window reopens on the
     /// next launch. While detached, a click on the menu-bar item raises the
@@ -570,11 +604,16 @@ final class AppState {
 
     init(
         notificationService: (any NotificationServiceProtocol)? = nil,
-        readModelCacheEnabled: Bool = true
+        readModelCacheEnabled: Bool = true,
+        navigationModel: NavigationModel? = nil
     ) {
         _ = try? LocalDataStore.migrateLegacyDefaultStorageIfNeeded()
         self.notificationService = notificationService ?? NotificationService.shared
         self.readModelCacheEnabled = readModelCacheEnabled
+        // The popover-window navigation model. Hydrates the last
+        // filter/selection/heatmap from the original UserDefaults keys, so
+        // persistence is preserved across the migration (R-02 façade).
+        self.navigationModel = navigationModel ?? NavigationModel()
         loadSettings()
         // Record whether Apple Foundation Models is available so the tier resolver
         // can prefer it (AND-563) and, when available, the insight service routes
