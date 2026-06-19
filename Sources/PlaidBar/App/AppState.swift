@@ -1543,6 +1543,28 @@ final class AppState {
         #endif
     }
 
+    /// The merchant categorizer for the current device, with the Foundation
+    /// Models guided-generation tier (AND-565) slotted ABOVE NaturalLanguage when
+    /// Apple Intelligence is available, and falling back to NaturalLanguage
+    /// otherwise.
+    ///
+    /// Additive and reversible: the FM seam is wired ONLY when the probe reports
+    /// `.available`; in every other state this returns a categorizer whose
+    /// behavior is byte-identical to the always-on NaturalLanguage path, so the
+    /// no-FM device is unchanged. The categorizer produces *suggestions* with
+    /// provenance — it never auto-applies a category or bypasses the review /
+    /// override flow (`EffectiveCategoryResolver` stays the source of truth for
+    /// persisted categories).
+    var merchantCategorizer: FMMerchantCategorizer {
+        FMMerchantCategorizer(
+            foundationModelsState: foundationModelsTierState,
+            nlCategorizer: NLMerchantCategorizer(),
+            fmCategorizer: foundationModelsTierState.isAvailable
+                ? FoundationModelsMerchantCategorizer()
+                : nil
+        )
+    }
+
     /// Re-probe Apple Foundation Models availability (e.g. after the user enables
     /// Apple Intelligence in System Settings) and rebuild the insight service so a
     /// now-available FM tier starts generating insights (AND-564) — or a

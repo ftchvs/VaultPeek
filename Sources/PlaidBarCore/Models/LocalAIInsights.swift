@@ -682,6 +682,13 @@ public struct LocalAICategoryResolution: Codable, Sendable, Hashable {
 
 public enum LocalAICategoryResolutionSource: String, Codable, Sendable, Hashable {
     case localAISuggestion
+    /// Apple Foundation Models (Apple Intelligence) guided-generation tier
+    /// (AND-565): an on-device categorizer that, when Apple Intelligence is
+    /// available, maps a merchant to a `SpendingCategory` via guided generation
+    /// constrained to the 16-case enum. It sits ABOVE `appleNaturalLanguage` in
+    /// the suggestion order. Like the NL tier it is a *suggestion* (display-only)
+    /// until the user approves it — never an auto-applied or persisted category.
+    case appleFoundationModels
     /// Apple NaturalLanguage zero-setup inference tier (AND-507): an always-on,
     /// on-device categorizer that fills a category when Plaid returned nothing
     /// usable and the user hasn't overridden. Distinct from `localAISuggestion`,
@@ -693,6 +700,7 @@ public enum LocalAICategoryResolutionSource: String, Codable, Sendable, Hashable
     public var displayName: String {
         switch self {
         case .localAISuggestion: "Local AI"
+        case .appleFoundationModels: "Suggested"
         case .appleNaturalLanguage: "Suggested"
         case .plaidCategory: "Plaid"
         case .fallbackOther: "Other"
