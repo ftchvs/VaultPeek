@@ -28,6 +28,8 @@ struct CategoryDashboardWindow: View {
     /// strict concurrency); mapped to the pure ``CategoryDashboardTableModel/Order``
     /// when the rows are built.
     @State private var tableOrder: CategoryDashboardTableModel.Order = .spendDescending
+    /// The category whose budget the user is editing (AND-541); drives the sheet.
+    @State private var budgetEditorCategory: BudgetEditorCategory?
 
     private var presentation: CategoryDashboardPresentation {
         appState.categoryDashboardPresentation
@@ -54,6 +56,15 @@ struct CategoryDashboardWindow: View {
         .scrollContentBackground(.hidden)
         .frame(minWidth: 520, minHeight: 480)
         .accessibilityElement(children: .contain)
+        .sheet(item: $budgetEditorCategory) { item in
+            BudgetEditorSheet(category: item.category)
+                .environment(appState)
+        }
+    }
+
+    /// Open the budget editor for `category` (AND-541).
+    private func editBudget(_ category: SpendingCategory) {
+        budgetEditorCategory = BudgetEditorCategory(category)
     }
 
     // MARK: - Header
@@ -86,7 +97,11 @@ struct CategoryDashboardWindow: View {
             Label("By group", systemImage: "list.bullet.indent")
                 .sectionTitle()
                 .foregroundStyle(.secondary)
-            CategoryTreeView(presentation: presentation, privacyMaskEnabled: isMasked)
+            CategoryTreeView(
+                presentation: presentation,
+                privacyMaskEnabled: isMasked,
+                onEditBudget: editBudget
+            )
         }
         .padding(Spacing.md)
         .glassSurface(.raised)
@@ -164,6 +179,11 @@ struct CategoryDashboardWindow: View {
                         .accessibilityLabel(row.statusText)
                 }
                 .width(min: 120, ideal: 140)
+
+                TableColumn("Plan") { row in
+                    budgetActionCell(row)
+                }
+                .width(min: 104, ideal: 120)
             }
             .frame(minHeight: 220)
 
@@ -192,6 +212,30 @@ struct CategoryDashboardWindow: View {
                     ? "\(currency(abs(remaining))) over"
                     : "\(currency(remaining)) left")
         )
+    }
+
+    /// The flat-table "Set a budget" / "Edit" action cell (AND-541). Budgetable
+    /// rows get a labeled button that opens `BudgetEditorSheet`; income / transfer
+    /// rows show an em dash, since they can never carry a budget.
+    @ViewBuilder
+    private func budgetActionCell(_ row: CategoryDashboardTableRow) -> some View {
+        let affordance = BudgetRowAffordance(category: row.category, isBudgeted: row.isBudgeted)
+        if affordance.isAvailable {
+            Button {
+                editBudget(row.category)
+            } label: {
+                Label(affordance.title, systemImage: affordance.systemImage)
+                    .labelStyle(.titleAndIcon)
+                    .lineLimit(1)
+            }
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+            .accessibilityLabel(affordance.accessibilityLabel)
+        } else {
+            Text("—")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+        }
     }
 
     private func tableFooter(_ totals: CategoryDashboardTableModel.Totals) -> some View {
