@@ -16,12 +16,11 @@ struct InlineCategoryRulePromptTests {
 
         let rule = prompt.buildRule()
 
-        let unwrapped = try? #require(rule)
-        #expect(unwrapped?.matchMerchantContains == "Blue Bottle Coffee")
-        #expect(unwrapped?.category == .foodAndDrink)
+        #expect(rule?.matchMerchantContains == "Blue Bottle Coffee")
+        #expect(rule?.category == .foodAndDrink)
         // A category rule never silently sets transfer/exclusion flags.
-        #expect(unwrapped?.isTransfer == nil)
-        #expect(unwrapped?.excludedFromBudgets == nil)
+        #expect(rule?.isTransfer == nil)
+        #expect(rule?.excludedFromBudgets == nil)
     }
 
     @Test("Built rule actually matches a transaction from that merchant")

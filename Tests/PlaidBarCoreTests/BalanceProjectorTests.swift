@@ -237,8 +237,11 @@ struct BalanceProjectorTests {
             now: Self.asOf,
             calendar: Self.calendar
         )
-        let projection = try? #require(presentation.projection)
-        #expect(projection?.anchorBalance == 1_200)
+        guard case let .available(projection) = presentation else {
+            Issue.record("expected available projection")
+            return
+        }
+        #expect(projection.anchorBalance == 1_200)
     }
 
     @Test("Demo data produces a non-trivial projection in-window")
@@ -253,9 +256,12 @@ struct BalanceProjectorTests {
             horizonDays: 30,
             calendar: Self.calendar
         )
-        let projection = try? #require(presentation.projection)
+        guard case let .available(projection) = presentation else {
+            Issue.record("expected available projection")
+            return
+        }
         // The forward line should step (not stay perfectly flat) given demo bills.
-        let balances = Set(projection?.series.map(\.balance) ?? [])
+        let balances = Set(projection.series.map(\.balance))
         #expect(balances.count > 1)
     }
 
