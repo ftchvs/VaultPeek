@@ -34,6 +34,16 @@ struct PopoverMaterialBackground: View {
             // behind the popover and collapses to an opaque surface on its own
             // when Reduce Transparency is enabled, so legibility is preserved
             // without a manual material swap.
+            //
+            // TODO(AND-511): this root glass and the panel glass inside
+            // `popoverColumns` live in separate `GlassEffectContainer` regions
+            // (this background is a `.background {}` sibling of the columns, not a
+            // descendant of their `.glassGroup()`), so panels sample over root
+            // glass = glass-on-glass double sampling. Unifying them into one
+            // container is not trivial here: it would require hoisting the root
+            // glass into the same view-tree branch as the columns rather than a
+            // detached background layer. Left as a follow-up; the visual cost is
+            // small at the current panel opacity.
             Rectangle()
                 .fill(.clear)
                 .glassEffect(.regular, in: .rect)
