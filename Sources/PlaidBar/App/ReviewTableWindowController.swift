@@ -175,6 +175,9 @@ final class ReviewTableWindowController: NSObject, NSWindowDelegate {
             ReviewTableWindow()
                 .environment(appState)
                 .forcedReviewTableColorScheme(forcedColorScheme)
+                // Scale the detached review Table with the same in-app text-size
+                // preference as every other surface (AND-570).
+                .appliesAppTextSize()
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         )
     }

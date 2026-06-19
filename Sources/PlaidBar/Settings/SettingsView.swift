@@ -76,6 +76,7 @@ struct AppearanceSettingsView: View {
     @AppStorage(AppContrastPreference.storageKey) private var contrastRaw = AppContrastPreference.defaultValue.rawValue
     @AppStorage(DecorativeEffectsPreference.storageKey) private var decorativeRaw = DecorativeEffectsPreference.defaultValue.rawValue
     @AppStorage(AppDensityPreference.storageKey) private var densityRaw = AppDensityPreference.defaultValue.rawValue
+    @AppStorage(TextSizePreference.storageKey) private var textSizeRaw = TextSizePreference.defaultValue.rawValue
     @Environment(\.colorSchemeContrast) private var systemContrast
 
     private var transparencySetting: PopoverTransparencySetting {
@@ -86,6 +87,7 @@ struct AppearanceSettingsView: View {
     private var contrastPreference: AppContrastPreference { AppContrastPreference(rawValue: contrastRaw) ?? .followSystem }
     private var decorativePreference: DecorativeEffectsPreference { DecorativeEffectsPreference(rawValue: decorativeRaw) ?? .followSystem }
     private var density: AppDensityPreference { AppDensityPreference(rawValue: densityRaw) ?? .comfortable }
+    private var textSize: TextSizePreference { TextSizePreference(rawValue: textSizeRaw) ?? .default }
 
     /// Increased contrast applies when the app pref asks for it OR the system
     /// Increase Contrast accessibility setting is on (system always wins).
@@ -208,6 +210,38 @@ struct AppearanceSettingsView: View {
                     .detailText()
                     .fixedSize(horizontal: false, vertical: true)
             }
+
+            Section("Text Size") {
+                // macOS does not honor the system Dynamic Type setting for
+                // third-party apps, so this control is the only way to enlarge
+                // VaultPeek's text. The picker writes the persisted preference;
+                // the scene roots read it and set `.dynamicTypeSize` app-wide so
+                // every surface scales together (AND-570).
+                Picker("Text Size", selection: Binding(
+                    get: { textSize },
+                    set: { textSizeRaw = $0.rawValue }
+                )) {
+                    ForEach(TextSizePreference.allCases) { Text($0.title).tag($0) }
+                }
+                .accessibilityValue(textSize.title)
+                .accessibilityHint("Sets the text size for all of VaultPeek")
+
+                // Live preview: synthetic text scaled to the selected size, so the
+                // effect is visible the instant the picker changes — privacy-safe
+                // (no real account data). `.dynamicTypeSize` here mirrors what the
+                // scene roots apply app-wide.
+                TextSizePreviewRow()
+                    .dynamicTypeSize(DynamicTypeSize(textSize.forcedDynamicTypeSize))
+                    .padding(.vertical, Spacing.xxs)
+
+                Text(textSize.detail)
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text("macOS ignores the system Dynamic Type setting for apps, so use this to make VaultPeek's text larger everywhere. The largest steps reflow some layouts to keep numbers legible.")
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .formStyle(.grouped)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -312,6 +346,31 @@ private struct AppearancePreviewCard: View {
         .accessibilityLabel(
             "Live preview of the popover at \(setting.displayPercent) percent transparency, with sample data only."
         )
+    }
+}
+
+/// Privacy-safe live preview of the in-app text size (AND-570). Synthetic labels
+/// scaled by the caller's `.dynamicTypeSize` — never real account data — so the
+/// user sees the effect of the Text Size picker the instant it changes. Uses a
+/// semantic text style and the hero-balance modifier so the preview tracks the
+/// same scaling path as the real dashboard surfaces.
+private struct TextSizePreviewRow: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.xxs) {
+            Text("Net Worth")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+            Text("$12,345.67")
+                .heroBalance()
+            Text("Preview only — sample data")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Spacing.sm)
+        .background(.quinary, in: RoundedRectangle(cornerRadius: Radius.control))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Live preview of the selected text size, with sample data only.")
     }
 }
 

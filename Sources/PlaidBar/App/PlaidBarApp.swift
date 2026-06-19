@@ -107,6 +107,12 @@ struct PlaidBarApp: App {
                 })
                 .forcedAppColorScheme(Self.forcedColorScheme)
                 .appliesAppAppearance()
+                // Apply the in-app text-size preference once at the popover root
+                // so every @ScaledMetric/Text below it scales together — macOS
+                // ignores the system Dynamic Type setting for third-party apps,
+                // so this control is the only way users can enlarge VaultPeek's
+                // text (AND-570).
+                .appliesAppTextSize()
         } label: {
             MenuBarLabel()
                 .environment(appState)
@@ -320,6 +326,9 @@ struct PlaidBarApp: App {
                 .environment(appState)
                 .forcedAppColorScheme(Self.forcedColorScheme)
                 .appliesAppAppearance()
+                // Scale the Settings window too, so the user sees the text-size
+                // change reflected in the very control they are adjusting (AND-570).
+                .appliesAppTextSize()
         }
     }
 
@@ -413,6 +422,15 @@ struct PlaidBarApp: App {
         }
     }
 
+    /// The in-app text-size preference forced by the `--text-size` CLI flag
+    /// (QA/screenshot aid: `--text-size default|large|xLarge|accessibility`), or
+    /// `nil` to follow the stored preference. Mirrors `forcedColorScheme`; lets a
+    /// QA pass cover the enlarged layouts without leaving a durable preference
+    /// behind (AND-570).
+    static var forcedTextSizePreference: TextSizePreference? {
+        CommandLineOptions.value(for: "--text-size").flatMap(TextSizePreference.init(rawValue:))
+    }
+
     private static func applyScreenshotDefaults() {
         guard CommandLine.arguments.contains("--demo") else { return }
 
@@ -480,6 +498,45 @@ private struct AppAppearanceApplier: ViewModifier {
     }
 }
 
+/// Applies the stored in-app text-size preference as a `dynamicTypeSize`
+/// environment value at the scene root, so every `@ScaledMetric`/`Text` below it
+/// scales together (AND-570). macOS ignores the system Dynamic Type setting for
+/// third-party apps, so this is the only lever users have to enlarge VaultPeek's
+/// text. The `--text-size` CLI override (QA aid) wins over the stored preference,
+/// mirroring `ForcedAppColorScheme`. Reading `@AppStorage` here means the whole
+/// subtree re-renders live the moment the Settings picker changes the value.
+struct AppTextSizeApplier: ViewModifier {
+    @AppStorage(TextSizePreference.storageKey) private var preferenceRaw = TextSizePreference.defaultValue.rawValue
+
+    private var resolvedSize: DynamicTypeSize {
+        let stored = TextSizePreference(rawValue: preferenceRaw) ?? .default
+        let forced = TextSizePreference.resolved(
+            cliOverride: PlaidBarApp.forcedTextSizePreference,
+            storedPreference: stored
+        )
+        return DynamicTypeSize(forced)
+    }
+
+    func body(content: Content) -> some View {
+        content.dynamicTypeSize(resolvedSize)
+    }
+}
+
+/// Bridges the SwiftUI-free Core `ForcedDynamicTypeSize` to SwiftUI's
+/// `DynamicTypeSize`. The Core enum keeps the case → size decision testable
+/// without importing SwiftUI; this 1:1 switch is the only place the two enums
+/// meet (parity with `ForcedColorScheme` → `ColorScheme`).
+extension DynamicTypeSize {
+    init(_ forced: ForcedDynamicTypeSize) {
+        switch forced {
+        case .large: self = .large
+        case .xLarge: self = .xLarge
+        case .xxLarge: self = .xxLarge
+        case .accessibility1: self = .accessibility1
+        }
+    }
+}
+
 /// Single mapping from the stored appearance mode to `NSApplication.appearance`,
 /// shared by the launch-time application (`PlaidBarApp.applyStoredAppearance`,
 /// before first paint) and the live `AppAppearanceApplier` (`onChange`). Making
@@ -506,5 +563,16 @@ private extension View {
 
     func appliesAppAppearance() -> some View {
         modifier(AppAppearanceApplier())
+    }
+}
+
+extension View {
+    /// Applies the stored in-app text-size preference at this point in the tree
+    /// (AND-570). Used at every scene/window root — the popover, Settings, and
+    /// the three detached AppKit-hosted windows — so the choice scales every
+    /// surface uniformly. Internal (not file-private) so the window controllers
+    /// in `App/` can share the one definition.
+    func appliesAppTextSize() -> some View {
+        modifier(AppTextSizeApplier())
     }
 }

@@ -417,6 +417,9 @@ final class DetachedDashboardWindowController: NSObject, NSWindowDelegate {
                 // window's live (NSApp-driven) appearance and follows Light/Dark
                 // changes made while the window is open.
                 .forcedDetachedColorScheme(forcedColorScheme)
+                // Apply the in-app text-size preference so the floating desktop
+                // dashboard scales with the same control as the popover (AND-570).
+                .appliesAppTextSize()
                 // The panel owns its own width via resize; let the dashboard fill
                 // it rather than imposing the popover's screen-anchored width math.
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
