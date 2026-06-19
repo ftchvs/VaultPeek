@@ -21,6 +21,14 @@ struct PlaidBarApp: App {
     /// Owns the global summon hotkey (⇧⌘V, AND-487). `@State` so the Carbon
     /// registration survives `body` recomputes for the process lifetime.
     @State private var summonHotkeyMonitor = SummonHotkeyMonitor()
+    /// Routes the window-first primary `Window`'s open/close lifecycle through the
+    /// shared refcounted activation-policy coordinator (ADR-001 / AND-620): elevate
+    /// `.accessory → .regular` when the window opens, return to `.accessory` when
+    /// the last managed window closes. `@State` so the single outstanding request it
+    /// can hold survives `body` recomputes for the process lifetime. Inert unless
+    /// the `Window` actually opens, which only happens behind the window-first flag,
+    /// so flag-OFF activation behavior is unchanged.
+    @State private var windowActivationPolicy = WindowActivationPolicy()
     @Environment(\.openSettings) private var openSettings
     @Environment(\.openWindow) private var openWindow
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -372,8 +380,23 @@ struct PlaidBarApp: App {
             AppShellView()
                 .environment(appState)
                 .forcedAppColorScheme(Self.forcedColorScheme)
+                // Fold the primary `Window` into the single `NSApp.appearance`
+                // source of truth (`AppAppearance`, also applied before first paint
+                // in `applyStoredAppearance()`): this carries the same live
+                // appearance updater the popover/label/Settings use, so flipping
+                // Light/Dark re-applies on this window too and there is no second,
+                // competing setter to flash a wrong first-paint theme (R-04).
                 .appliesAppAppearance()
                 .appliesAppTextSize()
+                // Elevate `.accessory → .regular` while this window is on screen and
+                // drop back when the last managed window closes, via the shared
+                // refcounted coordinator (ADR-001 / AND-620, R-01). SwiftUI gives a
+                // declarative `Window` no `NSWindowController`, so the lifecycle is
+                // bridged here; the helper is idempotent against repeated
+                // appear/disappear. Only ever reached when the window opens (behind
+                // the window-first flag), so flag-OFF behavior is unchanged.
+                .onAppear { windowActivationPolicy.onWindowAppear() }
+                .onDisappear { windowActivationPolicy.onWindowDisappear() }
                 // Liquid Glass on chrome only (ADR-001): the window background is
                 // the ultra-thin material; data surfaces inside stay opaque. This
                 // is a content modifier (it walks up to the window), so it lives on
