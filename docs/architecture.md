@@ -156,11 +156,31 @@ The App Group is a second trust boundary and follows the same rule as the status
 endpoint: only display-ready, low-sensitivity values cross it. The snapshot must
 never contain Plaid access tokens, the local bearer token, Plaid client secrets,
 account IDs, item IDs, account masks, merchant names, or transaction rows, and
-the command channel carries no data-bearing parameters. While Privacy Mask or
-App Lock is active the app clears/withholds the snapshot so the widget and
-Control Center control fall back to the placeholder state rather than exposing
-real values. If a future change adds any field to `GlanceSnapshot`, it must be
-reviewed against this boundary, `SECURITY.md`, and the status-endpoint contract.
+the command channel carries no data-bearing parameters.
+
+**Privacy Mask / App Lock contract.** While Privacy Mask or App Lock is active,
+the app re-writes the shared `FinanceSnapshot` (the value-bearing contract read
+by the App Intents / Siri / Spotlight surfaces, the widget, and the Control
+Center control) in a redacted, value-free form: no balances, safe-to-spend,
+per-account figures, bills, or utilization — only `isMasked == true`. Redaction
+happens at *write* time as defense-in-depth, on top of the *read*-time gate where
+each reader independently checks `isMasked` (e.g. the widget gates on
+`AppGroupSnapshotStore.loadIfAvailable()?.isMasked`) and withholds values or
+shows placeholders. With both gates a reader that ignored `isMasked` would still
+find no real figures to leak.
+
+The widget's net-worth path additionally reads `glance-snapshot.json`. That file
+is *not* re-written or cleared on a mask/lock transition today — its net-worth,
+today's-change, and sparkline values persist on disk while masked. The masked
+widget guarantee therefore rests on `FinanceSnapshot.isMasked` (the widget shows
+its placeholder/unavailable state when masked) rather than on clearing the glance
+snapshot. Redacting or clearing `glance-snapshot.json` on mask transitions is a
+tracked follow-up; until it lands, do not claim the glance file is cleared while
+masked.
+
+If a future change adds any field to `GlanceSnapshot` or `FinanceSnapshot`, it
+must be reviewed against this boundary, `SECURITY.md`, and the status-endpoint
+contract.
 
 ## Naming Compatibility
 
