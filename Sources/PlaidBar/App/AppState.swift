@@ -2483,13 +2483,16 @@ final class AppState {
             .appendingPathComponent(LocalDataStore.serverConfigFilename)
         if let configContents = try? String(contentsOf: configURL, encoding: .utf8) {
             for rawLine in configContents.components(separatedBy: .newlines) {
-                guard let entry = parseServerConfigLine(rawLine) else { continue }
-                environment[entry.key] = entry.value
+                guard let entry = ServerConfigLine.parse(rawLine) else { continue }
+                environment[entry.key] = ServerConfigLine.unquote(entry.value)
             }
         }
 
         let rawEnvironment = trimmedNonEmpty(environment["PLAID_ENV"]) ?? PlaidEnvironment.production.rawValue
-        guard let plaidEnvironment = PlaidEnvironment(rawValue: unquoteConfigValue(rawEnvironment)) else {
+        // Unquoted a second time on purpose: file-sourced values were unquoted in
+        // the loop above, but a PLAID_ENV inherited from the process environment
+        // bypasses it, so this normalizes a quoted value from either source.
+        guard let plaidEnvironment = PlaidEnvironment(rawValue: ServerConfigLine.unquote(rawEnvironment)) else {
             return nil
         }
 
@@ -2509,36 +2512,10 @@ final class AppState {
         )
     }
 
-    private func parseServerConfigLine(_ rawLine: String) -> (key: String, value: String)? {
-        var line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !line.isEmpty, !line.hasPrefix("#") else { return nil }
-        if line.hasPrefix("export ") {
-            line.removeFirst("export ".count)
-            line = line.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        guard let separator = line.firstIndex(of: "=") else { return nil }
-        let key = String(line[..<separator]).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !key.isEmpty else { return nil }
-        let value = String(line[line.index(after: separator)...])
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return (key, unquoteConfigValue(value))
-    }
-
     private func trimmedNonEmpty(_ value: String?) -> String? {
         guard let value else { return nil }
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
-    }
-
-    private func unquoteConfigValue(_ value: String) -> String {
-        guard value.count >= 2,
-              let first = value.first,
-              let last = value.last,
-              (first == "\"" && last == "\"") || (first == "'" && last == "'")
-        else {
-            return value
-        }
-        return String(value.dropFirst().dropLast())
     }
 
     private func persistedTransactionCacheContext() -> TransactionCacheContext? {
@@ -2991,8 +2968,8 @@ final class AppState {
         let configURL = localStorageDirectoryURL.appendingPathComponent(LocalDataStore.serverConfigFilename)
         if let contents = try? String(contentsOf: configURL, encoding: .utf8) {
             for line in contents.components(separatedBy: .newlines) {
-                guard let entry = Self.parseConfigLine(line) else { continue }
-                values[entry.key] = Self.unquotedConfigValue(entry.value)
+                guard let entry = ServerConfigLine.parse(line) else { continue }
+                values[entry.key] = ServerConfigLine.unquote(entry.value)
             }
         }
 
@@ -3003,34 +2980,6 @@ final class AppState {
             return nil
         }
         return PlaidEnvironment(rawValue: rawValue)
-    }
-
-    private static func parseConfigLine(_ rawLine: String) -> (key: String, value: String)? {
-        var line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !line.isEmpty, !line.hasPrefix("#") else { return nil }
-
-        if line.hasPrefix("export ") {
-            line.removeFirst("export ".count)
-            line = line.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-
-        guard let separator = line.firstIndex(of: "=") else { return nil }
-        let key = String(line[..<separator]).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !key.isEmpty else { return nil }
-        let value = String(line[line.index(after: separator)...])
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return (key, value)
-    }
-
-    private static func unquotedConfigValue(_ value: String) -> String {
-        guard value.count >= 2,
-              let first = value.first,
-              let last = value.last,
-              (first == "\"" && last == "\"") || (first == "'" && last == "'")
-        else {
-            return value
-        }
-        return String(value.dropFirst().dropLast())
     }
 
     @discardableResult
