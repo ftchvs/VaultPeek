@@ -34,6 +34,15 @@ struct AppLockPresentationTests {
         #expect(preferences.menuBarText(currentText: "$42,000", isAppLocked: false, isIconOnly: false) == "Private")
     }
 
+    @Test("normal mode passes the menu-bar text through untouched")
+    func normalModePassesTextThrough() {
+        let preferences = AppLockPreferences()
+
+        #expect(preferences.effectiveDisplayMode(isAppLocked: false) == .normal)
+        #expect(preferences.effectiveDisplayMode(isAppLocked: true) == .normal)
+        #expect(preferences.menuBarText(currentText: "$42,000", isAppLocked: false, isIconOnly: false) == "$42,000")
+    }
+
     @Test("private Review Inbox header does not expose queue counts")
     func privateReviewInboxHeaderDoesNotExposeCounts() {
         let presentation = ReviewInboxPrivacyPresentation.make(
@@ -222,5 +231,41 @@ struct AppLockPresentationTests {
         #expect(AppLockPreferences.normalizedInactivityInterval(75) == 60)
         #expect(AppLockPreferences.normalizedInactivityInterval(301) == 300)
         #expect(AppLockPreferences.normalizedInactivityInterval(1_600) == 1_800)
+    }
+
+    @Test("notification privacy modes expose a stable display name")
+    func notificationPrivacyDisplayNames() {
+        #expect(NotificationPrivacyMode.detailed.displayName == "Detailed")
+        #expect(NotificationPrivacyMode.genericWhenPrivate.displayName == "Generic when private")
+        #expect(NotificationPrivacyMode.alwaysGeneric.displayName == "Always generic")
+        #expect(NotificationPrivacyMode.offWhileLocked.displayName == "Off while locked")
+    }
+
+    @Test("only off-while-locked describes suppression; the rest share generic copy")
+    func notificationPrivacyDetailCopy() {
+        let generic = NotificationPrivacyMode.alwaysGeneric.detail
+        #expect(NotificationPrivacyMode.detailed.detail == generic)
+        #expect(NotificationPrivacyMode.genericWhenPrivate.detail == generic)
+        #expect(generic.contains("alerts still arrive while VaultPeek is locked"))
+        #expect(NotificationPrivacyMode.offWhileLocked.detail.contains("suppressed entirely while VaultPeek is locked"))
+        #expect(NotificationPrivacyMode.offWhileLocked.detail != generic)
+    }
+
+    @Test("shouldSend suppresses only off-while-locked while locked")
+    func notificationShouldSend() {
+        #expect(NotificationPrivacyMode.offWhileLocked.shouldSend(isLocked: true) == false)
+        #expect(NotificationPrivacyMode.offWhileLocked.shouldSend(isLocked: false) == true)
+        #expect(NotificationPrivacyMode.alwaysGeneric.shouldSend(isLocked: true) == true)
+        #expect(NotificationPrivacyMode.detailed.shouldSend(isLocked: true) == true)
+    }
+
+    @Test("each authentication outcome has distinct, non-empty locked-surface copy")
+    func authenticationMessageSurfaceCopy() {
+        let messages: [AppLockAuthenticationMessage] = [.failed, .canceled, .unavailable, .lockout]
+        let copies = messages.map(\.lockedSurfaceCopy)
+        #expect(copies.allSatisfy { !$0.isEmpty })
+        #expect(Set(copies).count == messages.count)
+        #expect(AppLockAuthenticationMessage.failed.lockedSurfaceCopy.contains("Try again"))
+        #expect(AppLockAuthenticationMessage.lockout.lockedSurfaceCopy.contains("Touch ID"))
     }
 }
