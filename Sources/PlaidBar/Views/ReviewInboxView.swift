@@ -53,7 +53,10 @@ struct ReviewInboxView: View {
                 header
 
                 if let actionConfirmation {
-                    ReviewActionConfirmationBanner(confirmation: actionConfirmation)
+                    ReviewActionConfirmationBanner(
+                        confirmation: actionConfirmation,
+                        isPrivate: appState.shouldMaskFinancialValues
+                    )
                         .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
                 }
 
@@ -380,30 +383,28 @@ private struct ReviewActionConfirmation: Equatable {
 
     let action: Action
     /// The single merchant a row-level action resolved. Nil for batch actions
-    /// (bulk review), where the subject is a count, not one merchant.
+    /// (bulk review), where the subject is a count, not one merchant. The
+    /// banner's user-facing copy and accessibility label are produced by
+    /// `ReviewActionConfirmationPrivacyPresentation`, which handles both the
+    /// nil-merchant (bulk) case and Privacy Mask redaction.
     let merchantName: String?
-
-    var bannerText: String {
-        if let merchantName {
-            return "\(action.message): \(merchantName)"
-        }
-        return action.message
-    }
-
-    var accessibilityLabel: String {
-        if let merchantName {
-            return "Review action completed: \(action.message) for \(merchantName)"
-        }
-        return "Review action completed: \(action.message)"
-    }
 }
 
 private struct ReviewActionConfirmationBanner: View {
     let confirmation: ReviewActionConfirmation
+    let isPrivate: Bool
+
+    private var presentation: ReviewActionConfirmationPrivacyPresentation {
+        ReviewActionConfirmationPrivacyPresentation.make(
+            actionMessage: confirmation.action.message,
+            merchantName: confirmation.merchantName,
+            isPrivate: isPrivate
+        )
+    }
 
     var body: some View {
         Label {
-            Text(confirmation.bannerText)
+            Text(presentation.message)
                 .font(.caption.weight(.semibold))
                 .lineLimit(2)
         } icon: {
@@ -418,7 +419,7 @@ private struct ReviewActionConfirmationBanner: View {
             RoundedRectangle(cornerRadius: 10).stroke(SemanticColors.positive.opacity(0.20), lineWidth: 1)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(confirmation.accessibilityLabel)
+        .accessibilityLabel(presentation.accessibilityLabel)
     }
 }
 

@@ -216,3 +216,37 @@ public struct ReviewInboxPrivacyPresentation: Sendable, Equatable {
         )
     }
 }
+
+public struct ReviewActionConfirmationPrivacyPresentation: Sendable, Equatable {
+    public let message: String
+    public let accessibilityLabel: String
+
+    /// `merchantName` is nil for batch actions (bulk review), where the subject
+    /// is a count rather than a single merchant — those confirmations carry no
+    /// merchant detail, so the non-private copy falls back to the action message
+    /// alone.
+    public static func make(
+        actionMessage: String,
+        merchantName: String?,
+        isPrivate: Bool
+    ) -> ReviewActionConfirmationPrivacyPresentation {
+        if isPrivate {
+            return ReviewActionConfirmationPrivacyPresentation(
+                message: "Review action completed",
+                accessibilityLabel: "Review action completed. Details are hidden while VaultPeek is private."
+            )
+        }
+
+        guard let merchantName else {
+            return ReviewActionConfirmationPrivacyPresentation(
+                message: actionMessage,
+                accessibilityLabel: "Review action completed: \(actionMessage)"
+            )
+        }
+
+        return ReviewActionConfirmationPrivacyPresentation(
+            message: "\(actionMessage): \(merchantName)",
+            accessibilityLabel: "Review action completed: \(actionMessage) for \(merchantName)"
+        )
+    }
+}
