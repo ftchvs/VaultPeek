@@ -1,5 +1,6 @@
 import SwiftUI
 import PlaidBarCore
+import PlaidBarCache
 import Combine
 import OSLog
 import WidgetKit
@@ -497,6 +498,20 @@ final class AppState {
     /// Fetches + caches merchant logos via the local server's authed proxy.
     let merchantLogoStore = MerchantLogoStore()
     private let localDataCache = LocalDataCacheService()
+    /// Disposable SwiftData read-model cache for instant cold render (AND-566).
+    /// Opened lazily and behind `try?`; `nil` whenever SwiftData is unavailable
+    /// or the store fails to open, in which case the app behaves exactly as it
+    /// did before this cache existed (the JSON/UserDefaults cold path). Opened
+    /// against the directory it was created for so a server-directory change
+    /// re-opens a fresh store. Never the source of truth. `internal` (not
+    /// `private`) so the AND-566 wiring extension in
+    /// `AppState+ReadModelCache.swift` can read/mutate it; still module-scoped.
+    var readModelCacheStore: ReadModelCacheStore?
+    var readModelCacheStoreDirectoryPath: String?
+    /// Set false to disable the disposable read-model cache entirely; the app
+    /// then renders exactly as it did before AND-566 (no hydrate, no persist).
+    /// Plumbed for kill-switch/test parity, not surfaced in Settings.
+    let readModelCacheEnabled: Bool
     private let appLockService = AppLockService()
     private let reviewStorageWriter = ReviewStorageWriter()
     private var localAIInsightsService = LocalAIInsightsService()
@@ -533,9 +548,13 @@ final class AppState {
 
     // MARK: - Init
 
-    init(notificationService: (any NotificationServiceProtocol)? = nil) {
+    init(
+        notificationService: (any NotificationServiceProtocol)? = nil,
+        readModelCacheEnabled: Bool = true
+    ) {
         _ = try? LocalDataStore.migrateLegacyDefaultStorageIfNeeded()
         self.notificationService = notificationService ?? NotificationService.shared
+        self.readModelCacheEnabled = readModelCacheEnabled
         loadSettings()
         // Record whether Apple Foundation Models is available so the tier resolver
         // can prefer it (AND-563) and, when available, the insight service routes
@@ -2313,6 +2332,9 @@ final class AppState {
         serverSyncedItemCount = nil
         lastSyncDate = nil
         clearCategoryBudgetCache()
+        // Wipe the disposable read-model cache alongside the JSON/SQLite caches
+        // so a post-reset cold start never paints pre-reset balances (AND-566).
+        await clearReadModelCache()
         UserDefaults.standard.set(false, forKey: resetSetupCompletionDefaultsKey)
         UserDefaults.standard.removeObject(forKey: firstRunSnapshotDismissalDefaultsKey)
         isSetupComplete = false
@@ -2730,6 +2752,12 @@ final class AppState {
     /// mismatches fall through to the normal post-connect cache path without
     /// surfacing an error during boot.
     private func preloadCachedDataBeforeFirstConnect() async {
+        // Fast path: paint frame 1 from the disposable SwiftData read-model cache
+        // before the (slower) JSON warm path and well before the HTTP refresh
+        // (AND-566). Best-effort; on any failure or miss it leaves `accounts` /
+        // `transactions` empty so the JSON path below runs exactly as before.
+        await hydrateFromReadModelCache()
+
         guard accounts.isEmpty, transactions.isEmpty,
               let context = persistedTransactionCacheContext(),
               let cacheDirectory = preconnectCacheDirectory(for: context)
@@ -2979,6 +3007,19 @@ final class AppState {
             environment: serverEnvironment,
             storagePath: serverStoragePath
         )
+    }
+
+    /// Internal accessors so the read-model cache wiring (AND-566, in a separate
+    /// file) can reuse the same context resolution the JSON cache uses without
+    /// duplicating it. The live context is the server-derived one; the preconnect
+    /// hint is the file/env-derived fallback for a cold start before the first
+    /// status check.
+    var liveTransactionCacheContext: TransactionCacheContext? {
+        transactionCacheContext
+    }
+
+    func preconnectReadModelCacheContextHint() -> TransactionCacheContext? {
+        currentPreconnectCacheContextHint()
     }
 
     @discardableResult
@@ -3386,6 +3427,10 @@ final class AppState {
             // (AND-513). `writeFinanceSnapshot` is skipped on this empty path, so
             // the index clear must happen here explicitly.
             AccountSpotlightIndexer.clear()
+            // Drop the disposable read-model cache on the same empty path so a
+            // cold start after the last institution was removed does not paint
+            // stale balances from the cache (AND-566).
+            Task { await clearReadModelCache() }
             Task {
                 await clearGlanceSnapshot()
                 await MainActor.run {
@@ -3397,6 +3442,11 @@ final class AppState {
         // Keep the App Intents snapshot fresh on the same path that already
         // recomputes summaries for the widget (AND-512).
         writeFinanceSnapshot(updatedAt: updatedAt)
+        // Trail the authoritative in-memory data into the disposable read-model
+        // cache so the next cold start renders instantly (AND-566). This is the
+        // single post-refresh/mutation seam, so the cache always reflects the
+        // latest accounts/transactions. Best-effort, detached, never blocks.
+        persistReadModelCache()
         glanceSnapshotWriteGeneration += 1
         let generation = glanceSnapshotWriteGeneration
         // When Privacy Mask / App Lock is active, build a value-free snapshot so
