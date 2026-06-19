@@ -359,6 +359,19 @@ final class DetachedDashboardWindowController: NSObject, NSWindowDelegate {
         // fills it edge-to-edge; while detached, `MainPopover` renders a clear
         // root background so this backdrop *is* the translucent surface rather
         // than an opaque material painted over an opaque window.
+        //
+        // AND-511 SPIKE — evaluated replacing this NSVisualEffectView with a
+        // SwiftUI `.glassEffect(.regular)` (or `.backgroundExtensionEffect`) root
+        // painted directly onto the transparent NSWindow. Decision: KEEP the
+        // behind-window NSVisualEffectView. SwiftUI glass on a borderless/clear
+        // NSWindow does NOT reliably sample what is *behind the window* — it
+        // samples within the window's own (clear) backing, so it renders flat
+        // instead of frosting the desktop. Behind-window translucency on a hosted
+        // NSWindow has regressed in this project before; NSVisualEffectView with
+        // `.behindWindow` is the one path confirmed to yield real desktop
+        // read-through here, so it stays. The in-content glass chrome
+        // (PopoverMaterialBackground / glassSurface) handles the popover host,
+        // where there is no window-level vibrancy to sample.
         let backdrop = NSVisualEffectView()
         backdrop.material = .underWindowBackground
         backdrop.blendingMode = .behindWindow
