@@ -644,8 +644,8 @@ private final class StubFMCategorizer: FMMerchantCategorizing, @unchecked Sendab
         self.result = result
     }
 
-    func suggestCategory(merchant: String) async -> SpendingCategory? {
+    func suggestCategory(merchant: String) async -> String? {
         lock.lock(); _callCount += 1; lock.unlock()
-        return result
+        return result?.rawValue
     }
 }
