@@ -17,6 +17,47 @@ import PlaidBarCore
 /// Everything is best-effort: any failure leaves the app on its existing
 /// JSON/UserDefaults cold path. The cache is never read as a source of truth and
 /// never blocks a render.
+///
+/// ## Persist/clear ordering (clear-wins)
+/// `persistReadModelCache()` schedules its write off the main actor so it never
+/// delays the render, and the empty-accounts path schedules a clear of the same
+/// store. Those two land on the store actor in an undefined order, so without a
+/// guard an in-flight persist of the *previous* (non-empty) read-model could
+/// commit *after* the clear that fires when the user removes their last
+/// institution — resurrecting removed-account balances on the next cold start.
+///
+/// `ReadModelCacheClearGate` closes that race: a monotonic clear epoch is bumped
+/// synchronously on the main actor the instant a clear is requested, *before* the
+/// clear's own off-main work begins. Every scheduled write captures the epoch it
+/// was scheduled under and re-checks it (still on the main actor) immediately
+/// before committing; if a clear has been requested since, the write is dropped.
+/// Because both the epoch bump and the capture/recheck run synchronously on the
+/// main actor, a clear that is *requested after* a persist in program order is
+/// always observed by that persist — so a clear can never be overwritten by a
+/// stale write.
+@MainActor
+final class ReadModelCacheClearGate {
+    static let shared = ReadModelCacheClearGate()
+
+    private var clearEpoch = 0
+
+    /// The epoch a write should capture when it is scheduled.
+    var currentEpoch: Int { clearEpoch }
+
+    /// Marks that a clear has been requested. Call synchronously on the main
+    /// actor *before* the clear's off-main work so any persist scheduled earlier
+    /// in program order observes the bump and drops itself.
+    func beginClear() {
+        clearEpoch &+= 1
+    }
+
+    /// Whether a write scheduled under `capturedEpoch` may still commit. Returns
+    /// `false` once any clear has been requested since the write was scheduled.
+    func mayCommit(capturedEpoch: Int) -> Bool {
+        capturedEpoch == clearEpoch
+    }
+}
+
 extension AppState {
     nonisolated static let readModelCacheLogger = Logger(
         subsystem: "com.ftchvs.PlaidBar",
@@ -107,8 +148,17 @@ extension AppState {
             transactions: transactions,
             generatedAt: Date()
         )
+        // Capture the clear epoch synchronously on the main actor as this write is
+        // scheduled. The save below only commits if no clear has been requested
+        // since — so an empty-state clear (last institution removed) can never be
+        // overwritten by this in-flight write. See `ReadModelCacheClearGate`.
+        let gate = ReadModelCacheClearGate.shared
+        let capturedEpoch = gate.currentEpoch
         Task.detached {
             do {
+                // Re-check on the main actor right before committing: if a clear
+                // raced ahead, drop this stale write rather than resurrect rows.
+                guard await gate.mayCommit(capturedEpoch: capturedEpoch) else { return }
                 try await store.save(model)
             } catch {
                 AppState.readModelCacheLogger.error(
@@ -118,8 +168,17 @@ extension AppState {
         }
     }
 
-    /// Wipes the disposable cache alongside the JSON/SQLite caches on local reset.
+    /// Wipes the disposable cache alongside the JSON/SQLite caches on local reset
+    /// and on the empty-accounts path (last institution removed).
+    ///
+    /// Bumps the clear epoch synchronously *first* so any persist already
+    /// scheduled in program order observes the clear and drops its write — the
+    /// empty-state clear must win over an in-flight persist of the prior
+    /// (non-empty) read-model. The epoch is bumped unconditionally (even when no
+    /// store is open) so a clear requested while the store is briefly absent still
+    /// invalidates a concurrently scheduled write.
     func clearReadModelCache() async {
+        ReadModelCacheClearGate.shared.beginClear()
         guard let store = readModelCacheStore else { return }
         try? await store.clearAll()
         readModelCacheStore = nil
