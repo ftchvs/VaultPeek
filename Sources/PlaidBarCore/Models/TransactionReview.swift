@@ -233,7 +233,7 @@ public enum TransactionReviewInbox {
             // when the user hasn't overridden AND Plaid returned nothing usable
             // (nil/.other) or flagged its own category LOW/UNKNOWN — so the
             // Review Inbox keeps surfacing only genuinely low-confidence items.
-            let resolvedCategory = resolveCategory(
+            let resolvedCategory = EffectiveCategoryResolver.resolveCategory(
                 transaction: transaction,
                 userCategory: metadata?.userCategory,
                 nlCategorizer: nlCategorizer
@@ -244,7 +244,7 @@ public enum TransactionReviewInbox {
                 ?? trimmedNonEmpty(transaction.merchantName)
                 ?? transaction.name
             let isTransfer = metadata?.isTransferOverride
-                ?? effectiveCategory.map(isTransferCategory)
+                ?? effectiveCategory.map(EffectiveCategoryResolver.isTransferCategory)
                 ?? false
 
             if transaction.isIncome, !looksLikeTransfer(transaction) {
@@ -362,47 +362,6 @@ public enum TransactionReviewInbox {
         return TransactionReviewInboxSnapshot(items: items)
     }
 
-    /// Resolved category plus the provenance that produced it.
-    struct ResolvedCategory {
-        let category: SpendingCategory?
-        let source: LocalAICategoryResolutionSource?
-    }
-
-    /// Apply the category precedence chain: user override → Plaid →
-    /// on-device NL inference (AND-507) → uncategorized.
-    ///
-    /// The NL tier is consulted only when the user hasn't overridden AND Plaid
-    /// returned nothing usable: a nil/`.other` category, or a category Plaid
-    /// itself flagged LOW/UNKNOWN (`isLowConfidenceCategory`). Even then, only a
-    /// *trusted* (high/medium) inference fills the category — a `low`-confidence
-    /// inference is discarded so genuinely ambiguous merchants keep flowing to
-    /// the Review Inbox instead of getting a confident wrong guess.
-    static func resolveCategory(
-        transaction: TransactionDTO,
-        userCategory: SpendingCategory?,
-        nlCategorizer: NLMerchantCategorizer
-    ) -> ResolvedCategory {
-        if let userCategory {
-            return ResolvedCategory(category: userCategory, source: nil)
-        }
-
-        let plaidCategory = transaction.category
-        let plaidIsUsable = plaidCategory != nil
-            && plaidCategory != .other
-            && !transaction.isLowConfidenceCategory
-        if plaidIsUsable {
-            return ResolvedCategory(category: plaidCategory, source: .plaidCategory)
-        }
-
-        if let inference = nlCategorizer.infer(for: transaction), inference.isTrusted {
-            return ResolvedCategory(category: inference.category, source: .appleNaturalLanguage)
-        }
-
-        // Nothing usable: keep Plaid's (possibly nil/.other/low-confidence)
-        // category so the `.uncategorized` heuristic still surfaces it.
-        return ResolvedCategory(category: plaidCategory, source: plaidCategory == nil ? nil : .plaidCategory)
-    }
-
     private static func normalizedMerchantKey(_ transaction: TransactionDTO) -> String {
         normalizedKey(transaction.merchantName ?? transaction.name)
     }
@@ -411,10 +370,6 @@ public enum TransactionReviewInbox {
         value
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
-    }
-
-    private static func isTransferCategory(_ category: SpendingCategory) -> Bool {
-        category == .transfer || category == .transferOut
     }
 
     private static func merchantNeedsReview(transaction: TransactionDTO, effectiveMerchant: String) -> Bool {
