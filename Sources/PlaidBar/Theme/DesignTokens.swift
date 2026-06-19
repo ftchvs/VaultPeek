@@ -237,9 +237,11 @@ enum SurfaceTokens {
 
     static let heroGlowOpacity = 0.10
 
-    /// Liquid Glass is a progressive enhancement on macOS 26+.
-    /// macOS 15 users keep the same layout with SwiftUI material/fill fallback.
-    static let liquidGlassAvailability = "macOS 26+ progressive enhancement; macOS 15 uses material fallback"
+    // AND-511: the `liquidGlassAvailability` descriptor was removed. The macOS-26
+    // floor (AND-509/510) makes Liquid Glass the only, unconditional path, so the
+    // "macOS 15 material fallback" note it carried no longer describes any code.
+    // Shadow depths and the spacing grid are intentionally retained — system
+    // glass supplies the material, not the depth/elevation language above.
 
     static func panelFill(emphasisTint: Color? = nil) -> Color {
         if let emphasisTint {
