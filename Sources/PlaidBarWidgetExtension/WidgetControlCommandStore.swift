@@ -25,11 +25,14 @@ struct PrivacyMaskCommandRequest: Codable, Sendable, Equatable {
     let requestedAt: Date
 }
 
-/// Reads/writes the privacy-mask command in the shared App Group container.
+/// Writes the privacy-mask command in the shared App Group container.
 ///
 /// Mirrors `GlanceSnapshotStore`'s container resolution and atomic, owner-only
-/// (`0o600`) write. The control is the only **writer**; the app is the only
-/// **reader** (it consumes-and-deletes on activation).
+/// (`0o600`) write. The control (this extension target) is the only **writer**;
+/// the app consumes the command via its own `PrivacyMaskControlCommandReader`
+/// (the app and extension targets cannot share symbols, so each keeps its own
+/// copy of the JSON contract). This store therefore writes only — it deliberately
+/// has no consume method.
 enum WidgetControlCommandStore {
     /// Distinct from `GlanceSnapshot.commandFilename` so the privacy command and
     /// the refresh command coexist without overwriting each other.
@@ -40,12 +43,6 @@ enum WidgetControlCommandStore {
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.sortedKeys]
         return encoder
-    }
-
-    private static var decoder: JSONDecoder {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return decoder
     }
 
     /// Resolves the shared command directory, reusing the glance store's
@@ -76,18 +73,5 @@ enum WidgetControlCommandStore {
         #if os(macOS)
         try? fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
         #endif
-    }
-
-    /// Consumes (reads-and-deletes) the privacy command (app side). Returns `nil`
-    /// when no command is pending so calling it on every activation is cheap.
-    static func consumePrivacyCommand(
-        directory: URL = directory(),
-        fileManager: FileManager = .default
-    ) throws -> PrivacyMaskCommandRequest? {
-        let url = privacyCommandURL(directory: directory)
-        guard fileManager.fileExists(atPath: url.path) else { return nil }
-        let data = try Data(contentsOf: url)
-        try fileManager.removeItem(at: url)
-        return try decoder.decode(PrivacyMaskCommandRequest.self, from: data)
     }
 }

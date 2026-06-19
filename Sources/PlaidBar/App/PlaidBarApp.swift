@@ -172,6 +172,16 @@ struct PlaidBarApp: App {
                 // is pending, so it is cheap on every activation (AND-385).
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
                     Task { await appState.consumePendingGlanceCommand() }
+                    // Apply the Control Center "Privacy Mask" toggle (AND-513).
+                    // Like the refresh control above, the toggle runs in the
+                    // WidgetKit extension and cannot mutate app state directly —
+                    // it drops a command file the app consumes on activation.
+                    // Synchronous and a cheap no-op when nothing is pending, so it
+                    // is safe to run on every activation. Routes through the same
+                    // `appLockPreferences.privacyMaskEnabled` path as the in-app
+                    // eye toggle, so persistence and the masked-snapshot rewrite
+                    // happen through the existing flow.
+                    appState.applyPendingPrivacyMaskControlCommand()
                 }
                 // App Lock trigger: lock when VaultPeek loses focus (the user
                 // clicks away / the popover closes) so balances re-mask behind
