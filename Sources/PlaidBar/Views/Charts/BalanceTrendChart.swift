@@ -52,6 +52,8 @@ struct BalanceTrendChart: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(trend.accessibilitySummary)
+        // VoiceOver audio graph: scrub the net-worth series tone-by-tone (AND-569).
+        .audioGraph(ChartAudioGraph.trend(trend))
     }
 
     private var tint: Color {
