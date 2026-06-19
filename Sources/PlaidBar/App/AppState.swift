@@ -3228,6 +3228,10 @@ final class AppState {
         // previous balances on disk — otherwise the widget would keep showing
         // removed-account net worth until a later reset or successful write.
         guard !accounts.isEmpty else {
+            // App Intents read a parallel App Group snapshot. Clear it on the same
+            // empty path so Spotlight/Siri/Shortcuts stop reporting removed-account
+            // figures (AND-512).
+            try? AppGroupSnapshotStore.clear()
             Task {
                 await clearGlanceSnapshot()
                 await MainActor.run {
@@ -3236,6 +3240,9 @@ final class AppState {
             }
             return
         }
+        // Keep the App Intents snapshot fresh on the same path that already
+        // recomputes summaries for the widget (AND-512).
+        writeFinanceSnapshot(updatedAt: updatedAt)
         glanceSnapshotWriteGeneration += 1
         let generation = glanceSnapshotWriteGeneration
         let snapshot = GlanceSnapshot.make(
@@ -3269,10 +3276,64 @@ final class AppState {
         }
     }
 
+    /// Writes the display-safe ``FinanceSnapshot`` consumed by the Finance App
+    /// Intents (Spotlight / Siri / Shortcuts) into the shared App Group — the
+    /// "Tahoe spine" writer half (AND-512). Runs on the same path that already
+    /// recomputes summaries for the glance widget so the intents stay fresh.
+    ///
+    /// Reuses the existing core inputs — `accounts`, `recurringTransactions`, and
+    /// the cashflow from ``WealthSummaryPresentation`` — and lets
+    /// ``FinanceSnapshotBuilder`` do the math, so the figures match the popover
+    /// with no duplicated calculation here. Values only; never tokens or ids.
+    /// When App Lock / Privacy Mask is active the snapshot is written with
+    /// `isMasked == true` so the intents withhold the figures past the lock.
+    private func writeFinanceSnapshot(updatedAt: Date = Date()) {
+        let cashflow = WealthSummaryPresentation.evaluate(
+            accounts: accounts,
+            transactions: transactions,
+            isDemoMode: usesDemoConnectionPresentation,
+            serverConnected: serverConnected,
+            credentialsConfigured: serverCredentialsConfigured,
+            linkedItemCount: statusItemCount,
+            syncedItemCount: serverSyncedItemCount ?? 0,
+            itemStatuses: itemStatuses,
+            isSyncStale: isSyncStale,
+            lastSyncRelative: lastSyncRelative,
+            statusSyncText: statusSyncText,
+            errorMessage: error,
+            creditUtilizationThreshold: creditUtilizationThreshold,
+            balanceHistory: balanceHistory
+        ).cashflow
+
+        let snapshot = FinanceSnapshotBuilder.make(
+            accounts: accounts,
+            recurringTransactions: recurringTransactions,
+            cashflow: cashflow,
+            isMasked: shouldMaskFinancialValues,
+            creditUtilizationThreshold: creditUtilizationThreshold,
+            generatedAt: updatedAt
+        )
+        // File IO off the main actor; the snapshot is `Sendable` and the store is
+        // a stateless enum, so a detached task is safe under strict concurrency.
+        Task.detached(priority: .utility) {
+            do {
+                try AppGroupSnapshotStore.save(snapshot)
+            } catch {
+                AppState.glanceSnapshotLogger.error(
+                    "Failed to write finance snapshot: \(String(describing: error), privacy: .public)"
+                )
+            }
+        }
+    }
+
     private func clearGlanceSnapshot() async {
         glanceSnapshotWriteGeneration += 1
         await glanceSnapshotWriteDebouncer.cancel()
         try? GlanceSnapshotStore.clear()
+        // The App Intents snapshot lives in a sibling file in the same container;
+        // wipe it on every glance clear (reset / last-institution removal) so it
+        // can't keep answering with pre-clear figures (AND-512).
+        try? AppGroupSnapshotStore.clear()
         // Tell WidgetKit to drop the already-issued timeline entry so the widget
         // surface stops showing pre-clear balances immediately. This covers
         // every clear path — the explicit reset/data-wipe (`resetLocalData`) and

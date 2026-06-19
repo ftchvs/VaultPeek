@@ -81,7 +81,7 @@ public enum FinanceIntentQueries {
         }
 
         let spoken = bills.prefix(maxSpokenBills).map { bill in
-            "\(bill.merchantName) for \(Formatters.currency(bill.amount, format: .full, currencyCode: snapshot.isoCurrencyCode)) on \(displayDate(bill.nextExpectedDate))"
+            "\(bill.merchantName) for \(Formatters.currency(bill.amount, format: .full, currencyCode: snapshot.isoCurrencyCode)) on \(Formatters.displayTransactionDate(bill.nextExpectedDate))"
         }
         var sentence = "Coming up: " + listSentence(spoken) + "."
         let remainder = bills.count - min(bills.count, maxSpokenBills)
@@ -105,20 +105,6 @@ public enum FinanceIntentQueries {
     }
 
     // MARK: - Formatting helpers
-
-    /// Renders a `yyyy-MM-dd` string as a friendly medium date, or returns the
-    /// raw string if it cannot be parsed.
-    private static func displayDate(_ raw: String) -> String {
-        guard let date = Formatters.parseTransactionDate(raw) else { return raw }
-        return mediumDateFormatter.string(from: date)
-    }
-
-    private static let mediumDateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .none
-        return formatter
-    }()
 
     /// Joins items into a spoken list: "a", "a and b", "a, b, and c".
     private static func listSentence(_ items: [String]) -> String {
