@@ -52,6 +52,20 @@ public struct MerchantCategorySuggestion: Sendable, Equatable, Hashable {
     }
 }
 
+/// Centralized limits for on-device Foundation Models generation (AND-564/565).
+///
+/// An on-device generation can block its `await` unbounded (model warm-up,
+/// contention, a stuck guardrail), so the app-side FM seams race generation
+/// against this deadline and return `nil` on timeout — degrading to the
+/// deterministic NL/heuristic floor rather than hanging. Defined here in
+/// `PlaidBarCore` (not the app target) so the value is shared, pure, and unit-
+/// testable; the value is intentionally aligned with the insight runtime's 8s
+/// generation timeout.
+public enum FMGenerationLimits {
+    /// Hard deadline (seconds) for a single on-device FM generation call.
+    public static let generationTimeout: TimeInterval = 8
+}
+
 /// Pure decision: should the Foundation Models categorization step be *attempted*
 /// for this run, given the probed FM tier state (AND-565)?
 ///
@@ -117,11 +131,17 @@ public enum FMSpendingCategoryMapper {
 /// entirely on-device and is given ONLY a redaction-safe merchant string — never
 /// raw account ids, transaction ids, item ids, tokens, or Plaid payloads.
 public protocol FMMerchantCategorizing: Sendable {
-    /// Suggest a `SpendingCategory` for a redaction-safe merchant string using
-    /// guided generation constrained to the 16-case enum. Returns `nil` when the
-    /// model produced no usable result (so the caller falls back to NL). Must
-    /// never throw across the boundary — failures degrade to `nil`.
-    func suggestCategory(merchant: String) async -> SpendingCategory?
+    /// Suggest a category for a redaction-safe merchant string using guided
+    /// generation constrained to the 16-case enum.
+    ///
+    /// The result crosses the app→Core boundary as the *constrained string* (the
+    /// `SpendingCategory.rawValue` the guided generation was restricted to), not a
+    /// resolved enum, so Core stays free of any FoundationModels dependency and
+    /// `FMSpendingCategoryMapper` remains the single, unit-tested place that string
+    /// is turned back into a `SpendingCategory`. Returns `nil` when the model
+    /// produced no usable result (so the caller falls back to NL). Must never throw
+    /// across the boundary — failures (incl. timeout/cancellation) degrade to `nil`.
+    func suggestCategory(merchant: String) async -> String?
 }
 
 /// The Foundation Models categorization tier, sitting ABOVE NaturalLanguage in
@@ -129,11 +149,14 @@ public protocol FMMerchantCategorizing: Sendable {
 ///
 /// Strategy:
 /// 1. If FM is `.available` AND a categorizer is wired, ask it for a constrained
-///    suggestion using only the redaction-safe merchant string. A result is
-///    returned as a `.foundationModels` suggestion (trusted — a constrained-enum
-///    output is always a valid case, but still a *suggestion*, never applied).
-/// 2. On FM unavailable, no wired categorizer, or an FM miss, fall back to the
-///    existing `NLMerchantCategorizer` — byte-identically to today's behavior.
+///    suggestion using only the redaction-safe merchant string. The constrained
+///    string is resolved back to a `SpendingCategory` through `FMSpendingCategory-
+///    Mapper` (the single tested boundary parser); a resolved result is returned
+///    as a `.foundationModels` suggestion (trusted — the generation is constrained
+///    to the 16 cases — but still a *suggestion*, never applied).
+/// 2. On FM unavailable, no wired categorizer, an FM miss, or an unparseable
+///    string, fall back to the existing `NLMerchantCategorizer` — byte-identically
+///    to today's behavior.
 ///
 /// The categorizer is a pure value type; the only side effect is the injected,
 /// on-device FM call, which is gated by the availability decision above.
@@ -162,7 +185,12 @@ public struct FMMerchantCategorizer: Sendable {
            let fmCategorizer {
             // Only the redaction-safe merchant string is sent to the model.
             let merchant = Self.redactionSafeMerchantString(for: transaction)
-            if !merchant.isEmpty, let fmCategory = await fmCategorizer.suggestCategory(merchant: merchant) {
+            if !merchant.isEmpty,
+               let rawCategory = await fmCategorizer.suggestCategory(merchant: merchant),
+               // Resolve the constrained string back to an enum through the single,
+               // unit-tested boundary parser. A malformed/unknown value degrades to
+               // the NL fallback rather than a wrong guess.
+               let fmCategory = FMSpendingCategoryMapper.category(from: rawCategory) {
                 return MerchantCategorySuggestion(
                     category: fmCategory,
                     tier: .foundationModels,
