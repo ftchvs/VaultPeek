@@ -23,10 +23,20 @@ import FoundationModels
 /// a sanitized merchant string — never raw account ids, transaction ids, item
 /// ids, tokens, dates, amounts, or Plaid payloads. Generation runs entirely
 /// on-device; nothing is transmitted off the machine. Failures (model error,
-/// guardrail, timeout) are swallowed to `nil` so the categorizer never throws
-/// across the boundary and always degrades to the deterministic NL floor.
+/// guardrail) are swallowed to `nil` so the categorizer never throws across the
+/// boundary and always degrades to the deterministic NL floor.
+///
+/// Bounded generation: an on-device generation can block its `await` unbounded
+/// (model warm-up, contention, a stuck guardrail), so the call is raced against
+/// `FMGenerationLimits.generationTimeout` and outer-task
+/// cancellation; on timeout or cancellation it returns `nil` so the NL fallback
+/// engages promptly instead of hanging.
+///
+/// Boundary contract: the result crosses to `PlaidBarCore` as the constrained
+/// `SpendingCategory.rawValue` string (not a resolved enum), so Core owns the
+/// single tested string→enum mapping (`FMSpendingCategoryMapper`).
 struct FoundationModelsMerchantCategorizer: FMMerchantCategorizing {
-    func suggestCategory(merchant: String) async -> SpendingCategory? {
+    func suggestCategory(merchant: String) async -> String? {
         let cleaned = Self.sanitizedMerchant(merchant)
         guard !cleaned.isEmpty else { return nil }
 
@@ -115,9 +125,12 @@ extension FoundationModelsMerchantCategorizer {
     details. The data is processed locally on the user's Mac.
     """
 
-    /// Run the on-device guided generation. Any failure (unavailable, guardrail,
-    /// model error) is swallowed to `nil` so the caller degrades to NL.
-    static func generate(merchant: String) async -> SpendingCategory? {
+    /// Run the on-device guided generation, bounded by an explicit deadline and
+    /// outer-task cancellation. Returns the constrained `SpendingCategory.rawValue`
+    /// string, or `nil` on any failure (unavailable, guardrail, model error,
+    /// timeout, or cancellation) so the caller degrades to NL. The string boundary
+    /// keeps the string→enum mapping in `PlaidBarCore` (`FMSpendingCategoryMapper`).
+    static func generate(merchant: String) async -> String? {
         // A fresh session per call keeps the categorizer stateless and avoids
         // cross-merchant context bleed. Greedy sampling makes the choice
         // deterministic for a given merchant.
@@ -125,15 +138,40 @@ extension FoundationModelsMerchantCategorizer {
         let prompt = "Categorize this merchant: \"\(merchant)\""
         let options = GenerationOptions(sampling: .greedy)
 
-        do {
-            let response = try await session.respond(
-                to: prompt,
-                generating: GeneratedSpendingCategory.self,
-                options: options
-            )
-            return response.content.spendingCategory
-        } catch {
-            return nil
+        // Race the generation against an explicit deadline so an on-device call
+        // can never block unbounded. A structured task group propagates outer-task
+        // cancellation into the generation child, so a superseded categorization
+        // also stops promptly; whichever child finishes first wins and the other
+        // is cancelled when the group tears down.
+        let timeoutNanoseconds = UInt64(
+            max(0, FMGenerationLimits.generationTimeout) * 1_000_000_000
+        )
+
+        return await withTaskGroup(of: String?.self) { group in
+            group.addTask {
+                do {
+                    let response = try await session.respond(
+                        to: prompt,
+                        generating: GeneratedSpendingCategory.self,
+                        options: options
+                    )
+                    return response.content.spendingCategory.rawValue
+                } catch {
+                    return nil
+                }
+            }
+            group.addTask {
+                do {
+                    try await Task.sleep(nanoseconds: timeoutNanoseconds)
+                    return nil // deadline reached → degrade to NL
+                } catch {
+                    return nil // group cancelled → stop waiting
+                }
+            }
+
+            let result = await group.next() ?? nil
+            group.cancelAll()
+            return result
         }
     }
 }

@@ -82,9 +82,17 @@ extension FoundationModelsInsightModel {
 
             // Single-pass consumption: each snapshot carries the cumulative
             // partially-generated content, so the LAST snapshot holds the final
-            // headline. Tracking it as we stream keeps cancellation responsive (a
-            // superseded refresh stops generation promptly) without depending on a
+            // headline. Tracking it as we stream lets generation stop at the next
+            // snapshot boundary once this task is cancelled, without depending on a
             // post-iteration `collect()`.
+            //
+            // NOTE: cancellation here is only responsive when *this* task is
+            // cancelled. Today `LocalInsightModelRuntime.withTimeout` runs the
+            // model in an unstructured `Task {}` that does not inherit the outer
+            // (superseded-refresh) cancellation, so a superseded refresh still runs
+            // to the runtime's 8s deadline. The structural fix lives in that shared
+            // runtime helper (run the operation as a `withThrowingTaskGroup` child
+            // so parent cancellation propagates); see PR follow-up.
             var latestHeadline: String?
             for try await snapshot in stream {
                 try Task.checkCancellation()
