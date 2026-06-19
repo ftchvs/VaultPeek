@@ -465,21 +465,23 @@ PlaidBar/                            # repo checkout (repo rename pending)
 │   │   ├── Models/                  # Local cache models
 │   │   ├── Services/                # HTTP client, refresh, launch
 │   │   └── Settings/                # Preferences window
+│   ├── PlaidBarWidgetExtension/     # Widget + Control Center control + App Intents (App Group glance surfaces)
 │   ├── PlaidBarServer/              # Local companion server
 │   │   ├── Routes/                  # REST endpoints
 │   │   ├── Plaid/                   # Plaid API client + models
 │   │   ├── Storage/                 # Fluent models + migrations
 │   │   └── Config/                  # Server configuration
+│   ├── PlaidBarCLI/                 # plaidbar-cli — command-line access to the local server
 │   └── PlaidBarCore/                # Shared library
 │       ├── Models/                  # DTOs, dashboard presenters, local AI receipts
 │       └── Utilities/               # Currency formatters, constants, reducers
-├── Tests/                           # Swift Testing suites for all 3 targets
+├── Tests/                           # Swift Testing suites for the app, server, and core library
 ├── Scripts/                         # build.sh, run.sh, screenshots.sh
 ├── Assets/                          # README screenshots
 ├── DESIGN.md                        # Design system spec
 ├── PRD.md                           # Product requirements
 ├── .github/workflows/ci.yml        # GitHub Actions CI
-├── Package.swift                    # SPM with 3 targets
+├── Package.swift                    # SPM with 5 source targets (app, widget extension, server, CLI, core)
 └── LICENSE                          # Proprietary
 ```
 
@@ -491,11 +493,11 @@ VaultPeek uses these Plaid endpoints:
 |----------|---------|------|-----------|
 | `/link/token/create` | Account setup | Free | On-demand |
 | `/item/public_token/exchange` | Account setup | Free | Once per bank |
-| `/accounts/get` | Cached balances | Free | Every 15 min |
+| `/accounts/get` | Cached balances | Free | ≤ Twice a day (default) or manual |
 | `/accounts/balance/get` | Real-time balances | Per-request | Manual refresh |
-| `/transactions/sync` | Transactions | Per-item | Every 30 min |
+| `/transactions/sync` | Transactions | Per-item | ≤ Twice a day (default) or manual |
 
-Rate limits are well within Plaid's allowances for personal use (~2-4 requests/hour/item).
+Rate limits are well within Plaid's allowances for personal use — automatic refresh is capped at roughly twice a day per item by default, plus on-demand manual refreshes.
 
 ## Security
 
