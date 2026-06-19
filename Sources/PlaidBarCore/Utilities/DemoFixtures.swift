@@ -134,6 +134,67 @@ public enum DemoFixtures {
         ]
     }
 
+    /// Current-month-anchored spend rows used **only** to score `demoBudgets`
+    /// against `CategoryBudgetPlanner` in `--demo`.
+    ///
+    /// The Category Dashboard scorer counts only transactions dated in the
+    /// current calendar month. The main demo set anchors dates relative to
+    /// `now` (`daysAgo`), so when `--demo` opens on the 1st/2nd the high-spend
+    /// rows that produce the intended under/near/over spread roll into the
+    /// previous month and the dashboard renders mostly under budget. These rows
+    /// are instead anchored to the **start of the current month** (day-of-month
+    /// 1...5), so the status mix survives every month boundary:
+    ///
+    /// - Shopping over budget (≈ 933 of 500)
+    /// - Food & Drink / Bills / Travel near their limits (≈ 89% / 88% / 90%)
+    /// - Transportation / Entertainment / Health comfortably under
+    ///
+    /// Kept separate from the main transaction list so the heatmap/recurring
+    /// continuity contract (which depends on the `daysAgo` cadence) is untouched.
+    /// All amounts invented.
+    public static func demoBudgetScoringTransactions(
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> [TransactionDTO] {
+        let monthStart = calendar.date(
+            from: calendar.dateComponents([.year, .month], from: now)
+        ) ?? now
+        func dayOfMonth(_ offset: Int) -> String {
+            let date = calendar.date(byAdding: .day, value: offset, to: monthStart) ?? monthStart
+            return Formatters.transactionDateString(date)
+        }
+        // (category, amount, day-of-month offset). Offsets stay within 0...4 so
+        // every row lands in the current month regardless of launch day.
+        let rows: [(SpendingCategory, Double, Int)] = [
+            // Shopping → over budget (500): West Elm + Costco + Nordstrom + Target.
+            (.shopping, 650.00, 0), (.shopping, 142.80, 1),
+            (.shopping, 85.00, 2), (.shopping, 55.00, 3),
+            // Food & Drink → near (400): ≈ 355.
+            (.foodAndDrink, 142.80, 0), (.foodAndDrink, 134.62, 2), (.foodAndDrink, 78.00, 4),
+            // Bills & Utilities → near (2400): rent + utilities ≈ 2100.
+            (.billsAndUtilities, 1_850.00, 1), (.billsAndUtilities, 250.00, 3),
+            // Travel → near (600): ≈ 540.
+            (.travel, 320.00, 1), (.travel, 220.00, 3),
+            // Transportation → under (150): ≈ 68.
+            (.transportation, 23.50, 0), (.transportation, 45.00, 2),
+            // Entertainment → under (120): ≈ 50.
+            (.entertainment, 15.99, 1), (.entertainment, 34.50, 3),
+            // Health & Fitness → under (200): ≈ 75.
+            (.healthAndFitness, 75.00, 2),
+        ]
+        return rows.enumerated().map { index, row in
+            let (category, amount, offset) = row
+            return TransactionDTO(
+                id: "demo_budget_\(index)",
+                accountId: "demo_checking",
+                amount: amount,
+                date: dayOfMonth(offset),
+                name: "DEMO BUDGET \(category.rawValue.uppercased())",
+                category: category
+            )
+        }
+    }
+
     /// Seeded transaction-review metadata so the Review Inbox is populated in
     /// `--demo` and a user override visibly flows into budget/category math.
     /// Every id references an explicit demo transaction (see `explicitTransactions`):

@@ -1204,9 +1204,19 @@ final class AppState {
 
     var categoryBudgetPresentation: CategoryBudgetPresentation {
         if let cached = _cachedCategoryBudgetPresentation { return cached }
+        // The budget scorer counts only current-calendar-month transactions. The
+        // demo set anchors dates relative to `now`, so on the 1st/2nd of a month
+        // the high-spend rows roll into the previous month and the dashboard
+        // collapses to all-under. Score demo budgets against the dedicated
+        // current-month-anchored rows so the under/near/over spread is stable
+        // regardless of launch day (AND-543 review). Suggestions are suppressed in
+        // demo mode (empty `transactions`) so only the seeded budgets show.
+        let scoringTransactions = isDemoMode
+            ? DemoFixtures.demoBudgetScoringTransactions()
+            : transactions
         let presentation = CategoryBudgetPlanner.mergedPresentation(
             explicitBudgets: categoryBudgets,
-            transactions: transactions,
+            transactions: scoringTransactions,
             asOf: Date()
         )
         _cachedCategoryBudgetPresentation = presentation
@@ -1216,14 +1226,14 @@ final class AppState {
     private var weeklyReviewTransactionState: WeeklyReviewTransactionState? {
         // Production weekly reviews require loaded transaction-review metadata.
         // Raw Plaid transactions alone are not treated as reviewed; demo mode
-        // keeps using pending flags so the checklist surface remains locally
-        // exercisable.
+        // keeps trusting non-pending rows so the checklist surface remains
+        // locally exercisable without seeding metadata for every fixture, while
+        // still honoring explicitly seeded `.needsReview` rows so the Review
+        // Inbox and the Weekly Review agree. See `demoDerived` for the contract.
         guard !isDemoMode else {
-            let unreviewed = Set(transactions.filter(\.pending).map(\.id))
-            let trusted = Set(transactions.map(\.id)).subtracting(unreviewed)
-            return WeeklyReviewTransactionState(
-                trustedTransactionIds: trusted,
-                unreviewedTransactionIds: unreviewed
+            return WeeklyReviewTransactionState.demoDerived(
+                from: transactions,
+                metadata: transactionReviewMetadata
             )
         }
 
@@ -3513,6 +3523,13 @@ final class AppState {
     }
 
     private func persistReviewStorage() {
+        // Demo mode seeds synthetic review metadata and rules into the real
+        // AppState (see `loadDemoData`). Acting on a demo inbox item must never
+        // write those fixtures to disk: `activeStorageDirectoryURL` is the
+        // sandbox-scoped real cache, and a later real connection on the same
+        // storage path would reload the synthetic `tx*`/Starbucks/Venmo records.
+        // The decision is a pure, tested predicate in PlaidBarCore.
+        guard ReviewStoragePersistencePolicy.shouldPersist(isDemoMode: isDemoMode) else { return }
         let metadata = transactionReviewMetadata
         let rules = transactionRules
         let cacheDirectory = activeStorageDirectoryURL

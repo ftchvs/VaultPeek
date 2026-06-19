@@ -66,6 +66,71 @@ struct DemoReviewBudgetFixturesTests {
         #expect(Set(budgets.map(\.monthlyLimit)).count >= 2)
     }
 
+    /// The Category Dashboard scorer only counts current-calendar-month
+    /// transactions. The dedicated `demoBudgetScoringTransactions` rows are
+    /// anchored to the start of the current month so the intended
+    /// under/near/over spread survives `--demo` opening on any day — including
+    /// the 1st/2nd, where the relative-dated main set would roll the high-spend
+    /// rows into the previous month and collapse every band to "under".
+    @Test("Demo budget status mix is stable across every day of the month")
+    func budgetStatusMixSurvivesMonthBoundaries() {
+        let budgets = Dictionary(
+            DemoFixtures.demoBudgets().map { ($0.category, $0.monthlyLimit) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let calendar = Calendar.current
+
+        // Walk a representative month day-by-day (a 31-day month covers every
+        // start-of-month edge). The status set must include all three bands and
+        // never change, regardless of the launch day-of-month.
+        var components = DateComponents()
+        components.year = 2025
+        components.month = 1
+        components.hour = 12
+
+        var observedStatusSets: Set<Set<CategoryBudgetStatus>> = []
+        for day in 1...31 {
+            components.day = day
+            let asOf = calendar.date(from: components)!
+            let presentation = CategoryBudgetPlanner.presentation(
+                budgets: budgets,
+                transactions: DemoFixtures.demoBudgetScoringTransactions(
+                    now: asOf,
+                    calendar: calendar
+                ),
+                asOf: asOf,
+                calendar: calendar
+            )
+            let statuses = Set(presentation.items.map(\.status))
+            observedStatusSets.insert(statuses)
+
+            #expect(
+                statuses == [.over, .nearing, .under],
+                "day \(day) produced \(statuses.map(\.rawValue).sorted()) instead of the full band mix"
+            )
+        }
+
+        // Every day produced exactly the same band mix — no month-boundary drift.
+        #expect(
+            observedStatusSets.count == 1,
+            "budget status mix drifted across the month: \(observedStatusSets)"
+        )
+    }
+
+    @Test("Demo budget scoring rows only reference budgeted spending categories")
+    func budgetScoringRowsAreWellFormed() {
+        let budgetedCategories = Set(DemoFixtures.demoBudgets().map(\.category))
+        let rows = DemoFixtures.demoBudgetScoringTransactions()
+        #expect(!rows.isEmpty)
+        for row in rows {
+            #expect(row.amount > 0, "scoring row \(row.id) is not an outflow")
+            #expect(
+                row.category.map(budgetedCategories.contains) == true,
+                "scoring row \(row.id) targets an unbudgeted category"
+            )
+        }
+    }
+
     // MARK: - Review metadata
 
     @Test("demoReviewMetadata is non-empty and references real demo transactions")
@@ -140,6 +205,54 @@ struct DemoReviewBudgetFixturesTests {
                 "rule \(rule.id) matches no demo transaction"
             )
         }
+    }
+
+    // MARK: - Persistence guard
+
+    /// The demo fixtures are seeded into the live AppState, so a review action in
+    /// `--demo` must never be persisted — `activeStorageDirectoryURL` is the real
+    /// sandbox-scoped cache and would survive into a later real connection.
+    @Test("Review storage persistence is suppressed in demo mode")
+    func persistenceSuppressedInDemoMode() {
+        #expect(ReviewStoragePersistencePolicy.shouldPersist(isDemoMode: true) == false)
+        #expect(ReviewStoragePersistencePolicy.shouldPersist(isDemoMode: false) == true)
+    }
+
+    /// Integration guard: mirrors `AppState.persistReviewStorage` against a
+    /// throwaway directory. With the demo-mode policy honored, acting on a demo
+    /// inbox item writes nothing to the storage dir; a real (non-demo) action
+    /// does write. Proves the synthetic `tx*`/Starbucks/Venmo fixtures never
+    /// reach disk in `--demo`.
+    @Test("Demo-mode review action writes nothing to the storage directory")
+    func demoModeReviewActionDoesNotTouchStorage() throws {
+        let fileManager = FileManager.default
+        let storageDir = fileManager.temporaryDirectory
+            .appendingPathComponent("pb-demo-persist-\(UUID().uuidString)", isDirectory: true)
+        defer { try? fileManager.removeItem(at: storageDir) }
+
+        let metadata = DemoFixtures.demoReviewMetadata()
+        let rules = DemoFixtures.demoTransactionRules()
+
+        // The exact files AppState's review writer would create.
+        let metadataURL = LocalDataStore.transactionReviewMetadataURL(in: storageDir)
+        let rulesURL = LocalDataStore.transactionRulesURL(in: storageDir)
+
+        // Demo mode: the guard short-circuits, so nothing is written.
+        func simulatePersist(isDemoMode: Bool) throws {
+            guard ReviewStoragePersistencePolicy.shouldPersist(isDemoMode: isDemoMode) else { return }
+            try LocalDataStore.saveTransactionReviewMetadata(metadata, to: storageDir)
+            try LocalDataStore.saveTransactionRules(rules, to: storageDir)
+        }
+
+        try simulatePersist(isDemoMode: true)
+        #expect(fileManager.fileExists(atPath: metadataURL.path) == false, "demo metadata leaked to disk")
+        #expect(fileManager.fileExists(atPath: rulesURL.path) == false, "demo rules leaked to disk")
+
+        // Sanity: a real (non-demo) action *does* persist, so the test exercises a
+        // genuine write path rather than a never-writing stub.
+        try simulatePersist(isDemoMode: false)
+        #expect(fileManager.fileExists(atPath: metadataURL.path), "real metadata was not persisted")
+        #expect(fileManager.fileExists(atPath: rulesURL.path), "real rules were not persisted")
     }
 
     // MARK: - Cross-fixture wiring
