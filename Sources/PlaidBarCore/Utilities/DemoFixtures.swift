@@ -207,6 +207,13 @@ public enum DemoFixtures {
     ///   now counts under Food & Drink downstream.
     /// - `tx14` (Venmo payment, an inflow) — `.reviewed`, marked a transfer and
     ///   excluded from budgets, so the transfer-override path is demoable.
+    /// - `tx5` (Netflix) — `.ignored`: a known recurring charge the user dismissed
+    ///   from the inbox, so the ignore path is demoable. Its spend still counts
+    ///   (ignoring is a triage action, not a budget exclusion).
+    ///
+    /// Together these cover every documented review state — `needsReview`,
+    /// `reviewed`, `ignored`, a `userCategory` override, and an
+    /// `excludedFromBudgets` transfer — so `--demo` exercises the full surface.
     ///
     /// Fixed (no `reviewedAt: Date()`) timestamps are derived from `now` so the
     /// records stay deterministic across launches and screenshots.
@@ -237,6 +244,15 @@ public enum DemoFixtures {
                 reviewedAt: reviewedAt,
                 lastSeenAmount: -1_500.00,
                 lastSeenName: "VENMO PAYMENT"
+            ),
+            // Known recurring charge the user dismissed from the inbox. Ignoring is
+            // a triage action only — the spend still counts toward Entertainment.
+            TransactionReviewMetadata(
+                id: "tx5",
+                status: .ignored,
+                reviewedAt: reviewedAt,
+                lastSeenAmount: 15.99,
+                lastSeenName: "NETFLIX.COM"
             ),
         ]
     }
