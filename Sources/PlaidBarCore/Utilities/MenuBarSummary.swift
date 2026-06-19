@@ -11,6 +11,14 @@ public enum MenuBarSummaryMode: String, CaseIterable, Codable, Sendable {
     case safeToSpend
     case iconOnly
 
+    /// Human-readable name for this mode.
+    ///
+    /// - Important: this is a single source of truth used in **two** places — the
+    ///   Settings picker label AND, via `MenuBarAnnouncement`, the menu-bar tooltip
+    ///   and VoiceOver label (the spoken form is `displayName.lowercased()`). A
+    ///   re-word here changes accessibility copy; `MenuBarAnnouncementTests` golden
+    ///   literals will fail if the wording drifts. Split this out if the two uses
+    ///   must diverge.
     public var displayName: String {
         switch self {
         case .netWorth: return "Net worth"

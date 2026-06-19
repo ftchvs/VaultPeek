@@ -124,6 +124,19 @@ public struct CategoryBudgetPresentation: Sendable, Hashable {
         self.nearingCount = nearingCount
     }
 
+    /// Build a presentation from already-ordered `items`, deriving the aggregate
+    /// totals (limit, spent, over/nearing counts) from them so the aggregates can
+    /// never drift from the items they summarize.
+    public init(items: [Item]) {
+        self.init(
+            items: items,
+            totalLimit: items.reduce(0) { $0 + $1.monthlyLimit },
+            totalSpent: items.reduce(0) { $0 + $1.spent },
+            overBudgetCount: items.reduce(0) { $0 + ($1.status == .over ? 1 : 0) },
+            nearingCount: items.reduce(0) { $0 + ($1.status == .nearing ? 1 : 0) }
+        )
+    }
+
     public var isEmpty: Bool { items.isEmpty }
     public var count: Int { items.count }
 

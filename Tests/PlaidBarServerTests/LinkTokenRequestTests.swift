@@ -148,6 +148,45 @@ struct LinkTokenRequestTests {
         #expect(configured.link.webhookURL == "https://vaultpeek.example/webhooks/plaid/hosted-link")
     }
 
+    @Test("A malformed server.conf line aborts the load with its 1-based line number")
+    func malformedConfigLineThrowsWithLineNumber() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-malformed-config-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        // A line with no '=' is rejected, reporting its 1-based position (line 3).
+        let noEquals = directory.appendingPathComponent("no-equals.conf")
+        try """
+        PLAID_CLIENT_ID=client-id
+        PLAID_SECRET=secret
+        GARBAGE_LINE_WITHOUT_EQUALS
+        """.write(to: noEquals, atomically: true, encoding: .utf8)
+        do {
+            _ = try ServerConfig.load(from: noEquals.path)
+            Issue.record("expected invalidConfigLine to be thrown")
+        } catch let ServerConfigError.invalidConfigLine(_, line) {
+            #expect(line == 3)
+        } catch {
+            Issue.record("unexpected error: \(error)")
+        }
+
+        // An empty key is likewise rejected, at its own line (line 2).
+        let emptyKey = directory.appendingPathComponent("empty-key.conf")
+        try """
+        PLAID_CLIENT_ID=client-id
+        =orphaned-value
+        """.write(to: emptyKey, atomically: true, encoding: .utf8)
+        do {
+            _ = try ServerConfig.load(from: emptyKey.path)
+            Issue.record("expected invalidConfigLine to be thrown")
+        } catch let ServerConfigError.invalidConfigLine(_, line) {
+            #expect(line == 2)
+        } catch {
+            Issue.record("unexpected error: \(error)")
+        }
+    }
+
     @Test("Link configuration rejects unsupported values before calling Plaid")
     func linkConfigurationValidation() {
         #expect(throws: PlaidLinkConfigurationError.self) {

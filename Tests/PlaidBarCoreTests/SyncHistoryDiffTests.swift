@@ -45,6 +45,25 @@ struct SyncHistoryDiffTests {
         #expect(rows.first?.accessibilityText.isEmpty == false)
     }
 
+    @Test("Row id uses the zero-padded stable-hash format (call-site regression guard)")
+    func rowIdUsesPaddedStableHash() {
+        // "k0" hashes to a value with a leading-zero nibble, so the padded form
+        // (08be…) differs from the unpadded form (8be…). This pins the row id to
+        // StableHash.hexPadded so a future swap to .hex — which would orphan
+        // existing identifiers — is caught here, at the call site.
+        let previous = AccountBalanceLedger(entries: [
+            entry("k0", daysAgo: 2, current: 100),
+            entry("k0", daysAgo: 1, current: 105),
+        ])
+        let next = AccountBalanceLedger(entries: [
+            entry("k0", daysAgo: 2, current: 130),
+            entry("k0", daysAgo: 1, current: 105),
+        ])
+        let rows = SyncHistoryDiff.evaluate(previousLedger: previous, nextLedger: next, displayName: displayName)
+        #expect(rows.first?.id == "08be0e07b562230e")
+        #expect(rows.first?.id == StableHash.hexPadded("k0"))
+    }
+
     @Test("A purely-additive newer day (no prior-day rewrite) yields no history-changed rows")
     func additiveDayYieldsNoRows() {
         let previous = AccountBalanceLedger(entries: [
