@@ -82,6 +82,44 @@ public enum BudgetsStatusSummary {
             guard budgetedCount > 0, totalLimit > 0 else { return nil }
             return min(1, max(0, totalSpent / totalLimit))
         }
+
+        /// Detail line under the "Budgeted this month" hero tile: how many
+        /// categories carry a budget out of those tracked, or a first-run prompt.
+        public var budgetedDetail: String {
+            guard budgetedCount > 0 else { return "No category budgets yet" }
+            return "Across \(budgetedCount) of \(trackedCount) categories"
+        }
+
+        /// Detail line under the "Spent" hero tile: surfaces the worst per-category
+        /// band (over → nearing → none), with grammatically correct singular/plural.
+        public var spentDetail: String {
+            if overBudgetCount > 0 {
+                return overBudgetCount == 1
+                    ? "1 category over its limit"
+                    : "\(overBudgetCount) categories over their limit"
+            }
+            if nearingCount > 0 {
+                return nearingCount == 1
+                    ? "1 category nearing its limit"
+                    : "\(nearingCount) categories nearing a limit"
+            }
+            return "This month, all categories"
+        }
+
+        /// Detail line under the aggregate "Left / Over" hero tile. Describes the
+        /// *aggregate* position (the figure's own sense), not the per-category band,
+        /// so the tile never reads "Left this month … Over budget".
+        public var remainingDetail: String {
+            if isAggregateOver {
+                return "Spending exceeds your budgeted total"
+            }
+            if overBudgetCount > 0 {
+                return overBudgetCount == 1
+                    ? "Still room overall, but 1 category is over"
+                    : "Still room overall, but \(overBudgetCount) categories are over"
+            }
+            return "Remaining across your budgeted total"
+        }
     }
 
     /// Reduce a finished dashboard rollup into the status summary.

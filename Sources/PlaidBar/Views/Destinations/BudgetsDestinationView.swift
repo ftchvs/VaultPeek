@@ -132,7 +132,7 @@ struct BudgetsDestinationView: View {
             label: "Budgeted this month",
             value: heroCurrency(summary.totalLimit, masked: masked),
             systemImage: "slider.horizontal.3",
-            detail: budgetedDetail(summary),
+            detail: summary.budgetedDetail,
             accent: SemanticColors.brand
         )
 
@@ -141,7 +141,7 @@ struct BudgetsDestinationView: View {
             label: "Spent",
             value: heroCurrency(summary.totalSpent, masked: masked),
             systemImage: "creditcard",
-            detail: spentDetail(summary),
+            detail: summary.spentDetail,
             accent: .secondary
         )
 
@@ -154,7 +154,7 @@ struct BudgetsDestinationView: View {
                 label: summary.isAggregateOver ? "Over budget" : "Left this month",
                 value: heroCurrency(abs(remaining), masked: masked),
                 systemImage: summary.isAggregateOver ? "exclamationmark.triangle.fill" : "checkmark.circle",
-                detail: remainingDetail(summary),
+                detail: summary.remainingDetail,
                 accent: summary.isAggregateOver ? SemanticColors.negative : SemanticColors.positive
             )
         } else {
@@ -169,40 +169,6 @@ struct BudgetsDestinationView: View {
         }
 
         return [budgeted, spent, remainingTile]
-    }
-
-    private func budgetedDetail(_ summary: BudgetsStatusSummary.Summary) -> String {
-        guard summary.budgetedCount > 0 else { return "No category budgets yet" }
-        return "Across \(summary.budgetedCount) of \(summary.trackedCount) categories"
-    }
-
-    /// Detail for the aggregate "Left / Over" tile. Describes the *aggregate*
-    /// position (the figure's own sense), not the per-category band, so the tile
-    /// never reads "Left this month … Over budget".
-    private func remainingDetail(_ summary: BudgetsStatusSummary.Summary) -> String {
-        if summary.isAggregateOver {
-            return "Spending exceeds your budgeted total"
-        }
-        if summary.overBudgetCount > 0 {
-            return summary.overBudgetCount == 1
-                ? "Still room overall, but 1 category is over"
-                : "Still room overall, but \(summary.overBudgetCount) categories are over"
-        }
-        return "Remaining across your budgeted total"
-    }
-
-    private func spentDetail(_ summary: BudgetsStatusSummary.Summary) -> String {
-        if summary.overBudgetCount > 0 {
-            return summary.overBudgetCount == 1
-                ? "1 category over its limit"
-                : "\(summary.overBudgetCount) categories over their limit"
-        }
-        if summary.nearingCount > 0 {
-            return summary.nearingCount == 1
-                ? "1 category nearing its limit"
-                : "\(summary.nearingCount) categories nearing a limit"
-        }
-        return "This month, all categories"
     }
 
     /// Hero figures use the compact masked-aware currency the Dashboard hero row
