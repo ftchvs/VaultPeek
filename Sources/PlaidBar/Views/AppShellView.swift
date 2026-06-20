@@ -154,6 +154,20 @@ struct AppShellView: View {
         // The Dashboard reads the live query from the environment to filter its
         // account rows (the shell owns the field, the canvas owns the filtering).
         .environment(\.dashboardSearchQuery, destinationSupportsSearch(destination) ? searchText : "")
+        // Reroute the legacy "open detached window" affordances into in-window
+        // navigation (ADR-001 / AND-616). The Dashboard canvas embeds
+        // `CategoryDashboardCard` (its "Open dashboard" button) and the Review
+        // canvas embeds `ReviewInboxView` (its "Open review table" button); both
+        // read these environment hooks. In window-first there is no detached
+        // AppKit window to open — instead navigate *this* window's model to the
+        // Budgets / Review destination, so the affordance stays live and no legacy
+        // coordinator is constructed.
+        .environment(\.openCategoryDashboard) {
+            appState.navigationModel.go(to: .budgets)
+        }
+        .environment(\.openReviewTable) {
+            appState.navigationModel.go(to: .review)
+        }
         // Deep-link hand-off (ADR-001 / AND-597). The primary scene is a
         // declarative `Window`, so a route can't be threaded through `openWindow`;
         // instead the opener stages it on `AppState.pendingRoute` and this view

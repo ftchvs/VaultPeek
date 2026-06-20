@@ -9,15 +9,19 @@ import SwiftUI
 @main
 struct PlaidBarApp: App {
     @State private var appState: AppState
-    /// Owns the floating desktop-window dashboard (AND-384). `@State` so it
-    /// persists across `body` recomputes for the process lifetime.
-    @State private var detachedDashboard = DetachedDashboardCoordinator()
-    /// Owns the detached full Category Dashboard window (AND-539). `@State` so the
-    /// lazily-built window survives `body` recomputes for the process lifetime.
-    @State private var categoryDashboardWindow = CategoryDashboardWindowCoordinator()
-    /// Owns the detached multi-select review Table window (AND-532). `@State` so the
-    /// lazily-built window survives `body` recomputes for the process lifetime.
-    @State private var reviewTableWindow = ReviewTableWindowCoordinator()
+    /// The legacy popover-host window coordinators (AND-384/539/532). They are
+    /// **only constructed when window-first is OFF** — the hidden escape hatch
+    /// this stage (AND-616). Once window-first is the default the menu bar is a
+    /// glance that routes into the primary `Window`, and the detached-dashboard /
+    /// Category-Dashboard / Review-Table affordances reroute to window
+    /// destinations via `AppState.route(to:openWindow:)` instead of building
+    /// these AppKit windows — so on the default path nothing constructs them.
+    /// (Stage 2 deletes these files; this stage just stops constructing them.)
+    /// `@State` so the legacy-path instances survive `body` recomputes for the
+    /// process lifetime.
+    @State private var detachedDashboard: DetachedDashboardCoordinator?
+    @State private var categoryDashboardWindow: CategoryDashboardWindowCoordinator?
+    @State private var reviewTableWindow: ReviewTableWindowCoordinator?
     /// Owns the global summon hotkey (⇧⌘V, AND-487). `@State` so the Carbon
     /// registration survives `body` recomputes for the process lifetime.
     @State private var summonHotkeyMonitor = SummonHotkeyMonitor()
@@ -63,6 +67,16 @@ struct PlaidBarApp: App {
 
         let state = AppState()
         _appState = State(initialValue: state)
+        // Construct the legacy popover-host window coordinators only on the
+        // escape-hatch (window-first OFF) path. On the default window-first path
+        // they are never built — the glance + window routing replace them
+        // (AND-616). `isWindowFirstEnabled` (a `let` resolved from the same flag)
+        // is not yet initialized here, so resolve the flag directly.
+        if !WindowFirstFeatureFlag.resolved() {
+            _detachedDashboard = State(initialValue: DetachedDashboardCoordinator())
+            _categoryDashboardWindow = State(initialValue: CategoryDashboardWindowCoordinator())
+            _reviewTableWindow = State(initialValue: ReviewTableWindowCoordinator())
+        }
         updaterController = SPUStandardUpdaterController(
             startingUpdater: false,
             updaterDelegate: nil,
@@ -102,12 +116,32 @@ struct PlaidBarApp: App {
         }
     }
 
-    var body: some Scene {
-        MenuBarExtra {
+    /// The menu-bar surface. **Default (window-first ON):** the reduced
+    /// ``MenuBarGlanceView`` — sync line + glance metrics + ≤3 routing chips +
+    /// "Open VaultPeek" (ADR-001 §6, AND-616). The full dashboard now lives only
+    /// in the primary `Window`'s Dashboard destination. **Escape hatch
+    /// (window-first OFF):** the legacy ``MainPopover`` with its detach /
+    /// Category-Dashboard / Review-Table window affordances, byte-identical to the
+    /// pre-flip build.
+    @ViewBuilder
+    private var menuBarContent: some View {
+        if isWindowFirstEnabled {
+            MenuBarGlanceView()
+                .environment(appState)
+                // A glance chip deep-links a typed `Route` into the primary window
+                // via the single reusable entry point (`AppState.route(to:openWindow:)`,
+                // also the App Intents path); "Open VaultPeek" opens the window
+                // with no destination change.
+                .environment(\.openRoute, glanceRouteHandler)
+                .environment(\.openPrimaryWindow, { openWindow(id: Self.mainWindowID) })
+                .forcedAppColorScheme(Self.forcedColorScheme)
+                .appliesAppAppearance()
+                .appliesAppTextSize()
+        } else {
             MainPopover()
                 .environment(appState)
                 .environment(\.dashboardPresentation, .popover(detach: {
-                    detachedDashboard.detach(
+                    detachedDashboard?.detach(
                         appState: appState,
                         forcedColorScheme: Self.forcedColorScheme,
                         reduceMotion: reduceMotion
@@ -117,7 +151,7 @@ struct PlaidBarApp: App {
                 // the detached full dashboard window (AND-539). Wired here so the
                 // view never touches AppKit window lifecycle.
                 .environment(\.openCategoryDashboard, {
-                    categoryDashboardWindow.open(
+                    categoryDashboardWindow?.open(
                         appState: appState,
                         forcedColorScheme: Self.forcedColorScheme
                     )
@@ -126,21 +160,14 @@ struct PlaidBarApp: App {
                 // detached multi-select review Table window (AND-532). Wired here so
                 // the view never touches AppKit window lifecycle.
                 .environment(\.openReviewTable, {
-                    reviewTableWindow.open(
+                    reviewTableWindow?.open(
                         appState: appState,
                         forcedColorScheme: Self.forcedColorScheme
                     )
                 })
-                // Glance attention-chip deep-linking (ADR-001 / AND-597). Only
-                // install a real handler when the window-first flag is ON; with the
-                // flag OFF the `openRoute` environment value stays its no-op
-                // default, so a chip falls back to its existing in-place action and
-                // the popover behaves byte-identically to today. When ON, a chip
-                // routes a typed `Route` into the primary window through the single
-                // reusable entry point (`AppState.route(to:openWindow:)`, also the
-                // App Intents Epic-8 path), staging the route then opening the
-                // window via `openWindow(id:)`.
-                .environment(\.openRoute, glanceRouteHandler)
+                // Flag-OFF: `openRoute` stays its no-op default, so an attention
+                // chip falls back to its in-place action — popover behaves
+                // byte-identically to the pre-flip build.
                 .forcedAppColorScheme(Self.forcedColorScheme)
                 .appliesAppAppearance()
                 // Apply the in-app text-size preference once at the popover root
@@ -149,6 +176,12 @@ struct PlaidBarApp: App {
                 // so this control is the only way users can enlarge VaultPeek's
                 // text (AND-570).
                 .appliesAppTextSize()
+        }
+    }
+
+    var body: some Scene {
+        MenuBarExtra {
+            menuBarContent
         } label: {
             MenuBarLabel()
                 .environment(appState)
@@ -175,7 +208,11 @@ struct PlaidBarApp: App {
                 // SwiftUI would open the popover instead of raising the floating
                 // window (AND-384).
                 .task {
-                    detachedDashboard.sync(
+                    // Legacy detached-dashboard sync (window-first OFF only). On
+                    // the default window-first path `detachedDashboard` is nil and
+                    // the floating window is replaced by the primary `Window`, so
+                    // this is a no-op.
+                    detachedDashboard?.sync(
                         appState: appState,
                         forcedColorScheme: Self.forcedColorScheme,
                         reduceMotion: reduceMotion
@@ -186,9 +223,9 @@ struct PlaidBarApp: App {
                     // QA/screenshot aid: "--detach" opens the floating window at
                     // launch (parallel to "--show-popover") WITHOUT persisting the
                     // detached intent, so a QA run never leaves a durable
-                    // `dashboard.detached` preference behind.
+                    // `dashboard.detached` preference behind. Legacy path only.
                     if CommandLine.arguments.contains("--detach") {
-                        detachedDashboard.presentForLaunchOverride(
+                        detachedDashboard?.presentForLaunchOverride(
                             appState: appState,
                             forcedColorScheme: Self.forcedColorScheme,
                             reduceMotion: reduceMotion
@@ -223,7 +260,12 @@ struct PlaidBarApp: App {
                 // but intentionally leaves the persisted detached preference off,
                 // so include window visibility in the intercept.
                 .onChange(of: appState.isPopoverPresented) { _, isPresented in
-                    guard isPresented, appState.isDashboardDetached || detachedDashboard.isWindowVisible else { return }
+                    // Legacy detached-window intercept (window-first OFF only).
+                    // With window-first ON `detachedDashboard` is nil, so the
+                    // guard short-circuits and the menu bar mounts the glance.
+                    guard let detachedDashboard,
+                          isPresented,
+                          appState.isDashboardDetached || detachedDashboard.isWindowVisible else { return }
                     appState.isPopoverPresented = false
                     detachedDashboard.handleMenuBarActivation(
                         appState: appState,
@@ -232,7 +274,7 @@ struct PlaidBarApp: App {
                     )
                 }
                 .onChange(of: appState.isDashboardDetached) { _, _ in
-                    detachedDashboard.sync(
+                    detachedDashboard?.sync(
                         appState: appState,
                         forcedColorScheme: Self.forcedColorScheme,
                         reduceMotion: reduceMotion
@@ -313,21 +355,36 @@ struct PlaidBarApp: App {
                 statusItem: statusItem,
                 actions: StatusItemContextMenuActions(
                     showDashboard: {
-                        // "Open VaultPeek" raises the floating window when
-                        // detached; otherwise it opens the popover (AND-384).
-                        if detachedDashboard.handleMenuBarActivation(
+                        // Window-first (default): "Open VaultPeek" opens the
+                        // primary `Window` (AND-616). Legacy escape hatch: raise
+                        // the floating window when detached, else open the popover
+                        // (AND-384).
+                        if isWindowFirstEnabled {
+                            openWindow(id: Self.mainWindowID)
+                            return
+                        }
+                        if detachedDashboard?.handleMenuBarActivation(
                             appState: appState,
                             forcedColorScheme: Self.forcedColorScheme,
                             reduceMotion: reduceMotion
-                        ) {
+                        ) == true {
                             return
                         }
                         appState.isPopoverPresented = true
                     },
                     openInWindow: {
-                        // Detach into the floating desktop window directly, so the
-                        // window is reachable without hunting for the footer glyph.
-                        detachedDashboard.detach(
+                        // Window-first (default): "Open in window" routes into the
+                        // primary `Window`'s Dashboard destination via the single
+                        // routing entry point — no legacy detached AppKit window is
+                        // constructed (AND-616). Legacy escape hatch: detach into
+                        // the floating desktop window directly.
+                        if isWindowFirstEnabled {
+                            appState.route(to: .dashboard) {
+                                openWindow(id: Self.mainWindowID)
+                            }
+                            return
+                        }
+                        detachedDashboard?.detach(
                             appState: appState,
                             forcedColorScheme: Self.forcedColorScheme,
                             reduceMotion: reduceMotion
@@ -596,33 +653,48 @@ struct PlaidBarApp: App {
         }
     }
 
-    /// Opens the dashboard for a `vaultpeek://` deep link — raising the floating
-    /// window when detached, otherwise opening the popover. Shared by the
-    /// `.onOpenURL` handler (widget / control deep links) and the Spotlight
+    /// Opens the dashboard for a `vaultpeek://` deep link / Spotlight tap. Shared
+    /// by the `.onOpenURL` handler (widget / control deep links) and the Spotlight
     /// `CSSearchableItemActionType` continuation (tapping an indexed account),
     /// since both resolve to the same dashboard target (AND-513).
+    ///
+    /// Window-first (default): route into the primary `Window`'s Dashboard
+    /// destination (AND-616). Legacy escape hatch: raise the floating window when
+    /// detached, otherwise open the popover.
     @MainActor
     private func openDashboardFromDeepLink() {
-        if detachedDashboard.handleMenuBarActivation(
+        if isWindowFirstEnabled {
+            appState.route(to: .dashboard) {
+                openWindow(id: Self.mainWindowID)
+            }
+            return
+        }
+        if detachedDashboard?.handleMenuBarActivation(
             appState: appState,
             forcedColorScheme: Self.forcedColorScheme,
             reduceMotion: reduceMotion
-        ) {
+        ) == true {
             return
         }
         appState.isPopoverPresented = true
     }
 
-    /// Brings VaultPeek to the front and shows the dashboard — raising the
-    /// floating window when detached, otherwise activating the app and opening
-    /// the popover. Mirrors the `vaultpeek://` deep-link summon path.
+    /// Brings VaultPeek to the front and shows the dashboard. Window-first
+    /// (default): open the primary `Window` (AND-616). Legacy escape hatch: raise
+    /// the floating window when detached, otherwise activate the app and open the
+    /// popover. Mirrors the `vaultpeek://` deep-link summon path.
     @MainActor
     private func summonDashboard() {
-        if detachedDashboard.handleMenuBarActivation(
+        if isWindowFirstEnabled {
+            NSApplication.shared.activate(ignoringOtherApps: true)
+            openWindow(id: Self.mainWindowID)
+            return
+        }
+        if detachedDashboard?.handleMenuBarActivation(
             appState: appState,
             forcedColorScheme: Self.forcedColorScheme,
             reduceMotion: reduceMotion
-        ) {
+        ) == true {
             return
         }
         NSApplication.shared.activate(ignoringOtherApps: true)
