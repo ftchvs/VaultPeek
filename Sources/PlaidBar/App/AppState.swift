@@ -4036,6 +4036,19 @@ final class AppState {
         }
     }
 
+    /// Attach (or clear) a free-text note on a transaction from the Transaction
+    /// Workspace inspector (AND-582). Routes through the SAME undoable
+    /// `updateReviewMetadata` path as every other override, so the note persists on
+    /// the existing review-metadata storage and is covered by ⌘Z. A note is a
+    /// display-only annotation — it does NOT mark the row reviewed and never feeds
+    /// budget/category/export totals. An empty/whitespace note clears it.
+    func updateReviewNote(_ id: String, note: String) {
+        let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        updateReviewMetadata(id: id) { metadata, _ in
+            metadata.userNote = trimmed.isEmpty ? nil : trimmed
+        }
+    }
+
     func createRule(
         from item: TransactionReviewItem,
         category: SpendingCategory? = nil,
