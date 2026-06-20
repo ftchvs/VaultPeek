@@ -29,6 +29,12 @@ struct PlaidBarApp: App {
     /// the `Window` actually opens, which only happens behind the window-first flag,
     /// so flag-OFF activation behavior is unchanged.
     @State private var windowActivationPolicy = WindowActivationPolicy()
+    /// The window-first ⌘K command-palette state (ADR-001, IA §3.3, AND-596).
+    /// Owned at the scene level so the ⌘K `CommandMenu` and the `AppShellView`
+    /// overlay share one source of truth. `@State` so it survives `body`
+    /// recomputes. Inert unless the window-first surface is shown, which only
+    /// happens behind the flag — so flag-OFF behavior is unchanged.
+    @State private var commandPalette = CommandPaletteModel()
     @Environment(\.openSettings) private var openSettings
     @Environment(\.openWindow) private var openWindow
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -354,6 +360,64 @@ struct PlaidBarApp: App {
                     }
                     .keyboardShortcut("0", modifiers: .command)
                 }
+
+                // The window-first global keyboard map (ADR-001, IA §3.4,
+                // AND-596). All gated by the same flag as "Open VaultPeek" — with
+                // the flag OFF none of these menus/shortcuts are added, so the
+                // menu bar and the whole app are byte-identical to today. Each
+                // command drives the shared per-window models / the existing
+                // action paths; none reimplements behavior. (`⌘,` Settings stays
+                // the native Settings scene shortcut; it is not redeclared here.)
+
+                // Go menu — ⌘K palette, ⌘1–8 destinations, ⌘F find.
+                CommandMenu("Go") {
+                    Button("Command Palette…") {
+                        ensureWindowOpen()
+                        commandPalette.present()
+                    }
+                    .keyboardShortcut("k", modifiers: .command)
+
+                    Divider()
+
+                    // ⌘1…⌘8 jump to a destination, matching
+                    // `RouteDestination.commandShortcutNumber` (Dashboard…Accounts).
+                    ForEach(destinationsWithShortcut, id: \.self) { destination in
+                        Button(destination.title) {
+                            goToDestination(destination)
+                        }
+                        .keyboardShortcut(
+                            shortcutKey(for: destination.commandShortcutNumber),
+                            modifiers: .command
+                        )
+                    }
+
+                    Divider()
+
+                    Button("Find Transaction…") {
+                        ensureWindowOpen()
+                        commandPalette.dismiss()
+                        runFindCommand()
+                    }
+                    .keyboardShortcut("f", modifiers: .command)
+                }
+
+                // Account/Actions menu — ⌘R refresh, ⌘⇧P Privacy Mask, ⇧⌘V summon.
+                CommandMenu("Actions") {
+                    Button("Refresh") {
+                        Task { await appState.refreshDashboard() }
+                    }
+                    .keyboardShortcut("r", modifiers: .command)
+
+                    Button(privacyMaskMenuTitle) {
+                        appState.togglePrivacyMask()
+                    }
+                    .keyboardShortcut("p", modifiers: [.command, .shift])
+
+                    Button("Summon VaultPeek") {
+                        summonDashboard()
+                    }
+                    .keyboardShortcut("v", modifiers: [.command, .shift])
+                }
             }
         }
 
@@ -377,7 +441,14 @@ struct PlaidBarApp: App {
         // shell is an empty `NavigationSplitView` skeleton; routing/destinations
         // and the activation-policy/appearance wiring land in later Epic 1/2 PRs.
         Window("VaultPeek", id: Self.mainWindowID) {
-            AppShellView()
+            AppShellView(
+                paletteModel: commandPalette,
+                summon: { summonDashboard() },
+                // Per-destination search lands in later epics; ⌘F / the find
+                // command focus the window for now (the real search-field focus
+                // wires up when Transactions/Review land).
+                focusSearch: { NSApplication.shared.activate(ignoringOtherApps: true) }
+            )
                 .environment(appState)
                 .forcedAppColorScheme(Self.forcedColorScheme)
                 // Fold the primary `Window` into the single `NSApp.appearance`
@@ -411,6 +482,55 @@ struct PlaidBarApp: App {
         // never collapses below a usable width.
         .windowResizability(.contentMinSize)
         .defaultSize(width: 1080, height: 720)
+    }
+
+    // MARK: - Window-first command map (AND-596)
+
+    /// Destinations that own a `⌘N` shortcut (Dashboard…Accounts), in shortcut
+    /// order. Drives the "Go" menu's numbered items off the single source of
+    /// truth in `RouteDestination`, so the menu and the keymap never drift.
+    private var destinationsWithShortcut: [RouteDestination] {
+        RouteDestination.allCases
+            .filter { $0.commandShortcutNumber != nil }
+            .sorted { ($0.commandShortcutNumber ?? 0) < ($1.commandShortcutNumber ?? 0) }
+    }
+
+    /// The `KeyEquivalent` for a destination's shortcut number (1…8). Falls back
+    /// to "1" defensively; `destinationsWithShortcut` only yields numbered ones.
+    private func shortcutKey(for number: Int?) -> KeyEquivalent {
+        guard let number, let scalar = Character(String(number)).unicodeScalars.first else {
+            return "1"
+        }
+        return KeyEquivalent(Character(scalar))
+    }
+
+    /// The Privacy Mask menu title reflects the current state so the menu reads
+    /// "Hide Balances" / "Show Balances" rather than a static label.
+    private var privacyMaskMenuTitle: String {
+        appState.shouldMaskFinancialValues ? "Show Balances" : "Hide Balances"
+    }
+
+    /// Opens the primary window if it is not already up, so a ⌘K / ⌘1–8 pressed
+    /// while only the menu bar is showing brings the workspace forward first.
+    @MainActor
+    private func ensureWindowOpen() {
+        openWindow(id: Self.mainWindowID)
+    }
+
+    /// Navigates the primary window to a destination (the ⌘1–8 path). Opens the
+    /// window first, then drives the shared per-window `NavigationModel`.
+    @MainActor
+    private func goToDestination(_ destination: RouteDestination) {
+        ensureWindowOpen()
+        appState.navigationModel.go(to: destination)
+    }
+
+    /// Runs the palette's "find" command (the ⌘F path): focus the current
+    /// destination's search. Per-destination search surfaces land in later epics;
+    /// today this brings the window forward so the user lands on the workspace.
+    @MainActor
+    private func runFindCommand() {
+        NSApplication.shared.activate(ignoringOtherApps: true)
     }
 
     /// Registers or unregisters the global summon hotkey to match the persisted

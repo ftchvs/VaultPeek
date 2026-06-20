@@ -24,6 +24,33 @@ import SwiftUI
 struct AppShellView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.openSettings) private var openSettings
+    /// The ⌘K command-palette state for this window. Owned by the scene
+    /// (`PlaidBarApp`) so the ⌘K menu command and this overlay share one source
+    /// of truth, and injected here. Defaults to a fresh model so the `#Preview`
+    /// and any standalone use still work (AND-596).
+    @State private var paletteModel: CommandPaletteModel
+    /// Brings VaultPeek to the front (the summon-hotkey path); injected from the
+    /// scene since summon is a scene-level concern. No-op by default.
+    private let summon: () -> Void
+    /// Focuses the current destination's search field (the ⌘F / find path);
+    /// injected from the scene. No-op until per-destination search lands.
+    private let focusSearch: () -> Void
+
+    /// `paletteModel` is optional so the default is constructed inside this
+    /// `@MainActor` init body (a `@MainActor`-isolated default *argument* would be
+    /// evaluated in the caller's nonisolated context and fail strict concurrency).
+    /// The scene injects its shared model; the `#Preview` / standalone use gets a
+    /// fresh one.
+    @MainActor
+    init(
+        paletteModel: CommandPaletteModel? = nil,
+        summon: @escaping () -> Void = {},
+        focusSearch: @escaping () -> Void = {}
+    ) {
+        _paletteModel = State(initialValue: paletteModel ?? CommandPaletteModel())
+        self.summon = summon
+        self.focusSearch = focusSearch
+    }
 
     var body: some View {
         // The per-window navigation model owns the selected destination (R-10).
@@ -48,6 +75,26 @@ struct AppShellView: View {
         } detail: {
             ShellContentColumn(destination: appState.navigationModel.destination)
         }
+        // The ⌘K command palette is a window-level overlay (IA §3.3). It is only
+        // ever reachable in this window-first surface — `AppShellView` is built
+        // solely behind `WindowFirstFeatureFlag` — so the palette never exists in
+        // the flag-OFF popover build.
+        .overlay {
+            if paletteModel.isPresented {
+                CommandPalette(
+                    model: paletteModel,
+                    dispatcher: CommandDispatcher(
+                        appState: appState,
+                        navigationModel: appState.navigationModel,
+                        openSettings: { openSettings() },
+                        summon: summon,
+                        focusSearch: focusSearch
+                    )
+                )
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.15), value: paletteModel.isPresented)
     }
 }
 
