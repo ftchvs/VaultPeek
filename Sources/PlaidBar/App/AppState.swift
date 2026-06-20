@@ -1636,7 +1636,7 @@ final class AppState {
     func consumePendingRoute(into navigationModel: NavigationModel) {
         guard let route = pendingRoute else { return }
         pendingRoute = nil
-        navigationModel.apply(route)
+        navigationModel.apply(route.resolvingAccountSelection(in: accounts))
     }
 
     var notificationPermissionPresentation: NotificationPermissionPresentation {
