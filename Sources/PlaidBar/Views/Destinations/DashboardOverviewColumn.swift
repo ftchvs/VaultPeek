@@ -455,10 +455,15 @@ struct DashboardYearHeatmapGrid: View {
     /// Gap between cells. A touch wider than the glance grid's 2pt so the larger
     /// cells read as a clean lattice at desk distance.
     private let cellSpacing: CGFloat = 3
-    /// Desk-distance cell-size clamp: never smaller than the glance cap (so it is
-    /// always at least as legible as the popover), never so large the year grid
-    /// dominates the column. The actual size fills the available width between.
-    private let minCell: CGFloat = 9
+    /// Desk-distance cell-size clamp. `maxCell` keeps the grid from blowing the
+    /// column out when there is room; `deskMinCell` is the *preferred* desk floor,
+    /// but the grid is allowed to shrink below it (down to ``hardMinCell``) rather
+    /// than overflow when the 53-week year can't fit a narrow column — see
+    /// ``clampedCell(forWidth:)``. The popover/Insights grid floors hard at 9pt,
+    /// but it lives in a wider surface; the Dashboard hero shares a 2-column canvas
+    /// and must fit a ~368pt column, so a clean shrink beats a horizontal bleed.
+    private let deskMinCell: CGFloat = 9
+    private let hardMinCell: CGFloat = 4
     private let maxCell: CGFloat = 15
 
     private var weekCount: Int { max(layout.weekColumns.count, 1) }
@@ -466,13 +471,18 @@ struct DashboardYearHeatmapGrid: View {
     var body: some View {
         VStack(alignment: .leading, spacing: WindowMetrics.sm) {
             GeometryReader { proxy in
-                let cell = clampedCell(forWidth: proxy.size.width)
-                VStack(alignment: .leading, spacing: cellSpacing) {
-                    monthMarkers(cell: cell)
-                    grid(cell: cell)
+                let width = proxy.size.width
+                let metrics = resolvedMetrics(forWidth: width)
+                VStack(alignment: .leading, spacing: metrics.spacing) {
+                    monthMarkers(cell: metrics.cell, spacing: metrics.spacing)
+                    grid(cell: metrics.cell, spacing: metrics.spacing)
                 }
             }
             .frame(height: gridHeight)
+            // Belt-and-braces bound only: the resolved metrics already fit the full
+            // 53-week year (cell + gap) inside the column, so this never hides data
+            // — it just guarantees no sub-pixel paint escapes the card (AQ-1).
+            .clipped()
 
             legend
         }
@@ -484,13 +494,33 @@ struct DashboardYearHeatmapGrid: View {
         .audioGraph(ChartAudioGraph.heatmap(layout, isPrivacyMasked: false))
     }
 
-    /// Largest cell that lets all weeks fit the available width, clamped to the
-    /// desk-distance range so the hero never collapses to a glance strip or blows
-    /// the column out.
-    private func clampedCell(forWidth width: CGFloat) -> CGFloat {
-        let usable = width - CGFloat(weekCount - 1) * cellSpacing
-        let fit = floor(usable / CGFloat(weekCount))
-        return min(maxCell, max(minCell, fit))
+    /// Resolve the cell size **and** inter-cell gap so the full 53-week year fits the
+    /// available width — the whole year stays glanceable (never clipped or hidden)
+    /// at any column width.
+    ///
+    /// When there is room, the cell grows toward `maxCell` at the comfortable desk
+    /// gap (`cellSpacing`). When the year can't fit the desk scale (e.g. the
+    /// ~330–368pt two-column column, where 53 cells at the 9pt desk floor + 3pt gaps
+    /// would need ~636pt), BOTH the cell and the gap shrink together — the gap
+    /// tightening toward 1pt so the lattice stays legible rather than gappy — so all
+    /// 53 weeks fit inside the card (Apple Health "Year"-style fit-to-width, not a
+    /// horizontal bleed). The `.clipped()` in `body` is then only a safety bound,
+    /// never the thing that hides weeks (AQ-1, codex review).
+    private func resolvedMetrics(forWidth width: CGFloat) -> (cell: CGFloat, spacing: CGFloat) {
+        guard width > 0 else { return (deskMinCell, cellSpacing) }
+        let n = CGFloat(weekCount)
+        let deskFit = floor((width - (n - 1) * cellSpacing) / n)
+        if deskFit >= deskMinCell {
+            // Room for the comfortable desk scale (or larger); grow up to maxCell.
+            return (min(maxCell, deskFit), cellSpacing)
+        }
+        // Too narrow for the desk scale: shrink cell + gap together so the whole
+        // year still fits. Size the cell assuming a tight 1pt gap, derive a
+        // proportional gap (≈ cell/3, capped at the desk gap), then re-fit the cell.
+        let tightCell = max(hardMinCell, floor((width - (n - 1)) / n))
+        let spacing = max(1, min(cellSpacing, floor(tightCell / 3)))
+        let cell = max(hardMinCell, floor((width - (n - 1) * spacing) / n))
+        return (cell, spacing)
     }
 
     /// Reserve height for seven day-rows at the max cell size plus the month-marker
@@ -501,10 +531,10 @@ struct DashboardYearHeatmapGrid: View {
         return markerRow + 7 * maxCell + 6 * cellSpacing
     }
 
-    private func grid(cell: CGFloat) -> some View {
-        HStack(alignment: .top, spacing: cellSpacing) {
+    private func grid(cell: CGFloat, spacing: CGFloat) -> some View {
+        HStack(alignment: .top, spacing: spacing) {
             ForEach(Array(layout.weekColumns.enumerated()), id: \.offset) { _, week in
-                VStack(spacing: cellSpacing) {
+                VStack(spacing: spacing) {
                     ForEach(Array(week.enumerated()), id: \.offset) { _, day in
                         cellView(for: day, size: cell)
                     }
@@ -528,10 +558,13 @@ struct DashboardYearHeatmapGrid: View {
         }
     }
 
-    /// Month labels above the grid, positioned by their week index. Hidden from
+    /// Month labels above the grid, positioned by their week index. `step` is
+    /// derived from the *resolved* cell + gap so the labels track the grid columns
+    /// exactly; because the resolved metrics fit the whole year inside the column,
+    /// the last label lands within the grid (no width guard needed). Hidden from
     /// accessibility (the VoiceOver label already names the span).
-    private func monthMarkers(cell: CGFloat) -> some View {
-        let step = cell + cellSpacing
+    private func monthMarkers(cell: CGFloat, spacing: CGFloat) -> some View {
+        let step = cell + spacing
         return ZStack(alignment: .topLeading) {
             ForEach(layout.monthMarkers) { marker in
                 Text(marker.label)
