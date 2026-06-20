@@ -32,6 +32,13 @@ final class NavigationModel {
         /// destination the user left off (IA §2.1 selection persistence). Absent ⇒
         /// Dashboard, so an upgrading user (and the flag-OFF popover) is unchanged.
         static let destination = "navigation.destination"
+        /// The Transaction Workspace filter/search, JSON-encoded (AND-582). New in
+        /// Epic 4: the popover never had this surface, so the key is absent for an
+        /// upgrading user (and the flag-OFF popover) ⇒ the default empty filter.
+        static let transactionFilter = "navigation.transactionFilter"
+        /// The Transaction Workspace sort order's raw value (AND-582). Absent ⇒
+        /// the default newest-first sort.
+        static let transactionSort = "navigation.transactionSort"
     }
 
     /// The pure state. Mutations route through the typed accessors below (which
@@ -89,6 +96,45 @@ final class NavigationModel {
             state.heatmapMode = newValue
             persistHeatmapMode()
         }
+    }
+
+    // MARK: - Transaction Workspace façade (AND-582)
+
+    var transactionFilter: TransactionWorkspace.Filter {
+        get { state.transactionFilter }
+        set {
+            state.setTransactionFilter(newValue)
+            persistTransactionFilter()
+            // setTransactionFilter clears the row selection on a real change; this
+            // selection is window-only (not persisted), so nothing else to mirror.
+        }
+    }
+
+    var transactionSort: TransactionWorkspace.Sort {
+        get { state.transactionSort }
+        set {
+            state.setTransactionSort(newValue)
+            persistTransactionSort()
+        }
+    }
+
+    /// The selected transaction row id, or empty when none. Deliberately **not**
+    /// persisted: a row selection is ephemeral per-session window state (unlike the
+    /// dashboard account selection, which restored a drill-in), so a relaunch lands
+    /// on the unselected inspector prompt.
+    var selectedTransactionID: String {
+        get { state.selectedTransactionID }
+        set { state.selectTransaction(id: newValue) }
+    }
+
+    func deselectTransaction() {
+        state.deselectTransaction()
+    }
+
+    /// Self-heal: drop a selected transaction id no longer in the filtered rows.
+    @discardableResult
+    func reconcileTransactionSelection(visibleTransactionIDs: [String]) -> Bool {
+        state.reconcileTransactionSelection(visibleTransactionIDs: visibleTransactionIDs)
     }
 
     // MARK: - Navigation
@@ -156,6 +202,18 @@ final class NavigationModel {
            let mode = SpendingHeatmapMode(rawValue: rawMode) {
             restored.heatmapMode = mode
         }
+        // Transaction Workspace filter/sort (AND-582). Absent ⇒ defaults, so the
+        // flag-OFF popover (which never reads these) is unchanged. A filter that
+        // fails to decode (e.g. a removed category) falls back to the default
+        // rather than throwing.
+        if let data = defaults.data(forKey: Keys.transactionFilter),
+           let filter = try? JSONDecoder().decode(TransactionWorkspace.Filter.self, from: data) {
+            restored.transactionFilter = filter
+        }
+        if let rawSort = defaults.string(forKey: Keys.transactionSort),
+           let sort = TransactionWorkspace.Sort(rawValue: rawSort) {
+            restored.transactionSort = sort
+        }
         state = restored
     }
 
@@ -177,5 +235,17 @@ final class NavigationModel {
     private func persistHeatmapMode() {
         guard !isHydrating else { return }
         defaults.set(state.heatmapMode.rawValue, forKey: Keys.heatmapMode)
+    }
+
+    private func persistTransactionFilter() {
+        guard !isHydrating else { return }
+        if let data = try? JSONEncoder().encode(state.transactionFilter) {
+            defaults.set(data, forKey: Keys.transactionFilter)
+        }
+    }
+
+    private func persistTransactionSort() {
+        guard !isHydrating else { return }
+        defaults.set(state.transactionSort.rawValue, forKey: Keys.transactionSort)
     }
 }

@@ -35,16 +35,38 @@ public struct NavigationState: Sendable, Equatable, Codable {
     /// `@AppStorage("dashboard.heatmapMode")` on the heatmap subview.
     public var heatmapMode: SpendingHeatmapMode
 
+    // MARK: Transaction Workspace state (AND-582, Epic 4)
+
+    /// The Transaction Workspace ledger's composed filter + search. Held here (not
+    /// view-level) so the window restores its last query and the table + inspector
+    /// share one source of truth (the prompt's "filter/search state lives in
+    /// NavigationModel"). All facets compose; the default passes everything.
+    public var transactionFilter: TransactionWorkspace.Filter
+
+    /// The Transaction Workspace table sort order.
+    public var transactionSort: TransactionWorkspace.Sort
+
+    /// The selected transaction id in the workspace, or empty when none. Empty
+    /// string (not `nil`) mirrors the `selectedAccountID` "" sentinel so the
+    /// content-gated inspector shows its "Select a transaction" prompt.
+    public var selectedTransactionID: String
+
     public init(
         destination: RouteDestination = .dashboard,
         dashboardFilter: DashboardAccountFilterKind = .all,
         selectedAccountID: String = "",
-        heatmapMode: SpendingHeatmapMode = .spending
+        heatmapMode: SpendingHeatmapMode = .spending,
+        transactionFilter: TransactionWorkspace.Filter = TransactionWorkspace.Filter(),
+        transactionSort: TransactionWorkspace.Sort = .dateDescending,
+        selectedTransactionID: String = ""
     ) {
         self.destination = destination
         self.dashboardFilter = dashboardFilter
         self.selectedAccountID = selectedAccountID
         self.heatmapMode = heatmapMode
+        self.transactionFilter = transactionFilter
+        self.transactionSort = transactionSort
+        self.selectedTransactionID = selectedTransactionID
     }
 
     // MARK: - Pure transitions
@@ -125,5 +147,44 @@ public struct NavigationState: Sendable, Equatable, Codable {
             selectedAccountID,
             visibleAccountIds: visibleAccountIDs
         )
+    }
+
+    // MARK: - Transaction Workspace transitions (AND-582)
+
+    /// Replace the workspace filter/search. Changing the filter clears the row
+    /// selection (the selected row may no longer be listed), mirroring the
+    /// dashboard filter→deselect rule. No-op (and no deselect) when unchanged.
+    public mutating func setTransactionFilter(_ filter: TransactionWorkspace.Filter) {
+        guard filter != transactionFilter else { return }
+        transactionFilter = filter
+        selectedTransactionID = ""
+    }
+
+    /// Change the workspace sort order (does not affect the selection).
+    public mutating func setTransactionSort(_ sort: TransactionWorkspace.Sort) {
+        transactionSort = sort
+    }
+
+    /// Select a transaction row in the workspace.
+    public mutating func selectTransaction(id: String) {
+        selectedTransactionID = id
+    }
+
+    /// Clear the workspace row selection.
+    public mutating func deselectTransaction() {
+        selectedTransactionID = ""
+    }
+
+    /// Drop a selected transaction id that is no longer among the visible (filtered)
+    /// rows — the same self-heal the dashboard does for accounts. Returns `true`
+    /// when a stale selection was cleared.
+    @discardableResult
+    public mutating func reconcileTransactionSelection(visibleTransactionIDs: [String]) -> Bool {
+        guard !selectedTransactionID.isEmpty,
+              !visibleTransactionIDs.contains(selectedTransactionID) else {
+            return false
+        }
+        selectedTransactionID = ""
+        return true
     }
 }
