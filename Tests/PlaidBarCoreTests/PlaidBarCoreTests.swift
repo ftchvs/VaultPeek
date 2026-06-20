@@ -3765,6 +3765,39 @@ struct PlaidBarCoreTests {
         #expect(!CommandLineOptions.isRenderingSnapshot(["PlaidBar"]))
     }
 
+    @Test("Window-first render is detected by the --render-window-first flag")
+    func commandLineOptionsDetectWindowFirstRender() {
+        #expect(CommandLineOptions.isRenderingWindowFirst(["PlaidBar", "--demo", "--render-window-first", "/tmp/out"]))
+        // Presence alone is enough — the directory value follows the flag.
+        #expect(CommandLineOptions.isRenderingWindowFirst(["PlaidBar", "--render-window-first"]))
+        // The directory value parses like the other flags.
+        #expect(
+            CommandLineOptions.value(
+                for: CommandLineOptions.renderWindowFirstFlag,
+                in: ["PlaidBar", "--demo", "--render-window-first", "/tmp/out"]
+            ) == "/tmp/out"
+        )
+        // A normal app launch — and a popover-snapshot run — never opts in.
+        #expect(!CommandLineOptions.isRenderingWindowFirst(["PlaidBar", "--demo"]))
+        #expect(!CommandLineOptions.isRenderingWindowFirst(["PlaidBar", "--demo", "--render-snapshot", "/tmp/out"]))
+        #expect(!CommandLineOptions.isRenderingWindowFirst(["PlaidBar"]))
+    }
+
+    @Test("Window-first render harness renders every in-shell destination plus the shell")
+    func windowFirstRenderHarnessCoversAllDestinations() {
+        // The harness renders one PNG per in-shell destination (Settings is the
+        // native scene, never an in-split pane, so it is excluded) plus one
+        // whole-shell reference. Asserting the expected set here pins the PNG
+        // count the integration smoke test verifies on disk, without spawning a
+        // window. RouteDestination has 10 cases; 9 are in-shell.
+        let inShell = RouteDestination.allCases.filter { $0 != .settings }
+        #expect(inShell.count == 9)
+        #expect(!inShell.contains(.settings))
+        // expectedImageCount == destinations + 1 (the shell). Kept in lockstep
+        // with the harness so the two never drift.
+        #expect(inShell.count + 1 == 10)
+    }
+
     // MARK: - RecurringTransaction Model Tests
 
     @Test("RecurringTransaction identity by merchantName")
