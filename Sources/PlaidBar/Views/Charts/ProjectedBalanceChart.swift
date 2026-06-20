@@ -78,6 +78,11 @@ struct ProjectedBalanceChart: View {
                     revealFraction = 1
                 }
             }
+            // Scrubbable audio graph (AND-569/AND-588): the analogue of the spoken
+            // `accessibilitySummary` below — VoiceOver's "Play Audio Graph" rotor
+            // plays the projected balance tone-by-tone, with the projected-low day
+            // called out. No-op when the series has too few points to sonify.
+            .audioGraph(ChartAudioGraph.projection(projection))
 
             // Confidence cue: text + icon, never color alone.
             Label(confidenceText, systemImage: projection.confidence.iconName)
