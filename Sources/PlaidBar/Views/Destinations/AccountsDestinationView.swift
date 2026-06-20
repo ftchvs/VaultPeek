@@ -1,12 +1,28 @@
 import PlaidBarCore
 import SwiftUI
 
-/// **Accounts** destination (3-column — IA §3.1/§5.9, `[⌘8]`, AND-623 / ADR-001).
+/// **Accounts** destination (3-column — IA §3.1/§5.9, `[⌘8]`, AND-623 / AND-624,
+/// ADR-001).
 ///
-/// The full account ledger: a type-grouped account list (content column) → the
-/// existing ``AccountDetailFlyout`` (inspector column). The shell renders this
-/// content column plus ``Inspector`` in the detail column, which is content-gated
-/// and shows "Select an account" when nothing is selected (IA §3.1).
+/// The full account ledger, re-hosted at **window (desk-distance) density** to
+/// match the Dashboard reference (AND-624): a **headline metric row** over a
+/// **type-grouped account list** in the content column, feeding the existing
+/// ``AccountDetailFlyout`` in the inspector column. The shell renders this content
+/// column plus ``Inspector`` in the detail column, which is content-gated and shows
+/// "Select an account" when nothing is selected (IA §3.1).
+///
+/// ## Window-scale layout (AND-624)
+/// This is a re-*host* of the same data the popover and Dashboard read — **no model
+/// or chart logic lives here** — laid out for the window rather than the glance:
+/// 1. a **hero metric row** (net worth, total assets, total debt) as large tabular
+///    ``WindowHeroMetricTile`` figures, surfaced from `WealthSummaryPresentation`
+///    (the same engine the rail and Dashboard use), so the content column leads with
+///    the wealth context the inspector then drills into;
+/// 2. the **type-grouped account list**: each ``AccountListGrouping`` section is a
+///    ``WindowSection`` (a `title3` header + a count accessory) holding window-scale
+///    account rows — larger rows, ≥`.body` tabular balances, sync/utilization shown
+///    as glyph + text. The cards stack with the calm ``WindowMetrics`` rhythm, not
+///    the popover's tight pack.
 ///
 /// ## Reused engines (nothing rebuilt)
 /// - **Selection** rides the existing per-window `NavigationState.selectedAccountID`
@@ -20,6 +36,8 @@ import SwiftUI
 ///   from the shared ``AccountPresentation`` helpers — the same Core layer the
 ///   popover's `DashboardAccountRow` reads, so the two surfaces can't drift in what
 ///   a row says.
+/// - **Headline figures** come from ``WealthSummaryPresentation`` — no new totals
+///   are summed here.
 /// - **Detail + actions** (balances, utilization, due dates, sync status, the
 ///   reconnect / remove / settings action bar) are the existing
 ///   ``AccountInspector`` → ``AccountDetailFlyout``, which already route reconnect
@@ -27,10 +45,11 @@ import SwiftUI
 ///   Nothing about those paths is re-implemented here.
 ///
 /// ## Privacy & accessibility
-/// Amounts route through ``AccountPresentation``'s privacy-mask-aware text, and the
-/// inspector withholds detail under Privacy Mask / App Lock (the shell also gates
-/// the whole window). Selection is carried by a filled vs. outline chevron (shape),
-/// never color alone (ACCESSIBILITY.md).
+/// Amounts route through ``AccountPresentation`` / ``PrivacyMaskPresentation``'s
+/// privacy-mask-aware text, and the inspector withholds detail under Privacy Mask /
+/// App Lock (the shell also gates the whole window). Selection is carried by a
+/// filled vs. outline chevron (shape) and a tinted fill, never color alone
+/// (ACCESSIBILITY.md). The hero figures name themselves in text.
 ///
 /// Window-first surface only: built solely behind `WindowFirstFeatureFlag`
 /// (default OFF), so with the flag off none of this is instantiated and the popover
@@ -65,52 +84,135 @@ struct AccountsDestinationView: View {
         } else if accounts.isEmpty {
             emptyState
         } else {
-            accountList
+            accountCanvas
         }
     }
 
-    private var accountList: some View {
+    /// The window-scale content column: the hero metric row over the type-grouped
+    /// account list, on the calm ``WindowMetrics`` rhythm. Scrolls as one canvas so
+    /// the headline figures stay attached to the list they summarize.
+    private var accountCanvas: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: Spacing.lg, pinnedViews: [.sectionHeaders]) {
-                ForEach(sections) { section in
-                    Section {
-                        VStack(spacing: 0) {
-                            ForEach(section.accounts) { account in
-                                AccountListRow(
-                                    account: account,
-                                    isSelected: selectedID == account.id,
-                                    onSelect: { toggleSelection(account) }
-                                )
-                                .environment(appState)
-                            }
-                        }
-                        .clipShape(RoundedRectangle(cornerRadius: Radius.panel))
-                    } header: {
-                        sectionHeader(section)
+            VStack(alignment: .leading, spacing: WindowMetrics.xl) {
+                heroMetricsRow
+
+                VStack(alignment: .leading, spacing: WindowMetrics.lg) {
+                    ForEach(sections) { section in
+                        AccountsGroupSection(
+                            section: section,
+                            selectedID: selectedID,
+                            onSelect: toggleSelection
+                        )
+                        .environment(appState)
                     }
                 }
             }
-            .padding(Spacing.lg)
+            .padding(WindowMetrics.canvasMargin)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .scrollContentBackground(.hidden)
+        .accessibilityElement(children: .contain)
     }
 
-    private func sectionHeader(_ section: AccountListGrouping.Section) -> some View {
-        HStack {
-            Text(section.title)
-                .sectionTitle()
-                .foregroundStyle(.secondary)
-            Spacer()
-            Text("\(section.accounts.count)")
-                .sectionTitle()
-                .foregroundStyle(.secondary)
+    // MARK: - Hero metrics row
+
+    /// The headline figures across the top of the content column — net worth, total
+    /// assets, total debt — surfaced from the same ``WealthSummaryPresentation`` the
+    /// rail and Dashboard use (no new totals summed here). Reflows to wrap on a
+    /// narrow window so each figure keeps its tabular legibility. Every value runs
+    /// through `PrivacyMaskPresentation`; none rely on color for meaning (the label
+    /// names the figure).
+    private var heroMetricsRow: some View {
+        LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: WindowMetrics.heroTileMinWidth), spacing: WindowMetrics.lg)],
+            alignment: .leading,
+            spacing: WindowMetrics.lg
+        ) {
+            ForEach(heroMetrics) { metric in
+                WindowHeroMetricTile(
+                    label: metric.label,
+                    value: metric.value,
+                    systemImage: metric.systemImage,
+                    detail: metric.detail,
+                    accent: metric.accent,
+                    reduceMotion: reduceMotion
+                )
+            }
         }
-        .padding(.horizontal, Spacing.compactRowHorizontalPadding)
-        .padding(.vertical, Spacing.xs)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.bar)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(section.title), \(section.accounts.count) account\(section.accounts.count == 1 ? "" : "s")")
+        .loadingRedaction(appState.loadState(for: .summaryCards))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Account totals")
+    }
+
+    private struct HeroMetric: Identifiable {
+        let id: String
+        let label: String
+        let value: String
+        let systemImage: String
+        let detail: String?
+        let accent: Color
+    }
+
+    /// The wealth summary the rail/Dashboard also compute — the single source for net
+    /// worth, total assets, total debt, and the account count used by the hero
+    /// figures. Re-hosted, not recomputed.
+    private var wealthSummary: WealthSummaryPresentation {
+        WealthSummaryPresentation.evaluate(
+            accounts: appState.accounts,
+            transactions: appState.transactions,
+            isDemoMode: appState.usesDemoConnectionPresentation,
+            serverConnected: appState.serverConnected,
+            credentialsConfigured: appState.serverCredentialsConfigured,
+            linkedItemCount: appState.statusItemCount,
+            syncedItemCount: appState.serverSyncedItemCount ?? 0,
+            itemStatuses: appState.itemStatuses,
+            isSyncStale: appState.isSyncStale,
+            lastSyncRelative: appState.lastSyncRelative,
+            statusSyncText: appState.statusSyncText,
+            errorMessage: appState.error,
+            creditUtilizationThreshold: appState.creditUtilizationThreshold,
+            lowCashThreshold: appState.lowBalanceThreshold,
+            largeTransactionThreshold: appState.largeTransactionThreshold,
+            balanceHistory: appState.balanceHistory
+        )
+    }
+
+    private var heroMetrics: [HeroMetric] {
+        let masked = appState.shouldMaskFinancialValues
+        let summary = wealthSummary
+
+        let netWorth = HeroMetric(
+            id: "netWorth",
+            label: "Net worth",
+            value: PrivacyMaskPresentation.currency(summary.netWorth, format: .compact, isEnabled: masked),
+            systemImage: "chart.line.uptrend.xyaxis",
+            detail: accountCountDetail(summary.accountCount),
+            accent: SemanticColors.brand
+        )
+
+        let assets = HeroMetric(
+            id: "totalAssets",
+            label: "Total assets",
+            value: PrivacyMaskPresentation.currency(summary.totalAssets, format: .compact, isEnabled: masked),
+            systemImage: "banknote",
+            detail: "Cash and savings on hand",
+            accent: SemanticColors.positive
+        )
+
+        let debt = HeroMetric(
+            id: "totalDebt",
+            label: "Total debt",
+            value: PrivacyMaskPresentation.currency(summary.totalDebt, format: .compact, isEnabled: masked),
+            systemImage: "creditcard",
+            detail: "Credit and loan balances",
+            accent: summary.totalDebt > 0 ? SemanticColors.warning : .secondary
+        )
+
+        return [netWorth, assets, debt]
+    }
+
+    private func accountCountDetail(_ count: Int) -> String {
+        count == 1 ? "Across 1 account" : "Across \(count) accounts"
     }
 
     // MARK: - Selection (shared NavigationState.selectedAccountID)
@@ -184,45 +286,97 @@ struct AccountsDestinationView: View {
     }
 }
 
-// MARK: - Account Row
+// MARK: - Account group section (window scale)
 
-/// A single account row in the Accounts destination's content column. Re-hosts the
-/// popover row's visual idiom (leading type icon, name + subtitle, trailing amount
-/// + utilization cue, selection chevron) on the shared ``AccountPresentation``
-/// helpers so the two surfaces can't drift. Selection is carried by a filled vs.
-/// outline chevron (shape) and a tinted fill, never color alone (ACCESSIBILITY.md).
+/// One type-group of accounts as a window-scale titled card: an
+/// ``AccountListGrouping`` section rendered as a ``WindowSection`` (a `title3`
+/// header + a count accessory) holding its account rows. This is the
+/// list→inspector idiom at desk-distance density — a calm card per group rather
+/// than the popover's pinned `.bar` headers over a tight stack.
+private struct AccountsGroupSection: View {
+    @Environment(AppState.self) private var appState
+    let section: AccountListGrouping.Section
+    let selectedID: String
+    let onSelect: (AccountDTO) -> Void
+
+    var body: some View {
+        WindowSection(section.title, systemImage: Self.sectionSymbol(for: section.type)) {
+            Text("\(section.accounts.count)")
+                .windowSupportingText()
+                .monospacedDigit()
+                .accessibilityLabel("\(section.accounts.count) account\(section.accounts.count == 1 ? "" : "s")")
+        } content: {
+            VStack(spacing: 0) {
+                ForEach(Array(section.accounts.enumerated()), id: \.element.id) { index, account in
+                    AccountListRow(
+                        account: account,
+                        isSelected: selectedID == account.id,
+                        showsDivider: index < section.accounts.count - 1,
+                        onSelect: { onSelect(account) }
+                    )
+                    .environment(appState)
+                }
+            }
+        }
+    }
+
+    /// A group glyph for a section header, keyed by ``AccountType`` (shape, not
+    /// color, carries meaning — ACCESSIBILITY.md). Namespaced here rather than in
+    /// Core because it is purely this destination's section chrome; the per-row
+    /// glyph still comes from the shared `AccountPresentation.iconName`.
+    private static func sectionSymbol(for type: AccountType) -> String {
+        switch type {
+        case .depository: return "building.columns"
+        case .credit: return "creditcard"
+        case .loan: return "dollarsign.circle"
+        case .investment: return "chart.line.uptrend.xyaxis"
+        case .other: return "square.grid.2x2"
+        }
+    }
+}
+
+// MARK: - Account Row (window scale)
+
+/// A single account row in the Accounts destination's content column, at window
+/// (desk-distance) density. Re-hosts the popover row's visual idiom (leading type
+/// icon, name + subtitle, trailing amount + utilization cue, selection chevron) on
+/// the shared ``AccountPresentation`` helpers so the two surfaces can't drift, but
+/// scaled up for the window: a larger icon chip, `.body` name, `.subheadline`
+/// subtitle, and a `.body`-tabular balance figure. Selection is carried by a filled
+/// vs. outline chevron (shape) and a tinted fill, never color alone (ACCESSIBILITY.md).
 private struct AccountListRow: View {
     @Environment(AppState.self) private var appState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let account: AccountDTO
     let isSelected: Bool
+    let showsDivider: Bool
     let onSelect: () -> Void
 
     private var privacyMaskEnabled: Bool { appState.shouldMaskFinancialValues }
 
     var body: some View {
         Button(action: onSelect) {
-            HStack(spacing: Spacing.compactRowContentSpacing) {
+            HStack(spacing: WindowMetrics.sm) {
                 Image(systemName: AccountPresentation.iconName(for: account))
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.system(size: 18, weight: .medium))
                     .foregroundStyle(.secondary)
-                    .frame(width: Sizing.iconChip, height: Sizing.iconChip)
+                    .frame(width: 40, height: 40)
                     .background(.quinary, in: RoundedRectangle(cornerRadius: Radius.control))
 
-                VStack(alignment: .leading, spacing: Spacing.compactRowTextSpacing) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(account.name)
-                        .font(.callout.weight(.medium))
+                        .font(.body.weight(.medium))
                         .lineLimit(1)
                     Text(subtitle)
-                        .detailText()
+                        .windowSupportingText()
                         .lineLimit(1)
                 }
 
-                Spacer(minLength: Spacing.compactRowContentSpacing)
+                Spacer(minLength: WindowMetrics.sm)
 
-                VStack(alignment: .trailing, spacing: Spacing.xs) {
+                VStack(alignment: .trailing, spacing: 2) {
                     Text(amountText)
-                        .dataText()
+                        .font(.body.weight(.medium).monospacedDigit())
                         .rollingTabularNumber(amountText, reduceMotion: reduceMotion)
                         .foregroundStyle(AppearanceTextColors.primary)
                         .lineLimit(1)
@@ -233,7 +387,7 @@ private struct AccountListRow: View {
                            threshold: appState.creditUtilizationThreshold,
                            privacyMaskEnabled: privacyMaskEnabled
                        ) {
-                        HStack(spacing: Spacing.xxs) {
+                        HStack(spacing: WindowMetrics.xs / 2) {
                             if utilization >= appState.creditUtilizationThreshold {
                                 // Tint the icon, never the small text — orange caption
                                 // text fails 4.5:1 contrast (ACCESSIBILITY.md).
@@ -241,15 +395,14 @@ private struct AccountListRow: View {
                                     for: utilization,
                                     threshold: appState.creditUtilizationThreshold
                                 ))
-                                .font(.caption2.weight(.medium))
+                                .font(.subheadline.weight(.medium))
                                 .foregroundStyle(SemanticColors.utilization(
                                     for: utilization,
                                     threshold: appState.creditUtilizationThreshold
                                 ))
                             }
                             Text(utilizationText)
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(.secondary)
+                                .windowSupportingText()
                         }
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
@@ -257,17 +410,17 @@ private struct AccountListRow: View {
                 }
 
                 Image(systemName: isSelected ? "chevron.forward.circle.fill" : "chevron.forward")
-                    .font(.caption.weight(.medium))
+                    .font(.body.weight(.medium))
                     .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.tertiary))
             }
-            .padding(.horizontal, Spacing.compactRowHorizontalPadding)
-            .padding(.vertical, Spacing.compactRowVerticalPadding)
+            .padding(.horizontal, WindowMetrics.sm)
+            .padding(.vertical, WindowMetrics.sm)
             .background(
                 isSelected ? Color.accentColor.opacity(SurfaceTokens.selectedFillOpacity) : .clear,
                 in: RoundedRectangle(cornerRadius: Radius.control)
             )
             .overlay(alignment: .bottom) {
-                if !isSelected {
+                if showsDivider, !isSelected {
                     Divider().opacity(0.4)
                 }
             }
