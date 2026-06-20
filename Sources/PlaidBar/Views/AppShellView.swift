@@ -26,11 +26,22 @@ import SwiftUI
 /// is zero behavior change.
 ///
 /// Liquid Glass on chrome is applied at the scene level via
-/// `.containerBackground(.ultraThinMaterial, for: .window)` in `PlaidBarApp`, not
-/// here — per ADR-001 glass goes on chrome only, never on data.
+/// `.containerBackground(.ultraThinMaterial, for: .window)` in `PlaidBarApp`
+/// (with an explicit solid Reduce Transparency fallback), not here — per ADR-001
+/// glass goes on chrome only, never on data.
+///
+/// **App Lock parity (ADR-001 Epic 10 / AND-588):** when content is LOCKED (not
+/// merely masked), this shell paints the shared `AppLockedGateView` over the
+/// entire window — identical to the popover and its detached host — so the
+/// window-first surface can never show balances, account, or institution names
+/// while App Lock is engaged. The gate sits above every other overlay (including
+/// the ⌘K palette), and the palette is force-dismissed while locked.
 struct AppShellView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.openSettings) private var openSettings
+    /// Reduce Motion gates the App-Lock gate's enter/exit transition so locking
+    /// the window does not animate when the user has asked for less motion.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The ⌘K command-palette state for this window. Owned by the scene
     /// (`PlaidBarApp`) so the ⌘K menu command and this overlay share one source
     /// of truth, and injected here. Defaults to a fresh model so the `#Preview`
@@ -140,6 +151,33 @@ struct AppShellView: View {
             }
         }
         .animation(.easeOut(duration: 0.15), value: paletteModel.isPresented)
+        // Full App Lock gate (security parity with the popover + detached host —
+        // ADR-001 Epic 10 / AND-588). When content is LOCKED (not merely masked)
+        // the entire window must be hidden behind the shared `AppLockedGateView`:
+        // account and institution names, the sidebar badges, and every
+        // destination would otherwise leak even though balances are dotted
+        // (AND-462). This overlay is declared *after* the palette overlay so it
+        // renders on top of it, and the palette is force-dismissed while locked
+        // so unlocking never reveals a stale ⌘K surface.
+        .overlay {
+            if appState.isContentLocked {
+                AppLockedGateView(
+                    message: appState.lockedSurfaceCopy,
+                    reduceMotion: reduceMotion,
+                    onUnlock: { Task { await appState.unlockApp() } }
+                )
+                .transition(.opacity)
+            }
+        }
+        .animation(
+            MotionTokens.animation(MotionTokens.standard, reduceMotion: reduceMotion),
+            value: appState.isContentLocked
+        )
+        .onChange(of: appState.isContentLocked) { _, isLocked in
+            // A locked window must not keep the ⌘K palette mounted underneath the
+            // gate; dismiss it so unlocking returns to the bare workspace.
+            if isLocked { paletteModel.dismiss() }
+        }
     }
 }
 

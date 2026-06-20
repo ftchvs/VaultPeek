@@ -478,11 +478,15 @@ struct PlaidBarApp: App {
                 // the window-first flag), so flag-OFF behavior is unchanged.
                 .onAppear { windowActivationPolicy.onWindowAppear() }
                 .onDisappear { windowActivationPolicy.onWindowDisappear() }
-                // Liquid Glass on chrome only (ADR-001): the window background is
-                // the ultra-thin material; data surfaces inside stay opaque. This
-                // is a content modifier (it walks up to the window), so it lives on
-                // the scene's root view, not on the `Window` scene itself.
-                .containerBackground(.ultraThinMaterial, for: .window)
+                // Liquid Glass on chrome only (ADR-001, R-08): the window
+                // background is the ultra-thin material; data surfaces inside stay
+                // opaque. Under Reduce Transparency (system setting or the reduced
+                // decorative-effects preference) it falls back to a fully solid
+                // window background — custom translucency self-manages its a11y
+                // degradation rather than relying on the framework to thin the
+                // material (AND-588). The glass-vs-solid decision is the pure,
+                // unit-tested `WindowChromeGlass.chromeBackground(reduceTransparency:)`.
+                .appliesWindowChromeBackground()
         }
         // Do not steal launch/activation: the window only appears when opened.
         .defaultLaunchBehavior(.suppressed)
@@ -770,6 +774,47 @@ struct AppTextSizeApplier: ViewModifier {
     }
 }
 
+/// Applies the window-first shell's **chrome** background (ADR-001 Epic 10 /
+/// AND-588, R-08). Liquid Glass is for the navigation layer only — the window
+/// container behind the sidebar / toolbar / nav bars — never lists, tables,
+/// charts, or dense data, which stay opaque inside.
+///
+/// Custom translucency must self-manage its accessibility degradation rather
+/// than rely on the framework to thin the material: when **Reduce Transparency**
+/// is on (the system accessibility setting always wins, or the user's reduced
+/// decorative-effects preference), this falls back to a fully solid window
+/// background so the chrome stays legible in light and dark. The glass-vs-solid
+/// choice is the pure, unit-tested `WindowChromeGlass.chromeBackground(reduceTransparency:)`.
+struct WindowChromeBackgroundModifier: ViewModifier {
+    @Environment(\.accessibilityReduceTransparency) private var systemReduceTransparency
+    @AppStorage(DecorativeEffectsPreference.storageKey) private var decorativeEffectsRaw = DecorativeEffectsPreference.defaultValue.rawValue
+
+    /// `true` when transparency must be reduced: the system setting wins, and the
+    /// user's "Reduced" decorative-effects preference also suppresses it. Mirrors
+    /// the popover's `ResolvedDecorativeEffects.allowsTexture` gate so the window
+    /// and popover degrade identically.
+    private var reduceTransparency: Bool {
+        let preference = DecorativeEffectsPreference(rawValue: decorativeEffectsRaw) ?? .followSystem
+        let effects = preference.resolved(
+            systemReduceMotion: false,
+            systemReduceTransparency: systemReduceTransparency
+        )
+        return !effects.allowsTexture
+    }
+
+    func body(content: Content) -> some View {
+        switch WindowChromeGlass.chromeBackground(reduceTransparency: reduceTransparency) {
+        case .glass:
+            content.containerBackground(.ultraThinMaterial, for: .window)
+        case .solid:
+            // Solid fallback: the opaque window background color reads correctly
+            // in both light and dark and carries no translucency for the chrome
+            // to sample (AND-588).
+            content.containerBackground(Color(nsColor: .windowBackgroundColor), for: .window)
+        }
+    }
+}
+
 /// Bridges the SwiftUI-free Core `ForcedDynamicTypeSize` to SwiftUI's
 /// `DynamicTypeSize`. The Core enum keeps the case → size decision testable
 /// without importing SwiftUI; this 1:1 switch is the only place the two enums
@@ -822,5 +867,12 @@ extension View {
     /// in `App/` can share the one definition.
     func appliesAppTextSize() -> some View {
         modifier(AppTextSizeApplier())
+    }
+
+    /// Applies the window-first shell's chrome background (Liquid Glass on chrome
+    /// only, with an explicit solid Reduce Transparency fallback — ADR-001 Epic
+    /// 10 / AND-588, R-08). Used on the primary `Window` scene root.
+    func appliesWindowChromeBackground() -> some View {
+        modifier(WindowChromeBackgroundModifier())
     }
 }
