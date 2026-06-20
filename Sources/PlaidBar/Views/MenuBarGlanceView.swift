@@ -46,7 +46,7 @@ struct MenuBarGlanceView: View {
                 chips
             }
             Divider()
-            openButton
+            footer
         }
         .padding(Spacing.md)
         .frame(width: Self.width)
@@ -132,6 +132,55 @@ struct MenuBarGlanceView: View {
             return
         }
         NSWorkspace.shared.open(url)
+    }
+
+    // MARK: - Footer quick-actions
+
+    /// The reduced glance footer: the popover's one-click Privacy Mask and
+    /// Refresh affordances kept reachable here (AND-616), then the primary
+    /// "Open VaultPeek" CTA which fills the remaining width. The glance stays a
+    /// launcher — only these two icon buttons plus the CTA; Add-Account,
+    /// Recurring, Detach, Settings, and the status line live in the window.
+    private var footer: some View {
+        HStack(spacing: Spacing.sm) {
+            privacyMaskButton
+            refreshButton
+            openButton
+        }
+    }
+
+    private var privacyMaskButton: some View {
+        let isMasked = appState.appLockPreferences.privacyMaskEnabled
+        let label = PrivacyMaskPresentation.toggleActionLabel(isMasked: isMasked)
+        return Button {
+            appState.togglePrivacyMask()
+        } label: {
+            // State is shape-borne (eye vs. eye.slash), never color alone.
+            Image(systemName: PrivacyMaskPresentation.toggleSymbolName(isMasked: isMasked))
+                .accessibilityHidden(true)
+        }
+        .buttonStyle(.borderless)
+        .foregroundStyle(.secondary)
+        .frame(minWidth: Sizing.hitTargetMin, minHeight: Sizing.hitTargetMin)
+        .help(label)
+        .accessibilityLabel(label)
+        .keyboardShortcut("p", modifiers: [.command, .shift])
+    }
+
+    private var refreshButton: some View {
+        Button {
+            Task { await appState.refreshDashboard() }
+        } label: {
+            // RefreshIcon carries loading state by glyph/motion, not color alone.
+            RefreshIcon(isLoading: appState.isLoading)
+                .accessibilityHidden(true)
+        }
+        .buttonStyle(.borderless)
+        .foregroundStyle(.secondary)
+        .frame(minWidth: Sizing.hitTargetMin, minHeight: Sizing.hitTargetMin)
+        .help("Refresh")
+        .accessibilityLabel("Refresh")
+        .keyboardShortcut("r", modifiers: .command)
     }
 
     // MARK: - Open window

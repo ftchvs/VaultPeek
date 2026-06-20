@@ -123,7 +123,11 @@ public struct MenuBarGlanceModel: Equatable, Sendable {
     ///   - attention: the ≤3-row attention queue (reused so the glance and the
     ///     dashboard status strip stay in lockstep).
     ///   - isMasked: Privacy Mask / App Lock — when on, currency metrics are
-    ///     redacted (the unreviewed *count* is not a balance, so it is shown).
+    ///     redacted, the unreviewed *count* is withheld (matching
+    ///     ``MenuBarReviewBadge/isVisible(unreviewedCount:isMasked:)`` and the
+    ///     status-item badge, AND-483), and each attention chip is rebuilt from
+    ///     generic, non-identifying copy so institution names and transaction
+    ///     counts never leak through the glance.
     public static func make(
         netWorth: Double,
         safeToSpend: Double,
@@ -148,10 +152,14 @@ public struct MenuBarGlanceModel: Equatable, Sendable {
             ),
         ]
 
-        // The unreviewed count is a count, not a balance, so it survives Privacy
-        // Mask. Only surface it when there is something to review, keeping the
-        // glance to the smallest set of high-signal numbers.
-        if unreviewedCount > 0 {
+        // The unreviewed count is withheld while masked — it tracks the same
+        // contract as the status-item badge
+        // (``MenuBarReviewBadge/isVisible(unreviewedCount:isMasked:)`` and
+        // ``ReviewInboxPrivacyPresentation/unreviewedBadge(count:isMasked:)``,
+        // AND-483) so the two surfaces can never disagree. When visible it is
+        // only surfaced if there is something to review, keeping the glance to
+        // the smallest set of high-signal numbers.
+        if MenuBarReviewBadge.isVisible(unreviewedCount: unreviewedCount, isMasked: isMasked) {
             metrics.append(
                 Metric(
                     id: "to-review",
@@ -163,17 +171,19 @@ public struct MenuBarGlanceModel: Equatable, Sendable {
         }
 
         let chips = attention.rows.map { row in
-            Chip(
-                id: row.id,
-                title: row.title,
-                detail: row.detail,
-                severity: row.severity,
-                glyph: row.severity.statusSymbolName,
-                accessibilityLabel: row.accessibilityLabel,
-                accessibilityHint: row.accessibilityHint,
-                route: Route.from(attentionRow: row),
-                fallbackAction: row.action
-            )
+            isMasked
+                ? Self.maskedChip(from: row)
+                : Chip(
+                    id: row.id,
+                    title: row.title,
+                    detail: row.detail,
+                    severity: row.severity,
+                    glyph: row.severity.statusSymbolName,
+                    accessibilityLabel: row.accessibilityLabel,
+                    accessibilityHint: row.accessibilityHint,
+                    route: Route.from(attentionRow: row),
+                    fallbackAction: row.action
+                )
         }
 
         return MenuBarGlanceModel(
@@ -181,6 +191,28 @@ public struct MenuBarGlanceModel: Equatable, Sendable {
             syncStatusGlyph: syncSeverity.statusSymbolName,
             metrics: metrics,
             chips: chips
+        )
+    }
+
+    /// Builds a privacy-safe chip from an attention row while Privacy Mask / App
+    /// Lock is on. The raw `row.title`/`row.detail`/`accessibilityLabel` can embed
+    /// identifying text — institution names on degraded-item rows, transaction
+    /// counts on the unusual-spending row — so under mask we replace the copy with
+    /// generic, non-sensitive text. Severity is still conveyed by the glyph SHAPE
+    /// and the (non-sensitive) ``AttentionQueueSeverity/statusLabel`` (never color
+    /// alone), and the chip keeps its `id`, `severity`, `glyph`, `route`, and
+    /// `fallbackAction` so it still deep-links / acts exactly as the unmasked chip.
+    static func maskedChip(from row: AttentionQueueRow) -> Chip {
+        Chip(
+            id: row.id,
+            title: row.severity.statusLabel,
+            detail: "Hidden while VaultPeek is private.",
+            severity: row.severity,
+            glyph: row.severity.statusSymbolName,
+            accessibilityLabel: "\(row.severity.statusLabel). Hidden while VaultPeek is private.",
+            accessibilityHint: nil,
+            route: Route.from(attentionRow: row),
+            fallbackAction: row.action
         )
     }
 }
