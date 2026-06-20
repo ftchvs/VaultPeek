@@ -441,15 +441,50 @@ private struct SidebarRow: View {
 /// `ConnectionHealthStripView` and `AppState.statusModeText` — no new signals.
 private struct SidebarFooter: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             Divider()
             ConnectionHealthStripView()
-            DataModeChip(mode: appState.statusModeText)
+            // Only show the data-mode chip for a known mode. Pre-connection the
+            // mode resolves to "Unknown" (serverless, no environment); printing a
+            // dead "❓ Unknown" pill is a non-actionable dead end. Instead surface
+            // an actionable "Not connected" control that deep-links to Settings,
+            // mirroring `ConnectionHealthStripView`'s self-hide of empty state.
+            if appState.statusModeText == "Unknown" {
+                NotConnectedFooterButton(openSettings: { openSettings() })
+            } else {
+                DataModeChip(mode: appState.statusModeText)
+            }
         }
         .padding(.horizontal, Spacing.md)
         .padding(.vertical, Spacing.sm)
+    }
+}
+
+/// Shown in the sidebar footer when no data mode is resolved yet (server
+/// unreachable / pre-setup). Replaces the dead "❓ Unknown" pill with an
+/// actionable control that opens Settings, so the footer always offers a next
+/// step. Glyph + text + label carry the meaning together — never color alone.
+private struct NotConnectedFooterButton: View {
+    let openSettings: () -> Void
+
+    var body: some View {
+        Button(action: openSettings) {
+            Label("Not connected", systemImage: "bolt.horizontal.circle")
+                .labelStyle(.titleAndIcon)
+                .microText()
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, Spacing.sm)
+                .padding(.vertical, Spacing.chipVertical)
+                .glassSurface(.inset)
+        }
+        .buttonStyle(.plain)
+        .help("Open Settings to connect VaultPeek to your bank.")
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Not connected. Open Settings to connect.")
+        .accessibilityAddTraits(.isButton)
     }
 }
 

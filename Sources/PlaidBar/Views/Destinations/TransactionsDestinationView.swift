@@ -75,7 +75,7 @@ struct TransactionsDestinationView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
+        VStack(alignment: .leading, spacing: WindowMetrics.sm) {
             TransactionsFilterBar(
                 filter: filterBinding,
                 sort: sortBinding,
@@ -83,8 +83,8 @@ struct TransactionsDestinationView: View {
                 resultCount: rows.count,
                 isSearchFocused: $isSearchFocused
             )
-            .padding(.horizontal, Spacing.lg)
-            .padding(.top, Spacing.md)
+            .padding(.horizontal, WindowMetrics.canvasMargin)
+            .padding(.top, WindowMetrics.md)
 
             Divider().opacity(0.4)
 

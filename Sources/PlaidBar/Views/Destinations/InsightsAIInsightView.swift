@@ -125,10 +125,15 @@ struct InsightsAIInsightView: View {
 
     /// Phase status pill — glyph + text so the state never rides on tint alone.
     /// The generating phase animates a non-looping shimmer, suppressed under
-    /// Reduce Motion.
+    /// Reduce Motion. When the runtime is unavailable — the expected graceful
+    /// fallback on a Mac without on-device AI, not an error — the pill reads as a
+    /// passive *info* status (neutral tint + info glyph), never an alarm (HIG:
+    /// match delivery to significance; never imply something's wrong). The long
+    /// availability detail and any raw probe diagnostic live only here, on the
+    /// `.help(...)` tooltip, so they never shout from the card body.
     private var phasePill: some View {
         HStack(spacing: Spacing.xxs) {
-            Image(systemName: phase.systemImage)
+            Image(systemName: phaseGlyph)
                 .font(.caption2.weight(.semibold))
                 .symbolEffect(.pulse, options: .repeating, isActive: phase.isWorking && !reduceMotion)
                 .accessibilityHidden(true)
@@ -141,17 +146,42 @@ struct InsightsAIInsightView: View {
         .padding(.vertical, 3)
         .background(phaseTint.opacity(0.12), in: Capsule())
         .overlay { Capsule().stroke(phaseTint.opacity(0.20), lineWidth: 1) }
+        .help(phaseHelpText)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(phase.accessibilityLabel)
     }
 
+    /// Glyph for the pill. The unavailable state uses a neutral info glyph rather
+    /// than the enum's `exclamationmark.triangle`, so the expected fallback reads
+    /// as information, not caution.
+    private var phaseGlyph: String {
+        switch phase {
+        case .unavailable: "info.circle"
+        default: phase.systemImage
+        }
+    }
+
     private var phaseTint: Color {
         switch phase {
-        case .off: .secondary
-        case .unavailable: SemanticColors.warning
+        // Unavailable is the expected fallback, not a fault — keep it secondary.
+        // `SemanticColors.warning` is reserved for true caution.
+        case .off, .unavailable: .secondary
         case .generating: SemanticColors.brand
         case .streamed: SemanticColors.positive
         }
+    }
+
+    /// Tooltip text for the pill. For the unavailable state it carries the long,
+    /// calm availability detail and — only here — the raw probe diagnostic, so
+    /// dev jargon never reaches the visible card (mirrors the popover sibling's
+    /// `.help(LocalAIAvailabilityPresentation.helpText(for:))`).
+    private var phaseHelpText: String {
+        guard phase == .unavailable else { return phase.accessibilityLabel }
+        var text = LocalAIAvailabilityPresentation.helpText(for: availability)
+        if let probe = availability.probeErrorText, !probe.isEmpty {
+            text += " (\(probe))"
+        }
+        return text
     }
 
     // MARK: - Off state (consent)
@@ -218,10 +248,6 @@ struct InsightsAIInsightView: View {
 
             provenance
 
-            if phase == .unavailable {
-                unavailableNote
-            }
-
             footer
         }
     }
@@ -263,16 +289,6 @@ struct InsightsAIInsightView: View {
         }
         lines.append(contentsOf: receipt.limitations.prefix(2))
         return Array(lines.prefix(3))
-    }
-
-    private var unavailableNote: some View {
-        Label(availability.detail, systemImage: "exclamationmark.triangle")
-            .font(.subheadline.weight(.medium))
-            .foregroundStyle(SemanticColors.warning)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(WindowMetrics.sm)
-            .nativeInsetSurface(stroke: SemanticColors.warning.opacity(0.18))
-            .accessibilityLabel("Runtime unavailable. \(availability.detail)")
     }
 
     private var footer: some View {

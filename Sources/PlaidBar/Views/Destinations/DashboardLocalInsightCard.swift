@@ -13,6 +13,13 @@ import SwiftUI
 /// visible status** (AND-564); the availability label carries the current state so
 /// the user always sees whether anything ran locally. Honors Privacy Mask via the
 /// receipt's `privacyMaskEnabled` input, and never carries meaning by color alone.
+///
+/// Like its self-carding Dashboard siblings (``DashboardRecurringCard``,
+/// ``CategoryDashboardCard``) and the Insights hero (``InsightsAIInsightView``),
+/// the card wraps its body in a ``WindowSection`` so it inherits the solid
+/// ``windowCardSurface()`` + 20pt (``WindowMetrics/md``) padding + `title3`
+/// (``WindowCardTitle``) header. Data stays solid — Liquid Glass goes on chrome,
+/// not on the financial figures (ADR-001: "glass on chrome, not data").
 struct DashboardLocalInsightCard: View {
     @Environment(AppState.self) private var appState
 
@@ -39,56 +46,53 @@ struct DashboardLocalInsightCard: View {
     var body: some View {
         let receipt = receipt
 
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .center, spacing: 8) {
-                Text(receipt.title)
-                    .sectionTitle()
-                    .foregroundStyle(.secondary)
+        // A titled window-section card so the receipt inherits the solid surface,
+        // 20pt padding, and `title3` header from the shared component — matching
+        // every sibling Dashboard card. The availability state rides in the header
+        // accessory (text + glyph, never color alone).
+        WindowSection(receipt.title, systemImage: "sparkles") {
+            availabilityLabel
+        } content: {
+            VStack(alignment: .leading, spacing: WindowMetrics.sm) {
+                Text(receipt.headline)
+                    .windowCardTitle()
+                    .fixedSize(horizontal: false, vertical: true)
 
-                Spacer()
-
-                availabilityLabel
-            }
-
-            Text(receipt.headline)
-                .font(.caption.weight(.semibold))
-                .lineLimit(1)
-                .minimumScaleFactor(0.86)
-
-            HStack(spacing: 6) {
-                ForEach(receipt.evidenceChips) { chip in
-                    evidenceChip(chip)
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 3) {
-                ForEach(Array(detailLines(receipt).enumerated()), id: \.offset) { _, detail in
-                    HStack(alignment: .top, spacing: 6) {
-                        Circle()
-                            .fill(Color.secondary.opacity(0.58))
-                            .frame(width: 4, height: 4)
-                            .padding(.top, 6)
-                        Text(detail)
-                            .microText()
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                if !receipt.evidenceChips.isEmpty {
+                    HStack(spacing: WindowMetrics.sm) {
+                        ForEach(receipt.evidenceChips) { chip in
+                            evidenceChip(chip)
+                        }
                     }
                 }
-            }
 
-            HStack(spacing: 5) {
-                Image(systemName: "lock.shield.fill")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Text("\(receipt.localOnlyBadge). \(receipt.reversibleActionCopy)")
-                    .microText()
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 4)
+                VStack(alignment: .leading, spacing: WindowMetrics.xs) {
+                    ForEach(Array(detailLines(receipt).enumerated()), id: \.offset) { _, detail in
+                        HStack(alignment: .top, spacing: WindowMetrics.sm) {
+                            Image(systemName: "circle.fill")
+                                .font(.system(size: 5))
+                                .foregroundStyle(.secondary)
+                                .padding(.top, 7)
+                                .accessibilityHidden(true)
+                            Text(detail)
+                                .windowSupportingText()
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+
+                HStack(spacing: WindowMetrics.xs) {
+                    Image(systemName: "lock.shield.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                    Text("\(receipt.localOnlyBadge). \(receipt.reversibleActionCopy)")
+                        .windowSupportingText()
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: WindowMetrics.xs)
+                }
             }
         }
-        .padding(Spacing.sm)
-        .glassSurface(.inset)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(receipt.accessibilitySummary)
     }
@@ -128,7 +132,7 @@ struct DashboardLocalInsightCard: View {
     }
 
     private func evidenceChip(_ chip: LocalAIInsightReceipt.EvidenceChip) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: WindowMetrics.xs) {
             HStack(spacing: 4) {
                 Image(systemName: chip.systemImage)
                     .font(.caption2.weight(.semibold))
@@ -148,7 +152,9 @@ struct DashboardLocalInsightCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, Spacing.sm)
         .padding(.vertical, Spacing.rowVertical)
-        .glassSurface(.inset, cornerRadius: Radius.control)
+        // A quiet `.quaternary` inner fill rather than Liquid Glass: even an inner
+        // evidence chip carries figures (data), so it stays solid (ADR-001).
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: Radius.control))
         .help("\(chip.label): \(chip.value)")
     }
 }
