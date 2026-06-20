@@ -455,10 +455,15 @@ struct DashboardYearHeatmapGrid: View {
     /// Gap between cells. A touch wider than the glance grid's 2pt so the larger
     /// cells read as a clean lattice at desk distance.
     private let cellSpacing: CGFloat = 3
-    /// Desk-distance cell-size clamp: never smaller than the glance cap (so it is
-    /// always at least as legible as the popover), never so large the year grid
-    /// dominates the column. The actual size fills the available width between.
-    private let minCell: CGFloat = 9
+    /// Desk-distance cell-size clamp. `maxCell` keeps the grid from blowing the
+    /// column out when there is room; `deskMinCell` is the *preferred* desk floor,
+    /// but the grid is allowed to shrink below it (down to ``hardMinCell``) rather
+    /// than overflow when the 53-week year can't fit a narrow column — see
+    /// ``clampedCell(forWidth:)``. The popover/Insights grid floors hard at 9pt,
+    /// but it lives in a wider surface; the Dashboard hero shares a 2-column canvas
+    /// and must fit a ~368pt column, so a clean shrink beats a horizontal bleed.
+    private let deskMinCell: CGFloat = 9
+    private let hardMinCell: CGFloat = 4
     private let maxCell: CGFloat = 15
 
     private var weekCount: Int { max(layout.weekColumns.count, 1) }
@@ -466,13 +471,18 @@ struct DashboardYearHeatmapGrid: View {
     var body: some View {
         VStack(alignment: .leading, spacing: WindowMetrics.sm) {
             GeometryReader { proxy in
-                let cell = clampedCell(forWidth: proxy.size.width)
+                let width = proxy.size.width
+                let cell = clampedCell(forWidth: width)
                 VStack(alignment: .leading, spacing: cellSpacing) {
-                    monthMarkers(cell: cell)
+                    monthMarkers(cell: cell, width: width)
                     grid(cell: cell)
                 }
             }
             .frame(height: gridHeight)
+            // Hard stop for the cross-column bleed: neither the grid nor the
+            // .offset month-marker row may paint outside the card, regardless of
+            // the resolved cell size or the column width (AQ-1).
+            .clipped()
 
             legend
         }
@@ -484,13 +494,25 @@ struct DashboardYearHeatmapGrid: View {
         .audioGraph(ChartAudioGraph.heatmap(layout, isPrivacyMasked: false))
     }
 
-    /// Largest cell that lets all weeks fit the available width, clamped to the
-    /// desk-distance range so the hero never collapses to a glance strip or blows
-    /// the column out.
+    /// Largest cell that lets all weeks fit the available width.
+    ///
+    /// When there is room, the cell grows toward `maxCell` and never drops below the
+    /// preferred desk floor (`deskMinCell`) — keeping the comfortable desk-scale look.
+    /// When the 53-week year *can't* fit (e.g. a ~368pt two-column-breakpoint
+    /// column, where 53 cells at 9pt + spacing would need ~636pt), the cell is
+    /// allowed to shrink below the desk floor down to `hardMinCell` so the whole
+    /// year still fits inside the card instead of overflowing into the right column.
     private func clampedCell(forWidth width: CGFloat) -> CGFloat {
+        guard width > 0 else { return deskMinCell }
         let usable = width - CGFloat(weekCount - 1) * cellSpacing
         let fit = floor(usable / CGFloat(weekCount))
-        return min(maxCell, max(minCell, fit))
+        if fit >= deskMinCell {
+            // There is room for the comfortable desk scale (or more); clamp up.
+            return min(maxCell, fit)
+        }
+        // Not enough room for the desk floor: shrink to fit, but never below the
+        // hard minimum (below which the lattice stops reading as cells).
+        return max(hardMinCell, fit)
     }
 
     /// Reserve height for seven day-rows at the max cell size plus the month-marker
@@ -528,17 +550,24 @@ struct DashboardYearHeatmapGrid: View {
         }
     }
 
-    /// Month labels above the grid, positioned by their week index. Hidden from
-    /// accessibility (the VoiceOver label already names the span).
-    private func monthMarkers(cell: CGFloat) -> some View {
+    /// Month labels above the grid, positioned by their week index. `step` is
+    /// derived from the *resolved* (possibly shrunk) cell so the labels track the
+    /// grid columns exactly, and a marker is only emitted when its offset lands
+    /// within the available `width` — so a label can never paint past the right
+    /// edge into the neighboring column. Hidden from accessibility (the VoiceOver
+    /// label already names the span).
+    private func monthMarkers(cell: CGFloat, width: CGFloat) -> some View {
         let step = cell + cellSpacing
         return ZStack(alignment: .topLeading) {
             ForEach(layout.monthMarkers) { marker in
-                Text(marker.label)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .fixedSize()
-                    .offset(x: CGFloat(marker.weekIndex) * step)
+                let offset = CGFloat(marker.weekIndex) * step
+                if offset <= width {
+                    Text(marker.label)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .fixedSize()
+                        .offset(x: offset)
+                }
             }
         }
         .frame(maxWidth: .infinity, minHeight: 14, alignment: .topLeading)
