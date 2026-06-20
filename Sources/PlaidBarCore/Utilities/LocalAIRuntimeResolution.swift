@@ -184,10 +184,11 @@ public enum LocalAIRuntimeResolution {
         case .invalidOutput:
             "returned invalid or unsafe output"
         }
-        var detail = "\(runtime) \(reasonText). VaultPeek used deterministic local summaries and did not call cloud AI."
-        if let diagnostic, !diagnostic.isEmpty {
-            detail += " Probe error: \(diagnostic)"
-        }
-        return detail
+        // The user-facing detail stays jargon-free (HIG: avoid technical jargon,
+        // never imply something's wrong). The raw probe diagnostic is preserved
+        // separately on `LocalAIAvailability.probeErrorText` for the help tooltip
+        // and Settings — it is deliberately NOT folded into this sentence.
+        _ = diagnostic
+        return "\(runtime) \(reasonText). VaultPeek used deterministic local summaries and did not call cloud AI."
     }
 }
