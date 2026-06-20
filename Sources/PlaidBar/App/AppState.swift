@@ -3773,6 +3773,9 @@ final class AppState {
             recurringTransactions: recurringTransactions,
             cashflow: cashflow,
             isMasked: shouldMaskFinancialValues,
+            transactions: transactions,
+            reviewMetadata: transactionReviewMetadata,
+            transactionRules: transactionRules,
             creditUtilizationThreshold: creditUtilizationThreshold,
             generatedAt: updatedAt
         )

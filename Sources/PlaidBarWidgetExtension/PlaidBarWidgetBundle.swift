@@ -15,6 +15,12 @@ private struct GlanceEntry: TimelineEntry {
     /// out every figure so balances never leak onto a shared/visible desktop
     /// while the user has explicitly masked the app (AND-513 / AND-462).
     var isMasked = false
+    /// The richer multi-metric mini-dashboard model used by the `systemLarge`
+    /// family (AND-586). Built in Core from the shared `FinanceSnapshot`, it owns
+    /// the masking/formatting so the large widget matches the Spotlight snippet.
+    /// `nil` only for the redacted placeholder; the view falls back to the glance
+    /// layout when absent.
+    var dashboard: SnippetDashboardPresentation.Model?
 }
 
 private struct GlanceTimelineProvider: TimelineProvider {
@@ -55,9 +61,44 @@ private struct GlanceTimelineProvider: TimelineProvider {
         // means the widget stays masked even if the sibling FinanceSnapshot is
         // missing or stale — and a redacted glance file already holds no figures
         // (AND-517).
-        let financeMasked = AppGroupSnapshotStore.loadIfAvailable()?.isMasked ?? false
+        let financeSnapshot = AppGroupSnapshotStore.loadIfAvailable()
+        let financeMasked = financeSnapshot?.isMasked ?? false
         let isMasked = financeMasked || snapshot.isRedacted
-        return GlanceEntry(date: snapshot.updatedAt, snapshot: snapshot, isMasked: isMasked)
+        // Build the richer mini-dashboard model for the systemLarge family. When
+        // the glance snapshot is redacted but the finance snapshot is missing,
+        // pass a masked finance snapshot so the large widget self-masks too.
+        let dashboardModel = SnippetDashboardPresentation.model(
+            from: dashboardSource(financeSnapshot: financeSnapshot, glanceRedacted: snapshot.isRedacted)
+        )
+        return GlanceEntry(
+            date: snapshot.updatedAt,
+            snapshot: snapshot,
+            isMasked: isMasked,
+            dashboard: dashboardModel
+        )
+    }
+
+    /// Resolves the `FinanceSnapshot` the large-widget mini-dashboard renders. If
+    /// the glance snapshot is redacted (app wrote it while masked) but the finance
+    /// snapshot is missing/unmasked, force a masked snapshot so the large widget
+    /// can never out-resolve the lock the glance file already honored (AND-517).
+    private func dashboardSource(
+        financeSnapshot: FinanceSnapshot?,
+        glanceRedacted: Bool
+    ) -> FinanceSnapshot? {
+        guard glanceRedacted, let financeSnapshot, !financeSnapshot.isMasked else {
+            return financeSnapshot
+        }
+        return FinanceSnapshot(
+            safeToSpend: 0,
+            totalBalance: 0,
+            accountBalances: [],
+            nextRecurringBills: [],
+            creditUtilization: nil,
+            isoCurrencyCode: financeSnapshot.isoCurrencyCode,
+            generatedAt: financeSnapshot.generatedAt,
+            isMasked: true
+        )
     }
 }
 
@@ -85,7 +126,7 @@ private struct PlaidBarGlanceWidget: Widget {
         }
         .configurationDisplayName("VaultPeek")
         .description("Glance at net worth and today's change from local VaultPeek data.")
-        .supportedFamilies([.systemSmall, .systemMedium])
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
 }
 
@@ -96,6 +137,8 @@ private struct GlanceWidgetView: View {
     var body: some View {
         if entry.isUnavailable {
             unavailableState
+        } else if family == .systemLarge, let dashboard = entry.dashboard {
+            LargeDashboardView(model: dashboard, isMasked: entry.isMasked)
         } else {
             dataState
         }
@@ -194,6 +237,91 @@ private struct GlanceWidgetView: View {
             return "\(source)Figures hidden while Privacy Mask is on." + updated
         }
         return entry.snapshot.accessibilitySummary + updated
+    }
+}
+
+// MARK: - systemLarge mini-dashboard (AND-586)
+
+/// The `systemLarge` glance layout: a multi-metric mini-dashboard (balance,
+/// safe-to-spend, spent-this-period) plus the top spending categories, rendered
+/// from the Core ``SnippetDashboardPresentation/Model`` so it stays in lockstep
+/// with the Spotlight snippet and honors App Lock / Privacy Mask.
+private struct LargeDashboardView: View {
+    let model: SnippetDashboardPresentation.Model
+    let isMasked: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 6) {
+                Image(systemName: isMasked ? "eye.slash" : "lock.shield")
+                    .imageScale(.small)
+                Text("VaultPeek")
+                    .font(.caption.weight(.semibold))
+                Spacer(minLength: 0)
+                Text("Updated \(model.updatedAt, style: .time)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            if model.isWithheld {
+                Spacer(minLength: 0)
+                HStack(spacing: 6) {
+                    Image(systemName: "eye.slash")
+                    Text(model.headline)
+                        .font(.callout.weight(.semibold))
+                }
+                .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+            } else {
+                metricsRow
+                if !model.categories.isEmpty {
+                    Divider()
+                    categoriesSection
+                }
+                Spacer(minLength: 0)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(model.accessibilityLabel)
+    }
+
+    private var metricsRow: some View {
+        HStack(alignment: .top, spacing: 14) {
+            ForEach(model.rows) { row in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(row.value)
+                        .font(.title3.weight(.bold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                    Text(row.title)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    private var categoriesSection: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text("Top categories")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+            ForEach(model.categories) { category in
+                HStack(spacing: 8) {
+                    Label(category.title, systemImage: category.systemImage)
+                        .labelStyle(.titleAndIcon)
+                        .font(.caption)
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                    Text(category.value)
+                        .font(.caption.weight(.medium))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                }
+            }
+        }
     }
 }
 

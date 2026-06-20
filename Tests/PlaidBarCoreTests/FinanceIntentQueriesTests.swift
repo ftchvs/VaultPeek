@@ -144,6 +144,58 @@ struct FinanceIntentQueriesTests {
         #expect(text.lowercased().contains("no upcoming bills"))
     }
 
+    // MARK: - Show spending (AND-586)
+
+    @Test("Show spending returns the period total and names top categories")
+    func showSpendingReturnsValue() {
+        let categories = [
+            FinanceSnapshot.CategorySpend(category: .foodAndDrink, amount: 320),
+            FinanceSnapshot.CategorySpend(category: .shopping, amount: 180),
+        ]
+        guard case let .value(value, dialog) = FinanceIntentQueries.showSpending(
+            from: snapshot(periodSpending: 500, categories: categories)
+        ) else {
+            Issue.record("Expected .value")
+            return
+        }
+        #expect(value == 500)
+        #expect(dialog.contains("Food & Drink"))
+        #expect(dialog.lowercased().contains("top categories"))
+    }
+
+    @Test("Show spending reports the total even with no categorized spend")
+    func showSpendingWithoutCategories() {
+        guard case let .value(value, dialog) = FinanceIntentQueries.showSpending(
+            from: snapshot(periodSpending: 120, categories: [])
+        ) else {
+            Issue.record("Expected .value")
+            return
+        }
+        #expect(value == 120)
+        #expect(dialog.contains("120") || dialog.lowercased().contains("spent"))
+    }
+
+    @Test("Masked snapshot withholds show-spending without leaking a figure")
+    func showSpendingMaskedWithholds() {
+        let categories = [FinanceSnapshot.CategorySpend(category: .travel, amount: 999)]
+        guard case let .withheld(dialog) = FinanceIntentQueries.showSpending(
+            from: snapshot(isMasked: true, periodSpending: 999, categories: categories)
+        ) else {
+            Issue.record("Expected .withheld")
+            return
+        }
+        #expect(!dialog.contains("999"))
+        #expect(!dialog.contains("Travel"))
+    }
+
+    @Test("Nil snapshot reports unavailable for show-spending")
+    func showSpendingNilUnavailable() {
+        guard case .unavailable = FinanceIntentQueries.showSpending(from: nil) else {
+            Issue.record("Expected .unavailable")
+            return
+        }
+    }
+
     // MARK: - Helpers
 
     private func snapshot(
@@ -151,7 +203,9 @@ struct FinanceIntentQueriesTests {
         totalBalance: Double = 5_000,
         bills: [FinanceSnapshot.UpcomingBill] = [],
         creditUtilization: Double? = 20,
-        isMasked: Bool = false
+        isMasked: Bool = false,
+        periodSpending: Double = 0,
+        categories: [FinanceSnapshot.CategorySpend] = []
     ) -> FinanceSnapshot {
         FinanceSnapshot(
             safeToSpend: safeToSpend,
@@ -162,7 +216,9 @@ struct FinanceIntentQueriesTests {
             nextRecurringBills: bills,
             creditUtilization: creditUtilization,
             generatedAt: Date(timeIntervalSince1970: 1_780_000_000),
-            isMasked: isMasked
+            isMasked: isMasked,
+            periodSpending: periodSpending,
+            topSpendingCategories: categories
         )
     }
 }

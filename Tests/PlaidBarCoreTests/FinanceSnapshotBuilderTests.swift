@@ -139,7 +139,78 @@ struct FinanceSnapshotBuilderTests {
         #expect(snapshot.nextRecurringBills.map(\.merchantName) == ["Soon", "Later"])
     }
 
+    // MARK: - Spending this period (AND-586)
+
+    @Test("Builder computes month-to-date spend + top categories from transactions")
+    func builderComputesMonthToDateSpending() {
+        // asOf is 2026-05-28; month-to-date covers 2026-05-01 onward.
+        let transactions = [
+            expense("a", amount: 120, date: "2026-05-03", category: .foodAndDrink),
+            expense("b", amount: 80, date: "2026-05-10", category: .foodAndDrink),
+            expense("c", amount: 150, date: "2026-05-20", category: .shopping),
+            // Income (negative) must not count as spend.
+            income("d", amount: 5_000, date: "2026-05-15"),
+            // Prior-month expense must be excluded from the month-to-date total.
+            expense("e", amount: 999, date: "2026-04-29", category: .travel),
+        ]
+
+        let snapshot = FinanceSnapshotBuilder.make(
+            accounts: [depository(name: "Checking", available: 4_000)],
+            recurringTransactions: [],
+            isMasked: false,
+            transactions: transactions,
+            generatedAt: asOf
+        )
+
+        // 120 + 80 + 150 = 350; the prior-month 999 and the income are excluded.
+        #expect(snapshot.periodSpending == 350)
+        // Food & Drink (200) leads Shopping (150).
+        #expect(snapshot.topSpendingCategories.first?.category == .foodAndDrink)
+        #expect(snapshot.topSpendingCategories.first?.amount == 200)
+        #expect(snapshot.topSpendingCategories.count == 2)
+    }
+
+    @Test("Masked snapshot carries no spending figures (defense in depth)")
+    func maskedSnapshotHasNoSpending() {
+        let transactions = [expense("a", amount: 500, date: "2026-05-03", category: .shopping)]
+        let snapshot = FinanceSnapshotBuilder.make(
+            accounts: [depository(name: "Checking", available: 4_000)],
+            recurringTransactions: [],
+            isMasked: true,
+            transactions: transactions,
+            generatedAt: asOf
+        )
+        #expect(snapshot.periodSpending == 0)
+        #expect(snapshot.topSpendingCategories.isEmpty)
+    }
+
+    @Test("No transactions yields zero spend (server-less / demo path)")
+    func noTransactionsYieldsZeroSpend() {
+        let snapshot = FinanceSnapshotBuilder.make(
+            accounts: [depository(name: "Checking", available: 4_000)],
+            recurringTransactions: [],
+            isMasked: false,
+            generatedAt: asOf
+        )
+        #expect(snapshot.periodSpending == 0)
+        #expect(snapshot.topSpendingCategories.isEmpty)
+    }
+
     // MARK: - Helpers
+
+    private func expense(
+        _ id: String,
+        amount: Double,
+        date: String,
+        category: SpendingCategory
+    ) -> TransactionDTO {
+        TransactionDTO(id: id, accountId: "checking", amount: amount, date: date, name: id, category: category)
+    }
+
+    private func income(_ id: String, amount: Double, date: String) -> TransactionDTO {
+        TransactionDTO(id: id, accountId: "checking", amount: -amount, date: date, name: id, category: .income)
+    }
+
 
     private func depository(name: String, available: Double) -> AccountDTO {
         AccountDTO(
