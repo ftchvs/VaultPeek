@@ -86,6 +86,32 @@ struct PlaidBarTests {
         #expect(Set(pngs) == expected, "got PNGs: \(pngs)")
     }
 
+    @Test("Window-first Goals and Planning mask amount-derived progress while Privacy Mask is active")
+    func windowFirstGoalsProgressUsesPrivacyMask() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let goalsSource = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/Destinations/GoalsDestinationView.swift"),
+            encoding: .utf8
+        )
+        let planningSource = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/Destinations/PlanningDestinationView.swift"),
+            encoding: .utf8
+        )
+
+        #expect(!goalsSource.contains(#"\(summary.overallPercent)%"#))
+        #expect(!goalsSource.contains(#"\(goal.percentComplete)%"#))
+        #expect(goalsSource.contains("percent(summary.overallPercent)"))
+        #expect(goalsSource.contains("percent(goal.percentComplete)"))
+        #expect(goalsSource.contains("GoalProgressBar(goal: goal, isMasked: isMasked)"))
+        #expect(goalsSource.contains("GoalsOverallProgressBar("))
+        #expect(goalsSource.contains("isMasked: isMasked"))
+
+        #expect(!planningSource.contains(#"\(summary.overallPercent)% of total"#))
+        #expect(planningSource.contains("goalsPercent(summary.overallPercent)"))
+        #expect(planningSource.contains("if isMasked"))
+        #expect(planningSource.contains("ProgressView(value: summary.overallFraction)"))
+    }
+
     // MARK: - Account Type Categorization
 
     @Test("AccountDTO types correctly categorized")

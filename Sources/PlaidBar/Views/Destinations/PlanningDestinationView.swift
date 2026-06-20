@@ -315,13 +315,20 @@ struct PlanningDestinationView: View {
 
     private func goalsOverview(_ summary: GoalsSummary) -> some View {
         VStack(alignment: .leading, spacing: WindowMetrics.sm) {
-            ProgressView(value: summary.overallFraction)
-                .progressViewStyle(.linear)
-                .tint(SemanticColors.brand)
-                .accessibilityHidden(true)
+            if isMasked {
+                ProgressView()
+                    .progressViewStyle(.linear)
+                    .tint(.secondary)
+                    .accessibilityHidden(true)
+            } else {
+                ProgressView(value: summary.overallFraction)
+                    .progressViewStyle(.linear)
+                    .tint(SemanticColors.brand)
+                    .accessibilityHidden(true)
+            }
 
             HStack(alignment: .firstTextBaseline) {
-                Text("\(summary.overallPercent)% of total")
+                Text("\(goalsPercent(summary.overallPercent)) of total")
                     .windowBodyText()
                     .fontWeight(.semibold)
                     .monospacedDigit()
@@ -348,7 +355,7 @@ struct PlanningDestinationView: View {
 
     private func goalsAccessibilityLabel(_ summary: GoalsSummary) -> String {
         guard !summary.isEmpty else { return "Goals: no goals yet." }
-        var parts = ["Goals: \(summary.overallPercent) percent of total saved across \(summary.goalCount) goal\(summary.goalCount == 1 ? "" : "s")"]
+        var parts = ["Goals: \(goalsPercent(summary.overallPercent)) of total saved across \(summary.goalCount) goal\(summary.goalCount == 1 ? "" : "s")"]
         if summary.fundedCount > 0 { parts.append("\(summary.fundedCount) funded") }
         if summary.behindCount > 0 { parts.append("\(summary.behindCount) behind") }
         return parts.joined(separator: ". ")
@@ -356,6 +363,10 @@ struct PlanningDestinationView: View {
 
     private func goalsCurrency(_ amount: Double) -> String {
         PrivacyMaskPresentation.currency(amount, format: .full, isEnabled: isMasked, style: .compact)
+    }
+
+    private func goalsPercent(_ value: Int) -> String {
+        PrivacyMaskPresentation.percent(Double(value), decimals: 0, isEnabled: isMasked)
     }
 
     // MARK: - Hero metric data (surface-only; reuses Core engines)
