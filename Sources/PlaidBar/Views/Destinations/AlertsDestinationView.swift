@@ -2,25 +2,28 @@ import AppKit
 import PlaidBarCore
 import SwiftUI
 
-/// **Alerts** destination (3-column — IA §3.1/§5.8, `[⌘7]`) — Epic 7 / AND-585
-/// (ADR-001 window-first workspace).
+/// **Alerts** destination (3-column — IA §3.1/§5.8, `[⌘7]`) — Epic 7 / AND-585,
+/// redesigned to the window-first desktop language (AND-624).
 ///
-/// Content column = the alert **list** (severity-sorted, with inline acknowledge +
-/// "Acknowledge all"); detail column = the selected alert's **detail** with its
-/// recovery action and acknowledge toggle. The detail column is **content-gated,
-/// not existence-gated** (IA §3.1): with nothing selected it shows the "Select an
-/// alert" prompt rather than collapsing.
+/// Content column = the alert **list**, re-hosted at window (desk-distance) scale:
+/// a hero header carrying the unacknowledged count as a large tabular figure, then
+/// the feed grouped into **Needs attention** and **Acknowledged** ``WindowSection``
+/// cards (severity-sorted within each, ≤2 cards so the column reads calm). Detail
+/// column = the selected alert's **detail** with its recovery action and
+/// acknowledge toggle, also re-hosted in window-scale cards. The detail column is
+/// **content-gated, not existence-gated** (IA §3.1): with nothing selected it shows
+/// the "Select an alert" prompt rather than collapsing.
 ///
-/// **Surfaces existing engines, adds no alert source:**
+/// This is a **layout re-host only** — the alert source, sort/acknowledge/count
+/// policy, and recovery dispatch are unchanged:
 /// - The alerts are the live ``AttentionQueue`` rows (``AppState/attentionQueue``)
 ///   — the same "do I need to act?" rollup the menu-bar glance and Dashboard key
 ///   off (IA §1.3), so the feed stays truthful and consistent across surfaces.
-/// - ``AlertsInbox`` (new pure Core, unit-tested) reduces those rows + the
-///   acknowledged-id set into a sorted feed and the unacknowledged count. The rows
-///   are stateless (recomputed each render), so acknowledgement is layered on top
-///   as session-scoped per-window state on the per-window ``NavigationModel``
-///   (`alertSelection` + `acknowledgedAlertIDs`, AND-621/R-10) — the rows and the
-///   queue are never mutated.
+/// - ``AlertsInbox`` / ``AlertsSummary`` (pure Core, unit-tested) reduce those rows
+///   + the acknowledged-id set into the sorted feed, the unacknowledged count, and
+///   the header wording. Acknowledgement is session-scoped per-window state on the
+///   per-window ``NavigationModel`` (`alertSelection` + `acknowledgedAlertIDs`,
+///   AND-621/R-10) — the rows and the queue are never mutated.
 /// - Each alert's recovery action runs through the same dispatch the existing
 ///   ``AttentionQueueView`` uses, so an action means the same thing on every
 ///   surface.
@@ -31,9 +34,11 @@ import SwiftUI
 /// underlying condition — the badge keeps reflecting the live rows.
 ///
 /// Severity is always carried by text + SF Symbol, never color alone
-/// (ACCESSIBILITY.md). **Flag-OFF inert:** reached only when the window-first
-/// `Window` opens (`WindowFirstFeatureFlag` ON); with the flag off this file is
-/// never instantiated and the popover is byte-identical.
+/// (ACCESSIBILITY.md). Cards back their figures with the quiet solid
+/// ``WindowSection`` surface (data stays solid — glass is chrome-only, ADR-001/R-08).
+/// **Flag-OFF inert:** reached only when the window-first `Window` opens
+/// (`WindowFirstFeatureFlag` ON); with the flag off this file is never instantiated
+/// and the popover is byte-identical.
 struct AlertsDestinationView: View {
     @Environment(AppState.self) private var appState
 
@@ -54,17 +59,26 @@ struct AlertsDestinationView: View {
     var body: some View {
         let inbox = inbox
 
-        VStack(alignment: .leading, spacing: Spacing.md) {
-            header(inbox)
-
-            if inbox.isEmpty {
-                emptyState
-            } else {
-                alertsList(inbox)
+        ScrollView {
+            VStack(alignment: .leading, spacing: WindowMetrics.xl) {
+                if inbox.isEmpty {
+                    // All-clear: the empty state carries the message on its own; a
+                    // hero tile of zeros would just repeat "all clear" three times
+                    // and crowd a calm canvas, so it is suppressed here.
+                    emptyState
+                } else {
+                    AlertsHeroHeader(
+                        summary: summary,
+                        inbox: inbox,
+                        onAcknowledgeAll: { navigationModel.acknowledgeAllAlerts(in: inbox) }
+                    )
+                    feed(inbox)
+                }
             }
+            .padding(WindowMetrics.canvasMargin)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .padding(Spacing.lg)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .scrollContentBackground(.hidden)
         .navigationTitle(RouteDestination.alerts.title)
         // Keep the acknowledged set + selection bounded to the live rows so a
         // resolved condition never lingers acknowledged or selected.
@@ -75,70 +89,63 @@ struct AlertsDestinationView: View {
         .accessibilityElement(children: .contain)
     }
 
-    // MARK: - Header
+    // MARK: - Feed (grouped sections)
 
-    private func header(_ inbox: AlertsInbox) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
-            VStack(alignment: .leading, spacing: Spacing.xxs) {
-                HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
-                    Text("Alerts")
-                        .font(.title2.weight(.bold))
+    /// The feed, split into at most two ``WindowSection`` cards — **Needs
+    /// attention** (unacknowledged) above **Acknowledged** — so the column reads as
+    /// a calm work queue of two generous cards rather than one long undivided list.
+    /// Each section is hidden when it has no rows, so a feed with nothing
+    /// acknowledged shows a single card.
+    @ViewBuilder
+    private func feed(_ inbox: AlertsInbox) -> some View {
+        let unacked = inbox.entries.filter { !$0.isAcknowledged }
+        let acked = inbox.entries.filter(\.isAcknowledged)
 
-                    // Unacked-count chip. Meaning rides the number + the VoiceOver
-                    // label, never color alone (ACCESSIBILITY.md). Hidden at zero.
-                    if let badge = summary.unacknowledgedBadge {
-                        Text(badge)
-                            .font(.caption.weight(.semibold))
-                            .monospacedDigit()
-                            .foregroundStyle(SemanticColors.warning)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 2)
-                            .background(SemanticColors.warning.opacity(0.12), in: Capsule())
-                            .overlay { Capsule().stroke(SemanticColors.warning.opacity(0.20), lineWidth: 1) }
-                            .accessibilityLabel("\(inbox.unacknowledgedCount) unacknowledged")
-                    }
+        VStack(alignment: .leading, spacing: WindowMetrics.lg) {
+            if !unacked.isEmpty {
+                WindowSection(
+                    "Needs attention",
+                    systemImage: "exclamationmark.triangle"
+                ) {
+                    countAccessory(unacked.count)
+                } content: {
+                    alertRows(unacked, selectionEnabled: true)
                 }
-
-                Text(summary.title)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .accessibilityLabel(summary.accessibilityLabel)
             }
 
-            Spacer(minLength: Spacing.sm)
-
-            if inbox.unacknowledgedCount > 0 {
-                Button {
-                    navigationModel.acknowledgeAllAlerts(in: inbox)
-                } label: {
-                    Label("Acknowledge all", systemImage: "checkmark.circle")
+            if !acked.isEmpty {
+                WindowSection(
+                    "Acknowledged",
+                    systemImage: "bell.slash"
+                ) {
+                    countAccessory(acked.count)
+                } content: {
+                    alertRows(acked, selectionEnabled: true)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .help("Acknowledge every listed alert")
-                .accessibilityHint("Marks all listed alerts acknowledged.")
             }
         }
+        .accessibilityElement(children: .contain)
     }
 
-    // MARK: - List
+    private func countAccessory(_ count: Int) -> some View {
+        Text("\(count)")
+            .windowSupportingText()
+            .monospacedDigit()
+            .accessibilityLabel("\(count) alert\(count == 1 ? "" : "s")")
+    }
 
-    private func alertsList(_ inbox: AlertsInbox) -> some View {
-        ScrollView {
-            LazyVStack(spacing: Spacing.xs) {
-                ForEach(inbox.entries) { entry in
-                    AlertsRowView(
-                        entry: entry,
-                        isSelected: navigationModel.alertSelection == entry.id,
-                        onSelect: { navigationModel.alertSelection = entry.id },
-                        onToggleAcknowledged: { toggleAcknowledged(entry) }
-                    )
-                }
+    private func alertRows(_ entries: [AlertsInbox.Entry], selectionEnabled: Bool) -> some View {
+        VStack(spacing: WindowMetrics.xs) {
+            ForEach(entries) { entry in
+                AlertsRowView(
+                    entry: entry,
+                    isSelected: navigationModel.alertSelection == entry.id,
+                    onSelect: { navigationModel.alertSelection = entry.id },
+                    onToggleAcknowledged: { toggleAcknowledged(entry) }
+                )
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .scrollContentBackground(.hidden)
-        .accessibilityLabel("Alerts list, \(inbox.totalCount) item\(inbox.totalCount == 1 ? "" : "s")")
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func toggleAcknowledged(_ entry: AlertsInbox.Entry) {
@@ -157,13 +164,14 @@ struct AlertsDestinationView: View {
         } description: {
             Text("Nothing needs your attention right now. Connection, sync, and spending alerts show up here when something changes.")
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, minHeight: 320)
         .accessibilityLabel("Alerts. All clear, nothing needs attention.")
     }
 
     /// The detail-column (inspector) pane for Alerts — the selected alert's
-    /// detail, recovery action, and acknowledge toggle. Content-gated: shows the
-    /// "Select an alert" prompt when nothing is selected (IA §3.1).
+    /// detail, recovery action, and acknowledge toggle, re-hosted in window-scale
+    /// cards. Content-gated: shows the "Select an alert" prompt when nothing is
+    /// selected (IA §3.1).
     struct Inspector: View {
         @Environment(AppState.self) private var appState
         @Environment(\.openSettings) private var openSettings
@@ -247,11 +255,104 @@ struct AlertsDestinationView: View {
     }
 }
 
+// MARK: - Hero header
+
+/// The Alerts content column's hero header: the unacknowledged count as a large
+/// tabular figure (the destination's headline number, ``WindowHeroMetric``) with a
+/// glyph + summary line, and an "Acknowledge all" action when anything is pending.
+/// Meaning rides the number, the glyph shape, and the text — never tint alone
+/// (ACCESSIBILITY.md). It reuses the same quiet solid card surface as
+/// ``WindowHeroMetricTile`` so it sits in the dashboard's visual system.
+private struct AlertsHeroHeader: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    let summary: AlertsSummary
+    let inbox: AlertsInbox
+    let onAcknowledgeAll: () -> Void
+
+    private var unacked: Int { inbox.unacknowledgedCount }
+    private var hasPending: Bool { unacked > 0 }
+
+    /// Lead glyph: a clean bell when nothing is pending, an escalating glyph keyed
+    /// to the highest unacknowledged severity otherwise. Shape carries the state;
+    /// the figure and summary carry it again in text.
+    private var glyph: String {
+        guard hasPending else { return "bell.badge.slash" }
+        return inbox.highestUnacknowledgedSeverity?.statusSymbolName ?? "bell.badge"
+    }
+
+    private var accent: Color {
+        guard hasPending else { return .secondary }
+        switch inbox.highestUnacknowledgedSeverity {
+        case .blocked: return SemanticColors.negative
+        case .warning: return SemanticColors.warning
+        default: return SemanticColors.brand
+        }
+    }
+
+    private var figure: String { hasPending ? "\(unacked)" : "0" }
+
+    private var caption: String {
+        hasPending ? (unacked == 1 ? "needs attention" : "need attention") : "all clear"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: WindowMetrics.md) {
+            HStack(alignment: .top, spacing: WindowMetrics.md) {
+                VStack(alignment: .leading, spacing: WindowMetrics.xs) {
+                    Label {
+                        Text("Alerts")
+                            .windowSupportingText()
+                            .textCase(.uppercase)
+                    } icon: {
+                        Image(systemName: glyph)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(accent)
+                    }
+                    .labelStyle(.titleAndIcon)
+
+                    HStack(alignment: .firstTextBaseline, spacing: WindowMetrics.xs) {
+                        Text(figure)
+                            .windowHeroMetric()
+                            .rollingTabularNumber(figure, reduceMotion: reduceMotion)
+                            .foregroundStyle(AppearanceTextColors.primary)
+                            .lineLimit(1)
+                        Text(caption)
+                            .windowBodyText()
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Text(summary.title)
+                        .windowSupportingText()
+                        .accessibilityHidden(true)
+                }
+
+                Spacer(minLength: WindowMetrics.sm)
+
+                if hasPending {
+                    Button(action: onAcknowledgeAll) {
+                        Label("Acknowledge all", systemImage: "checkmark.circle")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                    .help("Acknowledge every listed alert")
+                    .accessibilityHint("Marks all listed alerts acknowledged.")
+                }
+            }
+        }
+        .padding(WindowMetrics.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .windowCardSurface()
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(summary.accessibilityLabel)
+    }
+}
+
 // MARK: - Row
 
-/// A single alert row in the list. Severity is carried by a status badge (glyph +
-/// label) and the acknowledged state by a strikethrough title + a labeled toggle —
-/// never tint alone.
+/// A single alert row in a section card, at window scale. Severity is carried by a
+/// status badge (glyph + label) and the acknowledged state by a strikethrough title
+/// + a labeled toggle — never tint alone (ACCESSIBILITY.md).
 private struct AlertsRowView: View {
     let entry: AlertsInbox.Entry
     let isSelected: Bool
@@ -260,50 +361,53 @@ private struct AlertsRowView: View {
 
     var body: some View {
         Button(action: onSelect) {
-            HStack(alignment: .top, spacing: Spacing.sm) {
+            HStack(alignment: .top, spacing: WindowMetrics.sm) {
                 Image(systemName: entry.severity.statusSymbolName)
-                    .font(.callout.weight(.semibold))
+                    .font(.title3.weight(.semibold))
                     .foregroundStyle(tint)
-                    .frame(width: Sizing.glyphSmall, height: Sizing.glyphSmall)
+                    .frame(width: 24, height: 24)
                     .accessibilityHidden(true)
 
-                VStack(alignment: .leading, spacing: Spacing.xxs) {
-                    HStack(spacing: Spacing.xs) {
+                VStack(alignment: .leading, spacing: WindowMetrics.xs) {
+                    HStack(spacing: WindowMetrics.xs) {
                         AlertSeverityBadge(severity: entry.severity, tint: tint)
                         Text(entry.title)
-                            .font(.caption.weight(.semibold))
+                            .windowBodyText()
+                            .fontWeight(.semibold)
                             .strikethrough(entry.isAcknowledged)
                             .foregroundStyle(entry.isAcknowledged ? .secondary : .primary)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.82)
+                            .minimumScaleFactor(0.85)
                     }
                     Text(entry.detail)
-                        .microText()
-                        .foregroundStyle(.secondary)
+                        .windowSupportingText()
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                Spacer(minLength: Spacing.xs)
+                Spacer(minLength: WindowMetrics.sm)
 
                 Button(action: onToggleAcknowledged) {
                     Image(systemName: entry.isAcknowledged ? "bell.slash.fill" : "bell.fill")
-                        .font(.callout)
+                        .font(.body)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(entry.isAcknowledged ? .secondary : tint)
                 .help(entry.isAcknowledged ? "Un-acknowledge" : "Acknowledge")
                 .accessibilityLabel(entry.isAcknowledged ? "Un-acknowledge alert" : "Acknowledge alert")
             }
-            .padding(.horizontal, Spacing.sm)
-            .padding(.vertical, Spacing.rowVertical)
+            .padding(.horizontal, WindowMetrics.sm)
+            .padding(.vertical, WindowMetrics.sm)
         }
         .buttonStyle(.plain)
         .background(
             isSelected ? SemanticColors.brand.opacity(0.10) : Color.clear,
-            in: RoundedRectangle(cornerRadius: Radius.control)
+            in: RoundedRectangle(cornerRadius: WindowMetrics.cardCornerRadius - 4)
         )
-        .nativeInsetSurface(stroke: panelStroke)
+        .overlay {
+            RoundedRectangle(cornerRadius: WindowMetrics.cardCornerRadius - 4)
+                .stroke(rowStroke, lineWidth: 1)
+        }
         .accessibilityElement(children: .ignore)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .accessibilityLabel(entry.accessibilityLabel)
@@ -318,7 +422,7 @@ private struct AlertsRowView: View {
         }
     }
 
-    private var panelStroke: Color {
+    private var rowStroke: Color {
         if isSelected { return SemanticColors.brand.opacity(0.28) }
         return entry.isAcknowledged ? Color.primary.opacity(0.06) : tint.opacity(0.16)
     }
@@ -326,8 +430,9 @@ private struct AlertsRowView: View {
 
 // MARK: - Detail (inspector)
 
-/// The selected alert's detail pane: title, severity, full message, an acknowledge
-/// toggle, and the recovery action (when the alert carries one).
+/// The selected alert's detail pane at window scale: a header card (severity, full
+/// message, acknowledge toggle) and a recovery card (when the alert carries an
+/// action), both on the quiet solid window card surface.
 private struct AlertDetailView: View {
     let entry: AlertsInbox.Entry
     let onToggleAcknowledged: () -> Void
@@ -337,13 +442,13 @@ private struct AlertDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Spacing.lg) {
+            VStack(alignment: .leading, spacing: WindowMetrics.lg) {
                 headerCard
                 if row.action != nil || row.actionTitle != nil {
                     actionCard
                 }
             }
-            .padding(Spacing.lg)
+            .padding(WindowMetrics.canvasMargin)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .scrollContentBackground(.hidden)
@@ -352,62 +457,61 @@ private struct AlertDetailView: View {
     }
 
     private var headerCard: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            HStack(spacing: Spacing.sm) {
+        VStack(alignment: .leading, spacing: WindowMetrics.md) {
+            HStack(spacing: WindowMetrics.sm) {
                 AlertSeverityBadge(severity: entry.severity, tint: tint)
                 if entry.isAcknowledged {
                     Label("Acknowledged", systemImage: "bell.slash")
-                        .font(.caption2.weight(.semibold))
+                        .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
                         .background(Color.primary.opacity(0.06), in: Capsule())
                 }
                 Spacer()
             }
 
             Text(row.title)
-                .font(.headline)
+                .windowCardTitle()
                 .fixedSize(horizontal: false, vertical: true)
 
             Text(row.detail)
-                .font(.subheadline)
+                .windowBodyText()
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             Toggle(isOn: Binding(get: { entry.isAcknowledged }, set: { _ in onToggleAcknowledged() })) {
                 Text(entry.isAcknowledged ? "Acknowledged" : "Acknowledge")
-                    .font(.caption.weight(.medium))
+                    .windowBodyText()
             }
             .toggleStyle(.switch)
-            .controlSize(.small)
+            .controlSize(.regular)
             .accessibilityHint("Mutes this alert from the unacknowledged count without resolving the underlying condition.")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(Spacing.md)
-        .glassSurface(.raised)
+        .padding(WindowMetrics.md)
+        .windowCardSurface()
     }
 
     private var actionCard: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
+        VStack(alignment: .leading, spacing: WindowMetrics.md) {
             Text("Resolve")
-                .font(.headline)
+                .windowCardTitle()
             Text("Run the suggested step to clear this alert.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .windowSupportingText()
                 .fixedSize(horizontal: false, vertical: true)
 
             Button(action: onAction) {
                 Label(row.actionTitle ?? "Resolve", systemImage: row.actionIconName ?? "arrow.right")
             }
             .buttonStyle(.borderedProminent)
-            .controlSize(.small)
+            .controlSize(.large)
             .accessibilityLabel(row.actionTitle ?? "Resolve")
             .accessibilityHint(row.accessibilityHint ?? row.detail)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(Spacing.md)
-        .glassSurface(.raised)
+        .padding(WindowMetrics.md)
+        .windowCardSurface()
     }
 
     private var tint: Color {
@@ -422,24 +526,24 @@ private struct AlertDetailView: View {
 // MARK: - Severity badge
 
 /// Severity badge — glyph + label, color-independent meaning carrier
-/// (ACCESSIBILITY.md). Mirrors the popover's attention badge without depending on
-/// its private view.
+/// (ACCESSIBILITY.md). At window scale uses the `.subheadline` supporting size so
+/// it reads cleanly beside a `.body` row title.
 private struct AlertSeverityBadge: View {
     let severity: AttentionQueueSeverity
     let tint: Color
 
     var body: some View {
-        HStack(spacing: Spacing.xxs) {
+        HStack(spacing: WindowMetrics.xs) {
             Image(systemName: severity.statusSymbolName)
-                .font(.caption2.weight(.semibold))
+                .font(.caption.weight(.semibold))
                 .accessibilityHidden(true)
             Text(severity.statusLabel)
-                .font(.caption2.weight(.semibold))
+                .font(.caption.weight(.semibold))
                 .lineLimit(1)
         }
         .foregroundStyle(tint)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 2)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
         .background(tint.opacity(0.11), in: Capsule())
         .overlay { Capsule().stroke(tint.opacity(0.22), lineWidth: 1) }
         .accessibilityHidden(true)
