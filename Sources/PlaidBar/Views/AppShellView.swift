@@ -54,6 +54,21 @@ struct AppShellView: View {
     /// injected from the scene. No-op until per-destination search lands.
     private let focusSearch: () -> Void
 
+    /// The window's unified `.searchable` query (AND-624). The shell owns one
+    /// search field in the toolbar; it is threaded into the destination that
+    /// supports search (currently the Dashboard, via `\.dashboardSearchQuery`).
+    /// Window-scoped `@State` so each window searches independently, and reset on
+    /// a destination switch so a stale query never leaks across surfaces.
+    @State private var searchText = ""
+
+    /// Whether the third (inspector) column is shown for a 3-column destination
+    /// (AND-624). The shell now hosts the detail pane via the native
+    /// `.inspector(isPresented:)` API with a toolbar toggle, instead of a fixed
+    /// `NavigationSplitView` `detail:` column, so the user can collapse it. Per
+    /// window, defaults open so a 3-column destination still lands on its full
+    /// layout (IA §3.1: the inspector is content-gated, not hidden).
+    @State private var isInspectorPresented = true
+
     /// `paletteModel` is optional so the default is constructed inside this
     /// `@MainActor` init body (a `@MainActor`-isolated default *argument* would be
     /// evaluated in the caller's nonisolated context and fail strict concurrency).
@@ -93,31 +108,52 @@ struct AppShellView: View {
         // Column policy per destination (IA §3.1, driven by the pure
         // `RouteDestination.prefersThreeColumnLayout` in PlaidBarCore). 3-column
         // destinations (Review, Transactions, Budgets, Goals, Alerts, Accounts)
-        // get sidebar + content + inspector; 2-column destinations (Dashboard,
-        // Planning, Insights) get sidebar + content only. Settings is never routed
-        // here — it opens the native Settings scene. Both branches share the same
-        // sidebar; the difference is whether a detail (inspector) column is
-        // mounted, so the column count tracks the selected destination's policy.
-        Group {
-            if destination.prefersThreeColumnLayout {
-                NavigationSplitView {
-                    SidebarView(selection: selection)
-                } content: {
-                    DestinationContentView(destination: destination)
-                } detail: {
+        // get sidebar + content + a native **inspector**; 2-column destinations
+        // (Dashboard, Planning, Insights) get sidebar + content only. Settings is
+        // never routed here — it opens the native Settings scene.
+        //
+        // The shell is a two-column `NavigationSplitView` (sidebar + content); the
+        // third column is the native `.inspector(isPresented:)` API (AND-624) with
+        // a toolbar toggle, rather than a fixed `NavigationSplitView` `detail:`
+        // column — so the detail pane can be collapsed at window scale per Apple's
+        // *Inspectors* guidance, and the unified per-destination `.toolbar` carries
+        // the title, primary actions, and the inspector toggle.
+        NavigationSplitView {
+            SidebarView(selection: selection)
+        } detail: {
+            DestinationContentView(destination: destination)
+                .inspector(isPresented: inspectorBinding(for: destination)) {
                     // Content-gated, not existence-gated (IA §3.1): the inspector
                     // always exists for a 3-column destination and shows its
                     // "Select a …" prompt when nothing is selected.
                     DestinationInspectorView(destination: destination)
+                        .inspectorColumnWidth(min: 280, ideal: 320, max: 420)
                 }
-            } else {
-                NavigationSplitView {
-                    SidebarView(selection: selection)
-                } detail: {
-                    DestinationContentView(destination: destination)
-                }
-            }
+                .toolbar { destinationToolbar(for: destination) }
+                // The shell owns ONE unified `.searchable` field, applied only to
+                // destinations that adopt it (currently the Dashboard). Destinations
+                // with their own inline search (e.g. Transactions' filter bar) are
+                // left untouched so there is never a competing second field — the
+                // propagation pass migrates those to the shell field one at a time.
+                .modifier(
+                    ShellSearchable(
+                        isEnabled: destinationSupportsSearch(destination),
+                        text: $searchText,
+                        prompt: searchPrompt(for: destination)
+                    )
+                )
         }
+        // Reset the search query and restore the inspector when the destination
+        // changes, so a query typed on one surface never leaks to another and a
+        // collapsed inspector does not persist into a destination where it is the
+        // primary detail view.
+        .onChange(of: destination) { _, _ in
+            searchText = ""
+            isInspectorPresented = true
+        }
+        // The Dashboard reads the live query from the environment to filter its
+        // account rows (the shell owns the field, the canvas owns the filtering).
+        .environment(\.dashboardSearchQuery, destinationSupportsSearch(destination) ? searchText : "")
         // Deep-link hand-off (ADR-001 / AND-597). The primary scene is a
         // declarative `Window`, so a route can't be threaded through `openWindow`;
         // instead the opener stages it on `AppState.pendingRoute` and this view
@@ -179,6 +215,106 @@ struct AppShellView: View {
             if isLocked { paletteModel.dismiss() }
         }
     }
+
+    // MARK: - Unified per-destination toolbar (AND-624)
+
+    /// The window's unified `.toolbar` for the current destination: shared primary
+    /// actions (refresh, Privacy Mask toggle) on every destination, plus a native
+    /// inspector toggle for the 3-column destinations. The destination *title* is
+    /// carried by each destination's `.navigationTitle`, which the split view
+    /// promotes into the toolbar — so the toolbar here adds actions, not a
+    /// duplicate title.
+    @ToolbarContentBuilder
+    private func destinationToolbar(for destination: RouteDestination) -> some ToolbarContent {
+        ToolbarItemGroup(placement: .primaryAction) {
+            // Privacy Mask toggle — shape carries the state (struck-through eye when
+            // masked), never color alone (ACCESSIBILITY.md). Disabled under App Lock
+            // (the gate already hides everything).
+            Button {
+                appState.togglePrivacyMask()
+            } label: {
+                Label(
+                    appState.shouldMaskFinancialValues ? "Show values" : "Hide values",
+                    systemImage: PrivacyMaskPresentation.toggleSymbolName(
+                        isMasked: appState.shouldMaskFinancialValues
+                    )
+                )
+            }
+            .disabled(appState.isContentLocked)
+            .help(appState.shouldMaskFinancialValues
+                ? "Show financial values"
+                : "Hide financial values (Privacy Mask)")
+
+            // Refresh — the same dashboard refresh the popover triggers; the symbol
+            // spins via the shared Reduce-Motion-aware `RefreshIcon`.
+            Button {
+                Task { await appState.refreshDashboard(force: true) }
+            } label: {
+                RefreshIcon(isLoading: appState.isLoading)
+            }
+            .disabled(appState.isLoading)
+            .help("Refresh")
+
+            // Inspector toggle — only for 3-column destinations, whose detail pane
+            // is now the native collapsible `.inspector`. Native API placement so it
+            // reads as the standard macOS inspector control.
+            if destination.prefersThreeColumnLayout {
+                Button {
+                    isInspectorPresented.toggle()
+                } label: {
+                    Label("Toggle Inspector", systemImage: "sidebar.trailing")
+                }
+                .help(isInspectorPresented ? "Hide Inspector" : "Show Inspector")
+            }
+        }
+    }
+
+    // MARK: - Inspector + search wiring (AND-624)
+
+    /// The inspector-presented binding for a destination. 3-column destinations
+    /// bind to the shell's `isInspectorPresented` state (toggleable); 2-column
+    /// destinations have no inspector, so they bind to a constant `false` and the
+    /// `.inspector` never mounts a pane.
+    private func inspectorBinding(for destination: RouteDestination) -> Binding<Bool> {
+        guard destination.prefersThreeColumnLayout else { return .constant(false) }
+        return Binding(get: { isInspectorPresented }, set: { isInspectorPresented = $0 })
+    }
+
+    /// Whether a destination adopts the shell's unified `.searchable` field. Only
+    /// the Dashboard does today (it filters its account rows via
+    /// `\.dashboardSearchQuery`); destinations with their own inline search keep it
+    /// until the propagation pass migrates them, so there is never a second field.
+    private func destinationSupportsSearch(_ destination: RouteDestination) -> Bool {
+        destination == .dashboard
+    }
+
+    /// The search-field prompt for a search-adopting destination.
+    private func searchPrompt(for destination: RouteDestination) -> String {
+        switch destination {
+        case .dashboard: "Search accounts"
+        default: "Search"
+        }
+    }
+}
+
+// MARK: - Conditional searchable
+
+/// Applies `.searchable` only when the destination adopts the shell search field,
+/// so destinations with their own inline search never get a competing second one.
+/// A `ViewModifier` (rather than an inline `if`) keeps the view-type stable across
+/// destination switches.
+private struct ShellSearchable: ViewModifier {
+    let isEnabled: Bool
+    @Binding var text: String
+    let prompt: String
+
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content.searchable(text: $text, placement: .toolbar, prompt: Text(prompt))
+        } else {
+            content
+        }
+    }
 }
 
 // MARK: - Sidebar
@@ -210,6 +346,7 @@ private struct SidebarView: View {
                 }
             }
         }
+        .listStyle(.sidebar)
         .navigationTitle("VaultPeek")
         .navigationSplitViewColumnWidth(min: 220, ideal: 248, max: 320)
         .safeAreaInset(edge: .bottom) {

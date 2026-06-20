@@ -1,77 +1,83 @@
 import PlaidBarCore
 import SwiftUI
 
-/// **Dashboard** destination (2-column composed canvas — IA §3.1/§5.1, `[⌘1]`) —
-/// AND-622 (ADR-001 window-first workspace).
+/// **Dashboard** destination — the window-first *reference* surface (AND-624,
+/// building on AND-622; ADR-001 window-first workspace, IA §3.1/§5.1, `[⌘1]`).
 ///
-/// The default / primary surface: a composed *overview* canvas with no
-/// master→detail relationship, so the shell renders only this content column (no
-/// inspector). It re-hosts the **same overview content the menu-bar popover and
-/// its detached desktop window show** (``MainPopover``), surfaced from the same
-/// reusable subviews + the same `PlaidBarCore` presentation engines — **no model
-/// or chart logic lives here** (surface only). The two surfaces can never diverge
-/// because they read the same `AppState` and the same Core.
+/// This is the design exemplar that sets the bar for the propagation pass across
+/// the other destinations: a **composed 2-column canvas that uses the window's
+/// width** rather than a re-hosted popover rail. It reads from the *same*
+/// `AppState` + `PlaidBarCore` presentation engines the menu-bar popover and the
+/// detached desktop window use — **no model or chart logic lives here** (surface
+/// only) — but it re-*hosts the data in a desktop layout*, it does not clone the
+/// popover's compact arrangement. The data can never diverge from the popover
+/// because both read the same Core; only the layout differs.
 ///
-/// Layout (IA §5.1): a two-column canvas — a **Summary** column (the existing
-/// ``WealthSummaryFlyout``: net-worth hero, balance mix, 30-day cashflow) beside
-/// an **Overview** column (the change receipt, balance time-machine, weekly
-/// review, category dashboard, status readiness, the activity heatmap + account
-/// rows, and the local-insight receipt). On a narrow window the two columns stack.
+/// Layout (desk-distance, ``WindowMetrics`` / ``WindowTypography``):
+/// 1. a **hero metrics row** — net worth, safe-to-spend, and last-30-day spend as
+///    large tabular figures with labels (the dashboard's headline numbers,
+///    surfaced from `WealthSummaryPresentation` + `SafeToSpendCalculator`, the
+///    same engines the rail/weekly-review use);
+/// 2. a **two-column card grid** below it — a generous left column (the 365-day
+///    activity heatmap + account rows, balance time-machine, weekly review) beside
+///    a right column (recurring obligations, the category dashboard, and the
+///    local-insight teaser), each card a ``WindowSection`` with a `title3` header
+///    and progressive disclosure. On a narrow window the two columns stack.
 ///
 /// **Drill-ins deep-link, they don't open a third column** (IA §3.1, §5.1): the
 /// 2-column dashboard has no inspector, so selecting an account routes to the
-/// **Accounts** destination via `\.openRoute` rather than opening a local
-/// inspector pane. With the window-first flag OFF the route handler is a no-op, so
-/// this view is never instantiated and the popover is byte-identical.
+/// **Accounts** destination via `\.openRoute`. With the window-first flag OFF the
+/// route handler is a no-op and this view is never instantiated, so the popover
+/// stays byte-identical.
 ///
-/// **Privacy Mask / App Lock:** the shell already paints the full
-/// ``AppLockedGateView`` over the whole window while content is *locked* (ADR-001
-/// Epic 10 / AND-588), so this canvas never double-gates; it only honors Privacy
-/// *Mask* the same way the re-hosted subviews already do (they read
-/// `AppState.shouldMaskFinancialValues`), so masked values stay dotted and are
-/// never leaked here.
+/// **Privacy Mask / App Lock:** the shell paints the full ``AppLockedGateView``
+/// over the whole window while content is *locked* (ADR-001 Epic 10 / AND-588),
+/// so this canvas never double-gates; it only honors Privacy *Mask* the way the
+/// re-hosted subviews and the hero figures do (every value runs through
+/// `PrivacyMaskPresentation` / `shouldMaskFinancialValues`), so masked figures
+/// stay dotted and are never leaked here.
 ///
 /// **Empty / loading / error states** match the popover: the re-hosted cards each
 /// carry their own loading redaction and empty copy, the overview block shows the
-/// shared fallback banner before setup completes, and a sync error surfaces in the
-/// inline ``DashboardErrorBanner`` at the top of the overview column — the same
-/// signals the popover renders.
+/// shared fallback banner before setup completes, the hero tiles read as
+/// dashes/“Private” before data lands, and a sync error surfaces in the inline
+/// ``DashboardErrorBanner`` at the top of the canvas.
 ///
 /// **Flag-OFF inert:** reached only when the window-first `Window` opens
-/// (`WindowFirstFeatureFlag` ON). This file is never instantiated in the
-/// flag-OFF popover build.
+/// (`WindowFirstFeatureFlag` ON). Never instantiated in the flag-OFF popover build.
 struct DashboardDestinationView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.openSettings) private var openSettings
     @Environment(\.openRoute) private var openRoute
-
-    /// Below this content width the two columns stack into one (a narrow window),
-    /// matching the popover's behavior of dropping the side rail when space is
-    /// tight. Tuned to the same ballpark as the popover's three-column floor.
-    private let twoColumnBreakpoint: CGFloat = 760
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         GeometryReader { proxy in
-            let isWide = proxy.size.width >= twoColumnBreakpoint
+            let isWide = proxy.size.width >= WindowMetrics.twoColumnBreakpoint
 
             ScrollView {
-                Group {
-                    if isWide {
-                        HStack(alignment: .top, spacing: Spacing.lg) {
-                            summaryColumn
-                                .frame(width: PopoverGeometry.railWidth, alignment: .topLeading)
+                VStack(alignment: .leading, spacing: WindowMetrics.xl) {
+                    if let error = appState.error {
+                        DashboardErrorBanner(error: error) { appState.error = nil }
+                    }
 
-                            overviewColumn
+                    heroMetricsRow
+
+                    if isWide {
+                        HStack(alignment: .top, spacing: WindowMetrics.lg) {
+                            primaryColumn
+                                .frame(maxWidth: .infinity, alignment: .topLeading)
+                            secondaryColumn
                                 .frame(maxWidth: .infinity, alignment: .topLeading)
                         }
                     } else {
-                        VStack(alignment: .leading, spacing: Spacing.lg) {
-                            summaryColumn
-                            overviewColumn
+                        VStack(alignment: .leading, spacing: WindowMetrics.xl) {
+                            primaryColumn
+                            secondaryColumn
                         }
                     }
                 }
-                .padding(Spacing.lg)
+                .padding(WindowMetrics.canvasMargin)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             }
             .scrollContentBackground(.hidden)
@@ -81,38 +87,72 @@ struct DashboardDestinationView: View {
         .task { await appState.loadInitialData() }
     }
 
-    // MARK: - Summary column
+    // MARK: - Hero metrics row
 
-    /// The left **Summary** column: the existing ``WealthSummaryFlyout`` the
-    /// popover mounts as its rail (net-worth hero, balance mix, 30-day cashflow),
-    /// re-hosted unchanged. Its "Add account" / "Recurring" / "Income flow"
-    /// affordances deep-link to the relevant destinations so the 2-column canvas
-    /// never needs a local inspector.
-    private var summaryColumn: some View {
-        WealthSummaryFlyout(
-            onAddAccount: { openRoute(.accounts()) },
-            onOpenSubscriptions: { openRoute(.planning(section: .recurring)) },
-            onOpenFlow: { openRoute(.planning(section: .incomeFlow)) }
-        )
-        .leftPanelSurface()
+    /// The headline figures across the top of the canvas. Reflows to wrap on a
+    /// narrow window so each figure keeps its tabular legibility (``WindowMetrics``
+    /// `heroTileMinWidth`). Every value runs through `PrivacyMaskPresentation`, so
+    /// masked figures show the dotted placeholder; none rely on color for meaning
+    /// (the label names the figure).
+    private var heroMetricsRow: some View {
+        let metrics = heroMetrics
+        return LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: WindowMetrics.heroTileMinWidth), spacing: WindowMetrics.lg)],
+            alignment: .leading,
+            spacing: WindowMetrics.lg
+        ) {
+            ForEach(metrics) { metric in
+                WindowHeroMetricTile(
+                    label: metric.label,
+                    value: metric.value,
+                    systemImage: metric.systemImage,
+                    detail: metric.detail,
+                    accent: metric.accent,
+                    reduceMotion: reduceMotion
+                )
+            }
+        }
+        .loadingRedaction(appState.loadState(for: .summaryCards))
         .accessibilityElement(children: .contain)
+        .accessibilityLabel("Headline metrics")
     }
 
-    // MARK: - Overview column
+    // MARK: - Columns
 
-    /// The right **Overview** column: the same center-column stack the popover
-    /// renders, top to bottom, each item an existing reusable subview driven by
-    /// the same `AppState` + Core. Order and content mirror ``MainPopover``'s
-    /// `dashboardColumn` so the two surfaces stay in lockstep.
-    private var overviewColumn: some View {
-        VStack(alignment: .leading, spacing: Spacing.lg) {
-            if let error = appState.error {
-                DashboardErrorBanner(error: error) { appState.error = nil }
-            }
+    /// The left/primary column: the year-scale activity heatmap + account rows
+    /// (the dashboard's core instrument), the balance time-machine, and the weekly
+    /// review. These re-host the existing reusable subviews unchanged — they each
+    /// carry their own card chrome and section header, so they are mounted directly
+    /// (not nested in a ``WindowSection``, which would card-in-a-card). The layout
+    /// gives them desk-distance room at ``WindowMetrics`` spacing; the data is
+    /// identical to the popover.
+    private var primaryColumn: some View {
+        VStack(alignment: .leading, spacing: WindowMetrics.lg) {
+            sectionHeader("Activity", systemImage: "square.grid.3x3.fill")
+
+            DashboardOverviewColumn(onSelectAccount: { account in
+                openRoute(.accounts(itemID: account.itemId))
+            })
 
             BalanceTimeMachineView()
 
             WeeklyReviewCard()
+
+            if shouldShowStatusReadiness {
+                statusReadinessCluster
+            }
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    /// The right/secondary column: recurring obligations, the category dashboard,
+    /// the first-run snapshot (when present), and the local-insight teaser. Like the
+    /// primary column, each re-hosted card self-cards, so they are mounted directly.
+    private var secondaryColumn: some View {
+        VStack(alignment: .leading, spacing: WindowMetrics.lg) {
+            sectionHeader("Money & insights", systemImage: "chart.pie")
+
+            DashboardRecurringCard(onOpen: { openRoute(.planning(section: .recurring)) })
 
             CategoryDashboardCard()
 
@@ -123,22 +163,26 @@ struct DashboardDestinationView: View {
                 )
             }
 
-            if shouldShowStatusReadiness {
-                statusReadinessCluster
-            }
-
-            // The activity heatmap + filter bar + account rows — the overview's
-            // core instrument. Account drill-ins deep-link to Accounts (no local
-            // inspector on a 2-column canvas).
-            DashboardOverviewColumn(onSelectAccount: { account in
-                openRoute(.accounts(itemID: account.itemId))
-            })
-
             DashboardLocalInsightCard()
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Dashboard overview")
     }
+
+    /// A window-scale column section header (`title3` via ``WindowCardTitle``) — the
+    /// reference pattern for grouping cards in a desktop canvas (the deliverable's
+    /// "section headers (title3)"). It is a heading, not a card, so it sits cleanly
+    /// above the self-carding cards below it without nesting a card in a card.
+    private func sectionHeader(_ title: String, systemImage: String) -> some View {
+        Label {
+            Text(title).windowCardTitle()
+        } icon: {
+            Image(systemName: systemImage).foregroundStyle(.secondary)
+        }
+        .labelStyle(.titleAndIcon)
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    // MARK: - Status readiness
 
     /// The status-readiness cluster (connection health + attention queue +
     /// readiness panel) is shown when setup is incomplete or the readiness verdict
@@ -150,17 +194,96 @@ struct DashboardDestinationView: View {
     }
 
     private var statusReadinessCluster: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
+        VStack(alignment: .leading, spacing: WindowMetrics.sm) {
             ConnectionHealthStripView()
-
             AttentionQueueView(title: "Attention", onAddAccount: { openRoute(.accounts()) })
-
             DashboardReadinessPanel(
                 openSettings: { openSettings() },
                 onAddAccount: { openRoute(.accounts()) }
             )
         }
         .accessibilityElement(children: .contain)
+    }
+
+    // MARK: - Hero metric data (surface-only; reuses Core engines)
+
+    /// One headline figure for the hero row. Pure presentation data, derived from
+    /// the same Core engines the rail/weekly-review use — no new model logic.
+    private struct HeroMetric: Identifiable {
+        let id: String
+        let label: String
+        let value: String
+        let systemImage: String
+        let detail: String?
+        let accent: Color
+    }
+
+    /// The wealth summary the rail also computes — the single source for net worth,
+    /// account count, and the 30-day cashflow used by the hero figures and the
+    /// safe-to-spend input.
+    private var wealthSummary: WealthSummaryPresentation {
+        WealthSummaryPresentation.evaluate(
+            accounts: appState.accounts,
+            transactions: appState.transactions,
+            isDemoMode: appState.usesDemoConnectionPresentation,
+            serverConnected: appState.serverConnected,
+            credentialsConfigured: appState.serverCredentialsConfigured,
+            linkedItemCount: appState.statusItemCount,
+            syncedItemCount: appState.serverSyncedItemCount ?? 0,
+            itemStatuses: appState.itemStatuses,
+            isSyncStale: appState.isSyncStale,
+            lastSyncRelative: appState.lastSyncRelative,
+            statusSyncText: appState.statusSyncText,
+            errorMessage: appState.error,
+            creditUtilizationThreshold: appState.creditUtilizationThreshold,
+            lowCashThreshold: appState.lowBalanceThreshold,
+            largeTransactionThreshold: appState.largeTransactionThreshold,
+            balanceHistory: appState.balanceHistory
+        )
+    }
+
+    private var heroMetrics: [HeroMetric] {
+        let masked = appState.shouldMaskFinancialValues
+        let summary = wealthSummary
+        let safeToSpend = SafeToSpendCalculator.compute(
+            accounts: appState.accounts,
+            recurringTransactions: appState.recurringTransactions,
+            cashflow: summary.cashflow,
+            asOf: Date()
+        )
+
+        let netWorth = HeroMetric(
+            id: "netWorth",
+            label: "Net worth",
+            value: PrivacyMaskPresentation.currency(summary.netWorth, format: .compact, isEnabled: masked),
+            systemImage: "chart.line.uptrend.xyaxis",
+            detail: accountCountDetail(summary.accountCount),
+            accent: SemanticColors.brand
+        )
+
+        let safe = HeroMetric(
+            id: "safeToSpend",
+            label: "Safe to spend",
+            value: PrivacyMaskPresentation.currency(safeToSpend.amount, format: .compact, isEnabled: masked),
+            systemImage: safeToSpend.confidence.iconName,
+            detail: "Through end of month · \(safeToSpend.confidence.label) confidence",
+            accent: safeToSpend.amount >= 0 ? SemanticColors.positive : SemanticColors.warning
+        )
+
+        let spend = HeroMetric(
+            id: "spend30",
+            label: "Last 30-day spend",
+            value: PrivacyMaskPresentation.currency(summary.cashflow.spending, format: .compact, isEnabled: masked),
+            systemImage: "creditcard",
+            detail: "Across \(summary.cashflow.transactionCount) transactions",
+            accent: .secondary
+        )
+
+        return [netWorth, safe, spend]
+    }
+
+    private func accountCountDetail(_ count: Int) -> String {
+        count == 1 ? "Across 1 account" : "Across \(count) accounts"
     }
 }
 
