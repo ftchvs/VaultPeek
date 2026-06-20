@@ -85,6 +85,15 @@ public struct NavigationState: Sendable, Equatable, Codable {
     /// from the unacknowledged count without resolving the underlying condition.
     public var acknowledgedAlertIDs: Set<String>
 
+    // MARK: Review workspace mode (AND-616)
+
+    /// The Review destination's Triage ↔ Table presentation. Held per-window so the
+    /// "Open review table" affordance can land the multi-select table while a fresh
+    /// window still opens on triage. Ephemeral per-window UI state (not persisted) —
+    /// a fresh window defaults to `.triage`, and the glance weekly-review deep-link
+    /// (`Route.from(weeklyReview:)`) still lands triage.
+    public var reviewWorkspaceMode: ReviewWorkspaceMode
+
     public init(
         destination: RouteDestination = .dashboard,
         dashboardFilter: DashboardAccountFilterKind = .all,
@@ -96,7 +105,8 @@ public struct NavigationState: Sendable, Equatable, Codable {
         goalSelection: String = "",
         budgetCategorySelection: SpendingCategory? = nil,
         alertSelection: String = "",
-        acknowledgedAlertIDs: Set<String> = []
+        acknowledgedAlertIDs: Set<String> = [],
+        reviewWorkspaceMode: ReviewWorkspaceMode = .triage
     ) {
         self.destination = destination
         self.dashboardFilter = dashboardFilter
@@ -109,6 +119,7 @@ public struct NavigationState: Sendable, Equatable, Codable {
         self.budgetCategorySelection = budgetCategorySelection
         self.alertSelection = alertSelection
         self.acknowledgedAlertIDs = acknowledgedAlertIDs
+        self.reviewWorkspaceMode = reviewWorkspaceMode
     }
 
     // MARK: - Pure transitions
@@ -307,5 +318,13 @@ public struct NavigationState: Sendable, Equatable, Codable {
         if !alertSelection.isEmpty, !rows.contains(where: { $0.id == alertSelection }) {
             alertSelection = ""
         }
+    }
+
+    // MARK: - Review workspace mode transitions (AND-616)
+
+    /// Set the Review destination's Triage ↔ Table presentation. Used by the
+    /// "Open review table" affordance to land the table before navigating to Review.
+    public mutating func setReviewWorkspaceMode(_ mode: ReviewWorkspaceMode) {
+        reviewWorkspaceMode = mode
     }
 }

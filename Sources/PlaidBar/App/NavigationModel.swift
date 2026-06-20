@@ -151,6 +151,16 @@ final class NavigationModel {
         set { state.selectAlert(id: newValue) }
     }
 
+    /// The Review destination's Triage ↔ Table presentation. Deliberately **not**
+    /// persisted: like the transaction row / budget category selections it is
+    /// ephemeral per-session per-window UI state, so a fresh window opens on
+    /// `.triage`. The "Open review table" affordance sets `.table` before
+    /// navigating to Review.
+    var reviewWorkspaceMode: ReviewWorkspaceMode {
+        get { state.reviewWorkspaceMode }
+        set { state.setReviewWorkspaceMode(newValue) }
+    }
+
     func deselectBudgetCategory() {
         state.deselectBudgetCategory()
     }

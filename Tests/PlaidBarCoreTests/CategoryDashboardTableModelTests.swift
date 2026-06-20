@@ -128,4 +128,47 @@ struct CategoryDashboardTableModelTests {
         #expect(totals.remaining == -60)  // 250 - 310
         #expect(totals.hasBudget)
     }
+
+    // MARK: - Budgets-destination "All categories" table visibility (AND-616)
+
+    /// Drives the demo presentation `BudgetsDestinationView` re-hosts the flat
+    /// "All categories" table from. A SwiftUI `Table` is not headlessly testable, so
+    /// this exercises the section's *data path*: the destination only renders the
+    /// `tableSection` when `presentation.isEmpty == false`, and the rows + footer
+    /// totals it shows come straight from this pure model. A non-empty (demo)
+    /// presentation must therefore yield visible rows and meaningful, budgeted
+    /// totals — the parity the legacy `CategoryDashboardWindow` exposed.
+    @Test("demo presentation yields a non-empty, budgeted flat table the Budgets destination renders")
+    func demoPresentationDrivesVisibleTable() {
+        let now = Formatters.parseTransactionDate("2026-06-13")!
+        let calendar = Calendar(identifier: .gregorian)
+        let budgets = Dictionary(
+            uniqueKeysWithValues: DemoFixtures.demoBudgets().map { ($0.category, $0.monthlyLimit) }
+        )
+        let p = CategoryDashboardBuilder.build(
+            transactions: DemoFixtures.demoBudgetScoringTransactions(now: now, calendar: calendar),
+            budgets: budgets,
+            asOf: now,
+            calendar: calendar
+        )
+
+        // Gating precondition for `tableSection` to render at all.
+        #expect(!p.isEmpty)
+
+        let rows = CategoryDashboardTableModel.rows(from: p, order: .spendDescending)
+        #expect(!rows.isEmpty)
+        // The demo set budgets several categories, so the budget/left footers mean
+        // something (the destination shows them rather than an em dash).
+        #expect(rows.contains { $0.isBudgeted })
+
+        let totals = CategoryDashboardTableModel.totals(for: rows)
+        #expect(totals.hasBudget)
+        #expect(totals.spent > 0)
+        #expect(totals.budget > 0)
+
+        // Re-sorting (the destination's segmented Picker) preserves the row set —
+        // the user never loses a category by switching order.
+        let byGroup = CategoryDashboardTableModel.rows(from: p, order: .groupThenSpend)
+        #expect(Set(byGroup.map(\.id)) == Set(rows.map(\.id)))
+    }
 }

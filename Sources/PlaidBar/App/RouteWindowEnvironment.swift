@@ -28,3 +28,22 @@ extension EnvironmentValues {
         set { self[OpenRouteKey.self] = newValue }
     }
 }
+
+/// Environment hook the menu-bar **glance** uses to open the primary `Window`
+/// without a destination — the "Open VaultPeek" button (ADR-001 §6, AND-616).
+///
+/// Supplied by the app scene (which owns SwiftUI's `openWindow(id:)`). The
+/// default is a no-op so previews / snapshots / any host that does not wire the
+/// window render the button inertly, mirroring ``openRoute``.
+private struct OpenPrimaryWindowKey: EnvironmentKey {
+    static let defaultValue: @MainActor @Sendable () -> Void = {}
+}
+
+extension EnvironmentValues {
+    /// Opens the window-first primary window (no destination change). No-op by
+    /// default.
+    var openPrimaryWindow: @MainActor @Sendable () -> Void {
+        get { self[OpenPrimaryWindowKey.self] }
+        set { self[OpenPrimaryWindowKey.self] = newValue }
+    }
+}

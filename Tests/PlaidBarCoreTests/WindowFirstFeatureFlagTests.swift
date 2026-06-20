@@ -6,15 +6,19 @@ import Testing
 struct WindowFirstFeatureFlagTests {
     // MARK: - Default
 
-    @Test("Defaults OFF when neither a CLI override nor a stored preference is set")
-    func defaultsOff() {
-        #expect(WindowFirstFeatureFlag.defaultValue == false)
-        #expect(WindowFirstFeatureFlag.resolve(cliOverrideRaw: nil, storedValue: nil) == false)
+    @Test("Defaults ON when neither a CLI override nor a stored preference is set (AND-616 flip)")
+    func defaultsOn() {
+        // AND-616 flipped the default: window-first is now the shipping
+        // experience; the flag is a hidden escape hatch this stage.
+        #expect(WindowFirstFeatureFlag.defaultValue == true)
+        #expect(WindowFirstFeatureFlag.resolve(cliOverrideRaw: nil, storedValue: nil) == true)
     }
 
-    @Test("With no override, the stored preference wins")
+    @Test("With no override, the stored preference wins (escape hatch can force the popover back)")
     func storedPreferenceWins() {
         #expect(WindowFirstFeatureFlag.resolve(cliOverrideRaw: nil, storedValue: true) == true)
+        // A user who explicitly stored OFF keeps the legacy popover even though
+        // the default is now ON.
         #expect(WindowFirstFeatureFlag.resolve(cliOverrideRaw: nil, storedValue: false) == false)
     }
 
@@ -36,24 +40,25 @@ struct WindowFirstFeatureFlagTests {
         #expect(WindowFirstFeatureFlag.parse("") == nil)
         #expect(WindowFirstFeatureFlag.parse("   ") == nil)
         #expect(WindowFirstFeatureFlag.parse(nil) == nil)
-        // Falls through to stored value when present, else the OFF default.
-        #expect(WindowFirstFeatureFlag.resolve(cliOverrideRaw: "garbage", storedValue: true) == true)
-        #expect(WindowFirstFeatureFlag.resolve(cliOverrideRaw: "garbage", storedValue: nil) == false)
+        // Falls through to stored value when present, else the now-ON default.
+        #expect(WindowFirstFeatureFlag.resolve(cliOverrideRaw: "garbage", storedValue: false) == false)
+        #expect(WindowFirstFeatureFlag.resolve(cliOverrideRaw: "garbage", storedValue: nil) == true)
     }
 
     // MARK: - resolved() wiring (UserDefaults + arguments)
 
-    @Test("resolved() returns OFF for an empty store and no CLI flag")
-    func resolvedDefaultsOff() {
+    @Test("resolved() returns ON for an empty store and no CLI flag (AND-616 flip)")
+    func resolvedDefaultsOn() {
         let defaults = Self.emptyDefaults()
-        #expect(WindowFirstFeatureFlag.resolved(arguments: ["PlaidBar"], defaults: defaults) == false)
+        #expect(WindowFirstFeatureFlag.resolved(arguments: ["PlaidBar"], defaults: defaults) == true)
     }
 
     @Test("resolved() reads the stored preference when no CLI flag is present")
     func resolvedReadsStoredPreference() {
         let defaults = Self.emptyDefaults()
-        defaults.set(true, forKey: WindowFirstFeatureFlag.storageKey)
-        #expect(WindowFirstFeatureFlag.resolved(arguments: ["PlaidBar"], defaults: defaults) == true)
+        // The escape hatch: an explicitly-stored OFF still forces the legacy popover.
+        defaults.set(false, forKey: WindowFirstFeatureFlag.storageKey)
+        #expect(WindowFirstFeatureFlag.resolved(arguments: ["PlaidBar"], defaults: defaults) == false)
     }
 
     @Test("resolved() lets the CLI flag override the stored preference")
