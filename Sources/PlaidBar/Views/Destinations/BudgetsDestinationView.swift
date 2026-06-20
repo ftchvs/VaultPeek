@@ -43,6 +43,11 @@ struct BudgetsDestinationView: View {
     /// The category whose budget the user is editing; drives the re-hosted
     /// `BudgetEditorSheet` (AND-541 pattern, mirroring `CategoryDashboardWindow`).
     @State private var budgetEditorCategory: BudgetEditorCategory?
+    /// User-selected flat-table ordering for the re-hosted "All categories" table.
+    /// Stored as the small `Sendable` ``CategoryDashboardTableModel/Order`` enum (a
+    /// `[KeyPathComparator]` is not `Sendable`, so it cannot live in `@State` under
+    /// strict concurrency); mapped to the pure model when the rows are built.
+    @State private var tableOrder: CategoryDashboardTableModel.Order = .spendDescending
 
     private var navigationModel: NavigationModel { appState.navigationModel }
 
@@ -61,6 +66,7 @@ struct BudgetsDestinationView: View {
                     heroMetricsRow
                     donutSection
                     treeSection
+                    tableSection
                 }
             }
             .padding(WindowMetrics.canvasMargin)
@@ -177,6 +183,29 @@ struct BudgetsDestinationView: View {
         PrivacyMaskPresentation.currency(amount, format: .compact, isEnabled: masked)
     }
 
+    /// Masked-aware currency for the flat table's money columns — matches the
+    /// Inspector / legacy `CategoryDashboardWindow` formatting so every amount in
+    /// the destination reads identically (Privacy Mask preserved).
+    private func currency(_ amount: Double) -> String {
+        PrivacyMaskPresentation.currency(
+            amount,
+            format: .full,
+            isEnabled: isMasked,
+            style: .compact
+        )
+    }
+
+    /// Redundant color cue for the table's status column — the glyph + label already
+    /// carry the verdict (ACCESSIBILITY.md), so tint is never the only signal.
+    private func statusTint(_ status: CategoryBudgetStatus?) -> Color {
+        switch status {
+        case .over: SemanticColors.negative
+        case .nearing: SemanticColors.warning
+        case .under: .secondary
+        case nil: .secondary
+        }
+    }
+
     // MARK: - Donut (hero visual)
 
     /// The spend donut — the destination's prominent hero visual, given its own
@@ -205,6 +234,168 @@ struct BudgetsDestinationView: View {
                 onEditBudget: selectAndEdit
             )
         }
+    }
+
+    // MARK: - Flat "All categories" table
+
+    /// The flat, sortable **SPENT / BUDGET / LEFT / Status / Plan** table — the
+    /// analytic counterpart to the two-level tree, re-hosted from the legacy
+    /// `CategoryDashboardWindow` so the "Open dashboard" route into Budgets keeps
+    /// every leaf in one sortable list (AND-616 category-dashboard parity). The rows
+    /// and footer totals come from the pure ``CategoryDashboardTableModel`` (no
+    /// recompute); the Plan column drives the same `selectAndEdit` the tree uses, so
+    /// editing here also selects the inspector. Amounts honor Privacy Mask; budget
+    /// pressure rides on glyph + text, never color alone (ACCESSIBILITY.md).
+    private var tableSection: some View {
+        let rows = CategoryDashboardTableModel.rows(from: presentation, order: tableOrder)
+        let totals = CategoryDashboardTableModel.totals(for: rows)
+
+        return WindowSection("All categories", systemImage: "tablecells") {
+            Picker("Sort", selection: $tableOrder) {
+                Text("By spend").tag(CategoryDashboardTableModel.Order.spendDescending)
+                Text("By group").tag(CategoryDashboardTableModel.Order.groupThenSpend)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            .accessibilityLabel("Sort categories")
+        } content: {
+            VStack(alignment: .leading, spacing: WindowMetrics.sm) {
+                Table(rows) {
+                    TableColumn("Category") { row in
+                        Label {
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text(row.categoryName)
+                                    .lineLimit(1)
+                                Text(row.groupTitle)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                        } icon: {
+                            Image(systemName: row.iconName)
+                                .foregroundStyle(CategoryAccentTokens.color(for: row.category))
+                        }
+                        .accessibilityLabel("\(row.categoryName), \(row.groupTitle)")
+                    }
+                    .width(min: 160, ideal: 200)
+
+                    TableColumn("Spent") { row in
+                        Text(currency(row.spent))
+                            .monospacedDigit()
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                    }
+                    .width(min: 80, ideal: 96)
+
+                    TableColumn("Budget") { row in
+                        Text(row.budget.map(currency) ?? "—")
+                            .monospacedDigit()
+                            .foregroundStyle(row.isBudgeted ? .primary : .secondary)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                    }
+                    .width(min: 80, ideal: 96)
+
+                    TableColumn("Left") { row in
+                        leftCell(row)
+                    }
+                    .width(min: 80, ideal: 96)
+
+                    TableColumn("Status") { row in
+                        Label(row.statusText, systemImage: row.statusIconName)
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(statusTint(row.status))
+                            .labelStyle(.titleAndIcon)
+                            .lineLimit(1)
+                            .accessibilityLabel(row.statusText)
+                    }
+                    .width(min: 120, ideal: 140)
+
+                    TableColumn("Plan") { row in
+                        budgetActionCell(row)
+                    }
+                    .width(min: 104, ideal: 120)
+                }
+                .frame(minHeight: 220)
+
+                tableFooter(totals)
+            }
+        }
+    }
+
+    private func leftCell(_ row: CategoryDashboardTableRow) -> some View {
+        guard let remaining = row.remaining else {
+            return AnyView(
+                Text("—")
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            )
+        }
+        // Over-budget rows read negative; the band glyph + text already carry the
+        // verdict, so the tint here is a redundant cue, never the only signal.
+        return AnyView(
+            Text(currency(remaining))
+                .monospacedDigit()
+                .foregroundStyle(remaining < 0 ? SemanticColors.negative : .primary)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .accessibilityLabel(remaining < 0
+                    ? "\(currency(abs(remaining))) over"
+                    : "\(currency(remaining)) left")
+        )
+    }
+
+    /// The flat-table "Set a budget" / "Edit" action cell (AND-541). Budgetable
+    /// rows get a labeled button that selects the row for the inspector and opens
+    /// `BudgetEditorSheet` (via the shared `selectAndEdit`); income / transfer rows
+    /// show an em dash, since they can never carry a budget.
+    @ViewBuilder
+    private func budgetActionCell(_ row: CategoryDashboardTableRow) -> some View {
+        let affordance = BudgetRowAffordance(category: row.category, isBudgeted: row.isBudgeted)
+        if affordance.isAvailable {
+            Button {
+                selectAndEdit(row.category)
+            } label: {
+                Label(affordance.title, systemImage: affordance.systemImage)
+                    .labelStyle(.titleAndIcon)
+                    .lineLimit(1)
+            }
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+            .accessibilityLabel(affordance.accessibilityLabel)
+        } else {
+            Text("—")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+        }
+    }
+
+    private func tableFooter(_ totals: CategoryDashboardTableModel.Totals) -> some View {
+        HStack(spacing: WindowMetrics.lg) {
+            footerStat("Total spent", currency(totals.spent))
+            if totals.hasBudget {
+                footerStat("Budgeted", currency(totals.budget))
+                footerStat(
+                    totals.remaining < 0 ? "Over" : "Left",
+                    currency(abs(totals.remaining)),
+                    tint: totals.remaining < 0 ? SemanticColors.negative : .primary
+                )
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.top, WindowMetrics.xs)
+    }
+
+    private func footerStat(_ label: String, _ value: String, tint: Color = .primary) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.callout.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(tint)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(label): \(value)")
     }
 
     // MARK: - Empty state
