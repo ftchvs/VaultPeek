@@ -36,15 +36,12 @@ import SwiftUI
 struct ReviewDestinationView: View {
     @Environment(AppState.self) private var appState
 
-    /// Triage ↔ Table presentation, persisted per-window so a power user who lives
-    /// in the table stays there across re-opens of the same window. `@SceneStorage`
-    /// keeps it window-scoped (each workspace window remembers its own mode) without
-    /// touching shared `AppState`.
-    @SceneStorage("review.workspace.mode") private var modeRaw = ReviewWorkspaceMode.triage.rawValue
-
+    /// Triage ↔ Table presentation, held on the per-window `NavigationModel`
+    /// (`PlaidBarCore`) so the "Open review table" affordance can land the table
+    /// before navigating here (AND-616). Per-window scene state (R-10), not shared
+    /// across windows; ephemeral, so a fresh window opens on `.triage`.
     private var mode: ReviewWorkspaceMode {
-        get { ReviewWorkspaceMode(rawValue: modeRaw) ?? .triage }
-        nonmutating set { modeRaw = newValue.rawValue }
+        appState.navigationModel.reviewWorkspaceMode
     }
 
     private var snapshot: TransactionReviewInboxSnapshot {
@@ -134,7 +131,7 @@ struct ReviewDestinationView: View {
     /// visible — the spec's "Triage | Table mode toggle".
     private var modePicker: some View {
         Picker("Review mode", selection: modeBinding) {
-            ForEach(ReviewWorkspaceMode.allCases) { mode in
+            ForEach(ReviewWorkspaceMode.allCases, id: \.self) { mode in
                 Label(mode.label, systemImage: mode.systemImage)
                     .tag(mode)
             }
@@ -149,7 +146,10 @@ struct ReviewDestinationView: View {
     }
 
     private var modeBinding: Binding<ReviewWorkspaceMode> {
-        Binding(get: { mode }, set: { mode = $0 })
+        Binding(
+            get: { appState.navigationModel.reviewWorkspaceMode },
+            set: { appState.navigationModel.reviewWorkspaceMode = $0 }
+        )
     }
 
     /// The detail-column (inspector) pane for Review — a contextual triage guide.
@@ -338,33 +338,6 @@ struct ReviewDestinationView: View {
                 Text("The review guide is hidden while Privacy Mask or App Lock is active.")
             }
             .accessibilityLabel("Review guide hidden while VaultPeek is private")
-        }
-    }
-}
-
-/// The Triage ↔ Table presentation of the Review workspace (Epic 6). A small,
-/// `Sendable`, `RawRepresentable` enum so it can live in `@SceneStorage`.
-private enum ReviewWorkspaceMode: String, CaseIterable, Identifiable {
-    /// Single-item triage: the embedded ``ReviewInboxView`` with date sections,
-    /// single-key actions, inline rule prompt, and undo.
-    case triage
-    /// Multi-select power review: the embedded ``ReviewTableWindow`` bulk engine
-    /// with blast-radius confirmation.
-    case table
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .triage: "Triage"
-        case .table: "Table"
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .triage: "checklist"
-        case .table: "tablecells"
         }
     }
 }

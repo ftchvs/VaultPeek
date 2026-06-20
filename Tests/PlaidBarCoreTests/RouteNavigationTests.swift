@@ -129,6 +129,70 @@ struct RouteTests {
         #expect(Route.from(weeklyReview: .safeToSpend) == .dashboard)
     }
 
+    // MARK: - Account deep-link mapper (AND-616)
+
+    /// A minimal account fixture: `id` is the Plaid `account_id` Accounts selects
+    /// by; `itemId` is the Plaid `item_id` a degraded-institution chip carries.
+    private func account(id: String, itemId: String) -> AccountDTO {
+        AccountDTO(
+            id: id,
+            itemId: itemId,
+            name: "Account \(id)",
+            type: .depository,
+            balances: BalanceDTO(available: 100, current: 100, isoCurrencyCode: "USD")
+        )
+    }
+
+    @Test("resolvingAccountSelection maps an item_id deep-link to the matching account_id (AND-616)")
+    func resolvingAccountSelectionMapsItemToAccount() {
+        let accounts = [
+            account(id: "acct_chk", itemId: "item_42"),
+            account(id: "acct_sav", itemId: "item_99"),
+        ]
+        // A chip carrying item_42 must resolve to that item's account_id.
+        #expect(
+            Route.accounts(itemID: "item_42").resolvingAccountSelection(in: accounts)
+                == .accounts(itemID: "acct_chk")
+        )
+    }
+
+    @Test("resolvingAccountSelection selects the first matching account for a multi-account item (AND-616)")
+    func resolvingAccountSelectionFirstMatch() {
+        // Two accounts share item_42; the first-listed is selected by design.
+        let accounts = [
+            account(id: "acct_first", itemId: "item_42"),
+            account(id: "acct_second", itemId: "item_42"),
+        ]
+        #expect(
+            Route.accounts(itemID: "item_42").resolvingAccountSelection(in: accounts)
+                == .accounts(itemID: "acct_first")
+        )
+    }
+
+    @Test("resolvingAccountSelection returns self when no account matches the item_id (AND-616)")
+    func resolvingAccountSelectionNoMatch() {
+        let accounts = [account(id: "acct_chk", itemId: "item_42")]
+        let route = Route.accounts(itemID: "item_missing")
+        #expect(route.resolvingAccountSelection(in: accounts) == route)
+        // Empty account list → unchanged too.
+        #expect(route.resolvingAccountSelection(in: []) == route)
+    }
+
+    @Test("resolvingAccountSelection returns self for a nil-item or non-accounts route (AND-616)")
+    func resolvingAccountSelectionPassThrough() {
+        let accounts = [account(id: "acct_chk", itemId: "item_42")]
+        // nil item → nothing to resolve.
+        #expect(
+            Route.accounts(itemID: nil).resolvingAccountSelection(in: accounts)
+                == .accounts(itemID: nil)
+        )
+        // A non-accounts route is returned untouched even if an id happens to match.
+        #expect(Route.dashboard.resolvingAccountSelection(in: accounts) == .dashboard)
+        #expect(
+            Route.transactions().resolvingAccountSelection(in: accounts) == .transactions()
+        )
+    }
+
     @Test("Route round-trips through Codable (deep-link persistence ready)")
     func codableRoundTrip() throws {
         let routes: [Route] = [
@@ -390,6 +454,44 @@ struct NavigationStateTransitionTests {
         state.selectGoal(id: "g7")
         state.go(to: .planning)
         #expect(state.goalSelection == "g7")
+    }
+
+    // MARK: - Review workspace mode (AND-616)
+
+    @Test("Review workspace mode defaults to triage")
+    func reviewModeDefault() {
+        #expect(NavigationState().reviewWorkspaceMode == .triage)
+    }
+
+    @Test("setReviewWorkspaceMode(.table) then go(to: .review) lands the table on Review (AND-616)")
+    func reviewTableModeViaGo() {
+        // The "Open review table" affordance sets the mode, then navigates: the
+        // window must land on Review *in table mode*, not triage.
+        var state = NavigationState()
+        state.setReviewWorkspaceMode(.table)
+        state.go(to: .review)
+        #expect(state.destination == .review)
+        #expect(state.reviewWorkspaceMode == .table)
+    }
+
+    @Test("setReviewWorkspaceMode(.table) survives an apply(.review) deep-link (AND-616)")
+    func reviewTableModeViaApply() {
+        // apply(_:) is the deep-link entry point; it must not reset a mode the
+        // caller set just before navigating.
+        var state = NavigationState()
+        state.setReviewWorkspaceMode(.table)
+        state.apply(.review())
+        #expect(state.destination == .review)
+        #expect(state.reviewWorkspaceMode == .table)
+    }
+
+    @Test("Review mode round-trips through Codable")
+    func reviewModeCodable() throws {
+        let state = NavigationState(destination: .review, reviewWorkspaceMode: .table)
+        let data = try JSONEncoder().encode(state)
+        let decoded = try JSONDecoder().decode(NavigationState.self, from: data)
+        #expect(decoded.reviewWorkspaceMode == .table)
+        #expect(decoded == state)
     }
 }
 
