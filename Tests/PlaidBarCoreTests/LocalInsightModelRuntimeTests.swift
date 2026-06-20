@@ -205,6 +205,38 @@ struct LocalInsightModelRuntimeTests {
         #expect(result.fallbackReason == .timeout)
     }
 
+    @Test("Runtime outer cancellation returns before the timeout elapses")
+    func runtimeOuterCancellationReturnsBeforeTimeoutElapses() async {
+        let state = BlockingCancellationIgnoringLocalInsightModel.State()
+        let model = BlockingCancellationIgnoringLocalInsightModel(
+            output: "Food spending was the largest driver this month.",
+            state: state
+        )
+        let timeoutNanoseconds: UInt64 = 200_000_000
+
+        let runtimeTask = Task {
+            await LocalInsightModelRuntime.generateSummary(
+                input: input(),
+                model: model,
+                fallbackSummary: { _ in "deterministic fallback" },
+                configuration: LocalInsightModelGenerationConfiguration(timeoutNanoseconds: timeoutNanoseconds)
+            )
+        }
+
+        await state.waitUntilStarted()
+        let startedAt = ContinuousClock.now
+        runtimeTask.cancel()
+        let result = await runtimeTask.value
+        let elapsed = startedAt.duration(to: .now)
+        #expect(!state.wasReleased)
+        state.release()
+
+        #expect(elapsed < .milliseconds(100))
+        #expect(result.summary == "deterministic fallback")
+        #expect(result.usedModelOutput == false)
+        #expect(result.fallbackReason == .modelError)
+    }
+
     private func input() -> LocalAIActivitySummaryInput {
         let current = LocalAIActivityMetrics(
             transactionCount: 4,
