@@ -654,6 +654,61 @@ struct PlaidBarTests {
         #expect(state.selectedAccountID == "")
     }
 
+    // MARK: - Destination restoration (mirrors NavigationModel.hydrate, AND-597)
+    //
+    // AND-597 adds a `navigation.destination` UserDefaults key so the window-first
+    // shell reopens on the destination the user left off (IA §2.1 selection
+    // persistence). `NavigationModel` is in the app target (not @testable here), so
+    // these pin the persist/restore contract at the pure layer: a stored
+    // `RouteDestination.rawValue` decodes back to the same destination, and an
+    // absent key falls back to Dashboard (the upgrading-user / flag-OFF default).
+
+    @Test("Persisted destination raw value restores the same destination (relaunch parity)")
+    func destinationRestoreParity() {
+        // Simulate NavigationModel.hydrate's destination branch for every
+        // destination: round-trip through the raw value the model writes.
+        for destination in RouteDestination.allCases {
+            let storedRaw = destination.rawValue // what persistDestination() writes
+            var restored = NavigationState()
+            if let decoded = RouteDestination(rawValue: storedRaw) {
+                restored.destination = decoded
+            }
+            #expect(restored.destination == destination)
+        }
+    }
+
+    @Test("Absent destination key falls back to Dashboard (upgrading user / flag-OFF default)")
+    func destinationRestoreDefaultsToDashboard() {
+        // hydrate() only overrides the default when the key is present and decodes;
+        // a nil stored value (the pre-AND-597 / flag-OFF case) leaves Dashboard.
+        let storedRaw: String? = nil
+        var restored = NavigationState()
+        if let raw = storedRaw, let decoded = RouteDestination(rawValue: raw) {
+            restored.destination = decoded
+        }
+        #expect(restored.destination == .dashboard)
+    }
+
+    @Test("Applying a deep-link route restores its destination AND its selection")
+    func routeRestoresDestinationAndSelection() {
+        // The full AND-597 round-trip at the pure layer: apply an account
+        // deep-link, persist what NavigationModel would (destination raw +
+        // account id), then rehydrate and confirm both survive a relaunch.
+        var live = NavigationState()
+        live.apply(.accounts(itemID: "demo_visa"))
+        let storedDestination = live.destination.rawValue
+        let storedAccountID = live.selectedAccountID
+
+        var restored = NavigationState()
+        if let decoded = RouteDestination(rawValue: storedDestination) {
+            restored.destination = decoded
+        }
+        restored.selectedAccountID = storedAccountID
+
+        #expect(restored.destination == .accounts)
+        #expect(restored.selectedAccountID == "demo_visa")
+    }
+
     // MARK: - Foundation Models categorization tier (mirrors AppState.refreshFoundationModelsCategorySuggestions)
 
     @Test("FM categorizer produces a foundationModels suggestion when Apple Intelligence is available")

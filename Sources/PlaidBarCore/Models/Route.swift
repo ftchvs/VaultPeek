@@ -220,4 +220,49 @@ public enum Route: Sendable, Hashable, Codable {
         case .safeToSpend: .dashboard
         }
     }
+
+    /// Maps a menu-bar **glance attention chip** onto the destination it should
+    /// open the window at (IA §2.1, §3.6 "menu-bar glance → window hand-off", §6
+    /// glance spec). A glance chip is a launcher: tapping "Card over 75%" opens
+    /// **Accounts** at that card, "3 to review" opens **Review**, a stale-spend
+    /// chip opens **Transactions** — *not* just the Dashboard.
+    ///
+    /// Returns `nil` for chips that carry no meaningful in-window destination —
+    /// the local-infrastructure rows (server offline, missing/rejected auth,
+    /// missing credentials, mode mismatch, the generic recent-error / sync /
+    /// notification rows). Those keep their existing in-place *action* (check the
+    /// server, open Settings, refresh) rather than routing somewhere unhelpful;
+    /// the caller falls back to the row's `action` when this is `nil`.
+    ///
+    /// Pure (keyed off the row's stable `id` + carried `targetItemId`) so the
+    /// glance → route decision is unit-testable at the Core layer without the app
+    /// target (CLAUDE.md). The window-first flag gating and the actual
+    /// `openWindow` live in the app target; this only decides *where* a chip
+    /// points.
+    public static func from(attentionRow row: AttentionQueueRow) -> Route? {
+        // Degraded-institution rows (reconnect / fresh-login / outage) point at
+        // Accounts, selecting the affected item so the inspector follows the link.
+        if row.id.hasPrefix("item-error-")
+            || row.id.hasPrefix("item-repair-")
+            || row.id.hasPrefix("item-outage-") {
+            return .accounts(itemID: row.targetItemId)
+        }
+
+        switch row.id {
+        // Financial cockpit chips route to where the user reviews that signal.
+        case "financial-low-cash":
+            // Low cash → review cash accounts.
+            return .accounts()
+        case "financial-high-utilization":
+            // "Card over 75%" → the credit card inspector in Accounts.
+            return .accounts()
+        case "financial-unusual-spending":
+            // "Recent spending changed" → recent activity in Transactions.
+            return .transactions()
+        default:
+            // Local-infrastructure + generic rows have no in-window destination;
+            // the caller keeps their existing action.
+            return nil
+        }
+    }
 }

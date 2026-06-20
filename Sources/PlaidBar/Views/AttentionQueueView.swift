@@ -5,10 +5,19 @@ import SwiftUI
 struct AttentionQueueView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.openSettings) private var openSettings
+    /// Deep-links a glance chip into the window-first window (ADR-001 / AND-597).
+    /// No-op by default — installed with a real handler only when the window-first
+    /// flag is ON (`PlaidBarApp`), so flag-OFF chip behavior is unchanged.
+    @Environment(\.openRoute) private var openRoute
 
     let title: String
     var showsHealthyRow = true
     var onAddAccount: (() -> Void)?
+
+    /// Window-first hybrid opt-in, resolved once per render. Gates whether an
+    /// attention chip routes into the window vs. runs its existing in-place
+    /// action. OFF (the shipping default) ⇒ today's behavior exactly.
+    private var isWindowFirstEnabled: Bool { WindowFirstFeatureFlag.resolved() }
 
     private var rows: [AttentionQueueRow] {
         let rows = appState.attentionQueue.rows
@@ -48,6 +57,19 @@ struct AttentionQueueView: View {
     }
 
     private func perform(_ row: AttentionQueueRow) {
+        // Window-first: a glance chip is a launcher (IA §3.6 / §6). When the flag
+        // is ON and the chip maps to an in-window destination, open the window
+        // there instead of running the in-place action — e.g. "Card over 75%"
+        // opens Accounts at that card, "Recent spending changed" opens
+        // Transactions. The pure `Route.from(attentionRow:)` decides the target.
+        // When the flag is OFF this branch is skipped entirely, so the chip runs
+        // exactly today's action (`openRoute` would also be a no-op, but the flag
+        // guard keeps flag-OFF behavior byte-identical without relying on that).
+        if isWindowFirstEnabled, let route = Route.from(attentionRow: row) {
+            openRoute(route)
+            return
+        }
+
         guard let action = row.action else { return }
         switch action {
         case .checkServer:

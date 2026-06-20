@@ -75,6 +75,19 @@ struct AppShellView: View {
         } detail: {
             ShellContentColumn(destination: appState.navigationModel.destination)
         }
+        // Deep-link hand-off (ADR-001 / AND-597). The primary scene is a
+        // declarative `Window`, so a route can't be threaded through `openWindow`;
+        // instead the opener stages it on `AppState.pendingRoute` and this view
+        // consumes it into the window's `NavigationModel`. Both triggers are
+        // needed: `onAppear` covers "this route opened the window" (the route was
+        // staged *before* the window existed, so no change fires after mount), and
+        // `onChange` covers "the window was already open" (a glance chip / App
+        // Intent fired while the workspace was on screen). `consumePendingRoute`
+        // is single-shot — it clears the slot — so the two never double-apply.
+        .onAppear { appState.consumePendingRoute(into: appState.navigationModel) }
+        .onChange(of: appState.pendingRoute) {
+            appState.consumePendingRoute(into: appState.navigationModel)
+        }
         // The ⌘K command palette is a window-level overlay (IA §3.3). It is only
         // ever reachable in this window-first surface — `AppShellView` is built
         // solely behind `WindowFirstFeatureFlag` — so the palette never exists in
