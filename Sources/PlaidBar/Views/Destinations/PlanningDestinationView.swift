@@ -1,31 +1,41 @@
 import PlaidBarCore
 import SwiftUI
 
-/// **Planning** destination (2-column — IA §3.1/§5.5, `[⌘4]`).
+/// **Planning** destination — window-first composed 2-column canvas (AND-624,
+/// Epic 5 / AND-583; ADR-001 window-first workspace, IA §3.1/§5.5, `[⌘4]`).
 ///
-/// Epic 5 / AND-583 (ADR-001 window-first workspace). A composed analytical
-/// canvas — no master list, so the shell renders only this content column (no
-/// inspector). It stacks the forward-looking planning surfaces, every one driven
-/// by an existing engine (no new aggregation here):
+/// Redesigned to match the **Dashboard reference** desktop language
+/// (``WindowMetrics`` / ``WindowTypography``): a **hero metrics row** of the
+/// headline forward-looking figures, then a **two-column card grid** (≤3 cards per
+/// column) under `title2` region banners — not the popover's tight single-column
+/// stack. It re-*hosts* the data the popover already computes in a desk-distance
+/// layout; **no new aggregation lives here** — every figure comes from an existing
+/// Core engine, so this canvas can never disagree with the popover or the other
+/// destinations:
 ///
-/// - **Safe to spend** — `SafeToSpendCard` over `SafeToSpendCalculator.compute`,
-///   the exact Core computation the popover uses, so the two surfaces can never
-///   disagree. It recomputes from live `transactions` / `recurringTransactions` /
-///   cashflow, so it updates whenever a transaction is edited.
-/// - **Cashflow projection** — `ProjectedBalanceChart` over
-///   `ProjectedBalancePresentation.evaluate`; self-hides until there is enough
-///   recorded balance history to anchor a line.
-/// - **Upcoming recurring** — `RecurringObligationsSection` over
-///   `RecurringObligationsPresentation.make`, the same read-only recurring
-///   presentation the flyout shows; self-hides when nothing is detected.
+/// - **Safe to spend** — the hero figure, plus an explainable breakdown via
+///   `SafeToSpendCard` over `SafeToSpendCalculator.compute` (the exact Core
+///   computation the popover uses). Recomputes from live `transactions` /
+///   `recurringTransactions` / cashflow, so it updates on every edit.
+/// - **Cashflow projection** — the prominent left-column hero card,
+///   `ProjectedBalanceChart` over `ProjectedBalancePresentation.evaluate`;
+///   self-hides until there is enough recorded balance history to anchor a line.
+/// - **Upcoming recurring** — `RecurringObligationsSection` (re-hosting the same
+///   read-only `RecurringObligationsPresentation` the flyout shows). The "open"
+///   affordance is omitted here — this *is* the recurring surface.
 /// - **Goals** — a read-only contribution overview (AND-606) over ``GoalsSummary``
 ///   of the live ``GoalsStore`` goals, so it can never disagree with the Goals
 ///   destination's numbers. Self-shows its empty state when no goals exist.
 ///
-/// Confidence / pressure cues ride on text + SF Symbol, never color alone
-/// (ACCESSIBILITY.md — the reused cards already enforce this). Window-first surface
-/// only: reached solely when `AppShellView` mounts (behind `WindowFirstFeatureFlag`,
-/// default OFF), so the flag-off popover is byte-identical.
+/// **Charts stay solid** (ADR-001 R-08): the projection chart and figures back
+/// onto the quiet ``WindowSection`` surface, never a translucent wash. Confidence
+/// / pressure cues ride on text + SF Symbol, never color alone (ACCESSIBILITY.md —
+/// the reused cards already enforce this). Every value runs through
+/// `PrivacyMaskPresentation`, so masked figures stay dotted and are never leaked.
+///
+/// **Flag-OFF inert:** reached only when `AppShellView` mounts (behind
+/// `WindowFirstFeatureFlag`, default OFF), so the flag-off popover is
+/// byte-identical and this view is never instantiated there.
 struct PlanningDestinationView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -56,122 +66,239 @@ struct PlanningDestinationView: View {
     private var isMasked: Bool { appState.shouldMaskFinancialValues }
 
     var body: some View {
-        let presentation = wealthPresentation
-        let privacyMaskEnabled = isMasked
+        GeometryReader { proxy in
+            let isWide = proxy.size.width >= WindowMetrics.twoColumnBreakpoint
 
-        ScrollView {
-            VStack(alignment: .leading, spacing: Spacing.lg) {
-                header
+            ScrollView {
+                VStack(alignment: .leading, spacing: WindowMetrics.xl) {
+                    heroMetricsRow
 
-                // Safe to spend — must match the Core computation (AND-401).
-                SafeToSpendCard(
-                    result: SafeToSpendCalculator.compute(
-                        accounts: appState.accounts,
-                        recurringTransactions: appState.recurringTransactions,
-                        cashflow: presentation.cashflow,
-                        asOf: Date()
-                    ),
-                    lastUpdatedRelative: appState.lastSyncRelative,
-                    privacyMaskEnabled: privacyMaskEnabled
-                )
-                .loadingRedaction(appState.loadState(for: .summaryCards))
-
-                // Forward cashflow projection (AND-498). Self-hides until there is
-                // enough recorded balance history to anchor a line.
-                cashflowProjectionSection(privacyMaskEnabled: privacyMaskEnabled)
-
-                // Upcoming recurring obligations (AND-400), read-only. Self-hides
-                // when no recurring series are detected.
-                RecurringObligationsSection(
-                    presentation: RecurringObligationsPresentation.make(
-                        from: appState.recurringTransactions,
-                        asOf: Date()
-                    ),
-                    privacyMaskEnabled: privacyMaskEnabled
-                )
-                .loadingRedaction(appState.loadState(for: .recurring))
-
-                // Goals contributions — read-only overview over the live goals
-                // (AND-606). Wired to `GoalsSummary` so it matches the Goals
-                // destination; self-shows an empty state when no goals exist.
-                goalsSummarySection(privacyMaskEnabled: privacyMaskEnabled)
+                    if isWide {
+                        HStack(alignment: .top, spacing: WindowMetrics.columnGap) {
+                            cashflowColumn
+                                .frame(maxWidth: .infinity, alignment: .topLeading)
+                            commitmentsColumn
+                                .frame(maxWidth: .infinity, alignment: .topLeading)
+                        }
+                    } else {
+                        VStack(alignment: .leading, spacing: WindowMetrics.xl) {
+                            cashflowColumn
+                            commitmentsColumn
+                        }
+                    }
+                }
+                .padding(WindowMetrics.canvasMargin)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
             }
-            .padding(Spacing.lg)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .scrollContentBackground(.hidden)
         }
-        .scrollContentBackground(.hidden)
         .navigationTitle(RouteDestination.planning.title)
-        .task { await appState.goalsStore.loadIfNeeded() }
+        .accessibilityElement(children: .contain)
+        .task {
+            await appState.loadInitialData()
+            await appState.goalsStore.loadIfNeeded()
+        }
+    }
+
+    // MARK: - Hero metrics row
+
+    /// The headline forward-looking figures across the top of the canvas — safe to
+    /// spend, the projected month-end / low balance, and what's committed monthly —
+    /// as large tabular figures. Reflows to wrap on a narrow window so each figure
+    /// keeps its tabular legibility (``WindowMetrics`` `heroTileMinWidth`). Every
+    /// value runs through `PrivacyMaskPresentation`; none rely on color for meaning
+    /// (the label names the figure, a glyph reinforces it).
+    private var heroMetricsRow: some View {
+        let metrics = heroMetrics
+        return LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: WindowMetrics.heroTileMinWidth), spacing: WindowMetrics.lg)],
+            alignment: .leading,
+            spacing: WindowMetrics.lg
+        ) {
+            ForEach(metrics) { metric in
+                WindowHeroMetricTile(
+                    label: metric.label,
+                    value: metric.value,
+                    systemImage: metric.systemImage,
+                    detail: metric.detail,
+                    accent: metric.accent,
+                    reduceMotion: reduceMotion
+                )
+            }
+        }
+        .loadingRedaction(appState.loadState(for: .summaryCards))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Planning headline metrics")
+    }
+
+    // MARK: - Columns
+
+    /// The left/primary **Cashflow** column — the forward look at the balance:
+    /// 1. the **projected balance** chart, given the prominent hero card at the top
+    ///    (the column's signature instrument); it self-hides until there is enough
+    ///    recorded history, falling back to a quiet "building forecast" card so the
+    ///    grid keeps a uniform card rather than a hole;
+    /// 2. the **safe-to-spend breakdown** — the explainable, signed reconciliation
+    ///    behind the hero figure.
+    private var cashflowColumn: some View {
+        VStack(alignment: .leading, spacing: WindowMetrics.lg) {
+            columnHeader("Cashflow", systemImage: "chart.xyaxis.line")
+
+            projectedBalanceCard
+
+            safeToSpendBreakdownCard
+        }
         .accessibilityElement(children: .contain)
     }
 
-    // MARK: - Header
+    /// The right/secondary **Commitments** column — what's already spoken for and
+    /// what you're saving toward:
+    /// 1. **upcoming recurring** obligations (re-hosted from the popover);
+    /// 2. the **goals** contribution overview.
+    private var commitmentsColumn: some View {
+        VStack(alignment: .leading, spacing: WindowMetrics.lg) {
+            columnHeader("Commitments", systemImage: "calendar.badge.clock")
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: Spacing.xxs) {
-            Text("Planning")
-                .font(.title2.weight(.bold))
-            Text("Look ahead: what's safe to spend, where the balance is heading, and what's already committed.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+            recurringCard
+
+            goalsCard
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
     }
 
-    // MARK: - Cashflow projection
+    /// A window-scale **column** region header (`title2` via ``WindowSectionTitle``)
+    /// — one step up from a card's `title3` title, so the column reads as a region
+    /// grouping its cards rather than nesting a card in a card.
+    private func columnHeader(_ title: String, systemImage: String) -> some View {
+        Label {
+            Text(title).windowSectionTitle()
+        } icon: {
+            Image(systemName: systemImage).foregroundStyle(.secondary)
+        }
+        .labelStyle(.titleAndIcon)
+        .accessibilityAddTraits(.isHeader)
+    }
 
+    // MARK: - Projected balance card
+
+    /// The forward cashflow projection (AND-498), hosted as the column's prominent
+    /// hero card. Charts stay solid (R-08): the chart backs onto the quiet
+    /// ``WindowSection`` surface, never glass. While Privacy Mask is on the forecast
+    /// is withheld (it would otherwise reveal the balance trajectory); while history
+    /// is too thin it shows a quiet "building forecast" line so the grid keeps a
+    /// uniform card rather than a hole.
     @ViewBuilder
-    private func cashflowProjectionSection(privacyMaskEnabled: Bool) -> some View {
+    private var projectedBalanceCard: some View {
         let projection = ProjectedBalancePresentation.evaluate(
             history: appState.balanceHistory,
             recurring: appState.recurringTransactions,
             now: Date()
         )
-        switch projection {
-        case let .available(balanceProjection):
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                Label("Projected balance", systemImage: "chart.xyaxis.line")
-                    .sectionTitle()
-                    .foregroundStyle(.secondary)
-
-                if privacyMaskEnabled {
-                    Label("Forecast hidden while VaultPeek is private", systemImage: "eye.slash")
-                        .detailText()
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, minHeight: 88, alignment: .leading)
+        WindowSection("Projected balance", systemImage: "chart.xyaxis.line") {
+            if case let .available(balanceProjection) = projection, !isMasked {
+                Text(projectedLowDetail(balanceProjection))
+                    .windowSupportingText()
+                    .monospacedDigit()
+            }
+        } content: {
+            switch projection {
+            case let .available(balanceProjection):
+                if isMasked {
+                    maskedForecastNotice
                 } else {
                     ProjectedBalanceChart(projection: balanceProjection)
+                        .frame(minHeight: WindowMetrics.heatmapHeroMinHeight)
                 }
+            case .insufficientHistory:
+                Label(
+                    "Building your forecast — a projected line appears once VaultPeek has recorded a little balance history.",
+                    systemImage: "hourglass"
+                )
+                .windowBodyText()
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, minHeight: WindowMetrics.heatmapHeroMinHeight, alignment: .leading)
             }
-            .padding(Spacing.md)
-            .glassSurface(.raised)
-            .loadingRedaction(appState.loadState(for: .summaryCards))
-            .accessibilityElement(children: .contain)
-        case .insufficientHistory:
-            // Stay quiet until there is enough history — no empty placeholder.
-            EmptyView()
+        }
+        .loadingRedaction(appState.loadState(for: .summaryCards))
+    }
+
+    private var maskedForecastNotice: some View {
+        Label("Forecast hidden while VaultPeek is private", systemImage: "eye.slash")
+            .windowBodyText()
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, minHeight: WindowMetrics.heatmapHeroMinHeight, alignment: .leading)
+    }
+
+    private func projectedLowDetail(_ projection: BalanceProjection) -> String {
+        "Projected low \(Formatters.currency(projection.projectedLow.balance, format: .compact)) on \(Formatters.displayDate(projection.projectedLow.date))"
+    }
+
+    // MARK: - Safe-to-spend breakdown card
+
+    /// The explainable, signed safe-to-spend reconciliation behind the hero figure
+    /// — `SafeToSpendCard` re-hosted from the popover. It self-cards (its own glass
+    /// chrome at popover scale), so like the Dashboard's re-hosted cards it is
+    /// mounted directly under the column banner rather than re-wrapped (no
+    /// card-in-card). The hero tile already carries the big figure; this card adds
+    /// the "why".
+    private var safeToSpendBreakdownCard: some View {
+        SafeToSpendCard(
+            result: safeToSpendResult,
+            lastUpdatedRelative: appState.lastSyncRelative,
+            privacyMaskEnabled: isMasked
+        )
+        .loadingRedaction(appState.loadState(for: .summaryCards))
+    }
+
+    // MARK: - Recurring obligations card
+
+    /// Upcoming recurring obligations (AND-400), read-only. Re-hosts the popover's
+    /// self-carding ``RecurringObligationsSection`` directly under the column banner
+    /// (no card-in-card), exactly as the Dashboard does. The "open" affordance is
+    /// dropped (`onOpenSubscriptions: nil`) because this *is* the recurring surface.
+    /// When nothing is detected it shows a quiet uniform ``WindowSection`` empty
+    /// card rather than self-hiding, so the grid keeps an even rhythm.
+    @ViewBuilder
+    private var recurringCard: some View {
+        let presentation = RecurringObligationsPresentation.make(
+            from: appState.recurringTransactions,
+            asOf: Date()
+        )
+        if presentation.isEmpty {
+            WindowSection("Recurring", systemImage: "repeat") {
+                EmptyView()
+            } content: {
+                Label("No recurring charges detected yet.", systemImage: "repeat")
+                    .windowBodyText()
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .accessibilityElement(children: .combine)
+        } else {
+            RecurringObligationsSection(
+                presentation: presentation,
+                onOpenSubscriptions: nil,
+                privacyMaskEnabled: isMasked
+            )
+            .loadingRedaction(appState.loadState(for: .recurring))
         }
     }
 
     // MARK: - Goals contribution overview (AND-606)
 
-    @ViewBuilder
-    private func goalsSummarySection(privacyMaskEnabled: Bool) -> some View {
+    /// The read-only goals contribution overview, hosted in a window-scale
+    /// ``WindowSection`` with a `title3` header and an "Open Goals" accessory that
+    /// switches to the Goals workspace. Figures are window `.body`+ and tabular;
+    /// progress is carried by the percent text and counts, never color alone.
+    private var goalsCard: some View {
         let summary = GoalsSummary.make(from: appState.goalsStore.goals)
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            HStack(alignment: .firstTextBaseline) {
-                Label("Goals", systemImage: RouteDestination.goals.systemImage)
-                    .sectionTitle()
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button("Open Goals") {
-                    appState.navigationModel.go(to: .goals)
-                }
-                .buttonStyle(.link)
-                .font(.caption)
-                .accessibilityHint("Switches to the Goals workspace.")
+        return WindowSection("Goals", systemImage: RouteDestination.goals.systemImage) {
+            Button("Open Goals") {
+                appState.navigationModel.go(to: .goals)
             }
-
+            .buttonStyle(.link)
+            .accessibilityHint("Switches to the Goals workspace.")
+        } content: {
             if summary.isEmpty {
                 ContentUnavailableView {
                     Label("No goals yet", systemImage: "flag.checkered")
@@ -180,17 +307,14 @@ struct PlanningDestinationView: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: 140)
             } else {
-                goalsOverview(summary, privacyMaskEnabled: privacyMaskEnabled)
+                goalsOverview(summary)
             }
         }
-        .padding(Spacing.md)
-        .glassSurface(.raised)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(goalsAccessibilityLabel(summary, privacyMaskEnabled: privacyMaskEnabled))
+        .accessibilityLabel(goalsAccessibilityLabel(summary))
     }
 
-    private func goalsOverview(_ summary: GoalsSummary, privacyMaskEnabled: Bool) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
+    private func goalsOverview(_ summary: GoalsSummary) -> some View {
+        VStack(alignment: .leading, spacing: WindowMetrics.sm) {
             ProgressView(value: summary.overallFraction)
                 .progressViewStyle(.linear)
                 .tint(SemanticColors.brand)
@@ -198,34 +322,31 @@ struct PlanningDestinationView: View {
 
             HStack(alignment: .firstTextBaseline) {
                 Text("\(summary.overallPercent)% of total")
-                    .font(.callout.weight(.semibold))
+                    .windowBodyText()
+                    .fontWeight(.semibold)
                     .monospacedDigit()
-                Spacer()
-                Text("\(goalsCurrency(summary.totalSaved, masked: privacyMaskEnabled)) of \(goalsCurrency(summary.totalTarget, masked: privacyMaskEnabled))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Spacer(minLength: WindowMetrics.sm)
+                Text("\(goalsCurrency(summary.totalSaved)) of \(goalsCurrency(summary.totalTarget))")
+                    .windowSupportingText()
                     .monospacedDigit()
             }
 
-            HStack(spacing: Spacing.md) {
+            HStack(spacing: WindowMetrics.md) {
                 Label("\(summary.goalCount) goal\(summary.goalCount == 1 ? "" : "s")", systemImage: "flag")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .windowSupportingText()
                 if summary.fundedCount > 0 {
                     Label("\(summary.fundedCount) funded", systemImage: "checkmark.seal")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .windowSupportingText()
                 }
                 if summary.behindCount > 0 {
                     Label("\(summary.behindCount) behind", systemImage: "exclamationmark.triangle")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .windowSupportingText()
                 }
             }
         }
     }
 
-    private func goalsAccessibilityLabel(_ summary: GoalsSummary, privacyMaskEnabled: Bool) -> String {
+    private func goalsAccessibilityLabel(_ summary: GoalsSummary) -> String {
         guard !summary.isEmpty else { return "Goals: no goals yet." }
         var parts = ["Goals: \(summary.overallPercent) percent of total saved across \(summary.goalCount) goal\(summary.goalCount == 1 ? "" : "s")"]
         if summary.fundedCount > 0 { parts.append("\(summary.fundedCount) funded") }
@@ -233,8 +354,95 @@ struct PlanningDestinationView: View {
         return parts.joined(separator: ". ")
     }
 
-    private func goalsCurrency(_ amount: Double, masked: Bool) -> String {
-        PrivacyMaskPresentation.currency(amount, format: .full, isEnabled: masked, style: .compact)
+    private func goalsCurrency(_ amount: Double) -> String {
+        PrivacyMaskPresentation.currency(amount, format: .full, isEnabled: isMasked, style: .compact)
+    }
+
+    // MARK: - Hero metric data (surface-only; reuses Core engines)
+
+    /// One headline figure for the hero row. Pure presentation data derived from
+    /// the same Core engines the rail / popover use — no new model logic.
+    private struct PlanningHeroMetric: Identifiable {
+        let id: String
+        let label: String
+        let value: String
+        let systemImage: String
+        let detail: String?
+        let accent: Color
+    }
+
+    /// The safe-to-spend result — the exact Core computation behind both the hero
+    /// figure and the breakdown card, computed once per body pass.
+    private var safeToSpendResult: SafeToSpendResult {
+        SafeToSpendCalculator.compute(
+            accounts: appState.accounts,
+            recurringTransactions: appState.recurringTransactions,
+            cashflow: wealthPresentation.cashflow,
+            asOf: Date()
+        )
+    }
+
+    private var heroMetrics: [PlanningHeroMetric] {
+        let masked = isMasked
+        let safe = safeToSpendResult
+
+        let safeTile = PlanningHeroMetric(
+            id: "safeToSpend",
+            label: "Safe to spend",
+            value: PrivacyMaskPresentation.currency(safe.amount, format: .compact, isEnabled: masked),
+            systemImage: safe.confidence.iconName,
+            detail: "Through \(Formatters.displayDate(safe.horizonEnd)) · \(safe.confidence.label)",
+            accent: safe.amount >= 0 ? SemanticColors.positive : SemanticColors.warning
+        )
+
+        var tiles = [safeTile]
+
+        // Projected month-end balance — only when there is enough history.
+        let projection = ProjectedBalancePresentation.evaluate(
+            history: appState.balanceHistory,
+            recurring: appState.recurringTransactions,
+            now: Date()
+        )
+        if case let .available(balanceProjection) = projection {
+            tiles.append(
+                PlanningHeroMetric(
+                    id: "projectedEnd",
+                    label: "Projected balance",
+                    value: PrivacyMaskPresentation.currency(balanceProjection.endBalance, format: .compact, isEnabled: masked),
+                    systemImage: "calendar.badge.clock",
+                    detail: "Low \(PrivacyMaskPresentation.currency(balanceProjection.projectedLow.balance, format: .compact, isEnabled: masked)) on \(Formatters.displayDate(balanceProjection.projectedLow.date))",
+                    accent: SemanticColors.brand
+                )
+            )
+        }
+
+        // Committed monthly recurring.
+        let recurring = RecurringObligationsPresentation.make(
+            from: appState.recurringTransactions,
+            asOf: Date()
+        )
+        if !recurring.isEmpty {
+            tiles.append(
+                PlanningHeroMetric(
+                    id: "recurringMonthly",
+                    label: "Committed monthly",
+                    value: PrivacyMaskPresentation.currency(recurring.estimatedMonthlyTotal, format: .compact, isEnabled: masked),
+                    systemImage: "repeat",
+                    detail: recurringDetail(recurring),
+                    accent: .secondary
+                )
+            )
+        }
+
+        return tiles
+    }
+
+    private func recurringDetail(_ recurring: RecurringObligationsPresentation) -> String {
+        let charges = "\(recurring.count) recurring charge\(recurring.count == 1 ? "" : "s")"
+        if recurring.attentionCount > 0 {
+            return "\(charges) · \(recurring.attentionCount) need attention"
+        }
+        return charges
     }
 }
 
