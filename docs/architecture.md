@@ -16,6 +16,7 @@ executable names below intentionally keep the PlaidBar name; see
 | `PlaidBar` | SwiftUI menu bar app, popover, setup flow, settings, local client calls, notification UX | Store Plaid secrets, call Plaid directly, contain server persistence logic |
 | `PlaidBarCore` | Shared DTOs, formatting, sync reducers, recurring detection, dashboard presenters, attention queue models, local insight receipt models, local data path helpers | Depend on SwiftUI, Hummingbird, Plaid network clients, or cloud AI SDKs |
 | `PlaidBarServer` | Hummingbird localhost API, Plaid API client, SQLite storage, link flow, token vault, auth middleware | Render UI, depend on app state, expose secrets in status responses |
+| `PlaidBarCache` | App-only disposable SwiftData read-model cache (`@Model` + `@ModelActor`) for instant cold render and offline reads, scoped per Plaid environment | Become a source of truth, reach the server/CLI/widget targets, write to the App Group container, or sync to iCloud |
 
 ## Runtime Topology
 
