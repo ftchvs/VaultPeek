@@ -175,6 +175,34 @@ public enum InsightSection: String, CaseIterable, Sendable, Hashable, Codable {
     case trends
 }
 
+/// The Review workspace's Triage ↔ Table presentation (Epic 6, AND-616). Lives in
+/// `PlaidBarCore` (rather than as a private view-level enum) so the in-window
+/// route hooks can set the mode before navigating and the mode→navigation
+/// behavior is unit-testable without the app target (CLAUDE.md). A small,
+/// `Sendable`, `RawRepresentable` enum so it can drive a `Picker`/persisted store.
+public enum ReviewWorkspaceMode: String, Sendable, Codable, CaseIterable {
+    /// Single-item triage: the embedded `ReviewInboxView` with date sections,
+    /// single-key actions, inline rule prompt, and undo.
+    case triage
+    /// Multi-select power review: the embedded `ReviewTableWindow` bulk engine with
+    /// blast-radius confirmation.
+    case table
+
+    public var label: String {
+        switch self {
+        case .triage: "Triage"
+        case .table: "Table"
+        }
+    }
+
+    public var systemImage: String {
+        switch self {
+        case .triage: "checklist"
+        case .table: "tablecells"
+        }
+    }
+}
+
 // MARK: - Route
 
 /// A typed deep-link target. Any surface can navigate anywhere by constructing a
@@ -286,5 +314,30 @@ public enum Route: Sendable, Hashable, Codable {
             // the caller keeps their existing action.
             return nil
         }
+    }
+
+    /// Resolves an `.accounts(itemID:)` deep-link whose `itemID` is actually a
+    /// Plaid *item_id* into one keyed by the matching `AccountDTO.id`, so the
+    /// Accounts destination (which selects by `AccountDTO.id`) lands on the right
+    /// row.
+    ///
+    /// Degraded-institution attention chips carry the affected Plaid `item_id`
+    /// (`AttentionQueueRow.targetItemId`), but the Accounts list selects accounts
+    /// by `AccountDTO.id`; `AccountDTO.itemId` provides the item→account hop. For a
+    /// multi-account item the **first matching account is selected by design** —
+    /// the chip points at the institution, and the inspector then surfaces the
+    /// item's other accounts.
+    ///
+    /// Any non-`.accounts` route, an `.accounts(itemID: nil)` route, or an item id
+    /// with no matching account returns `self` unchanged, so the caller can apply
+    /// the result unconditionally. Pure + `accounts`-driven so the resolution is
+    /// unit-testable at the Core layer (CLAUDE.md); the `AppState` wiring that calls
+    /// this with the live account list lives in the app target.
+    public func resolvingAccountSelection(in accounts: [AccountDTO]) -> Route {
+        if case .accounts(let itemID?) = self,
+           let accountID = accounts.first(where: { $0.itemId == itemID })?.id {
+            return .accounts(itemID: accountID)
+        }
+        return self
     }
 }
