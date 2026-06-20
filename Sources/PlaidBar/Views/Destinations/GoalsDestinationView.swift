@@ -101,7 +101,7 @@ struct GoalsDestinationView: View {
                 )
                 WindowHeroMetricTile(
                     label: "Overall progress",
-                    value: "\(summary.overallPercent)%",
+                    value: percent(summary.overallPercent),
                     systemImage: "chart.bar.fill",
                     detail: remainingDetail(summary),
                     accent: SemanticColors.positive,
@@ -111,7 +111,11 @@ struct GoalsDestinationView: View {
             .accessibilityElement(children: .contain)
             .accessibilityLabel(summaryAccessibilityLabel(summary))
 
-            GoalsOverallProgressBar(fraction: summary.overallFraction, isComplete: false)
+            GoalsOverallProgressBar(
+                fraction: summary.overallFraction,
+                isComplete: false,
+                isMasked: isMasked
+            )
         }
     }
 
@@ -136,7 +140,7 @@ struct GoalsDestinationView: View {
     }
 
     private func summaryAccessibilityLabel(_ summary: GoalsSummary) -> String {
-        var parts = ["Goals summary", "\(summary.overallPercent) percent overall"]
+        var parts = ["Goals summary", "\(percent(summary.overallPercent)) overall"]
         parts.append("\(currency(summary.totalSaved)) saved of \(currency(summary.totalTarget)) target")
         if summary.fundedCount > 0 { parts.append("\(summary.fundedCount) funded") }
         if summary.behindCount > 0 { parts.append("\(summary.behindCount) behind pace") }
@@ -205,6 +209,10 @@ struct GoalsDestinationView: View {
 
     private func currency(_ amount: Double) -> String {
         PrivacyMaskPresentation.currency(amount, format: .compact, isEnabled: isMasked)
+    }
+
+    private func percent(_ value: Int) -> String {
+        PrivacyMaskPresentation.percent(Double(value), decimals: 0, isEnabled: isMasked)
     }
 
     /// The detail-column (inspector) pane for Goals — the selected goal's detail,
@@ -296,12 +304,12 @@ private struct GoalListRow: View {
 
                     Spacer(minLength: WindowMetrics.sm)
 
-                    Text("\(goal.percentComplete)%")
+                    Text(percent(goal.percentComplete))
                         .font(.title3.weight(.semibold).monospacedDigit())
                         .foregroundStyle(.primary)
                 }
 
-                GoalProgressBar(goal: goal)
+                GoalProgressBar(goal: goal, isMasked: isMasked)
 
                 paceLabel
             }
@@ -338,7 +346,7 @@ private struct GoalListRow: View {
     }
 
     private var accessibilityLabel: String {
-        var parts = ["\(goal.name), \(goal.percentComplete) percent funded"]
+        var parts = ["\(goal.name), \(percent(goal.percentComplete)) funded"]
         parts.append("\(currency(goal.contributedAmount)) of \(currency(goal.targetAmount))")
         if goal.isComplete {
             parts.append("Funded")
@@ -352,6 +360,10 @@ private struct GoalListRow: View {
     private func currency(_ amount: Double) -> String {
         PrivacyMaskPresentation.currency(amount, format: .full, isEnabled: isMasked, style: .compact)
     }
+
+    private func percent(_ value: Int) -> String {
+        PrivacyMaskPresentation.percent(Double(value), decimals: 0, isEnabled: isMasked)
+    }
 }
 
 // MARK: - Progress bars
@@ -361,12 +373,21 @@ private struct GoalListRow: View {
 /// color-independent (ACCESSIBILITY.md).
 private struct GoalProgressBar: View {
     let goal: Goal
+    let isMasked: Bool
 
+    @ViewBuilder
     var body: some View {
-        ProgressView(value: goal.fractionComplete)
-            .progressViewStyle(.linear)
-            .tint(goal.isComplete ? SemanticColors.positive : SemanticColors.brand)
-            .accessibilityHidden(true)
+        if isMasked {
+            ProgressView()
+                .progressViewStyle(.linear)
+                .tint(.secondary)
+                .accessibilityHidden(true)
+        } else {
+            ProgressView(value: goal.fractionComplete)
+                .progressViewStyle(.linear)
+                .tint(goal.isComplete ? SemanticColors.positive : SemanticColors.brand)
+                .accessibilityHidden(true)
+        }
     }
 }
 
@@ -375,12 +396,21 @@ private struct GoalProgressBar: View {
 private struct GoalsOverallProgressBar: View {
     let fraction: Double
     let isComplete: Bool
+    let isMasked: Bool
 
+    @ViewBuilder
     var body: some View {
-        ProgressView(value: fraction)
-            .progressViewStyle(.linear)
-            .tint(isComplete ? SemanticColors.positive : SemanticColors.brand)
-            .accessibilityHidden(true)
+        if isMasked {
+            ProgressView()
+                .progressViewStyle(.linear)
+                .tint(.secondary)
+                .accessibilityHidden(true)
+        } else {
+            ProgressView(value: fraction)
+                .progressViewStyle(.linear)
+                .tint(isComplete ? SemanticColors.positive : SemanticColors.brand)
+                .accessibilityHidden(true)
+        }
     }
 }
 
@@ -441,10 +471,10 @@ private struct GoalDetailPane: View {
                 .minimumScaleFactor(0.6)
                 .accessibilityLabel("Saved \(currency(goal.contributedAmount))")
 
-            GoalProgressBar(goal: goal)
+            GoalProgressBar(goal: goal, isMasked: isMasked)
 
             HStack(alignment: .firstTextBaseline) {
-                Text("\(goal.percentComplete)% funded")
+                Text("\(percent(goal.percentComplete)) funded")
                     .windowBodyText()
                     .fontWeight(.semibold)
                     .monospacedDigit()
@@ -533,6 +563,10 @@ private struct GoalDetailPane: View {
 
     private func currency(_ amount: Double) -> String {
         PrivacyMaskPresentation.currency(amount, format: .full, isEnabled: isMasked, style: .compact)
+    }
+
+    private func percent(_ value: Int) -> String {
+        PrivacyMaskPresentation.percent(Double(value), decimals: 0, isEnabled: isMasked)
     }
 
     private static let dateFormatter: DateFormatter = {

@@ -17,6 +17,9 @@ SERVER_BINARY="$APP_DIR/Contents/MacOS/PlaidBarServer"
 SPARKLE_FRAMEWORK="$APP_DIR/Contents/Frameworks/Sparkle.framework"
 INFO_PLIST="$APP_DIR/Contents/Info.plist"
 APP_ICON="$APP_DIR/Contents/Resources/AppIcon.icns"
+WIDGET_APPEX="$APP_DIR/Contents/PlugIns/PlaidBarWidgetExtension.appex"
+WIDGET_INFO_PLIST="$WIDGET_APPEX/Contents/Info.plist"
+WIDGET_BINARY="$WIDGET_APPEX/Contents/MacOS/PlaidBarWidgetExtension"
 
 if [ ! -f "$INFO_PLIST" ]; then
     echo "Missing Info.plist at $INFO_PLIST" >&2
@@ -65,10 +68,56 @@ if ! otool -l "$APP_BINARY" | grep -q "@executable_path/../Frameworks"; then
     exit 1
 fi
 
+# Widget extension (.appex) — embedded under Contents/PlugIns so the WidgetKit
+# widgets, Control Center controls, and the Spotlight/Shortcuts App Intents
+# install with the app (AND-586 distribution). The extension only loads when it
+# is present with a valid WidgetKit extension point and a verifiable signature.
+# Entitlements (App Group / sandbox) are intentionally NOT asserted here: the
+# ad-hoc package omits them so the local/DMG build stays launchable (see
+# package-app.sh and PR #476); the App Group entitlement is applied and verified
+# only on the Developer ID + notarized path in Scripts/notarize.sh.
+if [ ! -d "$WIDGET_APPEX" ]; then
+    echo "Missing widget extension at $WIDGET_APPEX" >&2
+    echo "package-app.sh must embed PlaidBarWidgetExtension.appex under Contents/PlugIns." >&2
+    exit 1
+fi
+
+if [ ! -f "$WIDGET_INFO_PLIST" ]; then
+    echo "Missing widget Info.plist at $WIDGET_INFO_PLIST" >&2
+    exit 1
+fi
+
+if [ ! -x "$WIDGET_BINARY" ]; then
+    echo "Missing executable widget binary at $WIDGET_BINARY" >&2
+    exit 1
+fi
+
+WIDGET_EXTENSION_POINT="$(/usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' "$WIDGET_INFO_PLIST" 2>/dev/null || true)"
+if [ "$WIDGET_EXTENSION_POINT" != "com.apple.widgetkit-extension" ]; then
+    echo "Widget Info.plist NSExtensionPointIdentifier must be com.apple.widgetkit-extension (got: ${WIDGET_EXTENSION_POINT:-<missing>})" >&2
+    exit 1
+fi
+
+if [ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$WIDGET_INFO_PLIST" 2>/dev/null || true)" != "com.ftchvs.PlaidBar.WidgetExtension" ]; then
+    echo "Widget Info.plist CFBundleIdentifier must be com.ftchvs.PlaidBar.WidgetExtension" >&2
+    exit 1
+fi
+
+if [ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$WIDGET_INFO_PLIST" 2>/dev/null || true)" != "PlaidBarWidgetExtension" ]; then
+    echo "Widget Info.plist CFBundleExecutable must be PlaidBarWidgetExtension" >&2
+    exit 1
+fi
+
+if ! codesign --verify --strict "$WIDGET_APPEX" >/dev/null 2>&1; then
+    echo "Widget extension signature failed to verify for $WIDGET_APPEX (ad-hoc or Developer ID)" >&2
+    codesign --verify --strict --verbose=2 "$WIDGET_APPEX" >&2 || true
+    exit 1
+fi
+
 if ! codesign --verify --deep --strict "$APP_DIR" >/dev/null 2>&1; then
     echo "Code signature failed to verify for $APP_DIR (ad-hoc or Developer ID)" >&2
     codesign --verify --deep --strict --verbose=2 "$APP_DIR" >&2 || true
     exit 1
 fi
 
-echo "Validated VaultPeek.app bundle at $APP_DIR"
+echo "Validated VaultPeek.app bundle (incl. widget extension) at $APP_DIR"
