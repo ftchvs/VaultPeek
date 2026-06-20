@@ -190,12 +190,23 @@ disposable SwiftData store (`@Model` + `@ModelActor`). It depends on
 CLI, and widget targets so the SwiftData dependency never reaches them.
 
 The cache is **disposable**: rebuildable from the authoritative in-memory/JSON
-data, never a source of truth, scoped per Plaid environment, and deleted on local
-reset and when the last institution is removed. It is written only into the
-private data dir (`~/.vaultpeek/dashboard-read-model-cache-v1.store`, file `0o600`)
-with `cloudKitDatabase: .none`, so it never syncs to iCloud and never reaches the
+data, never a source of truth, and scoped per Plaid environment. It is written
+only into the private data dir (`~/.vaultpeek/dashboard-read-model-cache-v1.store`
+plus the per-transaction `transaction-cache-v1.store` — the latter mirrors the
+full transaction history, including transaction IDs, account IDs, merchant names,
+and amounts, so it is the more sensitive of the two; both files `0o600`) with
+`cloudKitDatabase: .none`, so neither syncs to iCloud and neither reaches the
 App Group container. If SwiftData is unavailable or the store fails to open, the
-app falls back to its existing JSON/UserDefaults cold path. See `SECURITY.md`.
+app falls back to its existing JSON/UserDefaults cold path.
+
+`clearReadModelCache()` deletes both SwiftData stores on local reset and when the
+last institution is removed — but **only when a usable `ReadModelCacheStore` can
+be opened**. When SwiftData is unavailable or the store cannot be opened it bumps
+the clear epoch and returns without deleting, so `dashboard-read-model-cache-v1.store`,
+its `-wal`/`-shm` sidecars, and the transaction cache can survive a reset on disk.
+`LocalDataStore.resetLocalData` independently removes the JSON/scoped caches,
+Plaid SQLite files (and sidecars), pending-link state, saved goals, and the logo
+cache. See `SECURITY.md`.
 
 ## Data Flow
 

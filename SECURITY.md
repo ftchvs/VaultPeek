@@ -72,18 +72,27 @@ Use GitHub private vulnerability reporting if available, or contact the reposito
 - The disposable SwiftData read-model cache (AND-566) accelerates cold render and
   offline reads. It holds financial values and Plaid identifiers, so — like the
   existing `accounts.json` / `transactions.json` caches — it is written **only**
-  into the local private data dir (`~/.vaultpeek/dashboard-read-model-cache-v1.store`,
-  or `$PLAIDBAR_DATA_DIR`), with the directory at `0o700` and the store file (and
-  its `-wal`/`-shm` sidecars) tightened to `0o600`. It uses
-  `ModelConfiguration(..., cloudKitDatabase: .none)`, so it is **never** synced to
-  iCloud, and it is **never** written to the world-readable App Group container —
-  that boundary remains exclusive to the redacted glance / `FinanceSnapshot`
-  payloads. The cache is a **disposable** read-model: rebuildable from the
-  authoritative in-memory/JSON data, never a source of truth, scoped per Plaid
-  environment, deleted on local reset and when the last institution is removed,
-  and safe to delete at any time. If SwiftData is unavailable or the store fails
-  to open/read/write, the app falls back to its existing JSON/UserDefaults cold
-  path with no behavior change.
+  into the local private data dir (`~/.vaultpeek/dashboard-read-model-cache-v1.store`
+  plus the per-transaction `transaction-cache-v1.store`, or `$PLAIDBAR_DATA_DIR`),
+  with the directory at `0o700` and the store files (and their `-wal`/`-shm`
+  sidecars) tightened to `0o600`. `transaction-cache-v1.store` mirrors the full
+  transaction history (transaction IDs, account IDs, merchant names, amounts), so
+  it is the more sensitive of the two and must not be overlooked in a local-data
+  audit. Both use `ModelConfiguration(..., cloudKitDatabase: .none)`, so neither
+  is **ever** synced to iCloud, and neither is **ever** written to the
+  world-readable App Group container — that boundary remains exclusive to the
+  redacted glance / `FinanceSnapshot` payloads. The cache is a **disposable**
+  read-model: rebuildable from the authoritative in-memory/JSON data, never a
+  source of truth, scoped per Plaid environment, and safe to delete at any time.
+  `clearReadModelCache()` deletes both stores on local reset and when the last
+  institution is removed, but **only when a usable `ReadModelCacheStore` can be
+  opened**; if SwiftData is unavailable or the store cannot be opened it returns
+  without deleting, so both `.store` files (and their sidecars) can survive a
+  reset on disk. `LocalDataStore.resetLocalData` separately removes the
+  JSON/scoped caches, Plaid SQLite files, pending-link state, goals, and logo
+  cache. If SwiftData is unavailable or the store fails to open/read/write, the
+  app falls back to its existing JSON/UserDefaults cold path with no behavior
+  change.
 - `/api/status` is authenticated and exposes readiness metadata: version,
   environment, credential availability, storage path, linked item count,
   synced item count, sync readiness, and last sync time. With the opt-in
