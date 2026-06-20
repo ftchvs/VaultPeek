@@ -451,4 +451,118 @@ struct NavigationStateIndependenceTests {
         #expect(windowA.selectedAccountID == "demo_savings")
         #expect(windowB.selectedAccountID == "")
     }
+
+    // MARK: - AND-621: Budgets / Alerts selection are per-window (R-10)
+
+    @Test("Budgets category selection is per-window — independent across windows (AND-621)")
+    func independentBudgetSelection() {
+        var windowA = NavigationState()
+        var windowB = NavigationState()
+
+        // Default: both unselected (content-gated inspector prompt).
+        #expect(windowA.budgetCategorySelection == nil)
+        #expect(windowB.budgetCategorySelection == nil)
+
+        windowA.selectBudgetCategory(.foodAndDrink)
+        // B is untouched; A holds its own selection.
+        #expect(windowA.budgetCategorySelection == .foodAndDrink)
+        #expect(windowB.budgetCategorySelection == nil)
+
+        windowB.selectBudgetCategory(.shopping)
+        #expect(windowA.budgetCategorySelection == .foodAndDrink)
+        #expect(windowB.budgetCategorySelection == .shopping)
+
+        windowA.deselectBudgetCategory()
+        #expect(windowA.budgetCategorySelection == nil)
+        #expect(windowB.budgetCategorySelection == .shopping)
+    }
+
+    @Test("Alert selection is per-window — independent across windows (AND-621)")
+    func independentAlertSelection() {
+        var windowA = NavigationState()
+        var windowB = NavigationState()
+
+        // Default: both empty ("" sentinel content-gates the inspector prompt).
+        #expect(windowA.alertSelection == "")
+        #expect(windowB.alertSelection == "")
+
+        windowA.selectAlert(id: "alert_sync")
+        #expect(windowA.alertSelection == "alert_sync")
+        #expect(windowB.alertSelection == "")
+
+        windowB.selectAlert(id: "alert_reconnect")
+        #expect(windowA.alertSelection == "alert_sync")
+        #expect(windowB.alertSelection == "alert_reconnect")
+
+        windowA.deselectAlert()
+        #expect(windowA.alertSelection == "")
+        #expect(windowB.alertSelection == "alert_reconnect")
+    }
+
+    @Test("Alert acknowledgement is per-window — independent across windows (AND-621)")
+    func independentAlertAcknowledgement() {
+        var windowA = NavigationState()
+        var windowB = NavigationState()
+
+        windowA.acknowledgeAlert("alert_sync")
+        #expect(windowA.acknowledgedAlertIDs == ["alert_sync"])
+        #expect(windowB.acknowledgedAlertIDs.isEmpty)
+
+        windowB.acknowledgeAlert("alert_reconnect")
+        #expect(windowA.acknowledgedAlertIDs == ["alert_sync"])
+        #expect(windowB.acknowledgedAlertIDs == ["alert_reconnect"])
+
+        windowA.unacknowledgeAlert("alert_sync")
+        #expect(windowA.acknowledgedAlertIDs.isEmpty)
+        #expect(windowB.acknowledgedAlertIDs == ["alert_reconnect"])
+    }
+
+    @Test("pruneAlerts drops acknowledged ids + a stale selection no longer in the live rows (AND-621)")
+    func pruneAlertsSelfHeal() {
+        let liveRows = [
+            AttentionQueueRow(id: "alert_sync", severity: .warning, title: "Sync", detail: "D"),
+        ]
+
+        var window = NavigationState()
+        window.selectAlert(id: "alert_gone")          // selection no longer present
+        window.acknowledgeAlert("alert_sync")          // still live → kept
+        window.acknowledgeAlert("alert_gone")          // resolved → pruned
+
+        window.pruneAlerts(toRowsIn: liveRows)
+
+        #expect(window.alertSelection == "")                       // stale selection cleared
+        #expect(window.acknowledgedAlertIDs == ["alert_sync"])     // only live id survives
+    }
+
+    @Test("pruneAlerts keeps a still-live selection + acknowledgement (AND-621)")
+    func pruneAlertsKeepsLive() {
+        let liveRows = [
+            AttentionQueueRow(id: "alert_sync", severity: .warning, title: "Sync", detail: "D"),
+        ]
+
+        var window = NavigationState()
+        window.selectAlert(id: "alert_sync")
+        window.acknowledgeAlert("alert_sync")
+
+        window.pruneAlerts(toRowsIn: liveRows)
+
+        #expect(window.alertSelection == "alert_sync")
+        #expect(window.acknowledgedAlertIDs == ["alert_sync"])
+    }
+
+    @Test("acknowledgeAllAlerts acknowledges every listed entry (AND-621)")
+    func acknowledgeAllAlerts() {
+        let inbox = AlertsInbox.make(
+            rows: [
+                AttentionQueueRow(id: "a", severity: .warning, title: "A", detail: "D"),
+                AttentionQueueRow(id: "b", severity: .blocked, title: "B", detail: "D"),
+            ],
+            acknowledgedIDs: []
+        )
+
+        var window = NavigationState()
+        window.acknowledgeAllAlerts(in: inbox)
+
+        #expect(window.acknowledgedAlertIDs == ["a", "b"])
+    }
 }

@@ -60,6 +60,30 @@ public struct NavigationState: Sendable, Equatable, Codable {
     /// AND-621 anti-pattern). Ephemeral like the transaction selection: not
     /// persisted, so a relaunch lands on the unselected prompt.
     public var goalSelection: String
+    // MARK: Budgets / Alerts selection state (AND-621, R-10)
+
+    /// The selected category on the **Budgets** destination, or `nil` when none —
+    /// shared between the category tree (content column) and the category
+    /// detail/editor (inspector column). Previously the singleton
+    /// `BudgetsSelectionModel.shared`; holding it here makes two windows hold
+    /// independent Budgets selection (R-10). `nil` (an enum has no "" sentinel)
+    /// content-gates the inspector to its "Select a category" prompt.
+    public var budgetCategorySelection: SpendingCategory?
+
+    /// The selected alert id on the **Alerts** destination, or empty when none —
+    /// shared between the alert list (content column) and the alert detail
+    /// (inspector column). Previously the singleton `AlertsSelectionModel.shared`;
+    /// holding it here makes two windows hold independent Alerts selection (R-10).
+    /// Empty string (not `nil`) mirrors the `selectedTransactionID` "" sentinel so
+    /// the content-gated inspector shows its "Select an alert" prompt.
+    public var alertSelection: String
+
+    /// Alert ids the user has acknowledged this session, shared between the list
+    /// (writes) and the inspector (reflects the bit). Previously held on the
+    /// singleton `AlertsSelectionModel`; per-window here so two windows acknowledge
+    /// independently (R-10). Ephemeral session state — acknowledging mutes an alert
+    /// from the unacknowledged count without resolving the underlying condition.
+    public var acknowledgedAlertIDs: Set<String>
 
     public init(
         destination: RouteDestination = .dashboard,
@@ -69,7 +93,10 @@ public struct NavigationState: Sendable, Equatable, Codable {
         transactionFilter: TransactionWorkspace.Filter = TransactionWorkspace.Filter(),
         transactionSort: TransactionWorkspace.Sort = .dateDescending,
         selectedTransactionID: String = "",
-        goalSelection: String = ""
+        goalSelection: String = "",
+        budgetCategorySelection: SpendingCategory? = nil,
+        alertSelection: String = "",
+        acknowledgedAlertIDs: Set<String> = []
     ) {
         self.destination = destination
         self.dashboardFilter = dashboardFilter
@@ -79,6 +106,9 @@ public struct NavigationState: Sendable, Equatable, Codable {
         self.transactionSort = transactionSort
         self.selectedTransactionID = selectedTransactionID
         self.goalSelection = goalSelection
+        self.budgetCategorySelection = budgetCategorySelection
+        self.alertSelection = alertSelection
+        self.acknowledgedAlertIDs = acknowledgedAlertIDs
     }
 
     // MARK: - Pure transitions
@@ -223,5 +253,59 @@ public struct NavigationState: Sendable, Equatable, Codable {
         }
         goalSelection = ""
         return true
+    }
+
+    // MARK: - Budgets selection transitions (AND-621)
+
+    /// Select a category on the Budgets destination (drives the inspector).
+    public mutating func selectBudgetCategory(_ category: SpendingCategory?) {
+        budgetCategorySelection = category
+    }
+
+    /// Clear the Budgets category selection.
+    public mutating func deselectBudgetCategory() {
+        budgetCategorySelection = nil
+    }
+
+    // MARK: - Alerts selection transitions (AND-621)
+
+    /// Select an alert row on the Alerts destination (drives the inspector).
+    public mutating func selectAlert(id: String) {
+        alertSelection = id
+    }
+
+    /// Clear the Alerts selection.
+    public mutating func deselectAlert() {
+        alertSelection = ""
+    }
+
+    /// Acknowledge a single alert (mute it from the unacknowledged count).
+    public mutating func acknowledgeAlert(_ id: String) {
+        acknowledgedAlertIDs.insert(id)
+    }
+
+    /// Un-acknowledge a single alert (re-surface it in the count).
+    public mutating func unacknowledgeAlert(_ id: String) {
+        acknowledgedAlertIDs.remove(id)
+    }
+
+    /// Acknowledge every currently-listed alert ("acknowledge all").
+    public mutating func acknowledgeAllAlerts(in inbox: AlertsInbox) {
+        for entry in inbox.entries {
+            acknowledgedAlertIDs.insert(entry.id)
+        }
+    }
+
+    /// Prune acknowledged ids + a stale selection to the live rows, so neither
+    /// lingers for a condition that has since resolved. Mirrors the self-heal the
+    /// retired `AlertsSelectionModel.prune(toRowsIn:)` performed.
+    public mutating func pruneAlerts(toRowsIn rows: [AttentionQueueRow]) {
+        let pruned = AlertsInbox.pruneAcknowledgedIDs(acknowledgedAlertIDs, toRowsIn: rows)
+        if pruned != acknowledgedAlertIDs {
+            acknowledgedAlertIDs = pruned
+        }
+        if !alertSelection.isEmpty, !rows.contains(where: { $0.id == alertSelection }) {
+            alertSelection = ""
+        }
     }
 }
