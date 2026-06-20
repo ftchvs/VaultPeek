@@ -122,6 +122,25 @@ codesign --force --options runtime --timestamp \
 echo "==> Verifying signature before submission..."
 codesign --verify --deep --strict --verbose=2 "$APP_DIR"
 
+# The widget extension only appears in the widget gallery and only reads the
+# shared App Group snapshot when the signed .appex actually carries the
+# group.com.ftchvs.PlaidBar entitlement. codesign silently drops --entitlements
+# if the file path is wrong, so confirm the entitlement survived the signing
+# pass before spending a notarization round-trip (AND-586 distribution).
+if [ -e "$WIDGET_APPEX" ]; then
+    echo "==> Verifying widget extension carries the App Group entitlement..."
+    if ! codesign -d --entitlements :- "$WIDGET_APPEX" 2>/dev/null \
+        | grep -q "group.com.ftchvs.PlaidBar"; then
+        {
+            echo "Signed widget extension is missing the App Group entitlement."
+            echo "Expected group.com.ftchvs.PlaidBar from $WIDGET_ENTITLEMENTS."
+            echo "Without it the widget cannot read the shared snapshot and shows"
+            echo "the setup state, and Control Center controls cannot toggle state."
+        } >&2
+        exit 1
+    fi
+fi
+
 echo "==> Notarizing the app bundle..."
 rm -f "$ZIP_PATH"
 ditto -c -k --keepParent "$APP_DIR" "$ZIP_PATH"
