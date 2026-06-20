@@ -91,6 +91,36 @@ public enum FinanceIntentQueries {
         return .message(sentence)
     }
 
+    // MARK: - Spending this period
+
+    /// How many top categories to read aloud / list in the "show spending" answer.
+    public static let maxSpokenSpendingCategories = 3
+
+    /// Answers "show spending" / "how much have I spent": the month-to-date total
+    /// plus the leading categories. Returns a `.value` carrying the period total so
+    /// a `ReturnsValue` intent can hand Shortcuts the number, with a spoken dialog
+    /// that names the top categories.
+    public static func showSpending(from snapshot: FinanceSnapshot?) -> FinanceIntentResolution {
+        if let blocked = gate(snapshot) { return blocked }
+        guard let snapshot else { return .unavailable(spokenDialog: unavailableDialog) }
+
+        let total = snapshot.periodSpending
+        let formattedTotal = Formatters.currency(total, format: .full, currencyCode: snapshot.isoCurrencyCode)
+
+        let categories = snapshot.topSpendingCategories
+        guard !categories.isEmpty else {
+            // Non-empty snapshot but no categorized spend yet — report the total
+            // honestly rather than withholding.
+            return .value(total, spokenDialog: "You've spent \(formattedTotal) so far this period.")
+        }
+
+        let spoken = categories.prefix(maxSpokenSpendingCategories).map { row in
+            "\(Formatters.currency(row.amount, format: .full, currencyCode: snapshot.isoCurrencyCode)) on \(row.displayName)"
+        }
+        let dialog = "You've spent \(formattedTotal) this period. Top categories: " + listSentence(spoken) + "."
+        return .value(total, spokenDialog: dialog)
+    }
+
     // MARK: - Credit utilization
 
     public static func creditUtilization(from snapshot: FinanceSnapshot?) -> FinanceIntentResolution {

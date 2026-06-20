@@ -243,8 +243,8 @@ struct PlaidBarApp: App {
                     applySummonHotkeyState()
                 }
                 .onOpenURL { url in
-                    guard url.scheme == "vaultpeek" else { return }
-                    openDashboardFromDeepLink()
+                    guard url.scheme == RouteDeepLink.scheme else { return }
+                    handleDeepLink(url)
                 }
                 // Selecting an indexed account in Spotlight does NOT arrive via
                 // `.onOpenURL` even though the searchable item carries a
@@ -569,6 +569,25 @@ struct PlaidBarApp: App {
             summonHotkeyMonitor.start { summonDashboard() }
         } else {
             summonHotkeyMonitor.stop()
+        }
+    }
+
+    /// Handles a `vaultpeek://` deep link (AND-586). App Intents, widgets, and
+    /// Control Center hand the app a typed `RouteDeepLink` URL; when the
+    /// window-first shell is enabled this parses it into a `Route` and routes the
+    /// primary window there via the single reusable entry point
+    /// (`AppState.route(to:openWindow:)`) — so "Show Spending" lands on Budgets,
+    /// "Review Transactions" lands on Review, etc. When the flag is OFF (or the URL
+    /// carries no recognizable route) it falls back to the existing
+    /// open-the-dashboard behavior, so installed widgets keep working unchanged.
+    @MainActor
+    private func handleDeepLink(_ url: URL) {
+        guard isWindowFirstEnabled, let route = RouteDeepLink.route(from: url) else {
+            openDashboardFromDeepLink()
+            return
+        }
+        appState.route(to: route) {
+            openWindow(id: Self.mainWindowID)
         }
     }
 

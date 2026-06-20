@@ -18,6 +18,10 @@ public enum FinanceSnapshotBuilder {
     /// line with ``SafeToSpendCalculator/minimumObligationConfidence``.
     public static let minimumBillConfidence = SafeToSpendCalculator.minimumObligationConfidence
 
+    /// How many top spending categories the snapshot carries for the "show
+    /// spending" intent and the Spotlight snippet / `systemLarge` widget.
+    public static let maxSnapshotCategories = 4
+
     public static func make(
         accounts: [AccountDTO],
         recurringTransactions: [RecurringTransaction],
@@ -25,6 +29,9 @@ public enum FinanceSnapshotBuilder {
         safeToSpendInputs: SafeToSpendInputs = .default,
         pendingHolds: Double = 0,
         isMasked: Bool,
+        transactions: [TransactionDTO] = [],
+        reviewMetadata: [TransactionReviewMetadata]? = nil,
+        transactionRules: [TransactionRule]? = nil,
         creditUtilizationThreshold: Double = PlaidBarConstants.creditUtilizationWarningThreshold,
         generatedAt: Date = Date(),
         calendar: Calendar = .current
@@ -67,6 +74,14 @@ public enum FinanceSnapshotBuilder {
 
         let utilization = creditUtilizationPercent(from: accounts)
 
+        let spending = monthToDateSpending(
+            transactions: transactions,
+            metadata: reviewMetadata,
+            rules: transactionRules,
+            asOf: generatedAt,
+            calendar: calendar
+        )
+
         let currencyCode = accounts
             .compactMap { $0.balances.isoCurrencyCode }
             .first ?? "USD"
@@ -96,8 +111,48 @@ public enum FinanceSnapshotBuilder {
             creditUtilization: utilization,
             isoCurrencyCode: currencyCode,
             generatedAt: generatedAt,
-            isMasked: isMasked
+            isMasked: isMasked,
+            periodSpending: spending.total,
+            topSpendingCategories: spending.categories
         )
+    }
+
+    // MARK: - Spending this period
+
+    /// Month-to-date spend total + the leading categories, reusing
+    /// ``SpendingSummary/spendingByCategory(from:metadata:rules:)`` so the figures
+    /// match the override-aware dashboard. Returns zeros / empty when no
+    /// transactions are supplied (the server-less / demo path).
+    private static func monthToDateSpending(
+        transactions: [TransactionDTO],
+        metadata: [TransactionReviewMetadata]?,
+        rules: [TransactionRule]?,
+        asOf date: Date,
+        calendar: Calendar
+    ) -> (total: Double, categories: [FinanceSnapshot.CategorySpend]) {
+        guard !transactions.isEmpty else { return (0, []) }
+
+        // Start of the current calendar month, formatted as the canonical
+        // `yyyy-MM-dd` transaction date string SpendingSummary compares against.
+        let monthStart = calendar.date(
+            from: calendar.dateComponents([.year, .month], from: date)
+        ) ?? calendar.startOfDay(for: date)
+        let monthStartString = Formatters.transactionDateString(monthStart)
+
+        let monthExpenses = SpendingSummary.expenseTransactions(
+            from: transactions,
+            startingAt: monthStartString
+        )
+        let byCategory = SpendingSummary.spendingByCategory(
+            from: monthExpenses,
+            metadata: metadata,
+            rules: rules
+        )
+        let total = byCategory.reduce(0) { $0 + $1.1 }
+        let categories = byCategory
+            .prefix(maxSnapshotCategories)
+            .map { FinanceSnapshot.CategorySpend(category: $0.0, amount: $0.1) }
+        return (total, Array(categories))
     }
 
     // MARK: - Upcoming bills
