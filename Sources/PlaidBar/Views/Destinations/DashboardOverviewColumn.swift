@@ -27,6 +27,9 @@ struct DashboardOverviewColumn: View {
     @Environment(AppState.self) private var appState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    /// The shell's unified `.searchable` query (AND-624). Empty ⇒ no filter, so the
+    /// flag-OFF popover (which never injects it) is unchanged.
+    @Environment(\.dashboardSearchQuery) private var searchQuery
 
     /// Routed by the destination to the Accounts destination (no local inspector
     /// on a 2-column canvas).
@@ -34,8 +37,20 @@ struct DashboardOverviewColumn: View {
 
     private var filter: DashboardAccountFilter { appState.dashboardFilter }
 
+    private var trimmedQuery: String {
+        searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private var filteredAccounts: [AccountDTO] {
-        appState.accounts.filter { filter.includes($0, appState: appState) }
+        let byFilter = appState.accounts.filter { filter.includes($0, appState: appState) }
+        let query = trimmedQuery
+        guard !query.isEmpty else { return byFilter }
+        // Case-insensitive substring match on the displayed account name — the one
+        // field the user reads in the row. Honors the active filter (search refines
+        // within it) and never reveals masked values (it matches names, not amounts).
+        return byFilter.filter {
+            AccountPresentation.displayName(for: $0).localizedCaseInsensitiveContains(query)
+        }
     }
 
     private var fallbackState: DashboardOverviewFallbackState? {
@@ -147,6 +162,11 @@ struct DashboardOverviewColumn: View {
             if filteredAccounts.isEmpty {
                 if accountsLoadState.showsSkeleton {
                     DashboardAccountRowSkeletonList(loadState: accountsLoadState)
+                } else if !trimmedQuery.isEmpty {
+                    // A search that matched nothing reads differently from a filter
+                    // that resolved to no accounts — name the query, not the filter.
+                    ContentUnavailableView.search(text: trimmedQuery)
+                        .frame(maxWidth: .infinity, minHeight: 120)
                 } else {
                     DashboardAccountEmpty(filter: filter)
                 }
