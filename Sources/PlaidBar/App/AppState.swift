@@ -1588,7 +1588,8 @@ final class AppState {
             unreviewedCount: transactionReviewCount,
             overBudgetCount: categoryBudgetPresentation.overBudgetCount,
             unacknowledgedAlertCount: sidebarUnacknowledgedAlertCount,
-            reconnectNeededCount: sidebarReconnectNeededCount
+            reconnectNeededCount: sidebarReconnectNeededCount,
+            isMasked: shouldMaskFinancialValues
         )
     }
 
