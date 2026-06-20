@@ -766,7 +766,12 @@ final class AppState {
             : nil
         isDashboardDetached = DetachedDashboardPreferences.resolvedDetachedIntent(
             storedValue: storedDetached,
+            // Both headless renderers must run deterministically: a stale
+            // `dashboard.detached = true` would spawn the floating window and
+            // intercept either harness. The window-first harness builds its own
+            // off-screen windows, so it likewise wants no detached popover.
             isRenderingSnapshot: CommandLineOptions.isRenderingSnapshot()
+                || CommandLineOptions.isRenderingWindowFirst()
         )
     }
 
