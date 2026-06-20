@@ -348,11 +348,48 @@ struct NavigationStateTransitionTests {
             destination: .accounts,
             dashboardFilter: .debt,
             selectedAccountID: "demo_visa",
-            heatmapMode: .netCashflow
+            heatmapMode: .netCashflow,
+            goalSelection: "goal-uuid"
         )
         let data = try JSONEncoder().encode(state)
         let decoded = try JSONDecoder().decode(NavigationState.self, from: data)
         #expect(decoded == state)
+    }
+
+    // MARK: - Goals selection (AND-606)
+
+    @Test("Goal selection defaults to empty and round-trips select/deselect")
+    func goalSelection() {
+        var state = NavigationState()
+        #expect(state.goalSelection == "")
+
+        state.selectGoal(id: "goal-1")
+        #expect(state.goalSelection == "goal-1")
+
+        state.deselectGoal()
+        #expect(state.goalSelection == "")
+    }
+
+    @Test("reconcileGoalSelection drops a deleted goal, keeps a visible one")
+    func reconcileGoalSelection() {
+        var state = NavigationState()
+        state.selectGoal(id: "deleted-goal")
+        let cleared = state.reconcileGoalSelection(visibleGoalIDs: ["g1", "g2"])
+        #expect(cleared)
+        #expect(state.goalSelection == "")
+
+        state.selectGoal(id: "g2")
+        let kept = state.reconcileGoalSelection(visibleGoalIDs: ["g1", "g2"])
+        #expect(!kept)
+        #expect(state.goalSelection == "g2")
+    }
+
+    @Test("Switching destinations preserves the goal selection")
+    func goalSelectionSurvivesDestinationSwitch() {
+        var state = NavigationState()
+        state.selectGoal(id: "g7")
+        state.go(to: .planning)
+        #expect(state.goalSelection == "g7")
     }
 }
 

@@ -51,6 +51,16 @@ public struct NavigationState: Sendable, Equatable, Codable {
     /// content-gated inspector shows its "Select a transaction" prompt.
     public var selectedTransactionID: String
 
+    // MARK: Goals state (AND-606, Epic 5 net-new)
+
+    /// The selected goal id (a `Goal.id` UUID string) in the Goals workspace, or
+    /// empty when none. Empty string (not `nil`) mirrors the `selectedAccountID`
+    /// "" sentinel so the content-gated Goals inspector shows its "Select a goal"
+    /// prompt. Per-window scene state (R-10), **not** a selection singleton (the
+    /// AND-621 anti-pattern). Ephemeral like the transaction selection: not
+    /// persisted, so a relaunch lands on the unselected prompt.
+    public var goalSelection: String
+
     public init(
         destination: RouteDestination = .dashboard,
         dashboardFilter: DashboardAccountFilterKind = .all,
@@ -58,7 +68,8 @@ public struct NavigationState: Sendable, Equatable, Codable {
         heatmapMode: SpendingHeatmapMode = .spending,
         transactionFilter: TransactionWorkspace.Filter = TransactionWorkspace.Filter(),
         transactionSort: TransactionWorkspace.Sort = .dateDescending,
-        selectedTransactionID: String = ""
+        selectedTransactionID: String = "",
+        goalSelection: String = ""
     ) {
         self.destination = destination
         self.dashboardFilter = dashboardFilter
@@ -67,6 +78,7 @@ public struct NavigationState: Sendable, Equatable, Codable {
         self.transactionFilter = transactionFilter
         self.transactionSort = transactionSort
         self.selectedTransactionID = selectedTransactionID
+        self.goalSelection = goalSelection
     }
 
     // MARK: - Pure transitions
@@ -185,6 +197,31 @@ public struct NavigationState: Sendable, Equatable, Codable {
             return false
         }
         selectedTransactionID = ""
+        return true
+    }
+
+    // MARK: - Goals transitions (AND-606)
+
+    /// Select a goal in the Goals workspace (drives the inspector).
+    public mutating func selectGoal(id: String) {
+        goalSelection = id
+    }
+
+    /// Clear the Goals workspace selection.
+    public mutating func deselectGoal() {
+        goalSelection = ""
+    }
+
+    /// Drop a selected goal id that is no longer among the visible goals — the same
+    /// self-heal the dashboard does for accounts (e.g. the selected goal was just
+    /// deleted). Returns `true` when a stale selection was cleared.
+    @discardableResult
+    public mutating func reconcileGoalSelection(visibleGoalIDs: [String]) -> Bool {
+        guard !goalSelection.isEmpty,
+              !visibleGoalIDs.contains(goalSelection) else {
+            return false
+        }
+        goalSelection = ""
         return true
     }
 }
