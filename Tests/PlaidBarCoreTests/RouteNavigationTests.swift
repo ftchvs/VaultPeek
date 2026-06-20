@@ -60,6 +60,34 @@ struct RouteDestinationTests {
         }
     }
 
+    @Test("Detail-column prompt exists iff the destination is 3-column (content-gated, IA §3.1)")
+    func detailColumnPromptMatchesPolicy() {
+        for d in RouteDestination.allCases {
+            // The third column is content-gated, not existence-gated: every
+            // 3-column destination has a "Select a …" prompt; 2-column
+            // destinations and Settings have none.
+            #expect((d.detailColumnEmptyPrompt != nil) == d.prefersThreeColumnLayout)
+            if let prompt = d.detailColumnEmptyPrompt {
+                #expect(!prompt.isEmpty)
+            }
+        }
+    }
+
+    @Test("Detail-column prompts are the IA per-destination copy")
+    func detailColumnPromptCopy() {
+        #expect(RouteDestination.review.detailColumnEmptyPrompt == "Select an item to review")
+        #expect(RouteDestination.transactions.detailColumnEmptyPrompt == "Select a transaction")
+        #expect(RouteDestination.budgets.detailColumnEmptyPrompt == "Select a category")
+        #expect(RouteDestination.goals.detailColumnEmptyPrompt == "Select a goal")
+        #expect(RouteDestination.alerts.detailColumnEmptyPrompt == "Select an alert")
+        #expect(RouteDestination.accounts.detailColumnEmptyPrompt == "Select an account")
+        // 2-column destinations + Settings have no inspector column.
+        #expect(RouteDestination.dashboard.detailColumnEmptyPrompt == nil)
+        #expect(RouteDestination.planning.detailColumnEmptyPrompt == nil)
+        #expect(RouteDestination.insights.detailColumnEmptyPrompt == nil)
+        #expect(RouteDestination.settings.detailColumnEmptyPrompt == nil)
+    }
+
     @Test("Every destination has a non-empty title and SF Symbol")
     func titlesAndSymbols() {
         for d in RouteDestination.allCases {
