@@ -1,34 +1,325 @@
 import PlaidBarCore
 import SwiftUI
 
-/// **Accounts** destination (3-column — IA §3.1/§5.9, `[⌘8]`).
+/// **Accounts** destination (3-column — IA §3.1/§5.9, `[⌘8]`, AND-623 / ADR-001).
 ///
-/// Institution/account list → `AccountDetailFlyout` inspector (the existing,
-/// proven master→detail). The shell renders this content column plus `Inspector`
-/// in the detail column, which is content-gated and shows "Select an account"
-/// when nothing is selected (IA §3.1).
+/// The full account ledger: a type-grouped account list (content column) → the
+/// existing ``AccountDetailFlyout`` (inspector column). The shell renders this
+/// content column plus ``Inspector`` in the detail column, which is content-gated
+/// and shows "Select an account" when nothing is selected (IA §3.1).
 ///
-/// Scaffold for the parallel Epics 4–7: both panes show the shared placeholders
-/// today; the real institution/account list and `AccountDetailFlyout` inspector
-/// land in this destination's epic by replacing the two bodies, never touching
-/// `AppShellView`.
+/// ## Reused engines (nothing rebuilt)
+/// - **Selection** rides the existing per-window `NavigationState.selectedAccountID`
+///   (the same `""`-sentinel slot the dashboard drill-in uses), so the list and the
+///   inspector share one source of truth and two windows select independently
+///   (R-10). No new navigation field is added.
+/// - **Grouping** is the pure, unit-tested ``AccountListGrouping`` (PlaidBarCore):
+///   accounts bucket by ``AccountType`` into ordered, labeled sections, preserving
+///   input order within each section.
+/// - **Row presentation** (icon, name, subtitle, amount, utilization cue) comes
+///   from the shared ``AccountPresentation`` helpers — the same Core layer the
+///   popover's `DashboardAccountRow` reads, so the two surfaces can't drift in what
+///   a row says.
+/// - **Detail + actions** (balances, utilization, due dates, sync status, the
+///   reconnect / remove / settings action bar) are the existing
+///   ``AccountInspector`` → ``AccountDetailFlyout``, which already route reconnect
+///   through `AppState.reconnectItem` and removal through `AppState.removeAccount`.
+///   Nothing about those paths is re-implemented here.
+///
+/// ## Privacy & accessibility
+/// Amounts route through ``AccountPresentation``'s privacy-mask-aware text, and the
+/// inspector withholds detail under Privacy Mask / App Lock (the shell also gates
+/// the whole window). Selection is carried by a filled vs. outline chevron (shape),
+/// never color alone (ACCESSIBILITY.md).
+///
+/// Window-first surface only: built solely behind `WindowFirstFeatureFlag`
+/// (default OFF), so with the flag off none of this is instantiated and the popover
+/// is byte-identical.
 struct AccountsDestinationView: View {
-    var body: some View {
-        DestinationPlaceholder(destination: .accounts)
+    @Environment(AppState.self) private var appState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var navigationModel: NavigationModel { appState.navigationModel }
+    private var accounts: [AccountDTO] { appState.accounts }
+    private var sections: [AccountListGrouping.Section] {
+        AccountListGrouping.sections(for: accounts)
     }
 
-    /// The detail-column (inspector) pane for Accounts.
-    struct Inspector: View {
-        var body: some View {
-            DestinationInspectorPlaceholder(destination: .accounts)
+    var body: some View {
+        content
+            .navigationTitle(RouteDestination.accounts.title)
+            // Self-heal: if the selected account falls out of the list (removed /
+            // disconnected), clear it so the inspector returns to its prompt instead
+            // of pointing at a vanished account. Mirrors the popover's reconcile.
+            .onChange(of: accounts.map(\.id)) { _, ids in
+                navigationModel.reconcileSelection(visibleAccountIDs: ids)
+            }
+    }
+
+    // MARK: - Content states
+
+    @ViewBuilder
+    private var content: some View {
+        if appState.loadState(for: .accounts).showsSkeleton, accounts.isEmpty {
+            loadingState
+        } else if accounts.isEmpty {
+            emptyState
+        } else {
+            accountList
         }
+    }
+
+    private var accountList: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: Spacing.lg, pinnedViews: [.sectionHeaders]) {
+                ForEach(sections) { section in
+                    Section {
+                        VStack(spacing: 0) {
+                            ForEach(section.accounts) { account in
+                                AccountListRow(
+                                    account: account,
+                                    isSelected: selectedID == account.id,
+                                    onSelect: { toggleSelection(account) }
+                                )
+                                .environment(appState)
+                            }
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: Radius.panel))
+                    } header: {
+                        sectionHeader(section)
+                    }
+                }
+            }
+            .padding(Spacing.lg)
+        }
+        .scrollContentBackground(.hidden)
+    }
+
+    private func sectionHeader(_ section: AccountListGrouping.Section) -> some View {
+        HStack {
+            Text(section.title)
+                .sectionTitle()
+                .foregroundStyle(.secondary)
+            Spacer()
+            Text("\(section.accounts.count)")
+                .sectionTitle()
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, Spacing.compactRowHorizontalPadding)
+        .padding(.vertical, Spacing.xs)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.bar)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(section.title), \(section.accounts.count) account\(section.accounts.count == 1 ? "" : "s")")
+    }
+
+    // MARK: - Selection (shared NavigationState.selectedAccountID)
+
+    private var selectedID: String { navigationModel.selectedAccountID }
+
+    private func toggleSelection(_ account: AccountDTO) {
+        withAnimation(MotionTokens.animation(MotionTokens.standard, reduceMotion: reduceMotion)) {
+            if selectedID == account.id {
+                navigationModel.deselectAccount()
+            } else {
+                navigationModel.selectedAccountID = account.id
+            }
+        }
+    }
+
+    // MARK: - Empty / loading states
+
+    private var loadingState: some View {
+        ProgressView()
+            .controlSize(.small)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .accessibilityLabel("Loading accounts")
+    }
+
+    private var emptyState: some View {
+        ContentUnavailableView {
+            Label("No accounts yet", systemImage: RouteDestination.accounts.systemImage)
+        } description: {
+            Text("Connect an institution to see its accounts here.")
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// The detail-column (inspector) pane for Accounts — the selected account's
+    /// full detail and actions, re-hosting the existing ``AccountInspector`` /
+    /// ``AccountDetailFlyout``. Content-gated: shows "Select an account" when
+    /// nothing is selected (IA §3.1). A separate `View` because the shell mounts the
+    /// content and inspector columns independently; both read the shared selection
+    /// from `AppState.navigationModel`.
+    struct Inspector: View {
+        @Environment(AppState.self) private var appState
+
+        private var navigationModel: NavigationModel { appState.navigationModel }
+
+        /// The selected account resolved against the live (visible) accounts — `nil`
+        /// when nothing is selected or the selection is no longer present, which
+        /// content-gates the inspector to its prompt.
+        private var selectedAccount: AccountDTO? {
+            guard let id = navigationModel.resolvedSelectedID(
+                visibleAccountIDs: appState.accounts.map(\.id)
+            ) else { return nil }
+            return appState.accounts.first { $0.id == id }
+        }
+
+        var body: some View {
+            if let account = selectedAccount {
+                AccountInspector(
+                    account: account,
+                    // Parity with the popover: the trailing inspector treats item-
+                    // level sync as the status-filter detail does, surfacing the
+                    // institution sync label.
+                    isStatusFilter: navigationModel.dashboardFilter == .status,
+                    onClose: { navigationModel.deselectAccount() }
+                )
+                .environment(appState)
+            } else {
+                DestinationInspectorPlaceholder(destination: .accounts)
+            }
+        }
+    }
+}
+
+// MARK: - Account Row
+
+/// A single account row in the Accounts destination's content column. Re-hosts the
+/// popover row's visual idiom (leading type icon, name + subtitle, trailing amount
+/// + utilization cue, selection chevron) on the shared ``AccountPresentation``
+/// helpers so the two surfaces can't drift. Selection is carried by a filled vs.
+/// outline chevron (shape) and a tinted fill, never color alone (ACCESSIBILITY.md).
+private struct AccountListRow: View {
+    @Environment(AppState.self) private var appState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let account: AccountDTO
+    let isSelected: Bool
+    let onSelect: () -> Void
+
+    private var privacyMaskEnabled: Bool { appState.shouldMaskFinancialValues }
+
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(spacing: Spacing.compactRowContentSpacing) {
+                Image(systemName: AccountPresentation.iconName(for: account))
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: Sizing.iconChip, height: Sizing.iconChip)
+                    .background(.quinary, in: RoundedRectangle(cornerRadius: Radius.control))
+
+                VStack(alignment: .leading, spacing: Spacing.compactRowTextSpacing) {
+                    Text(account.name)
+                        .font(.callout.weight(.medium))
+                        .lineLimit(1)
+                    Text(subtitle)
+                        .detailText()
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: Spacing.compactRowContentSpacing)
+
+                VStack(alignment: .trailing, spacing: Spacing.xs) {
+                    Text(amountText)
+                        .dataText()
+                        .rollingTabularNumber(amountText, reduceMotion: reduceMotion)
+                        .foregroundStyle(AppearanceTextColors.primary)
+                        .lineLimit(1)
+
+                    if let utilization = account.balances.utilizationPercent,
+                       let utilizationText = AccountPresentation.dashboardUtilizationDetailText(
+                           for: account,
+                           threshold: appState.creditUtilizationThreshold,
+                           privacyMaskEnabled: privacyMaskEnabled
+                       ) {
+                        HStack(spacing: Spacing.xxs) {
+                            if utilization >= appState.creditUtilizationThreshold {
+                                // Tint the icon, never the small text — orange caption
+                                // text fails 4.5:1 contrast (ACCESSIBILITY.md).
+                                Image(systemName: SemanticColors.utilizationIcon(
+                                    for: utilization,
+                                    threshold: appState.creditUtilizationThreshold
+                                ))
+                                .font(.caption2.weight(.medium))
+                                .foregroundStyle(SemanticColors.utilization(
+                                    for: utilization,
+                                    threshold: appState.creditUtilizationThreshold
+                                ))
+                            }
+                            Text(utilizationText)
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.secondary)
+                        }
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    }
+                }
+
+                Image(systemName: isSelected ? "chevron.forward.circle.fill" : "chevron.forward")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.tertiary))
+            }
+            .padding(.horizontal, Spacing.compactRowHorizontalPadding)
+            .padding(.vertical, Spacing.compactRowVerticalPadding)
+            .background(
+                isSelected ? Color.accentColor.opacity(SurfaceTokens.selectedFillOpacity) : .clear,
+                in: RoundedRectangle(cornerRadius: Radius.control)
+            )
+            .overlay(alignment: .bottom) {
+                if !isSelected {
+                    Divider().opacity(0.4)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .hoverHighlight()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)
+        .accessibilityHint("Shows this account's details in the inspector.")
+    }
+
+    private var subtitle: String {
+        AccountPresentation.dashboardRowSubtitle(
+            for: account,
+            connectionLabel: AccountPresentation.subtitle(for: account, privacyMaskEnabled: privacyMaskEnabled),
+            pendingCount: pendingCount,
+            privacyMaskEnabled: privacyMaskEnabled
+        )
+    }
+
+    private var amountText: String {
+        AccountPresentation.rowAmountText(for: account, privacyMaskEnabled: privacyMaskEnabled)
+    }
+
+    private var pendingCount: Int {
+        appState.transactionsForAccount(account.id).count(where: \.pending)
+    }
+
+    private var accessibilityLabel: String {
+        AccountPresentation.rowAccessibilityLabel(
+            for: account,
+            amountText: amountText,
+            connectionLabel: AccountPresentation.subtitle(for: account, privacyMaskEnabled: privacyMaskEnabled),
+            pendingCount: pendingCount,
+            isSelected: isSelected,
+            utilizationThreshold: appState.creditUtilizationThreshold,
+            privacyMaskEnabled: privacyMaskEnabled,
+            liability: appState.liabilities.first { $0.accountId == account.id }
+        )
     }
 }
 
 #Preview("Content") {
     AccountsDestinationView()
+        .environment(AppState())
+        .frame(width: 640, height: 480)
 }
 
 #Preview("Inspector") {
     AccountsDestinationView.Inspector()
+        .environment(AppState())
+        .frame(width: 320, height: 480)
 }
