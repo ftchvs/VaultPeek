@@ -53,6 +53,35 @@ public struct FinanceSnapshot: Codable, Sendable, Equatable {
         }
     }
 
+    /// One spending category's period total, reduced to a stable category-key, a
+    /// user-facing label, and the amount spent. The `categoryKey` is the
+    /// ``SpendingCategory`` raw value so a reader (the "show spending" intent, the
+    /// Spotlight snippet, a `systemLarge` widget) can recover the icon/colour from
+    /// `SpendingCategory(rawValue:)` without the snapshot carrying UI concerns.
+    public struct CategorySpend: Codable, Sendable, Equatable, Identifiable {
+        public let categoryKey: String
+        public let displayName: String
+        public let amount: Double
+
+        public var id: String { categoryKey }
+
+        /// The ``SpendingCategory`` this row maps to, or `nil` for an unknown key
+        /// (forward-compat if a future build adds a category this one can't decode).
+        public var category: SpendingCategory? { SpendingCategory(rawValue: categoryKey) }
+
+        public init(categoryKey: String, displayName: String, amount: Double) {
+            self.categoryKey = categoryKey
+            self.displayName = displayName
+            self.amount = amount
+        }
+
+        public init(category: SpendingCategory, amount: Double) {
+            self.categoryKey = category.rawValue
+            self.displayName = category.displayName
+            self.amount = amount
+        }
+    }
+
     /// Conservative discretionary balance through the look-ahead horizon
     /// (`SafeToSpendResult.amount`). May be negative — reported honestly.
     public let safeToSpend: Double
@@ -72,6 +101,12 @@ public struct FinanceSnapshot: Codable, Sendable, Equatable {
     /// True when App Lock / Privacy Mask is active. Intents must withhold values
     /// while this is set.
     public let isMasked: Bool
+    /// Total spend across the current period (month-to-date), used by the
+    /// "show spending" intent and the Spotlight snippet. Zero when unknown.
+    public let periodSpending: Double
+    /// Top spending categories this period, largest first, already truncated to a
+    /// small count (the writer keeps only the leaders). Empty when unknown.
+    public let topSpendingCategories: [CategorySpend]
 
     public init(
         safeToSpend: Double,
@@ -81,7 +116,9 @@ public struct FinanceSnapshot: Codable, Sendable, Equatable {
         creditUtilization: Double?,
         isoCurrencyCode: String = "USD",
         generatedAt: Date,
-        isMasked: Bool
+        isMasked: Bool,
+        periodSpending: Double = 0,
+        topSpendingCategories: [CategorySpend] = []
     ) {
         self.safeToSpend = safeToSpend
         self.totalBalance = totalBalance
@@ -91,6 +128,31 @@ public struct FinanceSnapshot: Codable, Sendable, Equatable {
         self.isoCurrencyCode = isoCurrencyCode
         self.generatedAt = generatedAt
         self.isMasked = isMasked
+        self.periodSpending = periodSpending
+        self.topSpendingCategories = topSpendingCategories
+    }
+
+    // Decode the spending fields defensively: a snapshot written by an older build
+    // (no `periodSpending` / `topSpendingCategories` keys) decodes them as their
+    // empty defaults, so an upgrade never fails to read a pre-AND-586 snapshot.
+    private enum CodingKeys: String, CodingKey {
+        case safeToSpend, totalBalance, accountBalances, nextRecurringBills
+        case creditUtilization, isoCurrencyCode, generatedAt, isMasked
+        case periodSpending, topSpendingCategories
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        safeToSpend = try container.decode(Double.self, forKey: .safeToSpend)
+        totalBalance = try container.decode(Double.self, forKey: .totalBalance)
+        accountBalances = try container.decode([AccountBalance].self, forKey: .accountBalances)
+        nextRecurringBills = try container.decode([UpcomingBill].self, forKey: .nextRecurringBills)
+        creditUtilization = try container.decodeIfPresent(Double.self, forKey: .creditUtilization)
+        isoCurrencyCode = try container.decodeIfPresent(String.self, forKey: .isoCurrencyCode) ?? "USD"
+        generatedAt = try container.decode(Date.self, forKey: .generatedAt)
+        isMasked = try container.decode(Bool.self, forKey: .isMasked)
+        periodSpending = try container.decodeIfPresent(Double.self, forKey: .periodSpending) ?? 0
+        topSpendingCategories = try container.decodeIfPresent([CategorySpend].self, forKey: .topSpendingCategories) ?? []
     }
 
     /// Empty placeholder used before the first real snapshot exists. Treated as
@@ -110,11 +172,14 @@ public struct FinanceSnapshot: Codable, Sendable, Equatable {
     /// True when the snapshot carries no usable figures. Used to drive a
     /// setup/unavailable intent response. A credit-only user (paid-off cards, no
     /// cash accounts, no bills) still has a usable `creditUtilization`, so a
-    /// non-nil utilization keeps the snapshot non-empty.
+    /// non-nil utilization keeps the snapshot non-empty. Likewise a user with
+    /// recorded spend but no linked cash account stays non-empty.
     public var isEmpty: Bool {
         accountBalances.isEmpty
             && nextRecurringBills.isEmpty
             && totalBalance == 0
             && creditUtilization == nil
+            && periodSpending == 0
+            && topSpendingCategories.isEmpty
     }
 }
