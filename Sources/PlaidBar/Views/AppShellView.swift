@@ -154,6 +154,32 @@ struct AppShellView: View {
         // The Dashboard reads the live query from the environment to filter its
         // account rows (the shell owns the field, the canvas owns the filtering).
         .environment(\.dashboardSearchQuery, destinationSupportsSearch(destination) ? searchText : "")
+        // Reroute the legacy "open detached window" affordances into in-window
+        // navigation (ADR-001 / AND-616). The Dashboard canvas embeds
+        // `CategoryDashboardCard` (its "Open dashboard" button) and the Review
+        // canvas embeds `ReviewInboxView` (its "Open review table" button); both
+        // read these environment hooks. In window-first there is no detached
+        // AppKit window to open — instead navigate *this* window's model to the
+        // Budgets / Review destination, so the affordance stays live and no legacy
+        // coordinator is constructed.
+        .environment(\.openCategoryDashboard) {
+            appState.navigationModel.go(to: .budgets)
+        }
+        .environment(\.openReviewTable) {
+            // The "Open review table" affordance must land the multi-select table,
+            // not triage (AND-616). Set the mode first, then navigate. `Route.review`
+            // still defaults to triage, so the glance weekly-review deep-link
+            // (`Route.from(weeklyReview:)`) keeps landing on triage.
+            appState.navigationModel.reviewWorkspaceMode = .table
+            appState.navigationModel.go(to: .review)
+        }
+        // Drive in-window `openRoute(...)` callers (account rows, recurring card,
+        // Add Account, Dashboard attention chips) against *this* window's model
+        // (AND-616). Without this, the primary `Window` scene mounts `AppShellView`
+        // but never injects `\.openRoute`, so those controls hit the no-op default
+        // and are inert. Routing in-place (rather than `appState.route(to:openWindow:)`)
+        // avoids re-opening the already-open window.
+        .environment(\.openRoute, inWindowRouteHandler)
         // Deep-link hand-off (ADR-001 / AND-597). The primary scene is a
         // declarative `Window`, so a route can't be threaded through `openWindow`;
         // instead the opener stages it on `AppState.pendingRoute` and this view
@@ -214,6 +240,18 @@ struct AppShellView: View {
             // gate; dismiss it so unlocking returns to the bare workspace.
             if isLocked { paletteModel.dismiss() }
         }
+    }
+
+    // MARK: - In-window route handler (AND-616)
+
+    /// The in-window `\.openRoute` handler: drives *this* window's `NavigationModel`
+    /// so in-window controls (account rows, recurring card, Add Account, Dashboard
+    /// attention chips) navigate the open window rather than hitting the no-op
+    /// default. Returned as an explicitly typed `@MainActor @Sendable` closure
+    /// (mirroring `PlaidBarApp.glanceRouteHandler`) so the `.environment(\.openRoute, …)`
+    /// site type-checks under strict concurrency.
+    private var inWindowRouteHandler: @MainActor @Sendable (Route) -> Void {
+        { route in appState.navigationModel.apply(route) }
     }
 
     // MARK: - Unified per-destination toolbar (AND-624)

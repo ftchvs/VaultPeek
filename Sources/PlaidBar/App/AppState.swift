@@ -1506,6 +1506,56 @@ final class AppState {
         transactionReviewInboxSnapshot.totalCount
     }
 
+    // MARK: - Menu-bar glance (ADR-001 §6 / AND-616)
+
+    /// The reduced menu-bar **glance** contract (ADR-001 §6): the sync line, the
+    /// high-signal glance metrics (net worth · safe-to-spend · to-review), and the
+    /// ≤3 attention chips that deep-link into window destinations. Once
+    /// window-first is the default (AND-616) this — not the full dashboard — is the
+    /// menu-bar surface; the dashboard lives only in the window's Dashboard
+    /// destination.
+    ///
+    /// Assembly lives in the pure `MenuBarGlanceModel.make` (PlaidBarCore) so the
+    /// contract (≤4 metrics, ≤3 chips, each chip's route) is unit-tested without
+    /// the app; this feeds it the live finance signals — the same
+    /// `WealthSummaryPresentation` / `SafeToSpendCalculator` math the dashboard and
+    /// the App Intents snapshot use, so no surface can disagree on the figures.
+    /// Currency metrics honor Privacy Mask / App Lock via `shouldMaskFinancialValues`.
+    var menuBarGlanceModel: MenuBarGlanceModel {
+        let wealth = WealthSummaryPresentation.evaluate(
+            accounts: accounts,
+            transactions: transactions,
+            isDemoMode: usesDemoConnectionPresentation,
+            serverConnected: serverConnected,
+            credentialsConfigured: serverCredentialsConfigured,
+            linkedItemCount: statusItemCount,
+            syncedItemCount: serverSyncedItemCount ?? 0,
+            itemStatuses: itemStatuses,
+            isSyncStale: isSyncStale,
+            lastSyncRelative: lastSyncRelative,
+            statusSyncText: statusSyncText,
+            errorMessage: error,
+            creditUtilizationThreshold: creditUtilizationThreshold,
+            balanceHistory: balanceHistory
+        )
+        let safeToSpend = SafeToSpendCalculator.compute(
+            accounts: accounts,
+            recurringTransactions: recurringTransactions,
+            cashflow: wealth.cashflow,
+            asOf: Date()
+        ).amount
+
+        return MenuBarGlanceModel.make(
+            netWorth: wealth.netWorth,
+            safeToSpend: safeToSpend,
+            unreviewedCount: transactionReviewCount,
+            syncStatusText: statusSyncText,
+            syncSeverity: wealth.syncHealth.severity,
+            attention: attentionQueue,
+            isMasked: shouldMaskFinancialValues
+        )
+    }
+
     // MARK: - Window-first sidebar (ADR-001 / AND-595)
 
     /// Items needing reconnect — the actionable degraded items the connection
@@ -1586,7 +1636,7 @@ final class AppState {
     func consumePendingRoute(into navigationModel: NavigationModel) {
         guard let route = pendingRoute else { return }
         pendingRoute = nil
-        navigationModel.apply(route)
+        navigationModel.apply(route.resolvingAccountSelection(in: accounts))
     }
 
     var notificationPermissionPresentation: NotificationPermissionPresentation {
