@@ -79,9 +79,9 @@ struct MenuBarGlanceModelTests {
         #expect(model.metrics.count <= MenuBarGlanceModel.maximumMetricCount)
     }
 
-    @Test("Privacy Mask redacts currency metrics but not the review count")
+    @Test("Privacy Mask redacts currency metrics and withholds the review count")
     func privacyMaskRedactsCurrencyOnly() {
-        let model = MenuBarGlanceModel.make(
+        let masked = MenuBarGlanceModel.make(
             netWorth: 12_450,
             safeToSpend: 800,
             unreviewedCount: 4,
@@ -90,13 +90,59 @@ struct MenuBarGlanceModelTests {
             attention: AttentionQueue(rows: []),
             isMasked: true
         )
-        let netWorth = model.metrics.first { $0.id == "net-worth" }
-        let safeToSpend = model.metrics.first { $0.id == "safe-to-spend" }
-        let toReview = model.metrics.first { $0.id == "to-review" }
+        let netWorth = masked.metrics.first { $0.id == "net-worth" }
+        let safeToSpend = masked.metrics.first { $0.id == "safe-to-spend" }
         #expect(netWorth?.value == PrivacyMaskPresentation.compactValue)
         #expect(safeToSpend?.value == PrivacyMaskPresentation.compactValue)
-        // A count is not a balance, so it stays visible under Privacy Mask.
-        #expect(toReview?.value == "4")
+        // The review count is withheld under mask, matching the status-item badge
+        // contract (MenuBarReviewBadge.isVisible / ReviewInboxPrivacyPresentation).
+        #expect(masked.metrics.first { $0.id == "to-review" } == nil)
+
+        // The same inputs unmasked surface the live count.
+        let unmasked = MenuBarGlanceModel.make(
+            netWorth: 12_450,
+            safeToSpend: 800,
+            unreviewedCount: 4,
+            syncStatusText: "Synced",
+            syncSeverity: .healthy,
+            attention: AttentionQueue(rows: []),
+            isMasked: false
+        )
+        #expect(unmasked.metrics.first { $0.id == "to-review" }?.value == "4")
+    }
+
+    @Test("Privacy Mask rebuilds attention chips from generic, non-identifying copy")
+    func privacyMaskRedactsChipCopy() {
+        // A degraded-item row whose title/detail embed an institution name.
+        let institution = "Chase Sapphire"
+        let row = AttentionQueueRow(
+            id: "item-error-bank42",
+            severity: .blocked,
+            title: "Reconnect \(institution)",
+            detail: "Sign in again to keep \(institution) balances current.",
+            action: .reconnect,
+            targetItemId: "bank42"
+        )
+        let model = MenuBarGlanceModel.make(
+            netWorth: 1,
+            safeToSpend: 1,
+            unreviewedCount: 0,
+            syncStatusText: "Needs attention",
+            syncSeverity: .blocked,
+            attention: AttentionQueue(rows: [row]),
+            isMasked: true
+        )
+        let chip = model.chips.first
+        #expect(chip != nil)
+        // No institution substring leaks through any visible/spoken text.
+        #expect(chip?.title.contains(institution) == false)
+        #expect(chip?.detail.contains(institution) == false)
+        #expect(chip?.accessibilityLabel.contains(institution) == false)
+        // The masked copy is the generic severity label + privacy notice.
+        #expect(chip?.title == AttentionQueueSeverity.blocked.statusLabel)
+        // The chip still deep-links to the affected item and keeps a shaped glyph.
+        #expect(chip?.route == .accounts(itemID: "bank42"))
+        #expect(chip?.glyph.isEmpty == false)
     }
 
     // MARK: - Chip contract
