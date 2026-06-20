@@ -52,6 +52,14 @@ public struct TransactionReviewMetadata: Codable, Sendable, Identifiable, Equata
     public var lastSeenAmount: Double?
     public var lastSeenName: String?
     public var lastSeenPending: Bool?
+    /// A free-text note the user attached to this transaction from the
+    /// Transaction Workspace inspector (AND-582). Display-only annotation: it is
+    /// never fed to budget/category/export totals and never bypasses the
+    /// review/override flow, so it cannot mis-attribute spend. Persisted on the
+    /// same review-metadata storage path as every other override. `nil` (and
+    /// decoded as `nil` when absent) so records written before AND-582 still
+    /// decode and behave identically.
+    public var userNote: String?
 
     public init(
         id: String,
@@ -64,7 +72,8 @@ public struct TransactionReviewMetadata: Codable, Sendable, Identifiable, Equata
         reviewReasonCodes: [TransactionReviewReason] = [],
         lastSeenAmount: Double? = nil,
         lastSeenName: String? = nil,
-        lastSeenPending: Bool? = nil
+        lastSeenPending: Bool? = nil,
+        userNote: String? = nil
     ) {
         self.id = id
         self.status = status
@@ -77,6 +86,26 @@ public struct TransactionReviewMetadata: Codable, Sendable, Identifiable, Equata
         self.lastSeenAmount = lastSeenAmount
         self.lastSeenName = lastSeenName
         self.lastSeenPending = lastSeenPending
+        self.userNote = userNote
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        status = try container.decode(TransactionReviewStatus.self, forKey: .status)
+        userCategory = try container.decodeIfPresent(SpendingCategory.self, forKey: .userCategory)
+        userMerchantName = try container.decodeIfPresent(String.self, forKey: .userMerchantName)
+        isTransferOverride = try container.decodeIfPresent(Bool.self, forKey: .isTransferOverride)
+        excludedFromBudgets = try container.decodeIfPresent(Bool.self, forKey: .excludedFromBudgets) ?? false
+        reviewedAt = try container.decodeIfPresent(Date.self, forKey: .reviewedAt)
+        reviewReasonCodes = try container.decodeIfPresent([TransactionReviewReason].self, forKey: .reviewReasonCodes) ?? []
+        lastSeenAmount = try container.decodeIfPresent(Double.self, forKey: .lastSeenAmount)
+        lastSeenName = try container.decodeIfPresent(String.self, forKey: .lastSeenName)
+        lastSeenPending = try container.decodeIfPresent(Bool.self, forKey: .lastSeenPending)
+        // New field (AND-582) — absent in records written before it existed, so
+        // default to nil. Matches the forward-compatible decode used for
+        // `TransactionDTO.isLowConfidenceCategory`.
+        userNote = try container.decodeIfPresent(String.self, forKey: .userNote)
     }
 }
 
