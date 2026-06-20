@@ -180,7 +180,22 @@ MenuBarExtra
 
 **Background Refresh:**
 
-A `Task` runs every 15 minutes to refresh account balances (free cached endpoint) and every 30 minutes for transaction sync (cursor-based incremental).
+A `Task` runs every 15 minutes to refresh account balances (free cached endpoint) and every 30 minutes for transaction sync (cursor-based incremental). `EnergyAwareRefreshPolicy` (AND-568) modulates this resident cadence: under Low Power Mode or thermal pressure the automatic Plaid fetch is deferred (back-off clamped to a finite ceiling), while user-initiated manual refresh is always honored.
+
+### PlaidBarCache (App-only SwiftData cache, AND-566)
+
+An app-bound library that backs instant cold render and offline reads with a
+disposable SwiftData store (`@Model` + `@ModelActor`). It depends on
+`PlaidBarCore` for the pure read-model and mapper but is kept out of the server,
+CLI, and widget targets so the SwiftData dependency never reaches them.
+
+The cache is **disposable**: rebuildable from the authoritative in-memory/JSON
+data, never a source of truth, scoped per Plaid environment, and deleted on local
+reset and when the last institution is removed. It is written only into the
+private data dir (`~/.vaultpeek/dashboard-read-model-cache-v1.store`, file `0o600`)
+with `cloudKitDatabase: .none`, so it never syncs to iCloud and never reaches the
+App Group container. If SwiftData is unavailable or the store fails to open, the
+app falls back to its existing JSON/UserDefaults cold path. See `SECURITY.md`.
 
 ## Data Flow
 
@@ -275,13 +290,14 @@ data.
 
 ## Testing Strategy
 
-Unit tests span 3 suites, all using Swift Testing framework:
+Unit tests span 4 suites, all using Swift Testing framework:
 
 | Suite | Coverage |
 |-------|----------|
-| PlaidBarCoreTests | DTOs, formatters, constants, Codable roundtrips |
+| PlaidBarCoreTests | DTOs, formatters, constants, Codable roundtrips, routing/navigation, goals |
 | PlaidBarServerTests | Plaid response decoding, config, type conversion |
 | PlaidBarTests | Business logic: net balance, spending aggregation, filtering |
+| PlaidBarCacheTests | SwiftData read-model + transaction cache store behavior |
 
 Server tests cover config, status contracts, Plaid decoding, auth behavior, and
 route-adjacent reducers. Full end-to-end Plaid sandbox coverage remains a manual
