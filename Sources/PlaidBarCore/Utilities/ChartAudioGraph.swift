@@ -194,6 +194,71 @@ public enum ChartAudioGraph {
         )
     }
 
+    // MARK: - Projected balance (cash-flow forecast)
+
+    /// Audio graph for the forward cash-flow projection line
+    /// (``BalanceProjection`` / `ProjectedBalanceChart`, AND-498). The x axis is a
+    /// day index over the forecast horizon (each point also labeled with its
+    /// date); the y axis is the projected balance. Continuous, since the chart is
+    /// a (dashed) line — the dash conveys "forecast" visually, but the audio graph
+    /// scrubs it like any other line, with the projected low spoken on its day.
+    ///
+    /// This is the audio-graph analogue of the chart's existing
+    /// `accessibilitySummary`: it closes the AND-588 gap where the projected-balance
+    /// chart in the window-first shell carried a spoken summary but no scrubbable
+    /// audio graph (the net-worth trend and spend donut both already had one).
+    ///
+    /// Returns a descriptor with no points when the series has fewer than two
+    /// snapshots — there is nothing to sonify for a single anchor point.
+    public static func projection(_ projection: BalanceProjection, currencyCode: String = "USD") -> Descriptor {
+        let series = projection.series
+        guard series.count >= 2 else {
+            return Descriptor(
+                title: "Projected balance",
+                summary: projection.accessibilitySummary,
+                xAxis: NumericAxis(title: "Day", lowerBound: 0, upperBound: 0),
+                yAxis: NumericAxis(title: "Projected balance", lowerBound: 0, upperBound: 0),
+                seriesName: "Projected balance",
+                isContinuous: true,
+                points: []
+            )
+        }
+
+        let lowDate = projection.projectedLow.date
+        let points = series.enumerated().map { index, snapshot -> Point in
+            let dateText = Formatters.displayDate(snapshot.date)
+            let amountText = Formatters.currency(snapshot.balance, format: .full, currencyCode: currencyCode)
+            // Call out the projected-low day so the audio graph speaks the dip.
+            let isLow = snapshot.date == lowDate
+            let label = isLow
+                ? "\(dateText), \(amountText), projected low"
+                : "\(dateText), \(amountText)"
+            return Point(xValue: Double(index), xLabel: dateText, yValue: snapshot.balance, label: label)
+        }
+
+        let balances = series.map(\.balance)
+        let yAxis = NumericAxis(
+            title: "Projected balance",
+            lowerBound: balances.min() ?? 0,
+            upperBound: balances.max() ?? 0
+        )
+        let xAxis = NumericAxis(
+            title: "Day",
+            lowerBound: 0,
+            upperBound: Double(max(points.count - 1, 0))
+        )
+
+        return Descriptor(
+            title: "Projected balance",
+            summary: projection.accessibilitySummary,
+            xAxis: xAxis,
+            yAxis: yAxis,
+            seriesName: "Projected balance",
+            isContinuous: true,
+            points: points
+        )
+    }
+
     // MARK: - Spend donut
 
     /// Audio graph for the spend-by-category donut. Each slice becomes one

@@ -356,4 +356,60 @@ struct ChartAudioGraphTests {
             #expect(!line.contains("75"))
         }
     }
+
+    // MARK: - Projected balance (AND-588 chart-parity gap fix)
+
+    private func projection(_ balances: [Double], lowIndex: Int, now: Date = Date()) -> BalanceProjection {
+        let calendar = Calendar.current
+        let day0 = calendar.startOfDay(for: now)
+        let series = balances.enumerated().map { index, balance in
+            BalanceSnapshot(
+                date: calendar.date(byAdding: .day, value: index, to: day0) ?? day0,
+                balance: balance
+            )
+        }
+        return BalanceProjection(
+            series: series,
+            projectedLow: series[lowIndex],
+            confidence: .ok,
+            accessibilitySummary: "Projected to dip then recover."
+        )
+    }
+
+    @Test("projection maps every forward snapshot to an ordered continuous point")
+    func projectionMapsPoints() {
+        let descriptor = ChartAudioGraph.projection(projection([1000, 800, 600, 900], lowIndex: 2))
+
+        #expect(!descriptor.isEmpty)
+        #expect(descriptor.points.count == 4)
+        #expect(descriptor.isContinuous)
+        #expect(descriptor.title == "Projected balance")
+        #expect(descriptor.summary == "Projected to dip then recover.")
+        // X axis is the day index 0…count-1; Y axis spans the balance range.
+        #expect(descriptor.xAxis.lowerBound == 0)
+        #expect(descriptor.xAxis.upperBound == 3)
+        #expect(descriptor.yAxis.lowerBound == 600)
+        #expect(descriptor.yAxis.upperBound == 1000)
+        // Points scrub left-to-right by ascending x index.
+        #expect(descriptor.points.map(\.xValue) == [0, 1, 2, 3])
+    }
+
+    @Test("projection calls out the projected-low day in its spoken label")
+    func projectionAnnouncesProjectedLow() {
+        let descriptor = ChartAudioGraph.projection(projection([1000, 800, 600, 900], lowIndex: 2))
+        let lowLabels = descriptor.points.filter { $0.label.contains("projected low") }
+        #expect(lowLabels.count == 1)
+        // Exactly the low snapshot's point carries the call-out.
+        #expect(lowLabels.first?.yValue == 600)
+    }
+
+    @Test("projection with a single anchor point has nothing to sonify")
+    func projectionTooFewPointsIsEmpty() {
+        let descriptor = ChartAudioGraph.projection(projection([1000], lowIndex: 0))
+        #expect(descriptor.isEmpty)
+        #expect(descriptor.points.isEmpty)
+        // A non-empty, non-inverted axis range is still guaranteed.
+        #expect(descriptor.xAxis.lowerBound <= descriptor.xAxis.upperBound)
+        #expect(descriptor.yAxis.lowerBound <= descriptor.yAxis.upperBound)
+    }
 }
