@@ -2,6 +2,10 @@ import Foundation
 import Testing
 @testable import PlaidBarCore
 
+/// Anchor for `Bundle(for:)` so the render-harness E2E test can locate the test
+/// bundle (and, beside it, the prebuilt `PlaidBar` binary).
+private final class BundleAnchor {}
+
 /// Tests for app-level logic: view model calculations, client-side data
 /// processing, and business rules used by the PlaidBar macOS app.
 ///
@@ -11,6 +15,76 @@ import Testing
 /// and data transformations the app performs.
 @Suite("PlaidBar App Tests")
 struct PlaidBarTests {
+
+    // MARK: - Window-first render harness (AND-624)
+
+    /// End-to-end smoke test for `--demo --render-window-first <dir>`: runs the
+    /// already-built demo binary with the flag, then asserts it wrote exactly one
+    /// PNG per in-shell destination plus the whole-shell reference (10 total).
+    ///
+    /// Opt-in: gated on `VAULTPEEK_RENDER_HARNESS_E2E=1` because it launches the
+    /// GUI executable, which needs a window server / GUI session and is far
+    /// heavier than the rest of the suite. CI without that env var skips it; the
+    /// harness's destination coverage and flag detection are still pinned by fast
+    /// unit tests in `PlaidBarCoreTests`. Run locally with:
+    ///
+    ///     swift build        # build the PlaidBar binary first
+    ///     VAULTPEEK_RENDER_HARNESS_E2E=1 swift test \
+    ///         --filter renderWindowFirstHarnessWritesOnePNGPerDestination
+    ///
+    /// It invokes the **prebuilt** `.build/<arch>/<config>/PlaidBar` binary
+    /// directly rather than `swift run`: nesting `swift run` inside `swift test`
+    /// deadlocks on the shared SwiftPM `.build` lock the test process already
+    /// holds. The binary sits next to this test bundle's executable (same
+    /// `debug`/`release` directory), so it is located relative to that.
+    @Test("--render-window-first writes one PNG per destination plus the shell")
+    func renderWindowFirstHarnessWritesOnePNGPerDestination() throws {
+        let env = ProcessInfo.processInfo.environment
+        // Opt-in only: a no-op unless explicitly enabled, so CI (which lacks a
+        // GUI session / window server) stays green without recording an issue.
+        // Swift Testing has no XCTSkip equivalent, so an early return is the
+        // idiom for a conditionally-disabled test.
+        guard env["VAULTPEEK_RENDER_HARNESS_E2E"] == "1" else { return }
+
+        let fm = FileManager.default
+
+        // The PlaidBar executable lives in the same build-config directory as the
+        // running test bundle (…/.build/<arch>/<config>/PlaidBar). Walk up from
+        // this bundle's executable to find it.
+        let bundleExecDir = Bundle(for: BundleAnchor.self).bundleURL
+            .deletingLastPathComponent()
+        let binary = bundleExecDir.appendingPathComponent("PlaidBar")
+        try #require(
+            fm.isExecutableFile(atPath: binary.path),
+            "PlaidBar binary not found at \(binary.path) — run `swift build` first."
+        )
+
+        let outDir = fm.temporaryDirectory
+            .appendingPathComponent("vaultpeek-render-harness-\(UUID().uuidString)", isDirectory: true)
+        defer { try? fm.removeItem(at: outDir) }
+
+        let process = Process()
+        process.executableURL = binary
+        process.arguments = ["--demo", "--render-window-first", outDir.path]
+        try process.run()
+        process.waitUntilExit()
+
+        #expect(process.terminationStatus == 0, "render harness exited \(process.terminationStatus)")
+
+        let pngs = (try? fm.contentsOfDirectory(atPath: outDir.path))?
+            .filter { $0.hasSuffix(".png") }
+            .sorted() ?? []
+
+        // 9 in-shell destinations (Settings excluded) + window-shell.png == 10.
+        let expectedDestinations = RouteDestination.allCases
+            .filter { $0 != .settings }
+            .map { "window-\($0.rawValue).png" }
+        var expected = Set(expectedDestinations)
+        expected.insert("window-shell.png")
+
+        #expect(pngs.count == expected.count, "got PNGs: \(pngs)")
+        #expect(Set(pngs) == expected, "got PNGs: \(pngs)")
+    }
 
     // MARK: - Account Type Categorization
 

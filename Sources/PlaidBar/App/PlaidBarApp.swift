@@ -89,6 +89,7 @@ struct PlaidBarApp: App {
             }
         }
         _ = SnapshotRenderer.renderIfRequested(appState: state)
+        _ = WindowFirstSnapshotRenderer.renderIfRequested(appState: state)
         // Debug aid: register as a regular app (Dock icon, app switcher) so
         // automation/permission systems that skip accessory apps can see it.
         if CommandLine.arguments.contains("--regular-activation") {
