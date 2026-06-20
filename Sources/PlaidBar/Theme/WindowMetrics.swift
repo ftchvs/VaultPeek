@@ -34,26 +34,38 @@ import SwiftUI
 /// with the popover tokens where the two meet (e.g. a re-hosted popover card
 /// inside a window section).
 enum WindowMetrics {
-    // MARK: Spacing scale (4pt sub-grid, coarser steps than Spacing)
+    // MARK: Spacing scale (8pt grid, coarser steps than the popover's Spacing)
+    //
+    // Tuned up for desk-distance "comfortable density" (AND-624): a calm,
+    // spacious macOS 26 desktop dashboard reads as breathing room first, dense
+    // figures second. Steps sit on the 8pt grid (with one 4pt half-step for the
+    // tightest inner spacing) so cards align to a single even rhythm — the gap
+    // *between* cards is never smaller than the gap *inside* a card, which is
+    // what makes a grid read as separated rather than crammed.
 
     /// Tight inner spacing — label↔value, icon↔text within a metric tile.
-    static let xs: CGFloat = 6
-    /// Within-card spacing — rows inside a card, header↔body.
+    static let xs: CGFloat = 8
+    /// Within-card spacing — rows inside a card, label↔figure clusters.
     static let sm: CGFloat = 12
-    /// Card content padding and intra-section spacing.
-    static let md: CGFloat = 16
-    /// Between cards within a grid, and section header↔content.
+    /// Card content padding and header↔body spacing (≥20pt: generous interior
+    /// breathing room so figures don't crowd the card edge).
+    static let md: CGFloat = 20
+    /// Between cards within a column, and section header↔content (≥20pt: cards
+    /// read as distinctly separated surfaces, not a stuck-together stack).
     static let lg: CGFloat = 20
-    /// Between major sections of a canvas.
-    static let xl: CGFloat = 28
+    /// Between major sections of a canvas (hero row ↔ the column grid).
+    static let xl: CGFloat = 32
+    /// The gap between the two canvas columns. Wider than the inter-card gap so
+    /// the two columns read as two distinct regions, not one run-on grid (≥24pt).
+    static let columnGap: CGFloat = 28
     /// Outer canvas margin — the window's content inset from its chrome.
-    static let canvasMargin: CGFloat = 24
+    static let canvasMargin: CGFloat = 28
 
     // MARK: Layout
 
     /// Corner radius for window-scale cards. Larger than the popover's
     /// ``Radius/panel`` (8) so cards read as comfortable desk-distance surfaces.
-    static let cardCornerRadius: CGFloat = 12
+    static let cardCornerRadius: CGFloat = 14
 
     /// The minimum width a metric/content card may shrink to before the grid
     /// reflows to fewer columns. Tuned so a hero tile keeps its large figure
@@ -67,7 +79,12 @@ enum WindowMetrics {
 
     /// The hero metrics row's minimum tile width before it wraps. Below this the
     /// hero figures lose their tabular legibility, so the row reflows.
-    static let heroTileMinWidth: CGFloat = 220
+    static let heroTileMinWidth: CGFloat = 240
+
+    /// The minimum height the hero activity heatmap card reserves for its grid,
+    /// so the signature year-scale instrument reads as a prominent, full-width
+    /// hero at the top of the Activity column rather than a small lost strip.
+    static let heatmapHeroMinHeight: CGFloat = 132
 }
 
 // MARK: - Window-scale type ramp
@@ -131,7 +148,7 @@ struct WindowSupportingText: ViewModifier {
 /// so multiple tiles' figures align, and the same `.xSmall ... .accessibility3`
 /// clamp as ``DisplayBalance`` to stop before the layout-breaking AX4/AX5 steps.
 struct WindowHeroMetric: ViewModifier {
-    @ScaledMetric(relativeTo: .largeTitle) private var size: CGFloat = 34
+    @ScaledMetric(relativeTo: .largeTitle) private var size: CGFloat = 38
 
     func body(content: Content) -> some View {
         content

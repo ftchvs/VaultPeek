@@ -1,23 +1,92 @@
 import PlaidBarCore
 import SwiftUI
 
-/// The overview block of the window-first **Dashboard** destination (AND-622): the
-/// activity heatmap + the primary account filter + the account rows — the same
-/// instrument the menu-bar popover renders via its private `DashboardOverviewStack`.
+/// The signature **Activity heatmap hero** of the window-first Dashboard
+/// (AND-622/AND-624): the read-only 365-day year-scale activity grid, given a
+/// prominent near-full-column-width card at the *top* of the Activity column so
+/// it reads as the dashboard's headline instrument rather than a small lost
+/// strip buried in a list of cards.
+///
+/// **Surface only — no model logic here.** It reads the *same*
+/// ``SpendingHeatmapLayout`` Core engine the popover and the Insights destination
+/// compute (`SpendingHeatmap.cellIntensity`, `ChartAudioGraph.heatmap`) — the
+/// data is never recomputed or divergent. It renders that layout at a
+/// **desk-distance scale** (``DashboardYearHeatmapGrid``: larger cells, month
+/// markers, more height) rather than re-hosting the popover/Insights
+/// ``InsightsActivityHeatmapGrid``, whose cells are capped at a glance-scale 9pt
+/// and read small/lost on a desktop hero. Privacy Mask / Reduce Transparency swap
+/// in a text alternative, since the grid leans on tinted, translucent cells
+/// (ACCESSIBILITY.md — never color/translucency alone).
+struct DashboardActivityHeatmapCard: View {
+    @Environment(AppState.self) private var appState
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    private var layout: SpendingHeatmapLayout {
+        let calendar = Calendar.current
+        let end = calendar.startOfDay(for: Date())
+        let start = calendar.date(byAdding: .day, value: -364, to: end) ?? end
+        return SpendingHeatmapLayout.compute(
+            from: appState.transactions,
+            startDate: start,
+            endDate: end,
+            mode: appState.dashboardHeatmapMode,
+            calendar: calendar
+        )
+    }
+
+    var body: some View {
+        let layout = layout
+        WindowSection("Activity", systemImage: "square.grid.3x3.fill") {
+            Text(layout.mode.summaryTitle)
+                .windowSupportingText()
+        } content: {
+            if appState.shouldMaskFinancialValues || reduceTransparency {
+                heatmapTextAlternative(layout: layout)
+            } else {
+                DashboardYearHeatmapGrid(layout: layout)
+            }
+        }
+        .loadingRedaction(appState.loadState(for: .activityHeatmap))
+    }
+
+    private func heatmapTextAlternative(layout: SpendingHeatmapLayout) -> some View {
+        let masked = appState.shouldMaskFinancialValues
+        let total = masked
+            ? PrivacyMaskPresentation.compactValue
+            : Formatters.currency(layout.totalValue, format: .compact)
+        return VStack(alignment: .leading, spacing: WindowMetrics.xs) {
+            Label("\(layout.activeDayCount) active days in the last year", systemImage: "calendar")
+                .windowBodyText()
+            Text(masked
+                ? "Activity totals are hidden while VaultPeek is private."
+                : "\(total) across active days. \(layout.mode.semanticDescription)")
+                .windowSupportingText()
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, minHeight: WindowMetrics.heatmapHeroMinHeight, alignment: .topLeading)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// The consolidated **Accounts** card of the window-first Dashboard
+/// (AND-622/AND-624): the primary account filter, the account rows, and the
+/// "what the bank said" bank-reported balances — merged into one card so the
+/// Activity column reads as a few generous cards rather than a tight stack of
+/// small ones. The filter segments live *inside* this card's header area (they
+/// scope its rows) rather than as a separate strip above it.
 ///
 /// **Surface only — no model logic here.** It composes existing reusable pieces
 /// over `PlaidBarCore`:
 /// - the **filter bar** is the existing ``DashboardFilterBar``, bound to the same
 ///   `AppState.dashboardFilter` the popover persists;
-/// - the **activity heatmap** is the existing read-only ``InsightsActivityHeatmapGrid``
-///   (already factored out for the Insights destination, AND-585) over the same
-///   ``SpendingHeatmapLayout`` Core engine — *the heatmap is not rebuilt here*;
 /// - the **account rows** render from the same ``AccountPresentation`` Core helpers
-///   the popover row uses, honoring Privacy Mask.
+///   the popover row uses, honoring Privacy Mask, at window (desk-distance) type;
+/// - the **"what the bank said" balances** re-host the same Core ledger the popover
+///   strip reads (``BalanceTimeMachineView``), folded in as a footer detail.
 ///
-/// **Drill-ins deep-link, not a third column** (IA §3.1, §5.1): the 2-column
-/// dashboard has no inspector, so selecting a row calls `onSelectAccount`, which
-/// the destination routes to the **Accounts** destination via `\.openRoute`.
+/// **Drill-ins deep-link, not a third column** (IA §3.1, §5.1): selecting a row
+/// calls `onSelectAccount`, which the destination routes to the **Accounts**
+/// destination via `\.openRoute`.
 ///
 /// Empty / loading states mirror the popover: a pre-setup install shows the Core
 /// ``DashboardOverviewFallbackState`` banner instead of an empty grid; the
@@ -63,79 +132,25 @@ struct DashboardOverviewColumn: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.md) {
+        WindowSection("Accounts", systemImage: "building.columns") {
+            Text("\(filteredAccounts.count)")
+                .windowCardTitle()
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+                .opacity(accountsLoadState.showsSkeleton ? 0 : 1)
+                .accessibilityLabel("\(filteredAccounts.count) accounts")
+        } content: {
             if let fallbackState {
                 DashboardOverviewFallback(presentation: fallbackState)
             } else {
-                activityHeatmap
-            }
-
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                DashboardFilterBar(selection: filterBinding, hasSelectedAccount: false)
-                accountsSection
-            }
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Overview with activity heatmap, account filters, and account rows.")
-    }
-
-    // MARK: - Heatmap
-
-    /// The read-only year heatmap, reusing the existing ``InsightsActivityHeatmapGrid``
-    /// over the same Core layout the popover computes. Privacy Mask / Reduce
-    /// Transparency swap in a text alternative, since the grid leans on tinted,
-    /// translucent cells (ACCESSIBILITY.md — never color/translucency alone).
-    @ViewBuilder
-    private var activityHeatmap: some View {
-        let layout = heatmapLayout()
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            Label(layout.mode.summaryTitle, systemImage: "square.grid.3x3.fill")
-                .sectionTitle()
-                .foregroundStyle(.secondary)
-
-            if appState.shouldMaskFinancialValues || reduceTransparency {
-                heatmapTextAlternative(layout: layout)
-            } else {
-                InsightsActivityHeatmapGrid(layout: layout)
+                VStack(alignment: .leading, spacing: WindowMetrics.md) {
+                    DashboardFilterBar(selection: filterBinding, hasSelectedAccount: false)
+                    accountsSection
+                    bankSaidFooter
+                }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(Spacing.md)
-        .glassSurface(.raised)
-        .loadingRedaction(appState.loadState(for: .activityHeatmap))
-        .accessibilityElement(children: .contain)
-    }
-
-    private func heatmapLayout() -> SpendingHeatmapLayout {
-        let calendar = Calendar.current
-        let end = calendar.startOfDay(for: Date())
-        let start = calendar.date(byAdding: .day, value: -364, to: end) ?? end
-        return SpendingHeatmapLayout.compute(
-            from: appState.transactions,
-            startDate: start,
-            endDate: end,
-            mode: appState.dashboardHeatmapMode,
-            calendar: calendar
-        )
-    }
-
-    private func heatmapTextAlternative(layout: SpendingHeatmapLayout) -> some View {
-        let masked = appState.shouldMaskFinancialValues
-        let total = masked
-            ? PrivacyMaskPresentation.compactValue
-            : Formatters.currency(layout.totalValue, format: .compact)
-        return VStack(alignment: .leading, spacing: Spacing.xs) {
-            Label("\(layout.activeDayCount) active days in the last year", systemImage: "calendar")
-                .font(.subheadline.weight(.medium))
-            Text(masked
-                ? "Activity totals are hidden while VaultPeek is private."
-                : "\(total) across active days. \(layout.mode.semanticDescription)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Accounts with filters, account rows, and bank-reported balances.")
     }
 
     // MARK: - Accounts
@@ -145,20 +160,7 @@ struct DashboardOverviewColumn: View {
     }
 
     private var accountsSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("Accounts")
-                    .sectionTitle()
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text("\(filteredAccounts.count)")
-                    .sectionTitle()
-                    .foregroundStyle(.secondary)
-                    .opacity(accountsLoadState.showsSkeleton ? 0 : 1)
-            }
-            .padding(.horizontal, Spacing.compactRowHorizontalPadding)
-            .padding(.bottom, Spacing.xs)
-
+        Group {
             if filteredAccounts.isEmpty {
                 if accountsLoadState.showsSkeleton {
                     DashboardAccountRowSkeletonList(loadState: accountsLoadState)
@@ -185,6 +187,22 @@ struct DashboardOverviewColumn: View {
         }
     }
 
+    // MARK: - "What the bank said" (folded-in footer)
+
+    /// The bank-reported balance ledger, folded into the Accounts card rather
+    /// than carried as its own small card. ``BalanceTimeMachineView`` self-hides
+    /// when there is nothing to show, so a divider only appears when there is a
+    /// footer to separate.
+    @ViewBuilder
+    private var bankSaidFooter: some View {
+        if appState.accountBalanceLedger.latestEntriesByAccount().contains(where: { entry in
+            appState.accounts.contains { $0.id == entry.accountId }
+        }) {
+            Divider().opacity(0.4)
+            BalanceTimeMachineView()
+        }
+    }
+
     private var filterBinding: Binding<DashboardAccountFilter> {
         Binding(
             get: { appState.dashboardFilter },
@@ -197,8 +215,11 @@ struct DashboardOverviewColumn: View {
 
 /// A single account row for the window-first dashboard overview. Drives off the
 /// shared ``AccountPresentation`` Core helpers (the same source the popover row
-/// uses), so name, subtitle, amount, and the VoiceOver label match. Selection
-/// deep-links to the Accounts destination rather than opening a local inspector.
+/// uses), so name, subtitle, amount, and the VoiceOver label match. Rendered at
+/// window (desk-distance) type — the account name and amount read at `.body`, the
+/// subtitle at `.subheadline` — so the primary figures never drop to caption
+/// scale on the larger surface. Selection deep-links to the Accounts destination
+/// rather than opening a local inspector.
 private struct DashboardAccountRowButton: View {
     @Environment(AppState.self) private var appState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -210,26 +231,29 @@ private struct DashboardAccountRowButton: View {
 
     var body: some View {
         Button(action: onSelect) {
-            HStack(spacing: Spacing.compactRowContentSpacing) {
+            HStack(spacing: WindowMetrics.sm) {
                 Image(systemName: AccountPresentation.iconName(for: account))
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.body.weight(.medium))
                     .foregroundStyle(.secondary)
                     .frame(width: Sizing.iconChip, height: Sizing.iconChip)
                     .background(.quinary, in: RoundedRectangle(cornerRadius: Radius.control))
 
-                VStack(alignment: .leading, spacing: Spacing.compactRowTextSpacing) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(account.name)
-                        .font(.callout.weight(.medium))
+                        .windowBodyText()
+                        .fontWeight(.medium)
                         .lineLimit(1)
                     Text(subtitle)
-                        .detailText()
+                        .windowSupportingText()
                         .lineLimit(1)
                 }
 
-                Spacer(minLength: Spacing.compactRowContentSpacing)
+                Spacer(minLength: WindowMetrics.sm)
 
                 Text(amountText)
-                    .dataText()
+                    .windowBodyText()
+                    .fontWeight(.semibold)
+                    .monospacedDigit()
                     .rollingTabularNumber(amountText, reduceMotion: reduceMotion)
                     .foregroundStyle(AppearanceTextColors.primary)
                     .lineLimit(1)
@@ -237,11 +261,11 @@ private struct DashboardAccountRowButton: View {
                 // The drill-in opens the Accounts destination; chevron.forward
                 // flips correctly under RTL and carries the affordance by shape.
                 Image(systemName: "chevron.forward")
-                    .font(.caption.weight(.medium))
+                    .font(.subheadline.weight(.medium))
                     .foregroundStyle(.tertiary)
             }
-            .padding(.horizontal, Spacing.compactRowHorizontalPadding)
-            .padding(.vertical, Spacing.compactRowVerticalPadding)
+            .padding(.horizontal, WindowMetrics.sm)
+            .padding(.vertical, WindowMetrics.sm)
             .contentShape(Rectangle())
             .overlay(alignment: .bottom) {
                 Divider().opacity(0.4)
@@ -329,8 +353,8 @@ private struct DashboardAccountEmpty: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 9) {
+        VStack(alignment: .leading, spacing: WindowMetrics.sm) {
+            HStack(spacing: WindowMetrics.sm) {
                 Image(systemName: presentation.iconName)
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(tint)
@@ -339,9 +363,10 @@ private struct DashboardAccountEmpty: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(presentation.title)
-                        .font(.callout.weight(.semibold))
+                        .windowBodyText()
+                        .fontWeight(.semibold)
                     Text(presentation.detail)
-                        .detailText()
+                        .windowSupportingText()
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -354,9 +379,7 @@ private struct DashboardAccountEmpty: View {
                 .controlSize(.small)
             }
         }
-        .padding(Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassSurface(emphasizedTint.map { SurfaceRank.emphasized($0) } ?? .raised)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(presentation.title). \(presentation.detail)")
     }
@@ -366,13 +389,6 @@ private struct DashboardAccountEmpty: View {
         case .brand: SemanticColors.brand
         case .warning: SemanticColors.warning
         case .healthy, .loading, .offline, .secondary: .secondary
-        }
-    }
-
-    private var emphasizedTint: Color? {
-        switch presentation.tone {
-        case .brand, .warning: tint
-        case .healthy, .loading, .offline, .secondary: nil
         }
     }
 }
@@ -385,8 +401,8 @@ private struct DashboardOverviewFallback: View {
     let presentation: DashboardOverviewFallbackState
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 10) {
+        VStack(alignment: .leading, spacing: WindowMetrics.sm) {
+            HStack(alignment: .top, spacing: WindowMetrics.sm) {
                 Image(systemName: presentation.iconName)
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(SemanticColors.brandSecondary)
@@ -398,9 +414,10 @@ private struct DashboardOverviewFallback: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(presentation.title)
-                        .font(.callout.weight(.semibold))
+                        .windowBodyText()
+                        .fontWeight(.semibold)
                     Text(presentation.detail)
-                        .detailText()
+                        .windowSupportingText()
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -413,8 +430,138 @@ private struct DashboardOverviewFallback: View {
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
         }
-        .padding(Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassSurface(.emphasized(SemanticColors.brandSecondary))
+    }
+}
+
+// MARK: - Year heatmap (desk-distance scale)
+
+/// The 365-day activity heatmap rendered at **desk-distance scale** for the
+/// Dashboard hero (AND-624). It reads the exact same ``SpendingHeatmapLayout``
+/// the popover/Insights compute and the exact same `SpendingHeatmap.cellIntensity`
+/// mapping — only the *render size* differs from the glance-scale
+/// ``InsightsActivityHeatmapGrid`` (whose cells cap at 9pt): cells here grow to
+/// fill the hero card's width (clamped to a comfortable desk range) and the grid
+/// carries month markers, so the signature year view reads as a prominent hero
+/// rather than a small lost strip.
+///
+/// Meaning never rides on cell color alone (ACCESSIBILITY.md): the card's title +
+/// the legend + the active-day count + the VoiceOver label and audio graph carry
+/// the same information in text and sound. Callers swap in a text alternative
+/// under Privacy Mask / Reduce Transparency before reaching this view.
+struct DashboardYearHeatmapGrid: View {
+    let layout: SpendingHeatmapLayout
+
+    /// Gap between cells. A touch wider than the glance grid's 2pt so the larger
+    /// cells read as a clean lattice at desk distance.
+    private let cellSpacing: CGFloat = 3
+    /// Desk-distance cell-size clamp: never smaller than the glance cap (so it is
+    /// always at least as legible as the popover), never so large the year grid
+    /// dominates the column. The actual size fills the available width between.
+    private let minCell: CGFloat = 9
+    private let maxCell: CGFloat = 15
+
+    private var weekCount: Int { max(layout.weekColumns.count, 1) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: WindowMetrics.sm) {
+            GeometryReader { proxy in
+                let cell = clampedCell(forWidth: proxy.size.width)
+                VStack(alignment: .leading, spacing: cellSpacing) {
+                    monthMarkers(cell: cell)
+                    grid(cell: cell)
+                }
+            }
+            .frame(height: gridHeight)
+
+            legend
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            "\(layout.mode.summaryTitle) heatmap for the last 365 days with \(layout.activeDayCount) active days. \(layout.mode.semanticDescription)."
+        )
+        // VoiceOver audio graph over the active days (AND-569) — same Core source.
+        .audioGraph(ChartAudioGraph.heatmap(layout, isPrivacyMasked: false))
+    }
+
+    /// Largest cell that lets all weeks fit the available width, clamped to the
+    /// desk-distance range so the hero never collapses to a glance strip or blows
+    /// the column out.
+    private func clampedCell(forWidth width: CGFloat) -> CGFloat {
+        let usable = width - CGFloat(weekCount - 1) * cellSpacing
+        let fit = floor(usable / CGFloat(weekCount))
+        return min(maxCell, max(minCell, fit))
+    }
+
+    /// Reserve height for seven day-rows at the max cell size plus the month-marker
+    /// row, so the card lays out at a stable, prominent height regardless of the
+    /// resolved cell size.
+    private var gridHeight: CGFloat {
+        let markerRow: CGFloat = 16
+        return markerRow + 7 * maxCell + 6 * cellSpacing
+    }
+
+    private func grid(cell: CGFloat) -> some View {
+        HStack(alignment: .top, spacing: cellSpacing) {
+            ForEach(Array(layout.weekColumns.enumerated()), id: \.offset) { _, week in
+                VStack(spacing: cellSpacing) {
+                    ForEach(Array(week.enumerated()), id: \.offset) { _, day in
+                        cellView(for: day, size: cell)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func cellView(for day: SpendingHeatmapDay?, size: CGFloat) -> some View {
+        if let day {
+            let intensity = SpendingHeatmap.cellIntensity(for: day, peakValue: layout.peakValue)
+            RoundedRectangle(cornerRadius: Radius.control)
+                .fill(Color.primary.opacity(0.10 + 0.62 * intensity))
+                .frame(width: size, height: size)
+        } else {
+            RoundedRectangle(cornerRadius: Radius.control)
+                .fill(.clear)
+                .frame(width: size, height: size)
+        }
+    }
+
+    /// Month labels above the grid, positioned by their week index. Hidden from
+    /// accessibility (the VoiceOver label already names the span).
+    private func monthMarkers(cell: CGFloat) -> some View {
+        let step = cell + cellSpacing
+        return ZStack(alignment: .topLeading) {
+            ForEach(layout.monthMarkers) { marker in
+                Text(marker.label)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize()
+                    .offset(x: CGFloat(marker.weekIndex) * step)
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 14, alignment: .topLeading)
+        .accessibilityHidden(true)
+    }
+
+    private var legend: some View {
+        HStack(spacing: WindowMetrics.xs) {
+            Text("Less")
+                .windowSupportingText()
+            ForEach([0.0, 0.25, 0.5, 0.75, 1.0], id: \.self) { intensity in
+                RoundedRectangle(cornerRadius: Radius.control)
+                    .fill(Color.primary.opacity(0.10 + 0.62 * intensity))
+                    .frame(width: 12, height: 12)
+            }
+            Text("More")
+                .windowSupportingText()
+
+            Spacer()
+
+            Text("\(layout.activeDayCount) active days")
+                .windowSupportingText()
+        }
+        .accessibilityHidden(true)
     }
 }

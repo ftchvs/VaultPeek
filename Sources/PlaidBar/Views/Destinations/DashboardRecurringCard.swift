@@ -31,10 +31,15 @@ struct DashboardRecurringCard: View {
     var body: some View {
         let presentation = presentation
         if presentation.isEmpty {
-            Label("No recurring charges detected yet.", systemImage: "repeat")
-                .windowSupportingText()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityElement(children: .combine)
+            WindowSection("Recurring", systemImage: "repeat") {
+                EmptyView()
+            } content: {
+                Label("No recurring charges detected yet.", systemImage: "repeat")
+                    .windowBodyText()
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .accessibilityElement(children: .combine)
         } else {
             RecurringObligationsSection(
                 presentation: presentation,

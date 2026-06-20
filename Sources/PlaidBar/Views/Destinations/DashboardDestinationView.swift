@@ -13,16 +13,25 @@ import SwiftUI
 /// popover's compact arrangement. The data can never diverge from the popover
 /// because both read the same Core; only the layout differs.
 ///
-/// Layout (desk-distance, ``WindowMetrics`` / ``WindowTypography``):
+/// Layout (desk-distance, ``WindowMetrics`` / ``WindowTypography``) — tuned for
+/// "comfortable density" (AND-624): a calm, spacious canvas of a few generous
+/// cards per column rather than a tight stack of small ones.
 /// 1. a **hero metrics row** — net worth, safe-to-spend, and last-30-day spend as
 ///    large tabular figures with labels (the dashboard's headline numbers,
 ///    surfaced from `WealthSummaryPresentation` + `SafeToSpendCalculator`, the
 ///    same engines the rail/weekly-review use);
-/// 2. a **two-column card grid** below it — a generous left column (the 365-day
-///    activity heatmap + account rows, balance time-machine, weekly review) beside
-///    a right column (recurring obligations, the category dashboard, and the
-///    local-insight teaser), each card a ``WindowSection`` with a `title3` header
-///    and progressive disclosure. On a narrow window the two columns stack.
+/// 2. a **two-column card grid** below it, **at most three cards per column** under
+///    a `title2` column banner:
+///    - left **Activity** column — the year-scale activity **heatmap hero** (the
+///      signature instrument, a prominent near-full-width card at the top), the
+///      consolidated **Accounts** card (filter segments + account rows + the "what
+///      the bank said" balances merged into one card), and either the
+///      **status-readiness** group (while setup needs attention) or the **weekly
+///      review** card;
+///    - right **Money & insights** column — recurring obligations, the category
+///      dashboard, and the local-insight teaser.
+///    Each card self-cards (a ``WindowSection`` or its own chrome) with a `title3`
+///    header. On a narrow window the two columns stack.
 ///
 /// **Drill-ins deep-link, they don't open a third column** (IA §3.1, §5.1): the
 /// 2-column dashboard has no inspector, so selecting an account routes to the
@@ -64,7 +73,7 @@ struct DashboardDestinationView: View {
                     heroMetricsRow
 
                     if isWide {
-                        HStack(alignment: .top, spacing: WindowMetrics.lg) {
+                        HStack(alignment: .top, spacing: WindowMetrics.columnGap) {
                             primaryColumn
                                 .frame(maxWidth: .infinity, alignment: .topLeading)
                             secondaryColumn
@@ -119,38 +128,45 @@ struct DashboardDestinationView: View {
 
     // MARK: - Columns
 
-    /// The left/primary column: the year-scale activity heatmap + account rows
-    /// (the dashboard's core instrument), the balance time-machine, and the weekly
-    /// review. These re-host the existing reusable subviews unchanged — they each
-    /// carry their own card chrome and section header, so they are mounted directly
-    /// (not nested in a ``WindowSection``, which would card-in-a-card). The layout
-    /// gives them desk-distance room at ``WindowMetrics`` spacing; the data is
-    /// identical to the popover.
+    /// The left/primary **Activity** column — at most three generous cards so the
+    /// column reads as calm, comfortable density rather than a tight stack of small
+    /// cards (AND-624):
+    /// 1. the year-scale activity **heatmap hero** (the signature instrument), given
+    ///    a prominent near-full-column-width card at the top;
+    /// 2. the consolidated **Accounts** card (filter segments + account rows + the
+    ///    "what the bank said" bank-reported balances, all merged into one card);
+    /// 3. the **status-readiness** card *when setup needs attention*, otherwise the
+    ///    **weekly review** card — never both, so the column stays at three cards.
+    ///
+    /// Each card self-cards (it is a ``WindowSection`` or carries its own chrome);
+    /// the column banner above them is a `title2` region header. The data is
+    /// identical to the popover — these re-host the same Core engines.
     private var primaryColumn: some View {
         VStack(alignment: .leading, spacing: WindowMetrics.lg) {
-            sectionHeader("Activity", systemImage: "square.grid.3x3.fill")
+            columnHeader("Activity", systemImage: "square.grid.3x3.fill")
+
+            DashboardActivityHeatmapCard()
 
             DashboardOverviewColumn(onSelectAccount: { account in
                 openRoute(.accounts(itemID: account.itemId))
             })
 
-            BalanceTimeMachineView()
-
-            WeeklyReviewCard()
-
             if shouldShowStatusReadiness {
-                statusReadinessCluster
+                statusReadinessCard
+            } else {
+                WeeklyReviewCard()
             }
         }
         .accessibilityElement(children: .contain)
     }
 
-    /// The right/secondary column: recurring obligations, the category dashboard,
-    /// the first-run snapshot (when present), and the local-insight teaser. Like the
-    /// primary column, each re-hosted card self-cards, so they are mounted directly.
+    /// The right/secondary **Money & insights** column — three cards: recurring
+    /// obligations, the category dashboard, and the local-insight teaser (plus the
+    /// first-run snapshot when present, which is transient). Each re-hosted card
+    /// self-cards, so they are mounted directly under the column banner.
     private var secondaryColumn: some View {
         VStack(alignment: .leading, spacing: WindowMetrics.lg) {
-            sectionHeader("Money & insights", systemImage: "chart.pie")
+            columnHeader("Money & insights", systemImage: "chart.pie")
 
             DashboardRecurringCard(onOpen: { openRoute(.planning(section: .recurring)) })
 
@@ -168,13 +184,13 @@ struct DashboardDestinationView: View {
         .accessibilityElement(children: .contain)
     }
 
-    /// A window-scale column section header (`title3` via ``WindowCardTitle``) — the
-    /// reference pattern for grouping cards in a desktop canvas (the deliverable's
-    /// "section headers (title3)"). It is a heading, not a card, so it sits cleanly
-    /// above the self-carding cards below it without nesting a card in a card.
-    private func sectionHeader(_ title: String, systemImage: String) -> some View {
+    /// A window-scale **column** region header (`title2` via ``WindowSectionTitle``)
+    /// — one step up from a card's `title3` title, so the column reads as a region
+    /// grouping its cards. It is a heading, not a card, so it sits cleanly above the
+    /// self-carding cards below without nesting a card in a card.
+    private func columnHeader(_ title: String, systemImage: String) -> some View {
         Label {
-            Text(title).windowCardTitle()
+            Text(title).windowSectionTitle()
         } icon: {
             Image(systemName: systemImage).foregroundStyle(.secondary)
         }
@@ -193,8 +209,24 @@ struct DashboardDestinationView: View {
         return !appState.isSetupComplete || level == .warning || level == .blocked
     }
 
-    private var statusReadinessCluster: some View {
+    /// The status-readiness group: connection health + attention queue + the
+    /// readiness panel under a single `title3` "Status" header. The three pieces
+    /// each carry their own glass chrome (they are shared popover views), so they
+    /// are grouped by a header + tight spacing rather than re-wrapped in another
+    /// card — that would card-in-a-card. They occupy the column's third slot in
+    /// place of the weekly review while setup needs attention. Tighter
+    /// intra-group spacing (`sm`) reads them as one cluster, distinct from the
+    /// `lg` gaps between the column's top-level cards.
+    private var statusReadinessCard: some View {
         VStack(alignment: .leading, spacing: WindowMetrics.sm) {
+            Label {
+                Text("Status").windowCardTitle()
+            } icon: {
+                Image(systemName: "checklist").foregroundStyle(.secondary)
+            }
+            .labelStyle(.titleAndIcon)
+            .accessibilityAddTraits(.isHeader)
+
             ConnectionHealthStripView()
             AttentionQueueView(title: "Attention", onAddAccount: { openRoute(.accounts()) })
             DashboardReadinessPanel(
