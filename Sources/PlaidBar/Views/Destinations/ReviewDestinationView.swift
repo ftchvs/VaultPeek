@@ -63,14 +63,17 @@ struct ReviewDestinationView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.md) {
+        VStack(alignment: .leading, spacing: WindowMetrics.xl) {
             header
 
             switch mode {
             case .triage:
                 // The existing inbox in its embedded (column-hosted) layout: it
                 // drops its own raised surface to fit the column, scrolls its rows,
-                // and shows a "Inbox Clear" empty state instead of collapsing.
+                // and shows a "Inbox Clear" empty state instead of collapsing. It
+                // is re-hosted whole (the triage engine, single-key actions, inline
+                // rule prompt, undo, and bulk path are all unchanged); only the
+                // surrounding canvas is brought to desk-distance window density.
                 ReviewInboxView(embedded: true)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             case .table:
@@ -81,28 +84,33 @@ struct ReviewDestinationView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
         }
-        .padding(Spacing.lg)
+        .padding(WindowMetrics.canvasMargin)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .navigationTitle(RouteDestination.review.title)
     }
 
+    /// The window-scale page header (desk distance — ``WindowMetrics`` /
+    /// ``WindowTypography``): a `largeTitle` page identity with the live unreviewed
+    /// chip, a `body`-scale subtitle, and the Triage | Table mode toggle. One step
+    /// up from the popover inbox's caption-scale title so it reads as a workspace
+    /// page, not a glance.
     private var header: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
-            VStack(alignment: .leading, spacing: Spacing.xxs) {
-                HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+        HStack(alignment: .firstTextBaseline, spacing: WindowMetrics.lg) {
+            VStack(alignment: .leading, spacing: WindowMetrics.xs) {
+                HStack(alignment: .firstTextBaseline, spacing: WindowMetrics.sm) {
                     Text("Review")
-                        .font(.title2.weight(.bold))
+                        .windowLargeTitle()
 
                     // Unreviewed-count chip. Meaning rides the number + the
                     // VoiceOver label "N to review", never color alone
                     // (ACCESSIBILITY.md). Hidden at 0 and under Privacy Mask.
                     if let unreviewedBadgeText {
                         Text("\(snapshot.totalCount)")
-                            .font(.caption.weight(.semibold))
+                            .font(.headline.weight(.semibold))
                             .monospacedDigit()
                             .foregroundStyle(SemanticColors.brand)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 2)
+                            .padding(.horizontal, WindowMetrics.sm)
+                            .padding(.vertical, 4)
                             .background(SemanticColors.brand.opacity(0.12), in: Capsule())
                             .overlay { Capsule().stroke(SemanticColors.brand.opacity(0.20), lineWidth: 1) }
                             .accessibilityLabel(unreviewedBadgeText)
@@ -110,11 +118,11 @@ struct ReviewDestinationView: View {
                 }
 
                 Text("Triage new and unusual transactions to zero.")
-                    .font(.subheadline)
+                    .windowBodyText()
                     .foregroundStyle(.secondary)
             }
 
-            Spacer(minLength: Spacing.sm)
+            Spacer(minLength: WindowMetrics.lg)
 
             modePicker
         }
@@ -133,6 +141,7 @@ struct ReviewDestinationView: View {
         }
         .pickerStyle(.segmented)
         .labelStyle(.titleAndIcon)
+        .controlSize(.large)
         .fixedSize()
         .accessibilityLabel("Review mode")
         .accessibilityHint("Switch between single-item triage and the multi-select table.")
@@ -177,52 +186,49 @@ struct ReviewDestinationView: View {
                 clearPrompt
             } else {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: Spacing.lg) {
+                    VStack(alignment: .leading, spacing: WindowMetrics.lg) {
                         summaryCard
                         shortcutGuide
                         if !activeReasons.isEmpty {
                             reasonLegend
                         }
                     }
-                    .padding(Spacing.lg)
+                    .padding(WindowMetrics.canvasMargin)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .scrollContentBackground(.hidden)
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel("Review guide")
             }
         }
 
-        // MARK: - Cards
+        // MARK: - Cards (window-scale ``WindowSection`` surfaces)
 
         /// Live at-a-glance counts: how many remain and how many are high-priority.
         /// Counts ride text (never color alone); the high-priority figure pairs a
         /// warning glyph with its label.
         private var summaryCard: some View {
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                Text("In your queue")
-                    .font(.headline)
-
-                Label(
-                    "\(snapshot.totalCount) to review",
-                    systemImage: "tray.full"
-                )
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.primary)
-                .accessibilityLabel("\(snapshot.totalCount) transactions to review")
-
-                if snapshot.highPriorityCount > 0 {
+            WindowSection("In your queue", systemImage: "tray.full") {
+                VStack(alignment: .leading, spacing: WindowMetrics.sm) {
                     Label(
-                        "\(snapshot.highPriorityCount) high priority",
-                        systemImage: "exclamationmark.triangle.fill"
+                        "\(snapshot.totalCount) to review",
+                        systemImage: "tray.full"
                     )
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(SemanticColors.warning)
-                    .accessibilityLabel("\(snapshot.highPriorityCount) high priority transactions")
+                    .windowBodyText()
+                    .foregroundStyle(.primary)
+                    .accessibilityLabel("\(snapshot.totalCount) transactions to review")
+
+                    if snapshot.highPriorityCount > 0 {
+                        Label(
+                            "\(snapshot.highPriorityCount) high priority",
+                            systemImage: "exclamationmark.triangle.fill"
+                        )
+                        .windowBodyText()
+                        .foregroundStyle(SemanticColors.warning)
+                        .accessibilityLabel("\(snapshot.highPriorityCount) high priority transactions")
+                    }
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(Spacing.md)
-            .glassSurface(.raised)
         }
 
         /// The single-key triage cheat-sheet. The shortcuts work on the focused row
@@ -230,39 +236,33 @@ struct ReviewDestinationView: View {
         /// (a native-macOS advantage the spec keeps). Each row is a glyph + key + an
         /// action label, so meaning never rides on a key cap alone.
         private var shortcutGuide: some View {
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                Text("Keyboard triage")
-                    .font(.headline)
-
-                VStack(alignment: .leading, spacing: Spacing.xs) {
+            WindowSection("Keyboard triage", systemImage: "keyboard") {
+                VStack(alignment: .leading, spacing: WindowMetrics.sm) {
                     ForEach(ReviewShortcutGuide.shortcuts) { shortcut in
                         shortcutRow(shortcut)
                     }
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(Spacing.md)
-            .glassSurface(.raised)
         }
 
         private func shortcutRow(_ shortcut: ReviewShortcutGuide.Shortcut) -> some View {
-            HStack(spacing: Spacing.sm) {
+            HStack(spacing: WindowMetrics.sm) {
                 Image(systemName: shortcut.systemImage)
-                    .font(.callout)
+                    .font(.body)
                     .foregroundStyle(.secondary)
-                    .frame(width: 20, alignment: .center)
+                    .frame(width: 24, alignment: .center)
                     .accessibilityHidden(true)
 
                 Text(shortcut.key)
-                    .font(.caption.weight(.bold).monospaced())
-                    .frame(minWidth: 20)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 5))
+                    .font(.callout.weight(.bold).monospaced())
+                    .frame(minWidth: 26)
+                    .padding(.horizontal, WindowMetrics.xs)
+                    .padding(.vertical, 3)
+                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
                     .accessibilityHidden(true)
 
                 Text(shortcut.action)
-                    .font(.subheadline)
+                    .windowBodyText()
                     .foregroundStyle(.primary)
 
                 Spacer(minLength: 0)
@@ -276,46 +276,40 @@ struct ReviewDestinationView: View {
         /// most-urgent first; high-priority reasons pair a warning tint with the
         /// "High priority" text so the urgency is never color-only.
         private var reasonLegend: some View {
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                Text("Why these surfaced")
-                    .font(.headline)
-
-                VStack(alignment: .leading, spacing: Spacing.sm) {
+            WindowSection("Why these surfaced", systemImage: "questionmark.circle") {
+                VStack(alignment: .leading, spacing: WindowMetrics.md) {
                     ForEach(activeReasons, id: \.self) { reason in
                         reasonRow(reason)
                     }
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(Spacing.md)
-            .glassSurface(.raised)
         }
 
         private func reasonRow(_ reason: TransactionReviewReason) -> some View {
             let tint: Color = reason.isHighPriority ? SemanticColors.warning : .secondary
-            return HStack(alignment: .top, spacing: Spacing.sm) {
+            return HStack(alignment: .top, spacing: WindowMetrics.sm) {
                 Image(systemName: ReviewReasonGuide.systemImage(for: reason))
-                    .font(.callout)
+                    .font(.body)
                     .foregroundStyle(tint)
-                    .frame(width: 20, alignment: .center)
+                    .frame(width: 24, alignment: .center)
                     .accessibilityHidden(true)
 
-                VStack(alignment: .leading, spacing: Spacing.xxs) {
-                    HStack(spacing: Spacing.xs) {
+                VStack(alignment: .leading, spacing: WindowMetrics.xs) {
+                    HStack(spacing: WindowMetrics.xs) {
                         Text(reason.displayName)
-                            .font(.subheadline.weight(.semibold))
+                            .windowBodyText()
+                            .fontWeight(.semibold)
                         if reason.isHighPriority {
                             Text("High priority")
-                                .font(.caption2.weight(.semibold))
+                                .font(.caption.weight(.semibold))
                                 .foregroundStyle(SemanticColors.warning)
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 1)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
                                 .background(SemanticColors.warning.opacity(0.12), in: Capsule())
                         }
                     }
                     Text(ReviewReasonGuide.explanation(for: reason))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .windowSupportingText()
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
