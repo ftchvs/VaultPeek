@@ -62,6 +62,14 @@ actor LocalDataCacheService {
         try LocalDataStore.saveTransactionRules(rules, to: directory, context: context)
     }
 
+    func loadGoals(from directory: URL) throws -> [Goal] {
+        try LocalDataStore.loadGoals(from: directory)
+    }
+
+    func saveGoals(_ goals: [Goal], to directory: URL) throws {
+        try LocalDataStore.saveGoals(goals, to: directory)
+    }
+
     func resetLocalData(at directory: URL) throws -> LocalDataResetResult {
         try LocalDataStore.resetLocalData(at: directory)
     }
