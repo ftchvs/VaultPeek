@@ -19,8 +19,11 @@ import SwiftUI
 ///   contract): with the toggle off no model is invoked and the surface shows only
 ///   the enable affordance.
 ///
-/// Liquid Glass never touches a chart; this is a text/receipt surface, so it uses
-/// the standard raised card chrome. Phase + provenance are carried by text + SF
+/// This is the Insights canvas **hero** (AND-624): a prominent full-width card at
+/// the top of the destination, at the window (desk-distance) scale —
+/// ``WindowMetrics`` / ``WindowTypography``. Data stays solid (ADR-001: glass on
+/// chrome, not data), so the receipt sits on the quiet ``windowCardSurface()``
+/// rather than a translucent wash. Phase + provenance are carried by text + SF
 /// Symbol, never color alone (ACCESSIBILITY.md).
 struct InsightsAIInsightView: View {
     @Environment(AppState.self) private var appState
@@ -69,7 +72,7 @@ struct InsightsAIInsightView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.md) {
+        VStack(alignment: .leading, spacing: WindowMetrics.md) {
             header
 
             if phase == .off {
@@ -78,8 +81,9 @@ struct InsightsAIInsightView: View {
                 insightBody
             }
         }
-        .padding(Spacing.md)
-        .glassSurface(.raised)
+        .padding(WindowMetrics.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .windowCardSurface()
         .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilityLabel)
         // Probe the on-device runtime when the surface appears so an enabled-but-
@@ -94,12 +98,16 @@ struct InsightsAIInsightView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
-            Label("Spending insights", systemImage: "sparkles")
-                .sectionTitle()
-                .foregroundStyle(.secondary)
+        HStack(alignment: .firstTextBaseline, spacing: WindowMetrics.sm) {
+            Label {
+                Text("Spending insights").windowCardTitle()
+            } icon: {
+                Image(systemName: "sparkles").foregroundStyle(.secondary)
+            }
+            .labelStyle(.titleAndIcon)
+            .accessibilityAddTraits(.isHeader)
 
-            Spacer(minLength: Spacing.sm)
+            Spacer(minLength: WindowMetrics.sm)
 
             phasePill
 
@@ -149,23 +157,22 @@ struct InsightsAIInsightView: View {
     // MARK: - Off state (consent)
 
     private var offState: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
+        VStack(alignment: .leading, spacing: WindowMetrics.sm) {
             Text("On-device spending summaries are off")
-                .font(.callout.weight(.semibold))
+                .font(.body.weight(.semibold))
 
             Text("Turn on Local AI to generate a short, factual summary of your spending on this Mac. Nothing leaves your device — there is no cloud fallback.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .windowSupportingText()
                 .fixedSize(horizontal: false, vertical: true)
 
-            HStack(spacing: Spacing.sm) {
+            HStack(spacing: WindowMetrics.sm) {
                 Button {
                     appState.localAIEnabled = true
                 } label: {
                     Label("Enable Local AI", systemImage: "sparkles")
                 }
                 .buttonStyle(.borderedProminent)
-                .controlSize(.small)
+                .controlSize(.large)
                 .accessibilityHint("Enables on-device spending insights. Off by default.")
 
                 Button {
@@ -174,23 +181,25 @@ struct InsightsAIInsightView: View {
                     Label("Where your data lives", systemImage: "lock.shield")
                 }
                 .buttonStyle(.bordered)
-                .controlSize(.small)
+                .controlSize(.large)
                 .accessibilityHint("Opens Settings to the local data section.")
             }
         }
-        .padding(Spacing.sm)
+        .padding(WindowMetrics.sm)
         .nativeInsetSurface()
     }
 
     // MARK: - Insight body (generating / streamed / unavailable)
 
     private var insightBody: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
+        VStack(alignment: .leading, spacing: WindowMetrics.sm) {
             // Headline — the deterministic fallback while generating, replaced in
-            // place by the model-generated headline when it streams in.
-            HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+            // place by the model-generated headline when it streams in. The hero
+            // figure of the card, so it reads at window `title3` rather than the
+            // popover's callout scale.
+            HStack(alignment: .firstTextBaseline, spacing: WindowMetrics.sm) {
                 Text(receipt.headline)
-                    .font(.callout.weight(.semibold))
+                    .windowCardTitle()
                     .fixedSize(horizontal: false, vertical: true)
                     .transition(.opacity)
                     .id(receipt.headline) // cross-fade as the streamed text lands
@@ -219,7 +228,7 @@ struct InsightsAIInsightView: View {
 
     private var evidenceChips: some View {
         // Wrap so chips reflow rather than clip on a narrow column.
-        InsightsFlowLayout(spacing: Spacing.xs) {
+        InsightsFlowLayout(spacing: WindowMetrics.xs) {
             ForEach(receipt.evidenceChips) { chip in
                 InsightsEvidenceChipView(chip: chip)
             }
@@ -231,17 +240,16 @@ struct InsightsAIInsightView: View {
     /// Provenance / consent receipt lines — confidence, runtime limitations, and
     /// the reversible-action note — each as a bulleted detail line.
     private var provenance: some View {
-        VStack(alignment: .leading, spacing: Spacing.xs) {
+        VStack(alignment: .leading, spacing: WindowMetrics.xs) {
             ForEach(Array(provenanceLines.enumerated()), id: \.offset) { _, line in
-                HStack(alignment: .top, spacing: Spacing.sm) {
+                HStack(alignment: .top, spacing: WindowMetrics.sm) {
                     Image(systemName: "circle.fill")
-                        .font(.system(size: 4))
+                        .font(.system(size: 5))
                         .foregroundStyle(.secondary)
-                        .padding(.top, 6)
+                        .padding(.top, 7)
                         .accessibilityHidden(true)
                     Text(line)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .windowSupportingText()
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -259,33 +267,32 @@ struct InsightsAIInsightView: View {
 
     private var unavailableNote: some View {
         Label(availability.detail, systemImage: "exclamationmark.triangle")
-            .font(.caption.weight(.medium))
+            .font(.subheadline.weight(.medium))
             .foregroundStyle(SemanticColors.warning)
             .fixedSize(horizontal: false, vertical: true)
-            .padding(Spacing.sm)
+            .padding(WindowMetrics.sm)
             .nativeInsetSurface(stroke: SemanticColors.warning.opacity(0.18))
             .accessibilityLabel("Runtime unavailable. \(availability.detail)")
     }
 
     private var footer: some View {
-        HStack(spacing: Spacing.xs) {
+        HStack(spacing: WindowMetrics.xs) {
             Image(systemName: "lock.shield.fill")
-                .font(.caption2.weight(.semibold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
             Text("\(receipt.localOnlyBadge). \(receipt.reversibleActionCopy)")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                .windowSupportingText()
                 .fixedSize(horizontal: false, vertical: true)
 
-            Spacer(minLength: Spacing.xs)
+            Spacer(minLength: WindowMetrics.xs)
 
             Button {
                 openSettings()
             } label: {
                 Label("Where your data lives", systemImage: "externaldrive.badge.questionmark")
                     .labelStyle(.titleAndIcon)
-                    .font(.caption2)
+                    .font(.subheadline)
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
@@ -317,18 +324,18 @@ struct InsightsEvidenceChipView: View {
     var body: some View {
         HStack(spacing: Spacing.xxs) {
             Image(systemName: chip.systemImage)
-                .font(.caption2.weight(.semibold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(accent)
                 .accessibilityHidden(true)
             Text(chip.label)
-                .font(.caption2)
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
             Text(chip.value)
-                .font(.caption2.weight(.semibold))
+                .font(.subheadline.weight(.semibold))
                 .monospacedDigit()
         }
-        .padding(.horizontal, 7)
-        .padding(.vertical, 3)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
         .background(Color.primary.opacity(0.05), in: Capsule())
         .overlay { Capsule().stroke(Color.primary.opacity(0.08), lineWidth: 1) }
         .accessibilityElement(children: .ignore)

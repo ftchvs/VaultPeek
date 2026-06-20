@@ -1,12 +1,13 @@
 import PlaidBarCore
 import SwiftUI
 
-/// The **Trends** band of the Insights destination (Epic 7 / AND-585) — the
-/// chart canvas. It re-hosts the existing, unchanged chart components and gives
-/// each one its audio graph + a `reduceTransparency` text fallback + a non-color
-/// alternative (ACCESSIBILITY.md). **Liquid Glass never touches a chart** — the
-/// charts render on the standard raised card chrome (a `.clear`-fill surface), and
-/// the marks themselves carry no material.
+/// The **Trends** column of the Insights window canvas (Epic 7 / AND-585; AND-624) —
+/// the chart cards. It re-hosts the existing, unchanged chart components at the
+/// window (desk-distance) scale and gives each one its audio graph + a
+/// `reduceTransparency` text fallback + a non-color alternative (ACCESSIBILITY.md).
+/// **Liquid Glass never touches a chart** — each chart sits on a quiet, *solid*
+/// ``WindowSection`` card (ADR-001: data stays solid), and the marks carry no
+/// material.
 ///
 /// - **Net worth trend** — ``BalanceTrendChart`` over ``BalanceTrend/evaluate``,
 ///   self-hides until there is enough recorded history to draw a line.
@@ -15,6 +16,9 @@ import SwiftUI
 /// - **Activity heatmap** — a read-only year heatmap built from the existing
 ///   ``SpendingHeatmapLayout`` Core engine + ``ChartAudioGraph/heatmap`` audio
 ///   graph (AND-569), with a Reduce Transparency / Privacy Mask text alternative.
+///
+/// At most three cards, so the column reads as calm comfortable density rather than
+/// a tight stack (AND-624).
 struct InsightsTrendsView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -23,7 +27,7 @@ struct InsightsTrendsView: View {
     private var isMasked: Bool { appState.shouldMaskFinancialValues }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.lg) {
+        VStack(alignment: .leading, spacing: WindowMetrics.lg) {
             netWorthTrendSection
             spendingByCategorySection
             activityHeatmapSection
@@ -35,27 +39,23 @@ struct InsightsTrendsView: View {
     @ViewBuilder
     private var netWorthTrendSection: some View {
         if let trend = BalanceTrend.evaluate(history: appState.balanceHistory) {
-            chartCard(
-                title: "Net worth trend",
-                systemImage: "chart.xyaxis.line"
-            ) {
+            WindowSection("Net worth trend", systemImage: "chart.xyaxis.line") {
+                // Direction is carried by the signed delta text + the VoiceOver
+                // summary, never by line color alone (ACCESSIBILITY.md).
+                Label(trend.deltaText, systemImage: directionGlyph(trend.direction))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(directionTint(trend.direction))
+                    .monospacedDigit()
+                    .accessibilityHidden(true)
+            } content: {
                 if isMasked {
                     maskedChartFallback(
                         message: "Net worth trend hidden while VaultPeek is private.",
-                        minHeight: 120
+                        minHeight: 160
                     )
                 } else {
-                    VStack(alignment: .leading, spacing: Spacing.xs) {
-                        // Direction is carried by the signed delta text + the
-                        // VoiceOver summary, never by line color alone.
-                        Label(trend.deltaText, systemImage: directionGlyph(trend.direction))
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(directionTint(trend.direction))
-                            .accessibilityHidden(true)
-
-                        BalanceTrendChart(trend: trend)
-                            .frame(minHeight: 120)
-                    }
+                    BalanceTrendChart(trend: trend)
+                        .frame(minHeight: 160)
                 }
             }
             .loadingRedaction(appState.loadState(for: .summaryCards))
@@ -84,10 +84,7 @@ struct InsightsTrendsView: View {
     private var spendingByCategorySection: some View {
         let presentation = appState.categoryDashboardPresentation
         if !presentation.isEmpty {
-            chartCard(
-                title: "Spending by category",
-                systemImage: "chart.pie"
-            ) {
+            WindowSection("Spending by category", systemImage: "chart.pie") {
                 SpendDonutChart(
                     model: SpendDonutModel(presentation: presentation),
                     isPrivacyMasked: isMasked
@@ -103,10 +100,10 @@ struct InsightsTrendsView: View {
     private var activityHeatmapSection: some View {
         let layout = heatmapLayout()
         if layout.activeDayCount > 0 {
-            chartCard(
-                title: layout.mode.summaryTitle,
-                systemImage: "square.grid.3x3.fill"
-            ) {
+            WindowSection(layout.mode.summaryTitle, systemImage: "square.grid.3x3.fill") {
+                Text("Last 365 days")
+                    .windowSupportingText()
+            } content: {
                 if isMasked || reduceTransparency {
                     // Reduce Transparency / Privacy Mask text alternative: the
                     // heatmap leans on tinted, translucent cells, so when either
@@ -138,45 +135,22 @@ struct InsightsTrendsView: View {
         let total = isMasked
             ? PrivacyMaskPresentation.compactValue
             : Formatters.currency(layout.totalValue, format: .compact)
-        return VStack(alignment: .leading, spacing: Spacing.xs) {
+        return VStack(alignment: .leading, spacing: WindowMetrics.xs) {
             Label("\(layout.activeDayCount) active days in the last year", systemImage: "calendar")
-                .font(.subheadline.weight(.medium))
+                .windowBodyText()
             Text(isMasked
                 ? "Activity totals are hidden while VaultPeek is private."
                 : "\(total) spent across active days. \(layout.mode.semanticDescription)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .windowSupportingText()
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: WindowMetrics.heatmapHeroMinHeight, alignment: .topLeading)
         .accessibilityElement(children: .combine)
-    }
-
-    // MARK: - Card chrome
-
-    /// Standard raised card chrome for a chart section. The chart marks never get
-    /// a glass treatment; the card surface uses `.glassSurface(.raised)`, whose
-    /// `.raised` rank is a `.clear` fill (no material on the chart).
-    private func chartCard(
-        title: String,
-        systemImage: String,
-        @ViewBuilder content: () -> some View
-    ) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            Label(title, systemImage: systemImage)
-                .sectionTitle()
-                .foregroundStyle(.secondary)
-            content()
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(Spacing.md)
-        .glassSurface(.raised)
-        .accessibilityElement(children: .contain)
     }
 
     private func maskedChartFallback(message: String, minHeight: CGFloat) -> some View {
         Label(message, systemImage: "eye.slash")
-            .font(.subheadline)
+            .windowBodyText()
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .leading)
             .accessibilityLabel(message)
@@ -184,21 +158,30 @@ struct InsightsTrendsView: View {
 }
 
 /// A read-only year activity heatmap grid built from the existing
-/// ``SpendingHeatmapLayout`` Core engine. It carries the ``ChartAudioGraph/heatmap``
-/// audio graph (AND-569) and a full text alternative via its VoiceOver label, so
-/// meaning never rides on cell color alone. No glass — cells are plain tinted
-/// rounded rects. Privacy Mask / Reduce Transparency callers swap this for a text
-/// summary upstream; this view is shown only when neither is active.
+/// ``SpendingHeatmapLayout`` Core engine, rendered at **desk-distance scale**
+/// (larger cells than the popover's glance-scale grid) so it reads as a comfortable
+/// window instrument. It carries the ``ChartAudioGraph/heatmap`` audio graph
+/// (AND-569) and a full text alternative via its VoiceOver label, so meaning never
+/// rides on cell color alone. No glass — cells are plain tinted rounded rects.
+/// Privacy Mask / Reduce Transparency callers swap this for a text summary upstream;
+/// this view is shown only when neither is active.
 struct InsightsActivityHeatmapGrid: View {
     let layout: SpendingHeatmapLayout
 
-    private let spacing: CGFloat = 2
+    private let spacing: CGFloat = 3
+    /// Desk-distance cell bounds — larger than the popover's 5...9pt glance cells so
+    /// the year grid reads as a comfortable window instrument, not a tiny strip.
+    private let minCell: CGFloat = 9
+    private let maxCell: CGFloat = 15
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.xs) {
+        VStack(alignment: .leading, spacing: WindowMetrics.sm) {
             GeometryReader { proxy in
                 let weeks = max(layout.weekColumns.count, 1)
-                let cell = max(5, min(9, floor((proxy.size.width - (CGFloat(weeks - 1) * spacing)) / CGFloat(weeks))))
+                let cell = max(
+                    minCell,
+                    min(maxCell, floor((proxy.size.width - (CGFloat(weeks - 1) * spacing)) / CGFloat(weeks)))
+                )
                 HStack(alignment: .top, spacing: spacing) {
                     ForEach(Array(layout.weekColumns.enumerated()), id: \.offset) { _, week in
                         VStack(spacing: spacing) {
@@ -210,7 +193,7 @@ struct InsightsActivityHeatmapGrid: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(height: 7 * 9 + 6 * spacing)
+            .frame(height: 7 * maxCell + 6 * spacing)
 
             legend
         }
@@ -237,24 +220,21 @@ struct InsightsActivityHeatmapGrid: View {
     }
 
     private var legend: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: WindowMetrics.xs) {
             Text("Less")
-                .microText()
-                .foregroundStyle(.secondary)
+                .windowSupportingText()
             ForEach([0.0, 0.25, 0.5, 0.75, 1.0], id: \.self) { intensity in
                 RoundedRectangle(cornerRadius: Radius.cell)
                     .fill(Color.primary.opacity(0.12 + 0.6 * intensity))
-                    .frame(width: 8, height: 8)
+                    .frame(width: 11, height: 11)
             }
             Text("More")
-                .microText()
-                .foregroundStyle(.secondary)
+                .windowSupportingText()
 
             Spacer()
 
             Text("\(layout.activeDayCount) active days")
-                .microText()
-                .foregroundStyle(.secondary)
+                .windowSupportingText()
         }
         .accessibilityHidden(true)
     }
