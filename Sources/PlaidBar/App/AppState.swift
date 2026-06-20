@@ -2310,6 +2310,22 @@ final class AppState {
         error = nil
 
         if isDemoMode {
+            // A serverless --demo launch needs no server to stay populated, but
+            // the demo readiness card advertises "Connect Bank". Probe for a real
+            // server FIRST and bail without mutating anything when none is
+            // reachable: the destructive demo→real teardown below (clearing
+            // accounts/transactions/etc.) must never run in a serverless demo, or
+            // a single "Connect Bank" tap would wipe the demo dashboard and paint
+            // a server-required banner the demo does not need. Mirrors the
+            // already-correct demo guards in `reconnectItem` and
+            // `refreshLiabilities`. Only once a server is actually present do we
+            // fall through into the real add-account flow (teardown + Plaid Link).
+            await checkServerConnection()
+            guard serverConnected else {
+                error = nil
+                return
+            }
+
             isDemoMode = false
             isDemoStatusRecoveryScenario = false
             isSetupComplete = false
@@ -2355,7 +2371,12 @@ final class AppState {
         }
 
         guard serverConnected else {
-            error = "Start the VaultPeek companion server before adding an account."
+            // Never paint a server-required banner over a demo dashboard
+            // (existing `error = isDemoMode ? nil : …` convention). The demo
+            // path already returned above before any teardown, so reaching here
+            // in demo mode is not expected — but suppress defensively in case a
+            // future caller re-enters this guard while demo is still active.
+            error = isDemoMode ? nil : "Start the VaultPeek companion server before adding an account."
             return
         }
 
