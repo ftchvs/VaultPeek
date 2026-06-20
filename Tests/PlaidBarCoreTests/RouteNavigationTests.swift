@@ -123,6 +123,94 @@ struct RouteTests {
     }
 }
 
+// MARK: - Glance attention chip → Route (AND-597)
+
+/// The pure glance-chip → deep-link mapping the menu-bar glance routes through
+/// (IA §2.1, §3.6, §6). A glance chip opens the window at the *relevant*
+/// destination, not just the dashboard; infrastructure rows keep their in-place
+/// action (no route). This is the testable seam — the flag gating and the actual
+/// `openWindow` live in the app target.
+@Suite("Glance attention chip routing (AND-597)")
+struct AttentionRowRoutingTests {
+    /// Builds a row with a given id/severity, optionally targeting an item, so the
+    /// mapping can be exercised without `AttentionQueue.evaluate`'s full inputs.
+    private func row(id: String, targetItemId: String? = nil) -> AttentionQueueRow {
+        AttentionQueueRow(
+            id: id,
+            severity: .warning,
+            title: "t",
+            detail: "d",
+            targetItemId: targetItemId
+        )
+    }
+
+    @Test("Financial cockpit chips route to where the signal is reviewed")
+    func financialChips() {
+        // Low cash / high utilization → Accounts; unusual spend → Transactions.
+        #expect(Route.from(attentionRow: row(id: "financial-low-cash")) == .accounts())
+        #expect(Route.from(attentionRow: row(id: "financial-high-utilization")) == .accounts())
+        #expect(Route.from(attentionRow: row(id: "financial-unusual-spending")) == .transactions())
+    }
+
+    @Test("Degraded-institution chips route to Accounts and carry the item selection")
+    func itemChips() {
+        // item-error / item-repair / item-outage all open Accounts at the item.
+        #expect(
+            Route.from(attentionRow: row(id: "item-error-0", targetItemId: "item_42"))
+                == .accounts(itemID: "item_42")
+        )
+        #expect(
+            Route.from(attentionRow: row(id: "item-repair-1", targetItemId: "item_7"))
+                == .accounts(itemID: "item_7")
+        )
+        #expect(
+            Route.from(attentionRow: row(id: "item-outage-2", targetItemId: "item_9"))
+                == .accounts(itemID: "item_9")
+        )
+        // No targetItemId ⇒ Accounts with no specific selection.
+        #expect(Route.from(attentionRow: row(id: "item-error-0")) == .accounts(itemID: nil))
+    }
+
+    @Test("Infrastructure / generic chips have no in-window destination (keep their action)")
+    func infrastructureChipsHaveNoRoute() {
+        // These rows carry a recovery *action* (check server, open Settings,
+        // refresh) but no useful destination, so the mapping returns nil and the
+        // caller falls back to the action — preserving today's behavior.
+        let noRoute = [
+            "server-offline", "credentials-missing", "local-auth-missing",
+            "local-auth-rejected", "server-mode-mismatch", "recent-error",
+            "no-items", "balances-not-loaded", "first-sync-needed",
+            "first-sync-incomplete", "sync-stale", "healthy", "demo-healthy",
+        ]
+        for id in noRoute {
+            #expect(Route.from(attentionRow: row(id: id)) == nil, "\(id) must not route")
+        }
+    }
+
+    @Test("Mapping is derived from rows AttentionQueue.evaluate actually emits")
+    func mappingMatchesRealEvaluatedRows() throws {
+        // Drive the real evaluator into a degraded-item state and confirm the
+        // emitted row maps to Accounts at that item — proving the id/targetItemId
+        // the mapping keys off are the ones the queue produces, not invented ids.
+        let queue = AttentionQueue.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 1,
+            accountCount: 2,
+            syncedItemCount: 1,
+            itemStatuses: [
+                ItemStatus(id: "item_live", institutionName: "Bank", status: .error),
+            ],
+            isSyncStale: false,
+            lastSyncRelative: "1m ago",
+            errorMessage: nil
+        )
+        let itemRow = try #require(queue.rows.first { $0.id.hasPrefix("item-error-") })
+        #expect(Route.from(attentionRow: itemRow) == .accounts(itemID: "item_live"))
+    }
+}
+
 // MARK: - NavigationState transitions
 
 @Suite("NavigationState transitions")
@@ -187,6 +275,30 @@ struct NavigationStateTransitionTests {
         state.apply(.accounts(itemID: "acct_42"))
         #expect(state.destination == .accounts)
         #expect(state.selectedAccountID == "acct_42")
+    }
+
+    @Test("apply(_:) sets the destination for every route (the deep-link entry point)")
+    func applySetsDestinationForEveryRoute() {
+        // `apply` is the single in-window navigation entry point (palette, keymap,
+        // glance chip, App Intents). Applying any route must land on its
+        // destination — the core deep-link guarantee.
+        for destination in RouteDestination.allCases {
+            var state = NavigationState()
+            state.apply(.canonical(for: destination))
+            #expect(state.destination == destination)
+        }
+    }
+
+    @Test("apply(.accounts(itemID: nil)) routes to Accounts without clobbering an existing selection")
+    func applyAccountRouteWithoutItem() {
+        // A glance "low cash" / "high utilization" chip routes to .accounts() with
+        // no specific item; that must select Accounts but not wipe a prior
+        // dashboard account selection to "".
+        var state = NavigationState()
+        state.selectAccount(id: "demo_visa")
+        state.apply(.accounts(itemID: nil))
+        #expect(state.destination == .accounts)
+        #expect(state.selectedAccountID == "demo_visa")
     }
 
     @Test("go(to:) switches destination and preserves dashboard selection")

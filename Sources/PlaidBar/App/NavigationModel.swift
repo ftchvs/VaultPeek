@@ -26,6 +26,12 @@ final class NavigationModel {
         static let dashboardFilter = "dashboard.accountFilter"
         static let selectedAccountID = "dashboard.selectedAccountId"
         static let heatmapMode = "dashboard.heatmapMode"
+        /// The last selected destination's `RouteDestination.rawValue`. New in
+        /// AND-597: the popover only ever showed Dashboard, so this key did not
+        /// exist before; restoring it lets the window-first shell reopen on the
+        /// destination the user left off (IA §2.1 selection persistence). Absent ⇒
+        /// Dashboard, so an upgrading user (and the flag-OFF popover) is unchanged.
+        static let destination = "navigation.destination"
     }
 
     /// The pure state. Mutations route through the typed accessors below (which
@@ -89,12 +95,20 @@ final class NavigationModel {
 
     func go(to destination: RouteDestination) {
         state.go(to: destination)
+        persistDestination()
     }
 
+    /// Applies a typed ``Route`` — the single in-window navigation entry point
+    /// (the ⌘K palette, the ⌘1–8 keymap, a glance-chip hand-off, and — Epic 8 —
+    /// App Intents all funnel here via `AppState.route(to:)`). Sets the
+    /// destination and folds in any carried selection, then persists both so a
+    /// relaunch restores exactly where the deep-link landed (IA §2.1).
     func apply(_ route: Route) {
         state.apply(route)
-        // A route may carry an account selection; persist it so a deep-link
-        // landing point survives like a manual selection did.
+        // A route may carry an account selection and always carries a
+        // destination; persist both so the deep-link landing point survives a
+        // relaunch like a manual selection / destination switch did.
+        persistDestination()
         persistSelectedAccountID()
     }
 
@@ -124,6 +138,13 @@ final class NavigationModel {
         defer { isHydrating = false }
 
         var restored = NavigationState()
+        // Restore the last destination (AND-597). Absent ⇒ the default Dashboard,
+        // so an upgrading user — and the flag-OFF popover, which only ever shows
+        // Dashboard — is unchanged.
+        if let rawDestination = defaults.string(forKey: Keys.destination),
+           let destination = RouteDestination(rawValue: rawDestination) {
+            restored.destination = destination
+        }
         if let raw = defaults.string(forKey: Keys.dashboardFilter),
            let filter = DashboardAccountFilterKind(rawValue: raw) {
             restored.dashboardFilter = filter
@@ -136,6 +157,11 @@ final class NavigationModel {
             restored.heatmapMode = mode
         }
         state = restored
+    }
+
+    private func persistDestination() {
+        guard !isHydrating else { return }
+        defaults.set(state.destination.rawValue, forKey: Keys.destination)
     }
 
     private func persistDashboardFilter() {

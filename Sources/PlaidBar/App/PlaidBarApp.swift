@@ -130,6 +130,16 @@ struct PlaidBarApp: App {
                         forcedColorScheme: Self.forcedColorScheme
                     )
                 })
+                // Glance attention-chip deep-linking (ADR-001 / AND-597). Only
+                // install a real handler when the window-first flag is ON; with the
+                // flag OFF the `openRoute` environment value stays its no-op
+                // default, so a chip falls back to its existing in-place action and
+                // the popover behaves byte-identically to today. When ON, a chip
+                // routes a typed `Route` into the primary window through the single
+                // reusable entry point (`AppState.route(to:openWindow:)`, also the
+                // App Intents Epic-8 path), staging the route then opening the
+                // window via `openWindow(id:)`.
+                .environment(\.openRoute, glanceRouteHandler)
                 .forcedAppColorScheme(Self.forcedColorScheme)
                 .appliesAppAppearance()
                 // Apply the in-app text-size preference once at the popover root
@@ -508,6 +518,24 @@ struct PlaidBarApp: App {
     /// "Hide Balances" / "Show Balances" rather than a static label.
     private var privacyMaskMenuTitle: String {
         appState.shouldMaskFinancialValues ? "Show Balances" : "Hide Balances"
+    }
+
+    /// The glance attention-chip deep-link handler injected into `\.openRoute`
+    /// (ADR-001 / AND-597). When the window-first flag is ON it routes a `Route`
+    /// into the primary window via the single reusable entry point
+    /// (`AppState.route(to:openWindow:)`); when OFF it is a no-op so the chip falls
+    /// back to its existing in-place action and flag-OFF behavior is unchanged.
+    ///
+    /// Returned as an explicitly typed `@MainActor @Sendable` closure so a single
+    /// `.environment(\.openRoute, …)` site type-checks under strict concurrency
+    /// (a ternary of two closure literals breaks `@Sendable` inference).
+    private var glanceRouteHandler: @MainActor @Sendable (Route) -> Void {
+        guard isWindowFirstEnabled else { return { _ in } }
+        return { route in
+            appState.route(to: route) {
+                openWindow(id: Self.mainWindowID)
+            }
+        }
     }
 
     /// Opens the primary window if it is not already up, so a ⌘K / ⌘1–8 pressed

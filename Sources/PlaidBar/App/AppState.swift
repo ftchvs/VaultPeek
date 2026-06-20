@@ -129,6 +129,18 @@ final class AppState {
     /// unchanged.
     let navigationModel: NavigationModel
 
+    /// Pending deep-link route awaiting the primary window (ADR-001 / AND-597).
+    ///
+    /// The window-first primary scene is a declarative `Window`, not a
+    /// `WindowGroup` with a presented value, so a deep-link cannot be passed *into*
+    /// the open call. Instead the opener sets this slot, then calls
+    /// `openWindow(id: "main")`; `AppShellView` consumes it on appear / change and
+    /// applies it through its window's `NavigationModel`. It is set only by
+    /// ``route(to:)`` and cleared by ``consumePendingRoute()``, so the round-trip
+    /// is single-shot. Inert with the flag OFF: nothing opens the window then, so
+    /// the slot is never read — flag-OFF behavior is unchanged.
+    var pendingRoute: Route?
+
     /// The dashboard's account filter, persisted under `dashboard.accountFilter`.
     /// Setting a *new* filter clears the account selection, exactly as the
     /// popover's `.onChange(of:)` did (AND-373/375).
@@ -1516,6 +1528,53 @@ final class AppState {
             unacknowledgedAlertCount: sidebarUnacknowledgedAlertCount,
             reconnectNeededCount: sidebarReconnectNeededCount
         )
+    }
+
+    // MARK: - Deep-link routing (ADR-001 / AND-597)
+
+    /// **The reusable deep-link entry point for the window-first shell.** Any
+    /// surface — a menu-bar glance attention chip today, an App Intent in Epic 8
+    /// tomorrow — routes a typed ``Route`` into the primary window by calling this.
+    ///
+    /// Because the primary scene is a declarative `Window` (not a `WindowGroup`
+    /// with a presented value), the route cannot be threaded through the open
+    /// call. So this performs a **pending-route handoff**: it stages the route in
+    /// ``pendingRoute`` and asks the caller-supplied `openWindow` to bring the
+    /// `Window` forward. ``AppShellView`` then consumes the pending route on
+    /// appear / change and applies it to *its* window's `NavigationModel`
+    /// (destination + selection), so the window lands exactly on the deep-link
+    /// target.
+    ///
+    /// The `openWindow` closure is injected (the scene owns SwiftUI's
+    /// `openWindow(id:)` environment action) rather than reached through
+    /// `AppState`, mirroring how the command palette injects `openSettings` /
+    /// `summon`. App Intents (Epic 8) will call this same method, passing the
+    /// intent's `openWindow`, so the deep-link path has one definition.
+    ///
+    /// - Parameters:
+    ///   - route: the destination + selection to land on.
+    ///   - openWindow: brings the primary `Window` forward (the scene's
+    ///     `openWindow(id: "main")`). A no-op default keeps headless callers /
+    ///     previews safe; in that case the staged route is still applied by an
+    ///     already-open `AppShellView`.
+    func route(to route: Route, openWindow: @MainActor () -> Void = {}) {
+        pendingRoute = route
+        openWindow()
+    }
+
+    /// Consumes the staged ``pendingRoute`` (if any), applying it to the supplied
+    /// window's `NavigationModel` and clearing the slot so it fires once.
+    /// Called by ``AppShellView`` on appear and whenever `pendingRoute` changes —
+    /// covering both "window already open" (change fires) and "window opened by
+    /// this route" (appear fires) hand-offs.
+    ///
+    /// - Parameter navigationModel: the consuming window's per-window model. Each
+    ///   `AppShellView` passes its own (R-10), so a route only ever lands in the
+    ///   window that processed the hand-off.
+    func consumePendingRoute(into navigationModel: NavigationModel) {
+        guard let route = pendingRoute else { return }
+        pendingRoute = nil
+        navigationModel.apply(route)
     }
 
     var notificationPermissionPresentation: NotificationPermissionPresentation {
