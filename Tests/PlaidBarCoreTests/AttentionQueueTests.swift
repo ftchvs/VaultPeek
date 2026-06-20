@@ -244,7 +244,8 @@ struct AttentionQueueTests {
             ],
             lowCashThreshold: 100,
             largeTransactionThreshold: 500,
-            creditUtilizationThreshold: 30
+            creditUtilizationThreshold: 30,
+            now: Formatters.parseTransactionDate("2026-06-14")!
         )
 
         #expect(queue.rows.map(\.id) == [
@@ -338,7 +339,8 @@ struct AttentionQueueTests {
             ],
             lowCashThreshold: 100,
             largeTransactionThreshold: 500,
-            creditUtilizationThreshold: 30
+            creditUtilizationThreshold: 30,
+            now: Formatters.parseTransactionDate("2026-06-14")!
         )
         let belowWarnings = AttentionQueue.evaluate(
             isDemoMode: false,
@@ -360,7 +362,8 @@ struct AttentionQueueTests {
             ],
             lowCashThreshold: 100,
             largeTransactionThreshold: 500,
-            creditUtilizationThreshold: 30
+            creditUtilizationThreshold: 30,
+            now: Formatters.parseTransactionDate("2026-06-14")!
         )
 
         #expect(atThreshold.rows.map(\.id) == [
