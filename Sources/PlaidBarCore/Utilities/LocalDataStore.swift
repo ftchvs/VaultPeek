@@ -79,6 +79,10 @@ public enum LocalDataStore {
     public static let transactionCacheFilename = "transactions.json"
     public static let transactionReviewMetadataFilename = "transaction-review-metadata.json"
     public static let transactionRulesFilename = "transaction-rules.json"
+    /// User-defined savings goals (AND-606). App-local and **not** Plaid-scoped —
+    /// goals are user intentions, not bank data, so a single context-free file
+    /// holds them regardless of the active environment/storage path.
+    public static let goalsFilename = "goals.json"
     public static let pendingLinkSessionsFilename = "pending-link-sessions.json"
     /// Stable, non-PII install-scoped Plaid `client_user_id`. Cleared on local
     /// reset so a fresh bank-link after reset does not reuse the pre-reset Plaid
@@ -237,6 +241,9 @@ public enum LocalDataStore {
             isTransactionCacheFilename(filename) ||
             isTransactionReviewMetadataFilename(filename) ||
             isTransactionRulesFilename(filename) ||
+            // Savings goals (AND-606) are local install state, cleared on a reset
+            // alongside review metadata/rules so a reset is a clean slate.
+            filename == goalsFilename ||
             isPendingLinkSessionsFilename(filename) ||
             filename == linkClientUserIdFilename ||
             // Merchant logo cache directory (AND-494): clear cached brand images.
@@ -289,6 +296,7 @@ public enum LocalDataStore {
             filename == ServerAutoLaunchPlan.logFilename ||
             isTransactionReviewMetadataFilename(filename) ||
             isTransactionRulesFilename(filename) ||
+            filename == goalsFilename ||
             isAccountCacheFilename(filename) ||
             isTransactionCacheFilename(filename) ||
             isPendingLinkSessionsFilename(filename) ||
@@ -420,6 +428,12 @@ public enum LocalDataStore {
         context: TransactionCacheContext? = nil
     ) -> URL {
         directory.appendingPathComponent(transactionRulesFilename(for: context))
+    }
+
+    public static func goalsURL(
+        in directory: URL = storageDirectoryURL()
+    ) -> URL {
+        directory.appendingPathComponent(goalsFilename)
     }
 
     public static func prepareStorageDirectory(
@@ -695,6 +709,31 @@ public enum LocalDataStore {
 
         let data = try Data(contentsOf: url)
         return try JSONDecoder().decode([TransactionRule].self, from: data)
+    }
+
+    public static func loadGoals(
+        from directory: URL = storageDirectoryURL(),
+        fileManager: FileManager = .default
+    ) throws -> [Goal] {
+        let url = goalsURL(in: directory)
+        guard fileManager.fileExists(atPath: url.path) else { return [] }
+
+        let data = try Data(contentsOf: url)
+        return try JSONDecoder().decode([Goal].self, from: data)
+    }
+
+    public static func saveGoals(
+        _ goals: [Goal],
+        to directory: URL = storageDirectoryURL(),
+        fileManager: FileManager = .default
+    ) throws {
+        try ensurePrivateDirectory(directory, fileManager: fileManager)
+
+        let url = goalsURL(in: directory)
+        // Stable order on disk so two saves of the same set diff cleanly.
+        let data = try JSONEncoder().encode(goals.sorted { $0.createdAt < $1.createdAt })
+        try writePrivateCacheFile(data, to: url, fileManager: fileManager)
+        try setPrivateCacheFilePermissions(url, fileManager: fileManager)
     }
 
     public static func saveTransactions(

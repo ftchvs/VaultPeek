@@ -544,6 +544,13 @@ final class AppState {
     /// Fetches + caches merchant logos via the local server's authed proxy.
     let merchantLogoStore = MerchantLogoStore()
     private let localDataCache = LocalDataCacheService()
+
+    /// App-local savings-goals store (AND-606). Constructing it is cheap and does
+    /// **no I/O** — goals are read lazily inside the store (`loadIfNeeded()` on the
+    /// Goals destination's first appearance). Only the window-first Goals
+    /// destination ever reads it, so with `WindowFirstFeatureFlag` OFF nothing
+    /// touches goals storage and the popover boot path is byte-identical.
+    let goalsStore = GoalsStore()
     /// Disposable SwiftData read-model cache for instant cold render (AND-566).
     /// Opened lazily and behind `try?`; `nil` whenever SwiftData is unavailable
     /// or the store fails to open, in which case the app behaves exactly as it

@@ -18,8 +18,9 @@ import SwiftUI
 /// - **Upcoming recurring** — `RecurringObligationsSection` over
 ///   `RecurringObligationsPresentation.make`, the same read-only recurring
 ///   presentation the flyout shows; self-hides when nothing is detected.
-/// - **Goals** — a read-only summary placeholder. The full Goals destination is a
-///   separate net-new sub (AND-606) and is **deferred**; Planning only previews it.
+/// - **Goals** — a read-only contribution overview (AND-606) over ``GoalsSummary``
+///   of the live ``GoalsStore`` goals, so it can never disagree with the Goals
+///   destination's numbers. Self-shows its empty state when no goals exist.
 ///
 /// Confidence / pressure cues ride on text + SF Symbol, never color alone
 /// (ACCESSIBILITY.md — the reused cards already enforce this). Window-first surface
@@ -90,15 +91,17 @@ struct PlanningDestinationView: View {
                 )
                 .loadingRedaction(appState.loadState(for: .recurring))
 
-                // Goals contributions — read-only summary placeholder. The full
-                // Goals destination is the separate net-new AND-606 (deferred).
-                goalsSummarySection
+                // Goals contributions — read-only overview over the live goals
+                // (AND-606). Wired to `GoalsSummary` so it matches the Goals
+                // destination; self-shows an empty state when no goals exist.
+                goalsSummarySection(privacyMaskEnabled: privacyMaskEnabled)
             }
             .padding(Spacing.lg)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .scrollContentBackground(.hidden)
         .navigationTitle(RouteDestination.planning.title)
+        .task { await appState.goalsStore.loadIfNeeded() }
         .accessibilityElement(children: .contain)
     }
 
@@ -150,25 +153,88 @@ struct PlanningDestinationView: View {
         }
     }
 
-    // MARK: - Goals summary (deferred destination — AND-606)
+    // MARK: - Goals contribution overview (AND-606)
 
-    private var goalsSummarySection: some View {
+    @ViewBuilder
+    private func goalsSummarySection(privacyMaskEnabled: Bool) -> some View {
+        let summary = GoalsSummary.make(from: appState.goalsStore.goals)
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            Label("Goals", systemImage: RouteDestination.goals.systemImage)
-                .sectionTitle()
-                .foregroundStyle(.secondary)
-
-            ContentUnavailableView {
-                Label("Savings goals are coming soon", systemImage: "flag.checkered")
-            } description: {
-                Text("Set targets and track contributions in the dedicated Goals workspace.")
+            HStack(alignment: .firstTextBaseline) {
+                Label("Goals", systemImage: RouteDestination.goals.systemImage)
+                    .sectionTitle()
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Open Goals") {
+                    appState.navigationModel.go(to: .goals)
+                }
+                .buttonStyle(.link)
+                .font(.caption)
+                .accessibilityHint("Switches to the Goals workspace.")
             }
-            .frame(maxWidth: .infinity, minHeight: 140)
+
+            if summary.isEmpty {
+                ContentUnavailableView {
+                    Label("No goals yet", systemImage: "flag.checkered")
+                } description: {
+                    Text("Set targets and track contributions in the Goals workspace.")
+                }
+                .frame(maxWidth: .infinity, minHeight: 140)
+            } else {
+                goalsOverview(summary, privacyMaskEnabled: privacyMaskEnabled)
+            }
         }
         .padding(Spacing.md)
         .glassSurface(.raised)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Goals: savings goals are coming soon.")
+        .accessibilityLabel(goalsAccessibilityLabel(summary, privacyMaskEnabled: privacyMaskEnabled))
+    }
+
+    private func goalsOverview(_ summary: GoalsSummary, privacyMaskEnabled: Bool) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            ProgressView(value: summary.overallFraction)
+                .progressViewStyle(.linear)
+                .tint(SemanticColors.brand)
+                .accessibilityHidden(true)
+
+            HStack(alignment: .firstTextBaseline) {
+                Text("\(summary.overallPercent)% of total")
+                    .font(.callout.weight(.semibold))
+                    .monospacedDigit()
+                Spacer()
+                Text("\(goalsCurrency(summary.totalSaved, masked: privacyMaskEnabled)) of \(goalsCurrency(summary.totalTarget, masked: privacyMaskEnabled))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+
+            HStack(spacing: Spacing.md) {
+                Label("\(summary.goalCount) goal\(summary.goalCount == 1 ? "" : "s")", systemImage: "flag")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if summary.fundedCount > 0 {
+                    Label("\(summary.fundedCount) funded", systemImage: "checkmark.seal")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if summary.behindCount > 0 {
+                    Label("\(summary.behindCount) behind", systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private func goalsAccessibilityLabel(_ summary: GoalsSummary, privacyMaskEnabled: Bool) -> String {
+        guard !summary.isEmpty else { return "Goals: no goals yet." }
+        var parts = ["Goals: \(summary.overallPercent) percent of total saved across \(summary.goalCount) goal\(summary.goalCount == 1 ? "" : "s")"]
+        if summary.fundedCount > 0 { parts.append("\(summary.fundedCount) funded") }
+        if summary.behindCount > 0 { parts.append("\(summary.behindCount) behind") }
+        return parts.joined(separator: ". ")
+    }
+
+    private func goalsCurrency(_ amount: Double, masked: Bool) -> String {
+        PrivacyMaskPresentation.currency(amount, format: .full, isEnabled: masked, style: .compact)
     }
 }
 

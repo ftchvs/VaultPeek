@@ -186,6 +186,28 @@ final class NavigationModel {
         state.reconcileTransactionSelection(visibleTransactionIDs: visibleTransactionIDs)
     }
 
+    // MARK: - Goals façade (AND-606)
+
+    /// The selected goal id (a `Goal.id` UUID string), or empty when none.
+    /// Deliberately **not** persisted: like the transaction row selection, a goal
+    /// selection is ephemeral per-session window state, so a relaunch lands on the
+    /// unselected inspector prompt.
+    var goalSelection: String {
+        get { state.goalSelection }
+        set { state.selectGoal(id: newValue) }
+    }
+
+    func deselectGoal() {
+        state.deselectGoal()
+    }
+
+    /// Self-heal: drop a selected goal id that no longer maps to a visible goal
+    /// (e.g. it was just deleted).
+    @discardableResult
+    func reconcileGoalSelection(visibleGoalIDs: [String]) -> Bool {
+        state.reconcileGoalSelection(visibleGoalIDs: visibleGoalIDs)
+    }
+
     // MARK: - Navigation
 
     func go(to destination: RouteDestination) {
