@@ -1,30 +1,41 @@
 import PlaidBarCore
 import SwiftUI
 
-/// **Insights** destination (2-column composed canvas — IA §3.1/§5.7, `[⌘6]`) —
-/// Epic 7 / AND-585 (ADR-001 window-first workspace).
+/// **Insights** destination — a window-first **composed 2-column canvas** (AND-624,
+/// matching the Dashboard reference; ADR-001 window-first workspace, IA §3.1/§5.7,
+/// `[⌘6]`), Epic 7 / AND-585.
 ///
-/// A composed reading canvas — no master list, so the shell renders only this
-/// content column (no inspector). It stacks the three Insights bands (IA §5.7 —
-/// ``InsightSection``), every one surfaced from an existing engine; **no model or
-/// chart logic lives here** (surface only):
+/// This re-*hosts* the Insights data — the on-device Foundation Models summary, the
+/// weekly review, and the trend charts — in a desk-distance desktop layout rather
+/// than re-using the popover's compact stack. It reads the *same* `AppState` +
+/// `PlaidBarCore` engines as the popover and the menu-bar surfaces, so the two can
+/// never diverge; **no model or chart logic lives here** (surface only).
 ///
-/// - **Spending insights** (``InsightSection/receipts``) — the streaming
-///   Foundation Models `@Generable` insight + the on-device ``LocalAIInsightReceipt``
-///   (tier + provenance + consent), via ``InsightsAIInsightView``. AI is **off by
-///   default with a visible toggle** (AND-564); FM availability is detected with a
-///   graceful NaturalLanguage / deterministic fallback (AND-563).
-/// - **Weekly review** (``InsightSection/weeklyReview``) — the existing
-///   ``WeeklyReviewCard`` re-hosted unchanged, so the window-first surface and the
-///   menu-bar popover drive the same review state.
-/// - **Trends** (``InsightSection/trends``) — the chart canvas (``InsightsTrendsView``):
-///   net-worth trend, spend donut, and activity heatmap. Every chart ships its
-///   ``ChartAudioGraph`` audio graph (AND-569) + a `reduceTransparency` / Privacy
-///   Mask text alternative; **Liquid Glass never touches a chart**, and no meaning
-///   rides on color alone (ACCESSIBILITY.md).
+/// Layout (desk-distance, ``WindowMetrics`` / ``WindowTypography`` — "comfortable
+/// density", a calm canvas of a few generous cards):
+/// 1. a **hero**: the streaming FM spending-insight headline + the on-device
+///    ``LocalAIInsightReceipt`` (tier + provenance + consent), surfaced via
+///    ``InsightsAIInsightView`` as a prominent full-width hero card. AI is **off by
+///    default with a visible toggle** (AND-564); availability is detected with a
+///    graceful NaturalLanguage / deterministic fallback (AND-563);
+/// 2. a **two-column card grid** below it, **at most three cards per column** under a
+///    `title2` column banner:
+///    - left **Trends** column — the net-worth trend, the spend donut, and the
+///      activity heatmap, each its own ``WindowSection`` chart card
+///      (``InsightsTrendsView``). Every chart ships its ``ChartAudioGraph`` audio
+///      graph (AND-569) + a `reduceTransparency` / Privacy Mask text alternative;
+///      **Liquid Glass never touches a chart** and no meaning rides on color alone
+///      (ACCESSIBILITY.md);
+///    - right **Review** column — the existing ``WeeklyReviewCard`` re-hosted
+///      unchanged, so the window-first surface and the popover drive the same
+///      review state.
+///   On a narrow window the two columns stack.
 ///
-/// A segmented section picker jumps between the three bands (scroll-to-anchor),
-/// matching the IA's Insights sub-sections without splitting into a master list.
+/// **Privacy Mask / App Lock:** the shell paints the full lock gate over the whole
+/// window while *locked* (ADR-001 Epic 10), so this canvas never double-gates; it
+/// honors Privacy *Mask* the way the re-hosted subviews do (figures run through
+/// `PrivacyMaskPresentation` / `shouldMaskFinancialValues`), so masked figures stay
+/// hidden and are never leaked here.
 ///
 /// **Flag-OFF inert:** reached only when the window-first `Window` opens
 /// (`WindowFirstFeatureFlag` ON). With the flag off the popover is byte-identical —
@@ -32,108 +43,78 @@ import SwiftUI
 struct InsightsDestinationView: View {
     @Environment(AppState.self) private var appState
 
-    /// The section the picker last jumped to. `@SceneStorage` keeps it window-
-    /// scoped so each workspace window remembers its own focus without touching
-    /// shared `AppState`.
-    @SceneStorage("insights.section") private var sectionRaw = InsightSection.receipts.rawValue
-
-    private var section: InsightSection {
-        InsightSection(rawValue: sectionRaw) ?? .receipts
-    }
-
     var body: some View {
-        ScrollViewReader { scroll in
+        GeometryReader { proxy in
+            let isWide = proxy.size.width >= WindowMetrics.twoColumnBreakpoint
+
             ScrollView {
-                VStack(alignment: .leading, spacing: Spacing.lg) {
-                    header
-
+                VStack(alignment: .leading, spacing: WindowMetrics.xl) {
+                    // Hero — the on-device spending insight + receipt, given the
+                    // full canvas width so it reads as the destination's headline
+                    // instrument (like the Dashboard's heatmap hero).
                     InsightsAIInsightView()
-                        .id(InsightSection.receipts)
 
-                    weeklyReviewSection
-                        .id(InsightSection.weeklyReview)
-
-                    InsightsTrendsView()
-                        .id(InsightSection.trends)
+                    if isWide {
+                        HStack(alignment: .top, spacing: WindowMetrics.columnGap) {
+                            trendsColumn
+                                .frame(maxWidth: .infinity, alignment: .topLeading)
+                            reviewColumn
+                                .frame(maxWidth: .infinity, alignment: .topLeading)
+                        }
+                    } else {
+                        VStack(alignment: .leading, spacing: WindowMetrics.xl) {
+                            trendsColumn
+                            reviewColumn
+                        }
+                    }
                 }
-                .padding(Spacing.lg)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(WindowMetrics.canvasMargin)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
             }
             .scrollContentBackground(.hidden)
-            .onChange(of: sectionRaw) { _, raw in
-                guard let target = InsightSection(rawValue: raw) else { return }
-                withAnimation { scroll.scrollTo(target, anchor: .top) }
-            }
         }
         .navigationTitle(RouteDestination.insights.title)
         .accessibilityElement(children: .contain)
+        .task { await appState.loadInitialData() }
     }
 
-    // MARK: - Header
+    // MARK: - Columns
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            VStack(alignment: .leading, spacing: Spacing.xxs) {
-                Text("Insights")
-                    .font(.title2.weight(.bold))
-                Text("On-device spending summaries, your weekly review, and the trends behind them — all computed locally on this Mac.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            .accessibilityElement(children: .combine)
-
-            sectionPicker
+    /// The left/primary **Trends** column — the three trend chart cards (net-worth
+    /// trend, spend donut, activity heatmap). Each self-cards as a ``WindowSection``
+    /// inside ``InsightsTrendsView``; the column banner above them is a `title2`
+    /// region header. Charts stay solid (never glass) and re-host the same Core
+    /// engines as the popover.
+    private var trendsColumn: some View {
+        VStack(alignment: .leading, spacing: WindowMetrics.lg) {
+            columnHeader("Trends", systemImage: "chart.xyaxis.line")
+            InsightsTrendsView()
         }
+        .accessibilityElement(children: .contain)
     }
 
-    /// Jumps the canvas to a band. Each segment carries a glyph **and** a label so
-    /// the selection is never conveyed by tint alone (ACCESSIBILITY.md).
-    private var sectionPicker: some View {
-        Picker("Insights section", selection: sectionBinding) {
-            ForEach(InsightSection.allCases, id: \.self) { section in
-                Label(sectionLabel(section), systemImage: sectionGlyph(section))
-                    .tag(section)
-            }
-        }
-        .pickerStyle(.segmented)
-        .labelStyle(.titleAndIcon)
-        .fixedSize()
-        .accessibilityLabel("Insights section")
-        .accessibilityHint("Jump to spending insights, the weekly review, or trends.")
-    }
-
-    private var sectionBinding: Binding<InsightSection> {
-        Binding(get: { section }, set: { sectionRaw = $0.rawValue })
-    }
-
-    private func sectionLabel(_ section: InsightSection) -> String {
-        switch section {
-        case .receipts: "Insights"
-        case .weeklyReview: "Weekly review"
-        case .trends: "Trends"
-        }
-    }
-
-    private func sectionGlyph(_ section: InsightSection) -> String {
-        switch section {
-        case .receipts: "sparkles"
-        case .weeklyReview: "calendar.badge.checkmark"
-        case .trends: "chart.xyaxis.line"
-        }
-    }
-
-    // MARK: - Weekly review
-
-    private var weeklyReviewSection: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            Label("Weekly review", systemImage: "calendar.badge.checkmark")
-                .sectionTitle()
-                .foregroundStyle(.secondary)
-            // The existing card, re-hosted unchanged — same review state as the
-            // menu-bar popover, so the two surfaces can never diverge.
+    /// The right/secondary **Review** column — the weekly review, re-hosted
+    /// unchanged so this surface and the popover drive the same review state.
+    private var reviewColumn: some View {
+        VStack(alignment: .leading, spacing: WindowMetrics.lg) {
+            columnHeader("Review", systemImage: "calendar.badge.checkmark")
             WeeklyReviewCard()
         }
         .accessibilityElement(children: .contain)
+    }
+
+    /// A window-scale **column** region header (`title2` via ``WindowSectionTitle``)
+    /// — one step up from a card's `title3` title, so the column reads as a region
+    /// grouping its cards. A heading, not a card, so it sits cleanly above the
+    /// self-carding cards below without nesting a card in a card.
+    private func columnHeader(_ title: String, systemImage: String) -> some View {
+        Label {
+            Text(title).windowSectionTitle()
+        } icon: {
+            Image(systemName: systemImage).foregroundStyle(.secondary)
+        }
+        .labelStyle(.titleAndIcon)
+        .accessibilityAddTraits(.isHeader)
     }
 }
 
