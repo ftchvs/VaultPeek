@@ -19,17 +19,21 @@ import SwiftUI
 ///
 /// Budget pressure (over/nearing) is always carried by **text + SF Symbol**, never
 /// color alone (ACCESSIBILITY.md). The content and inspector columns are separate
-/// split-view views, so they share selection through `BudgetsSelectionModel.shared`.
+/// split-view views, so they share selection through the per-window
+/// ``NavigationModel`` (`appState.navigationModel.budgetCategorySelection`) — a
+/// per-window value, never a singleton, so two windows hold independent Budgets
+/// selection (AND-621, R-10).
 ///
 /// Window-first surface only: reached solely when `AppShellView` mounts (behind
 /// `WindowFirstFeatureFlag`, default OFF). With the flag off none of this is
 /// instantiated and the popover is byte-identical.
 struct BudgetsDestinationView: View {
     @Environment(AppState.self) private var appState
-    @State private var selection = BudgetsSelectionModel.shared
     /// The category whose budget the user is editing; drives the re-hosted
     /// `BudgetEditorSheet` (AND-541 pattern, mirroring `CategoryDashboardWindow`).
     @State private var budgetEditorCategory: BudgetEditorCategory?
+
+    private var navigationModel: NavigationModel { appState.navigationModel }
 
     private var presentation: CategoryDashboardPresentation {
         appState.categoryDashboardPresentation
@@ -64,7 +68,7 @@ struct BudgetsDestinationView: View {
 
     /// Select a category (drives the inspector) and open its budget editor.
     private func selectAndEdit(_ category: SpendingCategory) {
-        selection.selectedCategory = category
+        navigationModel.budgetCategorySelection = category
         budgetEditorCategory = BudgetEditorCategory(category)
     }
 
@@ -133,8 +137,9 @@ struct BudgetsDestinationView: View {
     /// the "Select a category" prompt when nothing is selected (IA §3.1).
     struct Inspector: View {
         @Environment(AppState.self) private var appState
-        @State private var selection = BudgetsSelectionModel.shared
         @State private var budgetEditorCategory: BudgetEditorCategory?
+
+        private var navigationModel: NavigationModel { appState.navigationModel }
 
         private var presentation: CategoryDashboardPresentation {
             appState.categoryDashboardPresentation
@@ -147,7 +152,7 @@ struct BudgetsDestinationView: View {
                 VStack(alignment: .leading, spacing: Spacing.lg) {
                     statusSection
 
-                    if let category = selection.selectedCategory {
+                    if let category = navigationModel.budgetCategorySelection {
                         categoryDetail(category)
                     } else {
                         selectionPrompt

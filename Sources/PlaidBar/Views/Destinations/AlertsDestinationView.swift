@@ -18,8 +18,9 @@ import SwiftUI
 /// - ``AlertsInbox`` (new pure Core, unit-tested) reduces those rows + the
 ///   acknowledged-id set into a sorted feed and the unacknowledged count. The rows
 ///   are stateless (recomputed each render), so acknowledgement is layered on top
-///   as session-scoped per-window state in ``AlertsSelectionModel`` — the rows and
-///   the queue are never mutated.
+///   as session-scoped per-window state on the per-window ``NavigationModel``
+///   (`alertSelection` + `acknowledgedAlertIDs`, AND-621/R-10) — the rows and the
+///   queue are never mutated.
 /// - Each alert's recovery action runs through the same dispatch the existing
 ///   ``AttentionQueueView`` uses, so an action means the same thing on every
 ///   surface.
@@ -35,14 +36,15 @@ import SwiftUI
 /// never instantiated and the popover is byte-identical.
 struct AlertsDestinationView: View {
     @Environment(AppState.self) private var appState
-    @State private var selection = AlertsSelectionModel.shared
+
+    private var navigationModel: NavigationModel { appState.navigationModel }
 
     private var rows: [AttentionQueueRow] {
         appState.attentionQueue.rows
     }
 
     private var inbox: AlertsInbox {
-        AlertsInbox.make(rows: rows, acknowledgedIDs: selection.acknowledgedIDs)
+        AlertsInbox.make(rows: rows, acknowledgedIDs: navigationModel.acknowledgedAlertIDs)
     }
 
     private var summary: AlertsSummary {
@@ -67,9 +69,9 @@ struct AlertsDestinationView: View {
         // Keep the acknowledged set + selection bounded to the live rows so a
         // resolved condition never lingers acknowledged or selected.
         .onChange(of: rows.map(\.id)) { _, _ in
-            selection.prune(toRowsIn: rows)
+            navigationModel.pruneAlerts(toRowsIn: rows)
         }
-        .onAppear { selection.prune(toRowsIn: rows) }
+        .onAppear { navigationModel.pruneAlerts(toRowsIn: rows) }
         .accessibilityElement(children: .contain)
     }
 
@@ -107,7 +109,7 @@ struct AlertsDestinationView: View {
 
             if inbox.unacknowledgedCount > 0 {
                 Button {
-                    selection.acknowledgeAll(in: inbox)
+                    navigationModel.acknowledgeAllAlerts(in: inbox)
                 } label: {
                     Label("Acknowledge all", systemImage: "checkmark.circle")
                 }
@@ -127,8 +129,8 @@ struct AlertsDestinationView: View {
                 ForEach(inbox.entries) { entry in
                     AlertsRowView(
                         entry: entry,
-                        isSelected: selection.selectedAlertID == entry.id,
-                        onSelect: { selection.selectedAlertID = entry.id },
+                        isSelected: navigationModel.alertSelection == entry.id,
+                        onSelect: { navigationModel.alertSelection = entry.id },
                         onToggleAcknowledged: { toggleAcknowledged(entry) }
                     )
                 }
@@ -141,9 +143,9 @@ struct AlertsDestinationView: View {
 
     private func toggleAcknowledged(_ entry: AlertsInbox.Entry) {
         if entry.isAcknowledged {
-            selection.unacknowledge(entry.id)
+            navigationModel.unacknowledgeAlert(entry.id)
         } else {
-            selection.acknowledge(entry.id)
+            navigationModel.acknowledgeAlert(entry.id)
         }
     }
 
@@ -165,17 +167,18 @@ struct AlertsDestinationView: View {
     struct Inspector: View {
         @Environment(AppState.self) private var appState
         @Environment(\.openSettings) private var openSettings
-        @State private var selection = AlertsSelectionModel.shared
+
+        private var navigationModel: NavigationModel { appState.navigationModel }
 
         private var inbox: AlertsInbox {
             AlertsInbox.make(
                 rows: appState.attentionQueue.rows,
-                acknowledgedIDs: selection.acknowledgedIDs
+                acknowledgedIDs: navigationModel.acknowledgedAlertIDs
             )
         }
 
         private var selectedEntry: AlertsInbox.Entry? {
-            inbox.entry(id: selection.selectedAlertID)
+            inbox.entry(id: navigationModel.alertSelection)
         }
 
         var body: some View {
@@ -201,9 +204,9 @@ struct AlertsDestinationView: View {
 
         private func toggleAcknowledged(_ entry: AlertsInbox.Entry) {
             if entry.isAcknowledged {
-                selection.unacknowledge(entry.id)
+                navigationModel.unacknowledgeAlert(entry.id)
             } else {
-                selection.acknowledge(entry.id)
+                navigationModel.acknowledgeAlert(entry.id)
             }
         }
 

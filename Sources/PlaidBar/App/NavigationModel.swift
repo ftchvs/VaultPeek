@@ -131,6 +131,55 @@ final class NavigationModel {
         state.deselectTransaction()
     }
 
+    // MARK: - Budgets / Alerts selection façade (AND-621, R-10)
+
+    /// The selected Budgets category, or `nil` when none. Deliberately **not**
+    /// persisted: like the transaction row selection it is ephemeral per-session
+    /// per-window UI state (it replaces the in-memory `BudgetsSelectionModel`
+    /// singleton, which never persisted), so a relaunch lands on the unselected
+    /// inspector prompt.
+    var budgetCategorySelection: SpendingCategory? {
+        get { state.budgetCategorySelection }
+        set { state.selectBudgetCategory(newValue) }
+    }
+
+    /// The selected alert id, or empty when none. Deliberately **not** persisted
+    /// for the same reason as `budgetCategorySelection` (it replaces the in-memory
+    /// `AlertsSelectionModel.selectedAlertID`, which never persisted).
+    var alertSelection: String {
+        get { state.alertSelection }
+        set { state.selectAlert(id: newValue) }
+    }
+
+    func deselectBudgetCategory() {
+        state.deselectBudgetCategory()
+    }
+
+    func deselectAlert() {
+        state.deselectAlert()
+    }
+
+    /// Alert ids acknowledged this session. Not persisted (session-scoped
+    /// per-window state, like the retired `AlertsSelectionModel`).
+    var acknowledgedAlertIDs: Set<String> { state.acknowledgedAlertIDs }
+
+    func acknowledgeAlert(_ id: String) {
+        state.acknowledgeAlert(id)
+    }
+
+    func unacknowledgeAlert(_ id: String) {
+        state.unacknowledgeAlert(id)
+    }
+
+    func acknowledgeAllAlerts(in inbox: AlertsInbox) {
+        state.acknowledgeAllAlerts(in: inbox)
+    }
+
+    /// Self-heal: prune acknowledged ids + a stale selection to the live rows.
+    func pruneAlerts(toRowsIn rows: [AttentionQueueRow]) {
+        state.pruneAlerts(toRowsIn: rows)
+    }
+
     /// Self-heal: drop a selected transaction id no longer in the filtered rows.
     @discardableResult
     func reconcileTransactionSelection(visibleTransactionIDs: [String]) -> Bool {
