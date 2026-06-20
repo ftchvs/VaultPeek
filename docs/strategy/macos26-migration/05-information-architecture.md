@@ -354,6 +354,31 @@ Per-row triage keys inside **Review** (carried verbatim from `ReviewInboxView`):
 > safe). The `⌘1–8` navigation and `⌘K` palette take precedence at the shell
 > level.
 
+#### Keymap as shipped (AND-596)
+
+The first slice of this map ships behind `WindowFirstFeatureFlag` (default OFF):
+the `⌘K` palette + a `Go` and an `Actions` `CommandMenu` in `PlaidBarApp`. With
+the flag OFF none of these commands are added — the menu bar and the whole app are
+byte-identical to the popover-first build. Each command drives the existing action
+path (it never reimplements behavior). The palette (`CommandPalette` over the pure
+`CommandRegistry` + `FuzzyMatcher`, both in `PlaidBarCore`) lists every command;
+`↑/↓` move, `Return` executes, `Esc` dismisses.
+
+| Shortcut | Menu | Action | Wires to |
+|----------|------|--------|----------|
+| `⌘K` | Go → Command Palette… | Open the command palette | `CommandPaletteModel.present()` |
+| `⌘1`…`⌘8` | Go → (destination) | Go to destination N (Dashboard…Accounts) | `NavigationModel.go(to:)` |
+| `⌘F` | Go → Find Transaction… | Focus search / find | find command (per-destination search lands later) |
+| `⌘R` | Actions → Refresh | Refresh / sync now | `AppState.refreshDashboard()` |
+| `⌘⇧P` | Actions → Hide/Show Balances | Toggle Privacy Mask | `AppState.togglePrivacyMask()` |
+| `⇧⌘V` | Actions → Summon VaultPeek | Summon from any app | summon-hotkey path (`summonDashboard()`) |
+| `⌘,` | (native app menu) | Settings | native `Settings` scene (unchanged) |
+
+Command **kinds** in the registry: **navigate** (one per `RouteDestination`),
+**act** (`refresh`, `togglePrivacyMask`, `openSettings`, `summon`), and **find**.
+`⌘\` (toggle sidebar) is the native `NavigationSplitView` control; `⌘N`, `⌘Z/⇧⌘Z`,
+and the list/Review per-row keys land with their destinations in later epics.
+
 ### 3.5 Selection & focus behavior
 
 - Selecting a list row fills the detail column and shows the native accent
