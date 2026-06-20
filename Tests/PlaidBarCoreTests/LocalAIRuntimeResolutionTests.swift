@@ -129,8 +129,25 @@ struct LocalAIRuntimeResolutionTests {
         )
         #expect(resolved.state == .unavailable)
         #expect(resolved.detail.contains("not reachable"))
-        #expect(resolved.detail.contains("Connection refused"))
+        // The raw probe diagnostic must NOT leak into the user-facing detail
+        // (HIG: jargon-free, never imply something's wrong). It is preserved only
+        // on `probeErrorText`, which the help tooltip / Settings surface.
+        #expect(!resolved.detail.contains("Connection refused"))
+        #expect(!resolved.detail.lowercased().contains("probe error"))
         #expect(resolved.probeErrorText == "Connection refused")
+    }
+
+    @Test("Fallback detail stays jargon-free even when a diagnostic is present")
+    func fallbackDetailExcludesDiagnostic() {
+        let detail = LocalAIRuntimeResolution.fallbackDetail(
+            runtimeName: "ollama",
+            reason: .modelError,
+            diagnostic: "Foundation Models generation failed: GenerationError"
+        )
+        #expect(!detail.contains("Probe error"))
+        #expect(!detail.contains("GenerationError"))
+        #expect(!detail.contains("Foundation Models generation failed"))
+        #expect(detail.contains("returned an error"))
     }
 
     @Test("Terminal states pass through resolution unchanged")
