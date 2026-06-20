@@ -121,6 +121,28 @@ public enum RouteDestination: String, CaseIterable, Sendable, Hashable, Codable 
             false
         }
     }
+
+    /// The inspector (detail-column) empty-state prompt a 3-column destination
+    /// shows when nothing is selected. The third column is **content-gated, not
+    /// existence-gated** (IA §3.1): it always exists and shows a "Select a …"
+    /// `ContentUnavailableView` rather than collapsing. `nil` for 2-column
+    /// destinations and the native Settings scene, which have no inspector column.
+    ///
+    /// Pure copy in `PlaidBarCore` so the per-destination prompt — and the
+    /// "3-column ⇔ non-nil prompt" invariant — is unit-testable without the app
+    /// target (CLAUDE.md). The real per-row inspector content lands with each
+    /// destination's workspace in Epics 4–7.
+    public var detailColumnEmptyPrompt: String? {
+        switch self {
+        case .review: "Select an item to review"
+        case .transactions: "Select a transaction"
+        case .budgets: "Select a category"
+        case .goals: "Select a goal"
+        case .alerts: "Select an alert"
+        case .accounts: "Select an account"
+        case .dashboard, .planning, .insights, .settings: nil
+        }
+    }
 }
 
 // MARK: - Sub-section enums

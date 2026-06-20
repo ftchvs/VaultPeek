@@ -7,11 +7,18 @@ import SwiftUI
 /// A `NavigationSplitView` whose sidebar lists the IA's **5 bands → 11
 /// destinations** (`05-information-architecture.md` §2), driven by the
 /// per-window `NavigationModel` / typed `Route` (`PlaidBarCore`). Selecting a row
-/// sets the window's destination and routes the content column; destinations
-/// whose real workspaces land in later epics (4–7) show a labeled
-/// `ContentUnavailableView` placeholder. **Settings** is the native macOS
-/// `Settings` scene, so its sidebar row triggers `openSettings()` rather than an
-/// in-split pane (IA §5.10).
+/// sets the window's destination and routes the content column via
+/// `DestinationContentView` (and, for 3-column destinations, a detail/inspector
+/// column via `DestinationInspectorView`) — see
+/// `Views/Destinations/DestinationRouter.swift`. The column count tracks each
+/// destination's **2-col vs 3-col policy** (IA §3.1, pure
+/// `RouteDestination.prefersThreeColumnLayout`): 2-column for Dashboard /
+/// Planning / Insights, 3-column for Review / Transactions / Budgets / Goals /
+/// Alerts / Accounts. Destinations whose real workspaces land in later epics
+/// (4–7) show a labeled `ContentUnavailableView` placeholder in their own
+/// per-destination view file. **Settings** is the native macOS `Settings` scene,
+/// so its sidebar row triggers `openSettings()` rather than an in-split pane
+/// (IA §5.10).
 ///
 /// This is built **only** in the window-first surface — the menu-bar popover is
 /// untouched. The window never opens unless `WindowFirstFeatureFlag` is ON
@@ -70,10 +77,35 @@ struct AppShellView: View {
             }
         )
 
-        NavigationSplitView {
-            SidebarView(selection: selection)
-        } detail: {
-            ShellContentColumn(destination: appState.navigationModel.destination)
+        let destination = appState.navigationModel.destination
+
+        // Column policy per destination (IA §3.1, driven by the pure
+        // `RouteDestination.prefersThreeColumnLayout` in PlaidBarCore). 3-column
+        // destinations (Review, Transactions, Budgets, Goals, Alerts, Accounts)
+        // get sidebar + content + inspector; 2-column destinations (Dashboard,
+        // Planning, Insights) get sidebar + content only. Settings is never routed
+        // here — it opens the native Settings scene. Both branches share the same
+        // sidebar; the difference is whether a detail (inspector) column is
+        // mounted, so the column count tracks the selected destination's policy.
+        Group {
+            if destination.prefersThreeColumnLayout {
+                NavigationSplitView {
+                    SidebarView(selection: selection)
+                } content: {
+                    DestinationContentView(destination: destination)
+                } detail: {
+                    // Content-gated, not existence-gated (IA §3.1): the inspector
+                    // always exists for a 3-column destination and shows its
+                    // "Select a …" prompt when nothing is selected.
+                    DestinationInspectorView(destination: destination)
+                }
+            } else {
+                NavigationSplitView {
+                    SidebarView(selection: selection)
+                } detail: {
+                    DestinationContentView(destination: destination)
+                }
+            }
         }
         // Deep-link hand-off (ADR-001 / AND-597). The primary scene is a
         // declarative `Window`, so a route can't be threaded through `openWindow`;
@@ -241,29 +273,14 @@ private struct DataModeChip: View {
 }
 
 // MARK: - Content column
-
-/// The detail (content) column. For now every destination shows a labeled
-/// `ContentUnavailableView` placeholder — the real workspaces are decomposed from
-/// the popover in Epics 4–7 (AND-595 is scope-limited to the sidebar). Settings
-/// is never routed here: its sidebar row opens the native Settings scene instead.
-private struct ShellContentColumn: View {
-    let destination: RouteDestination
-
-    var body: some View {
-        ContentUnavailableView {
-            Label(destination.title, systemImage: destination.systemImage)
-        } description: {
-            Text(placeholderDescription)
-        }
-        .navigationTitle(destination.title)
-    }
-
-    /// Honest "under construction" copy naming the destination, so the shell is
-    /// demoable (via `--window-first on`) without pretending the workspaces exist.
-    private var placeholderDescription: String {
-        "The \(destination.title) workspace is coming soon."
-    }
-}
+//
+// The content / inspector columns are now routed per destination by
+// `DestinationContentView` / `DestinationInspectorView` (see
+// `Views/Destinations/DestinationRouter.swift`), each backed by a
+// per-destination `…DestinationView` file so Epics 4–7 fill their own files in
+// parallel without colliding here. Each still renders the same labeled
+// placeholder it showed inline before (`DestinationPlaceholder`), preserving
+// current behavior; the 2-col vs 3-col policy is applied in `body` above.
 
 #Preview {
     AppShellView()
