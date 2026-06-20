@@ -2320,8 +2320,36 @@ final class AppState {
             // already-correct demo guards in `reconnectItem` and
             // `refreshLiabilities`. Only once a server is actually present do we
             // fall through into the real add-account flow (teardown + Plaid Link).
+            // The probe's failure path (checkServerConnection's catch) clears
+            // itemStatuses + all server metadata. In a serverless demo (incl. the
+            // recovery-scenario screenshot mode) that would erase the demo
+            // sync-health rows even though accounts/transactions survive — so
+            // snapshot the demo status fields and restore them if no real server
+            // turns up (AQ-1, codex review).
+            let demoItemStatuses = itemStatuses
+            let demoServerConnected = serverConnected
+            let demoServerEnvironment = serverEnvironment
+            let demoServerVersion = serverVersion
+            let demoServerItemCount = serverItemCount
+            let demoServerCredentialsConfigured = serverCredentialsConfigured
+            let demoServerStoragePath = serverStoragePath
+            let demoServerSyncReady = serverSyncReady
+            let demoServerSyncedItemCount = serverSyncedItemCount
+            let demoBillingSubscription = billingSubscription
             await checkServerConnection()
             guard serverConnected else {
+                // No real server: restore the demo status fields the probe cleared
+                // and bail without tearing down demo data or painting a banner.
+                itemStatuses = demoItemStatuses
+                serverConnected = demoServerConnected
+                serverEnvironment = demoServerEnvironment
+                serverVersion = demoServerVersion
+                serverItemCount = demoServerItemCount
+                serverCredentialsConfigured = demoServerCredentialsConfigured
+                serverStoragePath = demoServerStoragePath
+                serverSyncReady = demoServerSyncReady
+                serverSyncedItemCount = demoServerSyncedItemCount
+                billingSubscription = demoBillingSubscription
                 error = nil
                 return
             }
