@@ -70,7 +70,14 @@ signing pass; sign nested code first:
    each `codesign --force --options runtime --timestamp`.
 2. `Sparkle.framework` itself.
 3. `Contents/MacOS/PlaidBarServer`.
-4. `VaultPeek.app` with `--entitlements PlaidBar.entitlements --options runtime --timestamp`.
+4. `Contents/PlugIns/PlaidBarWidgetExtension.appex` with
+   `--entitlements PlaidBarWidgetExtension.entitlements --options runtime --timestamp`.
+   `package-app.sh` only ad-hoc signs (no entitlements) this nested extension so
+   the local/DMG build stays launchable; the notarized build must re-sign it
+   here with its App Group + sandbox entitlements **before** the outer app, or
+   the widget never reaches the gallery (AND-385/AND-586). `notarize.sh` verifies
+   `group.com.ftchvs.PlaidBar` survived this pass before submitting.
+5. `VaultPeek.app` with `--entitlements PlaidBar.entitlements --options runtime --timestamp`.
 
 Then verify locally before submission:
 
@@ -110,6 +117,35 @@ Open workaround, menu bar item appears, demo mode renders, server starts, and
 `~/.vaultpeek/` is created with private permissions. Only after this passes
 may README/About/release-notes language change from "ad-hoc signed" to
 "notarized" (T084).
+
+### Widget, Control Center, and App Intents discovery (AND-586)
+
+The widget extension only loads from a **notarized, /Applications-installed**
+build — an ad-hoc local/DMG bundle embeds the `.appex` (gated by
+`validate-app-bundle.sh`) but macOS will not surface it in the gallery without a
+real signature. After the notarized install, on the same clean machine confirm:
+
+```bash
+# The host registered the embedded extension with the WidgetKit plugin host.
+pluginkit -m -v -i com.ftchvs.PlaidBar.WidgetExtension
+```
+
+Then, in the UI:
+
+- **Widget gallery** (Notification Center → Edit Widgets, or desktop
+  right-click → Edit Widgets): "VaultPeek" appears with the small/medium/large
+  families; adding one shows the redacted placeholder until the app writes a
+  snapshot.
+- **Control Center / menu bar** (System Settings → Control Center → add a
+  control): "Refresh balances", "Privacy Mask", "Safe to Spend", and "Credit
+  Utilization" controls are listed.
+- **Spotlight / Shortcuts**: searching "VaultPeek" surfaces the App Intents
+  (e.g. Refresh balances, Privacy Mask) and the Spotlight snippet; Shortcuts →
+  app actions lists the same intents.
+
+If the gallery is empty, the `.appex` signature lost its App Group/sandbox
+entitlements or was deep-signed away — re-run the inside-out signing order above
+and re-check `codesign -d --entitlements :- <appex>`.
 
 ## Sparkle Update Channel (decide before promising updates)
 
