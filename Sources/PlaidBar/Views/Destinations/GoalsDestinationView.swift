@@ -1,33 +1,37 @@
 import PlaidBarCore
 import SwiftUI
 
-/// **Goals** destination (3-column — IA §3.1/§5.6, `[⌘5]`) — AND-606, net-new,
-/// deferred from Epic 5 (ADR-001 window-first workspace).
+/// **Goals** destination (3-column — IA §3.1/§5.6, `[⌘5]`) — AND-606 / AND-624
+/// window-first redesign.
 ///
-/// Content column = the **goals list** (each row: name, progress bar + percent
-/// text, on-track verdict) with an "Add goal" affordance; detail column = the
-/// **selected goal's detail** (progress, remaining, pace, linked category) with
-/// edit/delete controls. The detail column is **content-gated, not
-/// existence-gated** (IA §3.1): with nothing selected it shows the "Select a goal"
-/// prompt rather than collapsing.
+/// Re-hosts the goals data in the desk-distance **window-scale** language the
+/// Dashboard reference sets (``WindowMetrics`` / ``WindowTypography``), not the
+/// compact popover scale: the content column leads with a **goals summary hero
+/// row** (total saved / total target / overall progress, as large tabular
+/// figures via ``WindowHeroMetricTile``) above a **goals list** of generous rows
+/// with large labeled progress bars; the detail column re-hosts the selected
+/// goal's detail as ``WindowSection`` cards with the editor sheet.
 ///
-/// **Local-first, app-local — no server, no Plaid:** goals are a net-new user
-/// intention persisted as `goals.json` under the app data dir via ``GoalsStore``
-/// (the same private-permissioned local-first pattern review metadata / merchant
-/// rules use). The pure ``Goal`` value type and its progress math live in
-/// `PlaidBarCore` and are unit-tested there; this file is presentation only.
+/// **No model logic lives here.** Every figure is the pure, Core-tested ``Goal``
+/// /``GoalsSummary`` math (`fractionComplete`, `percentComplete`, `pace(asOf:)`,
+/// `GoalsSummary.make`); persistence is the local-first ``GoalsStore`` and edits
+/// route through the unchanged ``GoalEditorSheet``. The hero row and Planning's
+/// goals overview read the *same* `GoalsSummary`, so they can never disagree.
 ///
-/// Selection rides the per-window ``NavigationModel/goalSelection`` field (R-10 —
-/// per-window scene state, **not** a selection singleton); the content and
-/// inspector panes both read it through `appState.navigationModel`, so they share
-/// one source of truth without a shared mutable singleton.
+/// The detail column is **content-gated, not existence-gated** (IA §3.1): with
+/// nothing selected it shows the "Select a goal" prompt rather than collapsing.
+/// Selection rides the per-window ``NavigationModel/goalSelection`` field (R-10),
+/// shared by the content and inspector panes without a selection singleton.
 ///
 /// Progress and the on-track verdict are always carried by **text + SF Symbol**,
-/// never color alone (ACCESSIBILITY.md). **Flag-OFF inert:** reached only when the
-/// window-first `Window` opens (`WindowFirstFeatureFlag` ON); with the flag off
-/// this file is never instantiated and the popover is byte-identical.
+/// never color alone (ACCESSIBILITY.md); data surfaces stay solid (Liquid Glass
+/// on chrome only, ADR-001 / R-08); figures honor Privacy Mask, and App Lock is
+/// shell-gated so this canvas never double-gates. **Flag-OFF inert:** reached
+/// only when the window-first `Window` opens (`WindowFirstFeatureFlag` ON); with
+/// the flag off this file is never instantiated and the popover is byte-identical.
 struct GoalsDestinationView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var editorState: GoalEditorState?
 
     private var store: GoalsStore { appState.goalsStore }
@@ -35,19 +39,21 @@ struct GoalsDestinationView: View {
     private var isMasked: Bool { appState.shouldMaskFinancialValues }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.md) {
-            header
-
-            if !store.hasLoaded {
-                loadingState
-            } else if store.goals.isEmpty {
-                emptyState
-            } else {
-                goalsList
+        ScrollView {
+            VStack(alignment: .leading, spacing: WindowMetrics.xl) {
+                if !store.hasLoaded {
+                    loadingState
+                } else if store.goals.isEmpty {
+                    emptyState
+                } else {
+                    summaryHeroRow
+                    goalsListSection
+                }
             }
+            .padding(WindowMetrics.canvasMargin)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .padding(Spacing.lg)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .scrollContentBackground(.hidden)
         .navigationTitle(RouteDestination.goals.title)
         .task { await store.loadIfNeeded() }
         // Self-heal: a deleted goal must not linger selected.
@@ -61,20 +67,89 @@ struct GoalsDestinationView: View {
         .accessibilityElement(children: .contain)
     }
 
-    // MARK: - Header
+    // MARK: - Summary hero row
 
-    private var header: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
-            VStack(alignment: .leading, spacing: Spacing.xxs) {
-                Text("Goals")
-                    .font(.title2.weight(.bold))
-                Text("Set savings targets and track how close you are.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+    /// The headline figures across the top of the content column — total saved,
+    /// total target, and overall progress — as large tabular figures (the same
+    /// `GoalsSummary` Planning previews, so the two surfaces never disagree).
+    /// Reflows to wrap on a narrow window so each figure keeps its tabular
+    /// legibility; every value honors Privacy Mask and none rely on color for
+    /// meaning (the label names the figure).
+    private var summaryHeroRow: some View {
+        let summary = GoalsSummary.make(from: store.goals)
+        return VStack(alignment: .leading, spacing: WindowMetrics.lg) {
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: WindowMetrics.heroTileMinWidth), spacing: WindowMetrics.lg)],
+                alignment: .leading,
+                spacing: WindowMetrics.lg
+            ) {
+                WindowHeroMetricTile(
+                    label: "Total saved",
+                    value: currency(summary.totalSaved),
+                    systemImage: "banknote",
+                    detail: savedDetail(summary),
+                    accent: SemanticColors.brand,
+                    reduceMotion: reduceMotion
+                )
+                WindowHeroMetricTile(
+                    label: "Total target",
+                    value: currency(summary.totalTarget),
+                    systemImage: "target",
+                    detail: targetDetail(summary),
+                    accent: .secondary,
+                    reduceMotion: reduceMotion
+                )
+                WindowHeroMetricTile(
+                    label: "Overall progress",
+                    value: "\(summary.overallPercent)%",
+                    systemImage: "chart.bar.fill",
+                    detail: remainingDetail(summary),
+                    accent: SemanticColors.positive,
+                    reduceMotion: reduceMotion
+                )
             }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(summaryAccessibilityLabel(summary))
 
-            Spacer(minLength: Spacing.sm)
+            GoalsOverallProgressBar(fraction: summary.overallFraction, isComplete: false)
+        }
+    }
 
+    private func savedDetail(_ summary: GoalsSummary) -> String {
+        let goals = summary.goalCount == 1 ? "1 goal" : "\(summary.goalCount) goals"
+        if summary.fundedCount > 0 {
+            return "\(goals) · \(summary.fundedCount) funded"
+        }
+        return "Across \(goals)"
+    }
+
+    private func targetDetail(_ summary: GoalsSummary) -> String {
+        if summary.behindCount > 0 {
+            return summary.behindCount == 1 ? "1 goal behind pace" : "\(summary.behindCount) goals behind pace"
+        }
+        return "Everything on pace"
+    }
+
+    private func remainingDetail(_ summary: GoalsSummary) -> String {
+        let remaining = max(summary.totalTarget - summary.totalSaved, 0)
+        return "\(currency(remaining)) remaining"
+    }
+
+    private func summaryAccessibilityLabel(_ summary: GoalsSummary) -> String {
+        var parts = ["Goals summary", "\(summary.overallPercent) percent overall"]
+        parts.append("\(currency(summary.totalSaved)) saved of \(currency(summary.totalTarget)) target")
+        if summary.fundedCount > 0 { parts.append("\(summary.fundedCount) funded") }
+        if summary.behindCount > 0 { parts.append("\(summary.behindCount) behind pace") }
+        return parts.joined(separator: ". ")
+    }
+
+    // MARK: - Goals list
+
+    /// The list of goals in one titled ``WindowSection`` card — each row a
+    /// generous, full-width entry with a large labeled progress bar. The
+    /// "Add goal" affordance lives in the section header accessory.
+    private var goalsListSection: some View {
+        WindowSection("Your goals", systemImage: "flag.checkered") {
             Button {
                 editorState = .creating
             } label: {
@@ -84,17 +159,10 @@ struct GoalsDestinationView: View {
             .controlSize(.small)
             .help("Create a new savings goal")
             .accessibilityHint("Opens the new-goal editor.")
-        }
-        .accessibilityElement(children: .contain)
-    }
-
-    // MARK: - List
-
-    private var goalsList: some View {
-        ScrollView {
-            LazyVStack(spacing: Spacing.xs) {
+        } content: {
+            VStack(spacing: WindowMetrics.sm) {
                 ForEach(store.goals) { goal in
-                    GoalRowView(
+                    GoalListRow(
                         goal: goal,
                         isSelected: navigationModel.goalSelection == goal.id.uuidString,
                         isMasked: isMasked,
@@ -102,18 +170,17 @@ struct GoalsDestinationView: View {
                     )
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Goals list, \(store.goals.count) goal\(store.goals.count == 1 ? "" : "s")")
         }
-        .scrollContentBackground(.hidden)
-        .accessibilityLabel("Goals list, \(store.goals.count) goal\(store.goals.count == 1 ? "" : "s")")
     }
 
     // MARK: - Loading / empty states
 
     private var loadingState: some View {
         ProgressView()
-            .controlSize(.small)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .controlSize(.large)
+            .frame(maxWidth: .infinity, minHeight: 240)
             .accessibilityLabel("Loading goals")
     }
 
@@ -130,13 +197,19 @@ struct GoalsDestinationView: View {
             }
             .buttonStyle(.borderedProminent)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, minHeight: 360)
         .accessibilityLabel("Goals. No goals yet. Create a savings goal to track progress.")
     }
 
+    // MARK: - Helpers
+
+    private func currency(_ amount: Double) -> String {
+        PrivacyMaskPresentation.currency(amount, format: .compact, isEnabled: isMasked)
+    }
+
     /// The detail-column (inspector) pane for Goals — the selected goal's detail,
-    /// progress, pace, and edit/delete controls. Content-gated: shows the "Select a
-    /// goal" prompt when nothing is selected (IA §3.1).
+    /// progress, pace, and edit/delete controls, at window scale. Content-gated:
+    /// shows the "Select a goal" prompt when nothing is selected (IA §3.1).
     struct Inspector: View {
         @Environment(AppState.self) private var appState
         @State private var editorState: GoalEditorState?
@@ -153,7 +226,7 @@ struct GoalsDestinationView: View {
         var body: some View {
             Group {
                 if let goal = selectedGoal {
-                    GoalDetailView(
+                    GoalDetailPane(
                         goal: goal,
                         isMasked: isMasked,
                         onEdit: { editorState = .editing(goal) },
@@ -189,11 +262,12 @@ struct GoalsDestinationView: View {
     }
 }
 
-// MARK: - Row
+// MARK: - List row
 
-/// A single goal row: name, target, a labeled progress bar (percent text +
-/// pace glyph), so meaning never rides color alone (ACCESSIBILITY.md).
-private struct GoalRowView: View {
+/// A single goal row at window scale: a leading category glyph, the goal name +
+/// saved-of-target line, the percent figure, a large labeled progress bar, and
+/// the pace verdict — so meaning never rides color alone (ACCESSIBILITY.md).
+private struct GoalListRow: View {
     let goal: Goal
     let isSelected: Bool
     let isMasked: Bool
@@ -201,47 +275,50 @@ private struct GoalRowView: View {
 
     var body: some View {
         Button(action: onSelect) {
-            VStack(alignment: .leading, spacing: Spacing.xs) {
-                HStack(spacing: Spacing.sm) {
+            VStack(alignment: .leading, spacing: WindowMetrics.xs) {
+                HStack(alignment: .firstTextBaseline, spacing: WindowMetrics.sm) {
                     Image(systemName: goal.linkedCategory?.iconName ?? "flag.fill")
-                        .font(.callout.weight(.semibold))
+                        .font(.title3)
                         .foregroundStyle(.secondary)
-                        .frame(width: Sizing.glyphSmall, height: Sizing.glyphSmall)
+                        .frame(width: 28)
                         .accessibilityHidden(true)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(goal.name)
-                            .font(.caption.weight(.semibold))
+                            .windowCardTitle()
                             .foregroundStyle(.primary)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.82)
+                            .minimumScaleFactor(0.85)
                         Text("\(currency(goal.contributedAmount)) of \(currency(goal.targetAmount))")
-                            .microText()
-                            .foregroundStyle(.secondary)
+                            .windowSupportingText()
                             .lineLimit(1)
                     }
 
-                    Spacer(minLength: Spacing.xs)
+                    Spacer(minLength: WindowMetrics.sm)
 
                     Text("\(goal.percentComplete)%")
-                        .font(.caption.weight(.semibold))
-                        .monospacedDigit()
-                        .foregroundStyle(.secondary)
+                        .font(.title3.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(.primary)
                 }
 
                 GoalProgressBar(goal: goal)
 
                 paceLabel
             }
-            .padding(.horizontal, Spacing.sm)
-            .padding(.vertical, Spacing.rowVertical)
+            .padding(WindowMetrics.md)
         }
         .buttonStyle(.plain)
         .background(
             isSelected ? SemanticColors.brand.opacity(0.10) : Color.clear,
-            in: RoundedRectangle(cornerRadius: Radius.control)
+            in: RoundedRectangle(cornerRadius: WindowMetrics.cardCornerRadius)
         )
-        .nativeInsetSurface(stroke: isSelected ? SemanticColors.brand.opacity(0.28) : Color.primary.opacity(0.06))
+        .overlay {
+            RoundedRectangle(cornerRadius: WindowMetrics.cardCornerRadius)
+                .stroke(
+                    isSelected ? SemanticColors.brand.opacity(0.45) : Color.primary.opacity(0.08),
+                    lineWidth: 1
+                )
+        }
         .accessibilityElement(children: .ignore)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .accessibilityLabel(accessibilityLabel)
@@ -253,12 +330,10 @@ private struct GoalRowView: View {
         let pace = goal.pace(asOf: Date())
         if goal.isComplete {
             Label("Funded", systemImage: "checkmark.seal.fill")
-                .microText()
-                .foregroundStyle(.secondary)
+                .windowSupportingText()
         } else if pace != .noDeadline {
             Label(pace.label, systemImage: pace.systemImage)
-                .microText()
-                .foregroundStyle(.secondary)
+                .windowSupportingText()
         }
     }
 
@@ -279,10 +354,11 @@ private struct GoalRowView: View {
     }
 }
 
-// MARK: - Progress bar
+// MARK: - Progress bars
 
-/// A determinate progress bar. The fraction is the *only* meaning carrier here;
-/// the accompanying percent text in the row / detail makes it color-independent.
+/// A determinate per-goal progress bar. The fraction is the *only* meaning
+/// carrier here; the accompanying percent text in the row / detail makes it
+/// color-independent (ACCESSIBILITY.md).
 private struct GoalProgressBar: View {
     let goal: Goal
 
@@ -294,26 +370,42 @@ private struct GoalProgressBar: View {
     }
 }
 
-// MARK: - Detail (inspector)
+/// The aggregate progress bar under the summary hero row. Color-independent —
+/// the overall percent in the hero tile carries the meaning in text.
+private struct GoalsOverallProgressBar: View {
+    let fraction: Double
+    let isComplete: Bool
 
-/// The selected goal's detail pane: progress, remaining, pace, linked category,
-/// and edit/delete controls.
-private struct GoalDetailView: View {
+    var body: some View {
+        ProgressView(value: fraction)
+            .progressViewStyle(.linear)
+            .tint(isComplete ? SemanticColors.positive : SemanticColors.brand)
+            .accessibilityHidden(true)
+    }
+}
+
+// MARK: - Detail (inspector) pane
+
+/// The selected goal's detail at window scale: a prominent progress card, a
+/// details card, and an actions card — all ``WindowSection``-style solid
+/// surfaces, with the on-track verdict carried by text + SF Symbol.
+private struct GoalDetailPane: View {
     let goal: Goal
     let isMasked: Bool
     let onEdit: () -> Void
     let onDelete: () -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isConfirmingDelete = false
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Spacing.lg) {
+            VStack(alignment: .leading, spacing: WindowMetrics.lg) {
                 progressCard
                 detailsCard
                 actionsCard
             }
-            .padding(Spacing.lg)
+            .padding(WindowMetrics.canvasMargin)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .scrollContentBackground(.hidden)
@@ -322,40 +414,48 @@ private struct GoalDetailView: View {
     }
 
     private var progressCard: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            HStack(spacing: Spacing.sm) {
+        VStack(alignment: .leading, spacing: WindowMetrics.md) {
+            HStack(alignment: .firstTextBaseline, spacing: WindowMetrics.sm) {
                 Image(systemName: goal.linkedCategory?.iconName ?? "flag.fill")
-                    .font(.title3)
+                    .font(.title2)
                     .foregroundStyle(.secondary)
-                    .frame(width: 28)
+                    .frame(width: 30)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(goal.name)
-                        .font(.headline)
+                        .windowCardTitle()
                     if let category = goal.linkedCategory {
                         Text(category.displayName)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .windowSupportingText()
                     }
                 }
-                Spacer(minLength: Spacing.sm)
+                Spacer(minLength: WindowMetrics.sm)
             }
             .accessibilityElement(children: .combine)
+
+            Text(currency(goal.contributedAmount))
+                .windowHeroMetric()
+                .rollingTabularNumber(currency(goal.contributedAmount), reduceMotion: reduceMotion)
+                .foregroundStyle(AppearanceTextColors.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .accessibilityLabel("Saved \(currency(goal.contributedAmount))")
 
             GoalProgressBar(goal: goal)
 
             HStack(alignment: .firstTextBaseline) {
                 Text("\(goal.percentComplete)% funded")
-                    .font(.callout.weight(.semibold))
+                    .windowBodyText()
+                    .fontWeight(.semibold)
                     .monospacedDigit()
                 Spacer()
                 paceBadge
             }
             .accessibilityElement(children: .combine)
         }
+        .padding(WindowMetrics.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(Spacing.md)
-        .glassSurface(.raised)
+        .windowCardSurface()
     }
 
     @ViewBuilder
@@ -363,22 +463,18 @@ private struct GoalDetailView: View {
         let pace = goal.pace(asOf: Date())
         if goal.isComplete {
             Label("Funded", systemImage: "checkmark.seal.fill")
-                .font(.caption.weight(.semibold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(SemanticColors.positive)
         } else if pace != .noDeadline {
             Label(pace.label, systemImage: pace.systemImage)
-                .font(.caption.weight(.semibold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(pace == .behind ? SemanticColors.warning : SemanticColors.positive)
                 .accessibilityLabel("Pace: \(pace.label)")
         }
     }
 
     private var detailsCard: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            Label("Details", systemImage: "list.bullet")
-                .sectionTitle()
-                .foregroundStyle(.secondary)
-
+        WindowSection("Details", systemImage: "list.bullet") {
             detailRow("Saved", currency(goal.contributedAmount), systemImage: "banknote")
             detailRow("Target", currency(goal.targetAmount), systemImage: "target")
             detailRow("Remaining", currency(goal.remainingAmount), systemImage: "minus.circle")
@@ -386,19 +482,16 @@ private struct GoalDetailView: View {
                 detailRow("Target date", Self.dateFormatter.string(from: date), systemImage: "calendar")
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(Spacing.md)
-        .glassSurface(.raised)
     }
 
     private func detailRow(_ label: String, _ value: String, systemImage: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+        HStack(alignment: .firstTextBaseline, spacing: WindowMetrics.sm) {
             Label(label, systemImage: systemImage)
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-            Spacer(minLength: Spacing.sm)
+                .windowSupportingText()
+            Spacer(minLength: WindowMetrics.sm)
             Text(value)
-                .font(.callout.weight(.semibold))
+                .windowBodyText()
+                .fontWeight(.semibold)
                 .monospacedDigit()
         }
         .accessibilityElement(children: .combine)
@@ -406,36 +499,36 @@ private struct GoalDetailView: View {
     }
 
     private var actionsCard: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            Button(action: onEdit) {
-                Label("Edit goal", systemImage: "pencil")
-                    .labelStyle(.titleAndIcon)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.regular)
+        WindowSection("Manage", systemImage: "slider.horizontal.3") {
+            HStack(spacing: WindowMetrics.sm) {
+                Button(action: onEdit) {
+                    Label("Edit goal", systemImage: "pencil")
+                        .labelStyle(.titleAndIcon)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
 
-            Button(role: .destructive) {
-                isConfirmingDelete = true
-            } label: {
-                Label("Delete goal", systemImage: "trash")
-                    .labelStyle(.titleAndIcon)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.regular)
-            .confirmationDialog(
-                "Delete \"\(goal.name)\"?",
-                isPresented: $isConfirmingDelete,
-                titleVisibility: .visible
-            ) {
-                Button("Delete goal", role: .destructive, action: onDelete)
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("This removes the goal and its tracked progress. This can't be undone.")
+                Button(role: .destructive) {
+                    isConfirmingDelete = true
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                        .labelStyle(.titleAndIcon)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .confirmationDialog(
+                    "Delete \"\(goal.name)\"?",
+                    isPresented: $isConfirmingDelete,
+                    titleVisibility: .visible
+                ) {
+                    Button("Delete goal", role: .destructive, action: onDelete)
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("This removes the goal and its tracked progress. This can't be undone.")
+                }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(Spacing.md)
-        .glassSurface(.raised)
     }
 
     private func currency(_ amount: Double) -> String {
@@ -453,9 +546,11 @@ private struct GoalDetailView: View {
 #Preview("Content") {
     GoalsDestinationView()
         .environment(AppState())
+        .frame(width: 720, height: 600)
 }
 
 #Preview("Inspector") {
     GoalsDestinationView.Inspector()
         .environment(AppState())
+        .frame(width: 360, height: 600)
 }
