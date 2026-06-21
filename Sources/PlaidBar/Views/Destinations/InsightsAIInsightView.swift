@@ -142,8 +142,8 @@ struct InsightsAIInsightView: View {
                 .lineLimit(1)
         }
         .foregroundStyle(phaseTint)
-        .padding(.horizontal, 7)
-        .padding(.vertical, 3)
+        .padding(.horizontal, Spacing.sm)
+        .padding(.vertical, Spacing.chipVertical)
         .background(phaseTint.opacity(0.12), in: Capsule())
         .overlay { Capsule().stroke(phaseTint.opacity(0.20), lineWidth: 1) }
         .help(phaseHelpText)
@@ -269,9 +269,9 @@ struct InsightsAIInsightView: View {
         VStack(alignment: .leading, spacing: WindowMetrics.xs) {
             ForEach(Array(provenanceLines.enumerated()), id: \.offset) { _, line in
                 HStack(alignment: .top, spacing: WindowMetrics.sm) {
-                    Image(systemName: "circle.fill")
-                        .font(.system(size: 5))
-                        .foregroundStyle(.secondary)
+                    Circle()
+                        .fill(.secondary)
+                        .frame(width: 4, height: 4)
                         .padding(.top, 7)
                         .accessibilityHidden(true)
                     Text(line)
@@ -349,8 +349,8 @@ struct InsightsEvidenceChipView: View {
             Text(chip.value)
                 .windowDataText()
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
+        .padding(.horizontal, Spacing.sm)
+        .padding(.vertical, Spacing.xs)
         .background(Color.primary.opacity(0.05), in: Capsule())
         .overlay { Capsule().stroke(Color.primary.opacity(0.08), lineWidth: 1) }
         .accessibilityElement(children: .ignore)

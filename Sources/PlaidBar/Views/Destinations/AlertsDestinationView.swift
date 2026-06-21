@@ -464,8 +464,8 @@ private struct AlertDetailView: View {
                     Label("Acknowledged", systemImage: "bell.slash")
                         .windowFigureCaption()
                         .foregroundStyle(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
+                        .padding(.horizontal, Spacing.sm)
+                        .padding(.vertical, Spacing.chipVertical)
                         .background(Color.primary.opacity(0.06), in: Capsule())
                 }
                 Spacer()
@@ -542,8 +542,8 @@ private struct AlertSeverityBadge: View {
                 .lineLimit(1)
         }
         .foregroundStyle(tint)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 3)
+        .padding(.horizontal, Spacing.sm)
+        .padding(.vertical, Spacing.chipVertical)
         .background(tint.opacity(0.11), in: Capsule())
         .overlay { Capsule().stroke(tint.opacity(0.22), lineWidth: 1) }
         .accessibilityHidden(true)
