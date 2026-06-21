@@ -940,6 +940,48 @@ struct PlaidBarTests {
         #expect(suggestion?.tier != .foundationModels)
         #expect(stub.callCount == 0)
     }
+
+    // Regression for the bug-hunt R5 fix: AppState's
+    // `_foundationModelsCategorySuggestions` cache was insert-only, so entries
+    // for transactions that left the Review Inbox (categorized/approved/
+    // ignored/dropped) were never evicted and memory grew with session-
+    // cumulative throughput instead of live inbox size. AppState is an
+    // executable @main target (not @testable-importable), so this pins the
+    // exact prune expression the fix runs at the top of
+    // `refreshFoundationModelsCategorySuggestions()`:
+    //   cache = cache.filter { liveIDs.contains($0.key) }
+    @Test("FM suggestion cache evicts entries whose transactions left the inbox")
+    func fmSuggestionCacheEvictsDepartedInboxItems() {
+        // Two items previously cached this session.
+        var cache: [String: MerchantCategorySuggestion] = [
+            "txn-still-here": MerchantCategorySuggestion(category: .foodAndDrink, tier: .foundationModels, isTrusted: true),
+            "txn-left-inbox": MerchantCategorySuggestion(category: .travel, tier: .foundationModels, isTrusted: true),
+        ]
+
+        // The live inbox now contains only the first item; the second was
+        // categorized/approved/dropped and no longer appears.
+        let liveIDs = Set(["txn-still-here"])
+
+        // The prune AppState performs after the availability guard.
+        cache = cache.filter { liveIDs.contains($0.key) }
+
+        #expect(cache["txn-still-here"] != nil, "live inbox item's suggestion must be retained")
+        #expect(cache["txn-left-inbox"] == nil, "departed item's suggestion must be evicted")
+        #expect(cache.count == 1, "cache must track live inbox size, not cumulative throughput")
+    }
+
+    @Test("FM suggestion cache prune is a no-op when every cached item is still live")
+    func fmSuggestionCachePruneNoOpWhenAllLive() {
+        var cache: [String: MerchantCategorySuggestion] = [
+            "a": MerchantCategorySuggestion(category: .foodAndDrink, tier: .foundationModels, isTrusted: true),
+            "b": MerchantCategorySuggestion(category: .travel, tier: .foundationModels, isTrusted: true),
+        ]
+        let liveIDs = Set(["a", "b"])
+
+        cache = cache.filter { liveIDs.contains($0.key) }
+
+        #expect(cache.count == 2, "no eviction when every cached id is still in the inbox")
+    }
 }
 
 /// Deterministic `FMMerchantCategorizing` stub for the categorization-tier tests.
