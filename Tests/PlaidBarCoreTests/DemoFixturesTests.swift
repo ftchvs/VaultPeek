@@ -143,4 +143,25 @@ struct DemoFixturesTests {
         #expect(first == second)
         #expect(DemoFixtures.accountBalanceHistory(forAccountId: "accountSecretIdentifier", now: referenceDate).isEmpty)
     }
+
+    /// Demo-F2: the demo data contract is "accounts AND transactions together".
+    /// `--demo` (and any code that hydrates from `DemoFixtures`) must never land
+    /// in a half-populated state with accounts but no transactions, or vice
+    /// versa — a dashboard with accounts but an empty transaction list reads as
+    /// broken. Locks both halves non-empty together so a future fixture edit
+    /// cannot silently strand one side.
+    @Test("Demo fixtures populate accounts and transactions together")
+    func demoFixturesPopulateAccountsAndTransactionsTogether() {
+        let accounts = DemoFixtures.accounts
+        let transactions = DemoFixtures.transactions(now: referenceDate)
+
+        #expect(!accounts.isEmpty, "demo accounts must be populated")
+        #expect(!transactions.isEmpty, "demo transactions must be populated")
+        // The contract is the conjunction: neither side may be empty while the
+        // other is non-empty.
+        #expect(
+            accounts.isEmpty == transactions.isEmpty,
+            "demo accounts and transactions must be populated (or empty) together"
+        )
+    }
 }

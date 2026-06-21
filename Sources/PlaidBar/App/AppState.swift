@@ -2311,6 +2311,50 @@ final class AppState {
         error = nil
 
         if isDemoMode {
+            // A serverless --demo launch needs no server to stay populated, but
+            // the demo readiness card advertises "Connect Bank". Probe for a real
+            // server FIRST and bail without mutating anything when none is
+            // reachable: the destructive demo→real teardown below (clearing
+            // accounts/transactions/etc.) must never run in a serverless demo, or
+            // a single "Connect Bank" tap would wipe the demo dashboard and paint
+            // a server-required banner the demo does not need. Mirrors the
+            // already-correct demo guards in `reconnectItem` and
+            // `refreshLiabilities`. Only once a server is actually present do we
+            // fall through into the real add-account flow (teardown + Plaid Link).
+            // The probe's failure path (checkServerConnection's catch) clears
+            // itemStatuses + all server metadata. In a serverless demo (incl. the
+            // recovery-scenario screenshot mode) that would erase the demo
+            // sync-health rows even though accounts/transactions survive — so
+            // snapshot the demo status fields and restore them if no real server
+            // turns up (AQ-1, codex review).
+            let demoItemStatuses = itemStatuses
+            let demoServerConnected = serverConnected
+            let demoServerEnvironment = serverEnvironment
+            let demoServerVersion = serverVersion
+            let demoServerItemCount = serverItemCount
+            let demoServerCredentialsConfigured = serverCredentialsConfigured
+            let demoServerStoragePath = serverStoragePath
+            let demoServerSyncReady = serverSyncReady
+            let demoServerSyncedItemCount = serverSyncedItemCount
+            let demoBillingSubscription = billingSubscription
+            await checkServerConnection()
+            guard serverConnected else {
+                // No real server: restore the demo status fields the probe cleared
+                // and bail without tearing down demo data or painting a banner.
+                itemStatuses = demoItemStatuses
+                serverConnected = demoServerConnected
+                serverEnvironment = demoServerEnvironment
+                serverVersion = demoServerVersion
+                serverItemCount = demoServerItemCount
+                serverCredentialsConfigured = demoServerCredentialsConfigured
+                serverStoragePath = demoServerStoragePath
+                serverSyncReady = demoServerSyncReady
+                serverSyncedItemCount = demoServerSyncedItemCount
+                billingSubscription = demoBillingSubscription
+                error = nil
+                return
+            }
+
             isDemoMode = false
             isDemoStatusRecoveryScenario = false
             isSetupComplete = false
@@ -2356,7 +2400,12 @@ final class AppState {
         }
 
         guard serverConnected else {
-            error = "Start the VaultPeek companion server before adding an account."
+            // Never paint a server-required banner over a demo dashboard
+            // (existing `error = isDemoMode ? nil : …` convention). The demo
+            // path already returned above before any teardown, so reaching here
+            // in demo mode is not expected — but suppress defensively in case a
+            // future caller re-enters this guard while demo is still active.
+            error = isDemoMode ? nil : "Start the VaultPeek companion server before adding an account."
             return
         }
 
