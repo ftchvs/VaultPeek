@@ -1,178 +1,84 @@
-# Distribution Runbook: Signing, Notarization, Gatekeeper, Sparkle
+# Distribution: Open-Source Ad-Hoc Build (Bring Your Own Signing)
 
-> **Status: PREP ONLY — none of this has been performed.** Developer ID
-> signing and notarization require Felipe's Apple Developer account
-> credentials, which no agent holds. Until this runbook is executed and
-> verified end to end on a clean machine, the only true distribution claim is:
-> privately distributed, ad-hoc-signed DMG that needs right-click > Open on
-> first launch. Do not soften that claim in README, release notes, or About
-> copy (backlog T084).
+> **Status: OPEN-SOURCE BUILD — ad-hoc, unsigned.** This repository ships an
+> ad-hoc-signed build path only. There is no team-specific Apple Developer
+> identity, entitlements file, or notarization tooling in the tree. The only
+> true distribution claim is: an ad-hoc-signed `.app`/DMG that needs
+> right-click → Open on first launch. Developer ID signing, notarization, App
+> Group entitlements, and Sparkle auto-update are **bring-your-own** — a
+> contributor must add their own identity and tooling.
 
-This is the AND-309 execution plan. `Scripts/notarize.sh` is the executable
-scaffold for the signing/notarization steps; it fails fast with instructions
-until the required environment exists.
+## What the repo builds today
 
-## One-Time Setup (Felipe)
+`Scripts/package-app.sh` produces `.build/VaultPeek.app`:
 
-1. Apple Developer Program membership active for the distributing team.
-2. Create/download a **Developer ID Application** certificate into the login
-   keychain. Confirm with:
+- Builds all targets in release configuration.
+- Embeds `PlaidBarServer`, the `PlaidBarWidgetExtension.appex`, and
+  `Sparkle.framework`.
+- **Ad-hoc signs the whole bundle without entitlements**
+  (`codesign --force --deep --sign -`). This keeps the bundle launchable: App
+  Sandbox, app-groups, and `keychain-access-groups` need a Team ID +
+  provisioning profile, and applying them to an ad-hoc signature makes launchd
+  refuse to spawn the app ("Launchd job spawn failed", RBS error 163).
+- Runs `Scripts/validate-app-bundle.sh` to confirm structure: the app +
+  server binaries, the embedded Sparkle framework `@rpath`, and the
+  `.appex` (WidgetKit extension point, Info.plist, binary, verifiable ad-hoc
+  signature).
 
-   ```bash
-   security find-identity -v -p codesigning | grep "Developer ID Application"
-   ```
-
-3. Create an app-specific password for notarization and store a notarytool
-   profile (credentials live in the Keychain, never in the repo):
-
-   ```bash
-   xcrun notarytool store-credentials vaultpeek-notary \
-       --apple-id <apple-id> --team-id <TEAMID> --password <app-specific-password>
-   ```
-
-4. Export the environment the scaffold expects:
-
-   ```bash
-   export PLAIDBAR_SIGNING_IDENTITY="Developer ID Application: Felipe Chaves (TEAMID)"
-   export PLAIDBAR_NOTARY_PROFILE="vaultpeek-notary"
-   ```
-
-## Entitlements Review (do this before the first signed build)
-
-Current `Sources/PlaidBar/Resources/PlaidBar.entitlements`:
-
-| Entitlement | Value | Review note |
-|---|---|---|
-| `com.apple.security.app-sandbox` | true | Currently **not enforced**: `Scripts/package-app.sh` ad-hoc signs without `--entitlements`, so the shipped bundle runs unsandboxed. The first hardened-runtime signature will actually enforce the sandbox — expect behavior changes and test everything. |
-| `com.apple.security.network.client` | true | Required: app → localhost server, server → Plaid API. |
-| `com.apple.security.temporary-exception.files.home-relative-path.read-write` | `/.vaultpeek/`, `/.plaidbar/` | Needed for the local data directory while sandboxed. Acceptable for Developer ID distribution (it would be rejected on the App Store, which is not the plan). Revisit if storage moves to an app container. |
-| `keychain-access-groups` | `$(AppIdentifierPrefix)com.ftchvs.PlaidBar` | Plaid access-token bytes live in Keychain; group must match the signing team prefix once a real team signs. |
-
-Open items the first signed build must resolve:
-
-- The bundled `PlaidBarServer` binds `127.0.0.1:8484`. Under an enforced
-  sandbox a listening socket needs `com.apple.security.network.server` —
-  either in a second entitlements file for the server binary or in the app
-  entitlements if the server inherits them. Decide and test before notarizing.
-- Hardened runtime (`--options runtime`) may require exception entitlements if
-  anything loads plugins or uses JIT — none known today, but verify Sparkle
-  and SwiftNIO behavior under hardened runtime.
-- `Info.plist` ships `SUPublicEDKey` = `PLACEHOLDER_ED25519_KEY`. Replace with
-  a real key or strip it before signing a public build (see Sparkle below).
-
-## Signing Order (inside-out)
-
-Implemented in `Scripts/notarize.sh`. Never use `codesign --deep` for the real
-signing pass; sign nested code first:
-
-1. Sparkle helpers: `Sparkle.framework/Versions/B/XPCServices/Installer.xpc`,
-   `Downloader.xpc`, `Versions/B/Autoupdate`, `Versions/B/Updater.app` —
-   each `codesign --force --options runtime --timestamp`.
-2. `Sparkle.framework` itself.
-3. `Contents/MacOS/PlaidBarServer`.
-4. `Contents/PlugIns/PlaidBarWidgetExtension.appex` with
-   `--entitlements PlaidBarWidgetExtension.entitlements --options runtime --timestamp`.
-   `package-app.sh` only ad-hoc signs (no entitlements) this nested extension so
-   the local/DMG build stays launchable; the notarized build must re-sign it
-   here with its App Group + sandbox entitlements **before** the outer app, or
-   the widget never reaches the gallery (AND-385/AND-586). `notarize.sh` verifies
-   `group.com.ftchvs.PlaidBar` survived this pass before submitting.
-5. `VaultPeek.app` with `--entitlements PlaidBar.entitlements --options runtime --timestamp`.
-
-Then verify locally before submission:
+`Scripts/package-dmg.sh` stages that ad-hoc `.app` into a drag-install DMG
+(`.build/VaultPeek-<version>.dmg`) with an `/Applications` symlink.
 
 ```bash
-codesign --verify --deep --strict --verbose=2 .build/VaultPeek.app
+./Scripts/package-app.sh      # build + ad-hoc-signed .app
+./Scripts/package-dmg.sh      # wrap it in a drag-install DMG
 ```
 
-## Notarization And Stapling
+Because the build is ad-hoc-signed (not notarized), a downloaded DMG requires
+**right-click → Open** on first launch so macOS Gatekeeper lets it run.
 
-1. Zip the app (`ditto -c -k --keepParent`), submit with
-   `xcrun notarytool submit --keychain-profile <profile> --wait`.
-2. `xcrun stapler staple .build/VaultPeek.app`.
-3. Build the DMG from the **stapled** app (do not rerun `package-app.sh`
-   afterwards — it would re-sign ad-hoc over the Developer ID signature).
-4. Sign the DMG, submit the DMG to notarytool, staple the DMG.
-5. Record `shasum -a 256` for the released DMG.
+## Widget / App Group limitation in the ad-hoc build
 
-If a submission is rejected, fetch the log:
+The WidgetKit extension is embedded in the bundle, but its widgets read a
+shared snapshot through an **App Group** (`GlanceSnapshot` / `FinanceSnapshot`
+in `PlaidBarCore`). App Groups require an App Group entitlement and a real
+signing identity. The bare ad-hoc build **omits** that entitlement, so:
 
-```bash
-xcrun notarytool log <submission-id> --keychain-profile <profile>
-```
+- the menu-bar app, server, demo mode, and local use all work; but
+- the widget cannot read the shared snapshot and will not be surfaced in the
+  widget gallery / Control Center.
 
-## Gatekeeper Verification (clean machine, hard requirement)
+Making the widget functional requires bringing your own App Group entitlement
+and Developer ID signing identity (below).
 
-On a Mac (or fresh macOS VM) that has never run a dev build:
+## Bring Your Own Signing (optional, not shipped)
 
-```bash
-spctl --assess --type exec --verbose=2 /Applications/VaultPeek.app
-spctl --assess --type open --context context:primary-signature --verbose=2 VaultPeek-<version>.dmg
-xcrun stapler validate /Applications/VaultPeek.app
-```
+If you want a signed and/or notarized build, you supply the Apple Developer
+pieces yourself. None of this lives in the repo:
 
-Then the human pass: download the DMG over a browser (quarantine bit set),
-drag-install, double-click launch — it must open with **no** right-click >
-Open workaround, menu bar item appears, demo mode renders, server starts, and
-`~/.vaultpeek/` is created with private permissions. Only after this passes
-may README/About/release-notes language change from "ad-hoc signed" to
-"notarized" (T084).
+1. An Apple Developer Program membership and a **Developer ID Application**
+   certificate in your login keychain.
+2. Your own entitlements files. At minimum, to make the widget's shared
+   snapshot work you need an App Group entitlement (e.g.
+   `com.apple.security.application-groups` with a `group.<your-team>.<id>`
+   value) on both the app and the `.appex`, plus matching
+   `keychain-access-groups` for the Plaid access-token bytes the server stores
+   in the Keychain.
+3. Your own signing/notarization tooling. Sign **inside-out** (nested code
+   first): Sparkle's XPC helpers and `Updater.app`, then `Sparkle.framework`,
+   then `PlaidBarServer`, then the `.appex` (with its entitlements), then the
+   outer `VaultPeek.app` (with its entitlements) — never `codesign --deep` for
+   a real signing pass. Then `notarytool submit --wait` and `stapler staple`
+   the app and the DMG.
+4. Verify on a clean machine: `spctl --assess`, `stapler validate`, and a real
+   download → drag-install → double-click launch with no right-click workaround.
 
-### Widget, Control Center, and App Intents discovery (AND-586)
+Only after a real notarized + clean-machine pass may README/About/release-notes
+language change from "ad-hoc signed" to "notarized".
 
-The widget extension only loads from a **notarized, /Applications-installed**
-build — an ad-hoc local/DMG bundle embeds the `.appex` (gated by
-`validate-app-bundle.sh`) but macOS will not surface it in the gallery without a
-real signature. After the notarized install, on the same clean machine confirm:
+## Sparkle auto-update (dormant, bring-your-own)
 
-```bash
-# The host registered the embedded extension with the WidgetKit plugin host.
-pluginkit -m -v -i com.ftchvs.PlaidBar.WidgetExtension
-```
-
-Then, in the UI:
-
-- **Widget gallery** (Notification Center → Edit Widgets, or desktop
-  right-click → Edit Widgets): "VaultPeek" appears with the small/medium/large
-  families; adding one shows the redacted placeholder until the app writes a
-  snapshot.
-- **Control Center / menu bar** (System Settings → Control Center → add a
-  control): "Refresh balances", "Privacy Mask", "Safe to Spend", and "Credit
-  Utilization" controls are listed.
-- **Spotlight / Shortcuts**: searching "VaultPeek" surfaces the App Intents
-  (e.g. Refresh balances, Privacy Mask) and the Spotlight snippet; Shortcuts →
-  app actions lists the same intents.
-
-If the gallery is empty, the `.appex` signature lost its App Group/sandbox
-entitlements or was deep-signed away — re-run the inside-out signing order above
-and re-check `codesign -d --entitlements :- <appex>`.
-
-## Sparkle Update Channel (decide before promising updates)
-
-Sparkle 2.x ships in the bundle today but is dormant: `SUPublicEDKey` is a
-placeholder and no `SUFeedURL` is set, so no update feed is live. Before
-enabling:
-
-1. Generate EdDSA keys with Sparkle's `generate_keys`; the private key stays
-   in Felipe's Keychain — never in the repo.
-2. Put the real public key in `SUPublicEDKey` and add `SUFeedURL` pointing at
-   a privately hosted `appcast.xml` (HTTPS).
-3. Sign each release archive with `sign_update`; the appcast entry carries the
-   EdDSA signature; the archive itself must already be notarized.
-4. Sandboxed Sparkle needs its XPC services signed as above plus the
-   downloader service decision documented in Sparkle's sandboxing guide.
-5. Test the full update path: old version installed → appcast offers new
-   version → update installs and relaunches → Gatekeeper stays happy.
-
-Alternative track (Homebrew cask) was retired with the proprietary relicense;
-the chosen track is the private DMG plus (eventually) Sparkle. A cask requires
-public artifacts, which conflicts with private licensing.
-
-## What May Be Claimed, When
-
-| Claim | Allowed when |
-|---|---|
-| "Privately distributed DMG, right-click > Open on first launch" | Now (true today) |
-| "Developer ID signed" | After signing order above runs with a real identity and `codesign --verify` passes |
-| "Notarized" | After notarytool acceptance AND stapling AND clean-machine Gatekeeper pass |
-| "Auto-updates via Sparkle" | After the appcast end-to-end test above |
+Sparkle 2.x ships in the bundle but is dormant: `Info.plist` carries a
+placeholder `SUPublicEDKey` and sets no `SUFeedURL`, so no update feed is live.
+Enabling it is bring-your-own: generate EdDSA keys (private key stays out of the
+repo), set a real `SUPublicEDKey` + an HTTPS `SUFeedURL`, sign each release
+archive with `sign_update`, and the archive must already be notarized.

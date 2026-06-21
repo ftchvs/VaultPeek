@@ -24,8 +24,8 @@ curated release messaging here.
 
 - Developer ID signing, notarization, stapling, and a clean-machine Gatekeeper
   pass have NOT been performed. First launch of the DMG build still requires
-  right-click > Open. Prep runbook: `docs/distribution.md`; scaffold:
-  `Scripts/notarize.sh`.
+  right-click > Open. This is the open-source ad-hoc build; signing and
+  notarization are bring-your-own — see `docs/distribution.md`.
 - Sparkle auto-updates are dormant: `SUPublicEDKey` is a placeholder and no
   appcast feed exists.
 

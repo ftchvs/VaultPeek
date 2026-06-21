@@ -73,9 +73,9 @@ fi
 # install with the app (AND-586 distribution). The extension only loads when it
 # is present with a valid WidgetKit extension point and a verifiable signature.
 # Entitlements (App Group / sandbox) are intentionally NOT asserted here: the
-# ad-hoc package omits them so the local/DMG build stays launchable (see
-# package-app.sh and PR #476); the App Group entitlement is applied and verified
-# only on the Developer ID + notarized path in Scripts/notarize.sh.
+# open-source ad-hoc build omits them so the local/DMG bundle stays launchable
+# (see package-app.sh). The widget's App Group shared snapshot only works once a
+# contributor supplies their own App Group entitlement and signing identity.
 if [ ! -d "$WIDGET_APPEX" ]; then
     echo "Missing widget extension at $WIDGET_APPEX" >&2
     echo "package-app.sh must embed PlaidBarWidgetExtension.appex under Contents/PlugIns." >&2

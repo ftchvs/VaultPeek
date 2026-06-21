@@ -230,8 +230,9 @@ The ad-hoc-signed DMG is acceptable for 1.0 because VaultPeek is local-first and
 distributed privately to a controlled set of licensed users who can complete the
 first-launch right-click > Open step.
 
-Do not claim notarized public app distribution until all of these are complete
-(runbook: `docs/distribution.md`, scaffold: `Scripts/notarize.sh`):
+Do not claim notarized public app distribution until all of these are complete.
+Signing and notarization are bring-your-own in the open-source build (runbook:
+`docs/distribution.md`):
 
 - Developer ID signing configured
 - notarization and ticket stapling automated
