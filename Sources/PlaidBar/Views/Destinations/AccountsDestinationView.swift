@@ -65,7 +65,20 @@ struct AccountsDestinationView: View {
     }
 
     var body: some View {
-        content
+        VStack(spacing: 0) {
+            // Surface add-account (and any app) failures on this destination too:
+            // routing here from a Dashboard affordance leaves the Dashboard's own
+            // error banner behind, so without this a failed `addAccount()` (no
+            // server / missing credentials) would strand the user on "No accounts
+            // yet" with no actionable error — recreating the dead end this entry
+            // point closes (AND-631, codex #623). Reuses the shared error banner.
+            if let error = appState.error {
+                DashboardErrorBanner(error: error) { appState.error = nil }
+                    .padding(.horizontal, WindowMetrics.canvasMargin)
+                    .padding(.top, WindowMetrics.md)
+            }
+            content
+        }
             .navigationTitle(RouteDestination.accounts.title)
             // The window-first Add Account entry point (AND-631): the destination
             // every add-account affordance (Dashboard attention chip, readiness
@@ -73,7 +86,8 @@ struct AccountsDestinationView: View {
             // `AppState.addAccount()` flow — which opens Plaid Hosted Link in the
             // browser (no in-app sheet) — so those affordances resolve here instead
             // of dead-ending. In demo it no-ops (keeps demo); with no server it
-            // surfaces the actionable error; with credentials it opens Link.
+            // surfaces the actionable error in the banner above; with credentials
+            // it opens Link.
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
@@ -82,7 +96,12 @@ struct AccountsDestinationView: View {
                         Label("Add Account", systemImage: "plus")
                     }
                     .help("Connect a bank with Plaid Link")
-                    .disabled(appState.isLoading)
+                    // App Lock is a hard interaction boundary. This toolbar item
+                    // lives in window chrome *outside* AppShellView's lock overlay,
+                    // so gate it explicitly like the shell's Privacy Mask toolbar
+                    // item — otherwise a locked window could still open Plaid Link
+                    // (codex #623).
+                    .disabled(appState.isLoading || appState.isContentLocked)
                 }
             }
             // Self-heal: if the selected account falls out of the list (removed /
@@ -271,7 +290,7 @@ struct AccountsDestinationView: View {
                 Label("Add Account", systemImage: "plus")
             }
             .buttonStyle(.borderedProminent)
-            .disabled(appState.isLoading)
+            .disabled(appState.isLoading || appState.isContentLocked)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
