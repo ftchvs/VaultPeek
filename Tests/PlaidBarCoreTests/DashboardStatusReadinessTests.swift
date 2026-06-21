@@ -14,6 +14,7 @@ struct DashboardStatusReadinessTests {
         syncedItemCount: Int = 2,
         needsLoginItemCount: Int = 0,
         erroredItemCount: Int = 0,
+        providerOutageItemCount: Int = 0,
         isSyncStale: Bool = false,
         lastSyncRelative: String? = "2m ago",
         errorMessage: String? = nil,
@@ -30,6 +31,7 @@ struct DashboardStatusReadinessTests {
             syncedItemCount: syncedItemCount,
             needsLoginItemCount: needsLoginItemCount,
             erroredItemCount: erroredItemCount,
+            providerOutageItemCount: providerOutageItemCount,
             isSyncStale: isSyncStale,
             lastSyncRelative: lastSyncRelative,
             errorMessage: errorMessage,
@@ -100,6 +102,16 @@ struct DashboardStatusReadinessTests {
         #expect(readiness.level == .warning)
         #expect(readiness.title == "1 item needs update")
         #expect(readiness.primaryAction == .reconnect)
+    }
+
+    @Test("Provider outage warns (not healthy) with a self-healing retry message")
+    func providerOutage() {
+        let readiness = evaluate(providerOutageItemCount: 1)
+        #expect(readiness.level == .warning)
+        #expect(readiness.title == "1 item temporarily unavailable")
+        #expect(readiness.detail.contains("retry automatically"))
+        #expect(readiness.primaryAction == .refresh)
+        #expect(readiness.primaryActionTitle == "Refresh Now")
     }
 
     @Test("A recent action failure warns with the sanitized detail")

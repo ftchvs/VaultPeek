@@ -369,6 +369,39 @@ struct PlaidBarTests {
         #expect(transactions[0].accountId == "a3")
     }
 
+    // MARK: - Rule Replacement (mirrors AppState.createRule)
+
+    @Test("Creating a rule for an existing merchant replaces it instead of stacking")
+    func createRuleReplacesSameMerchant() {
+        // Mirrors AppState.createRule: before appending the new rule it drops any
+        // existing rule whose `matchMerchantContains` case-insensitively equals the
+        // new matcher, so re-categorizing the same merchant keeps a single rule
+        // (the user's newest choice) rather than leaving a dead earlier rule behind.
+        var transactionRules = [
+            TransactionRule(matchMerchantContains: "Acme", category: .shopping),
+        ]
+
+        let matcher = "acme" // different case — must still match and replace
+        transactionRules.removeAll {
+            $0.matchMerchantContains?.compare(matcher, options: .caseInsensitive) == .orderedSame
+        }
+        transactionRules.append(TransactionRule(matchMerchantContains: matcher, category: .foodAndDrink))
+
+        #expect(transactionRules.count == 1)
+        #expect(transactionRules[0].category == .foodAndDrink)
+
+        // And the resolver attributes spend to the surviving (newest) category.
+        let transaction = TransactionDTO(
+            id: "recat", accountId: "a", amount: 12, date: "2026-06-01",
+            name: "ACME CORP", merchantName: "Acme Corp", category: nil
+        )
+        let resolution = EffectiveCategoryResolver.resolve(
+            transaction: transaction,
+            rules: transactionRules
+        )
+        #expect(resolution.category == .foodAndDrink)
+    }
+
     // MARK: - Currency Format
 
     @Test("Currency format compact has no decimals")
