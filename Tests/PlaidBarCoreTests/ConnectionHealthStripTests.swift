@@ -35,6 +35,29 @@ struct ConnectionHealthStripTests {
         #expect(outage?.iconName != reconnect?.iconName)
     }
 
+    @Test("Privacy Mask withholds exact counts from labels but preserves status + recovery affordance")
+    func maskedLabelsDropCounts() {
+        let statuses = [
+            status("a", .connected),
+            status("b", .connected),
+            status("c", .error),
+            status("d", .providerOutage),
+        ]
+        let masked = ConnectionHealthStrip.evaluate(statuses, isMasked: true)
+        // Same buckets/states/order and the reconnect affordance survive…
+        #expect(masked.buckets.map(\.state) == [.connected, .reconnectNeeded, .providerOutage])
+        #expect(masked.hasActionableWork == true)
+        // …but no label leaks a digit, and they read as the status words.
+        #expect(masked.buckets.allSatisfy { !$0.label.contains(where: \.isNumber) })
+        let byState = Dictionary(uniqueKeysWithValues: masked.buckets.map { ($0.state, $0.label) })
+        #expect(byState[.connected] == "Connected")
+        #expect(byState[.reconnectNeeded] == "Needs attention")
+        #expect(byState[.providerOutage] == "Temporarily unavailable")
+        // Unmasked still shows the counts.
+        let unmasked = ConnectionHealthStrip.evaluate(statuses)
+        #expect(unmasked.buckets.contains { $0.label.contains("2 connected") })
+    }
+
     @Test("Reconnect-needed bucket is actionable, provider-outage is not")
     func actionableFlags() {
         let result = ConnectionHealthStrip.evaluate([
