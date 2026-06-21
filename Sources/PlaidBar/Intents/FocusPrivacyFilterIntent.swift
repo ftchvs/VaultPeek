@@ -76,6 +76,18 @@ struct FocusPrivacyFilterIntent: SetFocusFilterIntent {
             try PrivacyMaskControlCommandReader.write(
                 PrivacyMaskControlCommand(maskEnabled: outcome.desiredMaskEnabled, requestedAt: Date())
             )
+            // Enabling the mask must take effect on disk immediately, not wait for
+            // the app to foreground and apply the command — otherwise the widget and
+            // the Safe-to-Spend / Credit-Utilization value controls keep rendering
+            // the real balances from the already-persisted snapshot. Re-redact the
+            // shared FinanceSnapshot in place so every system surface reads
+            // value-free figures now. Un-mask still defers to the app: revealing is
+            // the non-leaking direction, and only the app holds the real numbers.
+            if outcome.desiredMaskEnabled,
+               let snapshot = AppGroupSnapshotStore.loadIfAvailable(),
+               !snapshot.isMasked {
+                try? AppGroupSnapshotStore.save(snapshot.masked())
+            }
             // Reload the Control Center toggle + widgets so the "Privacy Mask"
             // control reflects the new state even before the app applies it.
             ControlCenter.shared.reloadAllControls()
