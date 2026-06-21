@@ -64,7 +64,7 @@ struct TransactionsTable: View {
 
             TableColumn("Amount") { row in
                 Text(amountText(row))
-                    .monospacedDigit()
+                    .windowDataText()
                     .foregroundStyle(amountColor(row))
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
