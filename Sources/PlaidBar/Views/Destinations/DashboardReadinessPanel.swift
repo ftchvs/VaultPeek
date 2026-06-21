@@ -156,7 +156,7 @@ private struct DashboardStatusMetricGrid: View {
                 .microText()
                 .foregroundStyle(.secondary)
             Text(value)
-                .font(.caption.weight(.semibold))
+                .windowFigureCaption()
                 .lineLimit(1)
                 .minimumScaleFactor(0.78)
         }
@@ -180,7 +180,7 @@ struct DashboardErrorBanner: View {
                 .foregroundStyle(SemanticColors.negative)
                 .accessibilityHidden(true)
             Text(error)
-                .font(.caption)
+                .windowSupportingText()
                 .fixedSize(horizontal: false, vertical: true)
             Spacer()
             Button(action: onDismiss) {

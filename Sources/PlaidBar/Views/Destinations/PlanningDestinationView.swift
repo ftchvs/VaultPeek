@@ -329,9 +329,7 @@ struct PlanningDestinationView: View {
 
             HStack(alignment: .firstTextBaseline) {
                 Text("\(goalsPercent(summary.overallPercent)) of total")
-                    .windowBodyText()
-                    .fontWeight(.semibold)
-                    .monospacedDigit()
+                    .windowDataText()
                 Spacer(minLength: WindowMetrics.sm)
                 Text("\(goalsCurrency(summary.totalSaved)) of \(goalsCurrency(summary.totalTarget))")
                     .windowSupportingText()

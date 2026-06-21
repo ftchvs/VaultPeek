@@ -43,9 +43,8 @@ struct InsightsTrendsView: View {
                 // Direction is carried by the signed delta text + the VoiceOver
                 // summary, never by line color alone (ACCESSIBILITY.md).
                 Label(trend.deltaText, systemImage: directionGlyph(trend.direction))
-                    .font(.subheadline.weight(.semibold))
+                    .windowDataText()
                     .foregroundStyle(directionTint(trend.direction))
-                    .monospacedDigit()
                     .accessibilityHidden(true)
             } content: {
                 if isMasked {

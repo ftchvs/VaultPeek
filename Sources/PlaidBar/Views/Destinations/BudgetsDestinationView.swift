@@ -499,9 +499,7 @@ struct BudgetsDestinationView: View {
                             .windowSupportingText()
                             Spacer(minLength: WindowMetrics.sm)
                             Text(currency(abs(remaining)))
-                                .windowBodyText()
-                                .fontWeight(.semibold)
-                                .monospacedDigit()
+                                .windowDataText()
                                 .foregroundStyle(summary.isAggregateOver ? SemanticColors.negative : .primary)
                         }
                         .accessibilityElement(children: .combine)
@@ -516,9 +514,7 @@ struct BudgetsDestinationView: View {
                     .windowSupportingText()
                 Spacer(minLength: WindowMetrics.sm)
                 Text(value)
-                    .windowBodyText()
-                    .fontWeight(.semibold)
-                    .monospacedDigit()
+                    .windowDataText()
             }
             .accessibilityElement(children: .combine)
             .accessibilityLabel("\(label): \(value)")

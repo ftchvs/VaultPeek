@@ -157,6 +157,34 @@ struct WindowHeroMetric: ViewModifier {
     }
 }
 
+/// Window-scale tabular data / figure role — the desk-distance counterpart to the
+/// popover's ``DataText``. `.body`, semibold, with `.monospacedDigit()` baked into
+/// the font value so every amount, count, and percentage in a window card aligns
+/// into a tabular column. Centralizing the tabular digits here means a new numeric
+/// column physically cannot forget them: replace ad-hoc `.font(.body.weight(...))`
+/// + `.monospacedDigit()` on window figures with `.windowDataText()`. Built on the
+/// semantic `.body` style, so it scales with the in-app Text Size preference
+/// (`AppTextSizeApplier`) exactly like the other window roles.
+struct WindowDataText: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .font(.body.weight(.semibold).monospacedDigit())
+    }
+}
+
+/// Window-scale caption / micro label role — the small secondary label for column
+/// headers and figure sub-labels in a window card (the desk-distance counterpart
+/// to the popover's ``MicroText``). `.caption2`, medium weight. Built on the
+/// semantic `.caption2` style (scales with the in-app Text Size preference). Use
+/// for column headings and the small label above a figure — not body copy (use
+/// ``WindowSupportingText``) or section heads (use ``WindowCardTitle``).
+struct WindowFigureCaption: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .font(.caption2.weight(.medium))
+    }
+}
+
 extension View {
     /// Window page identity (`largeTitle`, bold).
     func windowLargeTitle() -> some View { modifier(WindowLargeTitle()) }
@@ -175,4 +203,13 @@ extension View {
 
     /// The dashboard hero metric figure (scaled, tabular). See ``WindowHeroMetric``.
     func windowHeroMetric() -> some View { modifier(WindowHeroMetric()) }
+
+    /// Window-scale tabular data / figure (body, semibold, monospaced digits).
+    /// See ``WindowDataText``. Tabular digits are baked in — do not add a separate
+    /// `.monospacedDigit()` at the call site.
+    func windowDataText() -> some View { modifier(WindowDataText()) }
+
+    /// Window-scale caption / micro label for column headers and figure sub-labels
+    /// (`caption2`, medium). See ``WindowFigureCaption``.
+    func windowFigureCaption() -> some View { modifier(WindowFigureCaption()) }
 }
