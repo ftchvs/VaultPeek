@@ -365,7 +365,8 @@ private struct AccountListRow: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(account.name)
-                        .font(.body.weight(.medium))
+                        .windowBodyText()
+                        .fontWeight(.medium)
                         .lineLimit(1)
                     Text(subtitle)
                         .windowSupportingText()
@@ -376,7 +377,7 @@ private struct AccountListRow: View {
 
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(amountText)
-                        .font(.body.weight(.medium).monospacedDigit())
+                        .windowDataText()
                         .rollingTabularNumber(amountText, reduceMotion: reduceMotion)
                         .foregroundStyle(AppearanceTextColors.primary)
                         .lineLimit(1)
