@@ -64,7 +64,14 @@ public enum ConnectionHealthStrip {
 
     /// Groups statuses into the three buckets, omitting empty buckets. The result
     /// preserves a stable Connected → Reconnect-needed → Provider-outage order.
-    public static func evaluate(_ statuses: [ItemStatus]) -> Result {
+    ///
+    /// - Parameter isMasked: when Privacy Mask / App Lock is active, the bucket
+    ///   labels drop the exact count and read as the status word alone
+    ///   ("Connected" / "Needs attention" / "Temporarily unavailable"). The
+    ///   recovery *status* (and its reconnect affordance) is preserved — never
+    ///   hidden — while the exact item count, which is behavioral metadata gated
+    ///   like the sidebar badges (AND-483), is withheld.
+    public static func evaluate(_ statuses: [ItemStatus], isMasked: Bool = false) -> Result {
         let counts = statuses.reduce(into: [State: Int]()) { partial, item in
             partial[bucketState(for: item.status), default: 0] += 1
         }
@@ -75,7 +82,7 @@ public enum ConnectionHealthStrip {
                 Bucket(
                     state: .connected,
                     count: connected,
-                    label: "\(connected) connected",
+                    label: isMasked ? "Connected" : "\(connected) connected",
                     detail: "Syncing normally.",
                     iconName: "checkmark.circle",
                     isActionable: false
@@ -87,7 +94,7 @@ public enum ConnectionHealthStrip {
                 Bucket(
                     state: .reconnectNeeded,
                     count: reconnect,
-                    label: "\(reconnect) need\(reconnect == 1 ? "s" : "") attention",
+                    label: isMasked ? "Needs attention" : "\(reconnect) need\(reconnect == 1 ? "s" : "") attention",
                     detail: "Reconnect to keep these accounts in sync.",
                     iconName: "exclamationmark.triangle",
                     isActionable: true
@@ -99,7 +106,7 @@ public enum ConnectionHealthStrip {
                 Bucket(
                     state: .providerOutage,
                     count: outage,
-                    label: "\(outage) temporarily unavailable",
+                    label: isMasked ? "Temporarily unavailable" : "\(outage) temporarily unavailable",
                     detail: "Your bank or Plaid is down. We'll retry automatically — no action needed.",
                     iconName: "wifi.exclamationmark",
                     isActionable: false

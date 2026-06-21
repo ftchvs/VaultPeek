@@ -60,6 +60,23 @@ struct SidebarBadgeModelTests {
         #expect(model == .empty)
     }
 
+    @Test("Privacy Mask withholds all exact sidebar counts")
+    func privacyMaskWithholdsCounts() {
+        let model = SidebarBadgeModel.make(
+            unreviewedCount: 7,
+            overBudgetCount: 3,
+            unacknowledgedAlertCount: 2,
+            reconnectNeededCount: 1,
+            isMasked: true
+        )
+
+        #expect(model == .empty)
+        #expect(model.badge(for: .review) == nil)
+        #expect(model.badge(for: .budgets) == nil)
+        #expect(model.badge(for: .alerts) == nil)
+        #expect(model.badge(for: .accounts) == nil)
+    }
+
     @Test("Negative inputs clamp to zero (no negative or phantom badges)")
     func negativeClampsToZero() {
         let model = SidebarBadgeModel.make(

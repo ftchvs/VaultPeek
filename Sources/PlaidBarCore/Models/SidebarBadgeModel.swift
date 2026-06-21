@@ -9,7 +9,10 @@ import Foundation
 /// zero**. Keeping the derivation here (rather than in the SwiftUI sidebar) makes
 /// the "which destinations badge, what counts, when do they hide" policy
 /// unit-testable without the app target (CLAUDE.md: shared logic lives in
-/// `PlaidBarCore`); the view stays a thin renderer over `badges`.
+/// `PlaidBarCore`); the view stays a thin renderer over `badges`. When Privacy
+/// Mask / App Lock is active, badges are withheld entirely so the window-first
+/// sidebar does not reveal review, budget, alert, or reconnect counts while the
+/// rest of the app is private.
 ///
 /// Four destinations badge, each from a live `AppState` signal (IA §3.2):
 ///
@@ -72,7 +75,8 @@ public struct SidebarBadgeModel: Sendable, Equatable {
     /// computes. Each negative input is clamped to zero, and a zero count
     /// produces no badge (the hide-when-zero rule). The resulting badges are
     /// ordered by `RouteDestination.allCases` so the model's order matches the
-    /// sidebar's.
+    /// sidebar's. When `isMasked` is true, all badges are withheld because exact
+    /// counts are behavioral finance metadata.
     ///
     /// - Parameters:
     ///   - unreviewedCount: items awaiting review
@@ -85,12 +89,17 @@ public struct SidebarBadgeModel: Sendable, Equatable {
     ///     menu-bar glance and Dashboard use (IA §1.3).
     ///   - reconnectNeededCount: items needing reconnect
     ///     (`ConnectionHealthStrip` reconnect-needed bucket).
+    ///   - isMasked: Privacy Mask / App Lock state. When true, every badge is
+    ///     hidden regardless of count.
     public static func make(
         unreviewedCount: Int,
         overBudgetCount: Int,
         unacknowledgedAlertCount: Int,
-        reconnectNeededCount: Int
+        reconnectNeededCount: Int,
+        isMasked: Bool = false
     ) -> SidebarBadgeModel {
+        guard !isMasked else { return .empty }
+
         var badges: [Badge] = []
 
         func appendBadge(
