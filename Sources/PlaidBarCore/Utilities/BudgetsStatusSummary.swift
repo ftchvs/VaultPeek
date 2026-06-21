@@ -60,15 +60,23 @@ public enum BudgetsStatusSummary {
         public let budgetedCount: Int
         /// Total leaf categories with spend or a budget in the rollup.
         public let trackedCount: Int
-        /// Sum of every leaf's spend across all groups.
+        /// Sum of every leaf's spend across all groups (budgeted *and* unbudgeted).
+        /// Drives the all-leaves "Spent" hero tile — never the over-budget math.
         public let totalSpent: Double
+        /// Sum of spend across *budgeted* leaves only — the spend figure that pairs
+        /// with ``totalLimit``. Unbudgeted leaves have no limit, so comparing their
+        /// spend against the budgeted limit produced a false "Over budget" and an
+        /// inflated fraction (bug-hunt R3); the aggregate over/left/used figures
+        /// below all derive from this, mirroring the budgeted-only table footer.
+        public let budgetedSpent: Double
         /// Sum of every budgeted leaf's limit.
         public let totalLimit: Double
 
-        /// `totalLimit - totalSpent` across budgeted categories; `nil` when no
-        /// budget exists (so the view shows no "left/over" line at all).
+        /// `totalLimit - budgetedSpent` across budgeted categories; `nil` when no
+        /// budget exists (so the view shows no "left/over" line at all). Uses the
+        /// budgeted-only spend so unbudgeted spend never eats into the budgeted left.
         public var remaining: Double? {
-            budgetedCount > 0 ? totalLimit - totalSpent : nil
+            budgetedCount > 0 ? totalLimit - budgetedSpent : nil
         }
 
         /// True when the budgeted total has been exceeded in aggregate.
@@ -77,10 +85,11 @@ public enum BudgetsStatusSummary {
         }
 
         /// Fraction of the budgeted total already spent, clamped to `0...1` for a
-        /// progress affordance; `nil` when there is no budget.
+        /// progress affordance; `nil` when there is no budget. Uses budgeted-only
+        /// spend so unbudgeted categories never inflate the bar.
         public var fractionUsed: Double? {
             guard budgetedCount > 0, totalLimit > 0 else { return nil }
-            return min(1, max(0, totalSpent / totalLimit))
+            return min(1, max(0, budgetedSpent / totalLimit))
         }
 
         /// Detail line under the "Budgeted this month" hero tile: how many
@@ -149,6 +158,7 @@ public enum BudgetsStatusSummary {
             budgetedCount: budgetedCount,
             trackedCount: leaves.count,
             totalSpent: presentation.totalSpent,
+            budgetedSpent: presentation.budgetedSpent,
             totalLimit: presentation.totalLimit
         )
     }

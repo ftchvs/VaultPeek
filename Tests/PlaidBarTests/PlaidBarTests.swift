@@ -640,8 +640,10 @@ struct PlaidBarTests {
             from: accounts,
             threshold: threshold
         )
-        #expect(highUtil.count == 1)
-        #expect(highUtil[0].id == "2")
+        // Inclusive boundary: the 90% account ("2") and the exactly-at-threshold
+        // 30% account ("3", -300/1000) both fire, matching the in-app surfaces.
+        #expect(highUtil.count == 2)
+        #expect(highUtil.map(\.id) == ["2", "3"])
     }
 
     // MARK: - Estimated Monthly Recurring Total
