@@ -21,6 +21,12 @@ struct CategoryDashboardCard: View {
     /// no-op in previews / headless renders.
     @Environment(\.openCategoryDashboard) private var openCategoryDashboard
 
+    /// Mounts the shared card on the **window** workspace rather than the popover.
+    /// In the window the card backs onto the solid window surface
+    /// (`windowCardSurface()` — HIG Materials / ADR-001 "glass on chrome, not
+    /// data"); in the popover (default) it keeps the raised glass surface.
+    var inWindow: Bool = false
+
     private var presentation: CategoryDashboardPresentation {
         appState.categoryDashboardPresentation
     }
@@ -34,25 +40,42 @@ struct CategoryDashboardCard: View {
     var body: some View {
         let model = model
 
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            header(model)
+        surfaced {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                header(model)
 
-            if model.isEmpty {
-                emptyState
-            } else {
-                SpendDonutChart(model: model.donut, isPrivacyMasked: isMasked)
+                if model.isEmpty {
+                    emptyState
+                } else {
+                    SpendDonutChart(model: model.donut, isPrivacyMasked: isMasked)
 
-                if !model.topGroups.isEmpty {
-                    topGroups(model)
+                    if !model.topGroups.isEmpty {
+                        topGroups(model)
+                    }
                 }
-            }
 
-            openDashboardButton(model)
+                openDashboardButton(model)
+            }
         }
-        .padding(Spacing.sm)
-        .glassSurface(.raised)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilitySummary(model))
+    }
+
+    /// Wraps the card content in the surface appropriate to where it is mounted:
+    /// the solid window card surface in the window (data stays solid — ADR-001
+    /// "glass on chrome, not data"), the raised glass surface in the popover.
+    /// `windowCardSurface()` does not self-pad, so window padding is applied here.
+    @ViewBuilder
+    private func surfaced(@ViewBuilder _ content: () -> some View) -> some View {
+        if inWindow {
+            content()
+                .padding(WindowMetrics.md)
+                .windowCardSurface()
+        } else {
+            content()
+                .padding(Spacing.sm)
+                .glassSurface(.raised)
+        }
     }
 
     // MARK: - Header
