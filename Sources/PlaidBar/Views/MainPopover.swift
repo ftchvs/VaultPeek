@@ -553,6 +553,7 @@ struct MainPopover: View {
                         if let presentation = appState.firstRunSnapshotPresentation {
                             FirstRunSnapshotView(
                                 presentation: presentation,
+                                isMasked: appState.shouldMaskFinancialValues,
                                 onDismiss: appState.dismissFirstRunSnapshot
                             )
                         }

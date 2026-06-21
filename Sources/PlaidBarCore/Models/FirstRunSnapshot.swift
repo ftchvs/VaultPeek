@@ -181,6 +181,26 @@ public struct FirstRunSnapshot: Equatable, Sendable {
         return "\(transaction.date)-\(transaction.displayName)-\(amountCents)-\(occurrence)"
     }
 
+    /// Privacy-Mask-aware VoiceOver summary. The default stored
+    /// ``accessibilitySummary`` (computed with `isMasked: false`) leaks every
+    /// figure, so the view re-derives the masked form through this method when
+    /// Privacy Mask is on — mirroring how sibling surfaces self-dot. When masked,
+    /// currency and percent values are replaced with the dotted token so the
+    /// spoken label never reveals real magnitudes.
+    public func maskedAccessibilitySummary(isMasked: Bool) -> String {
+        guard isMasked else { return accessibilitySummary }
+        return Self.accessibilitySummary(
+            netWorth: netWorth,
+            cashAvailable: cashAvailable,
+            debtTotal: debtTotal,
+            creditUtilization: creditUtilization,
+            monthToDateSpend: monthToDateSpend,
+            transactionState: transactionState,
+            largeTransactionCount: largeTransactions.count,
+            isMasked: true
+        )
+    }
+
     private static func accessibilitySummary(
         netWorth: Double,
         cashAvailable: Double,
@@ -188,24 +208,25 @@ public struct FirstRunSnapshot: Equatable, Sendable {
         creditUtilization: Double?,
         monthToDateSpend: Double?,
         transactionState: FirstRunSnapshotTransactionState,
-        largeTransactionCount: Int
+        largeTransactionCount: Int,
+        isMasked: Bool = false
     ) -> String {
         var parts = [
             "First-run money snapshot.",
-            "Net worth \(Formatters.currency(netWorth, format: .full)).",
-            "Cash available \(Formatters.currency(cashAvailable, format: .full)).",
-            "Debt \(Formatters.currency(debtTotal, format: .full)).",
+            "Net worth \(PrivacyMaskPresentation.currency(netWorth, format: .full, isEnabled: isMasked)).",
+            "Cash available \(PrivacyMaskPresentation.currency(cashAvailable, format: .full, isEnabled: isMasked)).",
+            "Debt \(PrivacyMaskPresentation.currency(debtTotal, format: .full, isEnabled: isMasked)).",
         ]
 
         if let creditUtilization {
-            parts.append("Credit utilization \(Formatters.percent(creditUtilization, decimals: 0)).")
+            parts.append("Credit utilization \(PrivacyMaskPresentation.percent(creditUtilization, decimals: 0, isEnabled: isMasked)).")
         } else {
             parts.append("No credit utilization available.")
         }
 
         switch (monthToDateSpend, transactionState) {
         case let (.some(spend), _):
-            parts.append("Month-to-date spend \(Formatters.currency(spend, format: .full)).")
+            parts.append("Month-to-date spend \(PrivacyMaskPresentation.currency(spend, format: .full, isEnabled: isMasked)).")
         case (.none, .syncing):
             parts.append("Transactions are still syncing.")
         case (.none, .empty):
