@@ -43,6 +43,12 @@ public enum PlaidBarConstants {
     public static let creditUtilizationWarningThreshold: Double = 30.0
     public static let maxRecentTransactions: Int = 50
 
+    /// Recency window (days) for large-transaction OS notifications. Without it, a
+    /// fresh install's ~90-day import would fire one alert per historical large
+    /// charge (the delivered-dedup set is empty on first sync). Mirrors
+    /// AttentionQueue's `unusualSpendingWindowDays`.
+    public static let largeTransactionNotificationWindowDays: Int = 7
+
     /// Page size for the virtualized large-history transaction list (AND-567).
     /// One page of rows is read at a time from the disposable per-transaction
     /// cache; the next page loads when the user scrolls near the end. Chosen large

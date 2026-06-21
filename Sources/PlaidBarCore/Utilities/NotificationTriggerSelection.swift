@@ -207,9 +207,16 @@ public enum NotificationTriggerSelection {
         }
 
         if config.largeTransaction {
+            // Constrain OS notifications to the recent window so a fresh install's
+            // ~90-day import does not fire one alert per historical large charge
+            // (the delivered-dedup set is empty on first sync). Mirrors the
+            // AttentionQueue window.
             for transaction in largeTransactions(
                 from: transactions,
-                threshold: config.largeTransactionThreshold
+                threshold: config.largeTransactionThreshold,
+                now: now,
+                windowDays: PlaidBarConstants.largeTransactionNotificationWindowDays,
+                calendar: calendar
             ) {
                 append(largeTransactionDecision(for: transaction))
             }
@@ -229,7 +236,12 @@ public enum NotificationTriggerSelection {
         let decisions = activeDecisions.filter { !deliveredDedupKeys.contains($0.dedupKey) }
         let clearableDeliveredKeys = deliveredDedupKeys.filter { key in
             guard let kind = kind(forDedupKey: key) else { return false }
-            return kind.clearsWhenResolved
+            // Only resolve a delivered key when its family was actually evaluated
+            // this pass. If the family is disabled in config, its block was
+            // skipped, so the underlying condition was never re-checked —
+            // preserving the delivered key prevents a still-active stateful alert
+            // from re-firing when the family is toggled off and back on.
+            return kind.clearsWhenResolved && isEnabled(kind, in: config)
         }
         let resolvedDedupKeys = Set(clearableDeliveredKeys).subtracting(activeDedupKeys)
 
@@ -253,12 +265,35 @@ public enum NotificationTriggerSelection {
     public static func largeTransactions(
         from transactions: [TransactionDTO],
         threshold: Double,
-        excluding notifiedTransactionIds: Set<String> = []
+        excluding notifiedTransactionIds: Set<String> = [],
+        now: Date? = nil,
+        windowDays: Int? = nil,
+        calendar: Calendar = .current
     ) -> [TransactionDTO] {
-        transactions.filter {
-            !$0.isIncome &&
-                $0.displayAmount >= threshold &&
-                !notifiedTransactionIds.contains($0.id)
+        // Optional recency window: when both `now` and `windowDays` are supplied,
+        // also require the transaction date within [startOfDay(now) - windowDays,
+        // startOfDay(now)]. Unparseable dates are dropped. When either is nil the
+        // filter behaves exactly as before so windowless callers (AttentionQueue,
+        // FirstRunSnapshot) keep their existing behavior.
+        let window: (start: Date, end: Date)? = {
+            guard let now, let windowDays else { return nil }
+            let end = calendar.startOfDay(for: now)
+            guard let start = calendar.date(byAdding: .day, value: -windowDays, to: end) else {
+                return nil
+            }
+            return (start, end)
+        }()
+
+        return transactions.filter { transaction in
+            guard !transaction.isIncome,
+                  transaction.displayAmount >= threshold,
+                  !notifiedTransactionIds.contains(transaction.id)
+            else { return false }
+
+            guard let window else { return true }
+            guard let date = Formatters.parseTransactionDate(transaction.date) else { return false }
+            let day = calendar.startOfDay(for: date)
+            return day >= window.start && day <= window.end
         }
     }
 
@@ -276,7 +311,10 @@ public enum NotificationTriggerSelection {
         threshold: Double
     ) -> [AccountDTO] {
         accounts.filter {
-            $0.type == .credit && ($0.balances.utilizationPercent ?? 0) > threshold
+            // Inclusive (>=) so an account exactly at the threshold fires the OS
+            // notification too, matching every in-app surface (AttentionQueue,
+            // AccountPresentation, AccountsDestinationView, MainPopover).
+            $0.type == .credit && ($0.balances.utilizationPercent ?? 0) >= threshold
         }
     }
 
@@ -458,6 +496,38 @@ public enum NotificationTriggerSelection {
             body: body,
             severity: .informational
         )
+    }
+
+    /// Whether the given trigger family is enabled in `config`, i.e. whether its
+    /// block in `evaluate()` actually ran this pass. Mirrors the per-family
+    /// gating above so delivered-key resolution only happens for re-evaluated
+    /// families.
+    private static func isEnabled(
+        _ kind: NotificationTriggerKind,
+        in config: NotificationTriggers
+    ) -> Bool {
+        switch kind {
+        case .itemError, .providerOutage:
+            config.itemError
+        case .loginRequired:
+            config.loginRequired
+        case .syncStale:
+            config.staleSync
+        case .highUtilization:
+            config.highUtilization
+        case .lowBalance:
+            config.lowBalance
+        case .largeTransaction:
+            config.largeTransaction
+        case .recurringChargeDetected:
+            config.recurringChargeDetected
+        case .recurringChargeChanged:
+            config.recurringChargeChanged
+        case .recurringChargeDueSoon:
+            config.recurringChargeDueSoon
+        case .merchantWatch, .categoryWatch:
+            config.watchlist
+        }
     }
 
     private static func kind(forDedupKey dedupKey: String) -> NotificationTriggerKind? {
