@@ -112,9 +112,14 @@ public enum GoalEditorInput {
         )
     }
 
-    /// Parse a currency-ish string ("1,250.50", "$1250", "1250") into a `Double`,
-    /// or `nil` when it has no parseable numeric content. Tolerant of grouping
-    /// separators, a leading currency symbol, and surrounding whitespace.
+    /// Parse a currency-ish string ("1,250.50", "$1250", "1250", "1.250,50") into a
+    /// `Double`, or `nil` when it has no parseable numeric content. Tolerant of
+    /// grouping separators, a leading currency symbol, and surrounding whitespace.
+    ///
+    /// Handles both the US ("1,250.50") and European ("1.250,50") conventions: when
+    /// both `.` and `,` are present, the *last-occurring* one is treated as the
+    /// decimal separator and the other as grouping. The comma-only case keeps US
+    /// grouping semantics ("5,000" ⇒ 5000) to preserve existing behavior.
     public static func parseAmount(_ text: String) -> Double? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
@@ -123,8 +128,21 @@ public enum GoalEditorInput {
         let stripped = String(trimmed.filter { allowed.contains($0) })
         guard !stripped.isEmpty else { return nil }
 
-        // Remove thousands separators, keep the decimal point.
-        let normalized = stripped.replacingOccurrences(of: ",", with: "")
+        // Decide the decimal separator: the last-occurring of '.'/',' when both are
+        // present (the other is grouping); comma-only stays US grouping.
+        let lastDot = stripped.lastIndex(of: ".")
+        let lastComma = stripped.lastIndex(of: ",")
+        let normalized: String
+        switch (lastDot, lastComma) {
+        case let (d?, c?):
+            normalized = d > c
+                ? stripped.replacingOccurrences(of: ",", with: "")
+                : stripped.replacingOccurrences(of: ".", with: "").replacingOccurrences(of: ",", with: ".")
+        case (nil, _?):
+            normalized = stripped.replacingOccurrences(of: ",", with: "")
+        default:
+            normalized = stripped
+        }
         return Double(normalized)
     }
 }

@@ -59,4 +59,21 @@ struct GoalsSummaryTests {
         #expect(summary.overallFraction == 1.0)
         #expect(summary.overallPercent == 100)
     }
+
+    @Test("Total remaining is per-goal clamped — an over-funded goal can't mask another's shortfall")
+    func totalRemainingPerGoalClamped() {
+        let goals = [
+            // Over-funded: contributes 0 to remaining (not −500).
+            Goal(name: "Over", targetAmount: 1000, contributedAmount: 1500),
+            // Untouched: a genuine 1000 shortfall.
+            Goal(name: "Behind", targetAmount: 1000, contributedAmount: 0),
+        ]
+        let summary = GoalsSummary.make(from: goals)
+        // Per-goal clamp: max(1000−1500,0) + max(1000−0,0) == 0 + 1000.
+        #expect(summary.totalRemaining == 1000)
+        // The naive flat-totals formula would (wrongly) report 500.
+        #expect(summary.totalTarget - summary.totalSaved == 500)
+        // Overall fraction still clamps to 1 (totalSaved 1500 / totalTarget 2000 = 0.75).
+        #expect(summary.overallFraction == 0.75)
+    }
 }
