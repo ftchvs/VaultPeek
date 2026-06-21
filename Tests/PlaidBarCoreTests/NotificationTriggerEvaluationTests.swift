@@ -37,6 +37,10 @@ struct NotificationTriggerEvaluationTests {
             NotificationTriggerKind.itemError,
             NotificationTriggerKind.loginRequired,
             NotificationTriggerKind.syncStale,
+            // Two credit accounts cross the 30% utilization threshold: the 90%
+            // account and the exactly-at-threshold account (30%), since the
+            // notification path uses an inclusive (>=) comparison.
+            NotificationTriggerKind.highUtilization,
             NotificationTriggerKind.highUtilization,
             NotificationTriggerKind.lowBalance,
             NotificationTriggerKind.recurringChargeChanged,
@@ -49,6 +53,7 @@ struct NotificationTriggerEvaluationTests {
         let severities = evaluation.decisions.map(\NotificationTriggerDecision.severity)
         #expect(severities == [
             NotificationTriggerSeverity.blocking,
+            NotificationTriggerSeverity.warning,
             NotificationTriggerSeverity.warning,
             NotificationTriggerSeverity.warning,
             NotificationTriggerSeverity.warning,
@@ -335,6 +340,79 @@ struct NotificationTriggerEvaluationTests {
         #expect(evaluation.resolvedDedupKeys.isEmpty)
     }
 
+    @Test("Large-transaction notifications fire only inside the recency window")
+    func largeTransactionNotificationsHonorRecencyWindow() {
+        // A large transaction ~30 days before `now` is outside the 7-day window
+        // and must NOT produce a largeTransaction decision (prevents the
+        // first-sync ~90-day import from flooding the OS with notifications).
+        let stale = NotificationTriggerSelection.evaluate(
+            transactions: [
+                transaction(id: "tx-old-large", amount: 650, date: "2026-05-15"),
+            ],
+            now: fixedNow,
+            config: testConfig
+        )
+        #expect(stale.decisions.contains { $0.kind == .largeTransaction } == false)
+
+        // A large transaction inside the 7-day window still fires.
+        let recent = NotificationTriggerSelection.evaluate(
+            transactions: [
+                transaction(id: "tx-recent-large", amount: 650, date: "2026-06-12"),
+            ],
+            now: fixedNow,
+            config: testConfig
+        )
+        #expect(recent.decisions.contains { $0.kind == .largeTransaction })
+
+        // Windowless callers (no now/window) keep their original behavior:
+        // every qualifying large transaction is returned regardless of date.
+        let windowless = NotificationTriggerSelection.largeTransactions(
+            from: [
+                transaction(id: "tx-old-large", amount: 650, date: "2026-05-15"),
+                transaction(id: "tx-recent-large", amount: 650, date: "2026-06-12"),
+            ],
+            threshold: 500
+        )
+        #expect(windowless.count == 2)
+    }
+
+    @Test("A disabled family preserves delivered keys and does not re-fire on re-enable")
+    func disabledFamilyPreservesDeliveredKeysAcrossToggle() {
+        // Deliver a stateful highUtilization alert (family enabled).
+        let active = NotificationTriggerSelection.evaluate(
+            accounts: [credit(id: "acct-high-util", current: -4_500, limit: 5_000)],
+            now: fixedNow,
+            config: testConfig
+        )
+        let utilKey = NotificationTriggerSelection.dedupKey(
+            kind: .highUtilization,
+            sourceID: "acct-high-util"
+        )
+        #expect(active.activeDedupKeys.contains(utilKey))
+        let delivered = active.activeDedupKeys
+
+        // Family toggled OFF while its condition is still active: the delivered
+        // key must NOT be resolved (the block never ran, so the condition was
+        // never re-checked).
+        let disabled = NotificationTriggerSelection.evaluate(
+            accounts: [credit(id: "acct-high-util", current: -4_500, limit: 5_000)],
+            now: fixedNow,
+            config: NotificationTriggers(highUtilization: false),
+            deliveredDedupKeys: delivered
+        )
+        #expect(disabled.resolvedDedupKeys.isEmpty)
+
+        // Family toggled back ON with the condition still active: because the key
+        // was preserved (still delivered), it is suppressed — no re-fire.
+        let reEnabled = NotificationTriggerSelection.evaluate(
+            accounts: [credit(id: "acct-high-util", current: -4_500, limit: 5_000)],
+            now: fixedNow,
+            config: testConfig,
+            deliveredDedupKeys: delivered
+        )
+        #expect(reEnabled.decisions.contains { $0.dedupKey == utilKey } == false)
+    }
+
     private var testConfig: NotificationTriggers {
         NotificationTriggers(
             largeTransactionThreshold: 500,
@@ -343,12 +421,12 @@ struct NotificationTriggerEvaluationTests {
         )
     }
 
-    private func transaction(id: String, amount: Double) -> TransactionDTO {
+    private func transaction(id: String, amount: Double, date: String = "2026-06-12") -> TransactionDTO {
         TransactionDTO(
             id: id,
             accountId: "acct-\(id)",
             amount: amount,
-            date: "2026-06-12",
+            date: date,
             name: "Synthetic Transaction"
         )
     }
