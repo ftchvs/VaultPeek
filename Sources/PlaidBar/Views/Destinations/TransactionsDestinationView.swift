@@ -47,6 +47,14 @@ struct TransactionsDestinationView: View {
     /// rather than all at once.
     @State private var pagedSource: PagedTransactionSource
 
+    /// Memoizes the *search-independent* build phase (page → override-aware rows),
+    /// mirroring `AppState._cachedCategoryDashboardPresentation`. Held as `@State`
+    /// so it survives body re-evaluations; it rebuilds only when the build inputs
+    /// (transactions / review metadata / rules) change — **not** when `searchText`
+    /// (or any other filter/sort facet) changes. So a search keystroke runs only the
+    /// cheap `filtered` scan + final `sort`, never the O(n) build + dictionary again.
+    @State private var rowBuildCache = BuiltRowCache()
+
     @MainActor
     init() {
         // A placeholder source until `.task` rebuilds it against the live AppState
@@ -63,24 +71,38 @@ struct TransactionsDestinationView: View {
     private var sourceTransactions: [TransactionDTO] { pagedSource.rows }
 
     /// The fully composed rows: page → build → filter → search → sort (pure Core).
+    ///
+    /// The build phase (`TransactionWorkspace.rows`) is search-independent and is
+    /// served from `rowBuildCache`, so a search keystroke only re-runs the cheap
+    /// `filtered` + `sort`. Read **once** per body pass (bound to a `let` in `body`)
+    /// rather than recomputed for every reader (count, `.onChange`, content,
+    /// table) — collapsing the old 3–4 pipeline runs per invalidation into 1.
     private var rows: [TransactionWorkspace.Row] {
-        TransactionWorkspace.resolve(
+        let built = rowBuildCache.rows(
             transactions: sourceTransactions,
             metadata: appState.transactionReviewMetadata,
-            rules: appState.transactionRules,
-            filter: navigationModel.transactionFilter,
-            sort: navigationModel.transactionSort,
+            rules: appState.transactionRules
+        )
+        let narrowed = TransactionWorkspace.filtered(
+            built,
+            by: navigationModel.transactionFilter,
             now: Date()
         )
+        return navigationModel.transactionSort.sorted(narrowed)
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: WindowMetrics.sm) {
+        // Compute the composed rows ONCE per body pass and thread the result to
+        // every reader. Previously `rows` was an uncached computed property read 3–4×
+        // per pass (result count, selection reconcile, content `isEmpty`, table),
+        // so each search keystroke ran the whole pipeline 3–4× on the MainActor.
+        let resolved = rows
+        return VStack(alignment: .leading, spacing: WindowMetrics.sm) {
             TransactionsFilterBar(
                 filter: filterBinding,
                 sort: sortBinding,
                 accounts: appState.accounts,
-                resultCount: rows.count,
+                resultCount: resolved.count,
                 isSearchFocused: $isSearchFocused
             )
             .padding(.horizontal, WindowMetrics.canvasMargin)
@@ -88,7 +110,7 @@ struct TransactionsDestinationView: View {
 
             Divider().opacity(0.4)
 
-            content
+            content(rows: resolved)
         }
         .navigationTitle(RouteDestination.transactions.title)
         // Build the paged source against the live AppState cache once, then load the
@@ -115,7 +137,8 @@ struct TransactionsDestinationView: View {
         }
         // Self-heal: if the selected row falls out of the filtered set, clear it so
         // the inspector returns to its prompt instead of pointing at a hidden row.
-        .onChange(of: rows.map(\.id)) { _, ids in
+        // Observes the already-computed `resolved` ids (no extra pipeline run).
+        .onChange(of: resolved.map(\.id)) { _, ids in
             navigationModel.reconcileTransactionSelection(visibleTransactionIDs: ids)
         }
     }
@@ -123,7 +146,7 @@ struct TransactionsDestinationView: View {
     // MARK: - Content states
 
     @ViewBuilder
-    private var content: some View {
+    private func content(rows: [TransactionWorkspace.Row]) -> some View {
         if appState.isBootLoadInFlight {
             TransactionsLoadingSkeleton()
         } else if let error = appState.error, appState.transactions.isEmpty {
@@ -135,11 +158,11 @@ struct TransactionsDestinationView: View {
         } else if rows.isEmpty {
             filteredEmptyState
         } else {
-            table
+            table(rows: rows)
         }
     }
 
-    private var table: some View {
+    private func table(rows: [TransactionWorkspace.Row]) -> some View {
         TransactionsTable(
             rows: rows,
             selection: selectionBinding,
@@ -256,6 +279,63 @@ struct TransactionsDestinationView: View {
             TransactionInspectorView()
                 .environment(appState)
         }
+    }
+}
+
+/// Memoizes the **search-independent** build phase of the Transaction Workspace
+/// pipeline (`TransactionWorkspace.rows` — page → override-aware row view-models),
+/// mirroring `AppState._cachedCategoryDashboardPresentation`.
+///
+/// `TransactionsDestinationView.body` re-evaluates on every search keystroke
+/// (`searchText` writes the navigation model's filter). The build phase is the
+/// expensive part — O(transactions) `EffectiveCategoryResolver` calls plus a
+/// metadata dictionary build — and it depends only on `(transactions, metadata,
+/// rules)`, never on the filter/search/sort. Caching it here keys the rebuild to
+/// those three inputs only, so a keystroke runs just the cheap `filtered` scan and
+/// final `sort` over the cached rows instead of rebuilding from scratch.
+///
+/// `@Observable` + held in `@State`: a class so the cache survives body
+/// re-evaluations, and so `rows(transactions:metadata:rules:)` may populate it
+/// when called from `body` (mutating a reference type, not `@State` struct storage).
+/// Not registering observation tracking here is intentional — invalidation is keyed
+/// on the inputs, which the view already observes via `AppState`.
+@MainActor
+@Observable
+final class BuiltRowCache {
+    /// The inputs that produced `cachedRows`. Compared by value: an array of
+    /// `Equatable` elements is `Equatable`, and `==` short-circuits on a count
+    /// mismatch / first differing element. Walking the inputs once per body pass is
+    /// far cheaper than the build it guards, and it never produces a stale result
+    /// (any edit — recategorize, rename, transfer, page append — changes one of the
+    /// three inputs and forces a rebuild).
+    @ObservationIgnored private var keyTransactions: [TransactionDTO] = []
+    @ObservationIgnored private var keyMetadata: [TransactionReviewMetadata] = []
+    @ObservationIgnored private var keyRules: [TransactionRule] = []
+    @ObservationIgnored private var cachedRows: [TransactionWorkspace.Row]?
+
+    /// The cached build, rebuilt only when `(transactions, metadata, rules)` differ
+    /// from the inputs that produced the current cache.
+    func rows(
+        transactions: [TransactionDTO],
+        metadata: [TransactionReviewMetadata],
+        rules: [TransactionRule]
+    ) -> [TransactionWorkspace.Row] {
+        if let cachedRows,
+           transactions == keyTransactions,
+           metadata == keyMetadata,
+           rules == keyRules {
+            return cachedRows
+        }
+        let built = TransactionWorkspace.rows(
+            transactions: transactions,
+            metadata: metadata,
+            rules: rules
+        )
+        keyTransactions = transactions
+        keyMetadata = metadata
+        keyRules = rules
+        cachedRows = built
+        return built
     }
 }
 
