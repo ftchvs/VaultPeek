@@ -77,6 +77,28 @@ enum AccountSpotlightIndexer {
     /// Deep link selecting a result opens — the shared dashboard URL.
     nonisolated static let deepLinkURL = GlanceSnapshot.deepLinkURL
 
+    /// Serializes every index/clear mutation through a single in-flight chain so a
+    /// later op never overtakes an earlier one. `index()` and `clear()` each spawn
+    /// an independent `Task` that suspends at its own `await`s, so without ordering
+    /// a `clear()` issued *after* an `index()` could finish *before* it — leaving
+    /// real account names re-indexed in Spotlight *after* the Privacy Mask cleared
+    /// them. Each enqueued op awaits the previous one's completion, so the final
+    /// state always reflects the last call (refresh-then-mask ⇒ "cleared").
+    @MainActor private static var pending: Task<Void, Never>?
+
+    /// Appends `work` to the in-flight chain: it runs only after the previously
+    /// enqueued op finishes. `work` is a `@MainActor`-isolated closure, so the
+    /// non-Sendable `CSSearchableIndex` it captures stays on the main actor and
+    /// never crosses an isolation boundary (Swift 6-clean).
+    @MainActor
+    private static func enqueue(_ work: @escaping @MainActor () async -> Void) {
+        let previous = pending
+        pending = Task { @MainActor in
+            await previous?.value
+            await work()
+        }
+    }
+
     /// Replaces the indexed account set with `entries`. When `entries` is empty
     /// (no accounts) the domain is cleared. Safe to call repeatedly — it replaces
     /// the whole domain, so removed accounts drop out of search.
@@ -93,7 +115,10 @@ enum AccountSpotlightIndexer {
         // Replace the whole domain atomically via the async API so the delete and
         // re-index stay ordered without nesting non-Sendable captures across a
         // `@Sendable` completion-handler boundary (Swift 6 strict concurrency).
-        Task { @MainActor in
+        // Routed through `enqueue` so this reindex can't be overtaken by — or
+        // overtake — a concurrent clear(); the `@MainActor` closure keeps the
+        // non-Sendable `index`/`items` on the main actor.
+        enqueue {
             try? await index.deleteSearchableItems(withDomainIdentifiers: [domainIdentifier])
             try? await index.indexSearchableItems(items)
         }
@@ -101,10 +126,12 @@ enum AccountSpotlightIndexer {
 
     /// Removes every VaultPeek account from Spotlight. Called when Privacy Mask /
     /// App Lock engages or all accounts are unlinked so names never linger in
-    /// system search.
+    /// system search. Routed through `enqueue` so a mask's clear() is strictly
+    /// ordered after any in-flight refresh's index() — a later clear can't be
+    /// beaten by an earlier reindex, so the masked end state is always "cleared".
     static func clear(index: CSSearchableIndex = .default()) {
         guard CSSearchableIndex.isIndexingAvailable() else { return }
-        Task { @MainActor in
+        enqueue {
             try? await index.deleteSearchableItems(withDomainIdentifiers: [domainIdentifier])
         }
     }
