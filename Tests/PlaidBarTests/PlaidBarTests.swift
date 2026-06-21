@@ -809,6 +809,44 @@ struct PlaidBarTests {
         #expect(restored.selectedAccountID == "demo_visa")
     }
 
+    // MARK: - Spotlight index/clear serialization (mirrors AccountSpotlightIndexer, bug-hunt R2)
+    //
+    // BUG #5 (privacy race): `index()` (a refresh's delete+reindex) and `clear()`
+    // (a mask's delete) each spawned an independent `Task { @MainActor in … }`.
+    // Independent Tasks suspend at their own `await`s with no ordering guarantee,
+    // so a `clear()` issued *after* an `index()` could finish *before* it — leaving
+    // real account names re-indexed in Spotlight *after* the Privacy Mask cleared
+    // them. The fix funnels BOTH ops through a single in-flight chain (`pending` +
+    // `enqueue`) so each awaits the previous, making refresh-then-mask strictly
+    // ordered. AccountSpotlightIndexer is in the app target (not @testable here,
+    // and `CSSearchableIndex` can't run in CI), so — like the window-first masking
+    // test above — this pins the fix as a source-level invariant.
+
+    @Test("AccountSpotlightIndexer serializes index/clear through a single in-flight Task chain")
+    func spotlightIndexClearSerialized() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let source = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Spotlight/AccountSpotlightIndexer.swift"),
+            encoding: .utf8
+        )
+
+        // The serialization primitives exist: one in-flight slot + an enqueue that
+        // chains each op after the previous one's completion.
+        #expect(source.contains("private static var pending: Task<Void, Never>?"))
+        #expect(source.contains("private static func enqueue("))
+        #expect(source.contains("let previous = pending"))
+        #expect(source.contains("await previous?.value"))
+
+        // Both mutating ops route through enqueue rather than spawning their own
+        // unordered Task. The only remaining `Task { @MainActor in … }` is the
+        // single chained one INSIDE enqueue — index()/clear() must not spawn their
+        // own. (The bug was two independent `Task { @MainActor in … }`, one per op.)
+        let enqueueCallSites = source.components(separatedBy: "enqueue {").count - 1
+        #expect(enqueueCallSites == 2, "expected index() and clear() to each route through enqueue")
+        let chainedTasks = source.components(separatedBy: "Task { @MainActor in").count - 1
+        #expect(chainedTasks == 1, "only enqueue's single chained Task should exist")
+    }
+
     // MARK: - Foundation Models categorization tier (mirrors AppState.refreshFoundationModelsCategorySuggestions)
 
     @Test("FM categorizer produces a foundationModels suggestion when Apple Intelligence is available")
