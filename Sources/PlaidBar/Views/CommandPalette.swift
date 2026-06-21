@@ -99,6 +99,12 @@ struct CommandPalette: View {
                             .id(index)
                             .contentShape(Rectangle())
                             .onTapGesture { execute(command) }
+                            // The row carries the `.isButton` trait, so VoiceOver
+                            // announces it as a button and its activate gesture must
+                            // run the command — `.onTapGesture` alone is invisible to
+                            // VoiceOver (matches the `.accessibilityAction` pattern in
+                            // MainPopover.swift account rows).
+                            .accessibilityAction { execute(command) }
                             .onHover { hovering in
                                 if hovering { highlightedIndex = index }
                             }
