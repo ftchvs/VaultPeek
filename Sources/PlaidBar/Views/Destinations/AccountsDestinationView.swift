@@ -67,6 +67,24 @@ struct AccountsDestinationView: View {
     var body: some View {
         content
             .navigationTitle(RouteDestination.accounts.title)
+            // The window-first Add Account entry point (AND-631): the destination
+            // every add-account affordance (Dashboard attention chip, readiness
+            // panel, recurring empty state) routes to. Invokes the shared
+            // `AppState.addAccount()` flow — which opens Plaid Hosted Link in the
+            // browser (no in-app sheet) — so those affordances resolve here instead
+            // of dead-ending. In demo it no-ops (keeps demo); with no server it
+            // surfaces the actionable error; with credentials it opens Link.
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        Task { await appState.addAccount() }
+                    } label: {
+                        Label("Add Account", systemImage: "plus")
+                    }
+                    .help("Connect a bank with Plaid Link")
+                    .disabled(appState.isLoading)
+                }
+            }
             // Self-heal: if the selected account falls out of the list (removed /
             // disconnected), clear it so the inspector returns to its prompt instead
             // of pointing at a vanished account. Mirrors the popover's reconcile.
@@ -243,6 +261,17 @@ struct AccountsDestinationView: View {
             Label("No accounts yet", systemImage: RouteDestination.accounts.systemImage)
         } description: {
             Text("Connect an institution to see its accounts here.")
+        } actions: {
+            // The primary recovery action for the no-accounts dead-end (AND-631):
+            // start Plaid Link via the shared flow rather than leaving the user on
+            // an explanation with no next step.
+            Button {
+                Task { await appState.addAccount() }
+            } label: {
+                Label("Add Account", systemImage: "plus")
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(appState.isLoading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
