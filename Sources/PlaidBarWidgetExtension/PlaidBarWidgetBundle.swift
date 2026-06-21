@@ -423,8 +423,11 @@ struct SetPrivacyMaskIntent: SetValueIntent {
         // FinanceSnapshot in place so every system surface reads value-free figures
         // now. Un-mask (value == false) still defers to the app: revealing is the
         // non-leaking direction, and only the app holds the real numbers to restore.
-        if value, let snapshot = AppGroupSnapshotStore.loadIfAvailable(), !snapshot.isMasked {
-            try? AppGroupSnapshotStore.save(snapshot.masked())
+        if value {
+            if let snapshot = AppGroupSnapshotStore.loadIfAvailable(), !snapshot.isMasked {
+                try? AppGroupSnapshotStore.save(snapshot.masked())
+            }
+            try? GlanceSnapshotStore.redactIfAvailable()
         }
         // Reload the widgets + controls so the toggle and every figure reflect the
         // new state even before the app has applied the command and rewritten the

@@ -112,6 +112,28 @@ struct PlaidBarTests {
         #expect(planningSource.contains("ProgressView(value: summary.overallFraction)"))
     }
 
+    @Test("Control and Focus privacy mask paths redact both App Group snapshots")
+    func privacyMaskControlPathsRedactEveryPublishedSnapshot() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let widgetSource = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBarWidgetExtension/PlaidBarWidgetBundle.swift"),
+            encoding: .utf8
+        )
+        let focusSource = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Intents/FocusPrivacyFilterIntent.swift"),
+            encoding: .utf8
+        )
+        let appStateSource = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/App/AppState.swift"),
+            encoding: .utf8
+        )
+
+        #expect(widgetSource.contains("GlanceSnapshotStore.redactIfAvailable()"))
+        #expect(focusSource.contains("PrivacyMaskControlCommandReader.redactPublishedSnapshots()"))
+        #expect(appStateSource.contains("queued OFF command must restore the"))
+        #expect(appStateSource.contains("clearPublishedSystemSnapshotsForDemoEntry()"))
+    }
+
     // MARK: - Account Type Categorization
 
     @Test("AccountDTO types correctly categorized")

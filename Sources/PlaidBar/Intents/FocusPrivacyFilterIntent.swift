@@ -83,10 +83,8 @@ struct FocusPrivacyFilterIntent: SetFocusFilterIntent {
             // shared FinanceSnapshot in place so every system surface reads
             // value-free figures now. Un-mask still defers to the app: revealing is
             // the non-leaking direction, and only the app holds the real numbers.
-            if outcome.desiredMaskEnabled,
-               let snapshot = AppGroupSnapshotStore.loadIfAvailable(),
-               !snapshot.isMasked {
-                try? AppGroupSnapshotStore.save(snapshot.masked())
+            if outcome.desiredMaskEnabled {
+                PrivacyMaskControlCommandReader.redactPublishedSnapshots()
             }
             // Reload the Control Center toggle + widgets so the "Privacy Mask"
             // control reflects the new state even before the app applies it.

@@ -91,6 +91,20 @@ enum PrivacyMaskControlCommandReader {
         try? fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
         #endif
     }
+
+    /// Redacts every App Group payload that can be read by system surfaces while
+    /// the app is backgrounded. Used by Control Center / Focus privacy-mask
+    /// writers before they reload widgets or controls.
+    static func redactPublishedSnapshots(
+        directory: URL = directory(),
+        fileManager: FileManager = .default
+    ) {
+        if let snapshot = AppGroupSnapshotStore.loadIfAvailable(directory: directory, fileManager: fileManager),
+           !snapshot.isMasked {
+            try? AppGroupSnapshotStore.save(snapshot.masked(), directory: directory, fileManager: fileManager)
+        }
+        try? GlanceSnapshotStore.redactIfAvailable(directory: directory, fileManager: fileManager)
+    }
 }
 
 // MARK: - AppState integration

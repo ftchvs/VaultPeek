@@ -494,12 +494,13 @@ final class AppState {
         guard !isContentLocked else { return true }
         if appLockPreferences.privacyMaskEnabled != command.maskEnabled {
             appLockPreferences.privacyMaskEnabled = command.maskEnabled
-            // Re-emit both App Group snapshots so the new mask state takes effect on
-            // disk immediately — enabling overwrites real figures with value-free
-            // snapshots, disabling restores the real values — instead of waiting for
-            // the next data refresh. Mirrors `togglePrivacyMask`.
-            writeGlanceSnapshot()
         }
+        // Re-emit both App Group snapshots after every consumed command, even when
+        // the in-app preference already matches. A background Control Center/Focus
+        // ON→OFF sequence can leave the persisted files masked while the app still
+        // has `privacyMaskEnabled == false`; the queued OFF command must restore the
+        // real App Group snapshots instead of being skipped as a state no-op.
+        writeGlanceSnapshot()
         return true
     }
 
@@ -2532,7 +2533,6 @@ final class AppState {
     }
 
     func startDemoMode() {
-        isDemoMode = true
         loadDemoData()
     }
 
@@ -4019,6 +4019,16 @@ final class AppState {
         WidgetCenter.shared.reloadTimelines(ofKind: "PlaidBarGlanceWidget")
     }
 
+    private func clearPublishedSystemSnapshotsForDemoEntry() {
+        glanceSnapshotWriteGeneration += 1
+        let debouncer = glanceSnapshotWriteDebouncer
+        Task { await debouncer.cancel() }
+        try? GlanceSnapshotStore.clear()
+        try? AppGroupSnapshotStore.clear()
+        AccountSpotlightIndexer.clear()
+        WidgetCenter.shared.reloadTimelines(ofKind: "PlaidBarGlanceWidget")
+    }
+
     /// Consume a pending widget/control command (e.g. the "Refresh balances"
     /// control) and run it. Reached from `loadInitialData()` and
     /// `refreshDashboard()`, and — because the control opens the app via its
@@ -4109,7 +4119,11 @@ final class AppState {
     // MARK: - Demo Data
 
     func loadDemoData() {
+        let wasDemoMode = isDemoMode
         isDemoMode = true
+        if !wasDemoMode {
+            clearPublishedSystemSnapshotsForDemoEntry()
+        }
         // Demo fixtures load synchronously: there is no boot handshake to wait for.
         isBooting = false
         isDemoStatusRecoveryScenario = CommandLine.arguments.contains("--screenshot-status-recovery")
