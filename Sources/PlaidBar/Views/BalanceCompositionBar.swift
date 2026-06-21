@@ -7,6 +7,10 @@ struct BalanceCompositionBarSegment: Identifiable, Equatable {
     let value: Double
     let share: Double
     let tint: Color
+    /// Privacy-mask-aware value spoken to VoiceOver. Built through
+    /// PrivacyMaskPresentation by the caller so the bar never leaks raw
+    /// per-bucket balances while Privacy Mask is on (matches the legend rows).
+    let accessibilityValueText: String
 
     var fillColor: Color {
         value > 0 ? tint.opacity(0.82) : Color.primary.opacity(0.08)
@@ -77,7 +81,7 @@ struct AnimatedBalanceCompositionBar: View {
     }
 
     private func segmentAccessibility(_ segment: BalanceCompositionBarSegment) -> String {
-        "\(segment.title), \(Formatters.currency(segment.value, format: .full)), \(percentText(segment.share)) of balance mix"
+        "\(segment.title), \(segment.accessibilityValueText), \(percentText(segment.share)) of balance mix"
     }
 }
 
