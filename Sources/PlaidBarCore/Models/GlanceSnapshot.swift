@@ -316,6 +316,24 @@ public enum GlanceSnapshotStore {
         }
     }
 
+    /// Rewrites an already-persisted glance snapshot into its value-free form.
+    ///
+    /// Control Center / Focus-filter privacy-mask intents can run while the app is
+    /// backgrounded, so they cannot rebuild the real widget snapshot from app
+    /// state. They can, however, make the existing on-disk snapshot safe by
+    /// zeroing every figure before WidgetKit reloads its timelines. Missing files
+    /// are a no-op so first-run/setup systems can call this defensively.
+    public static func redactIfAvailable(
+        directory: URL = snapshotDirectory(),
+        fileManager: FileManager = .default
+    ) throws {
+        let url = snapshotURL(directory: directory)
+        guard fileManager.fileExists(atPath: url.path) else { return }
+        let snapshot = try load(directory: directory, fileManager: fileManager)
+        guard !snapshot.isRedacted else { return }
+        try save(snapshot.redacted(), directory: directory, fileManager: fileManager)
+    }
+
     public static func saveCommand(
         _ request: GlanceCommandRequest,
         directory: URL = snapshotDirectory(),

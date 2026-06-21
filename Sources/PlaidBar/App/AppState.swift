@@ -474,6 +474,36 @@ final class AppState {
         writeGlanceSnapshot()
     }
 
+    /// Applies a pending Control Center / Focus-filter privacy-mask command, if
+    /// any. Drives the same `appLockPreferences.privacyMaskEnabled` path as the
+    /// in-app eye toggle so persistence, the masked snapshot rewrite, and control
+    /// reload all happen through the existing flow. A no-op (returns `false`) when
+    /// no command is pending. Skipped while fully locked — App Lock already masks
+    /// everything and owns reveal (mirrors `togglePrivacyMask`).
+    ///
+    /// Lives here (not in `PrivacyMaskControlCommandReader`) so it can re-emit both
+    /// App Group snapshots via the file-private `writeGlanceSnapshot()`, exactly
+    /// like `togglePrivacyMask` / `lockApp` / `unlockApp`. The extension that drops
+    /// the command (Control Center toggle) already re-redacts the on-disk snapshot
+    /// when enabling the mask; this makes the *activation* path deterministic too,
+    /// so the snapshot is re-redacted the moment the app applies the command rather
+    /// than at a later refresh (bug-hunt R2).
+    @discardableResult
+    func applyPendingPrivacyMaskControlCommand() -> Bool {
+        guard let command = try? PrivacyMaskControlCommandReader.consume() else { return false }
+        guard !isContentLocked else { return true }
+        if appLockPreferences.privacyMaskEnabled != command.maskEnabled {
+            appLockPreferences.privacyMaskEnabled = command.maskEnabled
+        }
+        // Re-emit both App Group snapshots after every consumed command, even when
+        // the in-app preference already matches. A background Control Center/Focus
+        // ON→OFF sequence can leave the persisted files masked while the app still
+        // has `privacyMaskEnabled == false`; the queued OFF command must restore the
+        // real App Group snapshots instead of being skipped as a state no-op.
+        writeGlanceSnapshot()
+        return true
+    }
+
     /// True only in full App Lock (`.locked`) — distinct from
     /// `shouldMaskFinancialValues`, which is also true for the lighter Privacy
     /// Mask (`.masked`). When this is true the dashboard must be gated behind the
@@ -2425,6 +2455,13 @@ final class AppState {
             // only; restore the user's real saved watchlist (or empty) so demo
             // Starbucks/Shopping targets never fire against real data.
             loadWatchlistTargets(defaults: .standard)
+            // Demo fixtures may have been published to the shared App Group before
+            // the demo guards landed, or by an older build; wipe both the glance and
+            // finance snapshots (and the Spotlight account index) on demo exit so a
+            // prior demo's unlabeled figures never linger on the widget / Control
+            // Center / Siri / Spotlight surfaces (bug-hunt R2). `clearGlanceSnapshot`
+            // clears both stores + the index and reloads the widget timeline.
+            await clearGlanceSnapshot()
             // Fall through into the real add-account flow: the demo readiness
             // card advertises "Connect Bank", so the first click must continue
             // into the server check + Plaid Link handoff (or surface the precise
@@ -2496,7 +2533,6 @@ final class AppState {
     }
 
     func startDemoMode() {
-        isDemoMode = true
         loadDemoData()
     }
 
@@ -3810,6 +3846,14 @@ final class AppState {
     }
 
     private func writeGlanceSnapshot(updatedAt: Date = Date()) {
+        // Demo-mode fixtures must never reach the shared App Group container: a
+        // glance/finance snapshot there is shown UNLABELED on Control Center / Siri
+        // / Spotlight / the widget and would PERSIST after demo exit. Skip the
+        // publish entirely while in demo. The tradeoff: demo mode loses widget /
+        // Control Center coverage — acceptable for a screenshot/preview mode, and it
+        // removes the leak. The demo-exit teardown clears any lingering snapshot
+        // (see `addAccount`'s `isDemoMode = false` path and `resetLocalData`).
+        guard !isDemoMode else { return }
         // With no accounts (e.g. the user just disconnected their last
         // institution), clear the app-group snapshot instead of leaving the
         // previous balances on disk — otherwise the widget would keep showing
@@ -3903,6 +3947,10 @@ final class AppState {
     /// When App Lock / Privacy Mask is active the snapshot is written with
     /// `isMasked == true` so the intents withhold the figures past the lock.
     private func writeFinanceSnapshot(updatedAt: Date = Date()) {
+        // Defense in depth alongside `writeGlanceSnapshot`'s guard: never publish
+        // demo fixtures to the shared App Group `FinanceSnapshot` that backs the
+        // unlabeled Control Center value controls / Siri / Spotlight / Shortcuts.
+        guard !isDemoMode else { return }
         let cashflow = WealthSummaryPresentation.evaluate(
             accounts: accounts,
             transactions: transactions,
@@ -3968,6 +4016,16 @@ final class AppState {
         // every clear path — the explicit reset/data-wipe (`resetLocalData`) and
         // removing the last institution — not just the empty-accounts write
         // branch, which previously reloaded on its own (AND-385 Codex review).
+        WidgetCenter.shared.reloadTimelines(ofKind: "PlaidBarGlanceWidget")
+    }
+
+    private func clearPublishedSystemSnapshotsForDemoEntry() {
+        glanceSnapshotWriteGeneration += 1
+        let debouncer = glanceSnapshotWriteDebouncer
+        Task { await debouncer.cancel() }
+        try? GlanceSnapshotStore.clear()
+        try? AppGroupSnapshotStore.clear()
+        AccountSpotlightIndexer.clear()
         WidgetCenter.shared.reloadTimelines(ofKind: "PlaidBarGlanceWidget")
     }
 
@@ -4061,7 +4119,11 @@ final class AppState {
     // MARK: - Demo Data
 
     func loadDemoData() {
+        let wasDemoMode = isDemoMode
         isDemoMode = true
+        if !wasDemoMode {
+            clearPublishedSystemSnapshotsForDemoEntry()
+        }
         // Demo fixtures load synchronously: there is no boot handshake to wait for.
         isBooting = false
         isDemoStatusRecoveryScenario = CommandLine.arguments.contains("--screenshot-status-recovery")

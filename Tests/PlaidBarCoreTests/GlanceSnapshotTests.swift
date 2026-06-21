@@ -198,23 +198,22 @@ struct GlanceSnapshotTests {
         #expect(try GlanceSnapshotStore.saveIfChanged(real, directory: directory))
         #expect(try GlanceSnapshotStore.load(directory: directory).netWorth == 1_250)
 
-        // 2. Mask turns on — the writer rebuilds and the persisted file is
-        // rewritten value-free (the change in `isRedacted`/figures defeats the
-        // saveIfChanged short-circuit).
-        let masked = GlanceSnapshot.make(
-            netWorth: 1_250,
-            balanceHistory: history,
-            updatedAt: now,
-            isDemo: false,
-            isMasked: true
-        )
-        #expect(try GlanceSnapshotStore.saveIfChanged(masked, directory: directory))
+        // 2. Mask turns on from a background control/focus intent — the existing
+        // persisted file is rewritten value-free before the app can foreground.
+        try GlanceSnapshotStore.redactIfAvailable(directory: directory)
 
         let onDisk = try GlanceSnapshotStore.load(directory: directory)
         #expect(onDisk.isRedacted)
         #expect(onDisk.netWorth == 0)
         #expect(onDisk.todayChange == 0)
         #expect(onDisk.sparkline.isEmpty)
+    }
+
+    @Test("Redacting a missing persisted snapshot is a no-op")
+    func redactingMissingPersistedSnapshotIsNoop() throws {
+        let directory = temporaryDirectory()
+        try GlanceSnapshotStore.redactIfAvailable(directory: directory)
+        #expect((try? GlanceSnapshotStore.load(directory: directory)) == nil)
     }
 
     @Test("Legacy snapshot without isRedacted decodes as not redacted")
