@@ -91,33 +91,32 @@ enum PrivacyMaskControlCommandReader {
         try? fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
         #endif
     }
+
+    /// Redacts every App Group payload that can be read by system surfaces while
+    /// the app is backgrounded. Used by Control Center / Focus privacy-mask
+    /// writers before they reload widgets or controls.
+    static func redactPublishedSnapshots(
+        directory: URL = directory(),
+        fileManager: FileManager = .default
+    ) {
+        if let snapshot = AppGroupSnapshotStore.loadIfAvailable(directory: directory, fileManager: fileManager),
+           !snapshot.isMasked {
+            try? AppGroupSnapshotStore.save(snapshot.masked(), directory: directory, fileManager: fileManager)
+        }
+        try? GlanceSnapshotStore.redactIfAvailable(directory: directory, fileManager: fileManager)
+    }
 }
 
 // MARK: - AppState integration
 //
-// `applyPendingPrivacyMaskControlCommand()` is wired into the app's activation
-// hook (`PlaidBarApp`'s `didBecomeActive` handler, alongside
+// `AppState.applyPendingPrivacyMaskControlCommand()` (defined in `AppState.swift`,
+// next to `togglePrivacyMask`) is wired into the app's activation hook
+// (`PlaidBarApp`'s `didBecomeActive` handler, alongside
 // `consumePendingGlanceCommand()`), so the Control Center toggle takes effect the
-// next time VaultPeek activates. The privacy control deliberately does NOT open
-// the app (silent masking), so it relies on the next natural activation — opening
-// the popover, summoning the window, or any focus change — to consume the pending
-// command. The reader is consume-and-delete, so a stale file never lingers and
-// re-running on every activation is a cheap no-op when nothing is pending.
-
-extension AppState {
-    /// Applies a pending Control Center privacy-mask command, if any. Drives the
-    /// same `appLockPreferences.privacyMaskEnabled` path as the in-app eye toggle
-    /// so persistence, the masked snapshot rewrite, and control reload all happen
-    /// through the existing flow. A no-op (returns `false`) when no command is
-    /// pending. Skipped while fully locked — App Lock already masks everything and
-    /// owns reveal (mirrors `togglePrivacyMask`).
-    @discardableResult
-    func applyPendingPrivacyMaskControlCommand() -> Bool {
-        guard let command = try? PrivacyMaskControlCommandReader.consume() else { return false }
-        guard !isContentLocked else { return true }
-        if appLockPreferences.privacyMaskEnabled != command.maskEnabled {
-            appLockPreferences.privacyMaskEnabled = command.maskEnabled
-        }
-        return true
-    }
-}
+// next time VaultPeek activates. It consumes the pending command via
+// `PrivacyMaskControlCommandReader.consume()` above. The privacy control
+// deliberately does NOT open the app (silent masking), so it relies on the next
+// natural activation — opening the popover, summoning the window, or any focus
+// change — to consume the pending command. The reader is consume-and-delete, so a
+// stale file never lingers and re-running on every activation is a cheap no-op
+// when nothing is pending.

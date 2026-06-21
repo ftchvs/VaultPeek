@@ -416,8 +416,24 @@ struct SetPrivacyMaskIntent: SetValueIntent {
         try WidgetControlCommandStore.savePrivacyCommand(
             PrivacyMaskCommandRequest(maskEnabled: value, requestedAt: Date())
         )
-        // Reload the controls so the toggle reflects its new state even before the
-        // app has applied the command and rewritten the snapshot.
+        // Enabling the mask must take effect on disk immediately, not wait for the
+        // app to foreground and apply the command — otherwise the widget and the
+        // Safe-to-Spend / Credit-Utilization value controls keep rendering the real
+        // balances from the already-persisted snapshot. Re-redact the shared
+        // FinanceSnapshot in place so every system surface reads value-free figures
+        // now. Un-mask (value == false) still defers to the app: revealing is the
+        // non-leaking direction, and only the app holds the real numbers to restore.
+        if value {
+            if let snapshot = AppGroupSnapshotStore.loadIfAvailable(), !snapshot.isMasked {
+                try? AppGroupSnapshotStore.save(snapshot.masked())
+            }
+            try? GlanceSnapshotStore.redactIfAvailable()
+        }
+        // Reload the widgets + controls so the toggle and every figure reflect the
+        // new state even before the app has applied the command and rewritten the
+        // snapshot. `reloadAllTimelines` was previously missing here, so the glance
+        // widget kept showing real balances until the next 15-minute reload.
+        WidgetCenter.shared.reloadAllTimelines()
         ControlCenter.shared.reloadAllControls()
         return .result()
     }
