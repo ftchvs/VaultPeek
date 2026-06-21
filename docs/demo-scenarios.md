@@ -10,21 +10,24 @@ financial data.
 Use these named scenarios when reviewing demo fixtures, screenshot changes, and
 onboarding confidence.
 
-| Scenario | Fixture intent | Dashboard story | Expected status and recovery state | Screenshot list |
-|----------|----------------|-----------------|------------------------------------|-----------------|
-| `steady-household-overview` | Four local demo accounts across checking, savings, and two credit cards; deterministic balance history; recurring income, rent, subscriptions, travel, shopping, groceries, and utility transactions. | The first popover view should answer cash on hand, savings cushion, credit exposure, debt risk, recent activity, 365-day spend/cashflow shape, and local-only insight receipt before a user opens details. | Demo mode is healthy. Local demo accounts are loaded, the server surface reports local demo readiness, the local insight receipt may show deterministic/no-runtime status, and no Plaid network call is required. | `Assets/dashboard.png` |
-| `cash-runway-check` | Same synthetic household fixture with the checking account selected and the Cash filter active. | A user can confirm checking and savings balances, spot recent inflow/outflow, and inspect the selected checking account without leaving the dashboard surface. | Healthy demo state. Recovery controls should stay quiet because the scenario is about confidence, not failure. | `Assets/dashboard-cash.png`, `Assets/dashboard-savings.png` |
-| `credit-pressure-review` | Same synthetic fixture with one low-utilization card and one high-utilization card; the selected card is the pressure point. | A user can see owed balances, utilization, available credit, pending card activity, and debt emphasis without turning the app into a budgeting workflow. | Healthy demo state for the normal credit capture. The row and detail copy should identify credit risk with text or shape, not color alone. | `Assets/dashboard-credit.png`, `Assets/dashboard-debt.png` |
-| `reconnect-confidence-check` | Demo data plus `--screenshot-status-recovery`, which keeps one synthetic institution recovered and marks another synthetic institution as needing login. | A user can trust that VaultPeek preserves last-known local data while making item recovery visible and actionable. | Status should show one connected/recovered institution, one login-required institution, synced-item count context, stale or delayed sync context when applicable, and explicit reconnect/settings/refresh handoff. | `Assets/dashboard-status.png` |
-| `first-run-sandbox-preflight` | Empty local app state with the screenshot preflight port and no real Plaid credentials in the capture. | A new contributor can see what VaultPeek checks before opening Plaid Link: local server reachability, expected environment, credential readiness, storage path, and linked item count. | Setup should fail closed until the local server and sandbox credentials are ready. It must not imply sandbox works without credentials. | `Assets/setup-sandbox-preflight.png` |
+Each scenario maps to one published window-first workspace screenshot
+(`Scripts/screenshots.sh` renders these via `--render-window-first`).
+
+| Scenario | Fixture intent | Workspace story | Expected status and recovery state | Screenshot |
+|----------|----------------|-----------------|------------------------------------|------------|
+| `dashboard-overview` | Four local demo accounts across checking, savings, and two credit cards; deterministic balance history; recurring income, rent, subscriptions, travel, shopping, groceries, and utility transactions. | The Dashboard workspace should answer cash on hand, savings cushion, credit exposure, debt risk, recent activity, 365-day spend/cashflow shape, and local-only insight context before a user opens details. | Demo mode is healthy. Local demo accounts are loaded, the server surface reports local demo readiness, and no Plaid network call is required. | `Assets/window-dashboard.png` |
+| `transactions-review` | Same synthetic household fixture; the Transactions workspace lists categorized demo activity. | A user can scan, search, and review categorized transactions — recurring income, rent, subscriptions, travel, shopping, groceries, utilities — with the category/review affordances visible. | Healthy demo state. No raw Plaid payloads, item IDs, or real merchant data appear. | `Assets/window-transactions.png` |
+| `budgets-planning` | Same synthetic fixture with category budgets and a recurring-commitment baseline. | The Budgets workspace shows spend vs. plan per category, safe-to-spend, and recurring obligations without turning the app into a heavy budgeting workflow. | Healthy demo state. Over/under-budget emphasis is conveyed with text or shape, not color alone. | `Assets/window-budgets.png` |
+| `local-insights` | Same synthetic fixture; demo transactions present so the local insight receipt renders. | The Insights workspace shows the local-only insight receipt: source-row count, window, top category, recurring estimate, and category hints. | The receipt is deterministic/local-only and shows the disabled/no-runtime state when no local AI runtime is configured. It must not imply cloud AI or send transaction data off-device. | `Assets/window-insights.png` |
+| `accounts-health` | Demo data plus `--screenshot-status-recovery`, which keeps one synthetic institution recovered and marks another as needing login. | The Accounts workspace shows balances, utilization, available credit, and connection status while preserving last-known local data and making item recovery visible and actionable. | One connected/recovered institution, one login-required institution, synced-item context, stale/delayed sync context when applicable, and an explicit reconnect/refresh handoff. | `Assets/window-accounts.png` |
 
 ## Reduced-Noise Composition
 
 - Keep the first screenshot signal dense and product-shaped: heatmap, account
   rows, selected-account detail, status strip, local insight receipt, and one
   clear action path.
-- Use dashboard filters to focus the story instead of adding separate marketing
-  or explanatory surfaces.
+- Let each window-first workspace tell one focused story instead of adding
+  separate marketing or explanatory surfaces.
 - Prefer one selected account per scenario so screenshots show drill-in
   behavior without expanding every row.
 - Keep recovery screenshots limited to one actionable degraded state; avoid

@@ -1,12 +1,13 @@
-# Distribution: Open-Source Ad-Hoc Build (Bring Your Own Signing)
+# Distribution: Ad-Hoc Build (Bring Your Own Signing)
 
-> **Status: OPEN-SOURCE BUILD — ad-hoc, unsigned.** This repository ships an
+> **Status: ad-hoc-signed, unsigned-for-distribution.** This repository ships an
 > ad-hoc-signed build path only. There is no team-specific Apple Developer
 > identity, entitlements file, or notarization tooling in the tree. The only
 > true distribution claim is: an ad-hoc-signed `.app`/DMG that needs
 > right-click → Open on first launch. Developer ID signing, notarization, App
 > Group entitlements, and Sparkle auto-update are **bring-your-own** — a
-> contributor must add their own identity and tooling.
+> contributor must add their own identity and tooling. Licensing is governed by
+> [`LICENSE`](../LICENSE); this document describes the build, not the license.
 
 ## What the repo builds today
 
@@ -50,6 +51,44 @@ signing identity. The bare ad-hoc build **omits** that entitlement, so:
 Making the widget functional requires bringing your own App Group entitlement
 and Developer ID signing identity (below).
 
+## What May Be Claimed, When
+
+Release language (README, About, release notes) must match what has actually
+been performed. Signing/notarization tooling is **not** in this repository, so
+the default build may only make the ad-hoc claim:
+
+| Build stage | May claim | Must NOT claim |
+|-------------|-----------|----------------|
+| Ad-hoc build (the default, shipped here) | "ad-hoc signed", "right-click → Open on first launch" | "notarized", "Developer ID signed", "Gatekeeper-approved" |
+| After bring-your-own Developer ID signing (not in repo) | "Developer ID signed" | "notarized" (until a notarytool pass + staple) |
+| After bring-your-own notarization + `stapler staple` (not in repo) | "notarized", normal double-click launch | — |
+
+Until a real notarized + clean-machine pass is done by a contributor with their
+own identity, the only accurate language is **"ad-hoc signed, right-click →
+Open"**.
+
+## Gatekeeper Verification (clean machine, hard requirement)
+
+The structural validity of the bundle/DMG is gated automatically
+(`./Scripts/package-app.sh` + `./Scripts/validate-app-bundle.sh`, and
+`./Scripts/package-dmg.sh` for release candidates — see
+[qa-matrix.md](qa-matrix.md) "App bundle / DMG package validation"). The actual
+Gatekeeper open behavior cannot be asserted by the build and must be verified by
+a human on a clean machine:
+
+1. Build the DMG (`./Scripts/package-dmg.sh`) and download it over a browser so
+   the quarantine bit is set, on a Mac that has never run a dev build.
+2. `spctl --assess --type execute --verbose VaultPeek.app` — for an ad-hoc build
+   this is expected to report rejected / unsigned (it passes only once a real
+   Developer ID + notarization pass is done).
+3. `stapler validate VaultPeek.app` — expected to fail until the app is notarized
+   and stapled.
+4. Human path: open the DMG → drag `VaultPeek.app` to `/Applications` → a plain
+   double-click is expected to be blocked → the one-time workaround is
+   **right-click (Control-click) → Open**, then confirm. After the first launch
+   it opens normally; the menu bar item appears, demo mode renders, the bundled
+   server starts, and `~/.vaultpeek/` is created with private permissions.
+
 ## Bring Your Own Signing (optional, not shipped)
 
 If you want a signed and/or notarized build, you supply the Apple Developer
@@ -69,11 +108,13 @@ pieces yourself. None of this lives in the repo:
    outer `VaultPeek.app` (with its entitlements) — never `codesign --deep` for
    a real signing pass. Then `notarytool submit --wait` and `stapler staple`
    the app and the DMG.
-4. Verify on a clean machine: `spctl --assess`, `stapler validate`, and a real
-   download → drag-install → double-click launch with no right-click workaround.
+4. Verify on a clean machine using the **Gatekeeper Verification** steps above:
+   `spctl --assess`, `stapler validate`, and a real download → drag-install →
+   double-click launch with no right-click workaround.
 
 Only after a real notarized + clean-machine pass may README/About/release-notes
-language change from "ad-hoc signed" to "notarized".
+language change from "ad-hoc signed" to "notarized" (see **What May Be Claimed,
+When** above).
 
 ## Sparkle auto-update (dormant, bring-your-own)
 
