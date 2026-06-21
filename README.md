@@ -53,75 +53,45 @@ Personal finance data lives behind bank website logins. The closest thing to a m
 
 ## Screenshots
 
-### Setup Preflight
-
-<p align="center">
-  <img src="Assets/setup-sandbox-preflight.png" width="420" alt="VaultPeek sandbox setup preflight showing server, mode, credential, storage, and linked item readiness before Plaid Link opens"/>
-</p>
-
-Sandbox and production setup now show readiness before Plaid Link opens. The app
-checks the local server, expected Plaid environment, credential availability,
-storage path, and linked item count so setup failures are visible before the
-browser handoff.
+VaultPeek is window-first: the primary experience is a `NavigationSplitView`
+workspace (Dashboard, Transactions, Budgets, Planning, Goals, Review Inbox,
+Insights, Alerts, Accounts, Settings), with the menu bar retained as a reduced
+glance-and-route surface. The captures below are the window-first workspaces
+rendered from demo data.
 
 ### Dashboard
 
 <p align="center">
-  <img src="Assets/dashboard.png" width="420" alt="VaultPeek dashboard popover with net worth, sync status, 365-day spending activity, account rows, and drill-down controls"/>
+  <img src="Assets/window-dashboard.png" width="720" alt="VaultPeek window-first Dashboard workspace with net worth, safe-to-spend, last-30-day spend, a 365-day activity heatmap, accounts panel, recurring detection, and spending-by-category breakdown"/>
 </p>
 
-The current app is dashboard-first. The main popover answers the common
-questions first: cash on hand, credit exposure, savings, debt, sync health, and
-the last year of spending activity. The same dashboard surface also owns
-below-the-fold local-only activity insight receipts and priority attention
-prompts without sending private transactions to a cloud model. Filtered states
-keep the same visual system while focusing the account list and drill-down
-controls.
+The Dashboard workspace answers the common questions first: net worth, safe to
+spend, recent spend, the last year of activity, account health, recurring
+charges, and spending by category — all in one window. Local-only insight
+receipts are surfaced without sending private transactions to a cloud model.
 
-| Overview | Cash |
-|----------|------|
-| <img src="Assets/dashboard.png" width="380" alt="Dashboard overview with net worth, sync state, balance mix, spending activity, filters, and account rows"> | <img src="Assets/dashboard-cash.png" width="380" alt="Dashboard cash filter showing depository accounts, balances, sync state, spending activity, and selected account details"> |
-| Net worth, cash, debt, runway, balance mix, sync state, and 365-day spending activity in one menu bar surface. | Cash-focused account review with checking and savings balances surfaced under the same dashboard controls. |
+### Workspaces
 
-| Credit | Savings |
-|--------|---------|
-| <img src="Assets/dashboard-credit.png" width="380" alt="Dashboard credit filter showing credit card accounts, debt summary, utilization, and selected card details"> | <img src="Assets/dashboard-savings.png" width="380" alt="Dashboard savings filter showing savings account balances and selected account detail controls"> |
-| Credit cards, utilization, limits, pending activity, and reconnect/refresh controls without leaving the popover. | Savings view narrows the account surface while preserving balance mix, spending context, and sync health. |
+| Transactions | Budgets |
+|--------------|---------|
+| <img src="Assets/window-transactions.png" width="380" alt="VaultPeek window-first Transactions workspace with a search and filter bar (account, category, date, amount, status) over a dense, categorized transaction ledger with review status"> | <img src="Assets/window-budgets.png" width="380" alt="VaultPeek window-first Budgets workspace showing budgeted vs spent, over-budget status, spending-by-category donut, and a per-category detail pane"> |
+| Search, filter, and review the full transaction ledger with category badges and per-row review status. | Track budgeted vs spent by category and group, with over-budget and nearing-limit status and a per-category detail pane. |
 
-| Debt | Status |
-|------|--------|
-| <img src="Assets/dashboard-debt.png" width="380" alt="Dashboard debt filter showing debt-oriented accounts and selected credit account detail"> | <img src="Assets/dashboard-status.png" width="380" alt="Dashboard status filter showing linked item health, server sync state, synced item count, attention queue, and recovery actions"> |
-| Debt view emphasizes owed balances and high-utilization cards so risk is visible at a glance. | Status view acts as a compact recovery surface for server state, credentials, synced items, active local data path, stale sync, item login, prioritized attention prompts, reconnect, refresh, and settings handoff. |
+| Insights | Accounts |
+|----------|----------|
+| <img src="Assets/window-insights.png" width="380" alt="VaultPeek window-first Insights workspace with a local-only spending summary, net-worth trend chart, spending-by-category chart, and a weekly review prompt"> | <img src="Assets/window-accounts.png" width="380" alt="VaultPeek window-first Accounts workspace listing cash, savings, and credit accounts with balances and a selected-account detail pane showing utilization, 30-day changes, top categories, and recent activity"> |
+| Local-only spending summaries, trends, and a weekly review cadence — deterministic, with no raw transactions sent to any cloud model. | Browse cash, savings, and credit accounts with a master/detail pane for balances, utilization, 30-day changes, and recent activity. |
 
-Generate fresh dashboard screenshots with demo data:
+Generate fresh window-first screenshots from demo data:
 
 ```bash
-./Scripts/screenshots.sh
+swift run PlaidBar --demo --render-window-first <output-dir>
 ```
 
-The screenshot script launches VaultPeek locally, captures the sandbox preflight
-screen, each dashboard filter state, and current settings surfaces. It requires
-macOS Screen Recording and Accessibility permission for Terminal.
-The named synthetic stories behind these captures are documented in
-[Demo Scenarios](docs/demo-scenarios.md), including fixture intent, expected
-status/recovery state, and reduced-noise composition guidance.
-
-### Settings
-
-| Local Data | Accounts |
-|------------|----------|
-| <img src="Assets/settings-local-data.png" width="380" alt="Settings General tab showing local data storage path, reveal, copy, and reset controls"> | <img src="Assets/settings-accounts.png" width="380" alt="Settings Accounts tab showing linked institutions, item health, reconnect, remove, and add account controls"> |
-| Local storage is explicit: users can inspect the resolved path, reveal/copy it, and reset local VaultPeek data with confirmation copy. | Linked institutions are grouped with account counts, balances, item health, reconnect, and destructive removal gates. |
-
-| Notifications |
-|---------------|
-| <img src="Assets/settings-notifications.png" width="380" alt="Settings Notifications tab showing notification permission, transaction alert, threshold, and credit utilization controls"> |
-| Notification controls keep permission state, transaction thresholds, low-balance alerts, and credit-utilization warnings in one place. |
-
-| About |
-|-------|
-| <img src="Assets/settings-about.png" width="380" alt="Settings About tab showing VaultPeek version, update action, support links, privacy, security, roadmap, and release notes"> |
-| About doubles as a support hub with links to troubleshooting, privacy, security, roadmap, release notes, updates, and the project repository. |
+This renders the window-first workspaces headlessly (no Plaid, no server, no
+credentials) as `window-*.png` into `<output-dir>`. The named synthetic stories
+behind the demo data are documented in [Demo Scenarios](docs/demo-scenarios.md),
+including fixture intent and expected status/recovery state.
 
 ## Launch status (public beta)
 
