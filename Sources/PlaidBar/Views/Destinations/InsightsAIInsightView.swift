@@ -134,11 +134,11 @@ struct InsightsAIInsightView: View {
     private var phasePill: some View {
         HStack(spacing: Spacing.xxs) {
             Image(systemName: phaseGlyph)
-                .font(.caption2.weight(.semibold))
+                .windowFigureCaption()
                 .symbolEffect(.pulse, options: .repeating, isActive: phase.isWorking && !reduceMotion)
                 .accessibilityHidden(true)
             Text(phase.statusLabel)
-                .font(.caption2.weight(.semibold))
+                .windowFigureCaption()
                 .lineLimit(1)
         }
         .foregroundStyle(phaseTint)
@@ -344,11 +344,10 @@ struct InsightsEvidenceChipView: View {
                 .foregroundStyle(accent)
                 .accessibilityHidden(true)
             Text(chip.label)
-                .font(.subheadline)
+                .windowFigureCaption()
                 .foregroundStyle(.secondary)
             Text(chip.value)
-                .font(.subheadline.weight(.semibold))
-                .monospacedDigit()
+                .windowDataText()
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
