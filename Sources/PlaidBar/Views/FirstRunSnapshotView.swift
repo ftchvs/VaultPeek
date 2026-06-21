@@ -3,6 +3,7 @@ import SwiftUI
 
 struct FirstRunSnapshotView: View {
     let presentation: FirstRunSnapshotPresentation
+    let isMasked: Bool
     let onDismiss: () -> Void
 
     private var snapshot: FirstRunSnapshot {
@@ -16,18 +17,18 @@ struct FirstRunSnapshotView: View {
             LazyVGrid(columns: metricColumns, alignment: .leading, spacing: Spacing.sm) {
                 SnapshotMetricTile(
                     title: "Cash Available",
-                    value: Formatters.currency(snapshot.cashAvailable, format: .compact),
+                    value: PrivacyMaskPresentation.currency(snapshot.cashAvailable, format: .compact, isEnabled: isMasked),
                     detail: "\(snapshot.cashAccountCount) cash account\(snapshot.cashAccountCount == 1 ? "" : "s")",
                     icon: "banknote",
-                    accessibilityLabel: "Cash available \(Formatters.currency(snapshot.cashAvailable, format: .full)) across \(snapshot.cashAccountCount) cash account\(snapshot.cashAccountCount == 1 ? "" : "s")."
+                    accessibilityLabel: "Cash available \(PrivacyMaskPresentation.currency(snapshot.cashAvailable, format: .full, isEnabled: isMasked)) across \(snapshot.cashAccountCount) cash account\(snapshot.cashAccountCount == 1 ? "" : "s")."
                 )
 
                 SnapshotMetricTile(
                     title: "Net Worth",
-                    value: Formatters.currency(snapshot.netWorth, format: .compact),
+                    value: PrivacyMaskPresentation.currency(snapshot.netWorth, format: .compact, isEnabled: isMasked),
                     detail: "Local estimate",
                     icon: "sum",
-                    accessibilityLabel: "Net worth estimate \(Formatters.currency(snapshot.netWorth, format: .full))."
+                    accessibilityLabel: "Net worth estimate \(PrivacyMaskPresentation.currency(snapshot.netWorth, format: .full, isEnabled: isMasked))."
                 )
 
                 SnapshotMetricTile(
@@ -53,7 +54,7 @@ struct FirstRunSnapshotView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassSurface(.hero(SemanticColors.brand))
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(presentation.primaryAccessibilityLabel)
+        .accessibilityLabel(snapshot.maskedAccessibilitySummary(isMasked: isMasked))
     }
 
     private var header: some View {
@@ -112,7 +113,7 @@ struct FirstRunSnapshotView: View {
             } else {
                 VStack(spacing: Spacing.xs) {
                     ForEach(snapshot.largeTransactions) { transaction in
-                        SnapshotTransactionRow(transaction: transaction)
+                        SnapshotTransactionRow(transaction: transaction, isMasked: isMasked)
                     }
                 }
             }
@@ -129,7 +130,7 @@ struct FirstRunSnapshotView: View {
 
     private var monthToDateValue: String {
         guard let spend = snapshot.monthToDateSpend else { return "Not Available" }
-        return Formatters.currency(spend, format: .compact)
+        return PrivacyMaskPresentation.currency(spend, format: .compact, isEnabled: isMasked)
     }
 
     private var monthToDateDetail: String {
@@ -147,36 +148,44 @@ struct FirstRunSnapshotView: View {
         guard let spend = snapshot.monthToDateSpend else {
             return "\(monthToDateDetail). Month-to-date spend is not available."
         }
-        return "Month-to-date spend \(Formatters.currency(spend, format: .full))."
+        return "Month-to-date spend \(PrivacyMaskPresentation.currency(spend, format: .full, isEnabled: isMasked))."
     }
 
     private var creditValue: String {
         guard snapshot.hasCreditAccounts else { return "No Credit" }
         guard let utilization = snapshot.creditUtilization else { return "No Limit" }
-        return Formatters.percent(utilization, decimals: 0)
+        return PrivacyMaskPresentation.percent(utilization, decimals: 0, isEnabled: isMasked)
     }
 
     private var creditDetail: String {
         if snapshot.hasCreditAccounts, let utilization = snapshot.creditUtilization {
+            // Masked: drop the derived low/elevated/high status so the magnitude
+            // of utilization is not leaked through the qualitative band.
+            if isMasked { return "Utilization" }
             return "Utilization, \(creditUtilizationStatus(for: utilization))"
         }
         if snapshot.hasDebtAccounts {
-            return "\(Formatters.currency(snapshot.debtTotal, format: .compact)) balance"
+            return "\(PrivacyMaskPresentation.currency(snapshot.debtTotal, format: .compact, isEnabled: isMasked)) balance"
         }
         return "No credit balance"
     }
 
     private var creditIcon: String {
-        guard let utilization = snapshot.creditUtilization else { return "creditcard" }
+        // Masked: the utilization-derived icon encodes the magnitude band, so
+        // fall back to the neutral creditcard glyph rather than a status icon.
+        guard !isMasked, let utilization = snapshot.creditUtilization else { return "creditcard" }
         return SemanticColors.utilizationIcon(for: utilization)
     }
 
     private var creditAccessibilityLabel: String {
         if snapshot.hasCreditAccounts, let utilization = snapshot.creditUtilization {
+            if isMasked {
+                return "Credit utilization \(PrivacyMaskPresentation.percent(utilization, decimals: 0, isEnabled: true)). Debt balance \(PrivacyMaskPresentation.currency(snapshot.debtTotal, format: .full, isEnabled: true))."
+            }
             return "Credit utilization \(Formatters.percent(utilization, decimals: 0)), \(creditUtilizationStatus(for: utilization)). Debt balance \(Formatters.currency(snapshot.debtTotal, format: .full))."
         }
         if snapshot.hasDebtAccounts {
-            return "Credit utilization unavailable. Debt balance \(Formatters.currency(snapshot.debtTotal, format: .full))."
+            return "Credit utilization unavailable. Debt balance \(PrivacyMaskPresentation.currency(snapshot.debtTotal, format: .full, isEnabled: isMasked))."
         }
         return "No credit utilization or debt balance available."
     }
@@ -249,6 +258,7 @@ private struct SnapshotMetricTile: View {
 
 private struct SnapshotTransactionRow: View {
     let transaction: FirstRunSnapshot.LargeTransaction
+    let isMasked: Bool
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
@@ -271,7 +281,7 @@ private struct SnapshotTransactionRow: View {
 
             Spacer(minLength: Spacing.sm)
 
-            Text(Formatters.currency(transaction.amount, format: .compact))
+            Text(PrivacyMaskPresentation.currency(transaction.amount, format: .compact, isEnabled: isMasked))
                 .font(.caption.weight(.semibold))
                 .monospacedDigit()
                 .lineLimit(1)
@@ -282,7 +292,7 @@ private struct SnapshotTransactionRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.quinary, in: RoundedRectangle(cornerRadius: Radius.control))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(transaction.displayName), \(Formatters.currency(transaction.amount, format: .full)), \(Formatters.displayTransactionDate(transaction.date)).")
+        .accessibilityLabel("\(transaction.displayName), \(PrivacyMaskPresentation.currency(transaction.amount, format: .full, isEnabled: isMasked)), \(Formatters.displayTransactionDate(transaction.date)).")
     }
 }
 

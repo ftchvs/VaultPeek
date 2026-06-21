@@ -18,6 +18,26 @@ import PlaidBarCore
 ///
 /// Everything is best-effort and fallback-safe: any failure leaves the list on
 /// today's in-memory rendering (no regression).
+///
+/// ## Persist/clear ordering (clear-wins)
+/// `persistTransactionCache()` schedules its `replaceAll` off the main actor so it
+/// never delays the render. `clearTransactionCache()` wipes the same store on local
+/// reset / last-institution removal. Those two land on the store actor in an
+/// undefined order, so without a guard an in-flight persist of the *previous*
+/// (non-empty) transactions could commit *after* the clear — repopulating
+/// `transaction-cache-v1.store` with removed-institution rows that the cold-start
+/// paged read then surfaces.
+///
+/// This cache routes through the *same* ``ReadModelCacheClearGate`` the read-model
+/// cache uses (see `AppState+ReadModelCache.swift`), so both caches clear/persist
+/// from the same two seams in the same program order under one monotonic epoch.
+/// `persistTransactionCache()` captures `currentEpoch` synchronously on the main
+/// actor as it schedules, and re-checks `mayCommit(capturedEpoch:)` (still on the
+/// main actor) immediately before committing; `clearTransactionCache()` calls
+/// `beginClear()` unconditionally as its first line (even when no store is open).
+/// Because the epoch bump and the capture/recheck both run synchronously on the
+/// main actor, a clear requested after a persist in program order is always
+/// observed by that persist — so a clear can never be overwritten by a stale write.
 extension AppState {
     nonisolated static let transactionCacheLogger = Logger(
         subsystem: "com.ftchvs.PlaidBar",
@@ -68,8 +88,18 @@ extension AppState {
         else { return }
 
         let snapshot = transactions
+        // Capture the clear epoch synchronously on the main actor as this write is
+        // scheduled. The replace below only commits if no clear has been requested
+        // since — so a clear (local reset / last institution removed) can never be
+        // overwritten by this in-flight write. Shared with the read-model cache via
+        // `ReadModelCacheClearGate`.
+        let gate = ReadModelCacheClearGate.shared
+        let capturedEpoch = gate.currentEpoch
         Task.detached {
             do {
+                // Re-check on the main actor right before committing: if a clear
+                // raced ahead, drop this stale write rather than resurrect rows.
+                guard await gate.mayCommit(capturedEpoch: capturedEpoch) else { return }
                 try await store.replaceAll(cacheKey: cacheKey, transactions: snapshot)
             } catch {
                 AppState.transactionCacheLogger.error(
@@ -93,7 +123,16 @@ extension AppState {
 
     /// Wipes the disposable per-transaction cache alongside the other caches on
     /// local reset, so a post-reset list never pages pre-reset transactions.
+    ///
+    /// Bumps the shared clear epoch synchronously *first* (via the same
+    /// ``ReadModelCacheClearGate`` the read-model cache uses) so any persist already
+    /// scheduled in program order observes the clear and drops its `replaceAll` —
+    /// the clear must win over an in-flight persist of the prior (non-empty)
+    /// transactions. The epoch is bumped unconditionally (even when no store is
+    /// open) so a clear requested while the store is briefly absent still
+    /// invalidates a concurrently scheduled write. Mirrors `clearReadModelCache()`.
     func clearTransactionCache() async {
+        ReadModelCacheClearGate.shared.beginClear()
         guard let store = transactionCacheStore else { return }
         try? await store.clearAll()
         transactionCacheStore = nil
