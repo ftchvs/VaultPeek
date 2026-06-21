@@ -14,6 +14,11 @@ public struct GoalsSummary: Sendable, Equatable {
     public let totalSaved: Double
     /// Sum of every goal's target amount.
     public let totalTarget: Double
+    /// Sum of every goal's *per-goal-clamped* remaining amount
+    /// (`Σ max(target − contributed, 0)`). Unlike `totalTarget − totalSaved`,
+    /// an over-funded goal contributes `0` rather than a negative that would
+    /// cancel another goal's genuine shortfall.
+    public let totalRemaining: Double
     /// Goals that have reached their target.
     public let fundedCount: Int
     /// Goals behind their target-date pace (excludes funded and no-deadline goals).
@@ -23,12 +28,14 @@ public struct GoalsSummary: Sendable, Equatable {
         goalCount: Int,
         totalSaved: Double,
         totalTarget: Double,
+        totalRemaining: Double,
         fundedCount: Int,
         behindCount: Int
     ) {
         self.goalCount = goalCount
         self.totalSaved = totalSaved
         self.totalTarget = totalTarget
+        self.totalRemaining = totalRemaining
         self.fundedCount = fundedCount
         self.behindCount = behindCount
     }
@@ -53,12 +60,14 @@ public struct GoalsSummary: Sendable, Equatable {
     public static func make(from goals: [Goal], asOf now: Date = Date()) -> GoalsSummary {
         var totalSaved = 0.0
         var totalTarget = 0.0
+        var totalRemaining = 0.0
         var fundedCount = 0
         var behindCount = 0
 
         for goal in goals {
             totalSaved += goal.contributedAmount
             totalTarget += goal.targetAmount
+            totalRemaining += goal.remainingAmount
             if goal.isComplete {
                 fundedCount += 1
             } else if goal.pace(asOf: now) == .behind {
@@ -70,6 +79,7 @@ public struct GoalsSummary: Sendable, Equatable {
             goalCount: goals.count,
             totalSaved: totalSaved,
             totalTarget: totalTarget,
+            totalRemaining: totalRemaining,
             fundedCount: fundedCount,
             behindCount: behindCount
         )
