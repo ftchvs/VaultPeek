@@ -475,9 +475,7 @@ private struct GoalDetailPane: View {
 
             HStack(alignment: .firstTextBaseline) {
                 Text("\(percent(goal.percentComplete)) funded")
-                    .windowBodyText()
-                    .fontWeight(.semibold)
-                    .monospacedDigit()
+                    .windowDataText()
                 Spacer()
                 paceBadge
             }
@@ -520,9 +518,7 @@ private struct GoalDetailPane: View {
                 .windowSupportingText()
             Spacer(minLength: WindowMetrics.sm)
             Text(value)
-                .windowBodyText()
-                .fontWeight(.semibold)
-                .monospacedDigit()
+                .windowDataText()
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(label): \(value)")

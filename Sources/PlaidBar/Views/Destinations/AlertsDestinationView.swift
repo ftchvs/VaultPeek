@@ -462,7 +462,7 @@ private struct AlertDetailView: View {
                 AlertSeverityBadge(severity: entry.severity, tint: tint)
                 if entry.isAcknowledged {
                     Label("Acknowledged", systemImage: "bell.slash")
-                        .font(.caption.weight(.semibold))
+                        .windowFigureCaption()
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
@@ -538,7 +538,7 @@ private struct AlertSeverityBadge: View {
                 .font(.caption.weight(.semibold))
                 .accessibilityHidden(true)
             Text(severity.statusLabel)
-                .font(.caption.weight(.semibold))
+                .windowFigureCaption()
                 .lineLimit(1)
         }
         .foregroundStyle(tint)
