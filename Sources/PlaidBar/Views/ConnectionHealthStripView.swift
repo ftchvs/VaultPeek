@@ -10,7 +10,10 @@ struct ConnectionHealthStripView: View {
     @Environment(AppState.self) private var appState
 
     private var result: ConnectionHealthStrip.Result {
-        ConnectionHealthStrip.evaluate(appState.itemStatuses)
+        // Withhold exact connection counts under Privacy Mask / App Lock — the
+        // status word + reconnect affordance stay, only the number is masked
+        // (matches the sidebar badge gating; AND-483 / codex #619).
+        ConnectionHealthStrip.evaluate(appState.itemStatuses, isMasked: appState.shouldMaskFinancialValues)
     }
 
     var body: some View {
