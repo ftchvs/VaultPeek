@@ -251,9 +251,7 @@ private struct DashboardAccountRowButton: View {
                 Spacer(minLength: WindowMetrics.sm)
 
                 Text(amountText)
-                    .windowBodyText()
-                    .fontWeight(.semibold)
-                    .monospacedDigit()
+                    .windowDataText()
                     .rollingTabularNumber(amountText, reduceMotion: reduceMotion)
                     .foregroundStyle(AppearanceTextColors.primary)
                     .lineLimit(1)
