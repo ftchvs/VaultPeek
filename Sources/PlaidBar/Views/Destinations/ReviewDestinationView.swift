@@ -103,8 +103,7 @@ struct ReviewDestinationView: View {
                     // (ACCESSIBILITY.md). Hidden at 0 and under Privacy Mask.
                     if let unreviewedBadgeText {
                         Text("\(snapshot.totalCount)")
-                            .font(.headline.weight(.semibold))
-                            .monospacedDigit()
+                            .windowDataText()
                             .foregroundStyle(SemanticColors.brand)
                             .padding(.horizontal, WindowMetrics.sm)
                             .padding(.vertical, 4)
@@ -301,7 +300,7 @@ struct ReviewDestinationView: View {
                             .fontWeight(.semibold)
                         if reason.isHighPriority {
                             Text("High priority")
-                                .font(.caption.weight(.semibold))
+                                .windowFigureCaption()
                                 .foregroundStyle(SemanticColors.warning)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
