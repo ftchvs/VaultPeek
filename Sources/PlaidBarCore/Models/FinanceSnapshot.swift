@@ -169,6 +169,29 @@ public struct FinanceSnapshot: Codable, Sendable, Equatable {
         )
     }
 
+    /// Returns the value-free, `isMasked == true` form of this snapshot: every
+    /// figure zeroed, every list emptied, only the timestamp and currency code
+    /// preserved. Mirrors the inline masked construction in
+    /// ``FinanceSnapshotBuilder`` so the app and the widget extension can re-redact
+    /// an already-persisted snapshot the instant Privacy Mask is enabled (from the
+    /// Control Center control / Focus filter) instead of leaking real balances
+    /// until the app is next foregrounded.
+    ///
+    /// Idempotent: calling `masked()` on an already-masked snapshot returns an
+    /// equivalent value-free snapshot.
+    public func masked() -> FinanceSnapshot {
+        FinanceSnapshot(
+            safeToSpend: 0,
+            totalBalance: 0,
+            accountBalances: [],
+            nextRecurringBills: [],
+            creditUtilization: nil,
+            isoCurrencyCode: isoCurrencyCode,
+            generatedAt: generatedAt,
+            isMasked: true
+        )
+    }
+
     /// True when the snapshot carries no usable figures. Used to drive a
     /// setup/unavailable intent response. A credit-only user (paid-off cards, no
     /// cash accounts, no bills) still has a usable `creditUtilization`, so a

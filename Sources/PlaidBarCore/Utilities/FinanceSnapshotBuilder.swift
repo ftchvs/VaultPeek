@@ -89,7 +89,9 @@ public enum FinanceSnapshotBuilder {
         // Defense in depth: a masked snapshot must be value-free *on disk*, not
         // merely withheld at read time. If anyone bypasses the read-time gate
         // (`FinanceIntentQueries`) the file itself carries no real figures — only
-        // the flag, timestamp, and currency code survive.
+        // the flag, timestamp, and currency code survive. Reuses
+        // ``FinanceSnapshot/masked()`` so this builder and the app/extension
+        // re-redaction path share one value-free shape.
         if isMasked {
             return FinanceSnapshot(
                 safeToSpend: 0,
@@ -99,8 +101,8 @@ public enum FinanceSnapshotBuilder {
                 creditUtilization: nil,
                 isoCurrencyCode: currencyCode,
                 generatedAt: generatedAt,
-                isMasked: true
-            )
+                isMasked: false
+            ).masked()
         }
 
         return FinanceSnapshot(
