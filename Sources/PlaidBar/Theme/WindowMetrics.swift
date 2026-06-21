@@ -91,13 +91,11 @@ enum WindowMetrics {
 
 // The window type ramp is taller than the popover's caption-scale roles: a
 // `largeTitle` page identity, `title2`/`title3` section heads, and a dedicated
-// hero-metric role for the dashboard's big figures. Each role is built on a
-// semantic SwiftUI text style so it scales with Dynamic Type automatically
-// (AND-515), except the hero-metric figure, which scales its fixed base point
-// size via `@ScaledMetric(relativeTo:)` exactly like ``DisplayBalance`` so the
-// big number grows with the user's text-size setting instead of staying pinned.
-// Numeric roles apply `.monospacedDigit()` on the font value so tabular columns
-// stay aligned at every Dynamic Type size and under Liquid Glass.
+// hero-metric role for the dashboard's big figures. The text-style roles are
+// built on semantic SwiftUI text styles; the hero-metric figure uses a fixed
+// point size because macOS has no Dynamic Type. Numeric roles apply
+// `.monospacedDigit()` on the font value so tabular columns stay aligned under
+// Liquid Glass.
 
 /// Window page identity — the workspace/section title at desk distance.
 /// `largeTitle`, bold. Used for a canvas's lead heading where one is shown.
@@ -142,18 +140,35 @@ struct WindowSupportingText: ViewModifier {
 }
 
 /// The dashboard's hero metric figure — the big tabular number in a metric tile
-/// (net worth, safe-to-spend, this-month spend). Scales its 34pt base with the
-/// user's text-size / accessibility setting via `@ScaledMetric(relativeTo:
-/// .largeTitle)` (a plain `.system(size:)` font would not), with tabular digits
-/// so multiple tiles' figures align, and the same `.xSmall ... .accessibility3`
-/// clamp as ``DisplayBalance`` to stop before the layout-breaking AX4/AX5 steps.
+/// (net worth, safe-to-spend, this-month spend). A fixed 38pt point size because
+/// macOS has no Dynamic Type (*HIG › Typography › macOS*), with tabular digits so
+/// multiple tiles' figures align in a column.
 struct WindowHeroMetric: ViewModifier {
-    @ScaledMetric(relativeTo: .largeTitle) private var size: CGFloat = 38
+    private let size: CGFloat = 38
 
     func body(content: Content) -> some View {
-        content
-            .font(.system(size: size, weight: .semibold, design: .default).monospacedDigit())
-            .dynamicTypeSize(.xSmall ... .accessibility3)
+        content.font(.system(size: size, weight: .semibold, design: .default).monospacedDigit())
+    }
+}
+
+/// Window-scale tabular figure / data role (DS-4) — the window counterpart to the
+/// popover's ``DataText``. `.body`, semibold, with `monospacedDigit()` baked into
+/// the font value so any numeric column rendered through this role gets tabular
+/// alignment by construction and can't forget it. No `@ScaledMetric` /
+/// `.dynamicTypeSize` (macOS has no Dynamic Type — *HIG › Typography › macOS*),
+/// and no manual `.tracking` (the system tracks per size automatically).
+struct WindowDataText: ViewModifier {
+    func body(content: Content) -> some View {
+        content.font(.body.weight(.semibold).monospacedDigit())
+    }
+}
+
+/// Window micro / caption role — column headers and table sub-labels at desk
+/// distance. `.caption2`, medium weight: a quiet figure-supporting label one step
+/// below ``WindowSupportingText``.
+struct WindowFigureCaption: ViewModifier {
+    func body(content: Content) -> some View {
+        content.font(.caption2.weight(.medium))
     }
 }
 
@@ -175,4 +190,10 @@ extension View {
 
     /// The dashboard hero metric figure (scaled, tabular). See ``WindowHeroMetric``.
     func windowHeroMetric() -> some View { modifier(WindowHeroMetric()) }
+
+    /// Window-scale tabular figure / data role: body, semibold, tabular digits baked in (DS-4).
+    func windowDataText() -> some View { modifier(WindowDataText()) }
+
+    /// Window micro / caption role (`caption2`, medium): column headers & figure sub-labels.
+    func windowFigureCaption() -> some View { modifier(WindowFigureCaption()) }
 }
