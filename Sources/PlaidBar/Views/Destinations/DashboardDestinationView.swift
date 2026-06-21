@@ -170,7 +170,7 @@ struct DashboardDestinationView: View {
 
             DashboardRecurringCard(onOpen: { openRoute(.planning(section: .recurring)) })
 
-            CategoryDashboardCard()
+            CategoryDashboardCard(inWindow: true)
 
             if let presentation = appState.firstRunSnapshotPresentation {
                 FirstRunSnapshotView(
