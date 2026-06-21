@@ -1252,6 +1252,13 @@ final class AppState {
         itemStatuses.filter { $0.status == .error }.count
     }
 
+    /// Linked items in a transient, non-actionable provider outage. Degraded but
+    /// self-healing — surfaced as a warning so the status cluster shows, never as
+    /// a blocking reconnect prompt.
+    var providerOutageItemCount: Int {
+        itemStatuses.filter { $0.status.isProviderOutage }.count
+    }
+
     /// Per-number completeness badge (AND-489): nil when data is complete and
     /// fresh, otherwise a `.stale` or `.partial` verdict mounted under derived
     /// numbers (net worth, utilization, cashflow, safe-to-spend).
@@ -1345,6 +1352,7 @@ final class AppState {
             syncedItemCount: serverSyncedItemCount ?? 0,
             needsLoginItemCount: needsLoginItemCount,
             erroredItemCount: erroredItemCount,
+            providerOutageItemCount: providerOutageItemCount,
             isSyncStale: isSyncStale,
             lastSyncRelative: lastSyncRelative,
             errorMessage: error,
@@ -4275,6 +4283,14 @@ final class AppState {
         guard !matcher.isEmpty else { return }
         let resolvedTransfer = markTransfer ?? (item.reasonCodes.contains(.possibleTransfer) ? true : item.isTransfer)
         pushReviewUndoState()
+        // Re-categorization replaces, not stacks: drop any existing rule that
+        // matches the SAME merchant so the user's newer choice wins. Without this
+        // the resolver would keep applying an older same-merchant rule (it resolves
+        // by most-recent `createdAt`, but a stale duplicate is still wasted state
+        // and surfaces as a phantom second rule).
+        transactionRules.removeAll {
+            $0.matchMerchantContains?.compare(matcher, options: .caseInsensitive) == .orderedSame
+        }
         transactionRules.append(TransactionRule(
             matchMerchantContains: matcher,
             matchOriginalNameContains: nil,

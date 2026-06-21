@@ -18,6 +18,28 @@ struct GoalEditorInputTests {
         #expect(GoalEditorInput.parseAmount("abc") == nil)
     }
 
+    @Test("parseAmount handles European grouping/decimal, US cases unchanged")
+    func parseAmountLocaleAware() {
+        // European: '.' grouping, ',' decimal — last separator wins.
+        #expect(GoalEditorInput.parseAmount("1.250,50") == 1250.50)
+        // Existing US cases must still pass.
+        #expect(GoalEditorInput.parseAmount("1,250.50") == 1250.50)
+        #expect(GoalEditorInput.parseAmount("5,000") == 5000)
+        #expect(GoalEditorInput.parseAmount("1250") == 1250)
+    }
+
+    @Test("validate accepts a European-formatted target amount")
+    func validateEuropeanTarget() {
+        let outcome = GoalEditorInput.validate(
+            nameText: "Fund",
+            targetText: "1.250,50",
+            contributedText: "",
+            targetDate: nil,
+            linkedCategory: nil
+        )
+        #expect(outcome.draft?.targetAmount == 1250.50)
+    }
+
     // MARK: - Name
 
     @Test("A blank name is invalid")

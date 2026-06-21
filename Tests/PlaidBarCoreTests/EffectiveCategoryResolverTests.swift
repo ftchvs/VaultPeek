@@ -136,6 +136,33 @@ struct EffectiveCategoryResolverTests {
         #expect(resolution.category == .foodAndDrink)
     }
 
+    @Test("The most recently created same-merchant rule wins over an older one")
+    func newestSameMerchantRuleWins() {
+        // Re-categorization: the user first filed Acme → shopping, then later
+        // re-filed Acme → foodAndDrink. The newer rule (by createdAt) must win,
+        // regardless of array order — the bug resolved by array index, so the
+        // stale earliest rule kept applying and the newer choice looked dead.
+        let transaction = tx(id: "recat", category: nil, merchantName: "Acme Corp")
+        let older = TransactionRule(
+            matchMerchantContains: "Acme",
+            category: .shopping,
+            createdAt: Date(timeIntervalSince1970: 1_000)
+        )
+        let newer = TransactionRule(
+            matchMerchantContains: "Acme",
+            category: .foodAndDrink,
+            createdAt: Date(timeIntervalSince1970: 2_000)
+        )
+
+        // Older first in the array (the natural append order) — newer must still win.
+        let resolution = EffectiveCategoryResolver.resolve(
+            transaction: transaction,
+            rules: [older, newer]
+        )
+
+        #expect(resolution.category == .foodAndDrink)
+    }
+
     // MARK: - Override vs rule precedence
 
     @Test("A user category override wins over a matching rule's category")

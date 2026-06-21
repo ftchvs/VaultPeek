@@ -135,7 +135,9 @@ struct GoalsDestinationView: View {
     }
 
     private func remainingDetail(_ summary: GoalsSummary) -> String {
-        let remaining = max(summary.totalTarget - summary.totalSaved, 0)
+        // Per-goal-clamped remaining — an over-funded goal can't mask another
+        // goal's shortfall (matches each row's `Goal.remainingAmount`).
+        let remaining = summary.totalRemaining
         return "\(currency(remaining)) remaining"
     }
 
