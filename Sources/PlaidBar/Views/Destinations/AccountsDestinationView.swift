@@ -358,7 +358,7 @@ private struct AccountListRow: View {
         Button(action: onSelect) {
             HStack(spacing: WindowMetrics.sm) {
                 Image(systemName: AccountPresentation.iconName(for: account))
-                    .font(.system(size: 18, weight: .medium))
+                    .font(.title3.weight(.medium))
                     .foregroundStyle(.secondary)
                     .frame(width: 40, height: 40)
                     .background(.quinary, in: RoundedRectangle(cornerRadius: Radius.control))
