@@ -1721,6 +1721,46 @@ final class AppState {
         RecurringSummary.estimatedMonthlyTotal(from: recurringTransactions, asOf: Date())
     }
 
+    /// The shared, contextual recurring **empty/unavailable** state — the single
+    /// source the window-first Dashboard and Planning recurring cards both render
+    /// when nothing is detected, so the two surfaces stay identical. The Core
+    /// engine (``SecondaryContentUnavailableState/recurring(isDemoMode:isInitialLoad:serverConnected:linkedItemCount:accountCount:syncedItemCount:transactionCount:errorMessage:)``)
+    /// decides the contextual copy + next-step action from the live load signals;
+    /// the views never branch on the inputs themselves.
+    var recurringUnavailableState: SecondaryContentUnavailableState {
+        SecondaryContentUnavailableState.recurring(
+            isDemoMode: usesDemoConnectionPresentation,
+            isInitialLoad: loadState(for: .recurring).isInitialLoad,
+            serverConnected: serverConnected,
+            linkedItemCount: statusItemCount,
+            accountCount: accounts.count,
+            syncedItemCount: serverSyncedItemCount ?? 0,
+            transactionCount: transactions.count,
+            errorMessage: error
+        )
+    }
+
+    /// Dispatches the recovery action carried by ``recurringUnavailableState`` to
+    /// the matching `AppState` method, mirroring the established mapping used by the
+    /// accounts empty state in Settings so behavior stays consistent. Keeps the
+    /// Dashboard and Planning recurring cards' action wiring identical.
+    func performRecurringUnavailableAction(_ action: SecondaryContentUnavailableAction) {
+        switch action {
+        case .checkServer:
+            Task { await checkServerConnection() }
+        case .refreshAccounts:
+            Task { await refreshAccounts() }
+        case .syncTransactions:
+            Task { await syncTransactions() }
+        case .refresh:
+            Task { await refreshDashboard() }
+        case .addAccount:
+            navigationModel.go(to: .accounts)
+        case .clearFilters, .showWiderPeriod:
+            break
+        }
+    }
+
     var localAIAvailability: LocalAIAvailability {
         if let probeAvailability = localAIProbeAvailability {
             return probeAvailability

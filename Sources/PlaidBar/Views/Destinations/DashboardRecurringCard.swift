@@ -9,8 +9,10 @@ import SwiftUI
 /// the streams; this view never detects). It is meant to sit *inside* a
 /// ``WindowSection`` (which supplies the title + card chrome), so unlike the
 /// popover's self-carding section it renders only the rows — and, when nothing is
-/// detected, a quiet empty line instead of self-hiding, so the dashboard grid
-/// keeps a uniform card rather than a hole.
+/// detected, the shared contextual, actionable empty state (the same
+/// ``SecondaryContentUnavailableState`` recurring engine + action dispatch
+/// Planning uses, sourced from `AppState`) instead of self-hiding, so the
+/// dashboard grid keeps a uniform card rather than a hole and offers a next step.
 ///
 /// Honors Privacy Mask the same way the re-hosted rows do (amounts and the
 /// monthly total run through `PrivacyMaskPresentation`). The "open" affordance
@@ -34,12 +36,11 @@ struct DashboardRecurringCard: View {
             WindowSection("Recurring", systemImage: "repeat") {
                 EmptyView()
             } content: {
-                Label("No recurring charges detected yet.", systemImage: "repeat")
-                    .windowBodyText()
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                SecondaryUnavailableView(presentation: appState.recurringUnavailableState) {
+                    appState.performRecurringUnavailableAction(appState.recurringUnavailableState.action)
+                }
             }
-            .accessibilityElement(children: .combine)
+            .accessibilityElement(children: .contain)
         } else {
             RecurringObligationsSection(
                 presentation: presentation,

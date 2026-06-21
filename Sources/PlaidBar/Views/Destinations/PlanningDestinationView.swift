@@ -256,8 +256,11 @@ struct PlanningDestinationView: View {
     /// self-carding ``RecurringObligationsSection`` directly under the column banner
     /// (no card-in-card), exactly as the Dashboard does. The "open" affordance is
     /// dropped (`onOpenSubscriptions: nil`) because this *is* the recurring surface.
-    /// When nothing is detected it shows a quiet uniform ``WindowSection`` empty
-    /// card rather than self-hiding, so the grid keeps an even rhythm.
+    /// When nothing is detected it shows the shared contextual, actionable empty
+    /// state (the same ``SecondaryContentUnavailableState`` recurring engine +
+    /// action dispatch the Dashboard uses, sourced from `AppState`) in a uniform
+    /// ``WindowSection`` card rather than self-hiding, so the grid keeps an even
+    /// rhythm and both surfaces match.
     @ViewBuilder
     private var recurringCard: some View {
         let presentation = RecurringObligationsPresentation.make(
@@ -268,12 +271,11 @@ struct PlanningDestinationView: View {
             WindowSection("Recurring", systemImage: "repeat") {
                 EmptyView()
             } content: {
-                Label("No recurring charges detected yet.", systemImage: "repeat")
-                    .windowBodyText()
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                SecondaryUnavailableView(presentation: appState.recurringUnavailableState) {
+                    appState.performRecurringUnavailableAction(appState.recurringUnavailableState.action)
+                }
             }
-            .accessibilityElement(children: .combine)
+            .accessibilityElement(children: .contain)
         } else {
             RecurringObligationsSection(
                 presentation: presentation,
