@@ -363,7 +363,12 @@ private struct WealthBalanceMixSection: View {
                 title: segment.title,
                 value: segment.value,
                 share: segment.share,
-                tint: tint(for: segment.id)
+                tint: tint(for: segment.id),
+                accessibilityValueText: PrivacyMaskPresentation.currency(
+                    segment.value,
+                    format: .full,
+                    isEnabled: privacyMaskEnabled
+                )
             )
         }
     }
