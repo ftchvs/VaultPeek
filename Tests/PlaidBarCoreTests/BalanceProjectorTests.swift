@@ -169,6 +169,30 @@ struct BalanceProjectorTests {
         #expect(projection.projectedLow.balance == 800)
     }
 
+    @Test("Obligation due exactly on the anchor day is applied to the seed (bug-hunt R4)")
+    func obligationDueExactlyTodayHitsAnchor() {
+        // An annual obligation due exactly on asOf (day index 0) must be folded
+        // into the anchor seed — not dropped — so the projected line agrees with
+        // SafeToSpendCalculator's inclusive (nextDay >= referenceDay) window.
+        let anchor = BalanceSnapshot(date: Self.asOf, balance: 1_000)
+        let dueToday = Self.recurring(
+            "Today", amount: 200, frequency: .annual, nextExpectedDate: "2026-06-01", category: .billsAndUtilities
+        )
+        let projection = BalanceProjector.project(
+            anchor: anchor,
+            recurring: [dueToday],
+            asOf: Self.asOf, // 2026-06-01
+            horizonDays: 30,
+            calendar: Self.calendar
+        )!
+        // The very first (anchor) point already reflects the day-0 charge.
+        #expect(projection.series.first?.balance == 800)
+        // The annual stream recurs +365 days, past the horizon, so the line is
+        // flat at the post-charge balance — every snapshot is 800.
+        #expect(projection.projectedLow.balance == 800)
+        #expect(projection.series.allSatisfy { $0.balance == 800 })
+    }
+
     @Test("Current anchor keeps the horizon + 1 series length")
     func currentAnchorKeepsLength() {
         let anchor = BalanceSnapshot(date: Self.asOf, balance: 1_000)

@@ -74,6 +74,7 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
         syncedItemCount: Int,
         needsLoginItemCount: Int,
         erroredItemCount: Int,
+        providerOutageItemCount: Int = 0,
         isSyncStale: Bool,
         lastSyncRelative: String?,
         errorMessage: String?,
@@ -166,6 +167,24 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
                 ),
                 detail: "One or more institutions need Plaid Link update mode for login, consent, or account selection.",
                 primaryAction: .reconnect
+            )
+        }
+
+        // A provider outage is degraded but non-actionable: the connection
+        // recovers on its own once Plaid/the institution is back. It must surface
+        // as a warning (so the status cluster shows) rather than silently reading
+        // as healthy, but it never blocks or asks the user to reconnect.
+        if providerOutageItemCount > 0 {
+            return DashboardStatusReadiness(
+                level: .warning,
+                title: itemRecoveryTitle(
+                    count: providerOutageItemCount,
+                    singularAction: "temporarily unavailable",
+                    pluralAction: "temporarily unavailable"
+                ),
+                detail: "Your bank or Plaid is temporarily unavailable. VaultPeek will retry automatically — no action needed.",
+                primaryAction: .refresh,
+                primaryActionTitle: "Refresh Now"
             )
         }
 

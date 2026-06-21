@@ -136,15 +136,26 @@ public enum EffectiveCategoryResolver {
     ///   `false`, which would otherwise short-circuit and suppress both rule-based
     ///   and transfer-default exclusion.)
     ///
-    /// When several rules match, the earliest in `rules` order with a value for a
-    /// given field wins (callers keep rules in their intended priority order).
+    /// When several rules match, the **most recently created** matching rule (by
+    /// `createdAt`, descending) with a value for a given field wins. A user's newer
+    /// same-merchant rule must take effect over an older one; resolving by array
+    /// index instead silently kept the earliest rule and made re-categorization
+    /// look dead.
     public static func resolve(
         transaction: TransactionDTO,
         metadata: TransactionReviewMetadata? = nil,
         rules: [TransactionRule] = [],
         nlCategorizer: NLMerchantCategorizer = NLMerchantCategorizer()
     ) -> Resolution {
-        let matchedRules = rules.filter { $0.matches(transaction) }
+        // Newest-first so `firstRuleValue` picks the most recently created matching
+        // rule's value for each field. `id` is the deterministic tiebreaker for
+        // equal timestamps (e.g. fixtures with a shared `createdAt`).
+        let matchedRules = rules
+            .filter { $0.matches(transaction) }
+            .sorted {
+                if $0.createdAt != $1.createdAt { return $0.createdAt > $1.createdAt }
+                return $0.id.uuidString > $1.id.uuidString
+            }
 
         // Budget category: user override wins outright; otherwise a matching rule's
         // category is an explicit user intent; otherwise a *confident* Plaid
@@ -220,7 +231,8 @@ public enum EffectiveCategoryResolver {
         category == .transfer || category == .transferOut
     }
 
-    /// The first non-nil value of `keyPath` across the matched rules, in order.
+    /// The first non-nil value of `keyPath` across the matched rules, in the
+    /// order they are passed (callers pre-sort newest-first by `createdAt`).
     private static func firstRuleValue<Value>(
         _ rules: [TransactionRule],
         _ keyPath: KeyPath<TransactionRule, Value?>
