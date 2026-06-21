@@ -2,17 +2,11 @@ import SwiftUI
 
 // MARK: - Type Scale Notes (AND-515)
 //
-// Dynamic Type: the two display sizes (`DisplayBalance`, `HeroBalance`) scale
-// their fixed base point size (30pt / 28pt) with the user's text-size /
-// accessibility setting via `@ScaledMetric(relativeTo:)` — a plain
-// `.system(size:)` font does NOT scale, so the metric is what makes the hero
-// figure grow instead of staying pinned. They also opt into
-// `.dynamicTypeSize(.xSmall ... .accessibility3)` to cap before the
-// layout-breaking AX4/AX5 steps. Every other modifier here is built on a semantic text style
-// (`.caption`, `.callout`, `.caption2`) and therefore scales with Dynamic Type
-// automatically. `monospacedDigit()` is applied on the font value (not as a
-// trailing modifier) on numeric surfaces so tabular column alignment is
-// preserved at every Dynamic Type size and under the Liquid Glass material.
+// The two display sizes (`DisplayBalance`, `HeroBalance`) use fixed
+// `.system(size:)` constants (30pt / 28pt) because macOS has no Dynamic Type
+// (*HIG › Typography › macOS*); `monospacedDigit()` is applied on the font value
+// for tabular alignment. Every other modifier here is built on a semantic text
+// style (`.caption`, `.callout`, `.caption2`).
 //
 // Never-color-alone (ACCESSIBILITY.md): this file controls weight, size, and
 // tabular alignment only — it never encodes balance, risk, utilization, sync,
@@ -45,31 +39,25 @@ struct RollingTabularNumber: ViewModifier {
 
 /// Level 0 — Display: the one hero number per surface (net worth).
 /// Standard SF Pro (not rounded) with tabular digits: instrument, not toy.
-/// Dynamic Type (AND-515): `@ScaledMetric(relativeTo: .largeTitle)` scales the
-/// 30pt base with the user's text-size / accessibility setting (a plain
-/// `.system(size:)` font would stay fixed), while `.monospacedDigit()` keeps the
-/// figures column-aligned at every size. `.dynamicTypeSize(.xSmall ...
-/// .accessibility3)` clamps before the layout-breaking AX4/AX5 steps.
+/// A fixed 30pt `.system(size:)` constant because macOS has no Dynamic Type
+/// (*HIG › Typography › macOS*); `.monospacedDigit()` keeps the figures
+/// column-aligned.
 struct DisplayBalance: ViewModifier {
-    @ScaledMetric(relativeTo: .largeTitle) private var size: CGFloat = 30
+    private let size: CGFloat = 30
 
     func body(content: Content) -> some View {
-        content
-            .font(.system(size: size, weight: .semibold, design: .default).monospacedDigit())
-            .dynamicTypeSize(.xSmall ... .accessibility3)
+        content.font(.system(size: size, weight: .semibold, design: .default).monospacedDigit())
     }
 }
 
 /// Level 1 — Hero: legacy 28pt rounded balance header (detail surfaces).
-/// Dynamic Type (AND-515): `@ScaledMetric(relativeTo: .largeTitle)` scales the
-/// 28pt base with text-size; tabular digits preserved; same accessibility clamp.
+/// A fixed 28pt `.system(size:)` constant because macOS has no Dynamic Type
+/// (*HIG › Typography › macOS*); tabular digits preserved on the font value.
 struct HeroBalance: ViewModifier {
-    @ScaledMetric(relativeTo: .largeTitle) private var size: CGFloat = 28
+    private let size: CGFloat = 28
 
     func body(content: Content) -> some View {
-        content
-            .font(.system(size: size, weight: .bold, design: .rounded).monospacedDigit())
-            .dynamicTypeSize(.xSmall ... .accessibility3)
+        content.font(.system(size: size, weight: .bold, design: .rounded).monospacedDigit())
     }
 }
 
