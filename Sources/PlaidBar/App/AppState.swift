@@ -1927,6 +1927,14 @@ final class AppState {
     func refreshFoundationModelsCategorySuggestions() async {
         guard foundationModelsTierState.isAvailable else { return }
         let categorizer = merchantCategorizer
+        // Evict cache entries whose transactions have left the Review Inbox
+        // (categorized/approved/ignored/dropped). The cache is otherwise
+        // insert-only, so without this prune it grows with session-cumulative
+        // throughput rather than live inbox size (unbounded memory creep).
+        // `foundationModelsCategorySuggestion(for:)` only reads ids currently
+        // in the inbox, so dropping absent ids removes nothing on display.
+        let liveIDs = Set(transactionReviewInboxSnapshot.items.map(\.id))
+        _foundationModelsCategorySuggestions = _foundationModelsCategorySuggestions.filter { liveIDs.contains($0.key) }
         // Only items still flagged as needing a category benefit from a
         // suggestion; a row the user already categorized must not be second-
         // guessed. Skip ones already suggested this session to avoid redundant
