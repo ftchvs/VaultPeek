@@ -174,6 +174,16 @@ public struct CategoryDashboardPresentation: Sendable, Hashable {
     /// Every leaf across all groups, flattened (groups stay in display order).
     public var leaves: [Leaf] { groups.flatMap(\.leaves) }
 
+    /// Sum of spend across *budgeted* leaves only — the spend figure that pairs
+    /// with ``totalLimit`` (which is itself budgeted-leaves only). Unbudgeted leaves
+    /// have no limit, so folding their spend into a budget comparison would
+    /// understate "left" and overstate "used" (mirrors the budgeted-only footer in
+    /// ``CategoryDashboardTableModel/totals(for:)``). Use ``totalSpent`` for the
+    /// all-leaves "Spent" figure; use this for over-budget / fraction-used math.
+    public var budgetedSpent: Double {
+        leaves.reduce(0) { $0 + ($1.isBudgeted ? $1.spent : 0) }
+    }
+
     /// The rollup for `group`, or `nil` when that group has no spend / budget.
     public func group(_ group: CategoryGroup) -> GroupRollup? {
         groups.first { $0.group == group }
