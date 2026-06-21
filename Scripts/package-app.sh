@@ -69,23 +69,19 @@ if ! otool -l "$APP_BINARY" | grep -q "@executable_path/../Frameworks"; then
     install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP_BINARY"
 fi
 
-# Ad-hoc sign the whole bundle WITHOUT entitlements. App Sandbox,
-# app-groups, and keychain-access-groups require a Team ID + provisioning
-# profile that an ad-hoc signature lacks; applying them to an ad-hoc build
-# makes launchd refuse to spawn the app ("Launchd job spawn failed", RBS
-# error 163). The drag-install DMG intentionally runs unsandboxed
-# (docs/distribution.md); the entitlements below are applied only for a real
-# Developer ID signing identity, where they are honored and notarization adds
-# the hardened runtime.
+# Ad-hoc sign the whole bundle WITHOUT entitlements. This is the open-source
+# build path: it produces an unsigned/ad-hoc VaultPeek.app that launches and
+# runs in demo and local use. App Sandbox, app-groups, and
+# keychain-access-groups require a Team ID + provisioning profile that an ad-hoc
+# signature lacks; applying them to an ad-hoc build makes launchd refuse to
+# spawn the app ("Launchd job spawn failed", RBS error 163). The drag-install
+# DMG intentionally runs unsandboxed (docs/distribution.md).
+#
+# Contributors who want signed/notarized distribution should bring their own
+# Apple Developer signing identity and entitlements (e.g. add an App Group
+# entitlement for the widget's shared snapshot) and re-sign the bundle
+# inside-out with their own tooling — that path is not shipped in this repo.
 codesign --force --deep --sign - "$APP_DIR" >/dev/null
-if [ -n "${PLAIDBAR_CODESIGN_IDENTITY:-}" ]; then
-    codesign --force --options runtime --sign "$PLAIDBAR_CODESIGN_IDENTITY" \
-        --entitlements "$WIDGET_RESOURCES_DIR/PlaidBarWidgetExtension.entitlements" \
-        "$WIDGET_EXTENSION_DIR" >/dev/null
-    codesign --force --options runtime --sign "$PLAIDBAR_CODESIGN_IDENTITY" \
-        --entitlements "$RESOURCES_DIR/PlaidBar.entitlements" \
-        "$APP_DIR" >/dev/null
-fi
 
 "$SCRIPT_DIR/validate-app-bundle.sh" "$APP_DIR"
 

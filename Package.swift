@@ -65,7 +65,6 @@ let package = Package(
             exclude: [
                 "Resources/AppIcon.icns",
                 "Resources/Info.plist",
-                "Resources/PlaidBar.entitlements",
             ],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
@@ -79,7 +78,6 @@ let package = Package(
             path: "Sources/PlaidBarWidgetExtension",
             exclude: [
                 "Resources/Info.plist",
-                "Resources/PlaidBarWidgetExtension.entitlements",
             ],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),

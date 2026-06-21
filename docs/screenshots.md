@@ -32,31 +32,28 @@ From the repository root:
 ./Scripts/screenshots.sh
 ```
 
-The script launches VaultPeek locally and captures:
+The script renders the window-first workspace surfaces headlessly via the
+built-in render harness (`swift run PlaidBar --demo --render-window-first`) and
+copies the README set into `Assets/`:
 
-- sandbox setup preflight
-- dashboard overview
-- dashboard Cash filter
-- dashboard Credit filter
-- dashboard Savings filter
-- dashboard Debt filter
-- dashboard Status filter
-- Settings > General / Local Data
-- Settings > Accounts
-- Settings > Notifications
-- Settings > About
+- `window-dashboard.png` — Dashboard workspace (hero)
+- `window-transactions.png` — Transactions workspace
+- `window-budgets.png` — Budgets workspace
+- `window-insights.png` — Insights workspace
+- `window-accounts.png` — Accounts workspace
 
-The dashboard surface also includes a below-the-fold local insight receipt when
-demo transactions are available. Peekaboo/AX validation should see that receipt
-even when the public screenshot stays focused on the first-glance dashboard
-area. The receipt is intentionally local-only: it shows source-row count,
-window, top category, recurring estimate, category hints, and the
-disabled/no-runtime state when no local AI runtime is configured. It must not
-imply cloud AI processing or send transaction data off-device.
+The harness rasterizes each routed destination off-screen from demo fixtures, so
+it needs **no Screen Recording permission, no UI automation, and no Plaid
+credentials**. It writes one `window-<destination>.png` per in-shell destination
+(dashboard, transactions, budgets, planning, goals, review, insights, alerts,
+accounts) plus a best-effort `window-shell.png`; `Scripts/screenshots.sh` copies
+only the committed README subset above.
 
-The Status capture uses demo data with `--screenshot-status-recovery`. That
-fixture keeps the regular demo dashboard healthy, while the Status filter shows
-one recovered institution and one institution that needs login/reconnect.
+The Dashboard surface includes a below-the-fold local insight receipt when demo
+transactions are available. The receipt is intentionally local-only: it shows
+source-row count, window, top category, recurring estimate, category hints, and
+the disabled/no-runtime state when no local AI runtime is configured. It must
+not imply cloud AI processing or send transaction data off-device.
 
 ## Appearance Matrix Renders
 
@@ -80,43 +77,36 @@ The demo narrative is defined in [Demo Scenarios](demo-scenarios.md). Use those
 scenario names when reviewing screenshot diffs so each public image has a clear
 fixture intent, dashboard story, and expected recovery state.
 
-| Scenario | Primary assets | Review focus |
-|----------|----------------|--------------|
-| `steady-household-overview` | `Assets/dashboard.png` | First-glance cash, credit, savings, debt, sync health, and heatmap context; validate below-fold local insight receipt separately |
-| `cash-runway-check` | `Assets/dashboard-cash.png`, `Assets/dashboard-savings.png` | Depository balances, selected-account detail, and quiet healthy status |
-| `credit-pressure-review` | `Assets/dashboard-credit.png`, `Assets/dashboard-debt.png` | Utilization, available credit, owed balances, and non-budgeting debt emphasis |
-| `reconnect-confidence-check` | `Assets/dashboard-status.png` | Login-required item recovery without raw Plaid payloads or real errors |
-| `first-run-sandbox-preflight` | `Assets/setup-sandbox-preflight.png` | Fail-closed setup readiness before Plaid Link opens |
+| Scenario | Primary asset | Review focus |
+|----------|---------------|--------------|
+| `dashboard-overview` | `Assets/window-dashboard.png` | First-glance cash, credit, savings, debt, sync health, and 365-day heatmap context |
+| `transactions-review` | `Assets/window-transactions.png` | Categorized transaction list/search with review affordances; no raw Plaid payloads |
+| `budgets-planning` | `Assets/window-budgets.png` | Spend vs. plan per category, safe-to-spend, recurring obligations; over/under emphasis not by color alone |
+| `local-insights` | `Assets/window-insights.png` | Local-only insight receipt (deterministic/no-runtime state when no local AI configured) |
+| `accounts-health` | `Assets/window-accounts.png` | Balances, utilization, connection status, and login-required item recovery without raw Plaid errors |
 
 ## macOS Permissions
 
-The screenshot script uses macOS UI automation. Terminal needs:
+`Scripts/screenshots.sh` uses the built-in render harness, which rasterizes the
+window-first content off-screen. It needs **no Screen Recording or Accessibility
+permission** and does not drive the live UI.
 
-- Screen Recording permission
-- Accessibility permission
-
-If captures fail, open System Settings and confirm permissions for the terminal
-app running the script.
-
-The script captures PlaidBar windows by their macOS window ID after the app is
-opened into each screenshot state. This avoids stale display-rectangle captures
-when the menu-bar popover is positioned outside the active display bounds.
+(The separate `Scripts/qa-appearance-matrix.sh` is also headless. Any remaining
+UI-automation captures, if reintroduced, would require Screen Recording and
+Accessibility for the terminal app running the script.)
 
 ## Expected Assets
 
+These are the committed window-first screenshots `Scripts/screenshots.sh`
+publishes into `Assets/` (and that README.md references):
+
 | File | Purpose |
 |------|---------|
-| `Assets/setup-sandbox-preflight.png` | Setup readiness before Plaid Link |
-| `Assets/dashboard.png` | Main dashboard overview |
-| `Assets/dashboard-cash.png` | Cash-focused account state |
-| `Assets/dashboard-credit.png` | Credit-focused account state |
-| `Assets/dashboard-savings.png` | Savings-focused account state |
-| `Assets/dashboard-debt.png` | Debt-focused account state |
-| `Assets/dashboard-status.png` | Status and recovery-focused state |
-| `Assets/settings-local-data.png` | Local data controls |
-| `Assets/settings-accounts.png` | Linked items and account management |
-| `Assets/settings-notifications.png` | Notification permission and thresholds |
-| `Assets/settings-about.png` | Version, support, privacy, security, roadmap, and release links |
+| `Assets/window-dashboard.png` | Dashboard workspace — first-glance overview (hero) |
+| `Assets/window-transactions.png` | Transactions workspace — categorized list/search |
+| `Assets/window-budgets.png` | Budgets workspace — spend vs. plan, safe-to-spend |
+| `Assets/window-insights.png` | Insights workspace — local-only insight receipt |
+| `Assets/window-accounts.png` | Accounts workspace — balances, utilization, connection status |
 
 ## Review Checklist
 
@@ -127,12 +117,12 @@ when the menu-bar popover is positioned outside the active display bounds.
   placeholders for balances, account endings, transactions, utilization, and
   notifications.
 - Empty/degraded states are represented where relevant.
-- `dashboard-status.png` shows the recovery fixture, not a real Plaid error.
-- Peekaboo/AX validation can find local insight receipt text saying
+- `window-accounts.png` shows the recovery fixture
+  (`--screenshot-status-recovery`), not a real Plaid error.
+- The Insights workspace shows local insight receipt text saying
   local-only/disabled when no local runtime is configured; it must not mention
   cloud AI fallback.
 - Button labels and status copy match the current app.
-- Settings screenshots show useful controls, not blank tabs.
 - Screenshots do not include unrelated desktop windows or notifications.
 - Captions and alt text claim only what is visible in the image. VoiceOver or
   below-the-fold privacy checks should be recorded as validation notes, not as

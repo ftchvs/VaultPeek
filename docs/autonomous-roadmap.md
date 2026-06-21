@@ -349,8 +349,9 @@ remain unmarked.
   formula and private DMG distribution shape, and added the final
   release-candidate checklist (`docs/release-checklist.md`) covering
   clean-profile setup and checks-green/manual-diff merge gates; also added the
-  AND-309 distribution prep runbook (`docs/distribution.md` and the
-  `Scripts/notarize.sh` scaffold — signing/notarization NOT performed);
+  AND-309 distribution prep runbook (`docs/distribution.md`; the original
+  `Scripts/notarize.sh` scaffold was later removed for the open-source build —
+  signing/notarization is now bring-your-own, see `docs/distribution.md`);
   evidence: chore/and-321-309-release-gates PR.
 
 ## Backlog Source
