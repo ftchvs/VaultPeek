@@ -56,7 +56,9 @@ public enum BalanceProjector {
             horizon
         )
 
-        // Per-day net delta across the span, keyed by day index 1...totalDays.
+        // Per-day net delta across the span, keyed by day index 0...totalDays.
+        // Index 0 captures any obligation due exactly on the anchor day; it is
+        // folded into the seed below so the anchor snapshot already reflects it.
         var deltasByDayIndex: [Int: Double] = [:]
         var hasSignal = false
 
@@ -86,7 +88,7 @@ public enum BalanceProjector {
 
             while occurrence <= horizonEnd {
                 if let dayIndex = calendar.dateComponents([.day], from: startDay, to: occurrence).day,
-                   dayIndex >= 1, dayIndex <= totalDays {
+                   dayIndex >= 0, dayIndex <= totalDays {
                     deltasByDayIndex[dayIndex, default: 0] += signed
                 }
                 guard let next = calendar.date(byAdding: .day, value: step, to: occurrence) else { break }
@@ -98,7 +100,11 @@ public enum BalanceProjector {
         // day), 1...totalDays forward through the horizon end.
         var series: [BalanceSnapshot] = []
         series.reserveCapacity(totalDays + 1)
-        var running = anchor.balance
+        // Fold any day-0 obligation (due exactly on the anchor day) into the seed
+        // so the projected line agrees with SafeToSpendCalculator's inclusive
+        // (nextDay >= referenceDay) window. The 1...totalDays loop starts at 1,
+        // so this does not double-count the day-0 delta.
+        var running = anchor.balance + (deltasByDayIndex[0] ?? 0)
         series.append(BalanceSnapshot(date: startDay, balance: running))
         for dayIndex in 1...totalDays {
             running += deltasByDayIndex[dayIndex] ?? 0
