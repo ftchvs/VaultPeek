@@ -6,11 +6,11 @@ import Testing
 
 @Suite("Route destinations")
 struct RouteDestinationTests {
-    @Test("All 11 IA destinations exist (10 sidebar + the Settings scene)")
+    @Test("All 11 destinations exist (10 sidebar + the Settings scene)")
     func hasEveryDestination() {
-        // IA §2: Dashboard, Review, Transactions, Budgets, Planning, Goals,
+        // Destinations: Dashboard, Review, Transactions, Budgets, Planning, Goals,
         // Insights, Alerts, Accounts, Settings. (Transactions counts as the 11th
-        // primary destination alongside Review per IA notes; both are present.)
+        // primary destination alongside Review; both are present.)
         let expected: Set<RouteDestination> = [
             .dashboard, .review, .transactions, .budgets, .planning,
             .goals, .insights, .alerts, .accounts, .settings,
@@ -19,9 +19,9 @@ struct RouteDestinationTests {
         #expect(RouteDestination.allCases.count == 10)
     }
 
-    @Test("Command shortcut numbers match the IA keymap ⌘1…⌘8 (Dashboard…Accounts)")
+    @Test("Command shortcut numbers match the keymap ⌘1…⌘8 (Dashboard…Accounts)")
     func commandShortcutNumbers() {
-        // IA §3.4: ⌘1 Dashboard, ⌘2 Review, ⌘3 Budgets, ⌘4 Planning, ⌘5 Goals,
+        // ⌘1 Dashboard, ⌘2 Review, ⌘3 Budgets, ⌘4 Planning, ⌘5 Goals,
         // ⌘6 Insights, ⌘7 Alerts, ⌘8 Accounts. Transactions and Settings have none.
         #expect(RouteDestination.dashboard.commandShortcutNumber == 1)
         #expect(RouteDestination.review.commandShortcutNumber == 2)
@@ -40,7 +40,7 @@ struct RouteDestinationTests {
         #expect(numbers == [1, 2, 3, 4, 5, 6, 7, 8])
     }
 
-    @Test("Bands group the destinations per the IA tree")
+    @Test("Bands group the destinations per the navigation tree")
     func bandGrouping() {
         #expect(RouteDestination.dashboard.band == .overview)
         for d in [RouteDestination.review, .transactions, .budgets, .planning, .goals] {
@@ -52,7 +52,7 @@ struct RouteDestinationTests {
         #expect(RouteDestination.settings.band == .system)
     }
 
-    @Test("3-column policy matches IA §3.1")
+    @Test("3-column policy")
     func columnPolicy() {
         let threeColumn: Set<RouteDestination> = [.review, .transactions, .budgets, .goals, .alerts, .accounts]
         for d in RouteDestination.allCases {
@@ -60,7 +60,7 @@ struct RouteDestinationTests {
         }
     }
 
-    @Test("Detail-column prompt exists iff the destination is 3-column (content-gated, IA §3.1)")
+    @Test("Detail-column prompt exists iff the destination is 3-column (content-gated)")
     func detailColumnPromptMatchesPolicy() {
         for d in RouteDestination.allCases {
             // The third column is content-gated, not existence-gated: every
@@ -73,7 +73,7 @@ struct RouteDestinationTests {
         }
     }
 
-    @Test("Detail-column prompts are the IA per-destination copy")
+    @Test("Detail-column prompts are the per-destination copy")
     func detailColumnPromptCopy() {
         #expect(RouteDestination.review.detailColumnEmptyPrompt == "Select an item to review")
         #expect(RouteDestination.transactions.detailColumnEmptyPrompt == "Select a transaction")
@@ -217,8 +217,8 @@ struct RouteTests {
 
 // MARK: - Glance attention chip → Route (AND-597)
 
-/// The pure glance-chip → deep-link mapping the menu-bar glance routes through
-/// (IA §2.1, §3.6, §6). A glance chip opens the window at the *relevant*
+/// The pure glance-chip → deep-link mapping the menu-bar glance routes through.
+/// A glance chip opens the window at the *relevant*
 /// destination, not just the dashboard; infrastructure rows keep their in-place
 /// action (no route). This is the testable seam — the flag gating and the actual
 /// `openWindow` live in the app target.

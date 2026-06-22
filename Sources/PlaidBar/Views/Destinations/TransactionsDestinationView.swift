@@ -1,12 +1,12 @@
 import PlaidBarCore
 import SwiftUI
 
-/// **Transactions** destination (3-column — IA §3.1/§5.2, AND-582 / Epic 4).
+/// **Transactions** destination (3-column — AND-582 / Epic 4).
 ///
 /// The ledger: a sortable, keyboard-navigable `Table` (content column) → a
 /// transaction inspector (detail column). The shell renders this content column
 /// plus ``Inspector`` in the detail column, which is content-gated and shows
-/// "Select a transaction" when nothing is selected (IA §3.1).
+/// "Select a transaction" when nothing is selected.
 ///
 /// ## Reused engines (nothing rebuilt)
 /// - **Filter / search / sort math** is the pure, unit-tested
@@ -269,7 +269,7 @@ struct TransactionsDestinationView: View {
 
     /// The detail-column (inspector) pane for Transactions — the selected row's full
     /// detail + inline edit. Content-gated: shows "Select a transaction" when
-    /// nothing is selected (IA §3.1). A separate `View` because the shell mounts the
+    /// nothing is selected. A separate `View` because the shell mounts the
     /// content and inspector columns independently; both read the shared selection
     /// from `AppState.navigationModel`.
     struct Inspector: View {

@@ -1,7 +1,7 @@
 import PlaidBarCore
 import SwiftUI
 
-/// The content-column router for the window-first shell (ADR-001, AND-580/581).
+/// The content-column router for the window-first shell (AND-580/581).
 ///
 /// Maps the window's selected `RouteDestination` to its per-destination content
 /// view. Each destination owns its own `…DestinationView` file under
@@ -10,7 +10,7 @@ import SwiftUI
 /// the shell touches.
 ///
 /// **Settings is never routed here**: its sidebar row opens the native macOS
-/// `Settings` scene (IA §5.10), so the shell maps a Settings tap to
+/// `Settings` scene, so the shell maps a Settings tap to
 /// `openSettings()` and the split-view selection never parks on `.settings`. The
 /// `.settings` arm falls back to the shared placeholder defensively, but it is
 /// unreachable in practice.
@@ -47,7 +47,7 @@ struct DestinationContentView: View {
 /// mounts this for them, so their arms fall back to the content-gated empty
 /// prompt defensively.
 ///
-/// The third column is **content-gated, not existence-gated** (IA §3.1): each
+/// The third column is **content-gated, not existence-gated**: each
 /// `Inspector` shows its "Select a …" prompt when nothing is selected rather than
 /// collapsing.
 struct DestinationInspectorView: View {

@@ -6,8 +6,8 @@ import PlaidBarCore
 ///
 /// The app's menu bar is a SwiftUI `MenuBarExtra`, but the underlying
 /// `NSStatusItem` is reachable via `MenuBarExtraAccess` (the same hook
-/// `StatusItemContextMenuController` already uses). Per the delivery design
-/// §4/§7 the badge is rendered through that custom `NSStatusItem` rather than
+/// `StatusItemContextMenuController` already uses). The badge is rendered
+/// through that custom `NSStatusItem` rather than
 /// the SwiftUI label, because a `MenuBarExtra` label can't host the overlapping
 /// pill cleanly under the documented glass constraint.
 ///

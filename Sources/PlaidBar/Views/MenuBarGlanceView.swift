@@ -3,7 +3,7 @@ import PlaidBarCore
 import SwiftUI
 
 /// The reduced menu-bar **glance** that replaces the full dashboard popover once
-/// window-first is the default (ADR-001 §6, AND-616 / AND-587).
+/// window-first is the default (AND-616 / AND-587).
 ///
 /// The glance is **read + route only**. It shows the sync line, two-to-four
 /// high-signal numbers (net worth · safe-to-spend · to-review), up to three
@@ -32,7 +32,7 @@ struct MenuBarGlanceView: View {
     @Environment(\.openSettings) private var openSettings
 
     /// Compact glance width — narrower than the old 3-column dashboard popover,
-    /// matching a launcher rather than a workspace (ADR-001 §6).
+    /// matching a launcher rather than a workspace.
     private static let width: CGFloat = 300
 
     private var model: MenuBarGlanceModel { appState.menuBarGlanceModel }

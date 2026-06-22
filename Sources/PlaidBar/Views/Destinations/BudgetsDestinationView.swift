@@ -1,8 +1,7 @@
 import PlaidBarCore
 import SwiftUI
 
-/// **Budgets** destination — window-first 3-column surface (AND-624; ADR-001
-/// window-first workspace, IA §3.1/§5.4, `[⌘3]`).
+/// **Budgets** destination — window-first 3-column surface (AND-624, `[⌘3]`).
 ///
 /// Re-hosted to the **desk-distance design language** the Dashboard reference set
 /// (``WindowMetrics`` / ``WindowTypography`` / ``WindowSection`` /
@@ -13,7 +12,7 @@ import SwiftUI
 /// status rollup + the selected category's detail/editor).
 ///
 /// **Data is re-hosted, not recomputed** — every figure comes from the same Core
-/// engines the popover uses; only the layout differs (R: re-host data, redesign
+/// engines the popover uses; only the layout differs (re-host data, redesign
 /// layout):
 /// - `AppState.categoryDashboardPresentation` (built by `CategoryDashboardBuilder`
 ///   over `CategoryBudgetPlanner.netSpendByCategory`, override-aware) drives the
@@ -25,14 +24,14 @@ import SwiftUI
 /// **Never color alone (ACCESSIBILITY.md):** budget pressure (over / nearing) is
 /// always carried by **text + SF Symbol**; tint is layered redundantly on top.
 /// **Privacy Mask:** every figure runs through `PrivacyMaskPresentation`, so
-/// masked values stay dotted. **App Lock** is shell-gated (ADR-001 Epic 10), so
-/// this canvas never double-gates. Data/charts stay solid (R-08, glass on chrome
+/// masked values stay dotted. **App Lock** is shell-gated (Epic 10), so
+/// this canvas never double-gates. Data/charts stay solid (glass on chrome
 /// only) via ``WindowSection``'s quiet card surface.
 ///
 /// The content and inspector columns are separate split-view views that share
 /// selection through the per-window ``NavigationModel``
 /// (`appState.navigationModel.budgetCategorySelection`) — a per-window value, never
-/// a singleton, so two windows hold independent Budgets selection (AND-621, R-10).
+/// a singleton, so two windows hold independent Budgets selection (AND-621).
 ///
 /// **Flag-OFF inert:** reached solely when `AppShellView` mounts (behind
 /// `WindowFirstFeatureFlag`, default OFF). With the flag off none of this is
@@ -425,8 +424,8 @@ struct BudgetsDestinationView: View {
 
     /// The detail-column (inspector) pane for Budgets at window scale: the overall
     /// month **status** rollup, then the selected category's detail/editor. Content
-    /// -gated — shows the "Select a category" prompt when nothing is selected
-    /// (IA §3.1). Re-hosts the same Core engines as the content column.
+    /// -gated — shows the "Select a category" prompt when nothing is selected.
+    /// Re-hosts the same Core engines as the content column.
     struct Inspector: View {
         @Environment(AppState.self) private var appState
         @State private var budgetEditorCategory: BudgetEditorCategory?

@@ -1,9 +1,9 @@
 import Foundation
 
 /// The pure, `Sendable` model of every command the ⌘K palette can run
-/// (ADR-001, IA §3.3 "Command palette", AND-596).
+/// (AND-596).
 ///
-/// The IA calls the command palette "the single most important new piece": a
+/// The command palette is a
 /// spotlight-style overlay with fuzzy search across three action classes —
 /// **navigate**, **act**, **find**. This type is the registry of those commands
 /// as *data*. It deliberately carries **no closures**: a command describes
@@ -20,12 +20,12 @@ public struct CommandRegistry: Sendable, Equatable {
     /// The kind of thing a command does. Drives both how it is grouped in the
     /// palette and how the app executes it.
     public enum Kind: Sendable, Equatable, Hashable, Codable {
-        /// Jump to a destination (the canonical route for it). IA §3.3 class 1.
+        /// Jump to a destination (the canonical route for it). Navigate class.
         case navigate(RouteDestination)
-        /// A global verb that works from anywhere. IA §3.3 class 2.
+        /// A global verb that works from anywhere. Act class.
         case act(Action)
-        /// Enter "find" mode — search transactions and jump to the match. IA
-        /// §3.3 class 3. The query itself is typed in the palette; this command
+        /// Enter "find" mode — search transactions and jump to the match. Find
+        /// class. The query itself is typed in the palette; this command
         /// is the entry point (it focuses the current destination's search, per
         /// the ⌘F keymap row).
         case find
@@ -37,7 +37,7 @@ public struct CommandRegistry: Sendable, Equatable {
         }
     }
 
-    /// The global verbs the palette exposes (IA §3.3 class 2 + the keymap §3.4).
+    /// The global verbs the palette exposes (the act class + the keymap).
     /// Each maps to an existing app action — the palette never invents behavior,
     /// it surfaces the paths the menu-bar / shortcuts already drive.
     public enum Action: String, Sendable, Equatable, Hashable, Codable, CaseIterable {
@@ -119,14 +119,14 @@ public struct CommandRegistry: Sendable, Equatable {
     /// Builds the **default** registry: a navigate command for every
     /// `RouteDestination`, the four global act verbs, and the find entry point.
     /// This is the complete command set AND-596 ships; contextual per-destination
-    /// commands (IA §3.3) layer on in later epics.
+    /// commands layer on in later epics.
     ///
     /// Order: navigate (sidebar / `allCases` order) → act (refresh, Privacy Mask,
     /// settings, summon) → find.
     public static func makeDefault() -> CommandRegistry {
         var commands: [Command] = []
 
-        // 1. Navigate — one per destination, in sidebar order (IA §3.3 class 1).
+        // 1. Navigate — one per destination, in sidebar order (navigate class).
         for destination in RouteDestination.allCases {
             commands.append(
                 Command(
@@ -182,7 +182,7 @@ public struct CommandRegistry: Sendable, Equatable {
             )
         )
 
-        // 3. Find — the search entry point (IA §3.3 class 3).
+        // 3. Find — the search entry point (find class).
         commands.append(
             Command(
                 id: findID,

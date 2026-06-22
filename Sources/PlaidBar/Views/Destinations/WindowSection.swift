@@ -13,7 +13,7 @@ import SwiftUI
 // `AppState`; data and Core presentations are passed in by the call site. That
 // keeps them reusable across destinations and trivially previewable.
 //
-// Liquid Glass goes on *chrome*, not data (ADR-001): a `WindowSection`'s card
+// Liquid Glass goes on *chrome*, not data: a `WindowSection`'s card
 // uses a quiet, solid hierarchical fill so the figures inside stay crisp and
 // legible. Section separation comes from spacing and the title, with a hairline
 // stroke for definition — never from a translucent wash behind the numbers.
@@ -148,7 +148,7 @@ private struct WindowCardSurface: ViewModifier {
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: WindowMetrics.cardCornerRadius)
-        // Data stays solid (ADR-001 — glass on chrome, not data): a window card
+        // Data stays solid (glass on chrome, not data): a window card
         // backs its figures with a quiet hierarchical `.quaternary` fill so the
         // tabular numbers read crisply, rather than a translucent wash. Under
         // Reduce Transparency the same solid fill is used (it is already solid),
@@ -163,7 +163,7 @@ private struct WindowCardSurface: ViewModifier {
 
 extension View {
     /// The quiet, solid window-scale card surface used by ``WindowSection`` and
-    /// ``WindowHeroMetricTile``. Data surfaces stay solid (ADR-001); glass is
+    /// ``WindowHeroMetricTile``. Data surfaces stay solid; glass is
     /// reserved for the shell chrome applied at the scene/shell level.
     func windowCardSurface() -> some View {
         modifier(WindowCardSurface())

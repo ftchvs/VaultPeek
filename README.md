@@ -125,8 +125,7 @@ only network traffic is from your Mac directly to Plaid using your credentials.
 In pure demo mode there are no Plaid or external network calls; local AI runtime
 features can still call localhost services if configured.
 
-The full launch scope and the rationale for every deferral live in the
-[MVP launch decision log](docs/mvp-launch-decision-log.md). Support and recovery
+Support and recovery
 guidance is in [SUPPORT.md](SUPPORT.md) and the
 [support runbook](docs/support-runbook.md).
 
@@ -539,11 +538,8 @@ Additional project docs:
 - [Screenshots](docs/screenshots.md)
 - [QA Matrix](docs/qa-matrix.md)
 - [Support Policy](SUPPORT.md)
-- [Long-Term Product Vision](docs/v1.0-roadmap.md)
 - [Release Notes Drafts](docs/release-notes.md)
 - [Changelog](CHANGELOG.md)
-- [Naming Clearance (VaultPeek)](docs/naming-clearance.md)
-- [Icon Review (VaultPeek)](docs/icon-review.md)
 
 ### Agentic Development Loop
 
@@ -588,15 +584,10 @@ when the local app created the Hosted Link session.
 
 ## Roadmap
 
-The long-term product vision lives in
-[docs/v1.0-roadmap.md](docs/v1.0-roadmap.md). It frames VaultPeek as a
-local-first macOS menu bar finance instrument and gives Hermes-style agents a
-stable starting point for deriving small, defensible implementation slices.
-When multiple agents are active, use
-[docs/agent-collaboration.md](docs/agent-collaboration.md) for the shared
-policy and channel rules: GitHub PRs for handoff, Linear for material status
-updates, repo docs for durable policy, and uncommitted local state for
-branch/worktree ownership.
+VaultPeek is a local-first macOS menu bar finance instrument: high-signal
+numbers one click away, with all data staying on your machine. Work is split
+into small, defensible implementation slices around the menu bar dashboard,
+trust, onboarding, local data controls, diagnostics, and empty/error states.
 
 Near-term release priorities:
 

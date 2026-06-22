@@ -6,10 +6,10 @@ import Foundation
 /// the UI can render restrained, honest plan-selection and usage shells. They
 /// do **not** enforce anything: there is no Stripe billing, no entitlement
 /// token, no managed broker, and no server-side limit check behind them yet.
-/// The managed cloud backend remains gated by `docs/strategy/approval-gates.md`
-/// (remaining architecture decisions in `docs/strategy/subscription-entitlements.md`
-/// are unresolved). Until those gates pass, every plan is a preview and demo /
-/// bring-your-own-keys mode stays fully free and ungated.
+/// The managed cloud backend remains gated by unresolved approval gates and
+/// subscription-entitlement architecture decisions. Until those gates pass,
+/// every plan is a preview and demo / bring-your-own-keys mode stays fully free
+/// and ungated.
 public enum SubscriptionPlan: String, CaseIterable, Sendable, Codable, Identifiable {
     case free
     case plus
@@ -35,10 +35,10 @@ public enum SubscriptionPlan: String, CaseIterable, Sendable, Codable, Identifia
 
     /// Managed-institution cap locked for each self-serve tier.
     ///
-    /// Values come from `docs/strategy/entitlement-matrix.md` (Free = 0 managed
-    /// institutions, Plus = 8). These are surfaced for the usage shell only —
-    /// nothing enforces them yet. BYO-keys connections are outside this managed
-    /// cap and remain ungated.
+    /// The planned entitlement matrix sets Free = 0 managed institutions and
+    /// Plus = 8. These are surfaced for the usage shell only — nothing enforces
+    /// them yet. BYO-keys connections are outside this managed cap and remain
+    /// ungated.
     public var institutionLimit: Int {
         switch self {
         case .free:
@@ -51,10 +51,10 @@ public enum SubscriptionPlan: String, CaseIterable, Sendable, Codable, Identifia
     /// Short forward-looking tagline. Deliberately framed as a preview so copy
     /// never implies billing or a managed backend exists today.
     ///
-    /// Final public pricing is gated behind `docs/strategy/approval-gates.md`
-    /// (AND-349, "Pricing bundles and launch copy") and must not appear in any
-    /// shipping app surface before that gate passes, so this preview copy states
-    /// the managed institution cap only — never a dollar amount.
+    /// Final public pricing is gated behind AND-349 ("Pricing bundles and launch
+    /// copy") and must not appear in any shipping app surface before that gate
+    /// passes, so this preview copy states the managed institution cap only —
+    /// never a dollar amount.
     public var priceDescription: String {
         switch self {
         case .free:
@@ -74,9 +74,9 @@ public enum SubscriptionPlan: String, CaseIterable, Sendable, Codable, Identifia
 /// if a DTO ever carries it, the field must be optional with a default so
 /// existing server JSON keeps decoding.
 ///
-/// The wire values match the planned `connection_origin = managed | byo` flag in
-/// `docs/strategy/subscription-entitlements.md` so a future DTO/storage adoption
-/// stays compatible with the documented entitlement and managed-count logic.
+/// The wire values match the planned `connection_origin = managed | byo` flag so
+/// a future DTO/storage adoption stays compatible with the planned entitlement
+/// and managed-count logic.
 public enum ItemOrigin: String, Sendable, Codable {
     case managed
     case bringYourOwn = "byo"

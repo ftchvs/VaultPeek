@@ -33,7 +33,6 @@
 - [ ] `CI / build` is green before merge.
 - [ ] `Claude Code Review / claude-review` is green before merge.
 - [ ] `Codex Code Review / codex-review` is green before merge.
-- [ ] `otto-openclaw-merge-gate` is green before merge.
 - [ ] Skipped checks are expected and not required for this PR.
 - [ ] Any failing, pending, cancelled, missing, or ambiguous required check blocks merge.
 - [ ] Claude/Codex review auth/token/session/setup-only failures are documented as blocking unless Felipe explicitly grants a one-off override.
@@ -63,7 +62,7 @@
 ## Merge safety
 
 - [ ] Final diff reviewed for secrets, private financial data, generated artifacts, scope creep, and unsafe destructive behavior.
-- [ ] Merge is within the scoped PlaidBar approval in `docs/autonomous-roadmap.md`, or Felipe explicitly approved this PR.
+- [ ] Merge is within the scoped PlaidBar approval, or Felipe explicitly approved this PR.
 - [ ] PR head SHA was rechecked immediately before merge.
 - [ ] No other agent is actively mutating this branch/worktree.
 - [ ] After merge, completed task IDs will be recorded in the roadmap ledger and backlog checklist.

@@ -1,7 +1,7 @@
 import Foundation
 
-/// Feature flag gating the window-first hybrid experience (ADR-001, Epic 1 /
-/// AND-579, first code step AND-591; default flipped in Epic 9 / AND-616).
+/// Feature flag gating the window-first hybrid experience (Epic 1 / AND-579,
+/// first code step AND-591; default flipped in Epic 9 / AND-616).
 ///
 /// The migration to a primary `Window` workspace ran **dual-run behind this
 /// flag**. Epic 9 (AND-616) flipped the default **ON**: window-first is now the

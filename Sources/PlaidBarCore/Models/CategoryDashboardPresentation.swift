@@ -93,8 +93,8 @@ public struct CategoryDashboardPresentation: Sendable, Hashable {
         /// `spent / monthlyLimit`, floored at 0; `nil` when the group has no budget.
         public let fractionUsed: Double?
         /// Group budget band — computed from the group's *summed* spend vs *summed*
-        /// limit, so a group can be over while every leaf is individually under
-        /// (spec §7). `nil` when the group has no budget.
+        /// limit, so a group can be over while every leaf is individually under.
+        /// `nil` when the group has no budget.
         public let status: CategoryBudgetStatus?
         /// Sum of the group's leaves' committed recurring spend; `nil` when no leaf
         /// has a recurring stream (AND-559). Always strictly positive when present.

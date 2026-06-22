@@ -7,7 +7,7 @@ import SwiftUI
 ///
 /// It is a **thin renderer**: all spend, ordering, shares, and label text come from
 /// the injected ``SpendDonutModel`` (built from the existing override-aware
-/// ``CategoryDashboardPresentation`` — no recompute, spec §3/§4, Option A). The view
+/// ``CategoryDashboardPresentation`` — no recompute, Option A). The view
 /// owns only geometry, color, and motion.
 ///
 /// Accessibility (ACCESSIBILITY.md): color is never the only signal. A glyph+text

@@ -201,9 +201,9 @@ struct SetupView: View {
 
             // Plan preview + usage shell. Production shows the managed-plan
             // *preview* picker, but today's production path is still BYO Plaid
-            // keys, which `docs/strategy/subscription-entitlements.md` (§D3) keeps
-            // fully ungated. So the usage meter uses a nil limit (count-only, no
-            // cap, no upgrade CTA) until real managed origin + entitlements exist.
+            // keys, which stays fully ungated. So the usage meter uses a nil limit
+            // (count-only, no cap, no upgrade CTA) until real managed origin +
+            // entitlements exist.
             // The count reflects all linked institutions (`statusItemCount`), not
             // only currently-healthy ones, so an item needing reauth still counts.
             if environment == .production {

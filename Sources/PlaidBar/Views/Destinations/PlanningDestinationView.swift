@@ -2,7 +2,7 @@ import PlaidBarCore
 import SwiftUI
 
 /// **Planning** destination — window-first composed 2-column canvas (AND-624,
-/// Epic 5 / AND-583; ADR-001 window-first workspace, IA §3.1/§5.5, `[⌘4]`).
+/// Epic 5 / AND-583; `[⌘4]`).
 ///
 /// Redesigned to match the **Dashboard reference** desktop language
 /// (``WindowMetrics`` / ``WindowTypography``): a **hero metrics row** of the
@@ -27,7 +27,7 @@ import SwiftUI
 ///   of the live ``GoalsStore`` goals, so it can never disagree with the Goals
 ///   destination's numbers. Self-shows its empty state when no goals exist.
 ///
-/// **Charts stay solid** (ADR-001 R-08): the projection chart and figures back
+/// **Charts stay solid**: the projection chart and figures back
 /// onto the quiet ``WindowSection`` surface, never a translucent wash. Confidence
 /// / pressure cues ride on text + SF Symbol, never color alone (ACCESSIBILITY.md —
 /// the reused cards already enforce this). Every value runs through
@@ -182,7 +182,7 @@ struct PlanningDestinationView: View {
     // MARK: - Projected balance card
 
     /// The forward cashflow projection (AND-498), hosted as the column's prominent
-    /// hero card. Charts stay solid (R-08): the chart backs onto the quiet
+    /// hero card. Charts stay solid: the chart backs onto the quiet
     /// ``WindowSection`` surface, never glass. While Privacy Mask is on the forecast
     /// is withheld (it would otherwise reveal the balance trajectory); while history
     /// is too thin it shows a quiet "building forecast" line so the grid keeps a

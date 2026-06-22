@@ -1,11 +1,11 @@
 import Foundation
 
-/// Pure decision for the **window-first shell's chrome background** (ADR-001
-/// Epic 10 / AND-588, risk R-08).
+/// Pure decision for the **window-first shell's chrome background** (Epic 10 /
+/// AND-588).
 ///
 /// VaultPeek's Liquid Glass is applied to the navigation layer only — the window
 /// container background behind the sidebar / toolbar / nav bars — and **never**
-/// to lists, tables, charts, or dense data (R-08). The window container
+/// to lists, tables, charts, or dense data. The window container
 /// background is *custom* translucency (`.containerBackground(.ultraThinMaterial,
 /// for: .window)`), and per the Epic 10 contract custom translucency must
 /// self-manage its accessibility degradation rather than rely on the framework
@@ -40,7 +40,7 @@ public enum WindowChromeGlass {
     /// Whether a given surface in the window-first shell is allowed to carry a
     /// Liquid Glass material. Glass is for the **navigation layer** only; **data**
     /// surfaces (lists, tables, charts, dense rows) always stay solid so values
-    /// never sample a translucent backdrop (R-08).
+    /// never sample a translucent backdrop.
     ///
     /// This encodes the chrome-vs-data policy as a pure, testable rule: the view
     /// layer classifies each surface as ``WindowSurfaceKind`` and this decides
@@ -58,7 +58,7 @@ public enum WindowChromeGlass {
     }
 }
 
-/// Classifies a window-first surface for the glass-on-chrome-only policy (R-08).
+/// Classifies a window-first surface for the glass-on-chrome-only policy.
 public enum WindowSurfaceKind: Sendable, Equatable {
     /// Navigation chrome — sidebar, toolbar, nav bars, window container. May use
     /// Liquid Glass.

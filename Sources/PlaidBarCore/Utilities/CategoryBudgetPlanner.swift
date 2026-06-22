@@ -333,7 +333,7 @@ public enum CategoryBudgetPlanner {
             if resolution.excludedFromBudgets || resolution.isTransfer { continue }
             // No *confident* override/rule/Plaid category (the row is `.other`, has
             // no Plaid category, or Plaid flagged it low/unknown). Per the spend
-            // precedence (user override → rule → raw Plaid → `.other`, spec §4/§5),
+            // precedence (user override → rule → raw Plaid → `.other`),
             // such a row must **fall back** to its raw Plaid bucket — or `.other`
             // when Plaid gave nothing — not vanish from totals. A display-only NL
             // suggestion is still never counted here: it lives on

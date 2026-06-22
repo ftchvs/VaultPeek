@@ -27,13 +27,12 @@ This command intentionally delegates the detailed operating loop to:
 
 ```text
 commands/vaultpeek-prod-loop.md
-docs/autonomous-loop-backlog.md
-docs/autonomous-roadmap.md
 ```
 
-Read those files first, then execute the same loop with the `/goal` arguments
-as the requested focus/timebox. Treat one backlog task as the default iteration;
-combine adjacent tasks only when the resulting PR remains easy to review.
+Read that file first, then execute the same loop with the `/goal` arguments
+as the requested focus/timebox. Treat one production-readiness task as the
+default iteration; combine adjacent tasks only when the resulting PR remains
+easy to review.
 
 ## Priority Order
 
@@ -79,7 +78,7 @@ Stop and report when:
 - a product/security decision needs Felipe.
 
 Interactive `/goal` defaults to local work. Push, open PRs, or merge only when
-the current run is explicitly operating under the scoped VaultPeek approval
-documented in `docs/autonomous-roadmap.md`, all local and GitHub checks are
-green, and the safe PR loop says the diff is mergeable. If approval scope or
-safety is unclear, stop with a handoff instead of merging.
+the current run is explicitly operating under the scoped VaultPeek approval,
+all local and GitHub checks are green, and the safe PR loop says the diff is
+mergeable. If approval scope or safety is unclear, stop with a handoff instead
+of merging.

@@ -1,7 +1,7 @@
 import Foundation
 
 /// The shared `vaultpeek://` deep-link contract that maps a URL to a ``Route`` and
-/// back (AND-586 / ADR-001).
+/// back (AND-586).
 ///
 /// App Intents (Spotlight / Siri / Shortcuts), widgets, and Control Center
 /// controls cannot reach into the app's window directly — they hand the app a URL.

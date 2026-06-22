@@ -6,10 +6,9 @@ import SwiftUI
 // FOUNDATION ONLY. These views are honest UX shells for the proposed managed
 // consumer plans (AND-350). They persist a *local preference* and render the
 // proposed institution limits, but nothing here enforces a limit, charges
-// money, or talks to a managed backend — that work is gated by
-// docs/strategy/approval-gates.md and stays deferred. Demo and bring-your-own
-// (BYO) Plaid-keys modes remain fully free and ungated; this picker only
-// appears on the production path as a preview.
+// money, or talks to a managed backend — that work stays deferred. Demo and
+// bring-your-own (BYO) Plaid-keys modes remain fully free and ungated; this
+// picker only appears on the production path as a preview.
 
 /// Restrained plan picker over `SubscriptionPlan.allCases`. Shows each plan's
 /// display name and proposed institution limit, with a one-line preview note so

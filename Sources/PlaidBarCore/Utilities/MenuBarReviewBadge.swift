@@ -4,8 +4,8 @@ import Foundation
 /// review-inbox count (AND-534).
 ///
 /// The badge is the small overlay drawn on the menu-bar status item's button
-/// (a custom `NSStatusItem` per the documented `MenuBarExtra`-glass constraint —
-/// see the delivery design §4/§7). Extracting the visibility/text rules here
+/// (a custom `NSStatusItem` per the documented `MenuBarExtra`-glass
+/// constraint). Extracting the visibility/text rules here
 /// keeps them `Sendable`, unit-tested, and out of the AppKit drawing code, which
 /// then only renders whatever string this returns (or nothing when `nil`).
 ///

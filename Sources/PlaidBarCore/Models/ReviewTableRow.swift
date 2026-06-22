@@ -2,7 +2,7 @@ import Foundation
 
 /// One row of the detached **review Table** (AND-532) — the power-review surface
 /// that pulls the popover's Review Inbox off into a resizable, multi-select
-/// `Table` (spec §3/§5, Option A). A row is the flat, `Sendable`, testable
+/// `Table` (Option A). A row is the flat, `Sendable`, testable
 /// projection of a ``TransactionReviewItem``: the columns the table shows
 /// (merchant, amount, date, category, reason) plus the provenance flags the
 /// renderer needs (transfer, on-device NL suggestion).

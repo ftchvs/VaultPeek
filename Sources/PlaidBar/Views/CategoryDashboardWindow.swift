@@ -3,7 +3,7 @@ import SwiftUI
 
 /// The full **Category Dashboard** surface hosted in the detached desktop window
 /// (AND-539) — Copilot's "full category tab." It assembles the same override-aware
-/// pieces the popover card previews, at full size (spec §3/§4, Option A):
+/// pieces the popover card previews, at full size (Option A):
 ///
 /// - the spend donut (`SpendDonutChart`, AND-537) with its center total,
 /// - the two-level status-bar tree (`CategoryTreeView`, AND-538), and
@@ -15,7 +15,7 @@ import SwiftUI
 /// PlaidBarCore. Amounts honor Privacy Mask; budget pressure rides on glyph + text,
 /// never color alone (ACCESSIBILITY.md).
 ///
-/// The monthly-history `BarMark` + dashed budget `RuleMark` (spec §3) is deferred
+/// The monthly-history `BarMark` + dashed budget `RuleMark` is deferred
 /// to a follow-up: there is no current override-aware multi-month spend rollup in
 /// PlaidBarCore to drive it, and building one is beyond assembling existing
 /// components. The card + window ship complete without it.

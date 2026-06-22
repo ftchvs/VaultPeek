@@ -1,7 +1,7 @@
 import Foundation
 
 /// Pure decision logic for the one-tap "accept suggested limit" affordance —
-/// the "ghost guardrails" UX (AND-542, spec §3/§4).
+/// the "ghost guardrails" UX (AND-542).
 ///
 /// The dashboard renders history-derived suggestions (`CategoryBudgetPresentation`
 /// items flagged `isSuggested`) as faint guardrails for categories the user has

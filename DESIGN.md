@@ -305,15 +305,13 @@ account's detail without hiding the rail or center, and the left edge stays
 anchored so the rail does not jump (AND-370). Esc (clears the selection first,
 then dismisses the popover), the inspector's ✕, re-clicking the row, or switching
 filters clears the selection — the inspector reverts to an empty-selection prompt
-rather than collapsing the layout to two columns. The binding contract —
-geometry, anchoring,
-screen-constrained fallback, and selection/keyboard/accessibility behavior —
-lives in
-[`docs/three-column-popover-contract.md`](docs/three-column-popover-contract.md).
+rather than collapsing the layout to two columns. The binding contract covers
+geometry, anchoring, screen-constrained fallback, and
+selection/keyboard/accessibility behavior.
 
 > **History:** this replaced an earlier **swap** model where a single left
 > fly-out showed the Wealth Summary *or* the selected account detail (inspecting
-> an account hid portfolio context). See `docs/wealth-summary-visual-polish.md`.
+> an account hid portfolio context).
 
 | Element | VaultPeek Meaning |
 |---------|------------------|

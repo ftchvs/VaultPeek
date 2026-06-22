@@ -4,7 +4,7 @@ import Foundation
 /// `Table` (AND-539). A row is a single leaf ``SpendingCategory`` carrying its
 /// group context plus the three money columns, derived purely from the
 /// override-aware ``CategoryDashboardPresentation`` the dashboard already built —
-/// no recompute (spec §3/§4, Option A).
+/// no recompute (Option A).
 ///
 /// The flat table is the window's analytic counterpart to the two-level status-bar
 /// tree: every leaf in one sortable list, grouped-by visually via the carried

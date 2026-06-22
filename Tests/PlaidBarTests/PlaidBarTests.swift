@@ -814,7 +814,7 @@ struct PlaidBarTests {
     // MARK: - Destination restoration (mirrors NavigationModel.hydrate, AND-597)
     //
     // AND-597 adds a `navigation.destination` UserDefaults key so the window-first
-    // shell reopens on the destination the user left off (IA §2.1 selection
+    // shell reopens on the destination the user left off (selection
     // persistence). `NavigationModel` is in the app target (not @testable here), so
     // these pin the persist/restore contract at the pure layer: a stored
     // `RouteDestination.rawValue` decodes back to the same destination, and an

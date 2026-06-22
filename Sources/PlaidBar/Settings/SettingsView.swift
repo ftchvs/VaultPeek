@@ -1883,14 +1883,7 @@ struct AboutView: View {
                     "GitHub Repository",
                     systemImage: "chevron.left.forwardslash.chevron.right",
                     url: PlaidBarConstants.repositoryURL,
-                    detail: "Source, issues, and releases (private repository)."
-                )
-
-                supportLink(
-                    "1.0 Roadmap",
-                    systemImage: "map",
-                    url: PlaidBarConstants.repositoryFileURL("docs/v1.0-roadmap.md"),
-                    detail: "Product, design, system, security, and release plan."
+                    detail: "Source, issues, and releases."
                 )
 
                 supportLink(

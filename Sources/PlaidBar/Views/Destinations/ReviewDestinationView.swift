@@ -1,13 +1,13 @@
 import PlaidBarCore
 import SwiftUI
 
-/// **Review** destination (3-column — IA §3.1/§5.3, `[⌘2]`) — the flagship triage
+/// **Review** destination (3-column — `[⌘2]`) — the flagship triage
 /// surface (Epic 6, AND-584), the window-first re-host of the Copilot-style Review
-/// Inbox (spec §3/§5, Option A).
+/// Inbox (Option A).
 ///
 /// The content column is the triage flow itself; the detail column (`Inspector`)
 /// is a contextual triage guide. The detail column is **content-gated, not
-/// existence-gated** (IA §3.1): when the inbox is clear the inspector shows the
+/// existence-gated**: when the inbox is clear the inspector shows the
 /// "nothing to review" prompt rather than collapsing.
 ///
 /// **What this re-hosts (no engine work — wiring + surfacing only):**

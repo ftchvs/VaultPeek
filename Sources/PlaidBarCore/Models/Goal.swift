@@ -1,6 +1,6 @@
 import Foundation
 
-/// A user-defined **savings goal** (AND-606, ADR-001 window-first surface).
+/// A user-defined **savings goal** (AND-606).
 ///
 /// Net-new, app-local, local-first: a `Goal` is created and tracked entirely on
 /// the user's machine (persisted as JSON under the app data dir — no server

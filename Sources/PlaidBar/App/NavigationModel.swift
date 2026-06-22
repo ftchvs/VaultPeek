@@ -1,12 +1,12 @@
 import PlaidBarCore
 import SwiftUI
 
-/// Per-window navigation model for the window-first shell (ADR-001, AND-594).
+/// Per-window navigation model for the window-first shell (AND-594).
 ///
 /// Wraps the pure ``NavigationState`` (PlaidBarCore) with the `@Observable`
 /// `@MainActor` machinery SwiftUI needs and the UserDefaults persistence the
 /// migrated `@AppStorage` keys used to own. It is **per-window scene state, not a
-/// singleton** (R-10): the menu-bar popover gets one instance (via `AppState`),
+/// singleton**: the menu-bar popover gets one instance (via `AppState`),
 /// and any additional window-first `Window` scene constructs its own — so two
 /// windows hold independent selection. The state-transition logic stays in the
 /// pure value type; this is a thin, testable shell over it.
@@ -15,7 +15,7 @@ import SwiftUI
 /// (`dashboard.accountFilter`, `dashboard.selectedAccountId`,
 /// `dashboard.heatmapMode`) and raw values, so a user who upgrades keeps their
 /// last filter / selection / heatmap metric. Reading/writing through these keys
-/// (rather than scattered view-level `@AppStorage`) is the R-02 façade move: one
+/// (rather than scattered view-level `@AppStorage`) is the façade move: one
 /// routable state, same on-disk footprint.
 @Observable
 @MainActor
@@ -29,7 +29,7 @@ final class NavigationModel {
         /// The last selected destination's `RouteDestination.rawValue`. New in
         /// AND-597: the popover only ever showed Dashboard, so this key did not
         /// exist before; restoring it lets the window-first shell reopen on the
-        /// destination the user left off (IA §2.1 selection persistence). Absent ⇒
+        /// destination the user left off (selection persistence). Absent ⇒
         /// Dashboard, so an upgrading user (and the flag-OFF popover) is unchanged.
         static let destination = "navigation.destination"
         /// The Transaction Workspace filter/search, JSON-encoded (AND-582). New in
@@ -131,7 +131,7 @@ final class NavigationModel {
         state.deselectTransaction()
     }
 
-    // MARK: - Budgets / Alerts selection façade (AND-621, R-10)
+    // MARK: - Budgets / Alerts selection façade (AND-621)
 
     /// The selected Budgets category, or `nil` when none. Deliberately **not**
     /// persisted: like the transaction row selection it is ephemeral per-session
@@ -229,7 +229,7 @@ final class NavigationModel {
     /// (the ⌘K palette, the ⌘1–8 keymap, a glance-chip hand-off, and — Epic 8 —
     /// App Intents all funnel here via `AppState.route(to:)`). Sets the
     /// destination and folds in any carried selection, then persists both so a
-    /// relaunch restores exactly where the deep-link landed (IA §2.1).
+    /// relaunch restores exactly where the deep-link landed.
     func apply(_ route: Route) {
         state.apply(route)
         // A route may carry an account selection and always carries a

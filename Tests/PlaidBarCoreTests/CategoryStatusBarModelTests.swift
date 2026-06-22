@@ -92,7 +92,7 @@ struct CategoryStatusBarModelTests {
         #expect(model.status == .under) // summed 500/700 ≈ 71% → under
     }
 
-    /// Spec §7: leaf and group status are independent — a group can be over while
+    /// Leaf and group status are independent — a group can be over while
     /// every leaf is individually under.
     @Test("Group over while every leaf under (independent status)")
     func groupOverLeavesUnder() {

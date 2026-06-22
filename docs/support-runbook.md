@@ -112,11 +112,8 @@ What is true today, grounded in code and docs:
   proposed tiers; selecting a plan changes nothing, charges nothing, and grants
   no access." Treat any "managed plan" copy in the app as forward-looking.
 - **The pricing tiers, refund policy, and managed bridge are proposed, not
-  decided.** [`docs/strategy/pricing-and-launch.md`](strategy/pricing-and-launch.md)
-  is explicitly a "Design/research document only. Nothing in this doc is
-  implemented." Tier prices, the 30-day refund default, and managed linking are
-  **open decisions awaiting approval (D1–D10)** — do not quote them to users as
-  policy.
+  decided.** Tier prices, the 30-day refund default, and managed linking are
+  **open decisions awaiting approval** — do not quote them to users as policy.
 
 Operator response framework:
 
@@ -124,8 +121,8 @@ Operator response framework:
 |---|---|
 | "Did you charge me?" / "Will I be charged?" | No. VaultPeek does not charge anyone today; there is no billing system. Selecting a plan in the app charges nothing and grants nothing — it is a preview. **TBD — pending billing implementation (AND-393).** |
 | "How do I cancel my subscription?" | There is no subscription to cancel today. If they used BYO keys, their data is already entirely on their Mac; they can stop using the app and optionally reset local data (Section 3). Paid cancellation flow is **TBD — pending billing implementation (AND-393).** |
-| "I want a refund." | There is nothing billed to refund today. A refund policy is **proposed but not decided** (`pricing-and-launch.md` §9, D10) and is **TBD — pending billing implementation (AND-393).** Do not promise a window or terms. |
-| "What does my plan include / what are the prices?" | Prices in `pricing-and-launch.md` are **estimates in a proposal**, not published prices. Do not quote them as committed. The only thing live today is free BYO-keys and demo. **TBD — pending billing implementation (AND-393).** |
+| "I want a refund." | There is nothing billed to refund today. A refund policy is **proposed but not decided** and is **TBD — pending billing implementation (AND-393).** Do not promise a window or terms. |
+| "What does my plan include / what are the prices?" | Proposed prices are **estimates**, not published prices. Do not quote them as committed. The only thing live today is free BYO-keys and demo. **TBD — pending billing implementation (AND-393).** |
 | "Is my data on your servers now that I'm on a paid plan?" | No managed/hosted mode exists today; nothing is hosted. (See Section 5 privacy snippet, and the important caveat for the *future* managed mode in `docs/privacy.md`.) |
 
 Do not improvise billing behavior. If a user has a billing question this
@@ -136,9 +133,7 @@ do not invent an answer.
 
 > **TBD — pending managed-link implementation (AND-394).** Support-assisted
 > managed linking is not available today. Before it can be sold, the consent,
-> audit, and escalation rules in
-> [`docs/strategy/managed-link-consent-operations.md`](strategy/managed-link-consent-operations.md)
-> must be implemented and approved.
+> audit, and escalation rules must be implemented and approved.
 
 The planned boundary is strict: a helper may guide a user through VaultPeek
 screens and record a safe audit event, but must never ask for, receive, type, or
@@ -346,10 +341,7 @@ tell users it is notarized.)*
 - **Billing questions beyond Section 2:** escalate as a product question tagged
   AND-393; do not improvise.
 - **Managed-link consent, audit, account removal, or helper-boundary questions:**
-  managed support is not live. Escalate as a product question tagged AND-394 and
-  use
-  [`docs/strategy/managed-link-consent-operations.md`](strategy/managed-link-consent-operations.md)
-  as the design boundary.
+  managed support is not live. Escalate as a product question tagged AND-394.
 - **Anything requiring a secret to diagnose:** stop. If you cannot diagnose it
   from sanitized in-app text, `/api/status` words, and demo/sandbox repros, it
   escalates to engineering with a safe repro — it does not escalate by

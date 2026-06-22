@@ -2,7 +2,7 @@ import Testing
 @testable import PlaidBarCore
 
 /// Codifies the **App Lock + Privacy Mask cross-window parity** decision the
-/// window-first shell relies on (ADR-001 Epic 10 / AND-588). The popover, its
+/// window-first shell relies on (Epic 10 / AND-588). The popover, its
 /// detached host, and the window-first `AppShellView` all gate on the *same* pure
 /// `AppLockPreferences.effectiveDisplayMode(isAppLocked:)` decision via
 /// `AppState.isContentLocked` (== `effectiveDisplayMode == .locked`) and

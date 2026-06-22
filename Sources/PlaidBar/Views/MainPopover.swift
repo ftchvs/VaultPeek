@@ -745,7 +745,7 @@ private struct InspectorGlassMorphSurface: ViewModifier {
 
 // `AppLockedGateView` — the full-surface App Lock gate — was moved to its own
 // file (`Views/AppLockedGateView.swift`) so the window-first shell (`AppShellView`)
-// can reuse the *same* gate for App Lock parity (ADR-001 Epic 10 / AND-588). The
+// can reuse the *same* gate for App Lock parity (Epic 10 / AND-588). The
 // popover's `.overlay { if appState.isContentLocked { AppLockedGateView(...) } }`
 // usage above is unchanged — same view, same behavior, just relocated to module
 // scope.

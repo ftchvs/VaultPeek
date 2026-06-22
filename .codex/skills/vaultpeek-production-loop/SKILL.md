@@ -19,9 +19,8 @@ menu-bar instrument over new feature breadth.
 
 ## Rules
 
-- Work locally by default. Use the scoped VaultPeek approval recorded in
-  `docs/autonomous-roadmap.md` for push, PR creation, and merge only when the
-  current task is clearly inside that scope.
+- Work locally by default. Use a scoped VaultPeek approval for push, PR
+  creation, and merge only when the current task is clearly inside that scope.
 - Merge only after local gates pass, GitHub checks are green, review feedback is
   addressed, and a final safety read finds no secrets, real financial data,
   generated artifacts, or local-first boundary violations.
@@ -36,8 +35,8 @@ menu-bar instrument over new feature breadth.
 
 1. Inspect `git status --short --branch`, `GOAL.md`, `README.md`,
    `DESIGN.md`, and the files likely to change.
-2. Choose one unfinished task from `docs/autonomous-loop-backlog.md`, combining
-   adjacent tasks only when the PR remains easy to review.
+2. Choose one unfinished task from the current backlog, combining adjacent
+   tasks only when the PR remains easy to review.
 3. Implement using existing SwiftUI, `AppState`, `ServerClient`, settings,
    status, and `PlaidBarCore` patterns.
 4. Run:

@@ -37,10 +37,9 @@ VaultPeek does not include:
 
 VaultPeek's roadmap includes an optional **managed cloud bridge** for bank
 linking: instead of bringing your own Plaid keys, a hosted VaultPeek service
-would broker the bank connection on your behalf. In the planned design (see
-`docs/strategy/managed-link-architecture.md` and
-`docs/strategy/managed-link-consent-operations.md`), the boundary is **"never
-stored," not "never transits."** The broker would hold only your identity,
+would broker the bank connection on your behalf. In the planned design, the
+boundary is **"never stored," not "never transits."** The broker would hold
+only your identity,
 entitlement, and an item registry; your financial data (accounts, balances,
 transactions) would still live only on your Mac dashboard. But because Plaid
 requires VaultPeek's production credentials, managed-mode data-plane responses

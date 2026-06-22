@@ -5,7 +5,7 @@ import SwiftUI
 ///
 /// Reads the selected transaction id from the shared ``NavigationModel`` and
 /// resolves it (override-aware) against `AppState`. Content-gated: shows the
-/// "Select a transaction" prompt when nothing is selected (IA §3.1). All edits —
+/// "Select a transaction" prompt when nothing is selected. All edits —
 /// recategorize, add/clear note, mark / un-mark transfer, "always categorize"
 /// rule, mark reviewed — route through the existing `AppState` review path, so the
 /// inspector, the table, and the Review Inbox stay in lockstep and every edit is

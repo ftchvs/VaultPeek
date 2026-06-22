@@ -21,7 +21,7 @@ import SwiftUI
 ///
 /// This is the Insights canvas **hero** (AND-624): a prominent full-width card at
 /// the top of the destination, at the window (desk-distance) scale —
-/// ``WindowMetrics`` / ``WindowTypography``. Data stays solid (ADR-001: glass on
+/// ``WindowMetrics`` / ``WindowTypography``. Data stays solid (glass on
 /// chrome, not data), so the receipt sits on the quiet ``windowCardSurface()``
 /// rather than a translucent wash. Phase + provenance are carried by text + SF
 /// Symbol, never color alone (ACCESSIBILITY.md).

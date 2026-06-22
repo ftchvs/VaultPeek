@@ -2,7 +2,7 @@ import PlaidBarCore
 import SwiftUI
 
 /// **Dashboard** destination — the window-first *reference* surface (AND-624,
-/// building on AND-622; ADR-001 window-first workspace, IA §3.1/§5.1, `[⌘1]`).
+/// building on AND-622; `[⌘1]`).
 ///
 /// This is the design exemplar that sets the bar for the propagation pass across
 /// the other destinations: a **composed 2-column canvas that uses the window's
@@ -33,14 +33,14 @@ import SwiftUI
 ///    Each card self-cards (a ``WindowSection`` or its own chrome) with a `title3`
 ///    header. On a narrow window the two columns stack.
 ///
-/// **Drill-ins deep-link, they don't open a third column** (IA §3.1, §5.1): the
+/// **Drill-ins deep-link, they don't open a third column**: the
 /// 2-column dashboard has no inspector, so selecting an account routes to the
 /// **Accounts** destination via `\.openRoute`. With the window-first flag OFF the
 /// route handler is a no-op and this view is never instantiated, so the popover
 /// stays byte-identical.
 ///
 /// **Privacy Mask / App Lock:** the shell paints the full ``AppLockedGateView``
-/// over the whole window while content is *locked* (ADR-001 Epic 10 / AND-588),
+/// over the whole window while content is *locked* (Epic 10 / AND-588),
 /// so this canvas never double-gates; it only honors Privacy *Mask* the way the
 /// re-hosted subviews and the hero figures do (every value runs through
 /// `PrivacyMaskPresentation` / `shouldMaskFinancialValues`), so masked figures

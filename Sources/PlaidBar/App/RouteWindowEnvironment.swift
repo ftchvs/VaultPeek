@@ -2,9 +2,9 @@ import PlaidBarCore
 import SwiftUI
 
 /// Environment hook the menu-bar glance uses to deep-link a typed ``Route`` into
-/// the window-first primary `Window` (ADR-001 / AND-597).
+/// the window-first primary `Window` (AND-597).
 ///
-/// A glance attention chip is a launcher (IA §3.6 / §6): tapping it should open
+/// A glance attention chip is a launcher: tapping it should open
 /// the workspace **at the relevant destination**, not just raise the dashboard.
 /// The closure is supplied by the app scene (which owns SwiftUI's
 /// `openWindow(id:)` action) and forwards to `AppState.route(to:openWindow:)`, so
@@ -30,7 +30,7 @@ extension EnvironmentValues {
 }
 
 /// Environment hook the menu-bar **glance** uses to open the primary `Window`
-/// without a destination — the "Open VaultPeek" button (ADR-001 §6, AND-616).
+/// without a destination — the "Open VaultPeek" button (AND-616).
 ///
 /// Supplied by the app scene (which owns SwiftUI's `openWindow(id:)`). The
 /// default is a no-op so previews / snapshots / any host that does not wire the

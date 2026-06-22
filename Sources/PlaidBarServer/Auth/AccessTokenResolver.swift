@@ -9,9 +9,8 @@ import PlaidBarCore
 /// macOS Keychain (local custody). The consumer Hosted Link track needs a
 /// second posture — the *device* holds the token and supplies it on the request,
 /// while a stateless hosted proxy injects the org secret and never stores the
-/// token (`docs/strategy/managed-link-architecture.md` §5.4, Variant 1 device
-/// custody). This protocol is the single point both postures share so routes can
-/// adopt it without caring which one is active.
+/// token (Variant 1 device custody). This protocol is the single point both
+/// postures share so routes can adopt it without caring which one is active.
 ///
 /// `.local` mode uses `TokenStoreAccessTokenResolver`, which delegates verbatim
 /// to today's code path — so wiring this in is behavior-preserving. The
@@ -50,9 +49,8 @@ struct TokenStoreAccessTokenResolver: AccessTokenResolver {
 /// item-bound device token off the request) and fails closed until the gated
 /// bridge work lands — it must never silently fall back to an empty or
 /// unverified token. The eventual implementation must verify the token is bound
-/// to the named managed item before returning it (architecture doc §5.4
-/// "Managed Item binding"); this stub does no such verification and therefore
-/// refuses to run.
+/// to the named managed item before returning it (Managed Item binding); this
+/// stub does no such verification and therefore refuses to run.
 struct RequestSuppliedAccessTokenResolver: AccessTokenResolver {
     /// Header the device uses to supply its custodied access token in the future
     /// hosted-stateless posture. Defined now so the contract is documented in

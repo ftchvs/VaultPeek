@@ -19,7 +19,7 @@ import SwiftUI
 /// the card wraps its body in a ``WindowSection`` so it inherits the solid
 /// ``windowCardSurface()`` + 20pt (``WindowMetrics/md``) padding + `title3`
 /// (``WindowCardTitle``) header. Data stays solid — Liquid Glass goes on chrome,
-/// not on the financial figures (ADR-001: "glass on chrome, not data").
+/// not on the financial figures ("glass on chrome, not data").
 struct DashboardLocalInsightCard: View {
     @Environment(AppState.self) private var appState
 
@@ -153,7 +153,7 @@ struct DashboardLocalInsightCard: View {
         .padding(.horizontal, Spacing.sm)
         .padding(.vertical, Spacing.rowVertical)
         // A quiet `.quaternary` inner fill rather than Liquid Glass: even an inner
-        // evidence chip carries figures (data), so it stays solid (ADR-001).
+        // evidence chip carries figures (data), so it stays solid.
         .background(.quaternary, in: RoundedRectangle(cornerRadius: Radius.control))
         .help("\(chip.label): \(chip.value)")
     }

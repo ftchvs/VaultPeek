@@ -1,15 +1,14 @@
 import PlaidBarCore
 import SwiftUI
 
-/// **Accounts** destination (3-column — IA §3.1/§5.9, `[⌘8]`, AND-623 / AND-624,
-/// ADR-001).
+/// **Accounts** destination (3-column — `[⌘8]`, AND-623 / AND-624).
 ///
 /// The full account ledger, re-hosted at **window (desk-distance) density** to
 /// match the Dashboard reference (AND-624): a **headline metric row** over a
 /// **type-grouped account list** in the content column, feeding the existing
 /// ``AccountDetailFlyout`` in the inspector column. The shell renders this content
 /// column plus ``Inspector`` in the detail column, which is content-gated and shows
-/// "Select an account" when nothing is selected (IA §3.1).
+/// "Select an account" when nothing is selected.
 ///
 /// ## Window-scale layout (AND-624)
 /// This is a re-*host* of the same data the popover and Dashboard read — **no model
@@ -27,8 +26,8 @@ import SwiftUI
 /// ## Reused engines (nothing rebuilt)
 /// - **Selection** rides the existing per-window `NavigationState.selectedAccountID`
 ///   (the same `""`-sentinel slot the dashboard drill-in uses), so the list and the
-///   inspector share one source of truth and two windows select independently
-///   (R-10). No new navigation field is added.
+///   inspector share one source of truth and two windows select independently.
+///   No new navigation field is added.
 /// - **Grouping** is the pure, unit-tested ``AccountListGrouping`` (PlaidBarCore):
 ///   accounts bucket by ``AccountType`` into ordered, labeled sections, preserving
 ///   input order within each section.
@@ -298,7 +297,7 @@ struct AccountsDestinationView: View {
     /// The detail-column (inspector) pane for Accounts — the selected account's
     /// full detail and actions, re-hosting the existing ``AccountInspector`` /
     /// ``AccountDetailFlyout``. Content-gated: shows "Select an account" when
-    /// nothing is selected (IA §3.1). A separate `View` because the shell mounts the
+    /// nothing is selected. A separate `View` because the shell mounts the
     /// content and inspector columns independently; both read the shared selection
     /// from `AppState.navigationModel`.
     struct Inspector: View {

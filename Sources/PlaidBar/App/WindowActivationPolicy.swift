@@ -5,15 +5,14 @@ import SwiftUI
 /// Routes the declarative window-first `Window`'s open/close lifecycle through the
 /// shared, refcounted ``AppActivationPolicyCoordinator`` so the menu-bar app
 /// (`.accessory`) elevates to `.regular` while the primary workspace is on screen
-/// and drops back to `.accessory` when the last managed window closes (ADR-001 /
-/// AND-620, R-01).
+/// and drops back to `.accessory` when the last managed window closes (AND-620).
 ///
 /// SwiftUI gives a declarative `Window` no `NSWindowController` to hang
 /// `windowDidLoad` / `windowWillClose` on, so this helper bridges the gap with
 /// `.onAppear` / `.onDisappear` on the scene's root view. The legacy AppKit
 /// windows (detached dashboard, Category Dashboard, Review Table, Settings) keep
 /// their own imperative `requestRegular()` / `releaseRegular()` calls; retiring
-/// those controllers is Epic 3 (R-01). Because this helper drives the *same*
+/// those controllers is Epic 3. Because this helper drives the *same*
 /// shared coordinator instance, the new `Window` and the legacy windows share one
 /// authoritative refcount — opening a legacy window while the primary window is up,
 /// then closing one, does not prematurely drop the app to `.accessory`.

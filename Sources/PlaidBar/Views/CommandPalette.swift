@@ -1,13 +1,13 @@
 import PlaidBarCore
 import SwiftUI
 
-/// The ⌘K command palette overlay (ADR-001, IA §3.3, AND-596).
+/// The ⌘K command palette overlay (AND-596).
 ///
 /// A spotlight-style overlay rendered at the `AppShellView` window level: a
 /// search field over the pure ``CommandRegistry``, with fuzzy filtering
 /// (``FuzzyMatcher``), `↑`/`↓` to move, `Return` to execute, and `Esc` to
 /// dismiss. It is **keyboard-first** — the field auto-focuses on present, and
-/// every command is reachable without the mouse (IA §1.4 "Keyboard-first").
+/// every command is reachable without the mouse.
 ///
 /// Selecting a command dispatches its `Kind` through ``CommandDispatcher``, which
 /// calls the *existing* action paths (navigate → `NavigationModel.destination`;

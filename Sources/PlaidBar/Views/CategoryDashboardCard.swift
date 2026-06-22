@@ -6,7 +6,7 @@ import SwiftUI
 /// donut, the top spending group rollups, and an "Open dashboard" affordance that
 /// launches the full detached window.
 ///
-/// It is a thin assembler over already-built pieces (spec §3/§4, Option A):
+/// It is a thin assembler over already-built pieces:
 /// `SpendDonutChart` (AND-537) and per-group `CategoryStatusBar` rows (AND-538),
 /// all driven by the override-aware ``CategoryDashboardPresentation`` `AppState`
 /// already caches — the card never recomputes spend. Every derived number and the
@@ -23,8 +23,8 @@ struct CategoryDashboardCard: View {
 
     /// Mounts the shared card on the **window** workspace rather than the popover.
     /// In the window the card backs onto the solid window surface
-    /// (`windowCardSurface()` — HIG Materials / ADR-001 "glass on chrome, not
-    /// data"); in the popover (default) it keeps the raised glass surface.
+    /// (`windowCardSurface()` — HIG Materials, "glass on chrome, not data"); in the
+    /// popover (default) it keeps the raised glass surface.
     var inWindow: Bool = false
 
     private var presentation: CategoryDashboardPresentation {
@@ -62,8 +62,8 @@ struct CategoryDashboardCard: View {
     }
 
     /// Wraps the card content in the surface appropriate to where it is mounted:
-    /// the solid window card surface in the window (data stays solid — ADR-001
-    /// "glass on chrome, not data"), the raised glass surface in the popover.
+    /// the solid window card surface in the window (data stays solid — "glass on
+    /// chrome, not data"), the raised glass surface in the popover.
     /// `windowCardSurface()` does not self-pad, so window padding is applied here.
     @ViewBuilder
     private func surfaced(@ViewBuilder _ content: () -> some View) -> some View {

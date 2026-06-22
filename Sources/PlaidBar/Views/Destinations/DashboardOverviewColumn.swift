@@ -84,7 +84,7 @@ struct DashboardActivityHeatmapCard: View {
 /// - the **"what the bank said" balances** re-host the same Core ledger the popover
 ///   strip reads (``BalanceTimeMachineView``), folded in as a footer detail.
 ///
-/// **Drill-ins deep-link, not a third column** (IA §3.1, §5.1): selecting a row
+/// **Drill-ins deep-link, not a third column**: selecting a row
 /// calls `onSelectAccount`, which the destination routes to the **Accounts**
 /// destination via `\.openRoute`.
 ///

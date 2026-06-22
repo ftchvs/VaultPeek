@@ -6,8 +6,7 @@ description: Publish a VaultPeek branch, open/update a PR, and merge only throug
 # Push
 
 Use only after Felipe explicitly approves pushing/opening a PR, or when the run
-is clearly covered by the scoped VaultPeek approval recorded in
-`docs/autonomous-roadmap.md`.
+is clearly covered by a scoped VaultPeek approval.
 
 1. Confirm the branch and latest validation.
 2. Push the branch with tracking.

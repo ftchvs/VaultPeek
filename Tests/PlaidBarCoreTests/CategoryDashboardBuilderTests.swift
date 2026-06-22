@@ -286,7 +286,7 @@ struct CategoryDashboardBuilderTests {
         )
         let group = result.group(.healthAndWellness)
         // Group spend 185 vs summed limit 200 → nearing at group level even though
-        // neither leaf is over. (Independent group status — spec §7 edge case.)
+        // neither leaf is over. (Independent group status — edge case.)
         #expect(group?.spent == 185)
         #expect(group?.monthlyLimit == 200)
         #expect(group?.status == .nearing)

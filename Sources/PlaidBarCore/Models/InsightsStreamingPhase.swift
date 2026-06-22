@@ -1,7 +1,7 @@
 import Foundation
 
 /// The display phase for the **Insights** destination's streaming spending-insight
-/// surface (Epic 7 / AND-585, ADR-001 window-first).
+/// surface (Epic 7 / AND-585).
 ///
 /// The Foundation Models `@Generable` insight is produced asynchronously: the
 /// service first returns a deterministic, on-device fallback headline (so the

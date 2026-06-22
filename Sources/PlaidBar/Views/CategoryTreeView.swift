@@ -9,7 +9,7 @@ import SwiftUI
 /// ``CategoryDashboardPresentation/Leaf`` rows, each with its independent status
 /// bar. Group and leaf status are computed independently in the presentation —
 /// a group can read *over* while every leaf reads *under* — and this view simply
-/// renders whatever band each row was handed (spec §3/§4, §7).
+/// renders whatever band each row was handed.
 ///
 /// The view is injected with a finished ``CategoryDashboardPresentation``; it
 /// performs no aggregation, reads no `AppState`, and triggers no recompute. All
