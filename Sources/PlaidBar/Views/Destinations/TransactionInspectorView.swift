@@ -54,6 +54,14 @@ struct TransactionInspectorView: View {
             noteDraft = selectedRow?.note ?? ""
         }
         .onAppear { noteDraft = selectedRow?.note ?? "" }
+        // Drive the on-device income-subtype suggestion tier (priority #5). The
+        // deterministic heuristic floor runs on every device; FM refines it when
+        // Apple Intelligence is available. Re-runs when the income transaction count
+        // changes so newly-synced inflows get a subtype. Display-only — never
+        // auto-applied, never budget spend.
+        .task(id: appState.transactions.lazy.filter(\.isIncome).count) {
+            await appState.refreshIncomeCategorySuggestions()
+        }
     }
 
     // MARK: - Detail
@@ -158,6 +166,50 @@ struct TransactionInspectorView: View {
                     .font(.caption)
                     .foregroundStyle(SemanticColors.brand)
             }
+            incomeSubtypeRow(row)
+            plaidFallbackRow(row)
+        }
+    }
+
+    /// The smarter on-device *income* subtype (priority #5). Plaid collapses every
+    /// inflow into one `INCOME` bucket, so for income transactions we surface the
+    /// suggested subtype (salary / interest / refund / …) with a text+icon
+    /// "Suggested" badge (never color alone). Display-only: it never persists or
+    /// becomes spend. Trusted suggestions show plainly; an untrusted (`low`) one is
+    /// hedged as a "possible" subtype so a low-confidence guess never reads as fact.
+    @ViewBuilder
+    private func incomeSubtypeRow(_ row: TransactionWorkspace.Row) -> some View {
+        if row.transaction.isIncome,
+           let suggestion = appState.incomeCategorySuggestion(for: row.id) {
+            let prefix = suggestion.isTrusted ? "Income type" : "Possible income type"
+            Label("\(prefix): \(suggestion.category.displayName)", systemImage: suggestion.category.iconName)
+                .font(.caption)
+                .foregroundStyle(suggestion.isTrusted ? SemanticColors.brand : Color.secondary)
+                .accessibilityLabel("\(prefix), \(suggestion.category.displayName), suggested on device")
+        }
+    }
+
+    /// The auditable, restorable Plaid fallback (priority #5). When the effective
+    /// category overrides what Plaid classified, show Plaid's own answer (text +
+    /// icon, never color alone) and a one-tap "Restore Plaid category" affordance
+    /// that clears the user override so the resolver falls back to Plaid's category.
+    @ViewBuilder
+    private func plaidFallbackRow(_ row: TransactionWorkspace.Row) -> some View {
+        if row.isOverridingPlaid, let plaid = row.plaidCategory {
+            HStack(spacing: Spacing.xs) {
+                Label("Plaid classified as \(plaid.displayName)", systemImage: plaid.iconName)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: Spacing.xs)
+                Button {
+                    edit { appState.clearReviewCategory(row.id) }
+                } label: {
+                    Label("Restore Plaid category", systemImage: "arrow.uturn.backward")
+                }
+                .controlSize(.small)
+                .help("Clear your category and fall back to what Plaid classified (\(plaid.displayName))")
+            }
+            .accessibilityElement(children: .combine)
         }
     }
 
@@ -237,8 +289,14 @@ struct TransactionInspectorView: View {
         Binding(
             get: { row.effectiveCategory },
             set: { newValue in
-                guard let newValue, newValue != row.effectiveCategory else { return }
-                edit { appState.updateReviewCategory(row.id, category: newValue) }
+                guard newValue != row.effectiveCategory else { return }
+                if let newValue {
+                    edit { appState.updateReviewCategory(row.id, category: newValue) }
+                } else {
+                    // Selecting "Uncategorized" clears the user override, restoring
+                    // the auditable Plaid (or uncategorized) fallback (priority #5).
+                    edit { appState.clearReviewCategory(row.id) }
+                }
             }
         )
     }

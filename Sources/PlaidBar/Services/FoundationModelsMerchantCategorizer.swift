@@ -42,7 +42,28 @@ struct FoundationModelsMerchantCategorizer: FMMerchantCategorizing {
 
         #if canImport(FoundationModels)
         if #available(macOS 26, *) {
-            return await Self.generate(merchant: cleaned)
+            return await Self.generate(prompt: "Categorize this merchant: \"\(cleaned)\"")
+        } else {
+            return nil
+        }
+        #else
+        return nil
+        #endif
+    }
+
+    /// Richer, injection-safe path (priority #5): prompts the model with the
+    /// `CategorySuggestionContext` (Plaid hint + recurring flag + inflow/outflow)
+    /// instead of the bare merchant string. The fragment is single-line and
+    /// sanitized inside Core, and the output is STILL constrained to the 16-case
+    /// enum, so no injection can produce an out-of-set category. Falls back to the
+    /// merchant-only call when there is no merchant signal.
+    func suggestCategory(context: CategorySuggestionContext) async -> String? {
+        guard context.hasMerchantSignal else { return nil }
+
+        #if canImport(FoundationModels)
+        if #available(macOS 26, *) {
+            let fragment = context.promptFragment()
+            return await Self.generate(prompt: "Categorize this transaction. \(fragment)")
         } else {
             return nil
         }
@@ -130,12 +151,11 @@ extension FoundationModelsMerchantCategorizer {
     /// string, or `nil` on any failure (unavailable, guardrail, model error,
     /// timeout, or cancellation) so the caller degrades to NL. The string boundary
     /// keeps the string→enum mapping in `PlaidBarCore` (`FMSpendingCategoryMapper`).
-    static func generate(merchant: String) async -> String? {
+    static func generate(prompt: String) async -> String? {
         // A fresh session per call keeps the categorizer stateless and avoids
         // cross-merchant context bleed. Greedy sampling makes the choice
         // deterministic for a given merchant.
         let session = LanguageModelSession(instructions: instructions)
-        let prompt = "Categorize this merchant: \"\(merchant)\""
         let options = GenerationOptions(sampling: .greedy)
 
         // Race the generation against an explicit deadline so an on-device call

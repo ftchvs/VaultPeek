@@ -36,6 +36,21 @@ public enum EffectiveCategoryResolver {
         /// **never** the aggregation category. `nil` when there is no trusted NL
         /// suggestion (or the category was already settled by user/rule).
         public let suggestedCategory: SpendingCategory?
+        /// The raw Plaid category exactly as Plaid classified the transaction
+        /// (`transaction.category`), surfaced verbatim as the *auditable, visible,
+        /// restorable* fallback (priority #5). This is a pure passthrough — it never
+        /// participates in the budget-precedence chain and is never re-derived — so a
+        /// display consumer can always show "Plaid classified as <X>" and offer to
+        /// restore it, no matter what the budget `category` resolved to. `nil` when
+        /// Plaid returned no category at all.
+        public let plaidCategory: SpendingCategory?
+        /// Whether the effective (budget) `category` differs from what Plaid
+        /// classified — i.e. a user override or rule is currently overriding Plaid's
+        /// own answer. Drives the "Restore Plaid category" affordance: it is `true`
+        /// only when there is a Plaid category AND the budget category came from the
+        /// user/rule (not from Plaid itself) AND the two differ. Display-only; it does
+        /// not affect aggregation.
+        public let isOverridingPlaid: Bool
         /// Whether this row is a transfer (own-account move / card payment) and so
         /// must never count as category spend.
         public let isTransfer: Bool
@@ -47,12 +62,16 @@ public enum EffectiveCategoryResolver {
             category: SpendingCategory?,
             source: LocalAICategoryResolutionSource?,
             suggestedCategory: SpendingCategory? = nil,
+            plaidCategory: SpendingCategory? = nil,
+            isOverridingPlaid: Bool = false,
             isTransfer: Bool,
             excludedFromBudgets: Bool
         ) {
             self.category = category
             self.source = source
             self.suggestedCategory = suggestedCategory
+            self.plaidCategory = plaidCategory
+            self.isOverridingPlaid = isOverridingPlaid
             self.isTransfer = isTransfer
             self.excludedFromBudgets = excludedFromBudgets
         }
@@ -214,10 +233,23 @@ public enum EffectiveCategoryResolver {
             || (firstRuleValue(matchedRules, \.excludedFromBudgets) == true)
             || isTransfer
 
+        // Plaid passthrough (priority #5): expose Plaid's raw category verbatim as
+        // the auditable, restorable fallback. `isOverridingPlaid` is true only when
+        // the budget category was supplied by the user/rule (i.e. NOT by Plaid:
+        // `budgetSource != .plaidCategory`) AND it differs from Plaid's answer — so
+        // the UI can offer "Restore Plaid category". Pure display signal; it does not
+        // touch the precedence chain or aggregation above.
+        let plaidCategory = transaction.category
+        let isOverridingPlaid = plaidCategory != nil
+            && budgetSource != .plaidCategory
+            && budgetCategory != plaidCategory
+
         return Resolution(
             category: budgetCategory,
             source: budgetSource,
             suggestedCategory: suggestedCategory,
+            plaidCategory: plaidCategory,
+            isOverridingPlaid: isOverridingPlaid,
             isTransfer: isTransfer,
             excludedFromBudgets: excludedFromBudgets
         )

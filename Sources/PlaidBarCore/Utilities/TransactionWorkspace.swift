@@ -253,6 +253,14 @@ public extension TransactionWorkspace {
         /// Display-only on-device NL suggestion (the "Suggested" badge), when the
         /// category came from neither the user nor a rule.
         public let suggestedCategory: SpendingCategory?
+        /// Plaid's raw category exactly as Plaid classified it — the auditable,
+        /// restorable fallback (priority #5). Pure passthrough; `nil` when Plaid
+        /// returned no category.
+        public let plaidCategory: SpendingCategory?
+        /// Whether the effective (budget) category currently overrides Plaid's own
+        /// answer (a user override / rule that differs from Plaid). Drives the
+        /// "Restore Plaid category" affordance.
+        public let isOverridingPlaid: Bool
         public let isTransfer: Bool
         public let excludedFromBudgets: Bool
         public let status: TransactionReviewStatus
@@ -266,6 +274,8 @@ public extension TransactionWorkspace {
             merchantName: String,
             effectiveCategory: SpendingCategory?,
             suggestedCategory: SpendingCategory?,
+            plaidCategory: SpendingCategory? = nil,
+            isOverridingPlaid: Bool = false,
             isTransfer: Bool,
             excludedFromBudgets: Bool,
             status: TransactionReviewStatus,
@@ -275,6 +285,8 @@ public extension TransactionWorkspace {
             self.merchantName = merchantName
             self.effectiveCategory = effectiveCategory
             self.suggestedCategory = suggestedCategory
+            self.plaidCategory = plaidCategory
+            self.isOverridingPlaid = isOverridingPlaid
             self.isTransfer = isTransfer
             self.excludedFromBudgets = excludedFromBudgets
             self.status = status
@@ -324,6 +336,8 @@ public extension TransactionWorkspace {
                 merchantName: merchant,
                 effectiveCategory: resolution.category,
                 suggestedCategory: resolution.suggestedCategory,
+                plaidCategory: resolution.plaidCategory,
+                isOverridingPlaid: resolution.isOverridingPlaid,
                 isTransfer: resolution.isTransfer,
                 excludedFromBudgets: resolution.excludedFromBudgets,
                 status: own?.status ?? .needsReview,

@@ -405,6 +405,80 @@ struct EffectiveCategoryResolverTests {
 
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
 
+    // MARK: - Plaid passthrough fallback (priority #5)
+
+    @Test("Plaid passthrough exposes the raw Plaid category verbatim")
+    func plaidPassthroughExposesRawCategory() {
+        let transaction = tx(id: "pt", category: .shopping)
+
+        let resolution = EffectiveCategoryResolver.resolve(transaction: transaction)
+
+        #expect(resolution.plaidCategory == .shopping)
+        // Plaid is the source of the budget category here → not overriding Plaid.
+        #expect(resolution.isOverridingPlaid == false)
+    }
+
+    @Test("isOverridingPlaid is true when a user override differs from Plaid")
+    func overridingPlaidWhenUserDiffers() {
+        let transaction = tx(id: "ov", category: .shopping)
+        let metadata = TransactionReviewMetadata(id: "ov", userCategory: .foodAndDrink)
+
+        let resolution = EffectiveCategoryResolver.resolve(transaction: transaction, metadata: metadata)
+
+        #expect(resolution.category == .foodAndDrink)
+        #expect(resolution.plaidCategory == .shopping)
+        #expect(resolution.isOverridingPlaid == true)
+    }
+
+    @Test("isOverridingPlaid is false when the user override matches Plaid")
+    func notOverridingWhenUserMatchesPlaid() {
+        let transaction = tx(id: "match", category: .shopping)
+        let metadata = TransactionReviewMetadata(id: "match", userCategory: .shopping)
+
+        let resolution = EffectiveCategoryResolver.resolve(transaction: transaction, metadata: metadata)
+
+        #expect(resolution.plaidCategory == .shopping)
+        #expect(resolution.isOverridingPlaid == false)
+    }
+
+    @Test("isOverridingPlaid is true when a rule differs from Plaid")
+    func overridingPlaidWhenRuleDiffers() {
+        let transaction = tx(id: "rule", name: "ACME STORE", category: .shopping, merchantName: "Acme")
+        let rule = TransactionRule(matchMerchantContains: "Acme", category: .homeImprovement)
+
+        let resolution = EffectiveCategoryResolver.resolve(transaction: transaction, rules: [rule])
+
+        #expect(resolution.category == .homeImprovement)
+        #expect(resolution.plaidCategory == .shopping)
+        #expect(resolution.isOverridingPlaid == true)
+    }
+
+    @Test("Nil Plaid category never reads as overriding Plaid")
+    func nilPlaidNeverOverriding() {
+        let transaction = tx(id: "nilp", name: "BLUE BOTTLE COFFEE", category: nil, merchantName: nil)
+        let metadata = TransactionReviewMetadata(id: "nilp", userCategory: .foodAndDrink)
+
+        let resolution = EffectiveCategoryResolver.resolve(transaction: transaction, metadata: metadata)
+
+        #expect(resolution.plaidCategory == nil)
+        #expect(resolution.isOverridingPlaid == false)
+    }
+
+    @Test("Plaid passthrough does not change the budget precedence (invariant)")
+    func plaidPassthroughDoesNotChangeBudgetCategory() {
+        // A nil-category, NL-recognizable transaction: the budget category must stay
+        // nil (NL is display-only) regardless of the new passthrough fields.
+        let transaction = tx(id: "inv", name: "BLUE BOTTLE COFFEE", category: nil, merchantName: nil)
+
+        let resolution = EffectiveCategoryResolver.resolve(transaction: transaction)
+
+        #expect(resolution.category == nil)
+        #expect(resolution.source == nil)
+        #expect(resolution.suggestedCategory == .foodAndDrink)
+        #expect(resolution.plaidCategory == nil)
+        #expect(resolution.isOverridingPlaid == false)
+    }
+
     private func tx(
         id: String,
         amount: Double = 12,
