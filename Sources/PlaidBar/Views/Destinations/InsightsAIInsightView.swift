@@ -35,7 +35,20 @@ struct InsightsAIInsightView: View {
     }
 
     private var primarySummary: LocalAIActivitySummary? {
-        summaries.first { $0.window == .lastMonth } ?? summaries.first
+        appState.selectedInsightSummary
+    }
+
+    /// Ordered window options + which are usable + the resolved selection, computed
+    /// in Core from the already-on-device summaries (no new model run).
+    private var windowSelection: LocalAIInsightWindowSelection {
+        appState.localAIWindowSelection
+    }
+
+    private var selectedWindowBinding: Binding<LocalAIInsightWindow> {
+        Binding(
+            get: { appState.selectedInsightWindow },
+            set: { appState.selectedInsightWindow = $0 }
+        )
     }
 
     private var availability: LocalAIAvailability {
@@ -78,6 +91,7 @@ struct InsightsAIInsightView: View {
             if phase == .off {
                 offState
             } else {
+                windowSelector
                 insightBody
             }
         }
@@ -182,6 +196,75 @@ struct InsightsAIInsightView: View {
             text += " (\(probe))"
         }
         return text
+    }
+
+    // MARK: - Window selector
+
+    /// Three-window switcher (7-day / 30-day / year-over-year). A chip row rather
+    /// than a plain segmented `Picker` so an unusable window (e.g. year-over-year
+    /// before a year of history) can be disabled in place with an explanation,
+    /// keeping the menu shape stable. Each chip carries an SF Symbol + text label so
+    /// the selected/disabled state never rides on color alone (ACCESSIBILITY.md).
+    private var windowSelector: some View {
+        let selection = windowSelection
+        return HStack(spacing: WindowMetrics.xs) {
+            ForEach(selection.options) { option in
+                windowChip(for: option)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Insight time window")
+    }
+
+    @ViewBuilder
+    private func windowChip(for option: LocalAIInsightWindowSelection.Option) -> some View {
+        let window = option.window
+        let isSelected = appState.selectedInsightWindow == window
+        Button {
+            selectedWindowBinding.wrappedValue = window
+        } label: {
+            Label {
+                Text(window.longDisplayName)
+            } icon: {
+                Image(systemName: window.systemImage)
+            }
+            .labelStyle(.titleAndIcon)
+            .font(.subheadline.weight(isSelected ? .semibold : .regular))
+            .padding(.horizontal, Spacing.sm)
+            .padding(.vertical, Spacing.xs)
+            .frame(maxWidth: .infinity)
+            .background(
+                isSelected ? AnyShapeStyle(SemanticColors.brand.opacity(0.16)) : AnyShapeStyle(Color.primary.opacity(0.05)),
+                in: Capsule()
+            )
+            .overlay {
+                Capsule().stroke(
+                    isSelected ? SemanticColors.brand.opacity(0.45) : Color.primary.opacity(0.08),
+                    lineWidth: isSelected ? 1.5 : 1
+                )
+            }
+            // The selected chip also carries a checkmark so selection reads without
+            // relying on the tint/weight difference alone.
+            .overlay(alignment: .topTrailing) {
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.caption2)
+                        .foregroundStyle(SemanticColors.brand)
+                        .padding(2)
+                        .accessibilityHidden(true)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(!option.isUsable)
+        .opacity(option.isUsable ? 1 : 0.5)
+        .help(option.isUsable ? window.accessibilityName : (option.unavailableReason ?? "Not available yet."))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(window.accessibilityName)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityHint(option.isUsable
+            ? "Shows the \(window.accessibilityName.lowercased()) spending summary."
+            : (option.unavailableReason ?? "Not available yet."))
     }
 
     // MARK: - Off state (consent)

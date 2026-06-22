@@ -1245,16 +1245,15 @@ private struct LocalInsightsCard: View {
     @Environment(AppState.self) private var appState
     @Environment(\.openSettings) private var openSettings
 
-    private var summaries: [LocalAIActivitySummary] {
-        appState.localAIActivitySummaries
-    }
-
     private var availability: LocalAIAvailability {
         primarySummary?.availability ?? appState.localAIAvailability
     }
 
     private var primarySummary: LocalAIActivitySummary? {
-        summaries.first { $0.window == .lastMonth } ?? summaries.first
+        // The menu-bar glance stays on the 30-day window by design, but reads
+        // through the shared accessor so it can never diverge from how the window
+        // surfaces resolve a summary (fallbacks included).
+        appState.summary(for: .lastMonth)
     }
 
     private var bullets: [String] {

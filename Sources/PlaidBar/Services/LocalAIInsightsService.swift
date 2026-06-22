@@ -172,8 +172,8 @@ struct LocalAIInsightsService: Sendable {
                 window: input.window,
                 availability: availability,
                 input: input,
-                generatedSummary: Self.summaryText(for: input),
-                generatedBullets: Self.bullets(for: input),
+                generatedSummary: LocalAIDeterministicSummary.summaryText(for: input),
+                generatedBullets: LocalAIDeterministicSummary.bullets(for: input),
                 evidence: input.evidence
             )
         }
@@ -314,7 +314,7 @@ struct LocalAIInsightsService: Sendable {
             if Task.isCancelled { break }
 
             let fallbackSummary: @Sendable (LocalAIActivitySummaryInput) -> String = { input in
-                Self.summaryText(for: input)
+                LocalAIDeterministicSummary.summaryText(for: input)
             }
             let generated = await LocalInsightModelRuntime.generateSummary(
                 input: input,
@@ -334,7 +334,7 @@ struct LocalAIInsightsService: Sendable {
                     availability: summaryAvailability,
                     input: input,
                     generatedSummary: generated.summary,
-                    generatedBullets: Self.bullets(for: input),
+                    generatedBullets: LocalAIDeterministicSummary.bullets(for: input),
                     evidence: input.evidence
                 )
             )
@@ -411,61 +411,6 @@ struct LocalAIInsightsService: Sendable {
         return OllamaLocalInsightModel.isLocalhost(baseURL)
     }
 
-    private static func summaryText(for input: LocalAIActivitySummaryInput) -> String {
-        let expenseText = Formatters.currency(input.current.expenseTotal, format: .compact)
-        let incomeText = Formatters.currency(input.current.incomeTotal, format: .compact)
-        let netText = signedCurrency(input.current.netCashflow)
-        return "\(input.window.displayName): \(expenseText) expenses, \(incomeText) income, \(netText) net cashflow."
-    }
-
-    private static func bullets(for input: LocalAIActivitySummaryInput) -> [String] {
-        var bullets: [String] = []
-
-        if let topCategory = input.current.categoryTotals.first {
-            bullets
-                .append(
-                    "\(topCategory.category.displayName) led expenses at \(Formatters.currency(topCategory.totalAmount, format: .compact)) from \(topCategory.transactionCount) transaction\(topCategory.transactionCount == 1 ? "" : "s")."
-                )
-        }
-
-        if let topExpense = input.current.topExpenses.first {
-            bullets
-                .append(
-                    "Largest outflow was \(topExpense.displayName) at \(Formatters.currency(topExpense.amount, format: .compact))."
-                )
-        }
-
-        if let prior = input.prior, prior.expenseTotal > 0 {
-            let delta = input.current.expenseTotal - prior.expenseTotal
-            let direction = delta >= 0 ? "up" : "down"
-            bullets
-                .append(
-                    "Expenses are \(direction) \(Formatters.currency(abs(delta), format: .compact)) versus the comparison window."
-                )
-        }
-
-        if input.current.netCashflow != 0 {
-            bullets.append("Net cashflow is \(signedCurrency(input.current.netCashflow)) after income and expenses.")
-        }
-
-        if input.recurringSnapshot.estimatedMonthlyTotal > 0 {
-            bullets
-                .append(
-                    "Recurring charges estimate \(Formatters.currency(input.recurringSnapshot.estimatedMonthlyTotal, format: .compact)) per month."
-                )
-        }
-
-        if bullets.isEmpty {
-            bullets.append("No transaction activity is available for this local summary window.")
-        }
-
-        return Array(bullets.prefix(4))
-    }
-
-    private static func signedCurrency(_ amount: Double) -> String {
-        let prefix = amount > 0 ? "+" : amount < 0 ? "-" : ""
-        return "\(prefix)\(Formatters.currency(abs(amount), format: .compact))"
-    }
 }
 
 private extension String {

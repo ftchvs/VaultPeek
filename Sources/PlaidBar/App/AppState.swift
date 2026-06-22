@@ -51,6 +51,7 @@ final class AppState {
         static let appLockLockWhenBackgrounded = "appLock.lockWhenBackgrounded"
         static let localAIEnabled = "localAIEnabled"
         static let localAIModelName = "localAIModelName"
+        static let selectedInsightWindow = "localAI.selectedInsightWindow"
         static let setupCompletedOnce = "setup.completedOnce"
         static let setupCompletedContextPrefix = "setup.completedOnce.context"
         static let firstRunSnapshotDismissedContextPrefix = "firstRunSnapshot.dismissed.context"
@@ -542,6 +543,19 @@ final class AppState {
             invalidateLocalAIActivitySummaries()
         }
     }
+    /// The insight time-window the user last chose in the Insights surface
+    /// (AND-585 follow-up). All three windows — 7-day, 30-day, year-over-year — are
+    /// already computed on-device every refresh; this only selects which one the
+    /// surfaces read. Persisted like the other local-AI preferences; defaults to
+    /// `.lastMonth` (the historical hardcoded window) so behavior is unchanged for
+    /// anyone who never touches the selector. UI-only — no model run is triggered.
+    var selectedInsightWindow: LocalAIInsightWindow = .lastMonth {
+        didSet {
+            guard selectedInsightWindow != oldValue, !isLoadingLocalAISettings else { return }
+            UserDefaults.standard.set(selectedInsightWindow.rawValue, forKey: Keys.selectedInsightWindow)
+        }
+    }
+
     var isCheckingLocalAIAvailability = false
 
     var launchAtLogin: Bool = false {
@@ -961,6 +975,14 @@ final class AppState {
         } else {
             localAIModelNamePreference = nil
             localAIModelName = Self.normalizedLocalAIModelName(environment["PLAIDBAR_LOCAL_AI_MODEL"]) ?? "llama3.2"
+        }
+
+        if let storedWindow = defaults.string(forKey: Keys.selectedInsightWindow),
+           let window = LocalAIInsightWindow(rawValue: storedWindow)
+        {
+            selectedInsightWindow = window
+        } else {
+            selectedInsightWindow = .lastMonth
         }
     }
 
@@ -1978,6 +2000,33 @@ final class AppState {
             transactionCount: transactions.count
         )
         return result
+    }
+
+    /// The on-device summary for a specific window, or the closest available
+    /// fallback (the requested window, then `.lastMonth`, then the first summary).
+    /// All three windows are computed every refresh, so selecting one never starts
+    /// a new model run.
+    func summary(for window: LocalAIInsightWindow) -> LocalAIActivitySummary? {
+        let summaries = localAIActivitySummaries
+        return summaries.first { $0.window == window }
+            ?? summaries.first { $0.window == .lastMonth }
+            ?? summaries.first
+    }
+
+    /// The summary for the window the user currently has selected in the Insights
+    /// surface. Convenience over `summary(for: selectedInsightWindow)`.
+    var selectedInsightSummary: LocalAIActivitySummary? {
+        summary(for: selectedInsightWindow)
+    }
+
+    /// The selector presentation (ordered options + which are usable + the resolved
+    /// selection) for the chosen window. Pure logic lives in Core; this binds it to
+    /// the live summaries and persisted selection.
+    var localAIWindowSelection: LocalAIInsightWindowSelection {
+        LocalAIInsightWindowSelection.make(
+            summaries: localAIActivitySummaries,
+            requestedSelection: selectedInsightWindow
+        )
     }
 
     private func invalidateLocalAIActivitySummaries() {

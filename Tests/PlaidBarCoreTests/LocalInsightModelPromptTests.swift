@@ -11,7 +11,7 @@ struct LocalInsightModelPromptTests {
     private let rawSourceId = "RAWSOURCEID_SENTINEL_5560"
     private let rawItemId = "RAWITEMID_SENTINEL_9921"
 
-    private func input(prior: Bool = true) -> LocalAIActivitySummaryInput {
+    private func input(prior: Bool = true, window: LocalAIInsightWindow = .lastMonth) -> LocalAIActivitySummaryInput {
         let evidence = [
             LocalAIInsightEvidence(
                 kind: .transaction,
@@ -67,7 +67,7 @@ struct LocalInsightModelPromptTests {
             topIncome: []
         )
         return LocalAIActivitySummaryInput(
-            window: .lastMonth,
+            window: window,
             currentRange: LocalAIInsightDateRange(startDate: "2026-05-13", endDate: "2026-06-11"),
             priorRange: LocalAIInsightDateRange(startDate: "2026-04-13", endDate: "2026-05-12"),
             categorySuggestions: [],
@@ -122,7 +122,22 @@ struct LocalInsightModelPromptTests {
     func omitsPriorWhenAbsent() {
         let prompt = LocalInsightPromptBuilder.make(from: input(prior: false)).user
         #expect(!prompt.contains("prior expenses"))
-        #expect(!prompt.contains("Versus the prior period"))
+        #expect(!prompt.contains("Versus"))
+    }
+
+    @Test("Comparison wording is window-aware (7d / 30d / YoY phrase differently)")
+    func windowAwareComparisonPhrasing() {
+        let last7 = LocalInsightPromptBuilder.make(from: input(window: .last7days)).user
+        #expect(last7.contains("Versus the prior 7 days"))
+        #expect(!last7.contains("a year ago"))
+
+        let lastMonth = LocalInsightPromptBuilder.make(from: input(window: .lastMonth)).user
+        #expect(lastMonth.contains("Versus the prior 30 days"))
+
+        let yoy = LocalInsightPromptBuilder.make(from: input(window: .yearOverYear)).user
+        #expect(yoy.contains("Versus the same period a year ago"))
+        #expect(!yoy.contains("prior 30 days"))
+        #expect(!yoy.contains("prior 7 days"))
     }
 
     @Test("System instruction carries the local-only guardrails")

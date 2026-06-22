@@ -1,5 +1,88 @@
 import Foundation
 
+/// The deterministic, no-runtime fallback copy for a local AI activity summary.
+///
+/// This is the always-available baseline phrasing VaultPeek shows when no on-device
+/// model runtime contributed (the consent contract: there is no cloud fallback).
+/// It lives in `PlaidBarCore` so it is pure, `Sendable`, and unit-testable — the
+/// app-side service simply delegates here, so the user-facing copy can never drift
+/// between the deterministic and model-enhanced paths.
+///
+/// Phrasing is window-aware via ``LocalAIInsightWindow/displayName`` and stays
+/// identifier-free: only display-safe aggregates (totals, category/merchant display
+/// names) are rendered, never raw transaction/account IDs.
+public enum LocalAIDeterministicSummary {
+    /// One-to-two sentence headline of the window's cashflow.
+    public static func summaryText(for input: LocalAIActivitySummaryInput) -> String {
+        let expenseText = Formatters.currency(input.current.expenseTotal, format: .compact)
+        let incomeText = Formatters.currency(input.current.incomeTotal, format: .compact)
+        let netText = signedCurrency(input.current.netCashflow)
+        return "\(input.window.displayName): \(expenseText) expenses, \(incomeText) income, \(netText) net cashflow."
+    }
+
+    /// Up to four supporting bullets: top category, largest outflow, a window-aware
+    /// comparison-window delta, net cashflow, and recurring estimate.
+    public static func bullets(for input: LocalAIActivitySummaryInput) -> [String] {
+        var bullets: [String] = []
+
+        if let topCategory = input.current.categoryTotals.first {
+            bullets
+                .append(
+                    "\(topCategory.category.displayName) led expenses at \(Formatters.currency(topCategory.totalAmount, format: .compact)) from \(topCategory.transactionCount) transaction\(topCategory.transactionCount == 1 ? "" : "s")."
+                )
+        }
+
+        if let topExpense = input.current.topExpenses.first {
+            bullets
+                .append(
+                    "Largest outflow was \(topExpense.displayName) at \(Formatters.currency(topExpense.amount, format: .compact))."
+                )
+        }
+
+        if let prior = input.prior, prior.expenseTotal > 0 {
+            let delta = input.current.expenseTotal - prior.expenseTotal
+            let direction = delta >= 0 ? "up" : "down"
+            bullets
+                .append(
+                    "Expenses are \(direction) \(Formatters.currency(abs(delta), format: .compact)) versus \(comparisonWindowPhrase(for: input.window))."
+                )
+        }
+
+        if input.current.netCashflow != 0 {
+            bullets.append("Net cashflow is \(signedCurrency(input.current.netCashflow)) after income and expenses.")
+        }
+
+        if input.recurringSnapshot.estimatedMonthlyTotal > 0 {
+            bullets
+                .append(
+                    "Recurring charges estimate \(Formatters.currency(input.recurringSnapshot.estimatedMonthlyTotal, format: .compact)) per month."
+                )
+        }
+
+        if bullets.isEmpty {
+            bullets.append("No transaction activity is available for this local summary window.")
+        }
+
+        return Array(bullets.prefix(4))
+    }
+
+    /// Window-aware phrasing for the comparison span the delta is measured against.
+    /// Year-over-year compares to the same span a year earlier; the rolling windows
+    /// compare to the immediately preceding span of equal length.
+    public static func comparisonWindowPhrase(for window: LocalAIInsightWindow) -> String {
+        switch window {
+        case .last7days: "the prior 7 days"
+        case .lastMonth: "the prior 30 days"
+        case .yearOverYear: "the same period a year ago"
+        }
+    }
+
+    public static func signedCurrency(_ amount: Double) -> String {
+        let prefix = amount > 0 ? "+" : amount < 0 ? "-" : ""
+        return "\(prefix)\(Formatters.currency(abs(amount), format: .compact))"
+    }
+}
+
 public enum LocalAICategorizationResolver {
     public static let defaultHighConfidenceThreshold = 0.85
 
