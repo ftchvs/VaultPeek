@@ -209,7 +209,12 @@ struct InsightsAIInsightView: View {
         let selection = windowSelection
         return HStack(spacing: WindowMetrics.xs) {
             ForEach(selection.options) { option in
-                windowChip(for: option)
+                // Mark the chip selected off the RESOLVED selection, not the raw
+                // `selectedInsightWindow`: when the requested window is unusable the
+                // selector falls back to a usable one, and the displayed summary
+                // already follows `resolvedSelection`. Highlighting the raw window
+                // would mark a disabled chip selected while a different summary shows.
+                windowChip(for: option, resolvedSelection: selection.resolvedSelection)
             }
         }
         .accessibilityElement(children: .contain)
@@ -217,9 +222,12 @@ struct InsightsAIInsightView: View {
     }
 
     @ViewBuilder
-    private func windowChip(for option: LocalAIInsightWindowSelection.Option) -> some View {
+    private func windowChip(
+        for option: LocalAIInsightWindowSelection.Option,
+        resolvedSelection: LocalAIInsightWindow
+    ) -> some View {
         let window = option.window
-        let isSelected = appState.selectedInsightWindow == window
+        let isSelected = resolvedSelection == window
         Button {
             selectedWindowBinding.wrappedValue = window
         } label: {

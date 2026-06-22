@@ -77,6 +77,61 @@ struct TransactionWorkspaceTests {
         #expect(rows[0].hasNote)
     }
 
+    // MARK: - Plaid restore affordance (codex #1 / #3)
+
+    @Test("A user override over confident Plaid is restorable per-row")
+    func userOverrideRowIsRestorable() {
+        let metadata = [TransactionReviewMetadata(id: "a", userCategory: .travel)]
+        let rows = TransactionWorkspace.rows(
+            transactions: [tx("a", category: .shopping)],
+            metadata: metadata,
+            rules: []
+        )
+        #expect(rows[0].isOverridingPlaid)
+        #expect(rows[0].overrideOrigin == .user)
+        #expect(rows[0].canRestorePlaidCategory)
+        #expect(!rows[0].isOverriddenByRule)
+    }
+
+    @Test("A rule-backed category over Plaid is NOT per-row restorable")
+    func ruleBackedRowNotRestorable() {
+        // The "Restore Plaid category" button only clears the per-transaction
+        // userCategory, which a rule-backed row does not have — so the inspector must
+        // not offer it (it would no-op). The row reports the override as rule-origin.
+        let rule = TransactionRule(matchMerchantContains: "Acme", category: .homeImprovement)
+        let rows = TransactionWorkspace.rows(
+            transactions: [tx("a", name: "ACME STORE", merchant: "Acme", category: .shopping)],
+            metadata: [],
+            rules: [rule]
+        )
+        #expect(rows[0].isOverridingPlaid)
+        #expect(rows[0].overrideOrigin == .rule)
+        #expect(!rows[0].canRestorePlaidCategory)
+        #expect(rows[0].isOverriddenByRule)
+    }
+
+    @Test("A low-confidence Plaid row with no override is not restorable")
+    func lowConfidenceNoOverrideNotRestorable() {
+        let transactions = [
+            TransactionDTO(
+                id: "a",
+                accountId: "acc1",
+                amount: 50,
+                date: "2026-06-10",
+                name: "MYSTERY LLC",
+                merchantName: nil,
+                category: .other,
+                pending: false,
+                isLowConfidenceCategory: true
+            ),
+        ]
+        let rows = TransactionWorkspace.rows(transactions: transactions, metadata: [], rules: [])
+        #expect(!rows[0].isOverridingPlaid)
+        #expect(rows[0].overrideOrigin == nil)
+        #expect(!rows[0].canRestorePlaidCategory)
+        #expect(!rows[0].isOverriddenByRule)
+    }
+
     // MARK: - Filtering (each facet, and composition)
 
     private func rows() -> [TransactionWorkspace.Row] {

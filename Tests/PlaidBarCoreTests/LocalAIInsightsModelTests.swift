@@ -199,6 +199,50 @@ struct LocalAIInsightsModelTests {
         #expect(selection.resolvedSelection == .yearOverYear)
     }
 
+    @Test("The displayed summary must follow the resolved selection, not the raw requested window (codex #9)")
+    func displayedSummaryFollowsResolvedSelection() {
+        // Requested YoY, but it became unusable (no prior-year rows) after a refresh.
+        // The selector resolves to the first usable window (lastMonth). The displayed
+        // summary AND the selected chip must follow `resolvedSelection` — keying off
+        // the raw requested window would show a disabled/misleading YoY receipt.
+        let summaries = [
+            Self.makeSummary(window: .last7days, currentCount: 0),
+            Self.makeSummary(window: .lastMonth, currentCount: 18),
+            Self.makeSummary(window: .yearOverYear, currentCount: 30, priorCount: 0),
+        ]
+        let requested = LocalAIInsightWindow.yearOverYear
+        let selection = LocalAIInsightWindowSelection.make(summaries: summaries, requestedSelection: requested)
+
+        #expect(selection.resolvedSelection == .lastMonth)
+        #expect(selection.resolvedSelection != requested)
+
+        // Mirror AppState.summary(for:) — the displayed summary the surface renders.
+        let displayed = Self.summary(for: selection.resolvedSelection, in: summaries)
+        let misleading = Self.summary(for: requested, in: summaries)
+
+        // Driving the receipt off the resolved selection shows the usable lastMonth
+        // window, not the unusable requested YoY window.
+        #expect(displayed?.window == .lastMonth)
+        #expect(misleading?.window == .yearOverYear)
+        #expect(displayed?.window != misleading?.window)
+
+        // The selected chip is the resolved window, and it is a usable option.
+        let resolvedOption = selection.options.first { $0.window == selection.resolvedSelection }
+        #expect(resolvedOption?.isUsable == true)
+    }
+
+    /// The same closest-window fallback `AppState.summary(for:)` uses: exact window →
+    /// lastMonth → first. Mirrored here so the pure model test pins the relationship
+    /// the AppState fix relies on (the app target is not in this test binary).
+    private static func summary(
+        for window: LocalAIInsightWindow,
+        in summaries: [LocalAIActivitySummary]
+    ) -> LocalAIActivitySummary? {
+        summaries.first { $0.window == window }
+            ?? summaries.first { $0.window == .lastMonth }
+            ?? summaries.first
+    }
+
     // MARK: - Fixtures
 
     private static func makeMetrics(

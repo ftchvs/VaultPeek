@@ -251,6 +251,83 @@ struct FMMerchantCategorizerTests {
         #expect(suggestion?.tier == .naturalLanguage)
     }
 
+    // MARK: - Context-rich overload (priority #5)
+
+    /// A stub that records whether the richer context path was taken (vs the bare
+    /// merchant path), so we can prove the overload reaches the model with context.
+    final class ContextRecordingStub: FMMerchantCategorizing, Sendable {
+        actor Recorder {
+            private var contexts: [CategorySuggestionContext] = []
+            private var bareMerchants: [String] = []
+            func appendContext(_ c: CategorySuggestionContext) { contexts.append(c) }
+            func appendMerchant(_ m: String) { bareMerchants.append(m) }
+            func contextSnapshot() -> [CategorySuggestionContext] { contexts }
+            func merchantSnapshot() -> [String] { bareMerchants }
+        }
+
+        let fixedRaw: String?
+        private let recorder = Recorder()
+        init(returning category: SpendingCategory?) { fixedRaw = category?.rawValue }
+
+        func seenContexts() async -> [CategorySuggestionContext] { await recorder.contextSnapshot() }
+        func seenBareMerchants() async -> [String] { await recorder.merchantSnapshot() }
+
+        func suggestCategory(merchant: String) async -> String? {
+            await recorder.appendMerchant(merchant)
+            return fixedRaw
+        }
+
+        func suggestCategory(context: CategorySuggestionContext) async -> String? {
+            await recorder.appendContext(context)
+            return fixedRaw
+        }
+    }
+
+    @Test("The context overload routes the richer context to the model")
+    func contextOverloadUsesContext() async {
+        let stub = ContextRecordingStub(returning: .travel)
+        let categorizer = FMMerchantCategorizer(foundationModelsState: .available, fmCategorizer: stub)
+        let txn = transaction(name: "NETFLIX.COM", merchantName: "Netflix")
+        let context = CategorySuggestionContext.make(for: txn, isRecurring: true)
+
+        let suggestion = await categorizer.suggest(for: txn, context: context)
+        #expect(suggestion?.category == .travel)
+        #expect(suggestion?.tier == .foundationModels)
+        // The context path (not the bare-merchant path) was taken.
+        #expect(await stub.seenContexts().count == 1)
+        #expect(await stub.seenBareMerchants().isEmpty)
+    }
+
+    @Test("The context overload degrades to NL when FM is unavailable")
+    func contextOverloadDegradesToNL() async {
+        let stub = ContextRecordingStub(returning: .government)
+        let categorizer = FMMerchantCategorizer(foundationModelsState: .unsupported, fmCategorizer: stub)
+        let txn = transaction(name: "NETFLIX.COM", merchantName: "Netflix")
+        let context = CategorySuggestionContext.make(for: txn)
+
+        let suggestion = await categorizer.suggest(for: txn, context: context)
+        #expect(suggestion == categorizer.nlSuggestion(for: txn))
+        #expect(suggestion?.tier == .naturalLanguage)
+        // The FM stub was never consulted while unavailable.
+        #expect(await stub.seenContexts().isEmpty)
+    }
+
+    @Test("The default protocol context method falls back to the bare merchant call")
+    func defaultProtocolContextFallsBack() async {
+        // A conformer that ONLY implements the merchant method (StubFMCategorizer)
+        // still works through the context overload via the protocol-extension default.
+        let stub = StubFMCategorizer(returning: .shopping)
+        let categorizer = FMMerchantCategorizer(foundationModelsState: .available, fmCategorizer: stub)
+        let txn = transaction(name: "NETFLIX.COM", merchantName: "Netflix")
+        let context = CategorySuggestionContext.make(for: txn)
+
+        let suggestion = await categorizer.suggest(for: txn, context: context)
+        #expect(suggestion?.category == .shopping)
+        #expect(suggestion?.tier == .foundationModels)
+        // The default routed through the bare-merchant path with the safe merchant.
+        #expect(await stub.seenMerchants() == ["Netflix"])
+    }
+
     // MARK: - Never auto-applies / EffectiveCategoryResolver untouched
 
     @Test("A suggestion never becomes a persisted budget category on its own")
