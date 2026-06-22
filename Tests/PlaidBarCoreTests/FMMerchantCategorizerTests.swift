@@ -19,10 +19,21 @@ struct FMMerchantCategorizerTests {
     // `SpendingCategory.rawValue` string (resolved back to an enum by
     // `FMSpendingCategoryMapper` inside `FMMerchantCategorizer`), so the stub
     // mirrors that contract.
-    final class StubFMCategorizer: FMMerchantCategorizing, @unchecked Sendable {
+    final class StubFMCategorizer: FMMerchantCategorizing, Sendable {
+        actor SeenMerchantsRecorder {
+            private var merchants: [String] = []
+
+            func append(_ merchant: String) {
+                merchants.append(merchant)
+            }
+
+            func snapshot() -> [String] {
+                merchants
+            }
+        }
+
         let fixedRawCategory: String?
-        private let lock = NSLock()
-        private var _seenMerchants: [String] = []
+        private let recorder = SeenMerchantsRecorder()
 
         init(returning category: SpendingCategory?) {
             fixedRawCategory = category?.rawValue
@@ -34,15 +45,12 @@ struct FMMerchantCategorizerTests {
             fixedRawCategory = raw
         }
 
-        var seenMerchants: [String] {
-            lock.lock(); defer { lock.unlock() }
-            return _seenMerchants
+        func seenMerchants() async -> [String] {
+            await recorder.snapshot()
         }
 
         func suggestCategory(merchant: String) async -> String? {
-            lock.lock()
-            _seenMerchants.append(merchant)
-            lock.unlock()
+            await recorder.append(merchant)
             return fixedRawCategory
         }
     }
@@ -123,9 +131,10 @@ struct FMMerchantCategorizerTests {
 
         _ = await categorizer.suggest(for: txn)
 
-        #expect(stub.seenMerchants == ["Blue Bottle"])
+        let seenMerchants = await stub.seenMerchants()
+        #expect(seenMerchants == ["Blue Bottle"])
         // The transaction/account id must never have been handed to the model.
-        for merchant in stub.seenMerchants {
+        for merchant in seenMerchants {
             #expect(!merchant.contains("txn-secret-id-123"))
             #expect(!merchant.contains("acct-1"))
         }
@@ -138,7 +147,7 @@ struct FMMerchantCategorizerTests {
         let txn = transaction(name: "UBER TRIP", merchantName: nil)
 
         _ = await categorizer.suggest(for: txn)
-        #expect(stub.seenMerchants == ["UBER TRIP"])
+        #expect(await stub.seenMerchants() == ["UBER TRIP"])
     }
 
     @Test("On an FM miss, the categorizer falls back to the NaturalLanguage tier")
@@ -229,7 +238,7 @@ struct FMMerchantCategorizerTests {
             }
         }
         // The FM stub must never have been consulted in any unavailable state.
-        #expect(pollutingStub.seenMerchants.isEmpty)
+        #expect(await pollutingStub.seenMerchants().isEmpty)
     }
 
     @Test("Default initializer (no FM, no wired categorizer) is the pure NL path")
