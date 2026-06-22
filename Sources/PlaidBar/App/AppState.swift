@@ -2007,6 +2007,14 @@ final class AppState {
         _incomeCategorySuggestions[transactionID]
     }
 
+    /// Whether the on-device Foundation Models (Apple Intelligence) categorization
+    /// tier is currently available. Read-only view onto the private probe state so
+    /// SwiftUI surfaces can key suggestion-refresh tasks on FM availability without
+    /// reaching into AppState internals.
+    var isFoundationModelsCategorizationAvailable: Bool {
+        foundationModelsTierState.isAvailable
+    }
+
     /// Whether a transaction belongs to a detected recurring stream (matched by
     /// normalized merchant), so the income/expense suggestion context can carry the
     /// recurring signal. Pure read over the cached recurring streams.
@@ -2022,22 +2030,34 @@ final class AppState {
         }
     }
 
-    /// Drive the income-subtype suggestion tier (priority #5): for income
-    /// transactions, compute a subtype suggestion (FM-refined when Apple
-    /// Intelligence is available, else the deterministic heuristic floor) and cache
+    /// Drive the income-subtype suggestion tier (priority #5) for a *specific* set of
+    /// income transactions, computing a subtype suggestion (FM-refined when Apple
+    /// Intelligence is available, else the deterministic heuristic floor) and caching
     /// it for display. Always runs the heuristic — it is on-device, deterministic,
     /// and needs no model — so income subtypes appear even without Apple
     /// Intelligence. Results are display-only and never bypass the review flow.
     ///
+    /// Scoped on purpose: an on-device FM generation can take seconds, so the
+    /// inspector (which shows ONE row) must not FM-categorize the entire income
+    /// history on every detail render. Callers pass the id(s) actually on screen via
+    /// `refreshIncomeCategorySuggestion(for:)`; the cache prune still covers the full
+    /// live set so it never leaks past departed transactions.
+    ///
     /// Only the redaction-safe `CategorySuggestionContext` crosses into any model;
     /// no identifiers, amounts, or Plaid payloads.
-    func refreshIncomeCategorySuggestions() async {
+    func refreshIncomeCategorySuggestions(ids: Set<String>) async {
         // Prune entries for transactions no longer present (cache stays bounded by
         // live transactions, not session-cumulative throughput).
         let liveIncomeIDs = Set(transactions.filter(\.isIncome).map(\.id))
         _incomeCategorySuggestions = _incomeCategorySuggestions.filter { liveIncomeIDs.contains($0.key) }
 
-        let pending = transactions.filter { $0.isIncome && _incomeCategorySuggestions[$0.id] == nil }
+        // Only the requested, still-live income rows that aren't already cached —
+        // bounds the (potentially slow) model work to what the caller needs now.
+        let pending = transactions.filter {
+            $0.isIncome
+                && ids.contains($0.id)
+                && _incomeCategorySuggestions[$0.id] == nil
+        }
         guard !pending.isEmpty else { return }
 
         let categorizer = merchantCategorizer
@@ -2059,9 +2079,20 @@ final class AppState {
             produced[transaction.id] = suggestion
         }
         guard !produced.isEmpty else { return }
+        // Merge rather than replace: a concurrent scoped pass for another row must
+        // not clobber a suggestion this pass did not compute.
         for (id, suggestion) in produced {
             _incomeCategorySuggestions[id] = suggestion
         }
+    }
+
+    /// Compute the income-subtype suggestion for a single transaction (the inspector
+    /// shows one row). A thin scope over `refreshIncomeCategorySuggestions(ids:)` so a
+    /// detail render never kicks off whole-history FM work. No-op for a non-income id
+    /// (filtered inside) or one already cached.
+    func refreshIncomeCategorySuggestion(for transactionID: String) async {
+        guard !transactionID.isEmpty else { return }
+        await refreshIncomeCategorySuggestions(ids: [transactionID])
     }
 
     /// Cached local summaries — invalidated via accounts.didSet and transactions.didSet.
@@ -2096,10 +2127,16 @@ final class AppState {
             ?? summaries.first
     }
 
-    /// The summary for the window the user currently has selected in the Insights
-    /// surface. Convenience over `summary(for: selectedInsightWindow)`.
+    /// The summary for the window the Insights surface should actually present —
+    /// driven off `localAIWindowSelection.resolvedSelection`, NOT the raw
+    /// `selectedInsightWindow`. When the requested window is no longer usable (e.g.
+    /// year-over-year after a refresh with no prior-year rows), the selector resolves
+    /// to a usable fallback; using the raw window here would show a disabled /
+    /// misleading receipt for a window the chip itself has fallen back from. Sourcing
+    /// both the summary and the selected chip from `resolvedSelection` keeps them in
+    /// lockstep.
     var selectedInsightSummary: LocalAIActivitySummary? {
-        summary(for: selectedInsightWindow)
+        summary(for: localAIWindowSelection.resolvedSelection)
     }
 
     /// The selector presentation (ordered options + which are usable + the resolved
@@ -4376,17 +4413,26 @@ final class AppState {
 
     /// Clear the user's category override on a transaction, restoring the
     /// auditable Plaid (or uncategorized) fallback as the effective category
-    /// (priority #5). This only nils `userCategory` — Plaid's raw
-    /// `transaction.category` is never mutated, so the `EffectiveCategoryResolver`
-    /// precedence chain (override → rule → confident Plaid → uncategorized)
-    /// transparently falls back to Plaid's own answer. Routed through the same
-    /// undoable `updateReviewMetadata` path as every other override, so the restore
-    /// is ⌘Z-reversible and reflected everywhere. The row is intentionally NOT
-    /// marked reviewed: clearing an override returns the transaction to its
-    /// Plaid-classified baseline, which may legitimately warrant another look.
+    /// (priority #5). This nils `userCategory` — Plaid's raw `transaction.category`
+    /// is never mutated, so the `EffectiveCategoryResolver` precedence chain
+    /// (override → rule → confident Plaid → uncategorized) transparently falls back
+    /// to Plaid's own answer.
+    ///
+    /// It also REOPENS the row to needs-review (clears `status`/`reviewedAt` back to
+    /// `.needsReview`): the row was likely marked `.reviewed` when the category was
+    /// first set, and `TransactionReviewInbox.evaluate` drops a `.reviewed` row, so
+    /// merely nilling the category would make the now-uncategorized transaction
+    /// vanish from the review queue instead of returning for re-confirmation. The
+    /// reason codes are cleared so `evaluate` re-derives them from the restored
+    /// baseline. Routed through the same undoable `updateReviewMetadata` path as
+    /// every other override, so the whole restore (override + reopen) is one
+    /// ⌘Z-reversible step and reflected everywhere.
     func clearReviewCategory(_ id: String) {
         updateReviewMetadata(id: id) { metadata, _ in
             metadata.userCategory = nil
+            metadata.status = .needsReview
+            metadata.reviewedAt = nil
+            metadata.reviewReasonCodes = []
         }
     }
 

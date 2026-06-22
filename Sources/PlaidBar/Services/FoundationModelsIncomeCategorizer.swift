@@ -85,6 +85,12 @@ extension FoundationModelsIncomeCategorizer {
     /// string, or `nil` on any failure so the caller degrades to the heuristic. The
     /// string boundary keeps the string→enum mapping in `PlaidBarCore`
     /// (`FMIncomeCategoryMapper`).
+    ///
+    /// The deadline is enforced by `CancellableTimeout`, a cancellation-aware race
+    /// that resumes on the first of {generation, deadline} WITHOUT awaiting the
+    /// loser. A bare `withTaskGroup` would still await the (possibly
+    /// cancellation-ignoring) `session.respond` child at scope exit, so it could hang
+    /// well past the deadline; this helper returns promptly on timeout regardless.
     static func generate(prompt: String) async -> String? {
         let session = LanguageModelSession(instructions: instructions)
         let options = GenerationOptions(sampling: .greedy)
@@ -93,31 +99,17 @@ extension FoundationModelsIncomeCategorizer {
             max(0, FMGenerationLimits.generationTimeout) * 1_000_000_000
         )
 
-        return await withTaskGroup(of: String?.self) { group in
-            group.addTask {
-                do {
-                    let response = try await session.respond(
-                        to: prompt,
-                        generating: GeneratedIncomeCategory.self,
-                        options: options
-                    )
-                    return response.content.incomeCategory.rawValue
-                } catch {
-                    return nil
-                }
+        return await CancellableTimeout.run(nanoseconds: timeoutNanoseconds) {
+            do {
+                let response = try await session.respond(
+                    to: prompt,
+                    generating: GeneratedIncomeCategory.self,
+                    options: options
+                )
+                return response.content.incomeCategory.rawValue
+            } catch {
+                return nil
             }
-            group.addTask {
-                do {
-                    try await Task.sleep(nanoseconds: timeoutNanoseconds)
-                    return nil // deadline reached → degrade to heuristic
-                } catch {
-                    return nil // group cancelled → stop waiting
-                }
-            }
-
-            let result = await group.next() ?? nil
-            group.cancelAll()
-            return result
         }
     }
 }

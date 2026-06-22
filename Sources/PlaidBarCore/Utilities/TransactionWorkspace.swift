@@ -257,10 +257,17 @@ public extension TransactionWorkspace {
         /// restorable fallback (priority #5). Pure passthrough; `nil` when Plaid
         /// returned no category.
         public let plaidCategory: SpendingCategory?
-        /// Whether the effective (budget) category currently overrides Plaid's own
-        /// answer (a user override / rule that differs from Plaid). Drives the
-        /// "Restore Plaid category" affordance.
+        /// Whether the effective (budget) category currently overrides a *restorable*
+        /// Plaid category (an actual user/rule override that differs from a confident
+        /// Plaid answer). Drives the "Restore Plaid category" affordance. `false` for
+        /// a low-confidence / `.other` / nil Plaid row with no override, so the
+        /// affordance is never offered for a value the resolver would re-reject.
         public let isOverridingPlaid: Bool
+        /// The provenance of the override over Plaid (`user` vs `rule`), or `nil` when
+        /// not overriding. The inspector offers a per-row "Restore Plaid category"
+        /// only for a `.user` override — a `.rule` override is governed by a rule, so
+        /// a per-row clear would not restore Plaid.
+        public let overrideOrigin: EffectiveCategoryResolver.OverrideOrigin?
         public let isTransfer: Bool
         public let excludedFromBudgets: Bool
         public let status: TransactionReviewStatus
@@ -276,6 +283,7 @@ public extension TransactionWorkspace {
             suggestedCategory: SpendingCategory?,
             plaidCategory: SpendingCategory? = nil,
             isOverridingPlaid: Bool = false,
+            overrideOrigin: EffectiveCategoryResolver.OverrideOrigin? = nil,
             isTransfer: Bool,
             excludedFromBudgets: Bool,
             status: TransactionReviewStatus,
@@ -287,6 +295,7 @@ public extension TransactionWorkspace {
             self.suggestedCategory = suggestedCategory
             self.plaidCategory = plaidCategory
             self.isOverridingPlaid = isOverridingPlaid
+            self.overrideOrigin = overrideOrigin
             self.isTransfer = isTransfer
             self.excludedFromBudgets = excludedFromBudgets
             self.status = status
@@ -297,6 +306,22 @@ public extension TransactionWorkspace {
         /// tier rather than the user / Plaid — drives the "Suggested" badge.
         public var isCategorySuggested: Bool {
             effectiveCategory == nil && suggestedCategory != nil
+        }
+
+        /// Whether a per-transaction "Restore Plaid category" affordance applies:
+        /// the effective category overrides a restorable Plaid category AND that
+        /// override is a per-row *user* override (clearable), not a rule. A
+        /// rule-backed override is governed by the rule, so a per-row clear would not
+        /// restore Plaid — the inspector surfaces the rule instead of a no-op restore.
+        public var canRestorePlaidCategory: Bool {
+            isOverridingPlaid && overrideOrigin == .user
+        }
+
+        /// Whether the override over Plaid comes from a matching rule (not a per-row
+        /// user override). The inspector uses this to explain that a rule governs the
+        /// category rather than offering a per-row restore that would silently no-op.
+        public var isOverriddenByRule: Bool {
+            isOverridingPlaid && overrideOrigin == .rule
         }
 
         /// Whether a free-text note is attached (drives a glyph in the table).
@@ -338,6 +363,7 @@ public extension TransactionWorkspace {
                 suggestedCategory: resolution.suggestedCategory,
                 plaidCategory: resolution.plaidCategory,
                 isOverridingPlaid: resolution.isOverridingPlaid,
+                overrideOrigin: resolution.overrideOrigin,
                 isTransfer: resolution.isTransfer,
                 excludedFromBudgets: resolution.excludedFromBudgets,
                 status: own?.status ?? .needsReview,

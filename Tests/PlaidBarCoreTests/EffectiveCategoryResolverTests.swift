@@ -428,6 +428,7 @@ struct EffectiveCategoryResolverTests {
         #expect(resolution.category == .foodAndDrink)
         #expect(resolution.plaidCategory == .shopping)
         #expect(resolution.isOverridingPlaid == true)
+        #expect(resolution.overrideOrigin == .user)
     }
 
     @Test("isOverridingPlaid is false when the user override matches Plaid")
@@ -451,6 +452,7 @@ struct EffectiveCategoryResolverTests {
         #expect(resolution.category == .homeImprovement)
         #expect(resolution.plaidCategory == .shopping)
         #expect(resolution.isOverridingPlaid == true)
+        #expect(resolution.overrideOrigin == .rule)
     }
 
     @Test("Nil Plaid category never reads as overriding Plaid")
@@ -462,6 +464,84 @@ struct EffectiveCategoryResolverTests {
 
         #expect(resolution.plaidCategory == nil)
         #expect(resolution.isOverridingPlaid == false)
+    }
+
+    // MARK: - isOverridingPlaid false-positive guard (codex #1)
+
+    @Test("Low-confidence Plaid with no override does not read as overriding Plaid")
+    func lowConfidencePlaidNoOverrideIsNotOverriding() {
+        // A Plaid `.other` row flagged LOW/UNKNOWN with NO user/rule override: the
+        // budget category falls through to nil (uncategorized). Previously
+        // `isOverridingPlaid` was true (raw `.other` != nil budget) and "Restore
+        // Plaid category" would have been a no-op — the resolver re-rejects `.other`.
+        // It must now read false: there is no actual override and no restorable Plaid.
+        let transaction = tx(id: "low-no-ov", name: "MYSTERY LLC", category: .other, merchantName: nil, lowConfidence: true)
+
+        let resolution = EffectiveCategoryResolver.resolve(transaction: transaction)
+
+        #expect(resolution.category == nil)
+        #expect(resolution.isOverridingPlaid == false)
+        #expect(resolution.overrideOrigin == nil)
+    }
+
+    @Test("Plaid .other with no override does not read as overriding Plaid")
+    func plaidOtherNoOverrideIsNotOverriding() {
+        // Same shape without the low-confidence flag: a bare `.other` Plaid category
+        // with no override is not a restorable category, so no override is reported.
+        let transaction = tx(id: "other-no-ov", category: .other, merchantName: nil)
+
+        let resolution = EffectiveCategoryResolver.resolve(transaction: transaction)
+
+        #expect(resolution.isOverridingPlaid == false)
+        #expect(resolution.overrideOrigin == nil)
+    }
+
+    @Test("Nil Plaid with no override does not read as overriding Plaid")
+    func nilPlaidNoOverrideIsNotOverriding() {
+        let transaction = tx(id: "nil-no-ov", name: "SQ *UNKNOWN", category: nil, merchantName: nil)
+
+        let resolution = EffectiveCategoryResolver.resolve(transaction: transaction)
+
+        #expect(resolution.isOverridingPlaid == false)
+        #expect(resolution.overrideOrigin == nil)
+    }
+
+    @Test("A user override over a confident Plaid category reads as a user override")
+    func userOverrideOverConfidentPlaidIsUserOrigin() {
+        let transaction = tx(id: "user-ov", category: .shopping)
+        let metadata = TransactionReviewMetadata(id: "user-ov", userCategory: .foodAndDrink)
+
+        let resolution = EffectiveCategoryResolver.resolve(transaction: transaction, metadata: metadata)
+
+        #expect(resolution.isOverridingPlaid == true)
+        #expect(resolution.overrideOrigin == .user)
+    }
+
+    @Test("A rule over a confident Plaid category reads as a rule override")
+    func ruleOverConfidentPlaidIsRuleOrigin() {
+        let transaction = tx(id: "rule-ov", name: "ACME STORE", category: .shopping, merchantName: "Acme")
+        let rule = TransactionRule(matchMerchantContains: "Acme", category: .homeImprovement)
+
+        let resolution = EffectiveCategoryResolver.resolve(transaction: transaction, rules: [rule])
+
+        #expect(resolution.isOverridingPlaid == true)
+        #expect(resolution.overrideOrigin == .rule)
+    }
+
+    @Test("A user override over a LOW-confidence Plaid category is not restorable")
+    func userOverrideOverLowConfidencePlaidNotRestorable() {
+        // The user overrode a row whose Plaid category is low-confidence. Restoring it
+        // would just be re-rejected (confidentPlaidCategory == nil), so the affordance
+        // must not be offered: isOverridingPlaid is false even though a user override
+        // exists. Budget precedence is unaffected — the user's category still wins.
+        let transaction = tx(id: "user-low", category: .shopping, merchantName: nil, lowConfidence: true)
+        let metadata = TransactionReviewMetadata(id: "user-low", userCategory: .foodAndDrink)
+
+        let resolution = EffectiveCategoryResolver.resolve(transaction: transaction, metadata: metadata)
+
+        #expect(resolution.category == .foodAndDrink) // override still wins for budgets
+        #expect(resolution.isOverridingPlaid == false)
+        #expect(resolution.overrideOrigin == nil)
     }
 
     @Test("Plaid passthrough does not change the budget precedence (invariant)")

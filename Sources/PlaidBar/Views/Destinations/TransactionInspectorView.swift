@@ -54,14 +54,28 @@ struct TransactionInspectorView: View {
             noteDraft = selectedRow?.note ?? ""
         }
         .onAppear { noteDraft = selectedRow?.note ?? "" }
-        // Drive the on-device income-subtype suggestion tier (priority #5). The
-        // deterministic heuristic floor runs on every device; FM refines it when
-        // Apple Intelligence is available. Re-runs when the income transaction count
-        // changes so newly-synced inflows get a subtype. Display-only — never
-        // auto-applied, never budget spend.
-        .task(id: appState.transactions.lazy.filter(\.isIncome).count) {
-            await appState.refreshIncomeCategorySuggestions()
+        // Drive the on-device income-subtype suggestion tier (priority #5) for the
+        // SELECTED row only. The deterministic heuristic floor runs on every device;
+        // FM refines it when Apple Intelligence is available. The inspector shows one
+        // transaction, and an on-device FM generation can take seconds — so this never
+        // FM-categorizes the whole income history from a detail render (the previous
+        // count-keyed whole-history refresh did). Keyed off the selected id + FM
+        // availability so selecting a different row, or FM coming online, recomputes;
+        // a same-count list swap that changes the selected row also re-runs because
+        // the id is part of the key. Display-only — never auto-applied, never spend.
+        .task(id: incomeSuggestionTaskKey) {
+            await appState.refreshIncomeCategorySuggestion(for: navigationModel.selectedTransactionID)
         }
+    }
+
+    /// The identity that should re-trigger the per-row income-suggestion task: the
+    /// selected transaction id plus FM availability. Keying off the id (not the
+    /// income count) means replacing the list or changing the selected income row
+    /// re-runs even when the count is unchanged (the count-keyed bug); folding in FM
+    /// availability re-runs when Apple Intelligence comes online so the heuristic
+    /// floor can be FM-refined.
+    private var incomeSuggestionTaskKey: String {
+        "\(navigationModel.selectedTransactionID)|\(appState.isFoundationModelsCategorizationAvailable)"
     }
 
     // MARK: - Detail
@@ -177,9 +191,14 @@ struct TransactionInspectorView: View {
     /// "Suggested" badge (never color alone). Display-only: it never persists or
     /// becomes spend. Trusted suggestions show plainly; an untrusted (`low`) one is
     /// hedged as a "possible" subtype so a low-confidence guess never reads as fact.
+    ///
+    /// Gated on `!row.isTransfer`: an own-account transfer-in or card payment is a
+    /// negative-amount inflow but NOT income, so labeling it salary/refund/etc. would
+    /// mislabel it. Transfers carry their own "Transfer" badge instead.
     @ViewBuilder
     private func incomeSubtypeRow(_ row: TransactionWorkspace.Row) -> some View {
         if row.transaction.isIncome,
+           !row.isTransfer,
            let suggestion = appState.incomeCategorySuggestion(for: row.id) {
             let prefix = suggestion.isTrusted ? "Income type" : "Possible income type"
             Label("\(prefix): \(suggestion.category.displayName)", systemImage: suggestion.category.iconName)
@@ -190,9 +209,15 @@ struct TransactionInspectorView: View {
     }
 
     /// The auditable, restorable Plaid fallback (priority #5). When the effective
-    /// category overrides what Plaid classified, show Plaid's own answer (text +
-    /// icon, never color alone) and a one-tap "Restore Plaid category" affordance
-    /// that clears the user override so the resolver falls back to Plaid's category.
+    /// category overrides a *restorable* Plaid category, show Plaid's own answer
+    /// (text + icon, never color alone). The one-tap "Restore Plaid category"
+    /// affordance — which clears the per-transaction `userCategory` so the resolver
+    /// falls back to Plaid — is offered ONLY for a per-row user override
+    /// (`canRestorePlaidCategory`). For a rule-backed category, clearing the per-row
+    /// override would not restore Plaid (the rule re-applies), so instead of a silent
+    /// no-op we surface that a rule governs the category and point at where to change
+    /// it. `isOverridingPlaid` already excludes low-confidence / `.other` / nil Plaid
+    /// rows, so this never offers to restore a value the resolver would re-reject.
     @ViewBuilder
     private func plaidFallbackRow(_ row: TransactionWorkspace.Row) -> some View {
         if row.isOverridingPlaid, let plaid = row.plaidCategory {
@@ -201,13 +226,23 @@ struct TransactionInspectorView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer(minLength: Spacing.xs)
-                Button {
-                    edit { appState.clearReviewCategory(row.id) }
-                } label: {
-                    Label("Restore Plaid category", systemImage: "arrow.uturn.backward")
+                if row.canRestorePlaidCategory {
+                    Button {
+                        edit { appState.clearReviewCategory(row.id) }
+                    } label: {
+                        Label("Restore Plaid category", systemImage: "arrow.uturn.backward")
+                    }
+                    .controlSize(.small)
+                    .help("Clear your category and fall back to what Plaid classified (\(plaid.displayName))")
+                } else if row.isOverriddenByRule {
+                    // A rule governs this category, so a per-row restore would no-op
+                    // (the rule re-applies). Tell the user where to change it rather
+                    // than offering a button that does nothing.
+                    Label("Set by a rule", systemImage: "wand.and.stars")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .help("A rule for “\(row.merchantName)” sets this category. Edit or remove the rule in Settings to restore Plaid's.")
                 }
-                .controlSize(.small)
-                .help("Clear your category and fall back to what Plaid classified (\(plaid.displayName))")
             }
             .accessibilityElement(children: .combine)
         }
