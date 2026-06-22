@@ -878,11 +878,24 @@ struct WindowChromeBackgroundModifier: ViewModifier {
     func body(content: Content) -> some View {
         switch WindowChromeGlass.chromeBackground(reduceTransparency: reduceTransparency) {
         case .glass:
-            content.containerBackground(.ultraThinMaterial, for: .window)
+            // Native macOS 26 Liquid Glass chrome: a clear rectangle carrying
+            // `.glassEffect(.regular)` is the window container background. This is
+            // the same native-glass primitive the popover chrome uses
+            // (`PopoverMaterialBackground`), not the legacy hand-rolled
+            // `.ultraThinMaterial` fill — the system material samples the desktop
+            // behind the window and is the unconditional baseline on macOS 26.
+            content.containerBackground(for: .window) {
+                Rectangle()
+                    .fill(.clear)
+                    .glassEffect(.regular, in: .rect)
+                    .ignoresSafeArea()
+            }
         case .solid:
-            // Solid fallback: the opaque window background color reads correctly
-            // in both light and dark and carries no translucency for the chrome
-            // to sample (AND-588).
+            // NOT a version fallback: this is the Reduce-Transparency accessibility
+            // degradation (the system setting always wins, or the user's reduced
+            // decorative-effects preference). The opaque window background color
+            // reads correctly in both light and dark and carries no translucency
+            // for the chrome to sample (AND-588 / ACCESSIBILITY.md).
             content.containerBackground(Color(nsColor: .windowBackgroundColor), for: .window)
         }
     }

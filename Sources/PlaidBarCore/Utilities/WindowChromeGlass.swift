@@ -59,7 +59,9 @@ public enum WindowChromeGlass {
 }
 
 /// Classifies a window-first surface for the glass-on-chrome-only policy.
-public enum WindowSurfaceKind: Sendable, Equatable {
+/// `CaseIterable` so the chrome-vs-data policy can be asserted exhaustively in
+/// tests — every surface kind has an explicit glass eligibility.
+public enum WindowSurfaceKind: Sendable, Equatable, CaseIterable {
     /// Navigation chrome — sidebar, toolbar, nav bars, window container. May use
     /// Liquid Glass.
     case chrome

@@ -24,10 +24,11 @@ import SwiftUI
 /// (default OFF), so with the flag off this view is never instantiated and there
 /// is zero behavior change.
 ///
-/// Liquid Glass on chrome is applied at the scene level via
-/// `.containerBackground(.ultraThinMaterial, for: .window)` in `PlaidBarApp`
-/// (with an explicit solid Reduce Transparency fallback), not here —
-/// glass goes on chrome only, never on data.
+/// Liquid Glass on chrome is applied at the scene level via the native
+/// `.glassEffect(.regular)` window container background in `PlaidBarApp`
+/// (`WindowChromeBackgroundModifier`), with an explicit solid Reduce
+/// Transparency degradation — not here. Glass goes on chrome only, never on
+/// data, and native glass is the unconditional macOS-26 baseline (AND-511).
 ///
 /// **App Lock parity (Epic 10 / AND-588):** when content is LOCKED (not
 /// merely masked), this shell paints the shared `AppLockedGateView` over the
