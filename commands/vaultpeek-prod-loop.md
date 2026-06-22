@@ -38,14 +38,14 @@ The default goal is:
 For Codex CLI non-interactive runs, use a VaultPeek-named checkout or worktree:
 
 ```bash
-codex exec --cd <home>/workspace/VaultPeek \
+codex exec --cd /path/to/VaultPeek \
   "$(cat commands/vaultpeek-prod-loop.md)"
 ```
 
 For a focused autonomous iteration:
 
 ```bash
-codex exec --cd <home>/workspace/VaultPeek \
+codex exec --cd /path/to/VaultPeek \
   "Read commands/vaultpeek-prod-loop.md and complete the next unfinished task from docs/autonomous-loop-backlog.md for: <focus>"
 ```
 

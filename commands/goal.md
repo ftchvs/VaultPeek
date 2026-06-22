@@ -56,7 +56,7 @@ Study RepoBar before changing VaultPeek's primary UI:
 
 - `https://repobar.app`
 - `https://github.com/steipete/RepoBar`
-- local reference clone, when present: `<home>/.openclaw/workspace/repos/RepoBar`
+- local reference clone, when present (path is environment-specific): `<your-local-RepoBar-clone>`
 - attached screenshot target: translucent macOS popover, GitHub contribution
   heatmap header, segmented filters, dense selected rows, and right-arrow drill-in.
 
