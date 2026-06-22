@@ -1,5 +1,5 @@
 {
-  "repo": "ftchvs/PlaidBar",
+  "repo": "ftchvs/VaultPeek",
   "updatedAt": "2026-06-08T00:00:00Z",
   "agents": [
     {
@@ -8,7 +8,7 @@
       "status": "editing",
       "branch": "feature/example-slice",
       "headSha": "0000000000000000000000000000000000000000",
-      "worktree": "/Users/otto/.openclaw/workspace/repos/PlaidBar",
+      "worktree": "/tmp/VaultPeek-build-hermes",
       "pr": null,
       "safeToPush": false,
       "note": "Builder owns edits on this branch until the PR is opened."

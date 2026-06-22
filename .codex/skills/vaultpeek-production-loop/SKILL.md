@@ -57,7 +57,7 @@ menu-bar instrument over new feature breadth.
 When no focus is supplied, implement the RepoBar-style finance dashboard:
 
 - study `https://repobar.app`, `https://github.com/steipete/RepoBar`, and the
-  local reference clone at `/Users/otto/.openclaw/workspace/repos/RepoBar` when
+  local reference clone at `<your-local-RepoBar-clone>` when
   available,
 - lead the popover with a GitHub-style daily spend/cashflow heatmap,
 - add All/Cash/Credit/Savings/Debt/Status filters,

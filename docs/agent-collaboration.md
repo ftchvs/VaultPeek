@@ -41,7 +41,7 @@ as the only source of truth for a branch.
 ## Worktree Ownership
 
 - Hermes should work from its own builder-owned checkout or temporary worktree,
-  such as `/Users/otto/workspace/VaultPeek` when launched via the Codex CLI
+  such as `/tmp/VaultPeek-build` when launched via the Codex CLI
   examples in `commands/vaultpeek-prod-loop.md`. Legacy local checkouts may
   still keep the `PlaidBar` directory name, but new automation examples should
   use VaultPeek-named paths.
