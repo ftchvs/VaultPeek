@@ -53,7 +53,7 @@ Amended public promise (draft, see launch copy §7; wording pending D1 and must 
 
 ## 3. What exists in code today (grounding)
 
-Read from `/Users/ftchvs/Developer/pb-worktrees/consumer-docs/Sources` on 2026-06-12:
+Grounded in the `Sources/` tree as of 2026-06-12:
 
 - **Demo mode already ships.** `swift run PlaidBar --demo` runs on local fixtures with zero Plaid calls (`Sources/PlaidBar/App/PlaidBarApp.swift`, `AppState.swift`). The Free Demo tier is therefore **already built** — it costs nothing to offer and nothing per user.
 - **No entitlement or institution-cap enforcement exists anywhere.** `LinkRoutes` will mint a link token for any authenticated local request; `TokenStore` has no item cap. Tier caps (3/8 institutions) are net-new work on both server and broker sides.

@@ -44,7 +44,28 @@ build/
 
 # Environment
 .env
-.env.local
+.env.*
+!.env.example
+
+# Signing & credentials — never commit (bring-your-own signing material stays
+# outside the repo; see docs/distribution.md "Bring Your Own Signing")
+*.p8
+*.p12
+*.cer
+*.certSigningRequest
+*.mobileprovision
+*.provisionprofile
+*.entitlements
+*.pem
+*.key
+
+# Local runtime artifacts (the auth token, server config, and SQLite store the
+# docs tell contributors to create/copy locally — never commit real Plaid creds)
+auth-token
+server.conf
+*.sqlite
+*.sqlite3
+*.db
 
 # Local agent coordination state
 .agent-state/

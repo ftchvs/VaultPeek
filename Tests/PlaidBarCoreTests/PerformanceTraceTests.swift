@@ -53,7 +53,7 @@ struct PerformanceTraceTests {
         #expect(!encoded.contains("balance"))
         #expect(!encoded.contains("access_token"))
         #expect(!encoded.contains("public_token"))
-        #expect(!encoded.contains("/Users/otto/private/server.conf"))
+        #expect(!encoded.contains("/Users/example/private/server.conf"))
     }
 
     @Test("builds synthetic smoke snapshot")
