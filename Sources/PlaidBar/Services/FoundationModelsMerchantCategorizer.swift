@@ -42,7 +42,28 @@ struct FoundationModelsMerchantCategorizer: FMMerchantCategorizing {
 
         #if canImport(FoundationModels)
         if #available(macOS 26, *) {
-            return await Self.generate(merchant: cleaned)
+            return await Self.generate(prompt: "Categorize this merchant: \"\(cleaned)\"")
+        } else {
+            return nil
+        }
+        #else
+        return nil
+        #endif
+    }
+
+    /// Richer, injection-safe path (priority #5): prompts the model with the
+    /// `CategorySuggestionContext` (Plaid hint + recurring flag + inflow/outflow)
+    /// instead of the bare merchant string. The fragment is single-line and
+    /// sanitized inside Core, and the output is STILL constrained to the 16-case
+    /// enum, so no injection can produce an out-of-set category. Falls back to the
+    /// merchant-only call when there is no merchant signal.
+    func suggestCategory(context: CategorySuggestionContext) async -> String? {
+        guard context.hasMerchantSignal else { return nil }
+
+        #if canImport(FoundationModels)
+        if #available(macOS 26, *) {
+            let fragment = context.promptFragment()
+            return await Self.generate(prompt: "Categorize this transaction. \(fragment)")
         } else {
             return nil
         }
@@ -130,48 +151,35 @@ extension FoundationModelsMerchantCategorizer {
     /// string, or `nil` on any failure (unavailable, guardrail, model error,
     /// timeout, or cancellation) so the caller degrades to NL. The string boundary
     /// keeps the string→enum mapping in `PlaidBarCore` (`FMSpendingCategoryMapper`).
-    static func generate(merchant: String) async -> String? {
+    static func generate(prompt: String) async -> String? {
         // A fresh session per call keeps the categorizer stateless and avoids
         // cross-merchant context bleed. Greedy sampling makes the choice
         // deterministic for a given merchant.
         let session = LanguageModelSession(instructions: instructions)
-        let prompt = "Categorize this merchant: \"\(merchant)\""
         let options = GenerationOptions(sampling: .greedy)
 
-        // Race the generation against an explicit deadline so an on-device call
-        // can never block unbounded. A structured task group propagates outer-task
-        // cancellation into the generation child, so a superseded categorization
-        // also stops promptly; whichever child finishes first wins and the other
-        // is cancelled when the group tears down.
+        // Race the generation against an explicit deadline so an on-device call can
+        // never block unbounded. `CancellableTimeout` is cancellation-aware: it
+        // resumes on the first of {generation, deadline} and does NOT await the
+        // loser, so a `session.respond` that ignores cancellation cannot extend the
+        // deadline (the prior `withTaskGroup` awaited the losing child at scope exit
+        // and could hang past the timeout). Outer-task cancellation (a superseded
+        // categorization) also resolves the race promptly.
         let timeoutNanoseconds = UInt64(
             max(0, FMGenerationLimits.generationTimeout) * 1_000_000_000
         )
 
-        return await withTaskGroup(of: String?.self) { group in
-            group.addTask {
-                do {
-                    let response = try await session.respond(
-                        to: prompt,
-                        generating: GeneratedSpendingCategory.self,
-                        options: options
-                    )
-                    return response.content.spendingCategory.rawValue
-                } catch {
-                    return nil
-                }
+        return await CancellableTimeout.run(nanoseconds: timeoutNanoseconds) {
+            do {
+                let response = try await session.respond(
+                    to: prompt,
+                    generating: GeneratedSpendingCategory.self,
+                    options: options
+                )
+                return response.content.spendingCategory.rawValue
+            } catch {
+                return nil
             }
-            group.addTask {
-                do {
-                    try await Task.sleep(nanoseconds: timeoutNanoseconds)
-                    return nil // deadline reached → degrade to NL
-                } catch {
-                    return nil // group cancelled → stop waiting
-                }
-            }
-
-            let result = await group.next() ?? nil
-            group.cancelAll()
-            return result
         }
     }
 }

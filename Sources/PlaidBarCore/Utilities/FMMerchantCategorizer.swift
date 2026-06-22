@@ -142,6 +142,22 @@ public protocol FMMerchantCategorizing: Sendable {
     /// produced no usable result (so the caller falls back to NL). Must never throw
     /// across the boundary — failures (incl. timeout/cancellation) degrade to `nil`.
     func suggestCategory(merchant: String) async -> String?
+
+    /// Suggest a category using the richer, injection-safe `CategorySuggestion-
+    /// Context` (Plaid hint + recurring flag + inflow/outflow) instead of the bare
+    /// merchant string. Additive: a default implementation falls back to the
+    /// merchant-only call, so existing conformers (and the no-op when FM is absent)
+    /// keep compiling and behaving identically. Same boundary contract — returns the
+    /// constrained `SpendingCategory.rawValue` string or `nil`, never throws.
+    func suggestCategory(context: CategorySuggestionContext) async -> String?
+}
+
+public extension FMMerchantCategorizing {
+    /// Default: ignore the extra context and categorize from the merchant string,
+    /// so a conformer that hasn't adopted the richer prompt still works unchanged.
+    func suggestCategory(context: CategorySuggestionContext) async -> String? {
+        await suggestCategory(merchant: context.merchant)
+    }
 }
 
 /// The Foundation Models categorization tier, sitting ABOVE NaturalLanguage in
@@ -164,6 +180,13 @@ public struct FMMerchantCategorizer: Sendable {
     private let foundationModelsState: LocalAIFoundationModelsTierState
     private let nlCategorizer: NLMerchantCategorizer
     private let fmCategorizer: (any FMMerchantCategorizing)?
+
+    /// Module-internal read of the probed FM tier state, so the income extension
+    /// (`suggestIncome(for:context:…)`, defined in `FMIncomeCategorizer.swift`) can
+    /// reuse the same availability gate without exposing it publicly.
+    var probedFoundationModelsState: LocalAIFoundationModelsTierState {
+        foundationModelsState
+    }
 
     public init(
         foundationModelsState: LocalAIFoundationModelsTierState = .unsupported,
@@ -200,6 +223,35 @@ public struct FMMerchantCategorizer: Sendable {
         }
 
         // FM unavailable / unwired / missed → exact NL/heuristic path as today.
+        return nlSuggestion(for: transaction)
+    }
+
+    /// Suggest a category using the richer, injection-safe `CategorySuggestion-
+    /// Context` (priority #5): the Plaid primary hint, recurring flag, and
+    /// inflow/outflow are passed to the on-device model so it can disambiguate
+    /// better than from the merchant string alone. Additive overload — same
+    /// strategy and fallbacks as `suggest(for:)`; when FM is unavailable / unwired /
+    /// misses, it degrades byte-identically to the NL tier (which reads only the
+    /// transaction's merchant string, exactly as today). The model still only ever
+    /// receives identifier-free context.
+    public func suggest(
+        for transaction: TransactionDTO,
+        context: CategorySuggestionContext
+    ) async -> MerchantCategorySuggestion? {
+        if FMCategorizationTierDecision.shouldAttemptFoundationModels(foundationModels: foundationModelsState),
+           let fmCategorizer,
+           context.hasMerchantSignal {
+            if let rawCategory = await fmCategorizer.suggestCategory(context: context),
+               let fmCategory = FMSpendingCategoryMapper.category(from: rawCategory) {
+                return MerchantCategorySuggestion(
+                    category: fmCategory,
+                    tier: .foundationModels,
+                    isTrusted: true
+                )
+            }
+        }
+
+        // FM unavailable / unwired / missed / no merchant signal → NL tier as today.
         return nlSuggestion(for: transaction)
     }
 

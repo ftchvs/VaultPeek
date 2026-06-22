@@ -338,6 +338,43 @@ struct TransactionReviewInboxTests {
         #expect(snapshot.totalCount == 0)
     }
 
+    @Test("Clearing a category without reopening review keeps the row suppressed (the bug)")
+    func clearedCategoryWhileStillReviewedStaysSuppressed() {
+        // The buggy `clearReviewCategory` only nilled `userCategory`, leaving the row
+        // `.reviewed`. The now-uncategorized charge SHOULD return for confirmation,
+        // but `evaluate` drops a reviewed row, so it silently vanishes. This pins the
+        // failure mode the fix must avoid.
+        let transaction = tx(id: "cleared", category: nil, merchantName: "Needs Category")
+        let stillReviewed = TransactionReviewMetadata(id: "cleared", status: .reviewed, userCategory: nil)
+
+        let snapshot = evaluate([transaction], metadata: [stillReviewed])
+
+        #expect(snapshot.items.contains { $0.id == "cleared" } == false)
+    }
+
+    @Test("Clearing a category AND reopening review returns the row for confirmation (the fix)")
+    func clearedCategoryReopenedReappearsInInbox() {
+        // `clearReviewCategory` now also resets the review metadata to needs-review
+        // (status .needsReview, reviewedAt nil, reasons cleared). The uncategorized
+        // charge must reappear so the user can re-confirm a category rather than have
+        // it disappear from the queue.
+        let transaction = tx(id: "cleared", category: nil, merchantName: "Needs Category")
+        let reopened = TransactionReviewMetadata(
+            id: "cleared",
+            status: .needsReview,
+            userCategory: nil,
+            reviewedAt: nil,
+            reviewReasonCodes: []
+        )
+
+        let snapshot = evaluate([transaction], metadata: [reopened])
+        let item = snapshot.items.first { $0.id == "cleared" }
+
+        #expect(item != nil)
+        #expect(item?.status == .needsReview)
+        #expect(item?.reasonCodes.contains(.uncategorized) == true)
+    }
+
     @Test("Approving a high-priority (unusual-amount) charge clears it from the inbox")
     func approvingHighPriorityChargeClearsIt() {
         let transactions = [
