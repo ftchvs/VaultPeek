@@ -87,7 +87,7 @@ struct GoalsDestinationView: View {
                     label: "Total saved",
                     value: currency(summary.totalSaved),
                     systemImage: "banknote",
-                    detail: savedDetail(summary),
+                    detail: summary.savedDetail,
                     accent: SemanticColors.brand,
                     reduceMotion: reduceMotion
                 )
@@ -95,7 +95,7 @@ struct GoalsDestinationView: View {
                     label: "Total target",
                     value: currency(summary.totalTarget),
                     systemImage: "target",
-                    detail: targetDetail(summary),
+                    detail: summary.targetDetail,
                     accent: .secondary,
                     reduceMotion: reduceMotion
                 )
@@ -117,21 +117,6 @@ struct GoalsDestinationView: View {
                 isMasked: isMasked
             )
         }
-    }
-
-    private func savedDetail(_ summary: GoalsSummary) -> String {
-        let goals = summary.goalCount == 1 ? "1 goal" : "\(summary.goalCount) goals"
-        if summary.fundedCount > 0 {
-            return "\(goals) · \(summary.fundedCount) funded"
-        }
-        return "Across \(goals)"
-    }
-
-    private func targetDetail(_ summary: GoalsSummary) -> String {
-        if summary.behindCount > 0 {
-            return summary.behindCount == 1 ? "1 goal behind pace" : "\(summary.behindCount) goals behind pace"
-        }
-        return "Everything on pace"
     }
 
     private func remainingDetail(_ summary: GoalsSummary) -> String {
