@@ -156,64 +156,95 @@ private extension View {
     }
 }
 
-// MARK: - Native Panel Surface
+// MARK: - Native Panel Surface (chrome = glass, data = solid)
+//
+// The chrome-vs-data split is expressed by the surface *type*, not a boolean:
+// chrome-rank panels (`NativePanelGlassSurface`) unconditionally carry native
+// Liquid Glass; data surfaces (`SolidDataSurface`) are always solid. There is no
+// material fallback path — glass is the macOS-26 baseline (AND-511), and the
+// chrome-vs-data eligibility rule itself is the pure `WindowChromeGlass.allowsGlass`.
 
-struct NativePanelSurface: ViewModifier {
+/// Chrome-rank panel surface: a fill + hairline stroke under native Liquid Glass.
+/// For navigation/chrome surfaces only — never dense data, which must stay solid
+/// (see `SolidDataSurface`).
+struct NativePanelGlassSurface: ViewModifier {
     let cornerRadius: CGFloat
     let fill: AnyShapeStyle
     let stroke: Color
-    let useLiquidGlass: Bool
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius)
+        content
+            .background(fill, in: shape)
+            .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
+            .overlay {
+                shape.stroke(stroke, lineWidth: 1)
+            }
+    }
+}
 
-        if useLiquidGlass {
-            content
-                .background(fill, in: shape)
-                .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
-                .overlay {
-                    shape.stroke(stroke, lineWidth: 1)
-                }
-        } else {
-            content
-                .background(fill, in: shape)
-                .overlay {
-                    shape.stroke(stroke, lineWidth: 1)
-                }
-        }
+/// Solid data surface: a fill + hairline stroke with **no** glass. Used for data
+/// (lists, rows, dense cards, insight bodies) so values never sample a
+/// translucent backdrop — the "Liquid Glass on chrome, not data" doctrine (R-08).
+struct SolidDataSurface: ViewModifier {
+    let cornerRadius: CGFloat
+    let fill: AnyShapeStyle
+    let stroke: Color
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius)
+        content
+            .background(fill, in: shape)
+            .overlay {
+                shape.stroke(stroke, lineWidth: 1)
+            }
     }
 }
 
 extension View {
-    /// Legacy fill+stroke surface treatment. New surfaces should use the
-    /// rank-based `glassSurface(_:cornerRadius:)` vibrancy system above;
-    /// this remains for setup/attention surfaces not yet migrated.
+    /// Chrome-rank fill+stroke surface under native Liquid Glass. New surfaces
+    /// should prefer the rank-based `glassSurface(_:cornerRadius:)` vibrancy
+    /// system above; this remains for setup/attention chrome not yet migrated.
+    /// Chrome only — route data surfaces through ``solidDataSurface`` /
+    /// ``nativeInsetSurface``.
     func nativePanelSurface(
         cornerRadius: CGFloat = SurfaceTokens.panelCornerRadius,
         fill: AnyShapeStyle = AnyShapeStyle(SurfaceTokens.panelFill()),
-        stroke: Color = SurfaceTokens.panelStroke(),
-        useLiquidGlass: Bool = true
+        stroke: Color = SurfaceTokens.panelStroke()
     ) -> some View {
         modifier(
-            NativePanelSurface(
+            NativePanelGlassSurface(
                 cornerRadius: cornerRadius,
                 fill: fill,
-                stroke: stroke,
-                useLiquidGlass: useLiquidGlass
+                stroke: stroke
             )
         )
     }
 
+    /// Solid (non-glass) data surface: fill + hairline stroke. The explicit
+    /// data-surface treatment — values stay legible over an opaque backdrop and
+    /// never sample translucency (R-08).
+    func solidDataSurface(
+        cornerRadius: CGFloat = SurfaceTokens.compactCornerRadius,
+        fill: AnyShapeStyle = AnyShapeStyle(Color.primary.opacity(SurfaceTokens.insetFillOpacity)),
+        stroke: Color = Color.primary.opacity(0.055)
+    ) -> some View {
+        modifier(
+            SolidDataSurface(
+                cornerRadius: cornerRadius,
+                fill: fill,
+                stroke: stroke
+            )
+        )
+    }
+
+    /// Quiet inset data surface. A thin convenience over ``solidDataSurface`` for
+    /// the common inset-card case (secondary rows, metric strips); always solid.
     func nativeInsetSurface(
         cornerRadius: CGFloat = SurfaceTokens.compactCornerRadius,
         stroke: Color = Color.primary.opacity(0.055)
     ) -> some View {
-        nativePanelSurface(
-            cornerRadius: cornerRadius,
-            fill: AnyShapeStyle(Color.primary.opacity(SurfaceTokens.insetFillOpacity)),
-            stroke: stroke,
-            useLiquidGlass: false
-        )
+        solidDataSurface(cornerRadius: cornerRadius, stroke: stroke)
     }
 }
 

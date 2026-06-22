@@ -625,8 +625,9 @@ struct MainPopover: View {
                     .padding(.bottom, Layout.contentBottomPadding)
                     // The dashboard's coexisting glass surfaces (heatmap, status
                     // readiness panel, insights card + chips, overview cards)
-                    // share one GlassEffectContainer sampling region on macOS 26;
-                    // passthrough on macOS 15 (AND-381). Merge radius =
+                    // share one GlassEffectContainer sampling region. Native
+                    // Liquid Glass is the unconditional macOS-26 baseline
+                    // (AND-511) — no version passthrough. Merge radius =
                     // SurfaceTokens.glassMergeRadius (small), so only adjacent
                     // glass fuses — distant cards in this tall column stay distinct.
                     .glassGroup()

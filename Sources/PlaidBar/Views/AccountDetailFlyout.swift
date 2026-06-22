@@ -100,7 +100,8 @@ struct AccountDetailFlyout: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 // Group the inspector's coexisting glass surfaces (inset/
                 // emphasized action chips) into one GlassEffectContainer sampling
-                // region on macOS 26; passthrough on macOS 15 (AND-381).
+                // region. Native Liquid Glass is the unconditional macOS-26
+                // baseline (AND-511), so there is no version passthrough.
                 // Merge radius = SurfaceTokens.glassMergeRadius.
                 .glassGroup()
             }
