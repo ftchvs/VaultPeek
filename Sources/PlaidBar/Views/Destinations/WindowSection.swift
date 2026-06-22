@@ -128,7 +128,7 @@ struct WindowHeroMetricTile: View {
             }
         }
         .padding(WindowMetrics.md)
-        .frame(maxWidth: .infinity, minHeight: 96, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
         .windowCardSurface()
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel)

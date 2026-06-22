@@ -12,10 +12,11 @@ import SwiftUI
 // `WindowMetrics` / `WindowTypography` are the **additive** window-scale layer.
 // They live alongside the popover tokens and never replace them: the popover
 // keeps reading ``Spacing`` / ``Typography`` byte-for-byte (flag-OFF parity),
-// while the window-first surfaces read these. Apple's *Designing for macOS*
-// guidance — "more content, fewer nested levels, less modality, comfortable
-// density" — maps directly onto this split: comfortable density at the window,
-// compact density at the glance.
+// while the window-first surfaces read these. The window is tuned as a dense,
+// RepoBar-style finance instrument (post-1.0): tight card padding, crisp card
+// separation (gap > padding), and compact hero figures — high signal, low
+// chrome — read at desk distance. (This intentionally supersedes the original
+// AND-624 "comfortable density" tuning for a denser, more scannable dashboard.)
 //
 // Never-color-alone (ACCESSIBILITY.md): like ``Typography``, this file controls
 // only size, weight, and tabular alignment. It never encodes financial meaning
@@ -24,42 +25,43 @@ import SwiftUI
 
 // MARK: - Window-scale spacing
 
-/// Desk-distance spacing for the window-first workspace. A coarser step than the
-/// popover's compact 8pt grid (``Spacing``): the window has room to breathe, so
-/// section gaps and card padding are larger and the rhythm reads as "comfortable
-/// density" (Apple HIG) rather than the glance's tight pack.
+/// Desk-distance spacing for the window-first workspace, tuned for RepoBar-style
+/// density: tighter than the original AND-624 "comfortable" scale so the dashboard
+/// reads as a high-signal finance instrument, but still a step coarser than the
+/// popover's compact 8pt grid (``Spacing``) because the window is read at desk
+/// distance, not arm's length.
 ///
 /// Kept deliberately separate from ``Spacing`` so tuning the window never risks
 /// shifting the popover. Values stay on the 4pt sub-grid so they compose cleanly
 /// with the popover tokens where the two meet (e.g. a re-hosted popover card
 /// inside a window section).
 enum WindowMetrics {
-    // MARK: Spacing scale (8pt grid, coarser steps than the popover's Spacing)
+    // MARK: Spacing scale (4pt grid, RepoBar-dense)
     //
-    // Tuned up for desk-distance "comfortable density" (AND-624): a calm,
-    // spacious macOS 26 desktop dashboard reads as breathing room first, dense
-    // figures second. Steps sit on the 8pt grid (with one 4pt half-step for the
-    // tightest inner spacing) so cards align to a single even rhythm — the gap
-    // *between* cards is never smaller than the gap *inside* a card, which is
-    // what makes a grid read as separated rather than crammed.
+    // Tuned for a dense, scannable macOS 26 desktop dashboard: figures and rows
+    // first, chrome second. Steps sit on the 4pt grid so cards align to one even
+    // rhythm, and the gap *between* cards (``lg``) is kept strictly *greater* than
+    // the padding *inside* a card (``md``) — that separation is what lets a dense
+    // grid still read as crisply separated surfaces rather than crammed.
 
     /// Tight inner spacing — label↔value, icon↔text within a metric tile.
     static let xs: CGFloat = 8
     /// Within-card spacing — rows inside a card, label↔figure clusters.
     static let sm: CGFloat = 12
-    /// Card content padding and header↔body spacing (≥20pt: generous interior
-    /// breathing room so figures don't crowd the card edge).
-    static let md: CGFloat = 20
-    /// Between cards within a column, and section header↔content (≥20pt: cards
-    /// read as distinctly separated surfaces, not a stuck-together stack).
+    /// Card content padding and header↔body spacing. Kept strictly tighter than
+    /// the inter-card gap (``lg``) so cards read as crisply separated, RepoBar-dense
+    /// surfaces rather than one soft run.
+    static let md: CGFloat = 16
+    /// Between cards within a column, and section header↔content. Strictly greater
+    /// than the card padding (``md``) so the grid reads as separated, not crammed.
     static let lg: CGFloat = 20
     /// Between major sections of a canvas (hero row ↔ the column grid).
-    static let xl: CGFloat = 32
-    /// The gap between the two canvas columns. Wider than the inter-card gap so
-    /// the two columns read as two distinct regions, not one run-on grid (≥24pt).
-    static let columnGap: CGFloat = 28
+    static let xl: CGFloat = 24
+    /// The gap between the two canvas columns. ≥ the inter-card gap so the two
+    /// columns read as two distinct regions, not one run-on grid.
+    static let columnGap: CGFloat = 24
     /// Outer canvas margin — the window's content inset from its chrome.
-    static let canvasMargin: CGFloat = 28
+    static let canvasMargin: CGFloat = 20
 
     // MARK: Layout
 
@@ -70,7 +72,7 @@ enum WindowMetrics {
     /// The minimum width a metric/content card may shrink to before the grid
     /// reflows to fewer columns. Tuned so a hero tile keeps its large figure
     /// readable and a content card keeps its section header on one line.
-    static let cardMinWidth: CGFloat = 260
+    static let cardMinWidth: CGFloat = 220
 
     /// The content width below which a two-column canvas stacks into one column
     /// (a narrow window). Mirrors the popover's behavior of dropping its side
@@ -79,12 +81,12 @@ enum WindowMetrics {
 
     /// The hero metrics row's minimum tile width before it wraps. Below this the
     /// hero figures lose their tabular legibility, so the row reflows.
-    static let heroTileMinWidth: CGFloat = 240
+    static let heroTileMinWidth: CGFloat = 200
 
     /// The minimum height the hero activity heatmap card reserves for its grid,
     /// so the signature year-scale instrument reads as a prominent, full-width
     /// hero at the top of the Activity column rather than a small lost strip.
-    static let heatmapHeroMinHeight: CGFloat = 132
+    static let heatmapHeroMinHeight: CGFloat = 120
 }
 
 // MARK: - Window-scale type ramp
@@ -142,13 +144,13 @@ struct WindowSupportingText: ViewModifier {
 }
 
 /// The dashboard's hero metric figure — the big tabular number in a metric tile
-/// (net worth, safe-to-spend, this-month spend). Scales its 34pt base with the
+/// (net worth, safe-to-spend, this-month spend). Scales its 30pt base with the
 /// user's text-size / accessibility setting via `@ScaledMetric(relativeTo:
 /// .largeTitle)` (a plain `.system(size:)` font would not), with tabular digits
 /// so multiple tiles' figures align, and the same `.xSmall ... .accessibility3`
 /// clamp as ``DisplayBalance`` to stop before the layout-breaking AX4/AX5 steps.
 struct WindowHeroMetric: ViewModifier {
-    @ScaledMetric(relativeTo: .largeTitle) private var size: CGFloat = 38
+    @ScaledMetric(relativeTo: .largeTitle) private var size: CGFloat = 30
 
     func body(content: Content) -> some View {
         content

@@ -263,7 +263,7 @@ private struct DashboardAccountRowButton: View {
                     .foregroundStyle(.tertiary)
             }
             .padding(.horizontal, WindowMetrics.sm)
-            .padding(.vertical, WindowMetrics.sm)
+            .padding(.vertical, WindowMetrics.xs)
             .contentShape(Rectangle())
             .overlay(alignment: .bottom) {
                 Divider().opacity(0.4)
