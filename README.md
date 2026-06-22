@@ -57,7 +57,7 @@ VaultPeek is window-first: the primary experience is a `NavigationSplitView`
 workspace (Dashboard, Transactions, Budgets, Planning, Goals, Review Inbox,
 Insights, Alerts, Accounts, Settings), with the menu bar retained as a reduced
 glance-and-route surface. The captures below are the window-first workspaces
-rendered from demo data.
+rendered from demo data in light mode.
 
 ### Dashboard
 
@@ -85,7 +85,7 @@ receipts are surfaced without sending private transactions to a cloud model.
 Generate fresh window-first screenshots from demo data:
 
 ```bash
-swift run PlaidBar --demo --render-window-first <output-dir>
+swift run PlaidBar --demo --render-window-first <output-dir> --appearance light
 ```
 
 This renders the window-first workspaces headlessly (no Plaid, no server, no
