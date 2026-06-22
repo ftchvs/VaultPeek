@@ -339,7 +339,7 @@ struct PlanningDestinationView: View {
             }
 
             HStack(spacing: WindowMetrics.md) {
-                Label("\(summary.goalCount) goal\(summary.goalCount == 1 ? "" : "s")", systemImage: "flag")
+                Label(summary.goalCountLabel, systemImage: "flag")
                     .windowSupportingText()
                 if summary.fundedCount > 0 {
                     Label("\(summary.fundedCount) funded", systemImage: "checkmark.seal")
@@ -355,7 +355,7 @@ struct PlanningDestinationView: View {
 
     private func goalsAccessibilityLabel(_ summary: GoalsSummary) -> String {
         guard !summary.isEmpty else { return "Goals: no goals yet." }
-        var parts = ["Goals: \(goalsPercent(summary.overallPercent)) of total saved across \(summary.goalCount) goal\(summary.goalCount == 1 ? "" : "s")"]
+        var parts = ["Goals: \(goalsPercent(summary.overallPercent)) of total saved across \(summary.goalCountLabel)"]
         if summary.fundedCount > 0 { parts.append("\(summary.fundedCount) funded") }
         if summary.behindCount > 0 { parts.append("\(summary.behindCount) behind") }
         return parts.joined(separator: ". ")
