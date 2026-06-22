@@ -23,12 +23,10 @@ import SwiftUI
 struct DashboardLocalInsightCard: View {
     @Environment(AppState.self) private var appState
 
-    private var summaries: [LocalAIActivitySummary] {
-        appState.localAIActivitySummaries
-    }
-
     private var primarySummary: LocalAIActivitySummary? {
-        summaries.first { $0.window == .lastMonth } ?? summaries.first
+        // Follow the shared insight-window selection so the Dashboard card and the
+        // Insights hero agree on which window they're summarizing.
+        appState.selectedInsightSummary
     }
 
     private var availability: LocalAIAvailability {

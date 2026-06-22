@@ -9,12 +9,148 @@ public enum LocalAIInsightWindow: String, Codable, Sendable, CaseIterable, Hasha
         rawValue
     }
 
+    /// Compact label for tight chrome (pills, evidence chips, prompt period line).
     public var displayName: String {
         switch self {
         case .last7days: "Last 7D"
         case .lastMonth: "Last Month"
         case .yearOverYear: "YoY"
         }
+    }
+
+    /// Fuller label for the segmented window selector, where there is room to be
+    /// unambiguous about the comparison span.
+    public var longDisplayName: String {
+        switch self {
+        case .last7days: "Last 7 days"
+        case .lastMonth: "Last 30 days"
+        case .yearOverYear: "Year over year"
+        }
+    }
+
+    /// Spoken/accessibility label — never an abbreviation, so VoiceOver reads the
+    /// span in full and the selector never communicates meaning by glyph alone.
+    public var accessibilityName: String {
+        switch self {
+        case .last7days: "Last 7 days"
+        case .lastMonth: "Last 30 days"
+        case .yearOverYear: "Year over year"
+        }
+    }
+
+    /// SF Symbol that pairs text with a shape so the segment is distinguishable
+    /// without relying on color (ACCESSIBILITY.md).
+    public var systemImage: String {
+        switch self {
+        case .last7days: "calendar.day.timeline.left"
+        case .lastMonth: "calendar"
+        case .yearOverYear: "calendar.badge.clock"
+        }
+    }
+}
+
+/// Presentation helper for the three-window insight selector.
+///
+/// Pure, `Sendable`, and unit-tested: it computes the ordered list of windows the
+/// UI offers and which of them are currently *usable* given the on-device summaries
+/// that already exist. A window is usable when a summary has at least one source
+/// row in its current range; year-over-year additionally requires a comparison
+/// (prior) window with history, since its entire value is the comparison.
+///
+/// The selector never hides an unusable window — it disables it and explains why —
+/// so the menu shape is stable and the user can see what becomes available as more
+/// history syncs.
+public struct LocalAIInsightWindowSelection: Equatable, Sendable {
+    /// A single selectable window plus its current usability and the reason it is
+    /// (or is not) usable.
+    public struct Option: Equatable, Sendable, Identifiable {
+        public let window: LocalAIInsightWindow
+        public let isUsable: Bool
+        /// Short, display-safe explanation of the option's state (e.g. why a
+        /// window is not yet usable). Identifier-free.
+        public let unavailableReason: String?
+
+        public var id: String { window.id }
+
+        public init(window: LocalAIInsightWindow, isUsable: Bool, unavailableReason: String?) {
+            self.window = window
+            self.isUsable = isUsable
+            self.unavailableReason = unavailableReason
+        }
+    }
+
+    public let options: [Option]
+    /// The window the UI should actually present, after resolving the requested
+    /// selection against what is usable. Falls back to the first usable window, or
+    /// — when nothing is usable — to the requested window so the selector still
+    /// shows a stable choice.
+    public let resolvedSelection: LocalAIInsightWindow
+
+    public init(options: [Option], resolvedSelection: LocalAIInsightWindow) {
+        self.options = options
+        self.resolvedSelection = resolvedSelection
+    }
+
+    /// Build the selection presentation from the available summaries.
+    ///
+    /// - Parameters:
+    ///   - summaries: the on-device summaries already computed for each window.
+    ///   - requestedSelection: the window the user last chose (persisted).
+    public static func make(
+        summaries: [LocalAIActivitySummary],
+        requestedSelection: LocalAIInsightWindow
+    ) -> LocalAIInsightWindowSelection {
+        let summariesByWindow = Dictionary(
+            summaries.map { ($0.window, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+
+        let options = LocalAIInsightWindow.allCases.map { window -> Option in
+            let summary = summariesByWindow[window]
+            let usable = isUsable(window: window, summary: summary)
+            return Option(
+                window: window,
+                isUsable: usable,
+                unavailableReason: usable ? nil : unavailableReason(window: window, summary: summary)
+            )
+        }
+
+        let usableWindows = options.filter(\.isUsable).map(\.window)
+        let resolved: LocalAIInsightWindow
+        if usableWindows.contains(requestedSelection) {
+            resolved = requestedSelection
+        } else if let firstUsable = usableWindows.first {
+            resolved = firstUsable
+        } else {
+            // Nothing usable yet — keep the requested window so the selector still
+            // renders a stable, explained choice rather than snapping elsewhere.
+            resolved = requestedSelection
+        }
+
+        return LocalAIInsightWindowSelection(options: options, resolvedSelection: resolved)
+    }
+
+    private static func isUsable(window: LocalAIInsightWindow, summary: LocalAIActivitySummary?) -> Bool {
+        guard let summary else { return false }
+        guard summary.input.current.transactionCount > 0 else { return false }
+        // Year-over-year is only meaningful with a prior window that has history.
+        if window == .yearOverYear {
+            guard let prior = summary.input.prior, prior.transactionCount > 0 else { return false }
+        }
+        return true
+    }
+
+    private static func unavailableReason(
+        window: LocalAIInsightWindow,
+        summary: LocalAIActivitySummary?
+    ) -> String {
+        guard let summary, summary.input.current.transactionCount > 0 else {
+            return "No transactions in \(window.accessibilityName.lowercased()) yet."
+        }
+        if window == .yearOverYear {
+            return "Needs at least a year of history to compare."
+        }
+        return "Not enough local history yet."
     }
 }
 
