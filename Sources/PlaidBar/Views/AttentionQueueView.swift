@@ -1,4 +1,3 @@
-import AppKit
 import PlaidBarCore
 import SwiftUI
 
@@ -70,39 +69,16 @@ struct AttentionQueueView: View {
             return
         }
 
-        guard let action = row.action else { return }
-        switch action {
-        case .checkServer:
-            Task { await appState.checkServerConnection() }
-        case .addAccount:
-            if let onAddAccount {
-                onAddAccount()
-            } else {
-                Task { await appState.addAccount() }
-            }
-        case .refresh:
-            Task { await appState.refreshDashboard() }
-        case .reconnect:
-            guard let itemId = row.targetItemId ?? ItemRecoveryTarget.itemId(from: appState.itemStatuses) else {
-                Task { await appState.refreshDashboard() }
-                return
-            }
-            Task { await appState.reconnectItem(itemId: itemId) }
-        case .openSettings:
-            openSettings()
-        case .requestNotificationPermission:
-            Task { _ = await appState.requestNotificationPermission() }
-        case .openNotificationSettings:
-            openNotificationSettings()
-        }
-    }
-
-    private func openNotificationSettings() {
-        guard let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") else {
-            openSettings()
-            return
-        }
-        NSWorkspace.shared.open(url)
+        // In-place dispatch through the shared dispatcher (no `openRoute`, so the
+        // route-mapped fallback never fires here — this path is reached only when
+        // the row has no window destination or the flag is OFF, matching the prior
+        // behavior exactly).
+        RecoveryActionDispatcher(
+            appState: appState,
+            openSettings: { openSettings() },
+            onAddAccount: onAddAccount
+        )
+        .dispatch(row)
     }
 }
 

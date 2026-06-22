@@ -192,7 +192,7 @@ public struct AccountConnectionPresentation: Sendable, Equatable {
                 signalLabel: "Stale",
                 iconName: "clock.badge.exclamationmark.fill",
                 showsRecoveryActions: true,
-                recoveryActionTitle: "Refresh",
+                recoveryActionTitle: staleSyncRefreshTitle,
                 itemSyncLabel: itemSyncLabel,
                 statusFilterSubtitle: "Stale sync • \(itemSyncLabel)",
                 recoveryDetailLabel: "This item has stale Plaid data. Refresh to pull current balances and transactions."

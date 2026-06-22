@@ -1521,7 +1521,7 @@ private struct DashboardStatusReadinessPanel: View {
                             } label: {
                                 Label(
                                     primaryActionLabel(for: primaryAction),
-                                    systemImage: readiness.primaryActionIconName ?? primaryAction.defaultIconName
+                                    systemImage: readiness.primaryActionIconName ?? primaryAction.canonicalIconName
                                 )
                             }
                             .buttonStyle(.borderedProminent)
@@ -1534,7 +1534,7 @@ private struct DashboardStatusReadinessPanel: View {
                             } label: {
                                 Label(
                                     primaryActionLabel(for: primaryAction),
-                                    systemImage: readiness.primaryActionIconName ?? primaryAction.defaultIconName
+                                    systemImage: readiness.primaryActionIconName ?? primaryAction.canonicalIconName
                                 )
                             }
                             .buttonStyle(.bordered)
@@ -1551,13 +1551,13 @@ private struct DashboardStatusReadinessPanel: View {
                         Button {
                             perform(action)
                         } label: {
-                            Label(action.defaultTitle, systemImage: action.defaultIconName)
+                            Label(action.canonicalTitle, systemImage: action.canonicalIconName)
                                 .lineLimit(1)
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
                         .disabled(appState.isLoading)
-                        .accessibilityLabel(action.defaultTitle)
+                        .accessibilityLabel(action.canonicalTitle)
                     }
                 }
             }
@@ -1590,48 +1590,22 @@ private struct DashboardStatusReadinessPanel: View {
         readiness.level == .warning || readiness.level == .blocked
     }
 
-    private func perform(_ action: DashboardStatusReadinessAction) {
-        switch action {
-        case .checkServer:
-            Task { await appState.checkServerConnection() }
-        case .addAccount:
-            onAddAccount()
-        case .refresh:
-            Task { await appState.refreshDashboard() }
-        case .reconnect:
-            guard let itemId = reconnectItemId else {
-                Task { await appState.refreshAccounts() }
-                return
-            }
-            Task { await appState.reconnectItem(itemId: itemId) }
-        case .openSettings:
-            openSettings()
-        case .requestNotificationPermission:
-            Task { _ = await appState.requestNotificationPermission() }
-        case .openNotificationSettings:
-            openNotificationSettings()
-        }
+    private func perform(_ action: RecoveryAction) {
+        RecoveryActionDispatcher(
+            appState: appState,
+            openSettings: openSettings,
+            onAddAccount: onAddAccount
+        )
+        .perform(action)
     }
 
-    private func openNotificationSettings() {
-        guard let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") else {
-            openSettings()
-            return
-        }
-        NSWorkspace.shared.open(url)
-    }
-
-    private func primaryActionLabel(for action: DashboardStatusReadinessAction) -> String {
+    private func primaryActionLabel(for action: RecoveryAction) -> String {
         if action == .reconnect,
            let title = ItemRecoveryTarget.actionTitle(from: appState.itemStatuses)
         {
             return title
         }
-        return readiness.primaryActionTitle ?? action.defaultTitle
-    }
-
-    private var reconnectItemId: String? {
-        ItemRecoveryTarget.itemId(from: appState.itemStatuses)
+        return readiness.primaryActionTitle ?? action.canonicalTitle
     }
 }
 

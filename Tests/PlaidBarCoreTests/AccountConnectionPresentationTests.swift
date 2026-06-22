@@ -53,7 +53,11 @@ struct AccountConnectionPresentationTests {
     func stale() {
         let presentation = evaluate(isSyncStale: true, itemStatus: .connected)
         #expect(presentation.level == .stale)
-        #expect(presentation.recoveryActionTitle == "Refresh")
+        // STATE-4 convergence: the stale-sync refresh label is the one canonical
+        // `staleSyncRefreshTitle` shared with the dashboard readiness and
+        // attention queue, resolving the prior "Refresh" / "Refresh Now" drift.
+        #expect(presentation.recoveryActionTitle == "Refresh Now")
+        #expect(presentation.recoveryActionTitle == staleSyncRefreshTitle)
         #expect(presentation.showsRecoveryActions)
         #expect(presentation.recoveryDetailLabel?.contains("stale") == true)
     }

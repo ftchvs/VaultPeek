@@ -41,7 +41,7 @@ public struct AttentionQueueRow: Equatable, Identifiable, Sendable {
     public let title: String
     public let detail: String
     public let menuBarAttentionText: String?
-    public let action: DashboardStatusReadinessAction?
+    public let action: RecoveryAction?
     public let actionTitle: String?
     public let actionIconName: String?
     public let targetItemId: String?
@@ -63,13 +63,28 @@ public struct AttentionQueueRow: Equatable, Identifiable, Sendable {
         id.hasPrefix(Self.financialAttentionIDPrefix)
     }
 
+    /// The converged recovery button for this row, folding the row's
+    /// `targetItemId` so an item-scoped `.reconnect` carries its target in the
+    /// same place every other attention surface does. `nil` for rows with no
+    /// action (e.g. the advisory provider-outage row).
+    public var recoveryActionButton: RecoveryActionButton? {
+        guard let action else { return nil }
+        return RecoveryActionButton(
+            action: action,
+            title: actionTitle,
+            iconName: actionIconName,
+            accessibilityHint: accessibilityHint,
+            targetItemId: targetItemId
+        )
+    }
+
     public init(
         id: String,
         severity: AttentionQueueSeverity,
         title: String,
         detail: String,
         menuBarAttentionText: String? = nil,
-        action: DashboardStatusReadinessAction? = nil,
+        action: RecoveryAction? = nil,
         actionTitle: String? = nil,
         actionIconName: String? = nil,
         targetItemId: String? = nil,
@@ -82,8 +97,8 @@ public struct AttentionQueueRow: Equatable, Identifiable, Sendable {
         self.detail = detail
         self.menuBarAttentionText = menuBarAttentionText
         self.action = action
-        self.actionTitle = actionTitle ?? action?.defaultTitle
-        self.actionIconName = actionIconName ?? action?.defaultIconName
+        self.actionTitle = actionTitle ?? action?.canonicalTitle
+        self.actionIconName = actionIconName ?? action?.canonicalIconName
         self.targetItemId = targetItemId
         self.accessibilityLabel = accessibilityLabel ?? "\(severity.statusLabel). \(title). \(detail)"
         self.accessibilityHint = accessibilityHint
@@ -123,6 +138,8 @@ public struct AttentionQueue: Equatable, Sendable {
         lowCashThreshold: Double = 100,
         largeTransactionThreshold: Double = 500,
         creditUtilizationThreshold: Double = PlaidBarConstants.creditUtilizationWarningThreshold,
+        notificationsEnabled: Bool = false,
+        notificationPermission: NotificationPermissionPresentation? = nil,
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> AttentionQueue {
@@ -225,8 +242,20 @@ public struct AttentionQueue: Equatable, Sendable {
                 detail: "Last sync: \(lastSyncRelative ?? "never"). Refresh for current data.",
                 menuBarAttentionText: lastSyncRelative == nil ? "Never" : "Stale",
                 action: .refresh,
-                actionTitle: "Refresh Now"
+                actionTitle: staleSyncRefreshTitle
             ))
+        }
+
+        // STATE-5 (notification-permission): mirror the dashboard readiness
+        // verdict so the popover / Alerts / Account Settings attention queue
+        // offers the same notification recovery the dashboard does. Advisory
+        // only, ranked below sync health and above financial attention.
+        if credentialsReady, serverConnected,
+           let notificationRow = notificationPermissionRow(
+               notificationsEnabled: notificationsEnabled,
+               permission: notificationPermission
+           ) {
+            rows.append(notificationRow)
         }
 
         // Only evaluate aggregate finance warnings once every linked item has
@@ -453,9 +482,12 @@ public struct AttentionQueue: Equatable, Sendable {
         }
     }
 
+    /// The institution-qualified reconnect/update title for a degraded item,
+    /// delegating to ``ItemRecoveryTarget`` so the verb ("Reconnect" for login /
+    /// error, "Update" for newly-available accounts) and the institution
+    /// qualification match every other surface (STATE-2 convergence).
     private static func reconnectTitle(_ item: ItemStatus) -> String {
-        guard let institutionName = normalizedInstitutionName(item.institutionName) else { return "Reconnect Item" }
-        return "Reconnect \(institutionName)"
+        ItemRecoveryTarget.actionTitle(from: [item]) ?? "Reconnect Item"
     }
 
     private static func localServerAuthRow(from message: String?) -> AttentionQueueRow? {
@@ -516,6 +548,75 @@ public struct AttentionQueue: Equatable, Sendable {
         UserFacingError.sanitizedDetail(from: message, maxLength: maxRenderedErrorLength)
     }
 
+    /// STATE-5: the notification-permission attention row, mirroring
+    /// `DashboardStatusReadiness.notificationPermissionRecovery` so the same
+    /// recovery (request permission / open System Settings / check again) is
+    /// offered on every attention surface. `nil` unless local alerts are enabled
+    /// AND macOS permission is currently blocking them.
+    private static func notificationPermissionRow(
+        notificationsEnabled: Bool,
+        permission: NotificationPermissionPresentation?
+    ) -> AttentionQueueRow? {
+        guard notificationsEnabled,
+              let permission,
+              permission.shouldDisableNotifications
+        else { return nil }
+
+        switch permission.recoveryAction {
+        case .requestPermission:
+            return AttentionQueueRow(
+                id: "notification-permission",
+                severity: .warning,
+                title: "Notification permission not requested",
+                detail: "Local alerts are enabled, but macOS permission has not been requested yet.",
+                action: .requestNotificationPermission,
+                actionTitle: permission.recoveryActionTitle,
+                actionIconName: permission.recoveryActionIconName,
+                accessibilityHint: "Requests macOS notification permission for VaultPeek alerts."
+            )
+        case .openSystemSettings:
+            return AttentionQueueRow(
+                id: "notification-permission",
+                severity: .warning,
+                title: "Notifications blocked",
+                detail: "Local alerts are enabled, but macOS is blocking VaultPeek notifications. Enable VaultPeek in System Settings to recover alerts.",
+                action: .openNotificationSettings,
+                actionTitle: permission.recoveryActionTitle,
+                actionIconName: permission.recoveryActionIconName,
+                accessibilityHint: "Opens the macOS System Settings notifications pane."
+            )
+        case .checkAgain:
+            return AttentionQueueRow(
+                id: "notification-permission",
+                severity: .warning,
+                title: "Notification permission unknown",
+                detail: permission.detail,
+                action: .requestNotificationPermission,
+                actionTitle: "Check Permission",
+                actionIconName: "arrow.clockwise",
+                accessibilityHint: "Re-checks the current macOS notification permission."
+            )
+        case .runBundledApp:
+            return AttentionQueueRow(
+                id: "notification-permission",
+                severity: .warning,
+                title: "Notification identity unavailable",
+                detail: permission.detail,
+                action: .openSettings,
+                actionTitle: permission.recoveryActionTitle,
+                actionIconName: permission.recoveryActionIconName
+            )
+        case nil:
+            return AttentionQueueRow(
+                id: "notification-permission",
+                severity: .warning,
+                title: "Notifications unavailable",
+                detail: permission.detail,
+                action: .openSettings
+            )
+        }
+    }
+
     private static func normalizedInstitutionName(_ institutionName: String?) -> String? {
         guard let institutionName else { return nil }
         let trimmed = institutionName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -545,9 +646,12 @@ public struct AttentionQueue: Equatable, Sendable {
             case "first-sync-needed": return 9
             case "first-sync-incomplete": return 10
             case "sync-stale": return 11
-            case "financial-low-cash": return 12
-            case "financial-high-utilization": return 13
-            case "financial-unusual-spending": return 14
+            // STATE-5 notification recovery: advisory, ranked just below sync
+            // health and just above financial attention (mirrors the dashboard).
+            case "notification-permission": return 12
+            case "financial-low-cash": return 13
+            case "financial-high-utilization": return 14
+            case "financial-unusual-spending": return 15
             default:
                 // Unknown rows fall back to severity-tier ordering: blocking
                 // failures first, advisories next, healthy rows last.

@@ -1281,21 +1281,15 @@ struct AccountSettingsView: View {
         isShowingAccountSetup = true
     }
 
-    private func performEmptyAction(_ action: SecondaryContentUnavailableAction) {
-        switch action {
-        case .checkServer:
-            Task { await appState.checkServerConnection() }
-        case .addAccount:
-            handleAddAccount()
-        case .refreshAccounts:
-            Task { await appState.refreshAccounts() }
-        case .syncTransactions:
-            Task { await appState.syncTransactions() }
-        case .refresh:
-            Task { await appState.refreshDashboard() }
-        case .clearFilters, .showWiderPeriod:
-            break
-        }
+    private func performEmptyAction(_ action: RecoveryAction) {
+        // Already inside Settings, so `openSettings` is a no-op; "add account"
+        // opens the account-setup sheet on this surface.
+        RecoveryActionDispatcher(
+            appState: appState,
+            openSettings: {},
+            onAddAccount: handleAddAccount
+        )
+        .perform(action)
     }
 
     private var accountGroups: [AccountItemGroup] {

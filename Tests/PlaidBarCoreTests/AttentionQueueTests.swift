@@ -535,6 +535,171 @@ struct AttentionQueueTests {
         }
     }
 
+    // MARK: - STATE-5: notification-permission row (convergence)
+
+    @Test("Notification permission denied surfaces a recovery row mirroring the dashboard")
+    func notificationPermissionDeniedSurfacesRow() {
+        let queue = AttentionQueue.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 1,
+            accountCount: 1,
+            syncedItemCount: 1,
+            itemStatuses: [],
+            isSyncStale: false,
+            lastSyncRelative: "now",
+            errorMessage: nil,
+            notificationsEnabled: true,
+            notificationPermission: .evaluate(kind: .denied)
+        )
+
+        let row = queue.rows.first { $0.id == "notification-permission" }
+        #expect(row != nil)
+        #expect(row?.severity == .warning)
+        #expect(row?.title == "Notifications blocked")
+        #expect(row?.action == .openNotificationSettings)
+        #expect(row?.actionTitle == "Open System Settings")
+    }
+
+    @Test("Notification permission not-requested offers the permission request")
+    func notificationPermissionNotRequestedOffersRequest() {
+        let queue = AttentionQueue.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 1,
+            accountCount: 1,
+            syncedItemCount: 1,
+            itemStatuses: [],
+            isSyncStale: false,
+            lastSyncRelative: "now",
+            errorMessage: nil,
+            notificationsEnabled: true,
+            notificationPermission: .evaluate(kind: .notDetermined)
+        )
+
+        let row = queue.rows.first { $0.id == "notification-permission" }
+        #expect(row?.title == "Notification permission not requested")
+        #expect(row?.action == .requestNotificationPermission)
+    }
+
+    @Test("Notification recovery is suppressed when local alerts are disabled")
+    func notificationRecoverySuppressedWhenDisabled() {
+        let queue = AttentionQueue.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 1,
+            accountCount: 1,
+            syncedItemCount: 1,
+            itemStatuses: [],
+            isSyncStale: false,
+            lastSyncRelative: "now",
+            errorMessage: nil,
+            notificationsEnabled: false,
+            notificationPermission: .evaluate(kind: .denied)
+        )
+
+        #expect(!queue.rows.contains { $0.id == "notification-permission" })
+        #expect(queue.rows.map(\.id) == ["healthy"])
+    }
+
+    @Test("Notification recovery is omitted while authorized (no blocking state)")
+    func notificationRecoveryOmittedWhenAuthorized() {
+        let queue = AttentionQueue.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 1,
+            accountCount: 1,
+            syncedItemCount: 1,
+            itemStatuses: [],
+            isSyncStale: false,
+            lastSyncRelative: "now",
+            errorMessage: nil,
+            notificationsEnabled: true,
+            notificationPermission: .evaluate(kind: .authorized)
+        )
+
+        #expect(!queue.rows.contains { $0.id == "notification-permission" })
+    }
+
+    @Test("Notification recovery ranks below sync health and above financial attention")
+    func notificationRecoveryRanksBelowSyncAboveFinancial() {
+        let queue = AttentionQueue.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 1,
+            accountCount: 2,
+            syncedItemCount: 1,
+            itemStatuses: [],
+            isSyncStale: true,
+            lastSyncRelative: "3 days ago",
+            errorMessage: nil,
+            accounts: [
+                depository(id: "checking", balance: 10),
+            ],
+            transactions: [],
+            lowCashThreshold: 100,
+            largeTransactionThreshold: 500,
+            creditUtilizationThreshold: 30,
+            notificationsEnabled: true,
+            notificationPermission: .evaluate(kind: .denied)
+        )
+
+        #expect(queue.rows.map(\.id) == [
+            "sync-stale",
+            "notification-permission",
+            "financial-low-cash",
+        ])
+    }
+
+    @Test("Notification recovery is suppressed until credentials and server are ready")
+    func notificationRecoverySuppressedUntilInfrastructureReady() {
+        let queue = AttentionQueue.evaluate(
+            isDemoMode: false,
+            serverConnected: false,
+            credentialsConfigured: true,
+            linkedItemCount: 1,
+            accountCount: 1,
+            syncedItemCount: 1,
+            itemStatuses: [],
+            isSyncStale: false,
+            lastSyncRelative: "now",
+            errorMessage: nil,
+            notificationsEnabled: true,
+            notificationPermission: .evaluate(kind: .denied)
+        )
+
+        // Server-offline dominates; notification recovery does not show.
+        #expect(!queue.rows.contains { $0.id == "notification-permission" })
+        #expect(queue.rows.map(\.id) == ["server-offline"])
+    }
+
+    @Test("New-accounts row uses the Update verb title, matching every surface")
+    func newAccountsRowUsesUpdateTitle() {
+        let queue = AttentionQueue.evaluate(
+            isDemoMode: false,
+            serverConnected: true,
+            credentialsConfigured: true,
+            linkedItemCount: 1,
+            accountCount: 1,
+            syncedItemCount: 1,
+            itemStatuses: [
+                ItemStatus(id: "item-new", institutionName: "Chase", status: .newAccountsAvailable),
+            ],
+            isSyncStale: false,
+            lastSyncRelative: "now",
+            errorMessage: nil
+        )
+
+        // STATE-2 convergence: the attention queue now says "Update Chase" for
+        // newly-available accounts, matching ItemRecoveryTarget / the chip.
+        #expect(queue.rows.first?.actionTitle == "Update Chase")
+    }
+
     private func transaction(id: String, amount: Double) -> TransactionDTO {
         TransactionDTO(
             id: id,

@@ -1,4 +1,3 @@
-import AppKit
 import PlaidBarCore
 import SwiftUI
 
@@ -53,7 +52,7 @@ struct DashboardReadinessPanel: View {
                 } label: {
                     Label(
                         primaryActionLabel(for: primaryAction),
-                        systemImage: readiness.primaryActionIconName ?? primaryAction.defaultIconName
+                        systemImage: readiness.primaryActionIconName ?? primaryAction.canonicalIconName
                     )
                 }
                 .buttonStyle(needsAttention ? AnyButtonStyle(.borderedProminent) : AnyButtonStyle(.bordered))
@@ -84,45 +83,24 @@ struct DashboardReadinessPanel: View {
         }
     }
 
-    private func primaryActionLabel(for action: DashboardStatusReadinessAction) -> String {
+    private func primaryActionLabel(for action: RecoveryAction) -> String {
         if action == .reconnect,
            let title = ItemRecoveryTarget.actionTitle(from: appState.itemStatuses) {
             return title
         }
-        return readiness.primaryActionTitle ?? action.defaultTitle
+        return readiness.primaryActionTitle ?? action.canonicalTitle
     }
 
-    /// Dispatches a readiness action through the same `AppState` entry points the
-    /// popover's panel uses, so window-first recovery matches the popover exactly.
-    private func perform(_ action: DashboardStatusReadinessAction) {
-        switch action {
-        case .checkServer:
-            Task { await appState.checkServerConnection() }
-        case .addAccount:
-            onAddAccount()
-        case .refresh:
-            Task { await appState.refreshDashboard() }
-        case .reconnect:
-            guard let itemId = ItemRecoveryTarget.itemId(from: appState.itemStatuses) else {
-                Task { await appState.refreshAccounts() }
-                return
-            }
-            Task { await appState.reconnectItem(itemId: itemId) }
-        case .openSettings:
-            openSettings()
-        case .requestNotificationPermission:
-            Task { _ = await appState.requestNotificationPermission() }
-        case .openNotificationSettings:
-            openNotificationSettings()
-        }
-    }
-
-    private func openNotificationSettings() {
-        guard let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") else {
-            openSettings()
-            return
-        }
-        NSWorkspace.shared.open(url)
+    /// Dispatches a readiness action through the shared ``RecoveryActionDispatcher``
+    /// — the same `AppState` entry points every other attention surface uses, so
+    /// recovery means the same thing everywhere.
+    private func perform(_ action: RecoveryAction) {
+        RecoveryActionDispatcher(
+            appState: appState,
+            openSettings: openSettings,
+            onAddAccount: onAddAccount
+        )
+        .perform(action)
     }
 }
 

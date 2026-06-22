@@ -8,15 +8,12 @@ public enum SecondaryContentSurface: String, Sendable {
     case recurring
 }
 
-public enum SecondaryContentUnavailableAction: String, Sendable {
-    case checkServer
-    case addAccount
-    case refreshAccounts
-    case syncTransactions
-    case refresh
-    case clearFilters
-    case showWiderPeriod
-}
+/// Deprecated alias for the converged ``RecoveryAction``. Secondary content
+/// `ContentUnavailableView`s now speak the same ``RecoveryAction`` vocabulary as
+/// the dashboard readiness verdict and attention queue; this alias keeps the
+/// pre-convergence call sites compiling. Prefer ``RecoveryAction`` in new code.
+@available(*, deprecated, renamed: "RecoveryAction")
+public typealias SecondaryContentUnavailableAction = RecoveryAction
 
 public struct SecondaryContentUnavailableState: Equatable, Sendable {
     private static let maxRenderedErrorLength = 240
@@ -24,7 +21,7 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
     public let title: String
     public let detail: String
     public let iconName: String
-    public let action: SecondaryContentUnavailableAction
+    public let action: RecoveryAction
     public let actionTitle: String
     public let actionIconName: String
     public let actionAccessibilityHint: String?
@@ -36,7 +33,7 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
         title: String,
         detail: String,
         iconName: String,
-        action: SecondaryContentUnavailableAction,
+        action: RecoveryAction,
         actionTitle: String,
         actionIconName: String,
         actionAccessibilityHint: String? = nil,
@@ -50,6 +47,20 @@ public struct SecondaryContentUnavailableState: Equatable, Sendable {
         self.actionIconName = actionIconName
         self.actionAccessibilityHint = actionAccessibilityHint
         self.isLoading = isLoading
+    }
+
+    /// The converged recovery button for this empty/unavailable state, so a
+    /// secondary `ContentUnavailableView` emits the same ``RecoveryActionButton``
+    /// shape every other attention surface does. The action is hidden while the
+    /// first fetch is in flight (`isLoading`), matching the views.
+    public var recoveryActionButton: RecoveryActionButton {
+        RecoveryActionButton(
+            action: action,
+            title: actionTitle,
+            iconName: actionIconName,
+            accessibilityHint: actionAccessibilityHint,
+            isInteractive: !isLoading
+        )
     }
 
     public static func accounts(

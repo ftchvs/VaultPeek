@@ -67,7 +67,7 @@ public struct MenuBarGlanceModel: Equatable, Sendable {
         public let route: Route?
         /// The in-place action to run when `route` is `nil` (server offline,
         /// missing credentials, generic recent-error/sync rows).
-        public let fallbackAction: DashboardStatusReadinessAction?
+        public let fallbackAction: RecoveryAction?
 
         public init(
             id: String,
@@ -78,7 +78,7 @@ public struct MenuBarGlanceModel: Equatable, Sendable {
             accessibilityLabel: String,
             accessibilityHint: String?,
             route: Route?,
-            fallbackAction: DashboardStatusReadinessAction?
+            fallbackAction: RecoveryAction?
         ) {
             self.id = id
             self.title = title
