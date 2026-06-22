@@ -56,6 +56,33 @@ public struct GoalsSummary: Sendable, Equatable {
         Int((overallFraction * 100).rounded())
     }
 
+    // MARK: - Presentation copy
+
+    /// Grammatically correct goal-count noun phrase ("1 goal" / "N goals"),
+    /// shared by the Goals hero detail and the Planning goals card so the two
+    /// surfaces always pluralize identically.
+    public var goalCountLabel: String {
+        goalCount == 1 ? "1 goal" : "\(goalCount) goals"
+    }
+
+    /// Detail line under the "Total saved" hero tile: how many goals are tracked,
+    /// surfacing the funded count when any goal has reached its target.
+    public var savedDetail: String {
+        if fundedCount > 0 {
+            return "\(goalCountLabel) · \(fundedCount) funded"
+        }
+        return "Across \(goalCountLabel)"
+    }
+
+    /// Detail line under the "Total target" hero tile: surfaces how many goals are
+    /// behind their target-date pace, with singular/plural grammar, or an all-clear.
+    public var targetDetail: String {
+        if behindCount > 0 {
+            return behindCount == 1 ? "1 goal behind pace" : "\(behindCount) goals behind pace"
+        }
+        return "Everything on pace"
+    }
+
     /// Build the summary from a goal list, evaluating pace `asOf` a reference date.
     public static func make(from goals: [Goal], asOf now: Date = Date()) -> GoalsSummary {
         var totalSaved = 0.0

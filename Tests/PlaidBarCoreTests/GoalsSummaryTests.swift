@@ -76,4 +76,43 @@ struct GoalsSummaryTests {
         // Overall fraction still clamps to 1 (totalSaved 1500 / totalTarget 2000 = 0.75).
         #expect(summary.overallFraction == 0.75)
     }
+
+    // MARK: - Presentation copy
+
+    private func summary(
+        goalCount: Int = 0,
+        fundedCount: Int = 0,
+        behindCount: Int = 0
+    ) -> GoalsSummary {
+        GoalsSummary(
+            goalCount: goalCount,
+            totalSaved: 0,
+            totalTarget: 0,
+            totalRemaining: 0,
+            fundedCount: fundedCount,
+            behindCount: behindCount
+        )
+    }
+
+    @Test("Goal-count label pluralizes the noun")
+    func goalCountLabel() {
+        #expect(summary(goalCount: 0).goalCountLabel == "0 goals")
+        #expect(summary(goalCount: 1).goalCountLabel == "1 goal")
+        #expect(summary(goalCount: 2).goalCountLabel == "2 goals")
+    }
+
+    @Test("Saved detail surfaces the funded count only when any goal is funded")
+    func savedDetail() {
+        #expect(summary(goalCount: 1, fundedCount: 0).savedDetail == "Across 1 goal")
+        #expect(summary(goalCount: 3, fundedCount: 0).savedDetail == "Across 3 goals")
+        #expect(summary(goalCount: 1, fundedCount: 1).savedDetail == "1 goal · 1 funded")
+        #expect(summary(goalCount: 4, fundedCount: 2).savedDetail == "4 goals · 2 funded")
+    }
+
+    @Test("Target detail surfaces behind-pace count with singular/plural grammar")
+    func targetDetail() {
+        #expect(summary(goalCount: 2, behindCount: 0).targetDetail == "Everything on pace")
+        #expect(summary(goalCount: 2, behindCount: 1).targetDetail == "1 goal behind pace")
+        #expect(summary(goalCount: 3, behindCount: 2).targetDetail == "2 goals behind pace")
+    }
 }
