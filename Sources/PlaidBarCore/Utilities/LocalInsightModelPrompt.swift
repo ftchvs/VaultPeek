@@ -90,13 +90,17 @@ public enum LocalInsightPromptBuilder {
         }
 
         if let prior = input.prior, prior.expenseTotal > 0 {
+            // Window-aware comparison wording so a year-over-year prompt reads as a
+            // year-ago comparison, not a generic "prior period" the way the 7-day
+            // and 30-day rolling windows do.
+            let comparisonPhrase = comparisonPhrase(for: input.window)
             let delta = input.current.expenseTotal - prior.expenseTotal
             if delta == 0 {
-                lines.append("Versus the prior period: spending is unchanged (prior expenses \(money(prior.expenseTotal))).")
+                lines.append("Versus \(comparisonPhrase): spending is unchanged (prior expenses \(money(prior.expenseTotal))).")
             } else {
                 let direction = delta > 0 ? "up" : "down"
                 lines.append(
-                    "Versus the prior period: spending is \(direction) "
+                    "Versus \(comparisonPhrase): spending is \(direction) "
                         + "\(money(abs(delta))) (prior expenses \(money(prior.expenseTotal)))."
                 )
             }
@@ -131,6 +135,16 @@ public enum LocalInsightPromptBuilder {
             : collapsed
         let escaped = capped.replacingOccurrences(of: "\"", with: "'")
         return "\"\(escaped)\""
+    }
+
+    /// Window-aware noun phrase for the comparison span used in the "Versus …"
+    /// line. Identifier-free and injection-safe (fixed strings only).
+    private static func comparisonPhrase(for window: LocalAIInsightWindow) -> String {
+        switch window {
+        case .last7days: "the prior 7 days"
+        case .lastMonth: "the prior 30 days"
+        case .yearOverYear: "the same period a year ago"
+        }
     }
 
     private static func money(_ value: Double) -> String {

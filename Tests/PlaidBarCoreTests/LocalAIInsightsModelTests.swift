@@ -39,4 +39,243 @@ struct LocalAIInsightsModelTests {
         )
         #expect(suggestion.id == "t1-GENERAL_MERCHANDISE")
     }
+
+    // MARK: - Window labels
+
+    @Test("Each window has a distinct compact, long, and accessibility label")
+    func windowLabels() {
+        #expect(LocalAIInsightWindow.last7days.displayName == "Last 7D")
+        #expect(LocalAIInsightWindow.lastMonth.displayName == "Last Month")
+        #expect(LocalAIInsightWindow.yearOverYear.displayName == "YoY")
+
+        #expect(LocalAIInsightWindow.last7days.longDisplayName == "Last 7 days")
+        #expect(LocalAIInsightWindow.lastMonth.longDisplayName == "Last 30 days")
+        #expect(LocalAIInsightWindow.yearOverYear.longDisplayName == "Year over year")
+
+        #expect(LocalAIInsightWindow.last7days.accessibilityName == "Last 7 days")
+        #expect(LocalAIInsightWindow.lastMonth.accessibilityName == "Last 30 days")
+        #expect(LocalAIInsightWindow.yearOverYear.accessibilityName == "Year over year")
+
+        // SF Symbols pair text with a shape so the selector never rides on color
+        // alone, and the three symbols are distinct.
+        let symbols = Set(LocalAIInsightWindow.allCases.map(\.systemImage))
+        #expect(symbols.count == LocalAIInsightWindow.allCases.count)
+        for window in LocalAIInsightWindow.allCases {
+            #expect(!window.systemImage.isEmpty)
+        }
+    }
+
+    // MARK: - Date ranges (window-specific spans)
+
+    @Test("7d / 30d / YoY windows produce their own current+prior spans")
+    func windowDateRanges() throws {
+        let anchor = try #require(Formatters.parseTransactionDate("2026-03-15"))
+
+        let last7 = LocalAIInsightInputBuilder.dateRanges(for: .last7days, anchorDate: anchor)
+        #expect(last7.current.startDate == "2026-03-09")
+        #expect(last7.current.endDate == "2026-03-15")
+        #expect(last7.prior?.startDate == "2026-03-02")
+        #expect(last7.prior?.endDate == "2026-03-08")
+
+        let lastMonth = LocalAIInsightInputBuilder.dateRanges(for: .lastMonth, anchorDate: anchor)
+        #expect(lastMonth.current.startDate == "2026-02-14")
+        #expect(lastMonth.current.endDate == "2026-03-15")
+
+        let yoy = LocalAIInsightInputBuilder.dateRanges(for: .yearOverYear, anchorDate: anchor)
+        #expect(yoy.current.startDate == "2025-03-16")
+        #expect(yoy.current.endDate == "2026-03-15")
+        #expect(yoy.prior?.startDate == "2024-03-16")
+        #expect(yoy.prior?.endDate == "2025-03-15")
+
+        // The three windows are distinct spans.
+        #expect(last7.current.startDate != lastMonth.current.startDate)
+        #expect(lastMonth.current.startDate != yoy.current.startDate)
+    }
+
+    // MARK: - Deterministic summary copy
+
+    @Test("Deterministic summary headline is window-labeled with totals")
+    func deterministicSummaryHeadline() {
+        let input = Self.makeInput(window: .lastMonth, expenseTotal: 1200, incomeTotal: 3000, net: 1800)
+        let text = LocalAIDeterministicSummary.summaryText(for: input)
+        #expect(text.hasPrefix("Last Month:"))
+        #expect(text.contains("expenses"))
+        #expect(text.contains("income"))
+        #expect(text.contains("net cashflow"))
+    }
+
+    @Test("Deterministic bullets phrase the comparison span per window")
+    func deterministicBulletsAreWindowAware() {
+        let prior = Self.makeMetrics(expenseTotal: 800, incomeTotal: 3000)
+
+        let lastMonth = Self.makeInput(window: .lastMonth, expenseTotal: 1200, incomeTotal: 3000, net: 1800, prior: prior)
+        let monthBullets = LocalAIDeterministicSummary.bullets(for: lastMonth).joined(separator: " ")
+        #expect(monthBullets.contains("the prior 30 days"))
+
+        let yoy = Self.makeInput(window: .yearOverYear, expenseTotal: 1200, incomeTotal: 3000, net: 1800, prior: prior)
+        let yoyBullets = LocalAIDeterministicSummary.bullets(for: yoy).joined(separator: " ")
+        #expect(yoyBullets.contains("the same period a year ago"))
+        #expect(!yoyBullets.contains("the prior 30 days"))
+
+        let last7 = Self.makeInput(window: .last7days, expenseTotal: 1200, incomeTotal: 3000, net: 1800, prior: prior)
+        let weekBullets = LocalAIDeterministicSummary.bullets(for: last7).joined(separator: " ")
+        #expect(weekBullets.contains("the prior 7 days"))
+    }
+
+    @Test("Comparison-window phrase differs across all three windows")
+    func comparisonWindowPhrasePerWindow() {
+        let phrases = LocalAIInsightWindow.allCases.map(LocalAIDeterministicSummary.comparisonWindowPhrase)
+        #expect(Set(phrases).count == LocalAIInsightWindow.allCases.count)
+        #expect(LocalAIDeterministicSummary.comparisonWindowPhrase(for: .yearOverYear) == "the same period a year ago")
+    }
+
+    @Test("signedCurrency prefixes positive, negative, and zero correctly")
+    func signedCurrency() {
+        #expect(LocalAIDeterministicSummary.signedCurrency(100).hasPrefix("+"))
+        #expect(LocalAIDeterministicSummary.signedCurrency(-100).hasPrefix("-"))
+        let zero = LocalAIDeterministicSummary.signedCurrency(0)
+        #expect(!zero.hasPrefix("+"))
+        #expect(!zero.hasPrefix("-"))
+    }
+
+    // MARK: - Window selection availability
+
+    @Test("A window with no source rows is unusable and explained")
+    func selectionMarksEmptyWindowsUnusable() {
+        let summaries = [
+            Self.makeSummary(window: .last7days, currentCount: 0),
+            Self.makeSummary(window: .lastMonth, currentCount: 12),
+            Self.makeSummary(window: .yearOverYear, currentCount: 0),
+        ]
+        let selection = LocalAIInsightWindowSelection.make(summaries: summaries, requestedSelection: .last7days)
+
+        let byWindow = Dictionary(uniqueKeysWithValues: selection.options.map { ($0.window, $0) })
+        #expect(byWindow[.last7days]?.isUsable == false)
+        #expect(byWindow[.last7days]?.unavailableReason != nil)
+        #expect(byWindow[.lastMonth]?.isUsable == true)
+        #expect(byWindow[.lastMonth]?.unavailableReason == nil)
+        // Requested 7-day window is unusable → resolves to the first usable one.
+        #expect(selection.resolvedSelection == .lastMonth)
+    }
+
+    @Test("Year-over-year needs a prior window with history to be usable")
+    func selectionYearOverYearNeedsPrior() {
+        // YoY current has rows but no prior history → unusable.
+        let noPrior = LocalAIInsightWindowSelection.make(
+            summaries: [Self.makeSummary(window: .yearOverYear, currentCount: 20, priorCount: 0)],
+            requestedSelection: .yearOverYear
+        )
+        let noPriorYoY = noPrior.options.first { $0.window == .yearOverYear }
+        #expect(noPriorYoY?.isUsable == false)
+        #expect(noPriorYoY?.unavailableReason?.contains("year of history") == true)
+
+        // With prior history → usable and the request is honored.
+        let withPrior = LocalAIInsightWindowSelection.make(
+            summaries: [Self.makeSummary(window: .yearOverYear, currentCount: 20, priorCount: 18)],
+            requestedSelection: .yearOverYear
+        )
+        let withPriorYoY = withPrior.options.first { $0.window == .yearOverYear }
+        #expect(withPriorYoY?.isUsable == true)
+        #expect(withPrior.resolvedSelection == .yearOverYear)
+    }
+
+    @Test("Always offers all three windows in order, even when none are usable")
+    func selectionAlwaysOffersAllWindows() {
+        let selection = LocalAIInsightWindowSelection.make(summaries: [], requestedSelection: .lastMonth)
+        #expect(selection.options.map(\.window) == LocalAIInsightWindow.allCases)
+        #expect(selection.options.allSatisfy { !$0.isUsable })
+        // Nothing usable → keep the requested window so the selector stays stable.
+        #expect(selection.resolvedSelection == .lastMonth)
+    }
+
+    @Test("A usable requested window is honored over the default order")
+    func selectionHonorsUsableRequest() {
+        let summaries = [
+            Self.makeSummary(window: .last7days, currentCount: 5),
+            Self.makeSummary(window: .lastMonth, currentCount: 20),
+            Self.makeSummary(window: .yearOverYear, currentCount: 30, priorCount: 25),
+        ]
+        let selection = LocalAIInsightWindowSelection.make(summaries: summaries, requestedSelection: .yearOverYear)
+        #expect(selection.resolvedSelection == .yearOverYear)
+    }
+
+    // MARK: - Fixtures
+
+    private static func makeMetrics(
+        transactionCount: Int = 5,
+        expenseTotal: Double = 1000,
+        incomeTotal: Double = 0
+    ) -> LocalAIActivityMetrics {
+        LocalAIActivityMetrics(
+            transactionCount: transactionCount,
+            incomeTotal: incomeTotal,
+            expenseTotal: expenseTotal,
+            netCashflow: incomeTotal - expenseTotal,
+            incomeTransactionIds: [],
+            expenseTransactionIds: [],
+            transferTransactionIds: [],
+            categoryTotals: [],
+            topExpenses: [],
+            topIncome: []
+        )
+    }
+
+    private static func makeInput(
+        window: LocalAIInsightWindow,
+        expenseTotal: Double,
+        incomeTotal: Double,
+        net: Double,
+        prior: LocalAIActivityMetrics? = nil
+    ) -> LocalAIActivitySummaryInput {
+        let current = LocalAIActivityMetrics(
+            transactionCount: 10,
+            incomeTotal: incomeTotal,
+            expenseTotal: expenseTotal,
+            netCashflow: net,
+            incomeTransactionIds: [],
+            expenseTransactionIds: [],
+            transferTransactionIds: [],
+            categoryTotals: [],
+            topExpenses: [],
+            topIncome: []
+        )
+        return LocalAIActivitySummaryInput(
+            window: window,
+            currentRange: LocalAIInsightDateRange(startDate: "2026-05-13", endDate: "2026-06-11"),
+            priorRange: prior == nil ? nil : LocalAIInsightDateRange(startDate: "2026-04-13", endDate: "2026-05-12"),
+            categorySuggestions: [],
+            accountSnapshot: LocalAIAccountSnapshot(accountCount: 1, accountIds: [], cashTotal: 0, debtTotal: 0, creditUtilization: nil),
+            current: current,
+            prior: prior,
+            recurringSnapshot: LocalAIRecurringSnapshot(estimatedMonthlyTotal: 0, items: []),
+            evidence: []
+        )
+    }
+
+    private static func makeSummary(
+        window: LocalAIInsightWindow,
+        currentCount: Int,
+        priorCount: Int? = nil
+    ) -> LocalAIActivitySummary {
+        let prior = priorCount.map { makeMetrics(transactionCount: $0) }
+        let input = LocalAIActivitySummaryInput(
+            window: window,
+            currentRange: LocalAIInsightDateRange(startDate: "2026-05-13", endDate: "2026-06-11"),
+            priorRange: prior == nil ? nil : LocalAIInsightDateRange(startDate: "2025-05-13", endDate: "2025-06-11"),
+            categorySuggestions: [],
+            accountSnapshot: LocalAIAccountSnapshot(accountCount: 1, accountIds: [], cashTotal: 0, debtTotal: 0, creditUtilization: nil),
+            current: makeMetrics(transactionCount: currentCount),
+            prior: prior,
+            recurringSnapshot: LocalAIRecurringSnapshot(estimatedMonthlyTotal: 0, items: []),
+            evidence: []
+        )
+        return LocalAIActivitySummary(
+            window: window,
+            availability: LocalAIAvailability(state: .disabled, detail: "test"),
+            input: input,
+            generatedSummary: "",
+            generatedBullets: [],
+            evidence: []
+        )
+    }
 }
