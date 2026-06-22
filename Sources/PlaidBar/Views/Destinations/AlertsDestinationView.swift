@@ -2,7 +2,7 @@ import AppKit
 import PlaidBarCore
 import SwiftUI
 
-/// **Alerts** destination (3-column — IA §3.1/§5.8, `[⌘7]`) — Epic 7 / AND-585,
+/// **Alerts** destination (3-column — `[⌘7]`) — Epic 7 / AND-585,
 /// redesigned to the window-first desktop language (AND-624).
 ///
 /// Content column = the alert **list**, re-hosted at window (desk-distance) scale:
@@ -11,19 +11,19 @@ import SwiftUI
 /// cards (severity-sorted within each, ≤2 cards so the column reads calm). Detail
 /// column = the selected alert's **detail** with its recovery action and
 /// acknowledge toggle, also re-hosted in window-scale cards. The detail column is
-/// **content-gated, not existence-gated** (IA §3.1): with nothing selected it shows
+/// **content-gated, not existence-gated**: with nothing selected it shows
 /// the "Select an alert" prompt rather than collapsing.
 ///
 /// This is a **layout re-host only** — the alert source, sort/acknowledge/count
 /// policy, and recovery dispatch are unchanged:
 /// - The alerts are the live ``AttentionQueue`` rows (``AppState/attentionQueue``)
 ///   — the same "do I need to act?" rollup the menu-bar glance and Dashboard key
-///   off (IA §1.3), so the feed stays truthful and consistent across surfaces.
+///   off, so the feed stays truthful and consistent across surfaces.
 /// - ``AlertsInbox`` / ``AlertsSummary`` (pure Core, unit-tested) reduce those rows
 ///   + the acknowledged-id set into the sorted feed, the unacknowledged count, and
 ///   the header wording. Acknowledgement is session-scoped per-window state on the
 ///   per-window ``NavigationModel`` (`alertSelection` + `acknowledgedAlertIDs`,
-///   AND-621/R-10) — the rows and the queue are never mutated.
+///   AND-621) — the rows and the queue are never mutated.
 /// - Each alert's recovery action runs through the same dispatch the existing
 ///   ``AttentionQueueView`` uses, so an action means the same thing on every
 ///   surface.
@@ -35,7 +35,7 @@ import SwiftUI
 ///
 /// Severity is always carried by text + SF Symbol, never color alone
 /// (ACCESSIBILITY.md). Cards back their figures with the quiet solid
-/// ``WindowSection`` surface (data stays solid — glass is chrome-only, ADR-001/R-08).
+/// ``WindowSection`` surface (data stays solid — glass is chrome-only).
 /// **Flag-OFF inert:** reached only when the window-first `Window` opens
 /// (`WindowFirstFeatureFlag` ON); with the flag off this file is never instantiated
 /// and the popover is byte-identical.
@@ -171,7 +171,7 @@ struct AlertsDestinationView: View {
     /// The detail-column (inspector) pane for Alerts — the selected alert's
     /// detail, recovery action, and acknowledge toggle, re-hosted in window-scale
     /// cards. Content-gated: shows the "Select an alert" prompt when nothing is
-    /// selected (IA §3.1).
+    /// selected.
     struct Inspector: View {
         @Environment(AppState.self) private var appState
         @Environment(\.openSettings) private var openSettings

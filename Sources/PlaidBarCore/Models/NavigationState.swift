@@ -1,14 +1,14 @@
 import Foundation
 
-/// Pure, value-type navigation state for one window of the window-first shell
-/// (ADR-001). Holds the current destination plus the per-destination selection
+/// Pure, value-type navigation state for one window of the window-first shell.
+/// Holds the current destination plus the per-destination selection
 /// and filter state that used to live as scattered view-level
 /// `@AppStorage` keys in `MainPopover` (`dashboard.accountFilter`,
 /// `dashboard.selectedAccountId`, `dashboard.heatmapMode`).
 ///
 /// This is a **value type**, so two windows that each own their own copy hold
-/// *independent* selection — the R-10 contract (a per-window model, never a
-/// singleton). The `@Observable @MainActor` `NavigationModel` wrapper in the app
+/// *independent* selection — a per-window model, never a
+/// singleton. The `@Observable @MainActor` `NavigationModel` wrapper in the app
 /// target wraps one of these per window; the pure transitions all live here so
 /// they are testable without SwiftUI (CLAUDE.md: shared logic in `PlaidBarCore`).
 ///
@@ -56,24 +56,24 @@ public struct NavigationState: Sendable, Equatable, Codable {
     /// The selected goal id (a `Goal.id` UUID string) in the Goals workspace, or
     /// empty when none. Empty string (not `nil`) mirrors the `selectedAccountID`
     /// "" sentinel so the content-gated Goals inspector shows its "Select a goal"
-    /// prompt. Per-window scene state (R-10), **not** a selection singleton (the
+    /// prompt. Per-window scene state, **not** a selection singleton (the
     /// AND-621 anti-pattern). Ephemeral like the transaction selection: not
     /// persisted, so a relaunch lands on the unselected prompt.
     public var goalSelection: String
-    // MARK: Budgets / Alerts selection state (AND-621, R-10)
+    // MARK: Budgets / Alerts selection state (AND-621)
 
     /// The selected category on the **Budgets** destination, or `nil` when none —
     /// shared between the category tree (content column) and the category
     /// detail/editor (inspector column). Previously the singleton
     /// `BudgetsSelectionModel.shared`; holding it here makes two windows hold
-    /// independent Budgets selection (R-10). `nil` (an enum has no "" sentinel)
+    /// independent Budgets selection. `nil` (an enum has no "" sentinel)
     /// content-gates the inspector to its "Select a category" prompt.
     public var budgetCategorySelection: SpendingCategory?
 
     /// The selected alert id on the **Alerts** destination, or empty when none —
     /// shared between the alert list (content column) and the alert detail
     /// (inspector column). Previously the singleton `AlertsSelectionModel.shared`;
-    /// holding it here makes two windows hold independent Alerts selection (R-10).
+    /// holding it here makes two windows hold independent Alerts selection.
     /// Empty string (not `nil`) mirrors the `selectedTransactionID` "" sentinel so
     /// the content-gated inspector shows its "Select an alert" prompt.
     public var alertSelection: String
@@ -81,7 +81,7 @@ public struct NavigationState: Sendable, Equatable, Codable {
     /// Alert ids the user has acknowledged this session, shared between the list
     /// (writes) and the inspector (reflects the bit). Previously held on the
     /// singleton `AlertsSelectionModel`; per-window here so two windows acknowledge
-    /// independently (R-10). Ephemeral session state — acknowledging mutes an alert
+    /// independently. Ephemeral session state — acknowledging mutes an alert
     /// from the unacknowledged count without resolving the underlying condition.
     public var acknowledgedAlertIDs: Set<String>
 
@@ -126,7 +126,7 @@ public struct NavigationState: Sendable, Equatable, Codable {
 
     /// Navigate to a bare destination, preserving the per-destination selection
     /// already held. (Selection within a destination is preserved across
-    /// destination switches — the IA's selection-restoration contract.)
+    /// destination switches — the selection-restoration contract.)
     public mutating func go(to destination: RouteDestination) {
         self.destination = destination
     }

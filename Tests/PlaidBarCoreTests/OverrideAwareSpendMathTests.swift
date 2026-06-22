@@ -6,7 +6,7 @@ import Testing
 /// `netSpendByCategory` now accepts optional `metadata` / `rules` so a user
 /// recategorizing or excluding a transaction in the Review Inbox actually moves
 /// the budget totals downstream (the load-bearing fix from the category-dashboard
-/// spec §2/§4).
+/// spend math).
 ///
 /// The contract:
 /// - **Default-nil params reproduce the legacy raw-category totals** (so every
@@ -239,7 +239,7 @@ struct OverrideAwareSpendMathTests {
         #expect(resolved[.foodAndDrink] == nil)
     }
 
-    // MARK: - Pending→posted metadata carry-forward (spec §4 edge case)
+    // MARK: - Pending→posted metadata carry-forward (edge case)
 
     @Test("Review metadata under a pending id carries into its posted replacement")
     func pendingMetadataCarriesForward() {
@@ -293,7 +293,7 @@ struct OverrideAwareSpendMathTests {
     // codified a live regression: an uncategorized row whose budget category
     // resolved to nil (no override, no rule, no confident Plaid category) was
     // *dropped* from every bucket. Per the spend precedence (user override → rule →
-    // raw Plaid → `.other`, spec §4/§5) such a row must **fall back** to its raw
+    // raw Plaid → `.other`) such a row must **fall back** to its raw
     // Plaid bucket — or `.other` when Plaid gave nothing — not vanish. So a nil-
     // category row now lands under `.other`, matching the legacy raw-category total.
     @Test("An uncategorized (nil-category) row with no override/rule falls back to .other")

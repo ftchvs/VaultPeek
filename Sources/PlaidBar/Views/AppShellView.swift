@@ -1,24 +1,23 @@
 import PlaidBarCore
 import SwiftUI
 
-/// The window-first primary workspace shell (ADR-001, Epic 2 / AND-580, sidebar
+/// The window-first primary workspace shell (Epic 2 / AND-580, sidebar
 /// step AND-595).
 ///
 /// A `NavigationSplitView` whose sidebar lists the IA's **5 bands → 11
-/// destinations** (`05-information-architecture.md` §2), driven by the
+/// destinations**, driven by the
 /// per-window `NavigationModel` / typed `Route` (`PlaidBarCore`). Selecting a row
 /// sets the window's destination and routes the content column via
 /// `DestinationContentView` (and, for 3-column destinations, a detail/inspector
 /// column via `DestinationInspectorView`) — see
 /// `Views/Destinations/DestinationRouter.swift`. The column count tracks each
-/// destination's **2-col vs 3-col policy** (IA §3.1, pure
+/// destination's **2-col vs 3-col policy** (pure
 /// `RouteDestination.prefersThreeColumnLayout`): 2-column for Dashboard /
 /// Planning / Insights, 3-column for Review / Transactions / Budgets / Goals /
 /// Alerts / Accounts. Destinations whose real workspaces land in later epics
 /// (4–7) show a labeled `ContentUnavailableView` placeholder in their own
 /// per-destination view file. **Settings** is the native macOS `Settings` scene,
-/// so its sidebar row triggers `openSettings()` rather than an in-split pane
-/// (IA §5.10).
+/// so its sidebar row triggers `openSettings()` rather than an in-split pane.
 ///
 /// This is built **only** in the window-first surface — the menu-bar popover is
 /// untouched. The window never opens unless `WindowFirstFeatureFlag` is ON
@@ -27,10 +26,10 @@ import SwiftUI
 ///
 /// Liquid Glass on chrome is applied at the scene level via
 /// `.containerBackground(.ultraThinMaterial, for: .window)` in `PlaidBarApp`
-/// (with an explicit solid Reduce Transparency fallback), not here — per ADR-001
+/// (with an explicit solid Reduce Transparency fallback), not here —
 /// glass goes on chrome only, never on data.
 ///
-/// **App Lock parity (ADR-001 Epic 10 / AND-588):** when content is LOCKED (not
+/// **App Lock parity (Epic 10 / AND-588):** when content is LOCKED (not
 /// merely masked), this shell paints the shared `AppLockedGateView` over the
 /// entire window — identical to the popover and its detached host — so the
 /// window-first surface can never show balances, account, or institution names
@@ -66,7 +65,7 @@ struct AppShellView: View {
     /// `.inspector(isPresented:)` API with a toolbar toggle, instead of a fixed
     /// `NavigationSplitView` `detail:` column, so the user can collapse it. Per
     /// window, defaults open so a 3-column destination still lands on its full
-    /// layout (IA §3.1: the inspector is content-gated, not hidden).
+    /// layout (the inspector is content-gated, not hidden).
     @State private var isInspectorPresented = true
 
     /// `paletteModel` is optional so the default is constructed inside this
@@ -86,7 +85,7 @@ struct AppShellView: View {
     }
 
     var body: some View {
-        // The per-window navigation model owns the selected destination (R-10).
+        // The per-window navigation model owns the selected destination.
         // Bind the sidebar selection to it; Settings is excluded from the
         // selectable set (it opens the native Settings scene instead), so the
         // binding maps a Settings tap to `openSettings()` and never parks the
@@ -105,7 +104,7 @@ struct AppShellView: View {
 
         let destination = appState.navigationModel.destination
 
-        // Column policy per destination (IA §3.1, driven by the pure
+        // Column policy per destination (driven by the pure
         // `RouteDestination.prefersThreeColumnLayout` in PlaidBarCore). 3-column
         // destinations (Review, Transactions, Budgets, Goals, Alerts, Accounts)
         // get sidebar + content + a native **inspector**; 2-column destinations
@@ -123,7 +122,7 @@ struct AppShellView: View {
         } detail: {
             DestinationContentView(destination: destination)
                 .inspector(isPresented: inspectorBinding(for: destination)) {
-                    // Content-gated, not existence-gated (IA §3.1): the inspector
+                    // Content-gated, not existence-gated: the inspector
                     // always exists for a 3-column destination and shows its
                     // "Select a …" prompt when nothing is selected.
                     DestinationInspectorView(destination: destination)
@@ -155,7 +154,7 @@ struct AppShellView: View {
         // account rows (the shell owns the field, the canvas owns the filtering).
         .environment(\.dashboardSearchQuery, destinationSupportsSearch(destination) ? searchText : "")
         // Reroute the legacy "open detached window" affordances into in-window
-        // navigation (ADR-001 / AND-616). The Dashboard canvas embeds
+        // navigation (AND-616). The Dashboard canvas embeds
         // `CategoryDashboardCard` (its "Open dashboard" button) and the Review
         // canvas embeds `ReviewInboxView` (its "Open review table" button); both
         // read these environment hooks. In window-first there is no detached
@@ -180,7 +179,7 @@ struct AppShellView: View {
         // and are inert. Routing in-place (rather than `appState.route(to:openWindow:)`)
         // avoids re-opening the already-open window.
         .environment(\.openRoute, inWindowRouteHandler)
-        // Deep-link hand-off (ADR-001 / AND-597). The primary scene is a
+        // Deep-link hand-off (AND-597). The primary scene is a
         // declarative `Window`, so a route can't be threaded through `openWindow`;
         // instead the opener stages it on `AppState.pendingRoute` and this view
         // consumes it into the window's `NavigationModel`. Both triggers are
@@ -193,7 +192,7 @@ struct AppShellView: View {
         .onChange(of: appState.pendingRoute) {
             appState.consumePendingRoute(into: appState.navigationModel)
         }
-        // The ⌘K command palette is a window-level overlay (IA §3.3). It is only
+        // The ⌘K command palette is a window-level overlay. It is only
         // ever reachable in this window-first surface — `AppShellView` is built
         // solely behind `WindowFirstFeatureFlag` — so the palette never exists in
         // the flag-OFF popover build.
@@ -214,7 +213,7 @@ struct AppShellView: View {
         }
         .animation(.easeOut(duration: 0.15), value: paletteModel.isPresented)
         // Full App Lock gate (security parity with the popover + detached host —
-        // ADR-001 Epic 10 / AND-588). When content is LOCKED (not merely masked)
+        // Epic 10 / AND-588). When content is LOCKED (not merely masked)
         // the entire window must be hidden behind the shared `AppLockedGateView`:
         // account and institution names, the sidebar badges, and every
         // destination would otherwise leak even though balances are dotted
@@ -359,7 +358,7 @@ private struct ShellSearchable: ViewModifier {
 
 /// The banded navigation sidebar: 5 IA bands → 11 destinations, each a
 /// SF Symbol + label + optional textual count badge, with a footer carrying the
-/// connection-health strip and the data-mode chip (IA §3.2).
+/// connection-health strip and the data-mode chip.
 private struct SidebarView: View {
     @Environment(AppState.self) private var appState
     @Binding var selection: RouteDestination?
@@ -427,7 +426,7 @@ private struct SidebarRow: View {
     }
 
     /// "Review, 4 items to review" — destination name plus the badge phrase when
-    /// present (IA §8: the sidebar announces destination + badge).
+    /// present (the sidebar announces destination + badge).
     private var accessibilityLabel: String {
         guard let badge else { return destination.title }
         return "\(destination.title), \(badge.accessibilityText)"
@@ -436,7 +435,7 @@ private struct SidebarRow: View {
 
 // MARK: - Sidebar footer
 
-/// Persistent sidebar footer (IA §3.2): the connection-health strip plus the
+/// Persistent sidebar footer: the connection-health strip plus the
 /// data-mode chip (Demo / Sandbox / Production). Reuses the existing
 /// `ConnectionHealthStripView` and `AppState.statusModeText` — no new signals.
 private struct SidebarFooter: View {

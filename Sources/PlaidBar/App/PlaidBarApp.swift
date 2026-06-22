@@ -26,14 +26,14 @@ struct PlaidBarApp: App {
     /// registration survives `body` recomputes for the process lifetime.
     @State private var summonHotkeyMonitor = SummonHotkeyMonitor()
     /// Routes the window-first primary `Window`'s open/close lifecycle through the
-    /// shared refcounted activation-policy coordinator (ADR-001 / AND-620): elevate
+    /// shared refcounted activation-policy coordinator (AND-620): elevate
     /// `.accessory → .regular` when the window opens, return to `.accessory` when
     /// the last managed window closes. `@State` so the single outstanding request it
     /// can hold survives `body` recomputes for the process lifetime. Inert unless
     /// the `Window` actually opens, which only happens behind the window-first flag,
     /// so flag-OFF activation behavior is unchanged.
     @State private var windowActivationPolicy = WindowActivationPolicy()
-    /// The window-first ⌘K command-palette state (ADR-001, IA §3.3, AND-596).
+    /// The window-first ⌘K command-palette state (AND-596).
     /// Owned at the scene level so the ⌘K `CommandMenu` and the `AppShellView`
     /// overlay share one source of truth. `@State` so it survives `body`
     /// recomputes. Inert unless the window-first surface is shown, which only
@@ -42,8 +42,8 @@ struct PlaidBarApp: App {
     @Environment(\.openSettings) private var openSettings
     @Environment(\.openWindow) private var openWindow
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// Identifier of the window-first primary workspace `Window` scene (ADR-001,
-    /// Epic 1 / AND-591). Shared by the scene declaration and the
+    /// Identifier of the window-first primary workspace `Window` scene (Epic 1 /
+    /// AND-591). Shared by the scene declaration and the
     /// `openWindow(id:)` affordances so they never drift.
     private static let mainWindowID = "main"
     /// Window-first hybrid opt-in (`WindowFirstFeatureFlag`, default OFF). Resolved
@@ -118,7 +118,7 @@ struct PlaidBarApp: App {
 
     /// The menu-bar surface. **Default (window-first ON):** the reduced
     /// ``MenuBarGlanceView`` — sync line + glance metrics + ≤3 routing chips +
-    /// "Open VaultPeek" (ADR-001 §6, AND-616). The full dashboard now lives only
+    /// "Open VaultPeek" (AND-616). The full dashboard now lives only
     /// in the primary `Window`'s Dashboard destination. **Escape hatch
     /// (window-first OFF):** the legacy ``MainPopover`` with its detach /
     /// Category-Dashboard / Review-Table window affordances, byte-identical to the
@@ -416,7 +416,7 @@ struct PlaidBarApp: App {
 
         .commands {
             // "Open VaultPeek" affordance in the app menu, gated by the
-            // window-first flag (ADR-001, Epic 1 / AND-591). When the flag is OFF
+            // window-first flag (Epic 1 / AND-591). When the flag is OFF
             // this command is not added, so the menu — and the whole app — is
             // identical to today's popover-first build. When ON it raises the
             // primary `Window` workspace via `openWindow(id:)`. The empty `if`
@@ -429,8 +429,8 @@ struct PlaidBarApp: App {
                     .keyboardShortcut("0", modifiers: .command)
                 }
 
-                // The window-first global keyboard map (ADR-001, IA §3.4,
-                // AND-596). All gated by the same flag as "Open VaultPeek" — with
+                // The window-first global keyboard map (AND-596). All gated by
+                // the same flag as "Open VaultPeek" — with
                 // the flag OFF none of these menus/shortcuts are added, so the
                 // menu bar and the whole app are byte-identical to today. Each
                 // command drives the shared per-window models / the existing
@@ -499,7 +499,7 @@ struct PlaidBarApp: App {
                 .appliesAppTextSize()
         }
 
-        // Window-first primary workspace (ADR-001, Epic 1 / AND-591). The scene is
+        // Window-first primary workspace (Epic 1 / AND-591). The scene is
         // always declared so the scene graph is stable, but it is inert until
         // explicitly opened: `.defaultLaunchBehavior(.suppressed)` keeps it from
         // appearing at launch, and the only affordance that opens it (the
@@ -524,19 +524,19 @@ struct PlaidBarApp: App {
                 // in `applyStoredAppearance()`): this carries the same live
                 // appearance updater the popover/label/Settings use, so flipping
                 // Light/Dark re-applies on this window too and there is no second,
-                // competing setter to flash a wrong first-paint theme (R-04).
+                // competing setter to flash a wrong first-paint theme.
                 .appliesAppAppearance()
                 .appliesAppTextSize()
                 // Elevate `.accessory → .regular` while this window is on screen and
                 // drop back when the last managed window closes, via the shared
-                // refcounted coordinator (ADR-001 / AND-620, R-01). SwiftUI gives a
+                // refcounted coordinator (AND-620). SwiftUI gives a
                 // declarative `Window` no `NSWindowController`, so the lifecycle is
                 // bridged here; the helper is idempotent against repeated
                 // appear/disappear. Only ever reached when the window opens (behind
                 // the window-first flag), so flag-OFF behavior is unchanged.
                 .onAppear { windowActivationPolicy.onWindowAppear() }
                 .onDisappear { windowActivationPolicy.onWindowDisappear() }
-                // Liquid Glass on chrome only (ADR-001, R-08): the window
+                // Liquid Glass on chrome only: the window
                 // background is the ultra-thin material; data surfaces inside stay
                 // opaque. Under Reduce Transparency (system setting or the reduced
                 // decorative-effects preference) it falls back to a fully solid
@@ -583,7 +583,7 @@ struct PlaidBarApp: App {
     }
 
     /// The glance attention-chip deep-link handler injected into `\.openRoute`
-    /// (ADR-001 / AND-597). When the window-first flag is ON it routes a `Route`
+    /// (AND-597). When the window-first flag is ON it routes a `Route`
     /// into the primary window via the single reusable entry point
     /// (`AppState.route(to:openWindow:)`); when OFF it is a no-op so the chip falls
     /// back to its existing in-place action and flag-OFF behavior is unchanged.
@@ -847,8 +847,8 @@ struct AppTextSizeApplier: ViewModifier {
     }
 }
 
-/// Applies the window-first shell's **chrome** background (ADR-001 Epic 10 /
-/// AND-588, R-08). Liquid Glass is for the navigation layer only — the window
+/// Applies the window-first shell's **chrome** background (Epic 10 /
+/// AND-588). Liquid Glass is for the navigation layer only — the window
 /// container behind the sidebar / toolbar / nav bars — never lists, tables,
 /// charts, or dense data, which stay opaque inside.
 ///
@@ -943,8 +943,8 @@ extension View {
     }
 
     /// Applies the window-first shell's chrome background (Liquid Glass on chrome
-    /// only, with an explicit solid Reduce Transparency fallback — ADR-001 Epic
-    /// 10 / AND-588, R-08). Used on the primary `Window` scene root.
+    /// only, with an explicit solid Reduce Transparency fallback — Epic
+    /// 10 / AND-588). Used on the primary `Window` scene root.
     func appliesWindowChromeBackground() -> some View {
         modifier(WindowChromeBackgroundModifier())
     }

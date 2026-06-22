@@ -1,7 +1,7 @@
 import Foundation
 
 /// Pure, `Sendable` refcount + baseline-capture decision for the menu-bar app's
-/// `.accessory ↔ .regular` activation policy (ADR-001 R-01, AND-620).
+/// `.accessory ↔ .regular` activation policy (AND-620).
 ///
 /// `.accessory↔.regular` thrash is the single most-repeatedly-patched area in repo
 /// history: every surface that needs front/Dock presence (the detached dashboard,

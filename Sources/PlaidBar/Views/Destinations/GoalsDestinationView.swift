@@ -1,7 +1,7 @@
 import PlaidBarCore
 import SwiftUI
 
-/// **Goals** destination (3-column — IA §3.1/§5.6, `[⌘5]`) — AND-606 / AND-624
+/// **Goals** destination (3-column — `[⌘5]`) — AND-606 / AND-624
 /// window-first redesign.
 ///
 /// Re-hosts the goals data in the desk-distance **window-scale** language the
@@ -18,14 +18,14 @@ import SwiftUI
 /// route through the unchanged ``GoalEditorSheet``. The hero row and Planning's
 /// goals overview read the *same* `GoalsSummary`, so they can never disagree.
 ///
-/// The detail column is **content-gated, not existence-gated** (IA §3.1): with
+/// The detail column is **content-gated, not existence-gated**: with
 /// nothing selected it shows the "Select a goal" prompt rather than collapsing.
-/// Selection rides the per-window ``NavigationModel/goalSelection`` field (R-10),
+/// Selection rides the per-window ``NavigationModel/goalSelection`` field,
 /// shared by the content and inspector panes without a selection singleton.
 ///
 /// Progress and the on-track verdict are always carried by **text + SF Symbol**,
 /// never color alone (ACCESSIBILITY.md); data surfaces stay solid (Liquid Glass
-/// on chrome only, ADR-001 / R-08); figures honor Privacy Mask, and App Lock is
+/// on chrome only); figures honor Privacy Mask, and App Lock is
 /// shell-gated so this canvas never double-gates. **Flag-OFF inert:** reached
 /// only when the window-first `Window` opens (`WindowFirstFeatureFlag` ON); with
 /// the flag off this file is never instantiated and the popover is byte-identical.
@@ -204,7 +204,7 @@ struct GoalsDestinationView: View {
 
     /// The detail-column (inspector) pane for Goals — the selected goal's detail,
     /// progress, pace, and edit/delete controls, at window scale. Content-gated:
-    /// shows the "Select a goal" prompt when nothing is selected (IA §3.1).
+    /// shows the "Select a goal" prompt when nothing is selected.
     struct Inspector: View {
         @Environment(AppState.self) private var appState
         @State private var editorState: GoalEditorState?

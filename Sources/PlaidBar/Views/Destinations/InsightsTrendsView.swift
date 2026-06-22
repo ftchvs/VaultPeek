@@ -6,7 +6,7 @@ import SwiftUI
 /// window (desk-distance) scale and gives each one its audio graph + a
 /// `reduceTransparency` text fallback + a non-color alternative (ACCESSIBILITY.md).
 /// **Liquid Glass never touches a chart** — each chart sits on a quiet, *solid*
-/// ``WindowSection`` card (ADR-001: data stays solid), and the marks carry no
+/// ``WindowSection`` card (data stays solid), and the marks carry no
 /// material.
 ///
 /// - **Net worth trend** — ``BalanceTrendChart`` over ``BalanceTrend/evaluate``,

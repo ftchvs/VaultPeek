@@ -35,9 +35,8 @@ Use GitHub private vulnerability reporting if available, or contact the reposito
 ## Security Model
 
 - VaultPeek has no hosted backend, analytics, telemetry, or tracking.
-- Optional managed bank linking is planned but not shipped. Before it ships, the
-  consent, audit, and escalation boundary in
-  `docs/strategy/managed-link-consent-operations.md` must be approved: support
+- Optional managed bank linking is planned but not shipped. Before it ships, a
+  consent, audit, and escalation boundary must be approved: support
   helpers may guide users through VaultPeek screens, but must never ask for,
   receive, type, store, or audit-log bank credentials, MFA codes, Plaid tokens,
   raw account identifiers, balances, transactions, local databases, logs, or

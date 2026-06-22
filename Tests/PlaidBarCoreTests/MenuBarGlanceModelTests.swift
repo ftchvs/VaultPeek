@@ -2,7 +2,7 @@ import Foundation
 @testable import PlaidBarCore
 import Testing
 
-/// The pure menu-bar **glance** contract (ADR-001 §6, AND-616): at most four
+/// The pure menu-bar **glance** contract (AND-616): at most four
 /// glance metrics, at most three attention chips, every chip's route, and
 /// Privacy-Mask redaction of currency metrics. Testing the assembly here at the
 /// Core layer keeps the contract enforceable without launching the SwiftUI app.

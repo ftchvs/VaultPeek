@@ -8,7 +8,7 @@ import SwiftUI
 /// Mask, which only dots currency and leaves content visible (AND-462).
 ///
 /// Shared by **both** local UI surfaces so App Lock gating is identical across
-/// them (ADR-001 Epic 10 / AND-588 security parity):
+/// them (Epic 10 / AND-588 security parity):
 /// - the menu-bar popover + its detached host (`MainPopover`), and
 /// - the window-first primary workspace (`AppShellView`).
 ///

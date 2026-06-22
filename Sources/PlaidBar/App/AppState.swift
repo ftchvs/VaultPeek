@@ -116,20 +116,20 @@ final class AppState {
     }
     var isPopoverPresented = false
 
-    /// Per-window navigation model (ADR-001 / AND-594). Owns the destination plus
+    /// Per-window navigation model (AND-594). Owns the destination plus
     /// the dashboard filter / account selection / heatmap metric that previously
     /// lived as scattered view-level `@AppStorage` keys in `MainPopover`. This is
     /// the menu-bar popover's window's model; a window-first `Window` scene
-    /// constructs its own, so two windows hold independent selection (R-10).
+    /// constructs its own, so two windows hold independent selection.
     ///
-    /// `AppState` exposes this as a façade (R-02): the popover reads
+    /// `AppState` exposes this as a façade: the popover reads
     /// `appState.dashboardFilter` / `dashboardSelectedAccountID` /
     /// `dashboardHeatmapMode`, which delegate here and persist to the original
     /// UserDefaults keys — so popover behavior and on-disk persistence are
     /// unchanged.
     let navigationModel: NavigationModel
 
-    /// Pending deep-link route awaiting the primary window (ADR-001 / AND-597).
+    /// Pending deep-link route awaiting the primary window (AND-597).
     ///
     /// The window-first primary scene is a declarative `Window`, not a
     /// `WindowGroup` with a presented value, so a deep-link cannot be passed *into*
@@ -661,7 +661,7 @@ final class AppState {
         self.readModelCacheEnabled = readModelCacheEnabled
         // The popover-window navigation model. Hydrates the last
         // filter/selection/heatmap from the original UserDefaults keys, so
-        // persistence is preserved across the migration (R-02 façade).
+        // persistence is preserved across the migration (façade).
         self.navigationModel = navigationModel ?? NavigationModel()
         loadSettings()
         // Record whether Apple Foundation Models is available so the tier resolver
@@ -1544,9 +1544,9 @@ final class AppState {
         transactionReviewInboxSnapshot.totalCount
     }
 
-    // MARK: - Menu-bar glance (ADR-001 §6 / AND-616)
+    // MARK: - Menu-bar glance (AND-616)
 
-    /// The reduced menu-bar **glance** contract (ADR-001 §6): the sync line, the
+    /// The reduced menu-bar **glance** contract: the sync line, the
     /// high-signal glance metrics (net worth · safe-to-spend · to-review), and the
     /// ≤3 attention chips that deep-link into window destinations. Once
     /// window-first is the default (AND-616) this — not the full dashboard — is the
@@ -1594,10 +1594,10 @@ final class AppState {
         )
     }
 
-    // MARK: - Window-first sidebar (ADR-001 / AND-595)
+    // MARK: - Window-first sidebar (AND-595)
 
     /// Items needing reconnect — the actionable degraded items the connection
-    /// health strip surfaces in its reconnect-needed bucket (IA §3.2). Drives the
+    /// health strip surfaces in its reconnect-needed bucket. Drives the
     /// Accounts sidebar badge; excludes provider-outage items, which are
     /// non-actionable (VaultPeek retries them automatically).
     var sidebarReconnectNeededCount: Int {
@@ -1607,17 +1607,17 @@ final class AppState {
             .count ?? 0
     }
 
-    /// Unacknowledged "alerts" backing the Alerts sidebar badge (IA §3.2 /
-    /// §5.8). The dedicated Alerts feed lands in Epic 6; until then this is the
+    /// Unacknowledged "alerts" backing the Alerts sidebar badge. The dedicated
+    /// Alerts feed lands in Epic 6; until then this is the
     /// count of non-healthy `AttentionQueue` rows — the same "do I need to act?"
-    /// rollup the menu-bar glance and Dashboard already key off (IA §1.3), so the
+    /// rollup the menu-bar glance and Dashboard already key off, so the
     /// badge stays truthful and consistent across all three surfaces.
     var sidebarUnacknowledgedAlertCount: Int {
         attentionQueue.rows.filter { $0.severity != .healthy }.count
     }
 
-    /// The per-destination textual count badges for the window-first sidebar
-    /// (ADR-001, IA §3.2). Pure assembly lives in `SidebarBadgeModel.make`
+    /// The per-destination textual count badges for the window-first sidebar.
+    /// Pure assembly lives in `SidebarBadgeModel.make`
     /// (PlaidBarCore) so the view stays thin and the hide-when-zero / a11y-phrase
     /// policy is unit-tested; this just feeds it the live counts. Window-first
     /// surface only — the menu-bar popover never reads it.
@@ -1631,7 +1631,7 @@ final class AppState {
         )
     }
 
-    // MARK: - Deep-link routing (ADR-001 / AND-597)
+    // MARK: - Deep-link routing (AND-597)
 
     /// **The reusable deep-link entry point for the window-first shell.** Any
     /// surface — a menu-bar glance attention chip today, an App Intent in Epic 8
@@ -1670,7 +1670,7 @@ final class AppState {
     /// this route" (appear fires) hand-offs.
     ///
     /// - Parameter navigationModel: the consuming window's per-window model. Each
-    ///   `AppShellView` passes its own (R-10), so a route only ever lands in the
+    ///   `AppShellView` passes its own, so a route only ever lands in the
     ///   window that processed the hand-off.
     func consumePendingRoute(into navigationModel: NavigationModel) {
         guard let route = pendingRoute else { return }

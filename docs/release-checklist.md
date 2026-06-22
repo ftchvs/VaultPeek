@@ -110,7 +110,6 @@ the (not yet performed) signing and notarization runbook.
 - [ ] A human-readable safety pass of the final diff happened before merge:
   secrets, private financial data, generated artifacts, scope creep, and
   destructive behavior.
-- [ ] `otto-openclaw-merge-gate` is green on the release-prep PR.
 - [ ] Publish runs only from clean, up-to-date `main`:
   `./Scripts/release.sh --publish`.
 - [ ] Rollback path is documented and the prior good tag/DMG is known

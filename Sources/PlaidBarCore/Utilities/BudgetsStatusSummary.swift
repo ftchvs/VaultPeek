@@ -1,7 +1,7 @@
 import Foundation
 
 /// Pure, deterministic rollup for the **Budgets** workspace status column
-/// (Epic 5 / AND-583, ADR-001 window-first surface).
+/// (Epic 5 / AND-583).
 ///
 /// The 3-column Budgets destination shows a category tree (content) → category
 /// detail/editor (inspector). Its third pane needs a compact, glance-able health

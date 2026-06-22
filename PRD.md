@@ -139,10 +139,6 @@ VaultPeek 1.0 (shipped as PlaidBar) is the first stable release. It is installab
 recoverable, and credible as a proprietary local finance utility without
 maintainer hand-holding.
 
-See [docs/v1.0-roadmap.md](docs/v1.0-roadmap.md) for the long-term product
-vision, design principles, product boundaries, architecture guardrails, and
-Hermes agent starting context.
-
 | # | Requirement | Acceptance Criteria |
 |---|-------------|-------------------|
 | 1.0.1 | New-user success path | **Given** a clean machine, **When** the user follows README Quick Start, **Then** demo mode renders useful dashboard data without Plaid credentials and sandbox setup exposes all readiness blockers before Plaid Link |
@@ -162,7 +158,7 @@ native RepoBar-style finance instrument before expanding finance scope.
 | P1.1 | Roadmap truth cleanup | **Given** a contributor reads README, PRD, release notes, release docs, and roadmap, **When** they compare release status, **Then** the docs agree that v1.0.0 has shipped and that Developer ID notarization plus Sparkle appcast distribution remains post-1.0 |
 | P1.2 | Native material surface system | **Given** the dashboard renders on macOS 15+, **When** panels, filters, selected rows, and recovery states are visible, **Then** they use shared material/fill/stroke tokens instead of one-off saturated card fills |
 | P1.3 | Liquid Glass readiness | **Given** VaultPeek is built with a macOS 26+ SDK, **When** SwiftUI Liquid Glass APIs are available, **Then** native panel surfaces may opt into `glassEffect` while preserving the macOS 15 material fallback |
-| P1.4 | RepoBar-style dashboard density | **Given** the menu bar popover opens, **When** dashboard content is scanned, **Then** the status strip and 365-day heatmap appear before account rows, with compact filters and selected account detail actions in the same surface (the menu-bar glance; the primary window workspace per [ADR-001](docs/strategy/macos26-migration/ADR-001-window-first-architecture.md) is the main experience for session workflows) |
+| P1.4 | RepoBar-style dashboard density | **Given** the menu bar popover opens, **When** dashboard content is scanned, **Then** the status strip and 365-day heatmap appear before account rows, with compact filters and selected account detail actions in the same surface (the menu-bar glance; the primary window workspace is the main experience for session workflows) |
 | P1.5 | Recovery convergence | **Given** common failures occur, **When** the user views dashboard or settings, **Then** server offline, wrong mode, missing credentials, stale sync, login-required item, empty account data, filtered-zero transactions, and denied notifications each expose one clear recovery action |
 | P1.6 | Local insight receipts | **Given** local transactions are available, **When** the user opens the dashboard, **Then** VaultPeek shows a local-only activity receipt with source-row count, time window, top category, recurring estimate, category hints, and disabled/no-runtime copy when no local model runtime is configured; future local model runtimes must not send data to cloud models |
 | P1.7 | Local AI categorization | **Given** synced transactions include Plaid categories, merchant names, raw names, amounts, dates, and account context, **When** local AI categorization is enabled, **Then** VaultPeek suggests smarter expense and income categories with confidence and evidence while preserving raw Plaid data and allowing user correction or fallback to Plaid categories |

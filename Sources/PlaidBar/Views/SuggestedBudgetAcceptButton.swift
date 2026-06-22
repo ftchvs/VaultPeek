@@ -2,7 +2,7 @@ import PlaidBarCore
 import SwiftUI
 
 /// One-tap "accept suggested limit" affordance — the "ghost guardrails" UX
-/// (AND-542, spec §3/§4).
+/// (AND-542).
 ///
 /// Given a `CategoryBudgetPresentation.Item` that is a history-derived *suggestion*
 /// for a budgetable category the user has not yet budgeted, this renders a single

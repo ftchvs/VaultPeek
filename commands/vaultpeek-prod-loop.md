@@ -10,12 +10,11 @@ argument-hint: "[focus area] [--hours=2-4] [--no-commit]"
 > variables below intentionally keep the PlaidBar name for compatibility.
 
 Use this command to keep improving VaultPeek toward a production-ready,
-local-first macOS finance utility through the 100+ task backlog in
-`docs/autonomous-loop-backlog.md`.
+local-first macOS finance utility through a reviewable production-readiness
+backlog.
 
-When another local agent is active, also follow
-`docs/agent-collaboration.md` for worktree ownership, PR handoff, and
-autonomous merge gates.
+When another local agent is active, coordinate on worktree ownership, PR
+handoff, and autonomous merge gates.
 Use GitHub PRs as the canonical handoff channel, Linear only for material
 status/process updates, and uncommitted `.agent-state/` or `/tmp` state for
 local branch/worktree ownership when needed.
@@ -46,7 +45,7 @@ For a focused autonomous iteration:
 
 ```bash
 codex exec --cd /path/to/VaultPeek \
-  "Read commands/vaultpeek-prod-loop.md and complete the next unfinished task from docs/autonomous-loop-backlog.md for: <focus>"
+  "Read commands/vaultpeek-prod-loop.md and complete the next unfinished production-readiness task for: <focus>"
 ```
 
 For parallel review support, keep one primary editor agent and use optional
@@ -56,9 +55,9 @@ PR creation, and merge-safety decisions.
 
 ## Operating Boundaries
 
-- Work locally by default. Use the scoped VaultPeek approval in
-  `docs/autonomous-roadmap.md` for push, PR, and merge only when the current
-  run is clearly inside that scope and the safe PR loop below passes.
+- Work locally by default. Use the scoped VaultPeek approval for push, PR, and
+  merge only when the current run is clearly inside that scope and the safe PR
+  loop below passes.
 - When using repo-local `.codex/skills/`, follow their safe PR/check/review
   gate; do not merge if any approval scope or safety condition is unclear.
 - Do not add telemetry, cloud sync, hosted backend, multi-user features, or
@@ -87,11 +86,10 @@ Repeat these phases until the timebox ends or a blocker appears:
      `feature/<short-production-readiness-topic>`.
    - Read `GOAL.md`, `README.md`, `DESIGN.md`, `docs/architecture.md`, and
      recent changed files before editing.
-   - Read `docs/agent-collaboration.md` before any PR, push, or merge.
 
 2. Pick the highest-leverage next task:
    - Prefer the explicit focus area in `$ARGUMENTS`.
-   - Otherwise use `docs/autonomous-loop-backlog.md`.
+   - Otherwise pick the next reviewable production-readiness task.
    - When the current slice is loop governance, first audit the backlog for
      stale tasks, duplicate tasks, completed-but-unchecked items, and tasks that
      no longer match VaultPeek's local-first product boundary.
@@ -155,8 +153,7 @@ Repeat these phases until the timebox ends or a blocker appears:
 
 ## Production-Readiness Backlog
 
-Use `docs/autonomous-loop-backlog.md` as the concrete backlog. It contains 120
-reviewable tasks grouped into PR slices covering:
+Work the reviewable production-readiness backlog as a set of PR slices covering:
 
 - minimalist modern design and RepoBar-style dashboard polish,
 - account rows, heatmaps, drill-in surfaces, empty states, and reconnect flows,
@@ -169,12 +166,11 @@ reviewable tasks grouped into PR slices covering:
 
 If a task appears stale, first inspect the current implementation. Complete it
 only if there is still a real gap; otherwise mark the task as already satisfied
-in the roadmap ledger with evidence.
+with evidence.
 
 During loop-governance passes, remove or consolidate stale and duplicate backlog
-tasks only after recording evidence in `docs/autonomous-roadmap.md`; otherwise
-leave questionable tasks in place and report the uncertainty instead of hiding
-scope.
+tasks only after recording evidence; otherwise leave questionable tasks in place
+and report the uncertainty instead of hiding scope.
 
 ## Design Standard
 

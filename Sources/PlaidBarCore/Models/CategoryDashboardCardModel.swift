@@ -6,7 +6,7 @@ import Foundation
 ///
 /// The card shows the donut (built from the same override-aware
 /// ``CategoryDashboardPresentation`` the full dashboard uses — never a recompute,
-/// spec §3/§4, Option A) plus the *top N* spending group rollups. This type owns
+/// Option A) plus the *top N* spending group rollups. This type owns
 /// the "top N groups for the card" selection and every derived headline string so
 /// the SwiftUI card stays a thin renderer and the selection / labels can be
 /// unit-tested without a host view.

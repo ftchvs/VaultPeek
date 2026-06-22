@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import PlaidBarCore
 
-@Suite("Activation-policy refcount (ADR-001 R-01 / AND-620)")
+@Suite("Activation-policy refcount (AND-620)")
 struct ActivationPolicyRefcountTests {
     typealias Policy = ActivationPolicyRefcount.ActivationPolicy
 

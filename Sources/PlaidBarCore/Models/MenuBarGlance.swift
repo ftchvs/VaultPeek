@@ -2,7 +2,7 @@ import Foundation
 
 /// The pure, testable contract for the reduced menu-bar **glance** that becomes
 /// the only menu-bar surface once the window-first hybrid is the default
-/// (ADR-001 §6 "menu-bar glance" spec, AND-616 / AND-587).
+/// (AND-616 / AND-587).
 ///
 /// The full dashboard moved into the primary `Window`'s Dashboard destination.
 /// The glance is read + route only: a sync line, a few high-signal numbers, and
@@ -16,11 +16,11 @@ import Foundation
 /// launching the SwiftUI app. The `MenuBarGlanceView` is a thin renderer over
 /// this model.
 public struct MenuBarGlanceModel: Equatable, Sendable {
-    /// ADR §6 caps the glance at four glance metrics so it stays a glance, not a
+    /// The glance is capped at four metrics so it stays a glance, not a
     /// second dashboard. ``make(...)`` truncates to this.
     public static let maximumMetricCount = 4
 
-    /// ADR §6 caps attention chips at three (it reuses the existing
+    /// Attention chips are capped at three (reusing the existing
     /// ``AttentionQueue.maximumRowCount`` budget so the glance and the
     /// dashboard's status strip can never disagree on how many it shows).
     public static let maximumChipCount = AttentionQueue.maximumRowCount

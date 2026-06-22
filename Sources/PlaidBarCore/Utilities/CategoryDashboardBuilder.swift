@@ -8,7 +8,7 @@ import Foundation
 ///
 /// The output ``CategoryDashboardPresentation`` is the `Sendable` view-model the
 /// donut (AND-537) and the status-bars / tree (AND-538) consume. This is **Option A**
-/// (display-only rollups, spec §3/§4): no schema change, no new server work, and no
+/// (display-only rollups): no schema change, no new server work, and no
 /// new `SpendingCategory` raw values.
 ///
 /// Like ``CategoryBudgetPlanner``, the builder is a stateless `enum` with an

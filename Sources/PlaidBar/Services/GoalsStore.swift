@@ -1,7 +1,7 @@
 import Foundation
 import PlaidBarCore
 
-/// App-local, local-first store for user savings ``Goal``s (AND-606, ADR-001).
+/// App-local, local-first store for user savings ``Goal``s (AND-606).
 ///
 /// Goals are net-new and live **entirely on the user's machine** — no server
 /// schema, no Plaid call. They persist as `goals.json` under the app data dir

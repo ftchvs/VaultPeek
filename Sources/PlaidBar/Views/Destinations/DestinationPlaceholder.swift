@@ -2,7 +2,7 @@ import PlaidBarCore
 import SwiftUI
 
 /// The shared "workspace coming soon" placeholder every window-first destination
-/// renders today (ADR-001, AND-580/581).
+/// renders today (AND-580/581).
 ///
 /// Each destination has its own `…DestinationView` file (so Epics 4–7 can fill
 /// them in parallel without colliding in `AppShellView`), but until that real
@@ -29,7 +29,7 @@ struct DestinationPlaceholder: View {
 
 /// The inspector (detail-column) empty state a 3-column destination shows when
 /// nothing is selected. The third column is **content-gated, not
-/// existence-gated** (IA §3.1): it always exists and shows this "Select a …"
+/// existence-gated**: it always exists and shows this "Select a …"
 /// prompt rather than collapsing. The prompt copy is the pure
 /// `RouteDestination.detailColumnEmptyPrompt` (PlaidBarCore), so it stays in
 /// lockstep with the column policy and is unit-tested at the Core layer.

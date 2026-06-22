@@ -18,7 +18,7 @@ import Foundation
 //   2. Navigation intents (`ShowSpendingIntent`, `ReviewTransactionsIntent`,
 //      `OpenDashboardIntent`) — additionally deep-link into the window via an
 //      `OpenURLIntent` carrying a `RouteDeepLink` URL, which the app's `onOpenURL`
-//      parses back into a `Route` and feeds to `AppState.route(to:)` (ADR-001).
+//      parses back into a `Route` and feeds to `AppState.route(to:)`.
 //
 // These supersede the app-target `FinanceAppIntents.swift` definitions: the app's
 // `AppShortcutsProvider` now points at these Core intents (single source of

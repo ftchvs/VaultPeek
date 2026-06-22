@@ -6,7 +6,7 @@ import PlaidBarCore
 /// regular, front-and-Dock app: the detached dashboard window, the Category
 /// Dashboard / Review Table windows, the Settings window, and — behind the
 /// window-first flag — the declarative primary `Window` (via
-/// ``WindowActivationPolicy``, ADR-001 / AND-620).
+/// ``WindowActivationPolicy``, AND-620).
 ///
 /// It is **refcounted**. The pre-elevation baseline policy is captured only on
 /// the *first* request and restored only when the *last* request is released, so
@@ -22,7 +22,7 @@ import PlaidBarCore
 /// decision and applies the policy the decision returns, mutating
 /// `NSApp.setActivationPolicy` only when it actually changes. The window-first
 /// helper drives this same instance, so every surface shares one authoritative
-/// refcount (R-01).
+/// refcount.
 ///
 /// `@MainActor`-isolated; all `NSApplication` mutation happens on the main actor.
 @MainActor

@@ -4,7 +4,7 @@ import SwiftUI
 //
 // The menu-bar popover is a *compact*, arm's-length surface: its spacing
 // (``Spacing``) and type roles (``Typography``) are tuned for a dense, ~360pt
-// glance read at close range. The window-first workspace (ADR-001) is a
+// glance read at close range. The window-first workspace is a
 // *desk-distance* surface — a resizable `Window` the user works in like Mail or
 // Finder — so it wants more generous spacing, a taller type ramp, and section
 // heads that the popover's caption-scale titles cannot carry.

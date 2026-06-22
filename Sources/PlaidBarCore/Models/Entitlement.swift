@@ -6,7 +6,7 @@ import Foundation
 /// but lives on the entitlement wire/verification side. Kept as a distinct type
 /// so the entitlement layer can evolve (e.g. add-ons, custom caps) without
 /// coupling to the UI preview enum. Nothing issues or verifies real
-/// entitlements yet — see `docs/strategy/subscription-entitlements.md`.
+/// entitlements yet.
 public enum EntitlementTier: String, Sendable, Codable, CaseIterable {
     case free
     case plus
@@ -17,13 +17,12 @@ public enum EntitlementTier: String, Sendable, Codable, CaseIterable {
 /// bridge's Stripe-backed signer.
 ///
 /// FOUNDATION ONLY. This is the in-memory shape of the entitlement token
-/// described in `subscription-entitlements.md` §4.2 (an Ed25519/PASETO-signed
-/// document verified locally with an embedded public key). **Nothing produces,
+/// (an Ed25519/PASETO-signed document verified locally with an embedded public
+/// key). **Nothing produces,
 /// signs, verifies, or enforces this today.** It exists so the entitlement
 /// middleware shell and future verification have a stable `Sendable` model, and
 /// so the wire contract is documented in one place. `.local` (BYO-keys) mode is
-/// ungated and never constructs an `Entitlement` (entitlements doc D3: BYO stays
-/// fully ungated).
+/// ungated and never constructs an `Entitlement` (BYO stays fully ungated).
 public struct Entitlement: Sendable, Codable, Equatable {
     /// Plan tier this entitlement grants.
     public let tier: EntitlementTier
@@ -41,7 +40,7 @@ public struct Entitlement: Sendable, Codable, Equatable {
     public let subscriptionStatus: String
 
     /// Token expiry (the 30-day TTL of the signed artifact, NOT the subscription
-    /// end date — see entitlements doc §4.2 / §5).
+    /// end date).
     public let expiresAt: Date?
 
     public init(
@@ -71,8 +70,7 @@ public struct Entitlement: Sendable, Codable, Equatable {
 /// BYO mode is ungated and the hosted path is not built). The non-`allow` cases
 /// document the future shape so enforcement can be added behind a gate without
 /// changing the decision type. The `retryAfter`/`reason` payloads map to the
-/// `402 limit_reached` / entitlement-required responses described in
-/// `managed-link-architecture.md` §6–§7.
+/// `402 limit_reached` / entitlement-required responses.
 public enum EntitlementDecision: Sendable, Equatable {
     /// Request proceeds. The only outcome today.
     case allow

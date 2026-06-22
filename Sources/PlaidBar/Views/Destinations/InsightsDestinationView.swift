@@ -2,8 +2,7 @@ import PlaidBarCore
 import SwiftUI
 
 /// **Insights** destination — a window-first **composed 2-column canvas** (AND-624,
-/// matching the Dashboard reference; ADR-001 window-first workspace, IA §3.1/§5.7,
-/// `[⌘6]`), Epic 7 / AND-585.
+/// matching the Dashboard reference; `[⌘6]`), Epic 7 / AND-585.
 ///
 /// This re-*hosts* the Insights data — the on-device Foundation Models summary, the
 /// weekly review, and the trend charts — in a desk-distance desktop layout rather
@@ -32,7 +31,7 @@ import SwiftUI
 ///   On a narrow window the two columns stack.
 ///
 /// **Privacy Mask / App Lock:** the shell paints the full lock gate over the whole
-/// window while *locked* (ADR-001 Epic 10), so this canvas never double-gates; it
+/// window while *locked* (Epic 10), so this canvas never double-gates; it
 /// honors Privacy *Mask* the way the re-hosted subviews do (figures run through
 /// `PrivacyMaskPresentation` / `shouldMaskFinancialValues`), so masked figures stay
 /// hidden and are never leaked here.

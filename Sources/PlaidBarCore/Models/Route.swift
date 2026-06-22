@@ -2,8 +2,7 @@ import Foundation
 
 // MARK: - Route destinations
 
-/// The 11 primary destinations of the window-first navigation shell (ADR-001,
-/// `docs/strategy/macos26-migration/05-information-architecture.md`).
+/// The 11 primary destinations of the window-first navigation shell.
 ///
 /// This is the *bare destination identity* — the sidebar selection token and the
 /// thing `⌘1…⌘8` jump to. The richer ``Route`` carries the per-destination
@@ -26,9 +25,9 @@ public enum RouteDestination: String, CaseIterable, Sendable, Hashable, Codable 
     case accounts
     case settings
 
-    /// The IA sidebar band a destination lives in (Overview / Workflows /
-    /// Insights / Money / System). Grouping the verbs together is the IA's
-    /// "list of jobs to do" model (§2 of the IA doc).
+    /// The sidebar band a destination lives in (Overview / Workflows /
+    /// Insights / Money / System). Grouping the verbs together is the
+    /// "list of jobs to do" model.
     public enum Band: String, CaseIterable, Sendable, Hashable, Codable {
         case overview
         case workflows
@@ -90,11 +89,11 @@ public enum RouteDestination: String, CaseIterable, Sendable, Hashable, Codable 
         }
     }
 
-    /// The `⌘N` shortcut number for the destination, matching the IA keymap's
-    /// explicit `[⌘1]…[⌘8]` assignments (§3.4 and the destination tree):
+    /// The `⌘N` shortcut number for the destination, matching the keymap's
+    /// explicit `[⌘1]…[⌘8]` assignments:
     /// Dashboard 1 · Review 2 · Budgets 3 · Planning 4 · Goals 5 · Insights 6 ·
     /// Alerts 7 · Accounts 8. `Transactions` is reachable via the sidebar / ⌘K /
-    /// deep-links but has no number (the IA tree assigns none), and `Settings`
+    /// deep-links but has no number, and `Settings`
     /// uses the native `⌘,` scene — both return `nil`.
     public var commandShortcutNumber: Int? {
         switch self {
@@ -111,7 +110,7 @@ public enum RouteDestination: String, CaseIterable, Sendable, Hashable, Codable 
     }
 
     /// Whether the destination renders a 3-column (list → detail) layout, per the
-    /// IA's column-policy table (§3.1). 2-column destinations are composed
+    /// column-policy table. 2-column destinations are composed
     /// canvases with no master→detail relationship.
     public var prefersThreeColumnLayout: Bool {
         switch self {
@@ -124,7 +123,7 @@ public enum RouteDestination: String, CaseIterable, Sendable, Hashable, Codable 
 
     /// The inspector (detail-column) empty-state prompt a 3-column destination
     /// shows when nothing is selected. The third column is **content-gated, not
-    /// existence-gated** (IA §3.1): it always exists and shows a "Select a …"
+    /// existence-gated**: it always exists and shows a "Select a …"
     /// `ContentUnavailableView` rather than collapsing. `nil` for 2-column
     /// destinations and the native Settings scene, which have no inspector column.
     ///
@@ -160,7 +159,7 @@ public enum SettingsRouteTab: String, CaseIterable, Sendable, Hashable, Codable 
     case about
 }
 
-/// Planning's segmented sub-sections (§5.5 of the IA doc) — Planning is a
+/// Planning's segmented sub-sections — Planning is a
 /// composed 2-column canvas, so these select a section rather than a list item.
 public enum PlanningSection: String, CaseIterable, Sendable, Hashable, Codable {
     case forecast
@@ -168,7 +167,7 @@ public enum PlanningSection: String, CaseIterable, Sendable, Hashable, Codable {
     case incomeFlow
 }
 
-/// Insights' feed sub-sections (§5.7 of the IA doc).
+/// Insights' feed sub-sections.
 public enum InsightSection: String, CaseIterable, Sendable, Hashable, Codable {
     case receipts
     case weeklyReview
@@ -209,7 +208,7 @@ public enum ReviewWorkspaceMode: String, Sendable, Codable, CaseIterable {
 /// `Route`; the associated values carry the per-destination selection so a link
 /// can land on a specific transaction, category, account, or sub-section.
 ///
-/// Mirrors the IA doc's `Route` sketch (§2.1). `Equatable`/`Hashable`/`Sendable`
+/// `Equatable`/`Hashable`/`Sendable`
 /// + `Codable` so it can be persisted (selection restoration across launches)
 /// and compared in tests. The actual sidebar / ⌘K / deep-link *UI* is later in
 /// Epic 2 (AND-595/596/597); this PR introduces the model and migrates state.
@@ -261,8 +260,8 @@ public enum Route: Sendable, Hashable, Codable {
     }
 
     /// Maps a weekly-review navigation target onto a route, so the existing
-    /// `WeeklyReviewNavigationTarget` deep-links land on the new destinations
-    /// (§2.1 of the IA doc). `.safeToSpend` lives on the Dashboard canvas.
+    /// `WeeklyReviewNavigationTarget` deep-links land on the new destinations.
+    /// `.safeToSpend` lives on the Dashboard canvas.
     public static func from(weeklyReview target: WeeklyReviewNavigationTarget) -> Route {
         switch target {
         case .reviewInbox: .review()
@@ -272,8 +271,8 @@ public enum Route: Sendable, Hashable, Codable {
     }
 
     /// Maps a menu-bar **glance attention chip** onto the destination it should
-    /// open the window at (IA §2.1, §3.6 "menu-bar glance → window hand-off", §6
-    /// glance spec). A glance chip is a launcher: tapping "Card over 75%" opens
+    /// open the window at (the menu-bar glance → window hand-off). A glance chip
+    /// is a launcher: tapping "Card over 75%" opens
     /// **Accounts** at that card, "3 to review" opens **Review**, a stale-spend
     /// chip opens **Transactions** — *not* just the Dashboard.
     ///

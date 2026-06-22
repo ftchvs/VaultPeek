@@ -1,7 +1,7 @@
 import Foundation
 
 /// Pure, testable grouping of accounts by ``AccountType`` for the window-first
-/// **Accounts** destination's content column (ADR-001, AND-623).
+/// **Accounts** destination's content column (AND-623).
 ///
 /// The menu-bar popover lists accounts in a single flat section. The Accounts
 /// destination re-hosts the same rows but groups them by type the way the

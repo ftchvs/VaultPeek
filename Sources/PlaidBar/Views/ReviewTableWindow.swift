@@ -2,7 +2,7 @@ import PlaidBarCore
 import SwiftUI
 
 /// The detached multi-select **review Table** surface (AND-532) — the power-review
-/// counterpart to the popover's Review Inbox (spec §3/§5, Option A). It lists every
+/// counterpart to the popover's Review Inbox (Option A). It lists every
 /// review-inbox row in a resizable, sortable, multi-select `Table` so a user can
 /// triage many transactions at once, with:
 ///

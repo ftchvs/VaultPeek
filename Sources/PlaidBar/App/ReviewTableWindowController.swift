@@ -5,7 +5,7 @@ import SwiftUI
 /// Hosts the detached multi-select **review Table** (`ReviewTableWindow`) in a
 /// real, managed desktop window (AND-532) — the power-review surface that pulls the
 /// popover's Review Inbox into its own resizable window with a multi-select
-/// `Table`, a per-row context menu, and bulk recategorize (spec §3/§5).
+/// `Table`, a per-row context menu, and bulk recategorize.
 ///
 /// This deliberately reuses the proven ``CategoryDashboardWindowController`` pattern
 /// (AND-539 / AND-384): a titled / closable / miniaturizable / resizable `NSWindow`

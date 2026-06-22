@@ -1,7 +1,7 @@
 import Foundation
 
 /// Pure reduction of the live ``AttentionQueue`` rows into the **Alerts**
-/// destination's list → detail feed (Epic 7 / AND-585, ADR-001 window-first).
+/// destination's list → detail feed (Epic 7 / AND-585, window-first).
 ///
 /// The ``AttentionQueue`` rows are *stateless* — they are recomputed every render
 /// from the current connection/sync/financial facts, so they carry no

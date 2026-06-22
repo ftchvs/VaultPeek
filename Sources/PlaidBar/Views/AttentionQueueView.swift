@@ -5,7 +5,7 @@ import SwiftUI
 struct AttentionQueueView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.openSettings) private var openSettings
-    /// Deep-links a glance chip into the window-first window (ADR-001 / AND-597).
+    /// Deep-links a glance chip into the window-first window (AND-597).
     /// No-op by default — installed with a real handler only when the window-first
     /// flag is ON (`PlaidBarApp`), so flag-OFF chip behavior is unchanged.
     @Environment(\.openRoute) private var openRoute
@@ -57,7 +57,7 @@ struct AttentionQueueView: View {
     }
 
     private func perform(_ row: AttentionQueueRow) {
-        // Window-first: a glance chip is a launcher (IA §3.6 / §6). When the flag
+        // Window-first: a glance chip is a launcher. When the flag
         // is ON and the chip maps to an in-window destination, open the window
         // there instead of running the in-place action — e.g. "Card over 75%"
         // opens Accounts at that card, "Recent spending changed" opens

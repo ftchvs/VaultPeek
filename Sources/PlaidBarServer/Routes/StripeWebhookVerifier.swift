@@ -26,7 +26,7 @@ enum StripeWebhookVerificationError: Error, Equatable {
 
 /// Fail-closed default: rejects every webhook until a signing-secret-backed
 /// verifier is configured. This is the production default until Stripe webhook
-/// signature verification is wired (see `docs/strategy/stripe-entitlement-seam.md`).
+/// signature verification is wired.
 struct UnconfiguredStripeWebhookVerifier: StripeWebhookVerifier {
     func verify(payload: Data, signatureHeader: String?, now: Date) async throws {
         throw StripeWebhookVerificationError.signatureVerificationUnavailable

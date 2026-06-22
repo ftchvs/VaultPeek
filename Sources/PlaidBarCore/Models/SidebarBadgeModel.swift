@@ -1,9 +1,9 @@
 import Foundation
 
 /// Pure, `Sendable` model assembling the window-first sidebar's per-destination
-/// count badges (ADR-001, IA §3.2, AND-595).
+/// count badges (AND-595).
 ///
-/// The IA mandates **textual count badges, never color-only dots**
+/// The product mandates **textual count badges, never color-only dots**
 /// (`ACCESSIBILITY.md`: no meaning by color alone) — so each badge is a number
 /// plus a spoken accessibility phrase, and a badge **hides when its count is
 /// zero**. Keeping the derivation here (rather than in the SwiftUI sidebar) makes
@@ -14,7 +14,7 @@ import Foundation
 /// sidebar does not reveal review, budget, alert, or reconnect counts while the
 /// rest of the app is private.
 ///
-/// Four destinations badge, each from a live `AppState` signal (IA §3.2):
+/// Four destinations badge, each from a live `AppState` signal:
 ///
 /// | Destination | Count source | Hidden when |
 /// |-------------|--------------|-------------|
@@ -86,7 +86,7 @@ public struct SidebarBadgeModel: Sendable, Equatable {
     ///   - unacknowledgedAlertCount: alerts needing acknowledgement. Until the
     ///     Alerts feed lands (Epic 6) the caller passes the count of non-healthy
     ///     `AttentionQueue` rows — the same "do I need to act?" rollup the
-    ///     menu-bar glance and Dashboard use (IA §1.3).
+    ///     menu-bar glance and Dashboard use.
     ///   - reconnectNeededCount: items needing reconnect
     ///     (`ConnectionHealthStrip` reconnect-needed bucket).
     ///   - isMasked: Privacy Mask / App Lock state. When true, every badge is

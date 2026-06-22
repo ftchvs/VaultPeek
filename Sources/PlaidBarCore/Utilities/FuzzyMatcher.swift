@@ -1,7 +1,7 @@
 import Foundation
 
 /// A pure, `Sendable` subsequence fuzzy matcher + ranker for the ⌘K command
-/// palette (ADR-001, IA §3.3, AND-596).
+/// palette (AND-596).
 ///
 /// The palette needs the same "type a few letters, the right command floats to
 /// the top" behavior every spotlight-style launcher has. Keeping the matcher

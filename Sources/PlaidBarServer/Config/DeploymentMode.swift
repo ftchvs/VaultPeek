@@ -7,10 +7,9 @@ import Foundation
 /// built incrementally without forking the server. **`.local` is the default and
 /// is byte-for-byte today's behavior**: the server holds the user's own Plaid
 /// `client_id`/`secret` (BYO-keys) and proxies Plaid directly. `.hostedBridge`
-/// is a placeholder for the future stateless bridge described in
-/// `docs/strategy/managed-link-architecture.md`; nothing reads a live bridge
+/// is a placeholder for the future stateless bridge; nothing reads a live bridge
 /// endpoint yet, and selecting it changes no runtime path until the gated work
-/// in `docs/strategy/approval-gates.md` lands.
+/// lands.
 ///
 /// Parsed from `PLAIDBAR_DEPLOYMENT` (env or `server.conf`). Unknown/blank
 /// values fall back to `.local` so a malformed config can never silently flip a
@@ -49,11 +48,10 @@ enum DeploymentMode: String, Sendable, Equatable, CaseIterable {
 /// the *shape* of what `.hostedBridge` mode will eventually need — a control-plane
 /// base URL (link/exchange/remove + entitlement), a blind-proxy base URL
 /// (data-plane relay), and the base64 Ed25519 public key the server verifies
-/// signed entitlements against (per `subscription-entitlements.md` §4.2). Every
-/// field is optional and defaults to `nil`; `.local` mode never constructs a
-/// non-nil value, and no code dials these URLs yet. Registering real endpoints,
-/// the org secret, and the entitlement public key is owner-gated
-/// (`docs/strategy/consumer-production-checklist.md`).
+/// signed entitlements against. Every field is optional and defaults to `nil`;
+/// `.local` mode never constructs a non-nil value, and no code dials these URLs
+/// yet. Registering real endpoints, the org secret, and the entitlement public
+/// key is owner-gated.
 struct RemoteBridgeConfig: Sendable, Equatable {
     /// Control-plane base URL (link-token mint, public-token exchange, item
     /// removal, entitlement ping). `nil` until the bridge is provisioned.
@@ -85,9 +83,9 @@ struct RemoteBridgeConfig: Sendable, Equatable {
     }
 
     /// Resolve placeholder values from a config/env dictionary. Returns
-    /// `.unconfigured` unless explicit non-empty values are present; this lets
-    /// the checklist's "provision the bridge" step populate config without any
-    /// code change, while keeping today's behavior untouched (nothing reads the
+    /// `.unconfigured` unless explicit non-empty values are present; this lets a
+    /// future "provision the bridge" step populate config without any code
+    /// change, while keeping today's behavior untouched (nothing reads the
     /// result in `.local` mode).
     static func resolved(from environment: [String: String]) -> RemoteBridgeConfig {
         func value(_ key: String) -> String? {

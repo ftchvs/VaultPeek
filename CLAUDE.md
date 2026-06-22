@@ -67,7 +67,7 @@ Data flow: `PlaidBar.app` → HTTP `localhost:8484` → `PlaidBarServer` → HTT
 - `Services/` — `ServerClient` (HTTP), `RefreshService`, `SyncService`, `NotificationService`, `LaunchService`, `LocalAIInsightsService`, `GoalsStore` (local-first goals), `HapticFeedback`.
 - `Views/` — `MainPopover` is the menu-bar glance surface; filter states (Cash/Credit/Savings/Debt/Status) reuse the same visual system. `Charts/` holds Swift Charts components.
 
-**Architecture doctrine: window-first hybrid** ([ADR-001](docs/strategy/macos26-migration/ADR-001-window-first-architecture.md), accepted at Gate 0 / AND-578, 2026-06-19). The main experience is a primary `Window` / `NavigationSplitView` workspace (Dashboard, Transactions, Budgets, Planning, Goals, Review Inbox, Insights, Alerts, Accounts, Settings). The `MenuBarExtra` glance is retained as a first-class **reduced read+route surface** (status, glance metrics, attention chips that deep-link into the window). Do **not** "revert" window surfaces to popover-only citing older docs — that doctrine is superseded. The window scene runs **dual-run behind `WindowFirstFeatureFlag` (default OFF)** while the workspace reaches parity: flag-OFF keeps the byte-identical popover-only build; opt in with `--window-first on` (QA aid) or the `featureFlag.windowFirst` UserDefaults key. `PlaidBarCore`, the server, the Plaid client, and the Keychain/localhost boundary are unchanged by this migration. Execution: Epics AND-579…618 (`docs/strategy/macos26-migration/migration-roadmap.md`).
+**Architecture doctrine: window-first hybrid** (accepted at Gate 0 / AND-578). The main experience is a primary `Window` / `NavigationSplitView` workspace (Dashboard, Transactions, Budgets, Planning, Goals, Review Inbox, Insights, Alerts, Accounts, Settings). The `MenuBarExtra` glance is retained as a first-class **reduced read+route surface** (status, glance metrics, attention chips that deep-link into the window). Do **not** "revert" window surfaces to popover-only citing older docs — that doctrine is superseded. The window scene runs **dual-run behind `WindowFirstFeatureFlag` (default OFF)** while the workspace reaches parity: flag-OFF keeps the byte-identical popover-only build; opt in with `--window-first on` (QA aid) or the `featureFlag.windowFirst` UserDefaults key. `PlaidBarCore`, the server, the Plaid client, and the Keychain/localhost boundary are unchanged by this migration. Execution: Epics AND-579…618.
 - `Theme/` — `DesignTokens`, `Typography` (semantic tokens + 8pt grid). See `DESIGN.md`.
 
 ## Conventions (enforced — see CONTRIBUTING.md)
@@ -94,6 +94,6 @@ Localhost endpoints. `/health` and `/oauth/callback` are open; `/api/*` requires
 
 ## Reference docs
 
-`README.md` (most complete), `ARCHITECTURE.md` + `docs/architecture.md`, `DESIGN.md`, `GOAL.md`, `PRD.md`, `SECURITY.md`, `ACCESSIBILITY.md`, `docs/troubleshooting.md`, `docs/qa-matrix.md`, `docs/v1.0-roadmap.md`.
+`README.md` (most complete), `ARCHITECTURE.md` + `docs/architecture.md`, `DESIGN.md`, `GOAL.md`, `PRD.md`, `SECURITY.md`, `ACCESSIBILITY.md`, `docs/troubleshooting.md`, `docs/qa-matrix.md`.
 
-`commands/goal.md` (`/goal`), `commands/vaultpeek-prod-loop.md`, and `.codex/skills/` contain a repo-local agentic production-readiness loop. `docs/agent-collaboration.md` defines multi-agent channel rules (PRs for handoff, Linear for status, repo docs for durable policy).
+`commands/goal.md` (`/goal`), `commands/vaultpeek-prod-loop.md`, and `.codex/skills/` contain a repo-local agentic production-readiness loop.
