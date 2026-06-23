@@ -90,6 +90,21 @@ public struct RecurringObligationsPresentation: Sendable, Hashable {
     public var isEmpty: Bool { items.isEmpty }
     public var count: Int { items.count }
 
+    /// Shared count phrase for recurring surfaces. Privacy Mask/App Lock withholds
+    /// exact counts because they are behavioral finance metadata even when amounts
+    /// are already redacted.
+    public func countLabel(privacyMaskEnabled: Bool = false) -> String {
+        privacyMaskEnabled ? "Recurring charges" : "\(count) recurring charge\(count == 1 ? "" : "s")"
+    }
+
+    /// Shared detail line for compact summary surfaces. In masked mode this avoids
+    /// both the exact recurring count and the exact attention count.
+    public func detailLine(privacyMaskEnabled: Bool = false) -> String {
+        let label = countLabel(privacyMaskEnabled: privacyMaskEnabled)
+        guard !privacyMaskEnabled, attentionCount > 0 else { return label }
+        return "\(label) · \(attentionCount) need attention"
+    }
+
     /// Build the presentation from detected recurring series.
     ///
     /// Ordering: likely-forgotten subscriptions first (so "you may have forgotten
