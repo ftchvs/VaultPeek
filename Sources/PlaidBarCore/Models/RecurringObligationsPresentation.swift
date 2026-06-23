@@ -90,6 +90,21 @@ public struct RecurringObligationsPresentation: Sendable, Hashable {
     public var isEmpty: Bool { items.isEmpty }
     public var count: Int { items.count }
 
+    /// "N recurring charge(s)" — the count phrase shared across surfaces (the
+    /// Planning hero tile and the recurring section's accessibility summary both
+    /// spelled this inline). Pluralizes only the noun.
+    public var countLabel: String {
+        "\(count) recurring charge\(count == 1 ? "" : "s")"
+    }
+
+    /// Planning hero-tile detail line: the count phrase, plus a mid-dot attention
+    /// clause when any series is flagged. The "N need attention" clause is
+    /// intentionally not pluralized on N (pre-existing copy, preserved verbatim).
+    public var detailLine: String {
+        guard attentionCount > 0 else { return countLabel }
+        return "\(countLabel) · \(attentionCount) need attention"
+    }
+
     /// Build the presentation from detected recurring series.
     ///
     /// Ordering: likely-forgotten subscriptions first (so "you may have forgotten

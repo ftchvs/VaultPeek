@@ -78,7 +78,7 @@ struct RecurringObligationsSection: View {
     }
 
     private var accessibilitySummary: String {
-        let countText = "\(presentation.count) recurring \(presentation.count == 1 ? "charge" : "charges")"
+        let countText = presentation.countLabel
         let total = PrivacyMaskPresentation.currency(
             presentation.estimatedMonthlyTotal,
             format: .full,

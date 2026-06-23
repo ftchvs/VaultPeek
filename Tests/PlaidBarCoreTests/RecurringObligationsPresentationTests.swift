@@ -122,6 +122,56 @@ struct RecurringObligationsPresentationTests {
         #expect(RecurringConfidenceLevel(confidence: 0.59) == .low)
     }
 
+    @Test("countLabel pluralizes only the noun (0 / 1 / many)")
+    func countLabelGrammar() {
+        let none = RecurringObligationsPresentation.make(from: [], asOf: Self.asOf)
+        #expect(none.countLabel == "0 recurring charges")
+
+        let one = RecurringObligationsPresentation.make(from: [recurring(merchantName: "Spotify")], asOf: Self.asOf)
+        #expect(one.countLabel == "1 recurring charge")
+
+        let many = RecurringObligationsPresentation.make(
+            from: [recurring(merchantName: "Spotify"), recurring(merchantName: "iCloud")],
+            asOf: Self.asOf
+        )
+        #expect(many.countLabel == "2 recurring charges")
+    }
+
+    @Test("detailLine appends the attention clause only when something is flagged")
+    func detailLineAttentionClause() {
+        // No flags → just the count phrase.
+        let clean = RecurringObligationsPresentation.make(
+            from: [recurring(merchantName: "Spotify"), recurring(merchantName: "iCloud")],
+            asOf: Self.asOf
+        )
+        #expect(clean.attentionCount == 0)
+        #expect(clean.detailLine == "2 recurring charges")
+
+        // One flagged (price increase) → mid-dot attention clause.
+        let flagged = RecurringObligationsPresentation.make(
+            from: [
+                recurring(merchantName: "Gym", latestAmount: 22, trailingAverageAmount: 20, confidence: 0.95),
+                recurring(merchantName: "Spotify"),
+            ],
+            asOf: Self.asOf
+        )
+        #expect(flagged.attentionCount == 1)
+        // "N need attention" is intentionally NOT pluralized on N (pre-existing copy).
+        #expect(flagged.detailLine == "2 recurring charges · 1 need attention")
+
+        // Multiple flagged → clause carries the count; still no verb pluralization.
+        let multiFlagged = RecurringObligationsPresentation.make(
+            from: [
+                recurring(merchantName: "Gym", latestAmount: 22, trailingAverageAmount: 20, confidence: 0.95),
+                recurring(merchantName: "Dormant", lastDate: "2026-01-01"),
+                recurring(merchantName: "Spotify"),
+            ],
+            asOf: Self.asOf
+        )
+        #expect(multiFlagged.attentionCount == 2)
+        #expect(multiFlagged.detailLine == "3 recurring charges · 2 need attention")
+    }
+
     @Test("Stream flags expose label + icon so they never read through color alone")
     func flagDisplayMetadata() {
         #expect(RecurringStreamFlag.priceIncrease.label == "Price up")

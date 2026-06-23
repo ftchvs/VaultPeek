@@ -439,21 +439,13 @@ struct PlanningDestinationView: View {
                     label: "Committed monthly",
                     value: PrivacyMaskPresentation.currency(recurring.estimatedMonthlyTotal, format: .compact, isEnabled: masked),
                     systemImage: "repeat",
-                    detail: recurringDetail(recurring),
+                    detail: recurring.detailLine,
                     accent: .secondary
                 )
             )
         }
 
         return tiles
-    }
-
-    private func recurringDetail(_ recurring: RecurringObligationsPresentation) -> String {
-        let charges = "\(recurring.count) recurring charge\(recurring.count == 1 ? "" : "s")"
-        if recurring.attentionCount > 0 {
-            return "\(charges) · \(recurring.attentionCount) need attention"
-        }
-        return charges
     }
 }
 
