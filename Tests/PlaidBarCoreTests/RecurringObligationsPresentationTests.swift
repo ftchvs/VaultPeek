@@ -122,6 +122,25 @@ struct RecurringObligationsPresentationTests {
         #expect(RecurringConfidenceLevel(confidence: 0.59) == .low)
     }
 
+    @Test("Recurring count copy withholds exact counts when Privacy Mask is active")
+    func privacyMaskedCountCopyWithholdsExactCounts() {
+        let presentation = RecurringObligationsPresentation.make(
+            from: [
+                recurring(merchantName: "Gym", latestAmount: 22, trailingAverageAmount: 20, confidence: 0.95),
+                recurring(merchantName: "Dormant", lastDate: "2026-01-01"),
+                recurring(merchantName: "Spotify"),
+            ],
+            asOf: Self.asOf
+        )
+
+        #expect(presentation.count == 3)
+        #expect(presentation.attentionCount == 2)
+        #expect(presentation.countLabel() == "3 recurring charges")
+        #expect(presentation.detailLine() == "3 recurring charges · 2 need attention")
+        #expect(presentation.countLabel(privacyMaskEnabled: true) == "Recurring charges")
+        #expect(presentation.detailLine(privacyMaskEnabled: true) == "Recurring charges")
+    }
+
     @Test("Stream flags expose label + icon so they never read through color alone")
     func flagDisplayMetadata() {
         #expect(RecurringStreamFlag.priceIncrease.label == "Price up")

@@ -36,7 +36,7 @@ struct RecurringObligationsSection: View {
                 }
 
                 if presentation.count > visibleLimit {
-                    Text("+\(presentation.count - visibleLimit) more")
+                    Text(privacyMaskEnabled ? "More recurring charges" : "+\(presentation.count - visibleLimit) more")
                         .microText()
                         .foregroundStyle(.secondary)
                 }
@@ -78,13 +78,13 @@ struct RecurringObligationsSection: View {
     }
 
     private var accessibilitySummary: String {
-        let countText = "\(presentation.count) recurring \(presentation.count == 1 ? "charge" : "charges")"
+        let countText = presentation.countLabel(privacyMaskEnabled: privacyMaskEnabled)
         let total = PrivacyMaskPresentation.currency(
             presentation.estimatedMonthlyTotal,
             format: .full,
             isEnabled: privacyMaskEnabled
         )
-        let attention = presentation.attentionCount > 0
+        let attention = !privacyMaskEnabled && presentation.attentionCount > 0
             ? " \(presentation.attentionCount) need attention."
             : ""
         return "\(countText), about \(total) per month.\(attention)"
