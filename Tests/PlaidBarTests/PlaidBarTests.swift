@@ -112,8 +112,8 @@ struct PlaidBarTests {
         #expect(planningSource.contains("ProgressView(value: summary.overallFraction)"))
     }
 
-    @Test("Control and Focus privacy mask paths redact both App Group snapshots")
-    func privacyMaskControlPathsRedactEveryPublishedSnapshot() throws {
+    @Test("Control and Focus privacy mask paths redact snapshots and clear Spotlight")
+    func privacyMaskControlPathsRedactEveryPublishedSystemSurface() throws {
         let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         let widgetSource = try String(
             contentsOf: root.appending(path: "Sources/PlaidBarWidgetExtension/PlaidBarWidgetBundle.swift"),
@@ -129,7 +129,12 @@ struct PlaidBarTests {
         )
 
         #expect(widgetSource.contains("GlanceSnapshotStore.redactIfAvailable()"))
+        #expect(widgetSource.contains("deleteSearchableItems("))
+        #expect(widgetSource.contains("withDomainIdentifiers: [PlaidBarConstants.accountSpotlightDomainIdentifier]"))
         #expect(focusSource.contains("PrivacyMaskControlCommandReader.redactPublishedSnapshots()"))
+        #expect(focusSource.contains("MainActor.run"))
+        #expect(focusSource.contains("AccountSpotlightIndexer.clear()"))
+        #expect(appStateSource.contains("PrivacyMaskControlCommandReader.peek()?.maskEnabled"))
         #expect(appStateSource.contains("queued OFF command must restore the"))
         #expect(appStateSource.contains("clearPublishedSystemSnapshotsForDemoEntry()"))
     }

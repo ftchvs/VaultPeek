@@ -85,6 +85,13 @@ struct FocusPrivacyFilterIntent: SetFocusFilterIntent {
             // the non-leaking direction, and only the app holds the real numbers.
             if outcome.desiredMaskEnabled {
                 PrivacyMaskControlCommandReader.redactPublishedSnapshots()
+                // Focus filters run while the app may be backgrounded. Clearing the
+                // Spotlight account-name domain here prevents searchable account
+                // names from lingering until the app next foregrounds and applies
+                // the queued command.
+                await MainActor.run {
+                    AccountSpotlightIndexer.clear()
+                }
             }
             // Reload the Control Center toggle + widgets so the "Privacy Mask"
             // control reflects the new state even before the app applies it.

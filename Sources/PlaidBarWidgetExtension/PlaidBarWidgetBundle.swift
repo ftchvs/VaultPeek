@@ -1,4 +1,5 @@
 import AppIntents
+import CoreSpotlight
 import PlaidBarCore
 import SwiftUI
 import WidgetKit
@@ -428,6 +429,9 @@ struct SetPrivacyMaskIntent: SetValueIntent {
                 try? AppGroupSnapshotStore.save(snapshot.masked())
             }
             try? GlanceSnapshotStore.redactIfAvailable()
+            try? await CSSearchableIndex.default().deleteSearchableItems(
+                withDomainIdentifiers: [PlaidBarConstants.accountSpotlightDomainIdentifier]
+            )
         }
         // Reload the widgets + controls so the toggle and every figure reflect the
         // new state even before the app has applied the command and rewritten the

@@ -4160,11 +4160,14 @@ final class AppState {
             balanceHistory: balanceHistory
         ).cashflow
 
+        let systemSurfaceMaskEnabled = shouldMaskFinancialValues
+            || ((try? PrivacyMaskControlCommandReader.peek()?.maskEnabled) == true)
+
         let snapshot = FinanceSnapshotBuilder.make(
             accounts: accounts,
             recurringTransactions: recurringTransactions,
             cashflow: cashflow,
-            isMasked: shouldMaskFinancialValues,
+            isMasked: systemSurfaceMaskEnabled,
             transactions: transactions,
             reviewMetadata: transactionReviewMetadata,
             transactionRules: transactionRules,
@@ -4185,11 +4188,12 @@ final class AppState {
         // Keep the display-only Spotlight account index in lockstep with the
         // finance snapshot: this is the shared seam for account load/refresh
         // (via `writeGlanceSnapshot`), demo data, and the Privacy Mask / App Lock
-        // transitions (`togglePrivacyMask` / `lockApp`). `refresh` clears the
-        // index when masked, so masking removes account names from system search
-        // immediately; the empty-accounts clear lives in `writeGlanceSnapshot` /
-        // `clearGlanceSnapshot` (AND-513).
-        AccountSpotlightIndexer.refresh(accounts: accounts, isMasked: shouldMaskFinancialValues)
+        // transitions (`togglePrivacyMask` / `lockApp`). Pending background ON
+        // commands are also treated as masked so automatic refreshes cannot
+        // re-publish account names before the next app activation consumes the
+        // command. `refresh` clears the index when masked; the empty-accounts
+        // clear lives in `writeGlanceSnapshot` / `clearGlanceSnapshot` (AND-513).
+        AccountSpotlightIndexer.refresh(accounts: accounts, isMasked: systemSurfaceMaskEnabled)
     }
 
     private func clearGlanceSnapshot() async {

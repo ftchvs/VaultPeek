@@ -84,6 +84,12 @@ public enum PlaidBarConstants {
     public static let appVersion: String = "1.0.0"
     public static let appName: String = "VaultPeek"
 
+    // System search
+    /// Core Spotlight domain used for VaultPeek account-name results. Kept in Core
+    /// so the app and WidgetKit/Control Center extension clear the same index when
+    /// Privacy Mask or App Lock engages.
+    public static let accountSpotlightDomainIdentifier = "com.ftchvs.PlaidBar.accounts"
+
     // Repository
     public static let repositoryURL: String = "https://github.com/ftchvs/VaultPeek"
 
