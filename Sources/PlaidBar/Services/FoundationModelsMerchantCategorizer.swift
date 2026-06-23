@@ -78,7 +78,13 @@ struct FoundationModelsMerchantCategorizer: FMMerchantCategorizing {
     /// read as an instruction. The constrained-enum output further guarantees a
     /// valid category regardless of any injection attempt.
     static func sanitizedMerchant(_ raw: String, maxLength: Int = 64) -> String {
-        let separators = CharacterSet.whitespacesAndNewlines.union(.controlCharacters)
+        let separators = CharacterSet.whitespacesAndNewlines
+            .union(.controlCharacters)
+            // Strip the structural prompt delimiters too — the merchant is embedded
+            // inside a quoted value (`"Categorize this merchant: \"…\""`), so a name
+            // containing a quote/`;`/`:` could otherwise close the quote and inject
+            // same-line instructions. Mirrors `CategorySuggestionContext.sanitizedLine`.
+            .union(CharacterSet(charactersIn: "\";:"))
         let collapsed = raw
             .components(separatedBy: separators)
             .filter { !$0.isEmpty }
