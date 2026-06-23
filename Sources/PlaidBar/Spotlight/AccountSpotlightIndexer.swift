@@ -72,7 +72,7 @@ enum AccountSpotlightIndexer {
     /// Groups VaultPeek's searchable items so the whole set can be replaced or
     /// cleared atomically. `nonisolated` so the display-safe `AccountSpotlightEntry`
     /// (a plain value type) can salt its identifier with it off the main actor.
-    nonisolated static let domainIdentifier = "com.ftchvs.PlaidBar.accounts"
+    nonisolated static let domainIdentifier = PlaidBarConstants.accountSpotlightDomainIdentifier
 
     /// Deep link selecting a result opens — the shared dashboard URL.
     nonisolated static let deepLinkURL = GlanceSnapshot.deepLinkURL
