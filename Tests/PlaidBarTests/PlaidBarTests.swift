@@ -129,9 +129,12 @@ struct PlaidBarTests {
         )
 
         #expect(widgetSource.contains("GlanceSnapshotStore.redactIfAvailable()"))
-        #expect(widgetSource.contains("deleteSearchableItems(withDomainIdentifiers: [PlaidBarConstants.accountSpotlightDomainIdentifier])"))
+        #expect(widgetSource.contains("deleteSearchableItems("))
+        #expect(widgetSource.contains("withDomainIdentifiers: [PlaidBarConstants.accountSpotlightDomainIdentifier]"))
         #expect(focusSource.contains("PrivacyMaskControlCommandReader.redactPublishedSnapshots()"))
+        #expect(focusSource.contains("MainActor.run"))
         #expect(focusSource.contains("AccountSpotlightIndexer.clear()"))
+        #expect(appStateSource.contains("PrivacyMaskControlCommandReader.peek()?.maskEnabled"))
         #expect(appStateSource.contains("queued OFF command must restore the"))
         #expect(appStateSource.contains("clearPublishedSystemSnapshotsForDemoEntry()"))
     }

@@ -68,6 +68,21 @@ enum PrivacyMaskControlCommandReader {
         return try decoder.decode(PrivacyMaskControlCommand.self, from: data)
     }
 
+    /// Reads the pending privacy command without consuming it. This is a defensive
+    /// system-surface guard for background refresh paths: when Control Center or a
+    /// Focus filter has requested Privacy Mask while the app is still backgrounded,
+    /// later app-side snapshot/Spotlight writes must treat the pending ON command
+    /// as masked until activation consumes it.
+    static func peek(
+        directory: URL = directory(),
+        fileManager: FileManager = .default
+    ) throws -> PrivacyMaskControlCommand? {
+        let url = commandURL(directory: directory)
+        guard fileManager.fileExists(atPath: url.path) else { return nil }
+        let data = try Data(contentsOf: url)
+        return try decoder.decode(PrivacyMaskControlCommand.self, from: data)
+    }
+
     /// Writes a pending privacy command into the shared container so it is applied
     /// on the next `applyPendingPrivacyMaskControlCommand()` activation — the same
     /// channel the Control Center toggle uses (`WidgetControlCommandStore`), but

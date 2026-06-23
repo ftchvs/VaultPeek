@@ -89,7 +89,9 @@ struct FocusPrivacyFilterIntent: SetFocusFilterIntent {
                 // Spotlight account-name domain here prevents searchable account
                 // names from lingering until the app next foregrounds and applies
                 // the queued command.
-                AccountSpotlightIndexer.clear()
+                await MainActor.run {
+                    AccountSpotlightIndexer.clear()
+                }
             }
             // Reload the Control Center toggle + widgets so the "Privacy Mask"
             // control reflects the new state even before the app applies it.
