@@ -1,4 +1,3 @@
-import AppKit
 import PlaidBarCore
 import SwiftUI
 
@@ -218,39 +217,13 @@ struct AlertsDestinationView: View {
             }
         }
 
-        /// Dispatch the alert's recovery action — the same paths
+        /// Dispatch the alert's recovery action through the shared
+        /// ``RecoveryActionDispatcher`` — the same `AppState` paths
         /// ``AttentionQueueView`` runs, so an action means the same thing here as
         /// on the menu-bar glance.
         private func perform(_ row: AttentionQueueRow) {
-            guard let action = row.action else { return }
-            switch action {
-            case .checkServer:
-                Task { await appState.checkServerConnection() }
-            case .addAccount:
-                Task { await appState.addAccount() }
-            case .refresh:
-                Task { await appState.refreshDashboard() }
-            case .reconnect:
-                guard let itemId = row.targetItemId ?? ItemRecoveryTarget.itemId(from: appState.itemStatuses) else {
-                    Task { await appState.refreshDashboard() }
-                    return
-                }
-                Task { await appState.reconnectItem(itemId: itemId) }
-            case .openSettings:
-                openSettings()
-            case .requestNotificationPermission:
-                Task { _ = await appState.requestNotificationPermission() }
-            case .openNotificationSettings:
-                openNotificationSettings()
-            }
-        }
-
-        private func openNotificationSettings() {
-            guard let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") else {
-                openSettings()
-                return
-            }
-            NSWorkspace.shared.open(url)
+            RecoveryActionDispatcher(appState: appState, openSettings: { openSettings() })
+                .dispatch(row)
         }
     }
 }

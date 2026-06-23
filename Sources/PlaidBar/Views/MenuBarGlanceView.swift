@@ -1,4 +1,3 @@
-import AppKit
 import PlaidBarCore
 import SwiftUI
 
@@ -97,41 +96,19 @@ struct MenuBarGlanceView: View {
 
     /// A chip routes into the window when it carries a ``Route``; otherwise it
     /// runs its in-place infrastructure action (check server, open Settings,
-    /// refresh) — exactly the `MenuBarGlanceModel.Chip` contract. The local-infra
-    /// action set mirrors `AttentionQueueView.perform`.
+    /// refresh) through the shared ``RecoveryActionDispatcher`` — exactly the
+    /// `MenuBarGlanceModel.Chip` contract, identical to every other surface.
     private func activate(_ chip: MenuBarGlanceModel.Chip) {
         if let route = chip.route {
             openRoute(route)
             return
         }
         guard let action = chip.fallbackAction else { return }
-        switch action {
-        case .checkServer:
-            Task { await appState.checkServerConnection() }
-        case .addAccount:
-            Task { await appState.addAccount() }
-        case .refresh:
-            Task { await appState.refreshDashboard() }
-        case .reconnect:
-            // Degraded-item chips carry a `Route` (`Route.from(attentionRow:)`
-            // maps `item-error-/item-repair-/item-outage-` rows to Accounts), so
-            // a reconnect action never reaches this fallback. Refresh defensively.
-            Task { await appState.refreshDashboard() }
-        case .openSettings:
-            openSettings()
-        case .requestNotificationPermission:
-            Task { _ = await appState.requestNotificationPermission() }
-        case .openNotificationSettings:
-            openNotificationSettings()
-        }
-    }
-
-    private func openNotificationSettings() {
-        guard let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") else {
-            openSettings()
-            return
-        }
-        NSWorkspace.shared.open(url)
+        // Degraded-item chips carry a `Route` (so a `.reconnect` never reaches
+        // this fallback); the dispatcher's reconnect path also refreshes
+        // defensively when no item resolves, matching the prior behavior.
+        RecoveryActionDispatcher(appState: appState, openSettings: { openSettings() })
+            .perform(action)
     }
 
     // MARK: - Footer quick-actions

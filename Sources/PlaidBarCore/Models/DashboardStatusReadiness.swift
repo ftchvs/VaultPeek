@@ -19,15 +19,19 @@ public enum DashboardStatusReadinessLevel: String, Codable, Sendable {
     }
 }
 
-public enum DashboardStatusReadinessAction: String, Codable, Sendable {
-    case checkServer
-    case addAccount
-    case refresh
-    case reconnect
-    case openSettings
-    case requestNotificationPermission
-    case openNotificationSettings
-}
+/// Deprecated alias for the converged ``RecoveryAction``. The dashboard readiness
+/// verdict, the attention queue, and the secondary content unavailable states all
+/// now speak the one ``RecoveryAction`` vocabulary; this alias keeps the
+/// pre-convergence call sites and `Codable`/equality snapshots compiling
+/// unchanged. Prefer ``RecoveryAction`` in new code.
+@available(*, deprecated, renamed: "RecoveryAction")
+public typealias DashboardStatusReadinessAction = RecoveryAction
+
+/// The canonical button title for the **stale-sync** (STATE-4) refresh action,
+/// shared by every surface (dashboard readiness, attention queue, account
+/// connection chip) so the state reads identically everywhere. This is the value
+/// that resolves the pre-convergence "Refresh Now" vs "Refresh" drift.
+public let staleSyncRefreshTitle = "Refresh Now"
 
 public struct DashboardStatusReadiness: Equatable, Sendable {
     private static let maxRenderedErrorLength = 240
@@ -35,10 +39,10 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
     public let level: DashboardStatusReadinessLevel
     public let title: String
     public let detail: String
-    public let primaryAction: DashboardStatusReadinessAction?
+    public let primaryAction: RecoveryAction?
     public let primaryActionTitle: String?
     public let primaryActionIconName: String?
-    public let secondaryActions: [DashboardStatusReadinessAction]
+    public let secondaryActions: [RecoveryAction]
 
     /// Severity tier derived from the readiness level this mapping already
     /// computed.
@@ -46,21 +50,41 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
         level.errorSeverity
     }
 
+    /// The converged recovery button for this readiness verdict, so the dashboard
+    /// readiness panel and the popover emit the same ``RecoveryActionButton``
+    /// shape every other attention surface does. `nil` for verdicts with no
+    /// primary action (e.g. the in-flight loading state).
+    ///
+    /// Pass `itemStatuses` so an item-scoped `.reconnect` folds in the
+    /// institution-qualified title and `targetItemId` (STATE-2); omit it on
+    /// surfaces that resolve the item target themselves.
+    public func recoveryActionButton(itemStatuses: [ItemStatus] = []) -> RecoveryActionButton? {
+        guard let primaryAction else { return nil }
+        if primaryAction == .reconnect, let reconnect = RecoveryActionButton.reconnect(from: itemStatuses) {
+            return reconnect
+        }
+        return RecoveryActionButton(
+            action: primaryAction,
+            title: primaryActionTitle,
+            iconName: primaryActionIconName
+        )
+    }
+
     public init(
         level: DashboardStatusReadinessLevel,
         title: String,
         detail: String,
-        primaryAction: DashboardStatusReadinessAction? = nil,
+        primaryAction: RecoveryAction? = nil,
         primaryActionTitle: String? = nil,
         primaryActionIconName: String? = nil,
-        secondaryActions: [DashboardStatusReadinessAction] = []
+        secondaryActions: [RecoveryAction] = []
     ) {
         self.level = level
         self.title = title
         self.detail = detail
         self.primaryAction = primaryAction
-        self.primaryActionTitle = primaryActionTitle ?? primaryAction?.defaultTitle
-        self.primaryActionIconName = primaryActionIconName ?? primaryAction?.defaultIconName
+        self.primaryActionTitle = primaryActionTitle ?? primaryAction?.canonicalTitle
+        self.primaryActionIconName = primaryActionIconName ?? primaryAction?.canonicalIconName
         self.secondaryActions = secondaryActions
     }
 
@@ -243,7 +267,7 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
                 title: "Sync is stale",
                 detail: "Last sync: \(lastSyncRelative ?? "never"). Refresh now to pull current balances and transactions.",
                 primaryAction: .refresh,
-                primaryActionTitle: "Refresh Now"
+                primaryActionTitle: staleSyncRefreshTitle
             )
         }
 
@@ -382,28 +406,14 @@ public struct DashboardStatusReadiness: Equatable, Sendable {
     }
 }
 
-public extension DashboardStatusReadinessAction {
-    var defaultTitle: String {
-        switch self {
-        case .checkServer: "Check Server"
-        case .addAccount: "Add Account"
-        case .refresh: "Refresh"
-        case .reconnect: "Reconnect"
-        case .openSettings: "Settings"
-        case .requestNotificationPermission: "Request Permission"
-        case .openNotificationSettings: "Open System Settings"
-        }
-    }
+public extension RecoveryAction {
+    /// Deprecated alias for ``canonicalTitle``. Kept so pre-convergence call sites
+    /// (`action.defaultTitle`) compile unchanged.
+    @available(*, deprecated, renamed: "canonicalTitle")
+    var defaultTitle: String { canonicalTitle }
 
-    var defaultIconName: String {
-        switch self {
-        case .checkServer: "server.rack"
-        case .addAccount: "plus.circle"
-        case .refresh: "arrow.clockwise"
-        case .reconnect: "link.badge.plus"
-        case .openSettings: "gearshape"
-        case .requestNotificationPermission: "bell.badge"
-        case .openNotificationSettings: "gearshape"
-        }
-    }
+    /// Deprecated alias for ``canonicalIconName``. Kept so pre-convergence call
+    /// sites (`action.defaultIconName`) compile unchanged.
+    @available(*, deprecated, renamed: "canonicalIconName")
+    var defaultIconName: String { canonicalIconName }
 }

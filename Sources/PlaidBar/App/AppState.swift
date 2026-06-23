@@ -1399,7 +1399,9 @@ final class AppState {
             transactions: transactions,
             lowCashThreshold: lowBalanceThreshold,
             largeTransactionThreshold: largeTransactionThreshold,
-            creditUtilizationThreshold: creditUtilizationThreshold
+            creditUtilizationThreshold: creditUtilizationThreshold,
+            notificationsEnabled: notificationsEnabled,
+            notificationPermission: notificationPermissionPresentation
         )
     }
 
@@ -1804,7 +1806,7 @@ final class AppState {
     /// the matching `AppState` method, mirroring the established mapping used by the
     /// accounts empty state in Settings so behavior stays consistent. Keeps the
     /// Dashboard and Planning recurring cards' action wiring identical.
-    func performRecurringUnavailableAction(_ action: SecondaryContentUnavailableAction) {
+    func performRecurringUnavailableAction(_ action: RecoveryAction) {
         switch action {
         case .checkServer:
             Task { await checkServerConnection() }
@@ -1817,6 +1819,11 @@ final class AppState {
         case .addAccount:
             navigationModel.go(to: .accounts)
         case .clearFilters, .showWiderPeriod:
+            break
+        // The recurring/secondary content states only ever emit the verbs above;
+        // the remaining converged verbs (reconnect / settings / notification)
+        // never reach here, so they are inert.
+        case .reconnect, .openSettings, .requestNotificationPermission, .openNotificationSettings:
             break
         }
     }

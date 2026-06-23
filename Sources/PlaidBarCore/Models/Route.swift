@@ -315,6 +315,37 @@ public enum Route: Sendable, Hashable, Codable {
         }
     }
 
+    /// Maps a converged ``RecoveryAction`` (plus the item it targets, for
+    /// `.reconnect`) onto the in-window destination its recovery should open, so
+    /// window-first deep-link routing keys off the unified verb rather than each
+    /// surface's bespoke action enum.
+    ///
+    /// Returns `nil` for verbs whose recovery is an *in-place* action with no
+    /// meaningful in-window destination — checking the server, opening Settings,
+    /// requesting / opening notification permission, refreshing, syncing, clearing
+    /// filters, widening the period. Those keep running their existing action; the
+    /// caller falls back to the action when this is `nil`.
+    ///
+    /// Pure (keyed off the verb + carried item id) so the recovery → route
+    /// decision is unit-testable at the Core layer without the app target
+    /// (CLAUDE.md).
+    public static func from(recoveryAction action: RecoveryAction, targetItemId: String? = nil) -> Route? {
+        switch action {
+        case .reconnect:
+            // A degraded item's reconnect opens Accounts at the affected item so
+            // the inspector follows the link (the item id may need
+            // `resolvingAccountSelection(in:)` applied by the caller).
+            return .accounts(itemID: targetItemId)
+        case .addAccount:
+            // Connecting a new institution lands on Accounts.
+            return .accounts()
+        case .checkServer, .refresh, .refreshAccounts, .syncTransactions,
+             .openSettings, .requestNotificationPermission, .openNotificationSettings,
+             .clearFilters, .showWiderPeriod:
+            return nil
+        }
+    }
+
     /// Resolves an `.accounts(itemID:)` deep-link whose `itemID` is actually a
     /// Plaid *item_id* into one keyed by the matching `AccountDTO.id`, so the
     /// Accounts destination (which selects by `AccountDTO.id`) lands on the right
