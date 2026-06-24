@@ -3,7 +3,7 @@ import OSLog
 import PlaidBarCache
 import PlaidBarCore
 
-/// AppState wiring for the disposable per-transaction SwiftData cache that backs
+/// AppState wiring for the disposable per-transaction cache that backs
 /// the virtualized large-history list (AND-567).
 ///
 /// Built on the AND-566 seams: it reuses ``readModelCacheKey()`` for environment

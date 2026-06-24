@@ -513,14 +513,18 @@ private struct AccountListRow: View {
     }
 }
 
+#if canImport(PreviewsMacros)
 #Preview("Content") {
     AccountsDestinationView()
         .environment(AppState())
         .frame(width: 640, height: 480)
 }
+#endif
 
+#if canImport(PreviewsMacros)
 #Preview("Inspector") {
     AccountsDestinationView.Inspector()
         .environment(AppState())
         .frame(width: 320, height: 480)
 }
+#endif

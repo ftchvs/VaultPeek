@@ -203,7 +203,9 @@ struct GoalEditorSheet: View {
     }
 }
 
+#if canImport(PreviewsMacros)
 #Preview("New") {
     GoalEditorSheet(state: .creating)
         .environment(AppState())
 }
+#endif

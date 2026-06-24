@@ -400,10 +400,14 @@ private enum ReviewReasonGuide {
     }
 }
 
+#if canImport(PreviewsMacros)
 #Preview("Content") {
     ReviewDestinationView()
 }
+#endif
 
+#if canImport(PreviewsMacros)
 #Preview("Inspector") {
     ReviewDestinationView.Inspector()
 }
+#endif

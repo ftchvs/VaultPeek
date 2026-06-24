@@ -1,7 +1,7 @@
 import Foundation
 import PlaidBarCore
 
-#if canImport(FoundationModels)
+#if canImport(FoundationModels) && canImport(FoundationModelsMacros)
 import FoundationModels
 #endif
 
@@ -40,7 +40,7 @@ struct FoundationModelsMerchantCategorizer: FMMerchantCategorizing {
         let cleaned = Self.sanitizedMerchant(merchant)
         guard !cleaned.isEmpty else { return nil }
 
-        #if canImport(FoundationModels)
+        #if canImport(FoundationModels) && canImport(FoundationModelsMacros)
         if #available(macOS 26, *) {
             return await Self.generate(prompt: "Categorize this merchant: \"\(cleaned)\"")
         } else {
@@ -60,7 +60,7 @@ struct FoundationModelsMerchantCategorizer: FMMerchantCategorizing {
     func suggestCategory(context: CategorySuggestionContext) async -> String? {
         guard context.hasMerchantSignal else { return nil }
 
-        #if canImport(FoundationModels)
+        #if canImport(FoundationModels) && canImport(FoundationModelsMacros)
         if #available(macOS 26, *) {
             let fragment = context.promptFragment()
             return await Self.generate(prompt: "Categorize this transaction. \(fragment)")
@@ -93,7 +93,7 @@ struct FoundationModelsMerchantCategorizer: FMMerchantCategorizing {
     }
 }
 
-#if canImport(FoundationModels)
+#if canImport(FoundationModels) && canImport(FoundationModelsMacros)
 @available(macOS 26, *)
 extension FoundationModelsMerchantCategorizer {
     /// The constrained generation target: a `@Generable` enum whose cases mirror

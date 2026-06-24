@@ -560,14 +560,18 @@ private struct GoalDetailPane: View {
     }()
 }
 
+#if canImport(PreviewsMacros)
 #Preview("Content") {
     GoalsDestinationView()
         .environment(AppState())
         .frame(width: 720, height: 600)
 }
+#endif
 
+#if canImport(PreviewsMacros)
 #Preview("Inspector") {
     GoalsDestinationView.Inspector()
         .environment(AppState())
         .frame(width: 360, height: 600)
 }
+#endif

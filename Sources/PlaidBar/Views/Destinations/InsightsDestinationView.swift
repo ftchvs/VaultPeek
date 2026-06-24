@@ -117,7 +117,9 @@ struct InsightsDestinationView: View {
     }
 }
 
+#if canImport(PreviewsMacros)
 #Preview {
     InsightsDestinationView()
         .environment(AppState())
 }
+#endif

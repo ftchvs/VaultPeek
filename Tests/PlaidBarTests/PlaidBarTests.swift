@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import Testing
 @testable import PlaidBarCore
 
@@ -994,11 +995,9 @@ struct PlaidBarTests {
 /// (which an executable target cannot expose to tests).
 private final class StubFMCategorizer: FMMerchantCategorizing, @unchecked Sendable {
     private let result: SpendingCategory?
-    private let lock = NSLock()
-    private var _callCount = 0
+    private let callCountStorage = Mutex(0)
     var callCount: Int {
-        lock.lock(); defer { lock.unlock() }
-        return _callCount
+        callCountStorage.withLock { $0 }
     }
 
     init(result: SpendingCategory?) {
@@ -1006,7 +1005,7 @@ private final class StubFMCategorizer: FMMerchantCategorizing, @unchecked Sendab
     }
 
     func suggestCategory(merchant: String) async -> String? {
-        lock.lock(); _callCount += 1; lock.unlock()
+        callCountStorage.withLock { $0 += 1 }
         return result?.rawValue
     }
 }

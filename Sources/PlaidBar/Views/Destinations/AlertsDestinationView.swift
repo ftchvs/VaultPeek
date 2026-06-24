@@ -523,12 +523,16 @@ private struct AlertSeverityBadge: View {
     }
 }
 
+#if canImport(PreviewsMacros)
 #Preview("Content") {
     AlertsDestinationView()
         .environment(AppState())
 }
+#endif
 
+#if canImport(PreviewsMacros)
 #Preview("Inspector") {
     AlertsDestinationView.Inspector()
         .environment(AppState())
 }
+#endif

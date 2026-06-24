@@ -320,7 +320,9 @@ struct DashboardDestinationView: View {
     }
 }
 
+#if canImport(PreviewsMacros)
 #Preview {
     DashboardDestinationView()
         .environment(AppState())
 }
+#endif

@@ -603,12 +603,16 @@ struct BudgetsDestinationView: View {
     }
 }
 
+#if canImport(PreviewsMacros)
 #Preview("Content") {
     BudgetsDestinationView()
         .environment(AppState())
 }
+#endif
 
+#if canImport(PreviewsMacros)
 #Preview("Inspector") {
     BudgetsDestinationView.Inspector()
         .environment(AppState())
 }
+#endif

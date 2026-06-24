@@ -3,11 +3,10 @@ import Testing
 @testable import PlaidBarCache
 @testable import PlaidBarCore
 
-// Serialized: each test spins up its own in-memory `ModelContainer`, and
-// initializing several SwiftData containers for the same schema concurrently
-// (the default parallel test run) crashes the SwiftData runtime. The suite is
-// tiny and fast, so serial execution costs nothing.
-@Suite("Disposable SwiftData read-model cache store (AND-566)", .serialized)
+// Serialized: each test exercises its own in-memory or temporary on-disk store.
+// The suite is tiny and fast, so serial execution keeps file-backed cache tests
+// deterministic without affecting broader runtime.
+@Suite("Disposable read-model cache store (AND-566)", .serialized)
 struct ReadModelCacheStoreTests {
 
     private func accounts() -> [AccountDTO] {

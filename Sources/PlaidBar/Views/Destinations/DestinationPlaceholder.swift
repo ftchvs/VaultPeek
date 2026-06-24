@@ -52,10 +52,14 @@ struct DestinationInspectorPlaceholder: View {
     }
 }
 
+#if canImport(PreviewsMacros)
 #Preview("Content placeholder") {
     DestinationPlaceholder(destination: .dashboard)
 }
+#endif
 
+#if canImport(PreviewsMacros)
 #Preview("Inspector placeholder") {
     DestinationInspectorPlaceholder(destination: .review)
 }
+#endif
