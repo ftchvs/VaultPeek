@@ -182,31 +182,34 @@ MenuBarExtra
 
 A `Task` runs every 15 minutes to refresh account balances (free cached endpoint) and every 30 minutes for transaction sync (cursor-based incremental). `EnergyAwareRefreshPolicy` (AND-568) modulates this resident cadence: under Low Power Mode or thermal pressure the automatic Plaid fetch is deferred (back-off clamped to a finite ceiling), while user-initiated manual refresh is always honored.
 
-### PlaidBarCache (App-only SwiftData cache, AND-566)
+### PlaidBarCache (App-only file-backed cache, AND-566)
 
 An app-bound library that backs instant cold render and offline reads with a
-disposable SwiftData store (`@Model` + `@ModelActor`). It depends on
-`PlaidBarCore` for the pure read-model and mapper but is kept out of the server,
-CLI, and widget targets so the SwiftData dependency never reaches them.
+disposable file-backed store: actor-isolated `ReadModelCacheStore` /
+`TransactionCacheStore` types that persist a `Codable` JSON snapshot to disk. It
+depends on `PlaidBarCore` for the pure read-model and mapper but is kept out of
+the server, CLI, and widget targets so private financial cache reads stay
+confined to the app (and so the broad strict-concurrency gate stays clean).
 
 The cache is **disposable**: rebuildable from the authoritative in-memory/JSON
 data, never a source of truth, and scoped per Plaid environment. It is written
 only into the private data dir (`~/.vaultpeek/dashboard-read-model-cache-v1.store`
 plus the per-transaction `transaction-cache-v1.store` — the latter mirrors the
 full transaction history, including transaction IDs, account IDs, merchant names,
-and amounts, so it is the more sensitive of the two; both files `0o600`) with
-`cloudKitDatabase: .none`, so neither syncs to iCloud and neither reaches the
-App Group container. If SwiftData is unavailable or the store fails to open, the
-app falls back to its existing JSON/UserDefaults cold path.
+and amounts, so it is the more sensitive of the two; the directory is `0o700` and
+both files are tightened to `0o600`). Both files are plain local JSON snapshots,
+so neither syncs to iCloud and neither reaches the App Group container. Every
+read/write `throws` and callers wrap in `try?`, so if a store file cannot be
+opened/read/written the app falls back to its existing JSON/UserDefaults cold
+path.
 
-`clearReadModelCache()` deletes both SwiftData stores on local reset and when the
+`clearReadModelCache()` deletes both stores on local reset and when the
 last institution is removed — but **only when a usable `ReadModelCacheStore` can
-be opened**. When SwiftData is unavailable or the store cannot be opened it bumps
-the clear epoch and returns without deleting, so `dashboard-read-model-cache-v1.store`,
-its `-wal`/`-shm` sidecars, and the transaction cache can survive a reset on disk.
-`LocalDataStore.resetLocalData` independently removes the JSON/scoped caches,
-Plaid SQLite files (and sidecars), pending-link state, saved goals, and the logo
-cache. See `SECURITY.md`.
+be opened**. When the store cannot be opened it bumps the clear epoch and returns
+without deleting, so `dashboard-read-model-cache-v1.store` and the transaction
+cache can survive a reset on disk. `LocalDataStore.resetLocalData` independently
+removes the JSON/scoped caches, Plaid SQLite files (and sidecars), pending-link
+state, saved goals, and the logo cache. See `SECURITY.md`.
 
 ## Data Flow
 
@@ -308,7 +311,7 @@ Unit tests span 4 suites, all using Swift Testing framework:
 | PlaidBarCoreTests | DTOs, formatters, constants, Codable roundtrips, routing/navigation, goals |
 | PlaidBarServerTests | Plaid response decoding, config, type conversion |
 | PlaidBarTests | Business logic: net balance, spending aggregation, filtering |
-| PlaidBarCacheTests | SwiftData read-model + transaction cache store behavior |
+| PlaidBarCacheTests | File-backed read-model + transaction cache store behavior |
 
 Server tests cover config, status contracts, Plaid decoding, auth behavior, and
 route-adjacent reducers. Full end-to-end Plaid sandbox coverage remains a manual
