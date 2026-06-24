@@ -51,9 +51,11 @@ struct DashboardRecurringCard: View {
     }
 }
 
+#if canImport(PreviewsMacros)
 #Preview {
     DashboardRecurringCard(onOpen: {})
         .environment(AppState())
         .padding()
         .frame(width: 360)
 }
+#endif

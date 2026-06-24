@@ -193,15 +193,15 @@ struct DashboardStatusReadinessTests {
         #expect(evaluate(notificationsEnabled: false, notificationPermission: .evaluate(kind: .denied)).level == .healthy)
     }
 
-    @Test("Every action exposes a default title and icon")
+    @Test("Every action exposes a canonical title and icon")
     func actionDefaults() {
-        let actions: [DashboardStatusReadinessAction] = [
+        let actions: [RecoveryAction] = [
             .checkServer, .addAccount, .refresh, .reconnect, .openSettings,
             .requestNotificationPermission, .openNotificationSettings,
         ]
         for action in actions {
-            #expect(!action.defaultTitle.isEmpty)
-            #expect(!action.defaultIconName.isEmpty)
+            #expect(!action.canonicalTitle.isEmpty)
+            #expect(!action.canonicalIconName.isEmpty)
         }
     }
 

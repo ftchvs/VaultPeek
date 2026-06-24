@@ -530,7 +530,9 @@ private struct DataModeChip: View {
 // placeholder it showed inline before (`DestinationPlaceholder`), preserving
 // current behavior; the 2-col vs 3-col policy is applied in `body` above.
 
+#if canImport(PreviewsMacros)
 #Preview {
     AppShellView()
         .environment(AppState())
 }
+#endif

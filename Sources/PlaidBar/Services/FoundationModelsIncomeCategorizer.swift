@@ -1,7 +1,7 @@
 import Foundation
 import PlaidBarCore
 
-#if canImport(FoundationModels)
+#if canImport(FoundationModels) && canImport(FoundationModelsMacros)
 import FoundationModels
 #endif
 
@@ -28,7 +28,7 @@ struct FoundationModelsIncomeCategorizer: FMIncomeCategorizing {
     func suggestIncomeCategory(context: CategorySuggestionContext) async -> String? {
         guard context.hasMerchantSignal else { return nil }
 
-        #if canImport(FoundationModels)
+        #if canImport(FoundationModels) && canImport(FoundationModelsMacros)
         if #available(macOS 26, *) {
             let fragment = context.promptFragment()
             return await Self.generate(prompt: "Classify this income transaction. \(fragment)")
@@ -41,7 +41,7 @@ struct FoundationModelsIncomeCategorizer: FMIncomeCategorizing {
     }
 }
 
-#if canImport(FoundationModels)
+#if canImport(FoundationModels) && canImport(FoundationModelsMacros)
 @available(macOS 26, *)
 extension FoundationModelsIncomeCategorizer {
     /// The constrained generation target: a `@Generable` enum whose cases mirror

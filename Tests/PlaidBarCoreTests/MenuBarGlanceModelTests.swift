@@ -24,7 +24,7 @@ struct MenuBarGlanceModelTests {
 
     /// A local-infrastructure row (server / credentials) that keeps its in-place
     /// action and carries no route.
-    private func infraRow(id: String, action: DashboardStatusReadinessAction) -> AttentionQueueRow {
+    private func infraRow(id: String, action: RecoveryAction) -> AttentionQueueRow {
         AttentionQueueRow(
             id: id,
             severity: .blocked,

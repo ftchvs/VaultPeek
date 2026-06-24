@@ -170,6 +170,7 @@ extension View {
     }
 }
 
+#if canImport(PreviewsMacros)
 #Preview("Window section") {
     VStack(spacing: WindowMetrics.lg) {
         HStack(spacing: WindowMetrics.lg) {
@@ -201,3 +202,4 @@ extension View {
     .padding(WindowMetrics.canvasMargin)
     .frame(width: 720)
 }
+#endif

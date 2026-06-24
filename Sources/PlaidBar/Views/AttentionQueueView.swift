@@ -220,6 +220,7 @@ private struct SeverityStatusBadge: View {
 // `swift test`). Without this guard the whole package fails to compile, taking
 // the test suite down with it (#314).
 #if !SWIFT_PACKAGE
+#if canImport(PreviewsMacros)
 #Preview("Attention rows") {
     VStack(spacing: Spacing.xs) {
         AttentionQueueRowView(
@@ -249,4 +250,5 @@ private struct SeverityStatusBadge: View {
     .padding()
     .frame(width: 360)
 }
+#endif
 #endif

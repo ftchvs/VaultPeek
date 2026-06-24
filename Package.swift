@@ -114,10 +114,10 @@ let package = Package(
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
 
-        // MARK: - PlaidBarCache (Disposable SwiftData read-model cache, AND-566)
-        // App-only library so the SwiftData dependency never reaches the lean
-        // server / CLI / widget targets. Holds the @Model + @ModelActor store;
-        // the pure read-model + mapper live in PlaidBarCore.
+        // MARK: - PlaidBarCache (Disposable file-backed read-model cache, AND-566)
+        // App-only library so private financial cache reads stay out of the lean
+        // server / CLI / widget targets. The pure read-model + mapper live in
+        // PlaidBarCore; this target only persists disposable local snapshots.
         .target(
             name: "PlaidBarCache",
             dependencies: ["PlaidBarCore"],

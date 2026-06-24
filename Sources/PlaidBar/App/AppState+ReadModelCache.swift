@@ -3,7 +3,7 @@ import OSLog
 import PlaidBarCache
 import PlaidBarCore
 
-/// AppState wiring for the disposable SwiftData read-model cache (AND-566).
+/// AppState wiring for the disposable read-model cache (AND-566).
 ///
 /// Two seams only:
 ///   1. **Cold-start hydrate** — `hydrateFromReadModelCache()` runs inside

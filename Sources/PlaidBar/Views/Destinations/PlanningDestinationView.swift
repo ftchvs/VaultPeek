@@ -456,7 +456,9 @@ struct PlanningDestinationView: View {
     }
 }
 
+#if canImport(PreviewsMacros)
 #Preview {
     PlanningDestinationView()
         .environment(AppState())
 }
+#endif
