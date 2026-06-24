@@ -885,7 +885,7 @@ private struct ReviewInboxRow: View {
     private var reasonChips: some View {
         HStack(spacing: Spacing.xxs) {
             ForEach(item.reasonCodes, id: \.self) { reason in
-                Label(reason.displayName, systemImage: symbolName(for: reason))
+                Label(reason.displayName, systemImage: reason.glyphName)
                     .font(.caption2.weight(.semibold))
                     .labelStyle(.titleAndIcon)
                     .foregroundStyle(tint(for: reason))
@@ -1040,7 +1040,7 @@ private struct ReviewInboxRow: View {
     }
 
     private var leadingSymbolName: String {
-        item.reasonCodes.first.map(symbolName(for:)) ?? "tray"
+        item.reasonCodes.first.map(\.glyphName) ?? "tray"
     }
 
     private var leadingTint: Color {
@@ -1075,18 +1075,6 @@ private struct ReviewInboxRow: View {
         let category = isShowingSuggestion ? "\(baseCategory) (suggested on device)" : baseCategory
         let amount = Formatters.currency(item.transaction.displayAmount, format: .full)
         return "\(item.effectiveMerchantName), \(amount), \(category), reasons: \(reasons)"
-    }
-
-    private func symbolName(for reason: TransactionReviewReason) -> String {
-        switch reason {
-        case .uncategorized: "tag"
-        case .newMerchant: "person.crop.circle.badge.questionmark"
-        case .unusualAmount: "chart.line.uptrend.xyaxis"
-        case .possibleTransfer: "arrow.left.arrow.right"
-        case .recurringChanged: "calendar.badge.exclamationmark"
-        case .pendingChanged: "clock.badge.exclamationmark"
-        case .changedSinceReview: "arrow.triangle.2.circlepath"
-        }
     }
 
     private func tint(for reason: TransactionReviewReason) -> Color {
