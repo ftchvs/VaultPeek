@@ -9,6 +9,13 @@ import SwiftUI
 struct BalanceTimeMachineView: View {
     @Environment(AppState.self) private var appState
 
+    /// Which surface is hosting this strip. `.popover` (the default) keeps the
+    /// compact glance caption-scale; the window dashboard passes `.window` so the
+    /// account names, balances, and dates read at desk-distance type
+    /// (``WindowBodyText`` / ``WindowDataText`` / ``WindowFigureCaption``) instead
+    /// of shrunken popover caption-scale (AND-625).
+    var scale: ComponentScale = .popover
+
     /// Latest per-account ledger rows, intersected with currently-linked
     /// accounts. After an institution is disconnected, `removeAccount` prunes the
     /// account but not the ledger, so an un-filtered list would keep showing the
@@ -49,6 +56,53 @@ struct BalanceTimeMachineView: View {
         SyncHistoryDiff.maskCurrencyTokens(in: text, isEnabled: privacyMaskEnabled)
     }
 
+    /// "What the bank said" head — popover `sectionTitle` (caption, uppercase),
+    /// window `windowCardTitle` (`title3`) so it matches the dashboard's heads.
+    @ViewBuilder
+    private var titleLabel: some View {
+        switch scale {
+        case .popover:
+            Text("What the bank said").sectionTitle()
+        case .window:
+            Text("What the bank said").windowCardTitle()
+        }
+    }
+
+    /// Account display name — popover caption-scale `microText`, window `.body`.
+    @ViewBuilder
+    private func nameLabel(_ text: String) -> some View {
+        switch scale {
+        case .popover:
+            Text(text).microText()
+        case .window:
+            Text(text).windowBodyText()
+        }
+    }
+
+    /// Bank-reported balance figure — popover caption-scale tabular, window tabular
+    /// (``WindowDataText``) so the amount column aligns at desk distance.
+    @ViewBuilder
+    private func balanceLabel(_ text: String) -> some View {
+        switch scale {
+        case .popover:
+            Text(text).microText().monospacedDigit()
+        case .window:
+            Text(text).windowDataText()
+        }
+    }
+
+    /// Date / restatement sub-label — popover `microText`, window
+    /// `windowFigureCaption` (`caption2`) so the small label reads at window scale.
+    @ViewBuilder
+    private func dateLabel(_ text: String) -> some View {
+        switch scale {
+        case .popover:
+            Text(text).microText()
+        case .window:
+            Text(text).windowFigureCaption()
+        }
+    }
+
     var body: some View {
         let entries = latestEntries
         if !entries.isEmpty {
@@ -57,23 +111,18 @@ struct BalanceTimeMachineView: View {
                     Image(systemName: "clock.arrow.circlepath")
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.secondary)
-                    Text("What the bank said")
-                        .sectionTitle()
+                    titleLabel
                         .foregroundStyle(.secondary)
                 }
 
                 ForEach(entries) { entry in
                     HStack(spacing: 6) {
-                        Text(displayName(for: entry.accountId))
-                            .microText()
+                        nameLabel(displayName(for: entry.accountId))
                             .lineLimit(1)
                         Spacer(minLength: 4)
-                        Text(balanceText(for: entry))
-                            .microText()
-                            .monospacedDigit()
+                        balanceLabel(balanceText(for: entry))
                             .foregroundStyle(.secondary)
-                        Text(Formatters.displayDate(entry.date))
-                            .microText()
+                        dateLabel(Formatters.displayDate(entry.date))
                             .foregroundStyle(.secondary)
                     }
                     .accessibilityElement(children: .combine)
@@ -87,8 +136,7 @@ struct BalanceTimeMachineView: View {
                         Image(systemName: "exclamationmark.arrow.triangle.2.circlepath")
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(.secondary)
-                        Text(maskedDelta(row.summary))
-                            .microText()
+                        dateLabel(maskedDelta(row.summary))
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }

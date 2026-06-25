@@ -1068,6 +1068,101 @@ struct PlaidBarTests {
 
         #expect(cache.count == 2, "no eviction when every cached id is still in the inbox")
     }
+
+    // MARK: - Window-scale shared sub-components + unified search (AND-625)
+
+    /// Source-invariant guard for AND-625 part (1): the shared sub-components that
+    /// are re-hosted in both the popover and the window must carry a
+    /// `ComponentScale` hint and reference the window type roles
+    /// (`windowDataText` / `windowFigureCaption` / `windowBodyText` /
+    /// `windowCardTitle`), so window canvases render them at desk-distance scale
+    /// rather than shrunken popover caption-scale. Default `.popover` keeps the
+    /// glance byte-for-byte. Asserts the call sites, not pixels — the app target is
+    /// an `@main` executable that can't be `@testable import`ed.
+    @Test("Shared sub-components adopt the window type roles when hosted in a window (AND-625)")
+    func sharedSubComponentsScaleToWindowRoles() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let recurringSource = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/RecurringObligationsSection.swift"),
+            encoding: .utf8
+        )
+        let balanceSource = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/BalanceTimeMachineView.swift"),
+            encoding: .utf8
+        )
+
+        // Both components must take a ComponentScale that defaults to .popover so
+        // the glance is unaffected and only window callers opt into window scale.
+        for source in [recurringSource, balanceSource] {
+            #expect(source.contains("var scale: ComponentScale = .popover"))
+            // The window branch must reach for the window roles, not the popover's
+            // caption-scale microText/sectionTitle.
+            #expect(source.contains("windowDataText()"))
+            #expect(source.contains("windowFigureCaption()"))
+            #expect(source.contains("windowBodyText()"))
+            #expect(source.contains("windowCardTitle()"))
+        }
+
+        // The window call sites must pass `.window`; the popover call site keeps the
+        // default. (Window: DashboardRecurringCard, PlanningDestinationView,
+        // DashboardOverviewColumn. Popover: WealthSummaryFlyout, MainPopover.)
+        let dashboardRecurring = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/Destinations/DashboardRecurringCard.swift"),
+            encoding: .utf8
+        )
+        let planning = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/Destinations/PlanningDestinationView.swift"),
+            encoding: .utf8
+        )
+        let overviewColumn = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/Destinations/DashboardOverviewColumn.swift"),
+            encoding: .utf8
+        )
+        let wealthFlyout = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/WealthSummaryFlyout.swift"),
+            encoding: .utf8
+        )
+
+        #expect(dashboardRecurring.contains("scale: .window"))
+        #expect(planning.contains("scale: .window"))
+        #expect(overviewColumn.contains("BalanceTimeMachineView(scale: .window)"))
+        // The popover host must NOT opt into window scale (would inflate the glance).
+        #expect(!wealthFlyout.contains("scale: .window"))
+    }
+
+    /// Source-invariant guard for AND-625 part (2): the window shell's unified
+    /// `.searchable` field now propagates to a second destination (Accounts), which
+    /// filters its account list by the shared `\.shellSearchQuery` environment value
+    /// exactly like the Dashboard — one consistent toolbar field, no competing
+    /// inline search, no leak across destinations.
+    @Test("Accounts adopts the shell's unified search field via \\.shellSearchQuery (AND-625)")
+    func accountsAdoptsUnifiedShellSearch() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let shell = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/AppShellView.swift"),
+            encoding: .utf8
+        )
+        let accounts = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/Destinations/AccountsDestinationView.swift"),
+            encoding: .utf8
+        )
+
+        // The shell routes its single field to both Dashboard and Accounts and
+        // injects the neutral, unified env key (not the old Dashboard-specific one).
+        #expect(shell.contains("case .dashboard, .accounts: true"))
+        #expect(shell.contains("let isSearchEnabled = destinationSupportsSearch(destination) && !appState.isContentLocked"))
+        #expect(shell.contains(".environment(\\.shellSearchQuery,"))
+        #expect(shell.contains("searchText = \"\""))
+        #expect(!shell.contains("dashboardSearchQuery"))
+
+        // Accounts reads the shared query and filters by display name (never a masked
+        // amount), with a contextual no-results state.
+        #expect(accounts.contains("@Environment(\\.shellSearchQuery)"))
+        #expect(accounts.contains("localizedCaseInsensitiveContains(query)"))
+        #expect(accounts.contains("ContentUnavailableView.search(text:"))
+        #expect(accounts.contains(".onChange(of: filteredAccounts.map(\\.id))"))
+        #expect(accounts.contains("visibleAccounts.map(\\.id)"))
+    }
 }
 
 /// Deterministic `FMMerchantCategorizing` stub for the categorization-tier tests.
