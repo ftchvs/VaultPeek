@@ -57,7 +57,6 @@ final class AppState {
         static let firstRunSnapshotDismissedContextPrefix = "firstRunSnapshot.dismissed.context"
         static let lastTransactionCacheContext = "cache.lastTransactionCacheContext"
         static let categoryBudgetCache = "cache.categoryBudgets"
-        static let dashboardDetached = DetachedDashboardPreferences.detachedStorageKey
     }
 
     // MARK: - State
@@ -115,7 +114,6 @@ final class AppState {
             self.error = sanitized
         }
     }
-    var isPopoverPresented = false
 
     /// Per-window navigation model (AND-594). Owns the destination plus
     /// the dashboard filter / account selection / heatmap metric that previously
@@ -127,7 +125,10 @@ final class AppState {
     /// `appState.dashboardFilter` / `dashboardSelectedAccountID` /
     /// `dashboardHeatmapMode`, which delegate here and persist to the original
     /// UserDefaults keys — so popover behavior and on-disk persistence are
-    /// unchanged.
+    /// unchanged. As of AND-600 it also owns the menu-bar popover's presentation
+    /// flag (`isPopoverPresented`) and the detached-dashboard intent
+    /// (`isDashboardDetached`), retired from `AppState` so each window holds
+    /// independent presentation and detach state.
     let navigationModel: NavigationModel
 
     /// Pending deep-link route awaiting the primary window (AND-597).
@@ -163,19 +164,14 @@ final class AppState {
         set { navigationModel.heatmapMode = newValue }
     }
 
-    /// When true, the dashboard lives in a floating desktop window instead of
-    /// the menu-bar popover (AND-384). Persisted so the window reopens on the
-    /// next launch. While detached, a click on the menu-bar item raises the
-    /// floating window rather than opening the popover; re-docking flips this
-    /// back to false and the popover resumes. Mirrors the `dashboard.detached`
-    /// `@AppStorage` key the Settings toggle writes, so the toggle and the
-    /// in-dashboard pin/re-dock controls stay in sync.
-    var isDashboardDetached = false {
-        didSet {
-            guard isDashboardDetached != oldValue else { return }
-            UserDefaults.standard.set(isDashboardDetached, forKey: Keys.dashboardDetached)
-        }
-    }
+    // AND-600: the menu-bar popover's presentation flag (`isPopoverPresented`) and
+    // the detached-dashboard intent (`isDashboardDetached`) no longer live on
+    // `AppState` as single-surface app-global storage. They moved onto the
+    // per-window ``NavigationModel`` (`appState.navigationModel.isPopoverPresented`
+    // / `.isDashboardDetached`), so a second window holds independent presentation
+    // and detach state. The legacy popover/escape-hatch path drives the menu bar's
+    // single model exactly as before; persistence of the detached intent is
+    // unchanged (still the `dashboard.detached` key, now owned by the model).
 
     /// Persisted across launches so configured installs boot straight into
     /// the dashboard instead of flashing first-run onboarding until the
@@ -674,9 +670,18 @@ final class AppState {
         self.notificationService = notificationService ?? NotificationService.shared
         self.readModelCacheEnabled = readModelCacheEnabled
         // The popover-window navigation model. Hydrates the last
-        // filter/selection/heatmap from the original UserDefaults keys, so
-        // persistence is preserved across the migration (façade).
-        self.navigationModel = navigationModel ?? NavigationModel()
+        // filter/selection/heatmap — and the detached-dashboard intent (AND-600) —
+        // from the original UserDefaults keys, so persistence is preserved across
+        // the migration (façade). Both headless renderers must hydrate the detached
+        // intent deterministically: a stale `dashboard.detached = true` would spawn
+        // the floating window and intercept either harness, so the snapshot flag is
+        // resolved here and threaded into the model's hydration (the resolution that
+        // previously lived in `loadSettings`). The snapshot harness builds its own
+        // off-screen popover; the window-first harness builds its own windows.
+        self.navigationModel = navigationModel ?? NavigationModel(
+            isRenderingSnapshot: CommandLineOptions.isRenderingSnapshot()
+                || CommandLineOptions.isRenderingWindowFirst()
+        )
         loadSettings()
         // Record whether Apple Foundation Models is available so the tier resolver
         // can prefer it (AND-563) and, when available, the insight service routes
@@ -799,24 +804,10 @@ final class AppState {
         loadPersistedWeeklyReviewState()
         // Launch at login
         launchAtLogin = LaunchService.isEnabled
-        // Detached-dashboard intent (AND-384). A headless snapshot render
-        // ignores the persisted intent so the popover-capture path stays
-        // deterministic regardless of host/CI defaults — otherwise a stale
-        // `dashboard.detached = true` would spawn the floating window and
-        // intercept the renderer's popover open. The stored value is left
-        // untouched (no write-back) so the real user preference survives.
-        let storedDetached = defaults.object(forKey: Keys.dashboardDetached) != nil
-            ? defaults.bool(forKey: Keys.dashboardDetached)
-            : nil
-        isDashboardDetached = DetachedDashboardPreferences.resolvedDetachedIntent(
-            storedValue: storedDetached,
-            // Both headless renderers must run deterministically: a stale
-            // `dashboard.detached = true` would spawn the floating window and
-            // intercept either harness. The window-first harness builds its own
-            // off-screen windows, so it likewise wants no detached popover.
-            isRenderingSnapshot: CommandLineOptions.isRenderingSnapshot()
-                || CommandLineOptions.isRenderingWindowFirst()
-        )
+        // Detached-dashboard intent (AND-384) is hydrated by `NavigationModel`
+        // (AND-600), which owns the `dashboard.detached` key and applies the same
+        // snapshot-render override (`DetachedDashboardPreferences.resolvedDetachedIntent`)
+        // the `AppState` init threads into the model. Nothing to resolve here.
     }
 
     private func loadAppLockPreferences(defaults: UserDefaults) {

@@ -486,6 +486,11 @@ struct GeneralSettingsView: View {
 
     var body: some View {
         @Bindable var state = appState
+        // The detached-dashboard intent moved onto the per-window navigation model
+        // (AND-600); bind directly off it since `appState.navigationModel` is a
+        // `let` (a `$state.navigationModel.…` chain can't form a writable binding
+        // through a `let`).
+        @Bindable var nav = appState.navigationModel
 
         Form {
             Section {
@@ -576,11 +581,11 @@ struct GeneralSettingsView: View {
 
                 // AND-384: pop the dashboard out of the menu bar into a
                 // floating desktop window the user can drag anywhere and that
-                // survives app-switches. Bound to AppState (single source of
-                // truth, persisted to the dashboard.detached key), so toggling
+                // survives app-switches. Bound to the per-window navigation model
+                // (AND-600; persisted to the dashboard.detached key), so toggling
                 // here opens/closes the floating window and stays in sync with
                 // the in-dashboard pin/dock control.
-                Toggle("Keep dashboard in a floating window", isOn: $state.isDashboardDetached)
+                Toggle("Keep dashboard in a floating window", isOn: $nav.isDashboardDetached)
                 Text("Detaches the dashboard from the menu bar into a movable desktop window that stays open when you switch apps. Click the menu bar item to bring it back to the front; dock it again from the window or this toggle.")
                     .detailText()
                     .fixedSize(horizontal: false, vertical: true)
@@ -590,7 +595,7 @@ struct GeneralSettingsView: View {
                 // original "monitor at a glance while you work" behavior — as an
                 // explicit opt-in rather than the default.
                 Toggle("Keep the floating window on top", isOn: $keepDashboardOnTop)
-                    .disabled(!state.isDashboardDetached)
+                    .disabled(!state.navigationModel.isDashboardDetached)
                 Text("Floats the window above other windows on every Space without taking focus from the app you're working in. Off (default): it behaves like a normal window — one Space, normal order, and visible in Mission Control and the Dock.")
                     .detailText()
                     .fixedSize(horizontal: false, vertical: true)

@@ -48,7 +48,7 @@ enum SnapshotRenderer {
 
         // Dashboard with no selection.
         UserDefaults.standard.set("", forKey: "dashboard.selectedAccountId")
-        appState.isPopoverPresented = true
+        appState.navigationModel.isPopoverPresented = true
         _ = await waitForPopoverWindow(appState: appState)
         try? await Task.sleep(for: .milliseconds(2200))
         if !capturePopoverWindow(to: directoryURL.appendingPathComponent("render-dashboard.png")) {
@@ -81,9 +81,9 @@ enum SnapshotRenderer {
         for attempt in 0..<attempts {
             if popoverWindow() != nil { return true }
             if attempt % 4 == 3 {
-                appState.isPopoverPresented = false
+                appState.navigationModel.isPopoverPresented = false
                 try? await Task.sleep(for: .milliseconds(150))
-                appState.isPopoverPresented = true
+                appState.navigationModel.isPopoverPresented = true
             }
             try? await Task.sleep(for: .milliseconds(500))
         }
