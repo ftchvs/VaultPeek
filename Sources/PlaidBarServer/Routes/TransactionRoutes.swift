@@ -93,7 +93,14 @@ struct TransactionRoutes: Sendable {
         request: Request,
         context: some RequestContext
     ) async throws -> HTTPResponse.Status {
-        let commitRequest = try await request.decode(as: SyncCursorCommitRequest.self, context: context)
+        // Decode with an explicit `.iso8601` strategy rather than the default
+        // context decoder. The app encodes `cursorUpdatedAts` as ISO-8601 date
+        // strings (`ServerClient`'s encoder), but the router's default
+        // `BasicRequestContext` decoder uses `.deferredToDate`, which would throw
+        // a `typeMismatch` on a populated map and fail the whole commit — leaving
+        // cursors unpersisted and `needsSync` permanently stuck. Mirrors the
+        // explicit-decoder convention in `BillingRoutes`/`ReviewRoutes`.
+        let commitRequest = try await Self.decodeCommitRequest(request)
         for (itemId, cursor) in commitRequest.cursors {
             guard let committableCursor = Self.normalizedCommittableCursor(cursor) else { continue }
             // Atomic existence-check + save: closes the TOCTOU between the
@@ -112,6 +119,23 @@ struct TransactionRoutes: Sendable {
     }
 
     // MARK: - Helpers
+
+    /// Upper bound for the small JSON cursor-commit payload.
+    private static let maxCommitBodyBytes = 256 * 1024
+
+    /// Decode a cursor-commit body with an explicit ISO-8601 date strategy so the
+    /// `cursorUpdatedAts` timestamps round-trip with what the app encoded.
+    private static func decodeCommitRequest(_ request: Request) async throws -> SyncCursorCommitRequest {
+        let buffer = try await request.body.collect(upTo: Self.maxCommitBodyBytes)
+        let data = Data(buffer: buffer)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        do {
+            return try decoder.decode(SyncCursorCommitRequest.self, from: data)
+        } catch {
+            throw HTTPError(.badRequest, message: "Malformed sync cursor commit")
+        }
+    }
 
     static func shouldFailSync(attemptedItemCount: Int, successfulItemCount: Int) -> Bool {
         attemptedItemCount > 0 && successfulItemCount == 0

@@ -2026,6 +2026,67 @@ struct PlaidBarServerTests {
         }
     }
 
+    @Test("Cursor commit decodes ISO-8601 cursorUpdatedAts over the HTTP boundary")
+    func cursorCommitDecodesISO8601UpdatedAts() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-cursor-commit-iso8601-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let databasePath = directory.appendingPathComponent("plaidbar-test.sqlite").path
+        let logger = Logger(label: "com.ftchvs.plaidbar-server-tests.cursor-commit-iso8601")
+        let client = DelayedRefreshPlaidClient(syncOutcomes: [:])
+
+        try await withTokenStore(databasePath: databasePath, logger: logger) { store, fluent in
+            try await ItemModel(
+                id: "item-a",
+                accessToken: "keychain:item-a",
+                institutionId: "ins-a",
+                institutionName: "Institution A"
+            ).save(on: fluent.db())
+            let route = TransactionRoutes(plaidClient: client, tokenStore: store, maxConcurrentItemRefreshes: 2)
+
+            // Mirror the real app client: ServerClient encodes the commit body —
+            // including the `cursorUpdatedAts` dates — with `.iso8601`. The server
+            // must decode that wire format. The router's default context decoder
+            // uses `.deferredToDate` and would throw a `typeMismatch` on these
+            // ISO-8601 date strings, so this drives the real HTTP decode boundary
+            // (regression guard for AND-667 cursor-commit decoding).
+            let cursorUpdatedAt = Date(timeIntervalSince1970: 1_800_000_000)
+            let commit = SyncCursorCommitRequest(
+                cursors: ["item-a": "cursor-after-sync"],
+                cursorUpdatedAts: ["item-a": cursorUpdatedAt]
+            )
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let body = try encoder.encode(commit)
+            var headers = HTTPFields()
+            headers[.contentType] = "application/json"
+            let request = Request(
+                head: HTTPRequest(
+                    method: .post,
+                    scheme: nil,
+                    authority: nil,
+                    path: "/api/transactions/sync/cursors",
+                    headerFields: headers
+                ),
+                body: RequestBody(buffer: ByteBuffer(data: body))
+            )
+
+            let status = try await route.commitSyncCursors(
+                request: request,
+                context: TestRequestContext(source: TestRequestContextSource())
+            )
+
+            #expect(status == .ok)
+            #expect(try await store.getSyncCursor(itemId: "item-a") == "cursor-after-sync")
+            // The cursor's observation time round-trips intact, so a stale cursor
+            // committed after a newer sync webhook stays stale (the PR's intent).
+            let updatedAts = try await store.syncCursorUpdatedAtsByItem()
+            #expect(updatedAts["item-a"] == cursorUpdatedAt)
+        }
+    }
+
     @Test("Concurrent syncs for the same item coalesce onto a single Plaid pass")
     func concurrentItemSyncsCoalesce() async throws {
         let directory = FileManager.default.temporaryDirectory
