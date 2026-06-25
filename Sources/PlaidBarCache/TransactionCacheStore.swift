@@ -61,7 +61,13 @@ public actor TransactionCacheStore {
 
     private let storeURL: URL?
     private let fileManager: FileManager
-    private var rowsByUniqueKey: [String: CachedTransaction]
+
+    /// In-memory rows, lazily hydrated from disk on first access. `nil` means the
+    /// store has not yet read its backing file — opening the actor performs **no**
+    /// disk I/O (AND-656 finding 3), so construction never blocks the MainActor
+    /// caller with a full-history JSON decode. The potentially large read+decode is
+    /// deferred to ``loadedRows()`` on the actor's own executor, off any UI path.
+    private var rowsByUniqueKey: [String: CachedTransaction]?
 
     private static var encoder: JSONEncoder {
         let encoder = JSONEncoder()
@@ -76,15 +82,55 @@ public actor TransactionCacheStore {
         return decoder
     }
 
-    init(storeURL: URL?, fileManager: FileManager = .default) throws {
+    /// Opens the store **without** touching disk. Constructing the actor is now a
+    /// pure, non-throwing handoff of the URL; the (potentially large) backing file
+    /// is read lazily on the actor's executor (see ``loadedRows()``), so a MainActor
+    /// caller never decodes the full transaction history synchronously during open
+    /// (AND-656 finding 3) — opening stays cheap and paging stays the bounded path.
+    init(storeURL: URL?, fileManager: FileManager = .default) {
         self.storeURL = storeURL
         self.fileManager = fileManager
-        if let storeURL, fileManager.fileExists(atPath: storeURL.path) {
-            let data = try Data(contentsOf: storeURL)
-            self.rowsByUniqueKey = try Self.decoder.decode(Snapshot.self, from: data).rowsByUniqueKey
-        } else {
-            self.rowsByUniqueKey = [:]
+        self.rowsByUniqueKey = nil
+    }
+
+    // MARK: - Lazy load / self-heal
+
+    /// The in-memory rows, hydrating from disk on first access.
+    ///
+    /// An **incompatible or corrupt backing file** (e.g. a pre-JSON SwiftData
+    /// `.store` that cannot decode as our `Snapshot`) is treated as a disposable
+    /// cache *miss*, not a hard failure: the unreadable file is discarded and the
+    /// store starts empty so the next refresh rebuilds it (AND-656 finding 2). The
+    /// disposable cache therefore never permanently disables itself and never loses
+    /// real data — the authoritative source is always the live in-memory data.
+    private func loadedRows() -> [String: CachedTransaction] {
+        if let rowsByUniqueKey { return rowsByUniqueKey }
+
+        guard let storeURL, fileManager.fileExists(atPath: storeURL.path) else {
+            rowsByUniqueKey = [:]
+            return [:]
         }
+
+        do {
+            let data = try Data(contentsOf: storeURL)
+            let rows = try Self.decoder.decode(Snapshot.self, from: data).rowsByUniqueKey
+            rowsByUniqueKey = rows
+            return rows
+        } catch {
+            // Undecodable file (incompatible/corrupt): discard it so the store
+            // self-heals into a clean miss instead of staying permanently broken.
+            discardIncompatibleStoreFile()
+            rowsByUniqueKey = [:]
+            return [:]
+        }
+    }
+
+    /// Removes the unreadable backing file so a subsequent ``persist()`` writes a
+    /// fresh, decodable snapshot. Best-effort: a failure to delete leaves the empty
+    /// in-memory state, and the next atomic write overwrites the file anyway.
+    private func discardIncompatibleStoreFile() {
+        guard let storeURL else { return }
+        try? fileManager.removeItem(at: storeURL)
     }
 
     // MARK: - Writes
@@ -96,14 +142,15 @@ public actor TransactionCacheStore {
     /// radius. One persistence write at the end.
     @discardableResult
     public func upsert(cacheKey: String, transactions: [TransactionDTO]) throws -> CachedTransactionUpsert.Plan {
-        let existingIds = existingTransactionIds(cacheKey: cacheKey)
+        var rows = loadedRows()
+        let existingIds = existingTransactionIds(in: rows, cacheKey: cacheKey)
         let plan = CachedTransactionUpsert.plan(incoming: transactions, existingIds: existingIds)
         guard !plan.rows.isEmpty else { return plan }
 
         for dto in plan.rows {
             let key = CachedTransaction.makeUniqueKey(cacheKey: cacheKey, transactionId: dto.id)
             let payload = try Self.encoder.encode(dto)
-            rowsByUniqueKey[key] = CachedTransaction(
+            rows[key] = CachedTransaction(
                 uniqueKey: key,
                 cacheKey: cacheKey,
                 transactionId: dto.id,
@@ -111,6 +158,7 @@ public actor TransactionCacheStore {
                 payload: payload
             )
         }
+        rowsByUniqueKey = rows
         try persist()
         invalidateOrderCache()
         return plan
@@ -122,7 +170,10 @@ public actor TransactionCacheStore {
     /// do not linger in the cache.
     @discardableResult
     public func replaceAll(cacheKey: String, transactions: [TransactionDTO]) throws -> CachedTransactionUpsert.Plan {
-        rowsByUniqueKey.removeAll()
+        // Replacing the whole history starts from empty regardless of any on-disk
+        // content, so this never needs to (and never triggers) a decode of an
+        // incompatible file before the subsequent `upsert` rebuilds it.
+        rowsByUniqueKey = [:]
         try persist()
         invalidateOrderCache()
         return try upsert(cacheKey: cacheKey, transactions: transactions)
@@ -136,7 +187,10 @@ public actor TransactionCacheStore {
     /// on this actor drops itself rather than repopulating wiped rows (AND-633).
     public func clearAll() throws {
         clearGeneration &+= 1
-        rowsByUniqueKey.removeAll()
+        // The store becomes empty regardless of any on-disk content, so a clear
+        // unconditionally wins and rewrites a fresh empty snapshot without first
+        // decoding a (possibly incompatible) file.
+        rowsByUniqueKey = [:]
         try persist()
         invalidateOrderCache()
     }
@@ -205,7 +259,7 @@ public actor TransactionCacheStore {
         if let cached = orderCache, cached.generation == dataGeneration, cached.cacheKey == cacheKey {
             return cached.rows
         }
-        let ordered = rowsByUniqueKey.values
+        let ordered = loadedRows().values
             .filter { $0.cacheKey == cacheKey }
             .sorted(by: Self.isNewerFirst)
         orderCache = (dataGeneration, cacheKey, ordered)
@@ -219,15 +273,18 @@ public actor TransactionCacheStore {
         orderCache = nil
     }
 
-    /// The transaction ids currently stored for `cacheKey`. Used inside `upsert`
-    /// to decide insert-vs-update.
-    private func existingTransactionIds(cacheKey: String) -> Set<String> {
-        Set(rowsByUniqueKey.values.filter { $0.cacheKey == cacheKey }.map(\.transactionId))
+    /// The transaction ids in `rows` for `cacheKey`. Used inside `upsert` to decide
+    /// insert-vs-update over the already-loaded snapshot (avoids re-reading disk).
+    nonisolated private func existingTransactionIds(
+        in rows: [String: CachedTransaction],
+        cacheKey: String
+    ) -> Set<String> {
+        Set(rows.values.filter { $0.cacheKey == cacheKey }.map(\.transactionId))
     }
 
     private func persist() throws {
         guard let storeURL else { return }
-        let data = try Self.encoder.encode(Snapshot(rowsByUniqueKey: rowsByUniqueKey))
+        let data = try Self.encoder.encode(Snapshot(rowsByUniqueKey: rowsByUniqueKey ?? [:]))
         try fileManager.createDirectory(
             at: storeURL.deletingLastPathComponent(),
             withIntermediateDirectories: true,

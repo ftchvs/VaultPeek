@@ -97,8 +97,35 @@ struct WindowHeroMetricTile: View {
     /// Rolls the figure on change (disabled under Reduce Motion). Pass the live
     /// `reduceMotion` environment value.
     var reduceMotion: Bool
+    /// Optional "where from / how fresh / what excluded" provenance for the figure
+    /// (AND-641). When set, an info affordance is shown beside the label; tapping it
+    /// explains the number's sources, freshness, and exclusions. Already
+    /// privacy-mask-aware (built masked when values are hidden).
+    var provenance: FigureProvenance?
 
     var body: some View {
+        VStack(alignment: .leading, spacing: WindowMetrics.xs) {
+            HStack(alignment: .firstTextBaseline, spacing: WindowMetrics.xs) {
+                // The figure (label + value + detail) reads as one VoiceOver
+                // element; the provenance affordance, when present, stays a
+                // separately-focusable control beside it (AND-641).
+                figure
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(accessibilityLabel)
+
+                if let provenance {
+                    Spacer(minLength: WindowMetrics.xs)
+                    ProvenancePopoverButton(provenance: provenance)
+                }
+            }
+        }
+        .padding(WindowMetrics.md)
+        .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
+        .windowCardSurface()
+        .accessibilityElement(children: .contain)
+    }
+
+    private var figure: some View {
         VStack(alignment: .leading, spacing: WindowMetrics.xs) {
             Label {
                 Text(label)
@@ -127,11 +154,7 @@ struct WindowHeroMetricTile: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(WindowMetrics.md)
-        .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
-        .windowCardSurface()
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityLabel)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var accessibilityLabel: String {

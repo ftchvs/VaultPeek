@@ -47,7 +47,7 @@ struct ReadModelCacheClearRaceTests {
     /// This is exactly the ordering the app-side gate prevents.
     @Test("stale write after clear resurrects removed balances (the bug the gate prevents)")
     func staleWriteAfterClearResurrects() async throws {
-        let store = try ReadModelCacheStore(inMemory: true)
+        let store = ReadModelCacheStore(inMemory: true)
         let key = "sandbox|/x"
 
         // Prior non-empty refresh persisted a row.
@@ -66,7 +66,7 @@ struct ReadModelCacheClearRaceTests {
     /// clear request ensures — the cold-start load is a clean miss.
     @Test("clear sequenced after a stale write wins; cold start sees no removed balances")
     func clearAfterStaleWriteWins() async throws {
-        let store = try ReadModelCacheStore(inMemory: true)
+        let store = ReadModelCacheStore(inMemory: true)
         let key = "sandbox|/x"
 
         try await store.save(nonEmptyModel(cacheKey: key))
@@ -163,7 +163,7 @@ struct ReadModelCacheClearRaceTests {
     /// no in-flight write can survive it.
     @Test("terminal clear after concurrent persists always wins")
     func terminalClearWinsOverConcurrentPersists() async throws {
-        let store = try ReadModelCacheStore(inMemory: true)
+        let store = ReadModelCacheStore(inMemory: true)
         let key = "sandbox|/x"
         let model = nonEmptyModel(cacheKey: key)
 

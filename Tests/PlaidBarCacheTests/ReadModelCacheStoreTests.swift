@@ -34,7 +34,7 @@ struct ReadModelCacheStoreTests {
 
     @Test("write then read returns an equal read-model (round-trip)")
     func roundTrip() async throws {
-        let store = try ReadModelCacheStore(inMemory: true)
+        let store = ReadModelCacheStore(inMemory: true)
         let model = sampleModel()
 
         try await store.save(model)
@@ -45,14 +45,14 @@ struct ReadModelCacheStoreTests {
 
     @Test("load returns nil for an unknown key (cold miss)")
     func missReturnsNil() async throws {
-        let store = try ReadModelCacheStore(inMemory: true)
+        let store = ReadModelCacheStore(inMemory: true)
         let loaded = try await store.load(cacheKey: "never|written")
         #expect(loaded == nil)
     }
 
     @Test("save upserts: a second save replaces the row for the same key")
     func upsert() async throws {
-        let store = try ReadModelCacheStore(inMemory: true)
+        let store = ReadModelCacheStore(inMemory: true)
         let key = "sandbox|/x"
 
         try await store.save(sampleModel(cacheKey: key))
@@ -71,7 +71,7 @@ struct ReadModelCacheStoreTests {
 
     @Test("two environments keep independent rows (no cross-environment bleed)")
     func environmentScoping() async throws {
-        let store = try ReadModelCacheStore(inMemory: true)
+        let store = ReadModelCacheStore(inMemory: true)
         let sandbox = sampleModel(cacheKey: "sandbox|/x")
         let production = DashboardReadModelMapper.makeReadModel(
             cacheKey: "production|/x",
@@ -89,7 +89,7 @@ struct ReadModelCacheStoreTests {
 
     @Test("a stale-schema row reads as a miss and is purged (disposable upgrade)")
     func staleSchemaPurged() async throws {
-        let store = try ReadModelCacheStore(inMemory: true)
+        let store = ReadModelCacheStore(inMemory: true)
         let key = "sandbox|/x"
         // Persist a row tagged with an older schema version directly through the
         // store so we exercise the version sweep on load.
@@ -111,7 +111,7 @@ struct ReadModelCacheStoreTests {
 
     @Test("clear removes a key; clearAll empties the store")
     func clearing() async throws {
-        let store = try ReadModelCacheStore(inMemory: true)
+        let store = ReadModelCacheStore(inMemory: true)
         try await store.save(sampleModel(cacheKey: "a|/x"))
         try await store.save(sampleModel(cacheKey: "b|/x"))
 
@@ -132,7 +132,7 @@ struct ReadModelCacheStoreTests {
     /// hydration.
     @Test("empty/disabled cache produces no hydration (no cold-start regression)")
     func emptyCacheIsANoOp() async throws {
-        let store = try ReadModelCacheStore(inMemory: true)
+        let store = ReadModelCacheStore(inMemory: true)
 
         // Empty store: a load is a clean miss.
         let loaded = try await store.load(cacheKey: "sandbox|/x")
@@ -159,7 +159,7 @@ struct ReadModelCacheStoreTests {
 
     @Test("hydrate from a loaded row yields the dashboard DTOs")
     func hydrateFromLoaded() async throws {
-        let store = try ReadModelCacheStore(inMemory: true)
+        let store = ReadModelCacheStore(inMemory: true)
         let model = sampleModel()
         try await store.save(model)
 
@@ -176,7 +176,7 @@ struct ReadModelCacheStoreTests {
             .appendingPathComponent("vaultpeek-readmodel-test-\(UUID().uuidString)", isDirectory: true)
         defer { try? fileManager.removeItem(at: directory) }
 
-        let store = try ReadModelCacheStore(onDiskIn: directory)
+        let store = ReadModelCacheStore(onDiskIn: directory)
         let model = sampleModel()
         try await store.save(model)
         #expect(try await store.load(cacheKey: model.cacheKey) == model)
@@ -200,12 +200,12 @@ struct ReadModelCacheStoreTests {
 
         let model = sampleModel()
         do {
-            let store = try ReadModelCacheStore(onDiskIn: directory)
+            let store = ReadModelCacheStore(onDiskIn: directory)
             try await store.save(model)
         }
         // A brand-new store actor over the same on-disk file still reads the row,
         // proving persistence survives an AppState/process restart.
-        let reopened = try ReadModelCacheStore(onDiskIn: directory)
+        let reopened = ReadModelCacheStore(onDiskIn: directory)
         #expect(try await reopened.load(cacheKey: model.cacheKey) == model)
     }
 }
