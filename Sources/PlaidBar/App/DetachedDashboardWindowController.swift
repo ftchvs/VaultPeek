@@ -420,6 +420,9 @@ final class DetachedDashboardWindowController: NSObject, NSWindowDelegate {
                 // Apply the in-app text-size preference so the floating desktop
                 // dashboard scales with the same control as the popover (AND-570).
                 .appliesAppTextSize()
+                // Tint the floating desktop dashboard with the same accent
+                // preference as every other surface (AND-647).
+                .appliesAppAccent()
                 // The panel owns its own width via resize; let the dashboard fill
                 // it rather than imposing the popover's screen-anchored width math.
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

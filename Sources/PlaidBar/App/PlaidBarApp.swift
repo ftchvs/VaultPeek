@@ -137,6 +137,7 @@ struct PlaidBarApp: App {
                 .forcedAppColorScheme(Self.forcedColorScheme)
                 .appliesAppAppearance()
                 .appliesAppTextSize()
+                .appliesAppAccent()
         } else {
             MainPopover()
                 .environment(appState)
@@ -176,6 +177,7 @@ struct PlaidBarApp: App {
                 // so this control is the only way users can enlarge VaultPeek's
                 // text (AND-570).
                 .appliesAppTextSize()
+                .appliesAppAccent()
         }
     }
 
@@ -497,6 +499,9 @@ struct PlaidBarApp: App {
                 // Scale the Settings window too, so the user sees the text-size
                 // change reflected in the very control they are adjusting (AND-570).
                 .appliesAppTextSize()
+                // Tint Settings too, so the accent picker's effect is visible in
+                // the very window the user is adjusting (AND-647).
+                .appliesAppAccent()
         }
 
         // Window-first primary workspace (Epic 1 / AND-591). The scene is
@@ -527,6 +532,7 @@ struct PlaidBarApp: App {
                 // competing setter to flash a wrong first-paint theme.
                 .appliesAppAppearance()
                 .appliesAppTextSize()
+                .appliesAppAccent()
                 // Elevate `.accessory → .regular` while this window is on screen and
                 // drop back when the last managed window closes, via the shared
                 // refcounted coordinator (AND-620). SwiftUI gives a
@@ -747,6 +753,14 @@ struct PlaidBarApp: App {
         }
     }
 
+    /// The accent color forced by the `--accent` CLI flag (QA/screenshot aid:
+    /// `--accent system|blue|purple|…`), or `nil` to follow the stored preference.
+    /// Mirrors `forcedColorScheme`/`forcedTextSizePreference`; lets a QA pass cover
+    /// a specific brand accent without leaving a durable preference behind (AND-647).
+    static var forcedAccentColor: AppAccentColor? {
+        CommandLineOptions.value(for: "--accent").flatMap(AppAccentColor.init(rawValue:))
+    }
+
     /// The in-app text-size preference forced by the `--text-size` CLI flag
     /// (QA/screenshot aid: `--text-size default|large|xLarge|accessibility`), or
     /// `nil` to follow the stored preference. Mirrors `forcedColorScheme`; lets a
@@ -844,6 +858,35 @@ struct AppTextSizeApplier: ViewModifier {
 
     func body(content: Content) -> some View {
         content.dynamicTypeSize(resolvedSize)
+    }
+}
+
+/// Applies the stored accent-color preference as the SwiftUI `.tint` at the scene
+/// root, so every surface that reads `Color.accentColor`/`SemanticColors.brand`
+/// (hero glyphs, active controls, selection washes) re-tints live when the user
+/// picks a different accent (AND-647). The accent is **decorative/brand only** —
+/// it is never used to convey over/under budget, gain/loss, currency, or status,
+/// which keep their own semantic colors plus non-color cues. "System" applies no
+/// tint so the macOS accent is inherited. The `--accent` CLI override (QA aid)
+/// wins over the stored preference, mirroring `AppTextSizeApplier`. Reading
+/// `@AppStorage` here re-tints the whole subtree the instant the Settings picker
+/// changes the value.
+struct AppAccentApplier: ViewModifier {
+    @AppStorage(AppAccentColor.storageKey) private var accentRaw = AppAccentColor.defaultValue.rawValue
+
+    private var resolvedTint: Color? {
+        let stored = AppAccentColor(rawValue: accentRaw) ?? .system
+        guard let swatch = AppAccentColor.resolvedSwatch(
+            cliOverride: PlaidBarApp.forcedAccentColor,
+            storedAccent: stored
+        ) else { return nil }
+        return Color(accentSwatch: swatch)
+    }
+
+    func body(content: Content) -> some View {
+        // `.tint(nil)` is a no-op that follows the system accent, so "System"
+        // never overrides the user's macOS-wide choice.
+        content.tint(resolvedTint)
     }
 }
 
@@ -953,6 +996,16 @@ extension View {
     /// in `App/` can share the one definition.
     func appliesAppTextSize() -> some View {
         modifier(AppTextSizeApplier())
+    }
+
+    /// Applies the stored accent-color preference as the SwiftUI `.tint` at this
+    /// point in the tree (AND-647). Used at every scene/window root — the popover,
+    /// menu-bar label, Settings, and the three detached AppKit-hosted windows — so
+    /// the chosen brand accent tints every surface uniformly. Internal (not
+    /// file-private) so the window controllers in `App/` can share the one
+    /// definition, exactly like `appliesAppTextSize()`.
+    func appliesAppAccent() -> some View {
+        modifier(AppAccentApplier())
     }
 
     /// Applies the window-first shell's chrome background (Liquid Glass on chrome
