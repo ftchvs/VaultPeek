@@ -16,7 +16,7 @@ executable names below intentionally keep the PlaidBar name; see
 | `PlaidBar` | SwiftUI menu bar app, popover, setup flow, settings, local client calls, notification UX | Store Plaid secrets, call Plaid directly, contain server persistence logic |
 | `PlaidBarCore` | Shared DTOs, formatting, sync reducers, recurring detection, dashboard presenters, attention queue models, local insight receipt models, local data path helpers | Depend on SwiftUI, Hummingbird, Plaid network clients, or cloud AI SDKs |
 | `PlaidBarServer` | Hummingbird localhost API, Plaid API client, SQLite storage, link flow, token vault, auth middleware | Render UI, depend on app state, expose secrets in status responses |
-| `PlaidBarCache` | App-only disposable SwiftData read-model cache (`@Model` + `@ModelActor`) for instant cold render and offline reads, scoped per Plaid environment | Become a source of truth, reach the server/CLI/widget targets, write to the App Group container, or sync to iCloud |
+| `PlaidBarCache` | App-only disposable file-backed read-model cache (actor-isolated stores persisting a `Codable` JSON snapshot) for instant cold render and offline reads, scoped per Plaid environment | Become a source of truth, reach the server/CLI/widget targets, write to the App Group container, or sync to iCloud |
 
 ## Runtime Topology
 
@@ -181,6 +181,15 @@ independent gates — the redacted-at-write glance file **and** the read-time
 `FinanceSnapshot.isMasked` check (the widget shows its placeholder/unavailable
 state when masked) — so a reader that ignored `isMasked` would still find no real
 net-worth, today's-change, or sparkline values on disk to leak.
+
+The display-only Core Spotlight account index (`AccountSpotlightIndexer`) is kept
+in lockstep with the same seam: `refresh(accounts:isMasked:)` clears the index
+whenever masked, so account names leave system search immediately on a Privacy
+Mask / App Lock transition. A *pending* background Privacy Mask ON command (set
+via Control Center or a Focus filter while the app is backgrounded) is also
+treated as masked — `PrivacyMaskControlCommandReader.peek()` is consulted on the
+snapshot/Spotlight write path — so an automatic refresh cannot re-publish account
+names before the next activation consumes the command (AND-513, hardened in #644).
 
 If a future change adds any field to `GlanceSnapshot` or `FinanceSnapshot`, it
 must be reviewed against this boundary, `SECURITY.md`, and the status-endpoint

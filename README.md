@@ -444,14 +444,14 @@ PlaidBar/                            # repo checkout (repo rename pending)
 │   ├── PlaidBarCore/                # Shared library
 │   │   ├── Models/                  # DTOs, dashboard presenters, local AI receipts, routes, goals
 │   │   └── Utilities/               # Currency formatters, constants, reducers
-│   └── PlaidBarCache/               # App-only disposable SwiftData read-model cache
+│   └── PlaidBarCache/               # App-only disposable file-backed read-model cache
 ├── Tests/                           # Swift Testing suites for the app, server, core, and cache libraries
 ├── Scripts/                         # build.sh, run.sh, screenshots.sh
 ├── Assets/                          # README screenshots
 ├── DESIGN.md                        # Design system spec
 ├── PRD.md                           # Product requirements
 ├── .github/workflows/ci.yml        # GitHub Actions CI
-├── Package.swift                    # SPM with 6 source targets (app, widget extension, server, CLI, core, app-only SwiftData cache)
+├── Package.swift                    # SPM with 6 source targets (app, widget extension, server, CLI, core, app-only file-backed cache)
 └── LICENSE                          # Proprietary
 ```
 

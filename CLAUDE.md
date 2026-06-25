@@ -42,13 +42,13 @@ swiftlint
 
 ## Architecture: two processes, one shared library
 
-Three core SPM targets in `Package.swift` define the security split (the package also builds a widget extension, a CLI, and an app-only SwiftData cache — see below). The split is a hard security boundary, not just organization:
+Three core SPM targets in `Package.swift` define the security split (the package also builds a widget extension, a CLI, and an app-only file-backed read-model cache — see below). The split is a hard security boundary, not just organization:
 
 - **`PlaidBar`** (`Sources/PlaidBar/`) — SwiftUI `MenuBarExtra` app. The UI layer. It **only** talks to the local server over HTTP; it never sees Plaid `client_secret` or `access_token`.
 - **`PlaidBarServer`** (`Sources/PlaidBarServer/`) — Hummingbird 2 companion server. Proxies all Plaid API calls, owns credentials and token storage. Binds to `127.0.0.1` only.
 - **`PlaidBarCore`** (`Sources/PlaidBarCore/`) — shared library. DTOs (`Models/`) and pure utilities (`Utilities/`) used by both. **Most testable business logic lives here** — summaries, formatters, recurring detection, sync reduction, presentation/state mapping, typed routing/navigation state, goals. Prefer adding logic here over embedding it in views or routes.
 
-Additional targets: **`PlaidBarCache`** (`Sources/PlaidBarCache/`) — app-only library holding the disposable SwiftData read-model cache (`@Model` + `@ModelActor` store, AND-566). It is kept out of the lean server/CLI/widget targets so the SwiftData dependency never reaches them; the pure read-model and mapper stay in `PlaidBarCore`. The cache is disposable, rebuildable, scoped per Plaid environment, and written only to the private data dir (see `SECURITY.md`). **`PlaidBarWidgetExtension`** and **`PlaidBarCLI`** (`plaidbar-cli`) round out the source targets.
+Additional targets: **`PlaidBarCache`** (`Sources/PlaidBarCache/`) — app-only library holding the disposable file-backed read-model cache (actor-isolated stores persisting a `Codable` JSON snapshot to the private data dir, AND-566). It is kept out of the lean server/CLI/widget targets so private financial cache reads stay confined to the app; the pure read-model and mapper stay in `PlaidBarCore`. The cache is disposable, rebuildable, scoped per Plaid environment, and written only to the private data dir (see `SECURITY.md`). **`PlaidBarWidgetExtension`** and **`PlaidBarCLI`** (`plaidbar-cli`) round out the source targets.
 
 Data flow: `PlaidBar.app` → HTTP `localhost:8484` → `PlaidBarServer` → HTTPS → Plaid API.
 

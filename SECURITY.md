@@ -68,30 +68,30 @@ Use GitHub private vulnerability reporting if available, or contact the reposito
 - Existing legacy `plaidbar.sqlite` data, SQLite sidecar files, and matching transaction cache are copied into a scoped database only when the legacy environment is explicit (`PLAIDBAR_MIGRATE_LEGACY_DATABASE=sandbox|production`) or can be inferred from the existing transaction-cache context. Ambiguous legacy databases are left untouched to avoid sandbox/production token crossover. Explicit migration can replace an existing scoped store, backs up the previous scoped SQLite store and transaction cache before copying legacy data, and writes a migration marker so restarts do not reapply stale legacy data.
 - The app/server auth token is generated locally under `~/.vaultpeek/auth-token`
   (or `$PLAIDBAR_DATA_DIR/auth-token`).
-- The disposable SwiftData read-model cache (AND-566) accelerates cold render and
+- The disposable file-backed read-model cache (AND-566) accelerates cold render and
   offline reads. It holds financial values and Plaid identifiers, so — like the
   existing `accounts.json` / `transactions.json` caches — it is written **only**
   into the local private data dir (`~/.vaultpeek/dashboard-read-model-cache-v1.store`
   plus the per-transaction `transaction-cache-v1.store`, or `$PLAIDBAR_DATA_DIR`),
-  with the directory at `0o700` and the store files (and their `-wal`/`-shm`
-  sidecars) tightened to `0o600`. `transaction-cache-v1.store` mirrors the full
-  transaction history (transaction IDs, account IDs, merchant names, amounts), so
-  it is the more sensitive of the two and must not be overlooked in a local-data
-  audit. Both use `ModelConfiguration(..., cloudKitDatabase: .none)`, so neither
-  is **ever** synced to iCloud, and neither is **ever** written to the
-  world-readable App Group container — that boundary remains exclusive to the
-  redacted glance / `FinanceSnapshot` payloads. The cache is a **disposable**
-  read-model: rebuildable from the authoritative in-memory/JSON data, never a
-  source of truth, scoped per Plaid environment, and safe to delete at any time.
+  with the directory at `0o700` and the store files tightened to `0o600`. Each
+  store is a single plain JSON snapshot written by an actor-isolated store type —
+  there are no SQLite `-wal`/`-shm` sidecars. `transaction-cache-v1.store` mirrors
+  the full transaction history (transaction IDs, account IDs, merchant names,
+  amounts), so it is the more sensitive of the two and must not be overlooked in a
+  local-data audit. Being local-only JSON files, neither is **ever** synced to
+  iCloud, and neither is **ever** written to the world-readable App Group
+  container — that boundary remains exclusive to the redacted glance /
+  `FinanceSnapshot` payloads. The cache is a **disposable** read-model:
+  rebuildable from the authoritative in-memory/JSON data, never a source of truth,
+  scoped per Plaid environment, and safe to delete at any time.
   `clearReadModelCache()` deletes both stores on local reset and when the last
   institution is removed, but **only when a usable `ReadModelCacheStore` can be
-  opened**; if SwiftData is unavailable or the store cannot be opened it returns
-  without deleting, so both `.store` files (and their sidecars) can survive a
-  reset on disk. `LocalDataStore.resetLocalData` separately removes the
-  JSON/scoped caches, Plaid SQLite files, pending-link state, goals, and logo
-  cache. If SwiftData is unavailable or the store fails to open/read/write, the
-  app falls back to its existing JSON/UserDefaults cold path with no behavior
-  change.
+  opened**; if the store cannot be opened it returns without deleting, so both
+  `.store` files can survive a reset on disk. `LocalDataStore.resetLocalData`
+  separately removes the JSON/scoped caches, Plaid SQLite files, pending-link
+  state, goals, and logo cache. Every cache read/write `throws` and callers wrap
+  in `try?`, so if a store file fails to open/read/write, the app falls back to
+  its existing JSON/UserDefaults cold path with no behavior change.
 - `/api/status` is authenticated and exposes readiness metadata: version,
   environment, credential availability, storage path, linked item count,
   synced item count, sync readiness, and last sync time. With the opt-in
