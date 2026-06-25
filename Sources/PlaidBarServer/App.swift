@@ -1,4 +1,5 @@
 import ArgumentParser
+import CryptoKit
 import FluentSQLiteDriver
 import Foundation
 import Hummingbird
@@ -101,6 +102,8 @@ struct PlaidBarServer: AsyncParsableCommand {
         .register(with: api)
         AccountRoutes(plaidClient: plaidClient, tokenStore: tokenStore)
             .register(with: api)
+        InvestmentRoutes(plaidClient: plaidClient, tokenStore: tokenStore)
+            .register(with: api)
         MerchantLogoRoutes(
             cacheDirectory: URL(fileURLWithPath: serverConfig.dataDirectoryPath, isDirectory: true)
                 .appendingPathComponent("logo-cache", isDirectory: true)
@@ -138,7 +141,7 @@ struct PlaidBarServer: AsyncParsableCommand {
         )
         .register(with: router)
         WebhookRoutes(
-            verifier: StrictPlaidWebhookVerifier(),
+            verifier: Self.webhookVerifier(config: serverConfig, logger: logger),
             tokenStore: tokenStore,
             eventStore: webhookEventStore
         )
@@ -185,6 +188,57 @@ struct PlaidBarServer: AsyncParsableCommand {
                     break
                 }
             }
+        }
+    }
+
+    /// Selects the webhook JWT verifier (AND-646). GATED: by default
+    /// (`webhookVerification.enabled == false`) this returns the exact same
+    /// `StrictPlaidWebhookVerifier()` the server has always wired — its default
+    /// `UnconfiguredPlaidWebhookSignatureValidator` always throws, so the
+    /// receiver stays dormant and shipped behavior is byte-for-byte unchanged.
+    /// The real ES256 validator is only constructed when the operator explicitly
+    /// opts in; if the opt-in is present but supplies no parseable signing key,
+    /// the validator is still wired but trusts no key (it rejects every
+    /// delivery), so processing remains inert from the user's perspective.
+    static func webhookVerifier(
+        config: ServerConfig,
+        logger: Logger
+    ) -> any PlaidWebhookVerifier {
+        guard config.webhookVerification.enabled else {
+            return StrictPlaidWebhookVerifier()
+        }
+        let keySource = StaticPlaidWebhookKeySource(
+            keysByID: pinnedWebhookKeys(config: config, logger: logger)
+        )
+        logger.info("Plaid webhook signature verification ENABLED (opt-in).")
+        return StrictPlaidWebhookVerifier(
+            signatureValidator: ES256PlaidWebhookSignatureValidator(keySource: keySource)
+        )
+    }
+
+    /// Parses the optional operator-pinned signing key (JWK JSON) into a
+    /// `kid`-indexed key set. Returns an empty set (verifier rejects everything)
+    /// if absent or unparseable, never crashing the server boot.
+    private static func pinnedWebhookKeys(
+        config: ServerConfig,
+        logger: Logger
+    ) -> [String: P256.Signing.PublicKey] {
+        guard let json = config.webhookVerification.signingKeyJWKJSON,
+              let data = json.data(using: .utf8)
+        else {
+            logger.warning("Webhook verification enabled but no signing key configured; all deliveries will be rejected.")
+            return [:]
+        }
+        do {
+            let jwk = try JSONDecoder().decode(PlaidWebhookJWK.self, from: data)
+            guard let kid = jwk.kid, !kid.isEmpty else {
+                logger.warning("Configured webhook signing JWK has no `kid`; all deliveries will be rejected.")
+                return [:]
+            }
+            return [kid: try jwk.publicKey()]
+        } catch {
+            logger.warning("Failed to parse configured webhook signing JWK: \(String(describing: error)); all deliveries will be rejected.")
+            return [:]
         }
     }
 }

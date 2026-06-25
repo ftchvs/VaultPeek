@@ -104,3 +104,55 @@ struct RemoteBridgeConfig: Sendable, Equatable {
         )
     }
 }
+
+/// Opt-in configuration for real Plaid webhook signature verification (AND-646).
+///
+/// GATED / NON-ACTIVATING BY DEFAULT. The shipped server keeps the dormant
+/// webhook receiver: it wires `UnconfiguredPlaidWebhookSignatureValidator`,
+/// which always throws, so no inbound webhook is ever accepted unless the
+/// operator explicitly opts in. This config records *whether* the real ES256
+/// validator should be wired and, optionally, a statically pinned EC public key
+/// (JWK JSON) to verify against. Until `enabled` is `true`, nothing constructs
+/// the real validator and the receiver stays off exactly as before.
+///
+/// `enabled` is parsed from `PLAIDBAR_WEBHOOK_VERIFICATION` (`on`/`true`/`1`);
+/// any other value (including absent) resolves to disabled — a malformed config
+/// can never silently activate webhook processing. The optional pinned key is
+/// read from `PLAIDBAR_WEBHOOK_SIGNING_JWK` (the JWK JSON Plaid returns from
+/// `/webhook_verification_key/get`), letting an operator verify against a known
+/// key without any live key fetch. Any hosted relay stores nothing — this is a
+/// local verification posture only.
+struct PlaidWebhookVerificationConfig: Sendable, Equatable {
+    /// When `false` (the default), the real signature validator is never wired
+    /// and the webhook receiver stays dormant.
+    let enabled: Bool
+
+    /// Optional statically pinned signing key, as the JWK JSON Plaid serves. When
+    /// present and `enabled`, the real validator verifies against this key by its
+    /// `kid`. `nil` keeps the validator wired but with no trusted key (it will
+    /// reject every delivery), which is still inert from the user's perspective.
+    let signingKeyJWKJSON: String?
+
+    /// Disabled, no pinned key — today's behavior. The default everywhere.
+    static let disabled = PlaidWebhookVerificationConfig(enabled: false, signingKeyJWKJSON: nil)
+
+    static let enabledEnvironmentVariable = "PLAIDBAR_WEBHOOK_VERIFICATION"
+    static let signingKeyEnvironmentVariable = "PLAIDBAR_WEBHOOK_SIGNING_JWK"
+
+    /// Resolve from a config/env dictionary. Defaults to `.disabled`; only the
+    /// explicit affirmative tokens enable it, so the dormant receiver can never
+    /// be activated by a typo or a blank value.
+    static func resolved(from environment: [String: String]) -> PlaidWebhookVerificationConfig {
+        let rawEnabled = environment[enabledEnvironmentVariable]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let enabled = ["on", "true", "1", "yes"].contains(rawEnabled ?? "")
+        guard enabled else { return .disabled }
+        let key = environment[signingKeyEnvironmentVariable]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return PlaidWebhookVerificationConfig(
+            enabled: true,
+            signingKeyJWKJSON: (key?.isEmpty == false) ? key : nil
+        )
+    }
+}

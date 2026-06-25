@@ -13,7 +13,9 @@ protocol NotificationServiceProtocol {
         recurringTransactions: [RecurringTransaction],
         itemStatuses: [ItemStatus],
         watchlistTargets: [WatchlistTarget],
+        budgetPresentation: CategoryBudgetPresentation,
         isSyncStale: Bool,
+        privacyMaskActive: Bool,
         config: NotificationTriggers
     ) async
 }
@@ -123,7 +125,9 @@ final class NotificationService: NotificationServiceProtocol {
         recurringTransactions: [RecurringTransaction],
         itemStatuses: [ItemStatus],
         watchlistTargets: [WatchlistTarget] = [],
+        budgetPresentation: CategoryBudgetPresentation = .empty,
         isSyncStale: Bool,
+        privacyMaskActive: Bool = false,
         config: NotificationTriggers
     ) async {
         let evaluation = NotificationTriggerSelection.evaluate(
@@ -132,7 +136,9 @@ final class NotificationService: NotificationServiceProtocol {
             recurringTransactions: recurringTransactions,
             itemStatuses: itemStatuses,
             watchlistTargets: watchlistTargets,
+            budgetPresentation: budgetPresentation,
             isSyncStale: isSyncStale,
+            privacyMaskActive: privacyMaskActive,
             config: config,
             deliveredDedupKeys: deliveredDedupKeySet
         )

@@ -87,6 +87,30 @@ struct PlaidBarTests {
         #expect(Set(pngs) == expected, "got PNGs: \(pngs)")
     }
 
+    @Test("Window-first orientation waits for unlocked content and persists user dismissal")
+    func windowFirstOrientationRequiresUnlockedContent() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let appStateSource = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/App/AppState.swift"),
+            encoding: .utf8
+        )
+        let appSource = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/App/PlaidBarApp.swift"),
+            encoding: .utf8
+        )
+
+        let gateRange = try #require(appStateSource.range(of: "var shouldShowWindowFirstOrientation: Bool"))
+        let gateBlock = String(appStateSource[gateRange.lowerBound...].prefix(500))
+        #expect(gateBlock.contains("&& !isContentLocked"))
+
+        let modifierRange = try #require(appSource.range(of: "private struct WindowFirstOrientationSheet"))
+        let modifierBlock = String(appSource[modifierRange.lowerBound...].prefix(2_500))
+        #expect(modifierBlock.contains(".sheet(isPresented: $isPresented, onDismiss: handleDismiss)"))
+        #expect(modifierBlock.contains("suppressNextDismissPersistence = true"))
+        #expect(modifierBlock.contains("guard appState.shouldShowWindowFirstOrientation else { return }"))
+        #expect(modifierBlock.contains("appState.dismissWindowFirstOrientation()"))
+    }
+
     @Test("Window-first Goals and Planning mask amount-derived progress while Privacy Mask is active")
     func windowFirstGoalsProgressUsesPrivacyMask() throws {
         let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
@@ -143,6 +167,38 @@ struct PlaidBarTests {
         #expect(!glanceMakeBlock.contains("isMasked: shouldMaskFinancialValues"))
         #expect(appStateSource.contains("queued OFF command must restore the"))
         #expect(appStateSource.contains("clearPublishedSystemSnapshotsForDemoEntry()"))
+    }
+
+    @Test("Foundation Models availability uses the public framework gate (AND-656)")
+    func foundationModelsProbeUsesPublicFrameworkGate() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let probeSource = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Services/FoundationModelsAvailabilityProbe.swift"),
+            encoding: .utf8
+        )
+        let merchantSource = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Services/FoundationModelsMerchantCategorizer.swift"),
+            encoding: .utf8
+        )
+        let incomeSource = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Services/FoundationModelsIncomeCategorizer.swift"),
+            encoding: .utf8
+        )
+        let insightSource = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Services/FoundationModelsInsightModel.swift"),
+            encoding: .utf8
+        )
+        let sources = [probeSource, merchantSource, incomeSource, insightSource]
+
+        for source in sources {
+            #expect(source.contains("#if canImport(FoundationModels)"))
+            #expect(!source.contains("FoundationModelsMacros"))
+        }
+
+        #expect(probeSource.contains("SystemLanguageModel.default.availability"))
+        #expect(merchantSource.contains("@Generable"))
+        #expect(incomeSource.contains("@Generable"))
+        #expect(insightSource.contains("@Generable"))
     }
 
     // MARK: - Account Type Categorization
@@ -915,6 +971,43 @@ struct PlaidBarTests {
         #expect(chainedTasks == 1, "only enqueue's single chained Task should exist")
     }
 
+    @Test("Cache persists re-check the clear epoch after store generation capture")
+    func cachePersistsRecheckClearEpochAfterGenerationCapture() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let readModelSource = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/App/AppState+ReadModelCache.swift"),
+            encoding: .utf8
+        )
+        let transactionSource = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/App/AppState+TransactionCache.swift"),
+            encoding: .utf8
+        )
+
+        try assertSecondEpochCheckAfterStoreGenerationCapture(
+            in: readModelSource,
+            generationCapture: "let capturedGeneration = await store.currentClearGeneration()",
+            commitCall: "try await store.save(model, ifNotClearedSince: capturedGeneration)"
+        )
+        try assertSecondEpochCheckAfterStoreGenerationCapture(
+            in: transactionSource,
+            generationCapture: "let capturedGeneration = await store.currentClearGeneration()",
+            commitCall: "try await store.replaceAll("
+        )
+    }
+
+    private func assertSecondEpochCheckAfterStoreGenerationCapture(
+        in source: String,
+        generationCapture: String,
+        commitCall: String
+    ) throws {
+        let generationRange = try #require(source.range(of: generationCapture))
+        let afterGeneration = String(source[generationRange.upperBound...])
+        let commitRange = try #require(afterGeneration.range(of: commitCall))
+        let window = String(afterGeneration[..<commitRange.lowerBound])
+
+        #expect(window.contains("guard await gate.mayCommit(capturedEpoch: capturedEpoch) else { return }"))
+    }
+
     // MARK: - Foundation Models categorization tier (mirrors AppState.refreshFoundationModelsCategorySuggestions)
 
     @Test("FM categorizer produces a foundationModels suggestion when Apple Intelligence is available")
@@ -950,6 +1043,20 @@ struct PlaidBarTests {
 
         #expect(suggestion?.tier != .foundationModels)
         #expect(stub.callCount == 0)
+    }
+
+    @Test("Paged transaction resync normalizes live rows before merging the head")
+    func pagedTransactionResyncSortsLiveRowsNewestFirstBeforeMerge() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let source = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Services/PagedTransactionSource.swift"),
+            encoding: .utf8
+        )
+
+        #expect(source.contains("feed.mergeHead(from: Self.newestFirstPreservingSameDateOrder(transactions))"))
+        #expect(source.contains("if lhs.element.date != rhs.element.date"))
+        #expect(source.contains("return lhs.element.date > rhs.element.date"))
+        #expect(source.contains("return lhs.offset < rhs.offset"))
     }
 
     // Regression for the bug-hunt R5 fix: AppState's
@@ -992,6 +1099,101 @@ struct PlaidBarTests {
         cache = cache.filter { liveIDs.contains($0.key) }
 
         #expect(cache.count == 2, "no eviction when every cached id is still in the inbox")
+    }
+
+    // MARK: - Window-scale shared sub-components + unified search (AND-625)
+
+    /// Source-invariant guard for AND-625 part (1): the shared sub-components that
+    /// are re-hosted in both the popover and the window must carry a
+    /// `ComponentScale` hint and reference the window type roles
+    /// (`windowDataText` / `windowFigureCaption` / `windowBodyText` /
+    /// `windowCardTitle`), so window canvases render them at desk-distance scale
+    /// rather than shrunken popover caption-scale. Default `.popover` keeps the
+    /// glance byte-for-byte. Asserts the call sites, not pixels — the app target is
+    /// an `@main` executable that can't be `@testable import`ed.
+    @Test("Shared sub-components adopt the window type roles when hosted in a window (AND-625)")
+    func sharedSubComponentsScaleToWindowRoles() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let recurringSource = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/RecurringObligationsSection.swift"),
+            encoding: .utf8
+        )
+        let balanceSource = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/BalanceTimeMachineView.swift"),
+            encoding: .utf8
+        )
+
+        // Both components must take a ComponentScale that defaults to .popover so
+        // the glance is unaffected and only window callers opt into window scale.
+        for source in [recurringSource, balanceSource] {
+            #expect(source.contains("var scale: ComponentScale = .popover"))
+            // The window branch must reach for the window roles, not the popover's
+            // caption-scale microText/sectionTitle.
+            #expect(source.contains("windowDataText()"))
+            #expect(source.contains("windowFigureCaption()"))
+            #expect(source.contains("windowBodyText()"))
+            #expect(source.contains("windowCardTitle()"))
+        }
+
+        // The window call sites must pass `.window`; the popover call site keeps the
+        // default. (Window: DashboardRecurringCard, PlanningDestinationView,
+        // DashboardOverviewColumn. Popover: WealthSummaryFlyout, MainPopover.)
+        let dashboardRecurring = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/Destinations/DashboardRecurringCard.swift"),
+            encoding: .utf8
+        )
+        let planning = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/Destinations/PlanningDestinationView.swift"),
+            encoding: .utf8
+        )
+        let overviewColumn = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/Destinations/DashboardOverviewColumn.swift"),
+            encoding: .utf8
+        )
+        let wealthFlyout = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/WealthSummaryFlyout.swift"),
+            encoding: .utf8
+        )
+
+        #expect(dashboardRecurring.contains("scale: .window"))
+        #expect(planning.contains("scale: .window"))
+        #expect(overviewColumn.contains("BalanceTimeMachineView(scale: .window)"))
+        // The popover host must NOT opt into window scale (would inflate the glance).
+        #expect(!wealthFlyout.contains("scale: .window"))
+    }
+
+    /// Source-invariant guard for AND-625 part (2): the window shell's unified
+    /// `.searchable` field now propagates to a second destination (Accounts), which
+    /// filters its account list by the shared `\.shellSearchQuery` environment value
+    /// exactly like the Dashboard — one consistent toolbar field, no competing
+    /// inline search, no leak across destinations.
+    @Test("Accounts adopts the shell's unified search field via \\.shellSearchQuery (AND-625)")
+    func accountsAdoptsUnifiedShellSearch() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let shell = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/AppShellView.swift"),
+            encoding: .utf8
+        )
+        let accounts = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/Destinations/AccountsDestinationView.swift"),
+            encoding: .utf8
+        )
+
+        // The shell routes its single field to both Dashboard and Accounts and
+        // injects the neutral, unified env key (not the old Dashboard-specific one).
+        #expect(shell.contains("case .dashboard, .accounts: true"))
+        #expect(shell.contains("let isSearchEnabled = destinationSupportsSearch(destination) && !appState.isContentLocked"))
+        #expect(shell.contains(".environment(\\.shellSearchQuery,"))
+        #expect(shell.contains("searchText = \"\""))
+        #expect(!shell.contains("dashboardSearchQuery"))
+
+        // Accounts reads the shared query and filters by display name (never a masked
+        // amount), with a contextual no-results state.
+        #expect(accounts.contains("@Environment(\\.shellSearchQuery)"))
+        #expect(accounts.contains("localizedCaseInsensitiveContains(query)"))
+        #expect(accounts.contains("ContentUnavailableView.search(text:"))
+        #expect(accounts.contains(".onChange(of: filteredAccounts.map(\\.id))"))
+        #expect(accounts.contains("visibleAccounts.map(\\.id)"))
     }
 }
 

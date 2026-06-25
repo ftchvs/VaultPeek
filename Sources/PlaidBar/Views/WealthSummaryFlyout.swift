@@ -102,6 +102,8 @@ struct WealthSummaryFlyout: View {
 
                     WealthCreditSection(
                         summary: presentation.creditUtilization,
+                        creditAccounts: appState.accounts.filter { $0.type == .credit },
+                        freshness: appState.lastSyncDate,
                         threshold: appState.creditUtilizationThreshold,
                         privacyMaskEnabled: privacyMaskEnabled
                     )
@@ -607,12 +609,30 @@ private struct ProjectedBalanceSection: View {
 
 private struct WealthCreditSection: View {
     let summary: WealthSummaryPresentation.CreditUtilizationSummary?
+    /// Credit accounts that fed the utilization figure, for the provenance popover
+    /// (AND-641). Display-safe; only names/balances are surfaced, never raw IDs.
+    var creditAccounts: [AccountDTO] = []
+    /// When the credit balances were last synced; drives the provenance freshness.
+    var freshness: Date?
     let threshold: Double
     let privacyMaskEnabled: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            WealthFlyoutSectionLabel("Credit")
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+                WealthFlyoutSectionLabel("Credit")
+
+                if let summary {
+                    ProvenancePopoverButton(
+                        provenance: FigureProvenance.creditUtilization(
+                            summary: summary,
+                            creditAccounts: creditAccounts,
+                            freshness: freshness,
+                            privacyMaskEnabled: privacyMaskEnabled
+                        )
+                    )
+                }
+            }
 
             if let summary {
                 HStack(alignment: .top, spacing: Spacing.sm) {

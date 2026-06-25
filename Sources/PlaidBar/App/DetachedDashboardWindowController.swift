@@ -18,7 +18,8 @@ import SwiftUI
 ///
 /// Frame (origin + size) is persisted by AppKit via `frameAutosaveName`, so the
 /// window reopens where the user left it. Open/closed intent is persisted
-/// separately by `AppState.isDashboardDetached`. Window appearance is left to
+/// separately by the per-window `NavigationModel.isDashboardDetached` (AND-600).
+/// Window appearance is left to
 /// inherit the single `NSApp.appearance` owner (pinned only for the `--appearance`
 /// QA override) so flipping Light/Dark updates the window live.
 ///
@@ -420,6 +421,9 @@ final class DetachedDashboardWindowController: NSObject, NSWindowDelegate {
                 // Apply the in-app text-size preference so the floating desktop
                 // dashboard scales with the same control as the popover (AND-570).
                 .appliesAppTextSize()
+                // Tint the floating desktop dashboard with the same accent
+                // preference as every other surface (AND-647).
+                .appliesAppAccent()
                 // The panel owns its own width via resize; let the dashboard fill
                 // it rather than imposing the popover's screen-anchored width math.
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

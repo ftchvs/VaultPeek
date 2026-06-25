@@ -107,6 +107,16 @@ public struct FinanceSnapshot: Codable, Sendable, Equatable {
     /// Top spending categories this period, largest first, already truncated to a
     /// small count (the writer keeps only the leaders). Empty when unknown.
     public let topSpendingCategories: [CategorySpend]
+    /// How much trust to place in `safeToSpend`, mirroring
+    /// ``SafeToSpendResult/confidence`` so the safe-to-spend snippet can show the
+    /// same "Estimate only / Lower confidence / On track" cue the in-app view does.
+    /// `nil` for a pre-AND-637 snapshot (decoded defensively) — the snippet then
+    /// simply omits the cue.
+    public let safeToSpendConfidence: SafeToSpendConfidence?
+    /// Inclusive end of the look-ahead window `safeToSpend` covers, mirroring
+    /// ``SafeToSpendResult/horizonEnd`` so the snippet can say "through <date>"
+    /// without re-deriving the horizon. `nil` for a pre-AND-637 snapshot.
+    public let safeToSpendHorizonEnd: Date?
 
     public init(
         safeToSpend: Double,
@@ -118,7 +128,9 @@ public struct FinanceSnapshot: Codable, Sendable, Equatable {
         generatedAt: Date,
         isMasked: Bool,
         periodSpending: Double = 0,
-        topSpendingCategories: [CategorySpend] = []
+        topSpendingCategories: [CategorySpend] = [],
+        safeToSpendConfidence: SafeToSpendConfidence? = nil,
+        safeToSpendHorizonEnd: Date? = nil
     ) {
         self.safeToSpend = safeToSpend
         self.totalBalance = totalBalance
@@ -130,6 +142,8 @@ public struct FinanceSnapshot: Codable, Sendable, Equatable {
         self.isMasked = isMasked
         self.periodSpending = periodSpending
         self.topSpendingCategories = topSpendingCategories
+        self.safeToSpendConfidence = safeToSpendConfidence
+        self.safeToSpendHorizonEnd = safeToSpendHorizonEnd
     }
 
     // Decode the spending fields defensively: a snapshot written by an older build
@@ -139,6 +153,7 @@ public struct FinanceSnapshot: Codable, Sendable, Equatable {
         case safeToSpend, totalBalance, accountBalances, nextRecurringBills
         case creditUtilization, isoCurrencyCode, generatedAt, isMasked
         case periodSpending, topSpendingCategories
+        case safeToSpendConfidence, safeToSpendHorizonEnd
     }
 
     public init(from decoder: Decoder) throws {
@@ -153,6 +168,11 @@ public struct FinanceSnapshot: Codable, Sendable, Equatable {
         isMasked = try container.decode(Bool.self, forKey: .isMasked)
         periodSpending = try container.decodeIfPresent(Double.self, forKey: .periodSpending) ?? 0
         topSpendingCategories = try container.decodeIfPresent([CategorySpend].self, forKey: .topSpendingCategories) ?? []
+        // Defensive: a pre-AND-637 snapshot has neither key — decode them as nil so
+        // the upgrade still reads the older payload, and an unknown confidence raw
+        // value degrades to nil rather than throwing the whole read.
+        safeToSpendConfidence = try container.decodeIfPresent(SafeToSpendConfidence.self, forKey: .safeToSpendConfidence)
+        safeToSpendHorizonEnd = try container.decodeIfPresent(Date.self, forKey: .safeToSpendHorizonEnd)
     }
 
     /// Empty placeholder used before the first real snapshot exists. Treated as

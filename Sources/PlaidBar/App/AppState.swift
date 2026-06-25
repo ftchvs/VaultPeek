@@ -42,6 +42,7 @@ final class AppState {
         static let notifyRecurringChargeDueSoon = "notifyRecurringChargeDueSoon"
         static let notifyBrokenConnection = "notifyBrokenConnection"
         static let notifyWatchlist = "notifyWatchlist"
+        static let notifyCategoryBudget = "notifyCategoryBudget"
         static let watchlistTargets = "watchlistTargets"
         static let privacyMaskEnabled = "privacyMaskEnabled"
         static let appLockEnabled = UserDefaultsAppLockSettingsStore.defaultStorageKey
@@ -55,9 +56,9 @@ final class AppState {
         static let setupCompletedOnce = "setup.completedOnce"
         static let setupCompletedContextPrefix = "setup.completedOnce.context"
         static let firstRunSnapshotDismissedContextPrefix = "firstRunSnapshot.dismissed.context"
+        static let windowFirstOrientationDismissedContextPrefix = "windowFirstOrientation.dismissed.context"
         static let lastTransactionCacheContext = "cache.lastTransactionCacheContext"
         static let categoryBudgetCache = "cache.categoryBudgets"
-        static let dashboardDetached = DetachedDashboardPreferences.detachedStorageKey
     }
 
     // MARK: - State
@@ -68,6 +69,11 @@ final class AppState {
     /// from Plaid Liabilities, refreshed alongside accounts. Empty for items
     /// linked without the `liabilities` scope. Latest-only — no history.
     var liabilities: [LiabilityDTO] = []
+    /// Latest Plaid Investments holdings + securities (AND-644), refreshed
+    /// alongside accounts. Empty for items linked without the `investments`
+    /// scope. The brokerage accounts inside also arrive via `accounts`, so this
+    /// supplements with positions rather than replacing balances.
+    var investments: InvestmentsResponse = InvestmentsResponse()
     var transactions: [TransactionDTO] = [] {
         didSet {
             _cachedTransactionDerivedIndex = nil
@@ -115,7 +121,6 @@ final class AppState {
             self.error = sanitized
         }
     }
-    var isPopoverPresented = false
 
     /// Per-window navigation model (AND-594). Owns the destination plus
     /// the dashboard filter / account selection / heatmap metric that previously
@@ -127,7 +132,10 @@ final class AppState {
     /// `appState.dashboardFilter` / `dashboardSelectedAccountID` /
     /// `dashboardHeatmapMode`, which delegate here and persist to the original
     /// UserDefaults keys — so popover behavior and on-disk persistence are
-    /// unchanged.
+    /// unchanged. As of AND-600 it also owns the menu-bar popover's presentation
+    /// flag (`isPopoverPresented`) and the detached-dashboard intent
+    /// (`isDashboardDetached`), retired from `AppState` so each window holds
+    /// independent presentation and detach state.
     let navigationModel: NavigationModel
 
     /// Pending deep-link route awaiting the primary window (AND-597).
@@ -163,19 +171,14 @@ final class AppState {
         set { navigationModel.heatmapMode = newValue }
     }
 
-    /// When true, the dashboard lives in a floating desktop window instead of
-    /// the menu-bar popover (AND-384). Persisted so the window reopens on the
-    /// next launch. While detached, a click on the menu-bar item raises the
-    /// floating window rather than opening the popover; re-docking flips this
-    /// back to false and the popover resumes. Mirrors the `dashboard.detached`
-    /// `@AppStorage` key the Settings toggle writes, so the toggle and the
-    /// in-dashboard pin/re-dock controls stay in sync.
-    var isDashboardDetached = false {
-        didSet {
-            guard isDashboardDetached != oldValue else { return }
-            UserDefaults.standard.set(isDashboardDetached, forKey: Keys.dashboardDetached)
-        }
-    }
+    // AND-600: the menu-bar popover's presentation flag (`isPopoverPresented`) and
+    // the detached-dashboard intent (`isDashboardDetached`) no longer live on
+    // `AppState` as single-surface app-global storage. They moved onto the
+    // per-window ``NavigationModel`` (`appState.navigationModel.isPopoverPresented`
+    // / `.isDashboardDetached`), so a second window holds independent presentation
+    // and detach state. The legacy popover/escape-hatch path drives the menu bar's
+    // single model exactly as before; persistence of the detached intent is
+    // unchanged (still the `dashboard.detached` key, now owned by the model).
 
     /// Persisted across launches so configured installs boot straight into
     /// the dashboard instead of flashing first-run onboarding until the
@@ -191,6 +194,15 @@ final class AppState {
         didSet {
             guard oldValue != isFirstRunSnapshotDismissed else { return }
             persistFirstRunSnapshotDismissal(isFirstRunSnapshotDismissed)
+        }
+    }
+    /// Whether the one-time window-first orientation moment (AND-640) has been
+    /// dismissed. Persisted per environment + data directory (mirroring the
+    /// first-run snapshot flag) so it never re-shows once the user has seen it.
+    var isWindowFirstOrientationDismissed = false {
+        didSet {
+            guard oldValue != isWindowFirstOrientationDismissed else { return }
+            persistWindowFirstOrientationDismissal(isWindowFirstOrientationDismissed)
         }
     }
     var serverConnected = false
@@ -387,6 +399,14 @@ final class AppState {
         didSet {
             guard notifyWatchlist != oldValue else { return }
             UserDefaults.standard.set(notifyWatchlist, forKey: Keys.notifyWatchlist)
+        }
+    }
+    /// Gate for per-category budget alerts: nudge when a budgeted category nears
+    /// or exceeds its monthly limit (AND-642).
+    var notifyCategoryBudget: Bool = true {
+        didSet {
+            guard notifyCategoryBudget != oldValue else { return }
+            UserDefaults.standard.set(notifyCategoryBudget, forKey: Keys.notifyCategoryBudget)
         }
     }
     /// User-defined per-merchant / per-category spend watches (AND-501).
@@ -674,9 +694,18 @@ final class AppState {
         self.notificationService = notificationService ?? NotificationService.shared
         self.readModelCacheEnabled = readModelCacheEnabled
         // The popover-window navigation model. Hydrates the last
-        // filter/selection/heatmap from the original UserDefaults keys, so
-        // persistence is preserved across the migration (façade).
-        self.navigationModel = navigationModel ?? NavigationModel()
+        // filter/selection/heatmap — and the detached-dashboard intent (AND-600) —
+        // from the original UserDefaults keys, so persistence is preserved across
+        // the migration (façade). Both headless renderers must hydrate the detached
+        // intent deterministically: a stale `dashboard.detached = true` would spawn
+        // the floating window and intercept either harness, so the snapshot flag is
+        // resolved here and threaded into the model's hydration (the resolution that
+        // previously lived in `loadSettings`). The snapshot harness builds its own
+        // off-screen popover; the window-first harness builds its own windows.
+        self.navigationModel = navigationModel ?? NavigationModel(
+            isRenderingSnapshot: CommandLineOptions.isRenderingSnapshot()
+                || CommandLineOptions.isRenderingWindowFirst()
+        )
         loadSettings()
         // Record whether Apple Foundation Models is available so the tier resolver
         // can prefer it (AND-563) and, when available, the insight service routes
@@ -693,6 +722,7 @@ final class AppState {
         lockOnLaunchIfNeeded()
         isSetupComplete = storedSetupCompletion()
         isFirstRunSnapshotDismissed = storedFirstRunSnapshotDismissal()
+        isWindowFirstOrientationDismissed = storedWindowFirstOrientationDismissal()
         if isSetupComplete {
             persistSetupCompletion(true)
         }
@@ -791,6 +821,9 @@ final class AppState {
         if defaults.object(forKey: Keys.notifyWatchlist) != nil {
             notifyWatchlist = defaults.bool(forKey: Keys.notifyWatchlist)
         }
+        if defaults.object(forKey: Keys.notifyCategoryBudget) != nil {
+            notifyCategoryBudget = defaults.bool(forKey: Keys.notifyCategoryBudget)
+        }
         loadWatchlistTargets(defaults: defaults)
         loadAppLockPreferences(defaults: defaults)
         loadLocalAISettings(defaults: defaults)
@@ -799,24 +832,10 @@ final class AppState {
         loadPersistedWeeklyReviewState()
         // Launch at login
         launchAtLogin = LaunchService.isEnabled
-        // Detached-dashboard intent (AND-384). A headless snapshot render
-        // ignores the persisted intent so the popover-capture path stays
-        // deterministic regardless of host/CI defaults — otherwise a stale
-        // `dashboard.detached = true` would spawn the floating window and
-        // intercept the renderer's popover open. The stored value is left
-        // untouched (no write-back) so the real user preference survives.
-        let storedDetached = defaults.object(forKey: Keys.dashboardDetached) != nil
-            ? defaults.bool(forKey: Keys.dashboardDetached)
-            : nil
-        isDashboardDetached = DetachedDashboardPreferences.resolvedDetachedIntent(
-            storedValue: storedDetached,
-            // Both headless renderers must run deterministically: a stale
-            // `dashboard.detached = true` would spawn the floating window and
-            // intercept either harness. The window-first harness builds its own
-            // off-screen windows, so it likewise wants no detached popover.
-            isRenderingSnapshot: CommandLineOptions.isRenderingSnapshot()
-                || CommandLineOptions.isRenderingWindowFirst()
-        )
+        // Detached-dashboard intent (AND-384) is hydrated by `NavigationModel`
+        // (AND-600), which owns the `dashboard.detached` key and applies the same
+        // snapshot-render override (`DetachedDashboardPreferences.resolvedDetachedIntent`)
+        // the `AppState` init threads into the model. Nothing to resolve here.
     }
 
     private func loadAppLockPreferences(defaults: UserDefaults) {
@@ -2247,6 +2266,7 @@ final class AppState {
             persistTransactionCacheContext()
             refreshSetupCompletionForActiveContext()
             refreshFirstRunSnapshotDismissalForActiveContext()
+            refreshWindowFirstOrientationDismissalForActiveContext()
             if let itemStatuses = status.itemStatuses {
                 applyItemStatuses(itemStatuses, itemCount: status.itemCount, syncReady: status.syncReady)
             } else if !(await refreshItemStatuses()) {
@@ -2432,6 +2452,21 @@ final class AppState {
         guard serverConnected, serverCredentialsConfigured != false else { return }
         if let fetched = try? await serverClient.getLiabilities() {
             liabilities = fetched
+        }
+    }
+
+    /// Fetches the latest Plaid Investments holdings (AND-644). Best-effort and
+    /// supplementary, exactly like ``refreshLiabilities()``: a failure (e.g.
+    /// items linked without the `investments` scope) leaves the previous set in
+    /// place and never disturbs the dashboard.
+    func refreshHoldings() async {
+        if isDemoMode {
+            investments = DemoFixtures.investments
+            return
+        }
+        guard serverConnected, serverCredentialsConfigured != false else { return }
+        if let fetched = try? await serverClient.getInvestmentHoldings() {
+            investments = fetched
         }
     }
 
@@ -2763,6 +2798,7 @@ final class AppState {
             await refreshAccounts(live: useLive)
             await syncTransactions()
             await refreshLiabilities()
+            await refreshHoldings()
         }
         if serverConnected {
             await refreshCategoryBudgets()
@@ -3014,6 +3050,7 @@ final class AppState {
             loginRequired: notifyBrokenConnection,
             itemError: notifyBrokenConnection,
             watchlist: notifyWatchlist,
+            categoryBudgetAlert: notifyCategoryBudget,
             largeTransactionThreshold: largeTransactionThreshold,
             lowBalanceThreshold: lowBalanceThreshold,
             creditUtilizationThreshold: creditUtilizationThreshold
@@ -3024,7 +3061,9 @@ final class AppState {
             recurringTransactions: recurringTransactions,
             itemStatuses: itemStatuses,
             watchlistTargets: watchlistTargets,
+            budgetPresentation: categoryBudgetPresentation,
             isSyncStale: isSyncStale,
+            privacyMaskActive: shouldMaskFinancialValues,
             config: config
         )
     }
@@ -3085,6 +3124,25 @@ final class AppState {
 
     func dismissFirstRunSnapshot() {
         isFirstRunSnapshotDismissed = true
+    }
+
+    /// Dismisses the one-time window-first orientation moment (AND-640). The
+    /// `didSet` on `isWindowFirstOrientationDismissed` persists it per environment,
+    /// so it never re-shows on a future launch.
+    func dismissWindowFirstOrientation() {
+        isWindowFirstOrientationDismissed = true
+    }
+
+    /// Whether the window-first orientation moment should be shown now (AND-640).
+    /// Gated on the window-first feature flag (the moment only makes sense when the
+    /// window surface is live), the per-environment dismissal flag, and unlocked
+    /// content. Suppressed in demo so a transient demo session never burns the
+    /// one-time welcome for a real configured install.
+    var shouldShowWindowFirstOrientation: Bool {
+        WindowFirstFeatureFlag.resolved()
+            && !isWindowFirstOrientationDismissed
+            && !isDemoMode
+            && !isContentLocked
     }
 
     func notificationPermissionStatus() async -> NotificationPermissionState {
@@ -3259,6 +3317,7 @@ final class AppState {
                     await refreshAccounts()
                     await syncTransactions()
                     await refreshLiabilities()
+                    await refreshHoldings()
                 }
             }
             await refreshCategoryBudgets()
@@ -3906,6 +3965,25 @@ final class AppState {
         }
     }
 
+    private func refreshWindowFirstOrientationDismissalForActiveContext() {
+        let storedValue = storedWindowFirstOrientationDismissal()
+        if isWindowFirstOrientationDismissed != storedValue {
+            isWindowFirstOrientationDismissed = storedValue
+        }
+    }
+
+    private func storedWindowFirstOrientationDismissal() -> Bool {
+        UserDefaults.standard.bool(forKey: windowFirstOrientationDismissalDefaultsKey)
+    }
+
+    private func persistWindowFirstOrientationDismissal(_ isDismissed: Bool) {
+        if isDismissed {
+            UserDefaults.standard.set(true, forKey: windowFirstOrientationDismissalDefaultsKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: windowFirstOrientationDismissalDefaultsKey)
+        }
+    }
+
     private var setupCompletionDefaultsKey: String {
         let environment = setupCompletionEnvironment.rawValue
         let path = activeStorageDirectoryURL.standardizedFileURL.path
@@ -3918,6 +3996,13 @@ final class AppState {
         let path = activeStorageDirectoryURL.standardizedFileURL.path
         let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? path
         return "\(Keys.firstRunSnapshotDismissedContextPrefix).\(environment).\(encodedPath)"
+    }
+
+    private var windowFirstOrientationDismissalDefaultsKey: String {
+        let environment = setupCompletionEnvironment.rawValue
+        let path = activeStorageDirectoryURL.standardizedFileURL.path
+        let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? path
+        return "\(Keys.windowFirstOrientationDismissedContextPrefix).\(environment).\(encodedPath)"
     }
 
     private var setupCompletionEnvironment: PlaidEnvironment {
@@ -4331,6 +4416,7 @@ final class AppState {
         // stay testable. See DemoFixtures and DemoFixturesTests.
         accounts = DemoFixtures.accounts
         liabilities = DemoFixtures.liabilities()
+        investments = DemoFixtures.investments
         transactions = DemoFixtures.transactions()
         // Seed review metadata, categorization rules, and category budgets so
         // --demo actually surfaces the Review Inbox + budget/category state

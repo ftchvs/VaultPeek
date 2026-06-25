@@ -54,9 +54,9 @@ struct AppShellView: View {
     /// injected from the scene. No-op until per-destination search lands.
     private let focusSearch: () -> Void
 
-    /// The window's unified `.searchable` query (AND-624). The shell owns one
-    /// search field in the toolbar; it is threaded into the destination that
-    /// supports search (currently the Dashboard, via `\.dashboardSearchQuery`).
+    /// The window's unified `.searchable` query (AND-624 / AND-625). The shell owns
+    /// one search field in the toolbar; it is threaded into the destinations that
+    /// adopt search (Dashboard and Accounts, via `\.shellSearchQuery`).
     /// Window-scoped `@State` so each window searches independently, and reset on
     /// a destination switch so a stale query never leaks across surfaces.
     @State private var searchText = ""
@@ -104,6 +104,7 @@ struct AppShellView: View {
         )
 
         let destination = appState.navigationModel.destination
+        let isSearchEnabled = destinationSupportsSearch(destination) && !appState.isContentLocked
 
         // Column policy per destination (driven by the pure
         // `RouteDestination.prefersThreeColumnLayout` in PlaidBarCore). 3-column
@@ -137,7 +138,7 @@ struct AppShellView: View {
                 // propagation pass migrates those to the shell field one at a time.
                 .modifier(
                     ShellSearchable(
-                        isEnabled: destinationSupportsSearch(destination),
+                        isEnabled: isSearchEnabled,
                         text: $searchText,
                         prompt: searchPrompt(for: destination)
                     )
@@ -151,9 +152,11 @@ struct AppShellView: View {
             searchText = ""
             isInspectorPresented = true
         }
-        // The Dashboard reads the live query from the environment to filter its
-        // account rows (the shell owns the field, the canvas owns the filtering).
-        .environment(\.dashboardSearchQuery, destinationSupportsSearch(destination) ? searchText : "")
+        // Search-adopting destinations read the live query from the environment to
+        // filter their own rows (the shell owns the field, each canvas owns the
+        // filtering). Cleared for non-adopting destinations so a stale query never
+        // leaks in.
+        .environment(\.shellSearchQuery, isSearchEnabled ? searchText : "")
         // Reroute the legacy "open detached window" affordances into in-window
         // navigation (AND-616). The Dashboard canvas embeds
         // `CategoryDashboardCard` (its "Open dashboard" button) and the Review
@@ -237,8 +240,13 @@ struct AppShellView: View {
         )
         .onChange(of: appState.isContentLocked) { _, isLocked in
             // A locked window must not keep the ⌘K palette mounted underneath the
-            // gate; dismiss it so unlocking returns to the bare workspace.
-            if isLocked { paletteModel.dismiss() }
+            // gate; dismiss it so unlocking returns to the bare workspace. The
+            // toolbar search field lives in chrome outside the lock overlay, so
+            // clear it too instead of preserving account names under the gate.
+            if isLocked {
+                paletteModel.dismiss()
+                searchText = ""
+            }
         }
     }
 
@@ -318,18 +326,22 @@ struct AppShellView: View {
         return Binding(get: { isInspectorPresented }, set: { isInspectorPresented = $0 })
     }
 
-    /// Whether a destination adopts the shell's unified `.searchable` field. Only
-    /// the Dashboard does today (it filters its account rows via
-    /// `\.dashboardSearchQuery`); destinations with their own inline search keep it
-    /// until the propagation pass migrates them, so there is never a second field.
+    /// Whether a destination adopts the shell's unified `.searchable` field. The
+    /// Dashboard and Accounts do (both filter their account list by display name via
+    /// `\.shellSearchQuery`); destinations with their own inline search (e.g.
+    /// Transactions' filter bar) keep it until the propagation pass migrates them, so
+    /// there is never a competing second field.
     private func destinationSupportsSearch(_ destination: RouteDestination) -> Bool {
-        destination == .dashboard
+        switch destination {
+        case .dashboard, .accounts: true
+        default: false
+        }
     }
 
     /// The search-field prompt for a search-adopting destination.
     private func searchPrompt(for destination: RouteDestination) -> String {
         switch destination {
-        case .dashboard: "Search accounts"
+        case .dashboard, .accounts: "Search accounts"
         default: "Search"
         }
     }

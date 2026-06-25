@@ -117,7 +117,8 @@ struct DashboardDestinationView: View {
                     systemImage: metric.systemImage,
                     detail: metric.detail,
                     accent: metric.accent,
-                    reduceMotion: reduceMotion
+                    reduceMotion: reduceMotion,
+                    provenance: metric.provenance
                 )
             }
         }
@@ -249,6 +250,9 @@ struct DashboardDestinationView: View {
         let systemImage: String
         let detail: String?
         let accent: Color
+        /// Optional number-provenance for the figure (AND-641). Built masked when
+        /// Privacy Mask is active, so the popover never leaks real values.
+        var provenance: FigureProvenance?
     }
 
     /// The wealth summary the rail also computes — the single source for net worth,
@@ -284,6 +288,7 @@ struct DashboardDestinationView: View {
             cashflow: summary.cashflow,
             asOf: Date()
         )
+        let freshness = appState.lastSyncDate
 
         let netWorth = HeroMetric(
             id: "netWorth",
@@ -291,7 +296,12 @@ struct DashboardDestinationView: View {
             value: PrivacyMaskPresentation.currency(summary.netWorth, format: .compact, isEnabled: masked),
             systemImage: "chart.line.uptrend.xyaxis",
             detail: accountCountDetail(summary.accountCount),
-            accent: SemanticColors.brand
+            accent: SemanticColors.brand,
+            provenance: FigureProvenance.netWorth(
+                accounts: appState.accounts,
+                freshness: freshness,
+                privacyMaskEnabled: masked
+            )
         )
 
         let safe = HeroMetric(
@@ -300,7 +310,12 @@ struct DashboardDestinationView: View {
             value: PrivacyMaskPresentation.currency(safeToSpend.amount, format: .compact, isEnabled: masked),
             systemImage: safeToSpend.confidence.iconName,
             detail: "Through end of month · \(safeToSpend.confidence.label) confidence",
-            accent: safeToSpend.amount >= 0 ? SemanticColors.positive : SemanticColors.warning
+            accent: safeToSpend.amount >= 0 ? SemanticColors.positive : SemanticColors.warning,
+            provenance: FigureProvenance.safeToSpend(
+                result: safeToSpend,
+                freshness: freshness,
+                privacyMaskEnabled: masked
+            )
         )
 
         let spend = HeroMetric(

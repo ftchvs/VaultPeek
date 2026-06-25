@@ -28,7 +28,23 @@ public actor ReadModelCacheStore {
 
     private let storeURL: URL?
     private let fileManager: FileManager
-    private var rowsByKey: [String: CachedDashboardReadModel]
+
+    /// In-memory rows, lazily hydrated from disk on first access. `nil` means the
+    /// store has not yet read its backing file — opening the actor performs **no**
+    /// disk I/O (AND-656 finding 3), so construction never blocks the MainActor
+    /// caller with a full-history decode. The read+decode is deferred to
+    /// ``loadedRows()`` on the actor's own executor.
+    private var rowsByKey: [String: CachedDashboardReadModel]?
+
+    /// Monotonic clear generation, bumped by `clearAll()`. Lets a scheduled write
+    /// re-validate, **on this actor**, that no clear has landed since it captured a
+    /// generation token — closing the two-hop persist-after-clear window the
+    /// main-actor `ReadModelCacheClearGate` epoch alone cannot (AND-633). Because
+    /// `clearGeneration()`, `clearAll()`, and `save(_:ifNotClearedSince:)` are all
+    /// FIFO-serialized on this actor, a clear that is enqueued after a write's
+    /// capture always bumps the counter before that write commits, so the clear
+    /// wins.
+    private var clearGeneration: UInt64 = 0
 
     private static var encoder: JSONEncoder {
         let encoder = JSONEncoder()
@@ -43,15 +59,54 @@ public actor ReadModelCacheStore {
         return decoder
     }
 
-    init(storeURL: URL?, fileManager: FileManager = .default) throws {
+    /// Opens the store **without** touching disk. Constructing the actor is now a
+    /// pure, non-throwing handoff of the URL; the backing file is read lazily on the
+    /// actor's executor (see ``loadedRows()``), so a MainActor caller never decodes
+    /// the full history synchronously during open (AND-656 finding 3).
+    init(storeURL: URL?, fileManager: FileManager = .default) {
         self.storeURL = storeURL
         self.fileManager = fileManager
-        if let storeURL, fileManager.fileExists(atPath: storeURL.path) {
-            let data = try Data(contentsOf: storeURL)
-            self.rowsByKey = try Self.decoder.decode(Snapshot.self, from: data).rows
-        } else {
-            self.rowsByKey = [:]
+        self.rowsByKey = nil
+    }
+
+    // MARK: - Lazy load / self-heal
+
+    /// The in-memory rows, hydrating from disk on first access.
+    ///
+    /// An **incompatible or corrupt backing file** (e.g. a pre-JSON SwiftData
+    /// `.store` that cannot decode as our `Snapshot`) is treated as a disposable
+    /// cache *miss*, not a hard failure: the unreadable file is discarded and the
+    /// store starts empty so the next refresh rebuilds it (AND-656 finding 2). This
+    /// is why the disposable cache never permanently disables itself and never loses
+    /// real data — the authoritative source is always the live in-memory data.
+    private func loadedRows() -> [String: CachedDashboardReadModel] {
+        if let rowsByKey { return rowsByKey }
+
+        guard let storeURL, fileManager.fileExists(atPath: storeURL.path) else {
+            rowsByKey = [:]
+            return [:]
         }
+
+        do {
+            let data = try Data(contentsOf: storeURL)
+            let rows = try Self.decoder.decode(Snapshot.self, from: data).rows
+            rowsByKey = rows
+            return rows
+        } catch {
+            // Undecodable file (incompatible/corrupt): discard it so the store
+            // self-heals into a clean miss instead of staying permanently broken.
+            discardIncompatibleStoreFile()
+            rowsByKey = [:]
+            return [:]
+        }
+    }
+
+    /// Removes the unreadable backing file so a subsequent ``persist()`` writes a
+    /// fresh, decodable snapshot. Best-effort: a failure to delete leaves the empty
+    /// in-memory state, and the next atomic write overwrites the file anyway.
+    private func discardIncompatibleStoreFile() {
+        guard let storeURL else { return }
+        try? fileManager.removeItem(at: storeURL)
     }
 
     // MARK: - Operations
@@ -60,13 +115,40 @@ public actor ReadModelCacheStore {
     /// `cacheKey`. The cache holds a single row per environment, so a save is an
     /// upsert.
     public func save(_ model: DashboardReadModel) throws {
+        var rows = loadedRows()
         let payload = try Self.encoder.encode(model)
-        rowsByKey[model.cacheKey] = CachedDashboardReadModel(
+        rows[model.cacheKey] = CachedDashboardReadModel(
             cacheKey: model.cacheKey,
             schemaVersion: model.schemaVersion,
             payload: payload
         )
+        rowsByKey = rows
         try persist()
+    }
+
+    /// The current clear generation. A scheduled write captures this on the store
+    /// actor when it is about to commit, then passes it to
+    /// `save(_:ifNotClearedSince:)` so the write drops itself if a `clearAll()`
+    /// raced in between (AND-633).
+    public func currentClearGeneration() -> UInt64 {
+        clearGeneration
+    }
+
+    /// Atomic clear-gated save. Re-checks the clear generation **as the first
+    /// action on this actor** and, if a `clearAll()` has run since `capturedGeneration`
+    /// was taken, drops the write entirely (returning `false`) rather than
+    /// resurrecting removed-institution balances. Because the generation check and
+    /// the row write are one actor-isolated hop, no `clearAll()` can interleave
+    /// between them — closing the two-hop window the main-actor epoch gate leaves
+    /// open (AND-633).
+    ///
+    /// Returns `true` when the row was committed, `false` when it was dropped
+    /// because a clear won.
+    @discardableResult
+    public func save(_ model: DashboardReadModel, ifNotClearedSince capturedGeneration: UInt64) throws -> Bool {
+        guard capturedGeneration == clearGeneration else { return false }
+        try save(model)
+        return true
     }
 
     /// Reads the cached read-model for `cacheKey`. Returns `nil` on a miss or
@@ -74,9 +156,11 @@ public actor ReadModelCacheStore {
     /// store self-heals). A decode failure throws so the caller's `try?` can drop
     /// back to today's cold path.
     public func load(cacheKey: String) throws -> DashboardReadModel? {
-        guard let row = rowsByKey[cacheKey] else { return nil }
+        var rows = loadedRows()
+        guard let row = rows[cacheKey] else { return nil }
         guard row.schemaVersion == DashboardReadModel.currentSchemaVersion else {
-            rowsByKey.removeValue(forKey: cacheKey)
+            rows.removeValue(forKey: cacheKey)
+            rowsByKey = rows
             try? persist()
             return nil
         }
@@ -88,14 +172,24 @@ public actor ReadModelCacheStore {
     /// Removes the row for `cacheKey` (e.g. after a local-data reset). Safe to
     /// call when no row exists.
     public func clear(cacheKey: String) throws {
-        rowsByKey.removeValue(forKey: cacheKey)
+        var rows = loadedRows()
+        rows.removeValue(forKey: cacheKey)
+        rowsByKey = rows
         try persist()
     }
 
     /// Removes every cached row. Used by the local-data reset path so the
     /// disposable cache is wiped alongside the JSON/SQLite caches.
+    ///
+    /// Bumps `clearGeneration` so any write that captured an earlier generation and
+    /// reaches `save(_:ifNotClearedSince:)` afterwards on this actor drops itself
+    /// rather than resurrecting wiped rows (AND-633).
     public func clearAll() throws {
-        rowsByKey.removeAll()
+        clearGeneration &+= 1
+        // The store becomes empty regardless of any on-disk content, so this never
+        // needs to (and never triggers) a decode of an incompatible file: a clear
+        // unconditionally wins and rewrites a fresh empty snapshot.
+        rowsByKey = [:]
         try persist()
     }
 
@@ -103,7 +197,7 @@ public actor ReadModelCacheStore {
 
     private func persist() throws {
         guard let storeURL else { return }
-        let data = try Self.encoder.encode(Snapshot(rows: rowsByKey))
+        let data = try Self.encoder.encode(Snapshot(rows: rowsByKey ?? [:]))
         try fileManager.createDirectory(
             at: storeURL.deletingLastPathComponent(),
             withIntermediateDirectories: true,

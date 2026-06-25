@@ -22,6 +22,7 @@ struct FinanceDashboardSnippetIntent: SnippetIntent {
     static let description = IntentDescription(
         "A glance at your balance, safe-to-spend, and spending — inline in Spotlight."
     )
+    static let authenticationPolicy: IntentAuthenticationPolicy = .requiresLocalDeviceAuthentication
 
     @MainActor
     func perform() async throws -> some IntentResult & ShowsSnippetView {

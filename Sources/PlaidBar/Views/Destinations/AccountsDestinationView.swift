@@ -56,11 +56,32 @@ import SwiftUI
 struct AccountsDestinationView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The shell's unified `.searchable` query (AND-625). Empty ⇒ no filter, so the
+    /// flag-OFF popover (which never injects it) is unchanged. The shell owns the
+    /// field; this canvas owns the filtering, mirroring the Dashboard.
+    @Environment(\.shellSearchQuery) private var searchQuery
 
     private var navigationModel: NavigationModel { appState.navigationModel }
     private var accounts: [AccountDTO] { appState.accounts }
+
+    private var trimmedQuery: String {
+        searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Accounts narrowed by the shell search query. Case-insensitive substring match
+    /// on the displayed account *name* — the one field the user reads in the row, and
+    /// never a masked value (it matches names, not amounts), so search stays safe
+    /// under Privacy Mask. Empty query ⇒ all accounts (the default).
+    private var filteredAccounts: [AccountDTO] {
+        let query = trimmedQuery
+        guard !query.isEmpty else { return accounts }
+        return accounts.filter {
+            AccountPresentation.displayName(for: $0).localizedCaseInsensitiveContains(query)
+        }
+    }
+
     private var sections: [AccountListGrouping.Section] {
-        AccountListGrouping.sections(for: accounts)
+        AccountListGrouping.sections(for: filteredAccounts)
     }
 
     var body: some View {
@@ -106,7 +127,7 @@ struct AccountsDestinationView: View {
             // Self-heal: if the selected account falls out of the list (removed /
             // disconnected), clear it so the inspector returns to its prompt instead
             // of pointing at a vanished account. Mirrors the popover's reconcile.
-            .onChange(of: accounts.map(\.id)) { _, ids in
+            .onChange(of: filteredAccounts.map(\.id)) { _, ids in
                 navigationModel.reconcileSelection(visibleAccountIDs: ids)
             }
     }
@@ -132,14 +153,23 @@ struct AccountsDestinationView: View {
             VStack(alignment: .leading, spacing: WindowMetrics.xl) {
                 heroMetricsRow
 
-                VStack(alignment: .leading, spacing: WindowMetrics.lg) {
-                    ForEach(sections) { section in
-                        AccountsGroupSection(
-                            section: section,
-                            selectedID: selectedID,
-                            onSelect: toggleSelection
-                        )
-                        .environment(appState)
+                if sections.isEmpty {
+                    // A search query that matches no account name. Keep the hero row
+                    // (it summarizes the whole ledger) and show a contextual "no
+                    // results" state below it rather than a blank canvas. Names the
+                    // query in text, no color cue.
+                    ContentUnavailableView.search(text: trimmedQuery)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                } else {
+                    VStack(alignment: .leading, spacing: WindowMetrics.lg) {
+                        ForEach(sections) { section in
+                            AccountsGroupSection(
+                                section: section,
+                                selectedID: selectedID,
+                                onSelect: toggleSelection
+                            )
+                            .environment(appState)
+                        }
                     }
                 }
             }
@@ -302,17 +332,30 @@ struct AccountsDestinationView: View {
     /// from `AppState.navigationModel`.
     struct Inspector: View {
         @Environment(AppState.self) private var appState
+        @Environment(\.shellSearchQuery) private var searchQuery
 
         private var navigationModel: NavigationModel { appState.navigationModel }
+
+        private var trimmedQuery: String {
+            searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        private var visibleAccounts: [AccountDTO] {
+            let query = trimmedQuery
+            guard !query.isEmpty else { return appState.accounts }
+            return appState.accounts.filter {
+                AccountPresentation.displayName(for: $0).localizedCaseInsensitiveContains(query)
+            }
+        }
 
         /// The selected account resolved against the live (visible) accounts — `nil`
         /// when nothing is selected or the selection is no longer present, which
         /// content-gates the inspector to its prompt.
         private var selectedAccount: AccountDTO? {
             guard let id = navigationModel.resolvedSelectedID(
-                visibleAccountIDs: appState.accounts.map(\.id)
+                visibleAccountIDs: visibleAccounts.map(\.id)
             ) else { return nil }
-            return appState.accounts.first { $0.id == id }
+            return visibleAccounts.first { $0.id == id }
         }
 
         var body: some View {

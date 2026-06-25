@@ -19,8 +19,8 @@ import Foundation
 ///   account-detail Changes block is never $0 in / $0 out.
 public enum DemoFixtures {
     /// Net worth implied by `accounts`:
-    /// 8,241.56 + 15,420.00 − 1,847.32 − 4,210.00.
-    public static let netWorth = 17_604.24
+    /// 8,241.56 + 15,420.00 + 42,500.00 − 1,847.32 − 4,210.00.
+    public static let netWorth = 60_104.24
 
     public static let accounts: [AccountDTO] = [
         AccountDTO(
@@ -36,6 +36,12 @@ public enum DemoFixtures {
             institutionName: "Chase"
         ),
         AccountDTO(
+            id: "demo_brokerage", itemId: "demo_fidelity", name: "Fidelity Brokerage",
+            officialName: "Fidelity Individual Brokerage", type: .investment, subtype: "brokerage",
+            mask: "5520", balances: BalanceDTO(available: 42_500.00, current: 42_500.00, isoCurrencyCode: "USD"),
+            institutionName: "Fidelity"
+        ),
+        AccountDTO(
             id: "demo_amex", itemId: "demo_amex_item", name: "Amex Platinum",
             officialName: "American Express Platinum Card", type: .credit, subtype: "credit card",
             mask: "1008", balances: BalanceDTO(current: -1_847.32, limit: 20_000, isoCurrencyCode: "USD"),
@@ -48,6 +54,42 @@ public enum DemoFixtures {
             institutionName: "Chase"
         ),
     ]
+
+    /// Synthetic Plaid Investments holdings for the demo brokerage account
+    /// (`demo_brokerage`). The position market values sum to the brokerage's
+    /// 42,500.00 current balance so the holdings detail reconciles with the
+    /// account balance and net worth. Securities/tickers are invented.
+    public static let investments = InvestmentsResponse(
+        accounts: [accounts.first { $0.id == "demo_brokerage" }].compactMap { $0 },
+        holdings: [
+            HoldingDTO(
+                accountId: "demo_brokerage", securityId: "demo_sec_vti",
+                quantity: 90, institutionPrice: 250, institutionValue: 22_500,
+                costBasis: 18_000, isoCurrencyCode: "USD"
+            ),
+            HoldingDTO(
+                accountId: "demo_brokerage", securityId: "demo_sec_aapl",
+                quantity: 50, institutionPrice: 200, institutionValue: 10_000,
+                costBasis: 11_500, isoCurrencyCode: "USD"
+            ),
+            HoldingDTO(
+                accountId: "demo_brokerage", securityId: "demo_sec_bnd",
+                quantity: 100, institutionPrice: 72, institutionValue: 7_200,
+                costBasis: 7_000, isoCurrencyCode: "USD"
+            ),
+            HoldingDTO(
+                accountId: "demo_brokerage", securityId: "demo_sec_cash",
+                quantity: 2_800, institutionPrice: 1, institutionValue: 2_800,
+                costBasis: 2_800, isoCurrencyCode: "USD"
+            ),
+        ],
+        securities: [
+            SecurityDTO(id: "demo_sec_vti", name: "Vanguard Total Market ETF", tickerSymbol: "VTI", type: "etf", closePrice: 250, isoCurrencyCode: "USD"),
+            SecurityDTO(id: "demo_sec_aapl", name: "Apple Inc.", tickerSymbol: "AAPL", type: "equity", closePrice: 200, isoCurrencyCode: "USD"),
+            SecurityDTO(id: "demo_sec_bnd", name: "Vanguard Total Bond ETF", tickerSymbol: "BND", type: "etf", closePrice: 72, isoCurrencyCode: "USD"),
+            SecurityDTO(id: "demo_sec_cash", name: "Cash Sweep", tickerSymbol: nil, type: "cash", closePrice: 1, isoCurrencyCode: "USD"),
+        ]
+    )
 
     /// Demo liabilities for the two demo credit cards, with due dates derived
     /// from `now` so `--demo` and screenshots never go stale. Mirrors the trimmed

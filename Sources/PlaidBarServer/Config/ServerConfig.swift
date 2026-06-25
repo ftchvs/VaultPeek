@@ -38,6 +38,11 @@ struct ServerConfig: Sendable {
     /// until the bridge is provisioned. Nothing dials these endpoints yet.
     let remoteBridge: RemoteBridgeConfig
 
+    /// Opt-in real-webhook-signature-verification posture (AND-646). Defaults to
+    /// `.disabled` so the webhook receiver stays dormant exactly as today; the
+    /// real ES256 validator is only wired when the operator opts in.
+    var webhookVerification: PlaidWebhookVerificationConfig = .disabled
+
     var dataDirectoryPath: String {
         URL(fileURLWithPath: databasePath)
             .deletingLastPathComponent()
@@ -130,6 +135,9 @@ struct ServerConfig: Sendable {
         // until the owner provisions them (see consumer-production-checklist.md).
         let deployment = DeploymentMode.resolved(from: environmentValues)
         let remoteBridge = RemoteBridgeConfig.resolved(from: environmentValues)
+        // Opt-in webhook signature verification. Defaults to `.disabled`; the
+        // dormant receiver only activates when the operator explicitly opts in.
+        let webhookVerification = PlaidWebhookVerificationConfig.resolved(from: environmentValues)
         if deployment == .hostedBridge, link.webhookURL == nil {
             throw ServerConfigError.missingManagedLinkWebhookURL
         }
@@ -159,7 +167,8 @@ struct ServerConfig: Sendable {
             linkClientUserId: linkClientUserId,
             link: link,
             deployment: deployment,
-            remoteBridge: remoteBridge
+            remoteBridge: remoteBridge,
+            webhookVerification: webhookVerification
         )
     }
 
