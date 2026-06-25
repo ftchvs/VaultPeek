@@ -55,7 +55,7 @@ struct TransactionCacheClearRaceTests {
     /// start. This is exactly the ordering the app-side gate prevents.
     @Test("stale persist after clear resurrects removed transactions (the bug the gate prevents)")
     func staleWriteAfterClearResurrects() async throws {
-        let store = try TransactionCacheStore(inMemory: true)
+        let store = TransactionCacheStore(inMemory: true)
         let key = Self.key
 
         // Prior non-empty refresh persisted the history.
@@ -74,7 +74,7 @@ struct TransactionCacheClearRaceTests {
     /// `replaceAll` never runs and the cold-start paged read is a clean miss.
     @Test("captured-epoch persist landing after beginClear does NOT commit")
     func capturedEpochPersistAfterClearIsDropped() async throws {
-        let store = try TransactionCacheStore(inMemory: true)
+        let store = TransactionCacheStore(inMemory: true)
         let key = Self.key
         let gate = ClearGateStub()
 
@@ -103,7 +103,7 @@ struct TransactionCacheClearRaceTests {
     /// cold-start paged read is a clean miss even if a write slipped the recheck.
     @Test("clear sequenced after a stale persist wins; cold start pages nothing")
     func clearAfterStaleWriteWins() async throws {
-        let store = try TransactionCacheStore(inMemory: true)
+        let store = TransactionCacheStore(inMemory: true)
         let key = Self.key
 
         try await store.replaceAll(cacheKey: key, transactions: removedInstitutionTransactions())

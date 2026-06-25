@@ -66,10 +66,17 @@ extension AppState {
 
     /// Lazily opens (or re-opens) the on-disk disposable store for the active
     /// data directory. Returns `nil` — and stays disabled for this call — when
-    /// the cache is feature-disabled, when in demo mode (demo data is never
-    /// cached), or when the file-backed store fails to open. Reopens when the
-    /// active storage directory changes (e.g. sandbox↔production switch) so the
-    /// store always matches the environment whose key it is asked about.
+    /// the cache is feature-disabled or when in demo mode (demo data is never
+    /// cached). Reopens when the active storage directory changes (e.g.
+    /// sandbox↔production switch) so the store always matches the environment whose
+    /// key it is asked about.
+    ///
+    /// Opening does **no** disk I/O and cannot fail: the backing file is read and
+    /// decoded lazily on the store actor's executor, so this never blocks the
+    /// MainActor with a full decode (AND-656 finding 3). An incompatible/corrupt
+    /// file (e.g. a pre-JSON SwiftData `.store`) is self-healed into a disposable
+    /// miss on that first off-main read rather than disabling the cache (AND-656
+    /// finding 2).
     func readModelCacheStoreIfAvailable() -> ReadModelCacheStore? {
         guard readModelCacheEnabled, !isDemoMode else { return nil }
 
@@ -81,21 +88,10 @@ extension AppState {
             return existing
         }
 
-        do {
-            let store = try ReadModelCacheStore(onDiskIn: directory)
-            readModelCacheStore = store
-            readModelCacheStoreDirectoryPath = directoryPath
-            return store
-        } catch {
-            // Cache unavailable / store unopenable: behave exactly as before
-            // the cache existed. Logged without any financial material.
-            AppState.readModelCacheLogger.error(
-                "Read-model cache unavailable: \(String(describing: error), privacy: .public)"
-            )
-            readModelCacheStore = nil
-            readModelCacheStoreDirectoryPath = nil
-            return nil
-        }
+        let store = ReadModelCacheStore(onDiskIn: directory)
+        readModelCacheStore = store
+        readModelCacheStoreDirectoryPath = directoryPath
+        return store
     }
 
     /// The environment+directory-scoped key for the active context, or `nil`
@@ -168,8 +164,11 @@ extension AppState {
         }
     }
 
-    /// Wipes the disposable cache alongside the JSON/SQLite caches on local reset
-    /// and on the empty-accounts path (last institution removed).
+    /// Wipes **only the read-model store** alongside the JSON/SQLite caches on local
+    /// reset and on the empty-accounts path (last institution removed). The
+    /// per-transaction store is wiped separately by ``clearTransactionCache()``
+    /// (AND-657) — both route through the same ``ReadModelCacheClearGate`` epoch so
+    /// they clear in the same program order.
     ///
     /// Bumps the clear epoch synchronously *first* so any persist already
     /// scheduled in program order observes the clear and drops its write — the

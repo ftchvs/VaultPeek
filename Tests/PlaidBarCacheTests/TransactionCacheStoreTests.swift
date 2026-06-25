@@ -29,7 +29,7 @@ struct TransactionCacheStoreTests {
 
     @Test("upsert then paged read returns the rows newest-first")
     func upsertThenPage() async throws {
-        let store = try TransactionCacheStore(inMemory: true)
+        let store = TransactionCacheStore(inMemory: true)
         let all = transactions(count: 10)
         try await store.upsert(cacheKey: key, transactions: all)
 
@@ -46,7 +46,7 @@ struct TransactionCacheStoreTests {
 
     @Test("#Unique upsert replaces a re-synced transaction instead of duplicating")
     func uniqueUpsertReplaces() async throws {
-        let store = try TransactionCacheStore(inMemory: true)
+        let store = TransactionCacheStore(inMemory: true)
         let original = TransactionDTO(id: "t1", accountId: "chk", amount: 10, date: "2026-01-10", name: "Old")
         try await store.upsert(cacheKey: key, transactions: [original])
 
@@ -71,7 +71,7 @@ struct TransactionCacheStoreTests {
 
     @Test("paging walks the whole history with no overlap and no gaps")
     func pagingCoversHistory() async throws {
-        let store = try TransactionCacheStore(inMemory: true)
+        let store = TransactionCacheStore(inMemory: true)
         let all = transactions(count: 23)
         try await store.upsert(cacheKey: key, transactions: all)
         let total = try await store.count(cacheKey: key)
@@ -93,7 +93,7 @@ struct TransactionCacheStoreTests {
 
     @Test("an out-of-range page reads empty")
     func outOfRangePage() async throws {
-        let store = try TransactionCacheStore(inMemory: true)
+        let store = TransactionCacheStore(inMemory: true)
         try await store.upsert(cacheKey: key, transactions: transactions(count: 3))
         let total = try await store.count(cacheKey: key)
         let window = TransactionPageWindow.make(pageIndex: 5, pageSize: 10, total: total)
@@ -103,7 +103,7 @@ struct TransactionCacheStoreTests {
 
     @Test("replaceAll drops removed transactions")
     func replaceAllDropsRemoved() async throws {
-        let store = try TransactionCacheStore(inMemory: true)
+        let store = TransactionCacheStore(inMemory: true)
         try await store.upsert(cacheKey: key, transactions: transactions(count: 10))
         #expect(try await store.count(cacheKey: key) == 10)
 
@@ -114,7 +114,7 @@ struct TransactionCacheStoreTests {
 
     @Test("rows for a different environment key are not returned for this key")
     func cacheKeyScoping() async throws {
-        let store = try TransactionCacheStore(inMemory: true)
+        let store = TransactionCacheStore(inMemory: true)
         try await store.upsert(cacheKey: "sandbox|/x", transactions: transactions(count: 4))
         try await store.upsert(cacheKey: "production|/x", transactions: transactions(count: 6))
 
@@ -124,7 +124,7 @@ struct TransactionCacheStoreTests {
 
     @Test("clearAll empties the store")
     func clearAllEmpties() async throws {
-        let store = try TransactionCacheStore(inMemory: true)
+        let store = TransactionCacheStore(inMemory: true)
         try await store.upsert(cacheKey: key, transactions: transactions(count: 5))
         try await store.clearAll()
         #expect(try await store.count(cacheKey: key) == 0)
@@ -132,7 +132,7 @@ struct TransactionCacheStoreTests {
 
     @Test("empty upsert is a no-op")
     func emptyUpsert() async throws {
-        let store = try TransactionCacheStore(inMemory: true)
+        let store = TransactionCacheStore(inMemory: true)
         let plan = try await store.upsert(cacheKey: key, transactions: [])
         #expect(plan.writeCount == 0)
         #expect(try await store.count(cacheKey: key) == 0)
@@ -145,7 +145,7 @@ struct TransactionCacheStoreTests {
     /// stable, correct slices — the cache must not corrupt or stale the ordering.
     @Test("repeated page reads reuse the cached ordering and stay correct")
     func cachedOrderingStableAcrossPages() async throws {
-        let store = try TransactionCacheStore(inMemory: true)
+        let store = TransactionCacheStore(inMemory: true)
         let all = transactions(count: 30)
         try await store.upsert(cacheKey: key, transactions: all)
         let total = try await store.count(cacheKey: key)
@@ -171,7 +171,7 @@ struct TransactionCacheStoreTests {
     /// is the cache-correctness guarantee behind the bounded paging path.
     @Test("a write invalidates the cached ordering so later reads see new rows")
     func writeInvalidatesCachedOrdering() async throws {
-        let store = try TransactionCacheStore(inMemory: true)
+        let store = TransactionCacheStore(inMemory: true)
         try await store.upsert(cacheKey: key, transactions: transactions(count: 5))
 
         // Prime the order cache with a read.
@@ -200,7 +200,7 @@ struct TransactionCacheStoreTests {
     /// key's ordering for the second key.
     @Test("the ordering cache does not bleed across cache keys within one generation")
     func cachedOrderingScopedPerKey() async throws {
-        let store = try TransactionCacheStore(inMemory: true)
+        let store = TransactionCacheStore(inMemory: true)
         try await store.upsert(cacheKey: "sandbox|/x", transactions: transactions(count: 4))
         try await store.upsert(cacheKey: "production|/x", transactions: transactions(count: 6))
 
@@ -223,7 +223,7 @@ struct TransactionCacheStoreTests {
     /// that the page path faults in the fresh blob rather than a stale one.
     @Test("an in-place update is reflected after cache invalidation")
     func updateReflectedAfterInvalidation() async throws {
-        let store = try TransactionCacheStore(inMemory: true)
+        let store = TransactionCacheStore(inMemory: true)
         let original = TransactionDTO(id: "t1", accountId: "chk", amount: 10, date: "2026-01-10", name: "Old")
         try await store.upsert(cacheKey: key, transactions: [original])
         // Prime the cache.
