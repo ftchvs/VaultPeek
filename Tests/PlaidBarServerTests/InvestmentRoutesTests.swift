@@ -9,6 +9,73 @@ import Testing
 /// account/liability mapping is validated.
 @Suite("Investment routes mapping")
 struct InvestmentRoutesTests {
+    private actor PaginatedInvestmentPlaidClient: PlaidClientProtocol {
+        private var responses: [PlaidInvestmentTransactionsResponse]
+        private var calls: [(count: Int, offset: Int)] = []
+
+        init(responses: [PlaidInvestmentTransactionsResponse]) {
+            self.responses = responses
+        }
+
+        func createLinkToken(
+            clientUserId _: String,
+            completionRedirectUri _: String
+        ) async throws -> PlaidLinkTokenResponse {
+            throw PlaidError.invalidResponse
+        }
+
+        func createUpdateLinkToken(
+            clientUserId _: String,
+            accessToken _: String,
+            completionRedirectUri _: String
+        ) async throws -> PlaidLinkTokenResponse {
+            throw PlaidError.invalidResponse
+        }
+
+        func getLinkToken(_: String) async throws -> PlaidLinkTokenGetResponse {
+            throw PlaidError.invalidResponse
+        }
+
+        func exchangePublicToken(_: String) async throws -> PlaidTokenExchangeResponse {
+            throw PlaidError.invalidResponse
+        }
+
+        func getAccounts(accessToken _: String) async throws -> PlaidAccountsResponse {
+            throw PlaidError.invalidResponse
+        }
+
+        func getBalances(accessToken _: String) async throws -> PlaidAccountsResponse {
+            throw PlaidError.invalidResponse
+        }
+
+        func getInvestmentTransactions(
+            accessToken _: String,
+            startDate _: String,
+            endDate _: String,
+            count: Int,
+            offset: Int
+        ) async throws -> PlaidInvestmentTransactionsResponse {
+            calls.append((count: count, offset: offset))
+            guard !responses.isEmpty else { throw PlaidError.invalidResponse }
+            return responses.removeFirst()
+        }
+
+        func syncTransactions(
+            accessToken _: String,
+            cursor _: String?
+        ) async throws -> PlaidTransactionsSyncResponse {
+            throw PlaidError.invalidResponse
+        }
+
+        func removeItem(accessToken _: String) async throws {
+            throw PlaidError.invalidResponse
+        }
+
+        func recordedCalls() -> [(count: Int, offset: Int)] {
+            calls
+        }
+    }
+
     private func item(id: String = "item-1") -> ItemModel {
         ItemModel(id: id, accessToken: "keychain:\(id)", institutionName: "Fidelity")
     }
@@ -80,6 +147,76 @@ struct InvestmentRoutesTests {
         )
         let result = InvestmentRoutes.investmentsResponse(from: response, item: item(), itemId: "item-1")
         #expect(result.accounts.first?.type == .other)
+    }
+
+    private func investmentTransaction(id: String) -> PlaidInvestmentTransaction {
+        PlaidInvestmentTransaction(
+            investmentTransactionId: id,
+            accountId: "acct_a",
+            securityId: "sec_vti",
+            date: "2026-06-01",
+            name: "Buy VTI",
+            quantity: 10,
+            price: 250,
+            amount: 2_500,
+            fees: 0,
+            type: "buy",
+            subtype: "buy",
+            isoCurrencyCode: "USD"
+        )
+    }
+
+    private func investmentTransactionsResponse(
+        ids: [String],
+        total: Int?
+    ) -> PlaidInvestmentTransactionsResponse {
+        PlaidInvestmentTransactionsResponse(
+            accounts: [],
+            securities: [],
+            investmentTransactions: ids.map(investmentTransaction(id:)),
+            totalInvestmentTransactions: total,
+            item: nil,
+            requestId: nil
+        )
+    }
+
+    @Test("Investment transactions page until the Plaid total is satisfied")
+    func paginatesInvestmentTransactionsUntilTotalIsSatisfied() async throws {
+        let client = PaginatedInvestmentPlaidClient(responses: [
+            investmentTransactionsResponse(ids: ["itx-1", "itx-2"], total: 3),
+            investmentTransactionsResponse(ids: ["itx-3"], total: 3),
+        ])
+
+        let transactions = try await InvestmentRoutes.paginatedInvestmentTransactions(
+            plaidClient: client,
+            accessToken: "keychain:item-1",
+            startDate: "2026-03-26",
+            endDate: "2026-06-24",
+            pageSize: 2
+        )
+
+        #expect(transactions.map(\.investmentTransactionId) == ["itx-1", "itx-2", "itx-3"])
+        #expect(await client.recordedCalls().map(\.offset) == [0, 2])
+        #expect(await client.recordedCalls().map(\.count) == [2, 2])
+    }
+
+    @Test("Investment transaction pagination stops on a short page when Plaid omits total")
+    func paginatesInvestmentTransactionsWithoutTotalUntilShortPage() async throws {
+        let client = PaginatedInvestmentPlaidClient(responses: [
+            investmentTransactionsResponse(ids: ["itx-1", "itx-2"], total: nil),
+            investmentTransactionsResponse(ids: ["itx-3"], total: nil),
+        ])
+
+        let transactions = try await InvestmentRoutes.paginatedInvestmentTransactions(
+            plaidClient: client,
+            accessToken: "keychain:item-1",
+            startDate: "2026-03-26",
+            endDate: "2026-06-24",
+            pageSize: 2
+        )
+
+        #expect(transactions.map(\.investmentTransactionId) == ["itx-1", "itx-2", "itx-3"])
+        #expect(await client.recordedCalls().map(\.offset) == [0, 2])
     }
 
     @Test("Investment transaction mapping carries the security, amount, and type")

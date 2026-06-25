@@ -55,17 +55,55 @@ struct InvestmentRoutes: Sendable {
         let perItem = try await BoundedConcurrency.map(items, limit: maxConcurrentItemRefreshes) { item -> [InvestmentTransactionDTO] in
             do {
                 let accessToken = try tokenStore.accessToken(for: item)
-                let response = try await plaidClient.getInvestmentTransactions(
+                let transactions = try await Self.paginatedInvestmentTransactions(
+                    plaidClient: plaidClient,
                     accessToken: accessToken,
                     startDate: startDate,
                     endDate: endDate
                 )
-                return response.investmentTransactions.map(Self.investmentTransactionDTO(from:))
+                return transactions.map(Self.investmentTransactionDTO(from:))
             } catch {
                 return []
             }
         }
         return try Self.jsonResponse(perItem.flatMap { $0 })
+    }
+
+    // MARK: - Mapping
+
+    static let investmentTransactionsPageSize = 250
+
+    static func paginatedInvestmentTransactions(
+        plaidClient: any PlaidClientProtocol,
+        accessToken: String,
+        startDate: String,
+        endDate: String,
+        pageSize: Int = investmentTransactionsPageSize
+    ) async throws -> [PlaidInvestmentTransaction] {
+        let count = max(1, pageSize)
+        var offset = 0
+        var transactions: [PlaidInvestmentTransaction] = []
+
+        while true {
+            let response = try await plaidClient.getInvestmentTransactions(
+                accessToken: accessToken,
+                startDate: startDate,
+                endDate: endDate,
+                count: count,
+                offset: offset
+            )
+            transactions.append(contentsOf: response.investmentTransactions)
+
+            if let total = response.totalInvestmentTransactions {
+                if transactions.count >= total || response.investmentTransactions.isEmpty {
+                    return transactions
+                }
+            } else if response.investmentTransactions.count < count {
+                return transactions
+            }
+
+            offset += response.investmentTransactions.count
+        }
     }
 
     // MARK: - Mapping
