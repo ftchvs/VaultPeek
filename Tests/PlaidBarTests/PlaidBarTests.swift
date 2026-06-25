@@ -915,6 +915,43 @@ struct PlaidBarTests {
         #expect(chainedTasks == 1, "only enqueue's single chained Task should exist")
     }
 
+    @Test("Cache persists re-check the clear epoch after store generation capture")
+    func cachePersistsRecheckClearEpochAfterGenerationCapture() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let readModelSource = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/App/AppState+ReadModelCache.swift"),
+            encoding: .utf8
+        )
+        let transactionSource = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/App/AppState+TransactionCache.swift"),
+            encoding: .utf8
+        )
+
+        try assertSecondEpochCheckAfterStoreGenerationCapture(
+            in: readModelSource,
+            generationCapture: "let capturedGeneration = await store.currentClearGeneration()",
+            commitCall: "try await store.save(model, ifNotClearedSince: capturedGeneration)"
+        )
+        try assertSecondEpochCheckAfterStoreGenerationCapture(
+            in: transactionSource,
+            generationCapture: "let capturedGeneration = await store.currentClearGeneration()",
+            commitCall: "try await store.replaceAll("
+        )
+    }
+
+    private func assertSecondEpochCheckAfterStoreGenerationCapture(
+        in source: String,
+        generationCapture: String,
+        commitCall: String
+    ) throws {
+        let generationRange = try #require(source.range(of: generationCapture))
+        let afterGeneration = String(source[generationRange.upperBound...])
+        let commitRange = try #require(afterGeneration.range(of: commitCall))
+        let window = String(afterGeneration[..<commitRange.lowerBound])
+
+        #expect(window.contains("guard await gate.mayCommit(capturedEpoch: capturedEpoch) else { return }"))
+    }
+
     // MARK: - Foundation Models categorization tier (mirrors AppState.refreshFoundationModelsCategorySuggestions)
 
     @Test("FM categorizer produces a foundationModels suggestion when Apple Intelligence is available")
