@@ -112,7 +112,8 @@ public enum CategoryBudgetPlanner {
         calendar: Calendar = .current,
         areSuggested: Bool = false,
         metadata: [TransactionReviewMetadata]? = nil,
-        rules: [TransactionRule]? = nil
+        rules: [TransactionRule]? = nil,
+        splits: [TransactionSplit] = []
     ) -> CategoryBudgetPresentation {
         let positiveBudgets = budgets.filter { $0.value > 0 }
         guard
@@ -126,7 +127,8 @@ public enum CategoryBudgetPlanner {
             startKey: Formatters.transactionDateString(monthStart),
             endKey: Formatters.transactionDateString(nextMonthStart),
             metadata: metadata,
-            rules: rules
+            rules: rules,
+            splits: splits
         )
 
         let items = positiveBudgets
@@ -193,7 +195,8 @@ public enum CategoryBudgetPlanner {
         asOf date: Date,
         calendar: Calendar = .current,
         metadata: [TransactionReviewMetadata]? = nil,
-        rules: [TransactionRule]? = nil
+        rules: [TransactionRule]? = nil,
+        splits: [TransactionSplit] = []
     ) -> CategoryBudgetPresentation {
         let suggested = presentation(
             budgets: suggestedBudgets(from: transactions, asOf: date, calendar: calendar)
@@ -203,7 +206,8 @@ public enum CategoryBudgetPlanner {
             calendar: calendar,
             areSuggested: true,
             metadata: metadata,
-            rules: rules
+            rules: rules,
+            splits: splits
         )
 
         guard !explicitBudgets.isEmpty else { return suggested }
@@ -214,7 +218,8 @@ public enum CategoryBudgetPlanner {
             asOf: date,
             calendar: calendar,
             metadata: metadata,
-            rules: rules
+            rules: rules,
+            splits: splits
         )
         return merge(explicit: explicit, suggested: suggested)
     }
@@ -273,11 +278,18 @@ public enum CategoryBudgetPlanner {
     ///   - calendar: the calendar used to derive the month bounds (no hidden
     ///     `Date()`).
     /// - Returns: signed net spend per category for the month, override-aware.
+    /// - Parameter splits: per-transaction category splits (AND-550). **Defaults to
+    ///   empty**, preserving the un-split behavior exactly. When a transaction has a
+    ///   *valid* split here, its parent is replaced by its allocation rows — each
+    ///   bucketed by the allocation's own category and respecting the allocation's
+    ///   own exclude flag — so rollups count the **parts, not the parent**. A
+    ///   transaction with no (or a malformed) split is unchanged.
     public static func overrideAwareSpend(
         transactions: [TransactionDTO],
         month: String,
         metadata: [TransactionReviewMetadata] = [],
         rules: [TransactionRule] = [],
+        splits: [TransactionSplit] = [],
         calendar: Calendar = .current
     ) -> [SpendingCategory: Double] {
         guard
@@ -293,7 +305,8 @@ public enum CategoryBudgetPlanner {
             startKey: Formatters.transactionDateString(monthStart),
             endKey: Formatters.transactionDateString(nextMonthStart),
             metadata: metadata,
-            rules: rules
+            rules: rules,
+            splits: splits
         )
     }
 
@@ -341,16 +354,28 @@ public enum CategoryBudgetPlanner {
         startKey: String,
         endKey: String,
         metadata: [TransactionReviewMetadata]? = nil,
-        rules: [TransactionRule]? = nil
+        rules: [TransactionRule]? = nil,
+        splits: [TransactionSplit] = []
     ) -> [SpendingCategory: Double] {
+        let splitIndex = TransactionSplitResolver.index(splits)
+
         // Legacy path: no review state supplied → bucket by raw Plaid category.
+        // Still split-aware: a transaction with a valid split contributes its
+        // allocation rows (each by its own category, honoring its exclude flag)
+        // rather than one parent row. With no splits this is byte-identical to the
+        // pre-AND-550 loop.
         guard metadata != nil || rules != nil else {
             var totals: [SpendingCategory: Double] = [:]
             for transaction in transactions {
                 if transaction.date < startKey || transaction.date >= endKey { continue }
-                let category = transaction.category ?? .other
-                if excludedCategories.contains(category) { continue }
-                totals[category, default: 0] += transaction.amount
+                for row in TransactionSplitResolver.spendRows(
+                    for: transaction, splitsByTransactionId: splitIndex
+                ) {
+                    if row.isSplitExcluded { continue }
+                    let category = row.category ?? .other
+                    if excludedCategories.contains(category) { continue }
+                    totals[category, default: 0] += row.amount
+                }
             }
             return totals
         }
@@ -365,36 +390,53 @@ public enum CategoryBudgetPlanner {
         for transaction in transactions {
             if transaction.date < startKey || transaction.date >= endKey { continue }
 
-            // Carry pending-phase review metadata into the posted charge: Plaid
-            // re-posts a previously-pending charge under a new id that links back
-            // via `pendingTransactionId`. Prefer the transaction's own record;
-            // fall back to the carried-forward pending record (mirrors
-            // `TransactionReviewInbox.evaluate`).
-            let effectiveMetadata = metadataById[transaction.id]
-                ?? transaction.pendingTransactionId.flatMap { metadataById[$0] }
+            for row in TransactionSplitResolver.spendRows(
+                for: transaction, splitsByTransactionId: splitIndex
+            ) {
+                // A split allocation already declared its category and exclude flag
+                // explicitly when the user split the charge — so it bypasses the
+                // per-parent override/rule resolution and buckets by its own
+                // category. Income/transfer categories are still never counted.
+                if row.isSplitAllocation {
+                    if row.isSplitExcluded { continue }
+                    let category = row.category ?? .other
+                    if excludedCategories.contains(category) { continue }
+                    totals[category, default: 0] += row.amount
+                    continue
+                }
 
-            let resolution = EffectiveCategoryResolver.resolve(
-                transaction: transaction,
-                metadata: effectiveMetadata,
-                rules: activeRules
-            )
+                // Un-split row: the existing override-aware path, unchanged.
+                // Carry pending-phase review metadata into the posted charge: Plaid
+                // re-posts a previously-pending charge under a new id that links back
+                // via `pendingTransactionId`. Prefer the transaction's own record;
+                // fall back to the carried-forward pending record (mirrors
+                // `TransactionReviewInbox.evaluate`).
+                let effectiveMetadata = metadataById[transaction.id]
+                    ?? transaction.pendingTransactionId.flatMap { metadataById[$0] }
 
-            // Drop excluded rows (explicit user/rule exclusion or transfers).
-            if resolution.excludedFromBudgets || resolution.isTransfer { continue }
-            // No *confident* override/rule/Plaid category (the row is `.other`, has
-            // no Plaid category, or Plaid flagged it low/unknown). Per the spend
-            // precedence (user override → rule → raw Plaid → `.other`),
-            // such a row must **fall back** to its raw Plaid bucket — or `.other`
-            // when Plaid gave nothing — not vanish from totals. A display-only NL
-            // suggestion is still never counted here: it lives on
-            // `resolution.suggestedCategory`, not on the aggregation category, so an
-            // unapproved guess keeps the row in raw-Plaid/`.other` until approved.
-            let category = resolution.category ?? (transaction.category ?? .other)
-            // Income never counts as category spend even if it survived resolution
-            // (the resolver does not classify income as transfer/excluded).
-            if excludedCategories.contains(category) { continue }
+                let resolution = EffectiveCategoryResolver.resolve(
+                    transaction: transaction,
+                    metadata: effectiveMetadata,
+                    rules: activeRules
+                )
 
-            totals[category, default: 0] += transaction.amount
+                // Drop excluded rows (explicit user/rule exclusion or transfers).
+                if resolution.excludedFromBudgets || resolution.isTransfer { continue }
+                // No *confident* override/rule/Plaid category (the row is `.other`, has
+                // no Plaid category, or Plaid flagged it low/unknown). Per the spend
+                // precedence (user override → rule → raw Plaid → `.other`),
+                // such a row must **fall back** to its raw Plaid bucket — or `.other`
+                // when Plaid gave nothing — not vanish from totals. A display-only NL
+                // suggestion is still never counted here: it lives on
+                // `resolution.suggestedCategory`, not on the aggregation category, so an
+                // unapproved guess keeps the row in raw-Plaid/`.other` until approved.
+                let category = resolution.category ?? (transaction.category ?? .other)
+                // Income never counts as category spend even if it survived resolution
+                // (the resolver does not classify income as transfer/excluded).
+                if excludedCategories.contains(category) { continue }
+
+                totals[category, default: 0] += row.amount
+            }
         }
         return totals
     }

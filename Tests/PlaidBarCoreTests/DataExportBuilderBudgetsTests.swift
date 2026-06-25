@@ -106,7 +106,9 @@ struct DataExportBuilderBudgetsTests {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         let envelope = try decoder.decode(DataExportBuilder.Envelope.self, from: data)
-        #expect(envelope.schemaVersion == 2)
+        // Current envelope schema is 3 (AND-550 added the optional splits array);
+        // the budgets array from AND-645 is unchanged.
+        #expect(envelope.schemaVersion == 3)
         #expect(envelope.counts.budgets == 2)
         // Stable order: sorted by category raw value (FOOD_AND_DRINK first).
         #expect(envelope.budgets.map(\.category) == [.foodAndDrink, .transportation])
