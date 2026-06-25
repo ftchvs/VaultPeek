@@ -98,7 +98,6 @@ struct IncomeCategoryFlowChart: View {
     /// VoiceOver amounts are masked; the flow geometry and labels still render.
     var isPrivacyMasked: Bool = false
 
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var revealFraction: CGFloat = 0
 

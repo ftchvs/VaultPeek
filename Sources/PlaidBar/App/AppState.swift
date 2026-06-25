@@ -3641,11 +3641,6 @@ final class AppState {
         UserDefaults.standard.set(data, forKey: Keys.categoryBudgetCache)
     }
 
-    private func loadCategoryBudgetCacheForActiveContext() {
-        guard let transactionCacheContext else { return }
-        loadCategoryBudgetCache(for: transactionCacheContext)
-    }
-
     private func loadCategoryBudgetCache(for context: TransactionCacheContext) {
         guard let data = UserDefaults.standard.data(forKey: Keys.categoryBudgetCache),
               let cache = try? JSONDecoder().decode(CategoryBudgetCache.self, from: data),

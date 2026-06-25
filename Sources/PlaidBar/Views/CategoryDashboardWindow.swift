@@ -21,7 +21,6 @@ import SwiftUI
 /// components. The card + window ship complete without it.
 struct CategoryDashboardWindow: View {
     @Environment(AppState.self) private var appState
-    @Environment(\.openCategoryDashboard) private var openCategoryDashboard
 
     /// User-selected flat-table ordering. Stored as a small `Sendable` enum (a
     /// `[KeyPathComparator]` is not `Sendable`, so it cannot live in `@State` under
