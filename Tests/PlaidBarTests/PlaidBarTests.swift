@@ -952,6 +952,20 @@ struct PlaidBarTests {
         #expect(stub.callCount == 0)
     }
 
+    @Test("Paged transaction resync normalizes live rows before merging the head")
+    func pagedTransactionResyncSortsLiveRowsNewestFirstBeforeMerge() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let source = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Services/PagedTransactionSource.swift"),
+            encoding: .utf8
+        )
+
+        #expect(source.contains("feed.mergeHead(from: Self.newestFirstPreservingSameDateOrder(transactions))"))
+        #expect(source.contains("if lhs.element.date != rhs.element.date"))
+        #expect(source.contains("return lhs.element.date > rhs.element.date"))
+        #expect(source.contains("return lhs.offset < rhs.offset"))
+    }
+
     // Regression for the bug-hunt R5 fix: AppState's
     // `_foundationModelsCategorySuggestions` cache was insert-only, so entries
     // for transactions that left the Review Inbox (categorized/approved/
