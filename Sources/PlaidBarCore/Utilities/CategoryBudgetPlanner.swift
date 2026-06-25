@@ -247,6 +247,56 @@ public enum CategoryBudgetPlanner {
         return CategoryBudgetPresentation(items: items)
     }
 
+    // MARK: - Override-aware spend (AND-546)
+
+    /// Override-aware net spend per category for a month, **always** resolving
+    /// per-transaction user category overrides, recategorization rules, and
+    /// budget-exclusions before bucketing.
+    ///
+    /// This is the v2-foundation fix for the long-standing override-unaware default
+    /// in ``netSpendByCategory``: that function's *default* path (both `metadata`
+    /// and `rules` `nil`) buckets purely by raw Plaid category, so a user who
+    /// recategorized a transaction or excluded it from budgets sees spend land in
+    /// the wrong category. The v1 default is intentionally left unchanged for
+    /// backward compatibility (a v1, not-opted-in user keeps identical behavior);
+    /// this entrypoint is the explicit, override-aware surface v2 callers use.
+    ///
+    /// It threads `metadata`/`rules` through to ``netSpendByCategory`` (forcing the
+    /// resolved path even when both are empty, by passing `rules` non-nil), so the
+    /// full ``EffectiveCategoryResolver`` precedence applies: user override → rule →
+    /// confident Plaid → `.other`, with transfers and excluded rows dropped and
+    /// income never counted.
+    ///
+    /// - Parameters:
+    ///   - month: the budgeted month as `YYYY-MM` (first-of-month). Spend is summed
+    ///     over `[month-01, nextMonth-01)`.
+    ///   - calendar: the calendar used to derive the month bounds (no hidden
+    ///     `Date()`).
+    /// - Returns: signed net spend per category for the month, override-aware.
+    public static func overrideAwareSpend(
+        transactions: [TransactionDTO],
+        month: String,
+        metadata: [TransactionReviewMetadata] = [],
+        rules: [TransactionRule] = [],
+        calendar: Calendar = .current
+    ) -> [SpendingCategory: Double] {
+        guard
+            let monthStart = monthStartDate(fromMonthKey: month, calendar: calendar),
+            let nextMonthStart = calendar.date(byAdding: .month, value: 1, to: monthStart)
+        else { return [:] }
+
+        // Pass `rules` non-nil so `netSpendByCategory` takes the resolved path even
+        // when both collections are empty — that's the whole point of this surface:
+        // resolution always runs, never the raw-Plaid legacy bucketing.
+        return netSpendByCategory(
+            from: transactions,
+            startKey: Formatters.transactionDateString(monthStart),
+            endKey: Formatters.transactionDateString(nextMonthStart),
+            metadata: metadata,
+            rules: rules
+        )
+    }
+
     // MARK: - Internals
 
     /// Net signed spend per category within `[startKey, endKey)`, excluding income
@@ -352,6 +402,21 @@ public enum CategoryBudgetPlanner {
     /// First instant of the month containing `date`, in `calendar`.
     static func monthStartDate(asOf date: Date, calendar: Calendar) -> Date? {
         calendar.date(from: calendar.dateComponents([.year, .month], from: date))
+    }
+
+    /// First instant of a `YYYY-MM` month key in `calendar`. Returns `nil` for a
+    /// malformed key (wrong length, non-numeric, out-of-range month) so a bad month
+    /// degrades to "no spend" rather than a crash. Used by ``overrideAwareSpend``.
+    static func monthStartDate(fromMonthKey month: String, calendar: Calendar) -> Date? {
+        let parts = month.split(separator: "-", omittingEmptySubsequences: false)
+        guard parts.count == 2,
+              parts[0].count == 4,
+              parts[1].count == 2,
+              let year = Int(parts[0]),
+              let monthValue = Int(parts[1]),
+              (1...12).contains(monthValue)
+        else { return nil }
+        return calendar.date(from: DateComponents(year: year, month: monthValue))
     }
 
     /// Round a trailing-average spend up to a tidy monthly limit. Larger spends
