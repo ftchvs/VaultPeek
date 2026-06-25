@@ -1120,6 +1120,31 @@ final class AppState {
         )
     }
 
+    /// Spoken form of the menu-bar value. Matches ``menuBarText`` for every mode
+    /// except mixed-currency balances, where it names the dominant currency's
+    /// subtotal in words (so VoiceOver does not read a bare `"€1,200+"` whose `+`
+    /// and currency are visual-only). Goes through the same app-lock/icon-only
+    /// masking as ``menuBarText`` so a locked or masked state never leaks a figure.
+    var menuBarAccessibleValueText: String {
+        let safeToSpend: Double? = menuBarSummaryMode == .safeToSpend
+            ? currentSafeToSpendAmount()
+            : nil
+        let rawText = MenuBarSummary.accessibleValueText(
+            mode: menuBarSummaryMode,
+            accounts: accounts,
+            transactions: transactions,
+            currencyFormat: balanceFormat,
+            isInitialLoad: isBootLoadInFlight,
+            privacyMaskEnabled: shouldMaskFinancialValues,
+            precomputedSafeToSpend: safeToSpend
+        )
+        return appLockPreferences.menuBarText(
+            currentText: rawText,
+            isAppLocked: isAppLocked,
+            isIconOnly: menuBarSummaryMode == .iconOnly
+        )
+    }
+
     var menuBarStatusPresentation: MenuBarStatusPresentation {
         MenuBarStatusPresentation.evaluate(
             isDemoMode: isDemoMode,
@@ -1187,7 +1212,7 @@ final class AppState {
         // status to keep VoiceOver in sync with the badge sighted users see.
         MenuBarAnnouncement.accessibilityLabel(
             mode: menuBarSummaryMode,
-            valueText: menuBarText,
+            valueText: menuBarAccessibleValueText,
             reviewCount: transactionReviewCount,
             diagnosticsSummary: diagnosticsSummary,
             attentionText: menuBarAttentionText,

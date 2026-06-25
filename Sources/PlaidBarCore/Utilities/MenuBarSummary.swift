@@ -220,24 +220,24 @@ public enum MenuBarSummary {
         case .netWorth:
             guard !accounts.isEmpty else { return PlaidBarConstants.appName }
             guard !privacyMaskEnabled else { return PrivacyMaskPresentation.heroValue }
-            return MultiCurrencyBalancePresentation.displayText(
+            return MultiCurrencyBalancePresentation.glance(
                 from: MultiCurrencyBalancePresentation.netWorth(accounts: accounts),
                 format: currencyFormat
-            )
+            ).text
         case .netCash:
             guard !accounts.isEmpty else { return PlaidBarConstants.appName }
             guard !privacyMaskEnabled else { return PrivacyMaskPresentation.heroValue }
-            return MultiCurrencyBalancePresentation.displayText(
+            return MultiCurrencyBalancePresentation.glance(
                 from: MultiCurrencyBalancePresentation.netWorth(accounts: accounts),
                 format: currencyFormat
-            )
+            ).text
         case .totalCash:
             guard !accounts.isEmpty else { return PlaidBarConstants.appName }
             guard !privacyMaskEnabled else { return PrivacyMaskPresentation.heroValue }
-            return MultiCurrencyBalancePresentation.displayText(
+            return MultiCurrencyBalancePresentation.glance(
                 from: MultiCurrencyBalancePresentation.totalCash(accounts: accounts),
                 format: currencyFormat
-            )
+            ).text
         case .creditUtilization:
             guard !accounts.isEmpty else { return PlaidBarConstants.appName }
             guard let utilization = creditUtilization(from: accounts) else { return "No credit" }
@@ -276,6 +276,47 @@ public enum MenuBarSummary {
             return Formatters.currency(amount, format: currencyFormat)
         case .iconOnly:
             return ""
+        }
+    }
+
+    /// The spoken value for VoiceOver. Identical to ``text(mode:accounts:...)`` for
+    /// every mode **except** the multi-currency balance modes: there it returns the
+    /// glance's spoken label, which names the dominant currency's subtotal in words
+    /// and notes that other currencies are shown separately — so a VoiceOver user is
+    /// not read a bare `"€1,200+"` whose `+` and currency are visual-only cues.
+    ///
+    /// For single-currency (or fully converted) balances the spoken value equals the
+    /// visible text, so this is a no-op for the common case.
+    public static func accessibleValueText(
+        mode: MenuBarSummaryMode,
+        accounts: [AccountDTO],
+        transactions: [TransactionDTO],
+        currencyFormat: CurrencyFormat,
+        isInitialLoad: Bool = false,
+        privacyMaskEnabled: Bool = false,
+        precomputedSafeToSpend: Double? = nil
+    ) -> String {
+        switch mode {
+        case .netWorth, .netCash, .totalCash:
+            guard !accounts.isEmpty else { return PlaidBarConstants.appName }
+            guard !privacyMaskEnabled else { return PrivacyMaskPresentation.heroValue }
+            let aggregation = mode == .totalCash
+                ? MultiCurrencyBalancePresentation.totalCash(accounts: accounts)
+                : MultiCurrencyBalancePresentation.netWorth(accounts: accounts)
+            return MultiCurrencyBalancePresentation.glance(
+                from: aggregation,
+                format: currencyFormat
+            ).accessibilityLabel
+        default:
+            return text(
+                mode: mode,
+                accounts: accounts,
+                transactions: transactions,
+                currencyFormat: currencyFormat,
+                isInitialLoad: isInitialLoad,
+                privacyMaskEnabled: privacyMaskEnabled,
+                precomputedSafeToSpend: precomputedSafeToSpend
+            )
         }
     }
 }
