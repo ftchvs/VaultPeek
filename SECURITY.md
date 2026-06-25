@@ -92,6 +92,19 @@ Use GitHub private vulnerability reporting if available, or contact the reposito
   state, goals, and logo cache. Every cache read/write `throws` and callers wrap
   in `try?`, so if a store file fails to open/read/write, the app falls back to
   its existing JSON/UserDefaults cold path with no behavior change.
+- **Caveat — the cache follows `PLAIDBAR_DATA_DIR`.** The "never synced to
+  iCloud" guarantee above is about iCloud Keychain and the App Group container,
+  not the filesystem location of the data dir itself. These JSON read-model
+  caches live wherever `PLAIDBAR_DATA_DIR` points (default `~/.vaultpeek/`,
+  which is local). If you override `PLAIDBAR_DATA_DIR` to a cloud-synced folder
+  (iCloud Drive, Dropbox, OneDrive, a synced network share, etc.), the
+  disposable cache — which holds derived financial read-model data such as
+  balances, merchant names, amounts, and Plaid identifiers, though **never**
+  Plaid secrets, access tokens, or any Keychain material — can be copied
+  off-device by that sync client. Plaid access tokens stay device-only
+  regardless (Keychain, `…ThisDeviceOnly`, non-synchronizable). To keep the
+  derived cache on-device, point `PLAIDBAR_DATA_DIR` at a local, non-synced
+  directory.
 - `/api/status` is authenticated and exposes readiness metadata: version,
   environment, credential availability, storage path, linked item count,
   synced item count, sync readiness, and last sync time. With the opt-in

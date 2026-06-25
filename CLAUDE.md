@@ -86,7 +86,7 @@ Data flow: `PlaidBar.app` → HTTP `localhost:8484` → `PlaidBarServer` → HTT
 | Sandbox | `./Scripts/run.sh --sandbox` | Yes (sandbox API) | Plaid sandbox creds |
 | Production | `./Scripts/run.sh` | Yes (prod API) | Plaid-approved creds |
 
-Sandbox/production need `PLAID_CLIENT_ID` and `PLAID_SECRET` exported (or set in `~/.vaultpeek/server.conf`). Server port defaults to `8484` (`PLAIDBAR_SERVER_PORT` to override); local data lives under `~/.vaultpeek/` by default (`PLAIDBAR_DATA_DIR` to override; legacy `~/.plaidbar/` files are migrated forward on startup without overwriting newer files). Tunable constants are centralized in `Sources/PlaidBarCore/Utilities/Constants.swift` (refresh intervals, sync page caps, credit thresholds, app version).
+Sandbox/production need `PLAID_CLIENT_ID` and `PLAID_SECRET` exported (or set in `~/.vaultpeek/server.conf`). Server port defaults to `8484` (`PLAIDBAR_SERVER_PORT` to override); local data lives under `~/.vaultpeek/` by default (`PLAIDBAR_DATA_DIR` to override; legacy `~/.plaidbar/` files are migrated forward on startup without overwriting newer files). Everything under `PLAIDBAR_DATA_DIR` — SQLite stores, auth token, and the disposable per-environment JSON read-model cache (`PlaidBarCache`) — follows that path, so the "local-only" framing assumes it stays on-device: if a user points `PLAIDBAR_DATA_DIR` at a cloud-synced folder (iCloud Drive, Dropbox, etc.) the cache (derived financial read-model data, though never tokens/secrets/Keychain material) can sync off-device; recommend a local, non-synced directory (see `SECURITY.md`). Tunable constants are centralized in `Sources/PlaidBarCore/Utilities/Constants.swift` (refresh intervals, sync page caps, credit thresholds, app version).
 
 ## Server API
 

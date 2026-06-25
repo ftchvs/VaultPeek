@@ -317,6 +317,17 @@ If the config file sets `PLAIDBAR_SERVER_PORT` or `PLAIDBAR_DATA_DIR` to a
 non-default value, export the same values before launching VaultPeek so the app
 connects to the right port and reads the same local auth token.
 
+> **Keep `PLAIDBAR_DATA_DIR` local.** Everything VaultPeek persists — the SQLite
+> stores, the local auth token, and the disposable, rebuildable, per-environment
+> JSON read-model cache — lives under `PLAIDBAR_DATA_DIR` (default
+> `~/.vaultpeek/`, which is local). VaultPeek's "local-only" framing assumes that
+> directory stays on-device. If you point `PLAIDBAR_DATA_DIR` at a cloud-synced
+> folder (iCloud Drive, Dropbox, OneDrive, a synced network share, etc.), that
+> sync client can copy those files off-device — including the read-model cache,
+> which holds derived financial data such as balances, merchant names, and
+> amounts (though never Plaid secrets, access tokens, or Keychain material). Use
+> a local, non-synced directory for `PLAIDBAR_DATA_DIR`.
+
 ## Data Modes
 
 | Mode | Command | Plaid network calls | Data source | Intended use |
