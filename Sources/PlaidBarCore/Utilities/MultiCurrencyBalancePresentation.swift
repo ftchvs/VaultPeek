@@ -183,6 +183,97 @@ public enum MultiCurrencyBalancePresentation {
         }
     }
 
+    /// A single-line menu-bar **glance** figure plus its spoken label, sized for
+    /// the constrained menu-bar surface where the multi-line ``headline``
+    /// disclosure does not fit.
+    ///
+    /// Unlike the dashboard, the glance must show *a number*, not a "By currency"
+    /// prompt. When the figure is exact (one currency) or a real cross-currency
+    /// conversion is available, that single figure is used verbatim — so a
+    /// single-currency user sees byte-identical text to before. When currencies
+    /// are mixed and unpriceable, the glance shows the **dominant** currency's
+    /// subtotal (largest by absolute value) in that currency's own symbol, with a
+    /// trailing ``multiCurrencyMarker`` (a non-color "+" cue) signalling that other
+    /// currencies exist but are not summed into this figure. It never fabricates a
+    /// cross-currency `$` total.
+    public struct Glance: Sendable, Equatable {
+        /// The figure to render in the menu bar, e.g. `"$1,234"`, `"€1.200+"`.
+        public let text: String
+        /// VoiceOver label naming the figure (and, when mixed, the dominant
+        /// currency + that other currencies exist) in words, never by color.
+        public let accessibilityLabel: String
+
+        public init(text: String, accessibilityLabel: String) {
+            self.text = text
+            self.accessibilityLabel = accessibilityLabel
+        }
+    }
+
+    /// Non-color marker appended to a mixed-currency dominant-subtotal glance to
+    /// signal "other currencies exist, not included in this figure". Kept ASCII so
+    /// it renders in the menu bar across locales and is read by VoiceOver via the
+    /// glance's spoken label rather than this glyph.
+    public static let multiCurrencyMarker = "+"
+
+    public static func glance(
+        from aggregation: CurrencyAggregation,
+        format: CurrencyFormat = .compact,
+        privacyMaskEnabled: Bool = false
+    ) -> Glance {
+        let headline = headline(
+            from: aggregation,
+            format: format,
+            privacyMaskEnabled: privacyMaskEnabled
+        )
+
+        // Exact (single currency) or a real cross-currency conversion → use the
+        // single figure verbatim. Single-currency text is byte-identical to the
+        // pre-multi-currency menu bar.
+        if let total = headline.formattedTotal {
+            return Glance(text: total, accessibilityLabel: headline.accessibilityLabel)
+        }
+
+        // Mixed + unpriceable → dominant currency's subtotal + non-color marker.
+        // No conversion is invented; the omitted currencies are named in the
+        // spoken label so VoiceOver users know the figure is one currency only.
+        guard let dominant = dominantSubtotal(in: aggregation) else {
+            // Defensive: no subtotals at all (empty input never reaches here via
+            // aggregate, which yields .exact 0) — keep the prior subtotals prompt.
+            return Glance(
+                text: displayText(from: aggregation, format: format, privacyMaskEnabled: privacyMaskEnabled),
+                accessibilityLabel: headline.accessibilityLabel
+            )
+        }
+
+        let figure = privacyMaskEnabled
+            ? PrivacyMaskPresentation.compactValue
+            : Formatters.currency(dominant.amount, in: dominant.currency, format: format)
+        let others = aggregation.subtotals
+            .filter { $0.currency != dominant.currency }
+            .map(\.currency)
+        let othersNote = others.isEmpty
+            ? ""
+            : " Other currencies (\(listCurrencyNames(others))) shown separately, not included."
+
+        return Glance(
+            text: figure + multiCurrencyMarker,
+            accessibilityLabel:
+                "\(figure) \(dominant.currency.accessibleName) subtotal.\(othersNote)"
+        )
+    }
+
+    /// The subtotal that dominates by absolute magnitude. Ties resolve to the
+    /// first in ``CurrencyAggregation``'s deterministic order (resolved-first,
+    /// alphabetical), so the chosen currency is stable across renders.
+    static func dominantSubtotal(
+        in aggregation: CurrencyAggregation
+    ) -> CurrencyAggregation.Subtotal? {
+        aggregation.subtotals.reduce(nil) { current, candidate in
+            guard let current else { return candidate }
+            return abs(candidate.amount) > abs(current.amount) ? candidate : current
+        }
+    }
+
     private static func listCurrencyNames(_ currencies: [CurrencyCode]) -> String {
         let names = currencies.map(\.accessibleName)
         switch names.count {

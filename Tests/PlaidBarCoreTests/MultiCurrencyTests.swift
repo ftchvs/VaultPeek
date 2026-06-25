@@ -282,8 +282,9 @@ struct MultiCurrencyTests {
         #expect(unavailable.disclosure.lowercased().contains("per currency"))
     }
 
-    @Test("Menu bar balance modes use subtotals-only text for mixed currencies")
-    func menuBarMixedCurrencyAvoidsScalarBalance() {
+    @Test("Menu bar shows the dominant currency's subtotal (no fabricated $ sum) for mixed currencies")
+    func menuBarMixedCurrencyShowsDominantSubtotal() {
+        // USD subtotal 5,000 dominates the EUR 2,000 subtotal by absolute value.
         let accounts = [
             depository(name: "US Checking", current: 5_000, currency: "USD"),
             depository(name: "Euro Savings", current: 2_000, currency: "EUR"),
@@ -296,7 +297,101 @@ struct MultiCurrencyTests {
             currencyFormat: .compact
         )
 
-        #expect(text == "By currency")
+        // Dominant USD subtotal in its own symbol + the non-color "+" marker; the
+        // EUR figure is never blind-summed into the dollar number.
+        #expect(text == "$5,000+")
+        #expect(!text.contains("7,000")) // no fabricated 5000 + 2000 cross-currency sum
+        #expect(!text.contains("€")) // the headline figure is the dollar one, not euro
+    }
+
+    @Test("Mixed-currency glance names the dominant subtotal for VoiceOver and notes the others")
+    func menuBarMixedCurrencyAccessibilityLabel() {
+        let accounts = [
+            depository(name: "US Checking", current: 5_000, currency: "USD"),
+            depository(name: "Euro Savings", current: 2_000, currency: "EUR"),
+        ]
+        let aggregation = MultiCurrencyBalancePresentation.netWorth(accounts: accounts)
+        let glance = MultiCurrencyBalancePresentation.glance(from: aggregation, format: .compact)
+
+        // Visible figure carries the dominant USD subtotal + non-color marker...
+        #expect(glance.text == "$5,000+")
+        // ...and the spoken label names the dominant currency in words (not the "+"
+        // glyph) and discloses that other currencies are shown separately.
+        #expect(!glance.accessibilityLabel.isEmpty)
+        #expect(glance.accessibilityLabel.contains("$5,000"))
+        #expect(glance.accessibilityLabel.lowercased().contains("subtotal"))
+        #expect(glance.accessibilityLabel.lowercased().contains("other currencies"))
+        // The accessible value text path used by the menu bar matches the glance.
+        let spoken = MenuBarSummary.accessibleValueText(
+            mode: .netWorth,
+            accounts: accounts,
+            transactions: [],
+            currencyFormat: .compact
+        )
+        #expect(spoken == glance.accessibilityLabel)
+    }
+
+    @Test("Dominant subtotal is picked by absolute magnitude, including negative debt")
+    func menuBarDominantPicksByAbsoluteValue() {
+        // EUR net worth is strongly negative (debt); it dominates the small USD
+        // asset by absolute value, so the glance shows the EUR figure.
+        let accounts = [
+            depository(name: "US Checking", current: 500, currency: "USD"),
+            credit(name: "Euro Card", current: 9_000, limit: 12_000, currency: "EUR"),
+        ]
+        let aggregation = MultiCurrencyBalancePresentation.netWorth(accounts: accounts)
+        let dominant = MultiCurrencyBalancePresentation.dominantSubtotal(in: aggregation)
+        #expect(dominant?.currency == CurrencyCode("EUR"))
+
+        let text = MenuBarSummary.text(
+            mode: .netWorth,
+            accounts: accounts,
+            transactions: [],
+            currencyFormat: .compact
+        )
+        // EUR debt subtotal of -9,000 rendered in EUR's own currency formatting,
+        // plus the marker. Critically: never coerced into a "$" figure. (The exact
+        // symbol — "€" vs "EUR" — is locale-dependent, so assert the *absence* of $
+        // and the dominant-currency pick rather than a brittle symbol literal.)
+        #expect(text.hasSuffix("+"))
+        #expect(!text.contains("$"))
+        // The figure equals EUR's native formatting of the dominant subtotal.
+        let expectedFigure = Formatters.currency(dominant!.amount, in: CurrencyCode("EUR"), format: .compact)
+        #expect(text == expectedFigure + "+")
+    }
+
+    @Test("Single-USD menu-bar text is byte-identical to the legacy formatter (no regression)")
+    func menuBarSingleUSDByteIdentical() {
+        let accounts = [
+            depository(name: "US Checking", current: 5_000, currency: "USD"),
+            depository(name: "US Savings", current: 3_000, currency: "USD"),
+            credit(name: "US Card", current: 800, limit: 3_000, currency: "USD"),
+        ]
+
+        for format in [CurrencyFormat.compact, .full, .abbreviated] {
+            let glanceText = MenuBarSummary.text(
+                mode: .netWorth,
+                accounts: accounts,
+                transactions: [],
+                currencyFormat: format
+            )
+            // Legacy behavior: a single scalar net-cash figure in USD via the
+            // pre-multi-currency formatter path.
+            let legacy = Formatters.currency(
+                MenuBarSummary.netCash(from: accounts),
+                format: format
+            )
+            #expect(glanceText == legacy)
+            #expect(!glanceText.hasSuffix("+")) // no mixed-currency marker for single-currency
+            // Spoken value also equals the visible single figure for VoiceOver.
+            let spoken = MenuBarSummary.accessibleValueText(
+                mode: .netWorth,
+                accounts: accounts,
+                transactions: [],
+                currencyFormat: format
+            )
+            #expect(spoken.contains(legacy))
+        }
     }
 
     // MARK: - Helpers
