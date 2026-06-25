@@ -223,6 +223,14 @@ actor TokenStore {
         try await SyncCursorModel.find(itemId, on: fluent.db())?.cursor
     }
 
+    func syncCursorUpdatedAtsByItem() async throws -> [String: Date] {
+        let cursors = try await SyncCursorModel.query(on: fluent.db()).all()
+        return cursors.reduce(into: [String: Date]()) { result, cursor in
+            guard let itemId = cursor.id, let updatedAt = cursor.updatedAt else { return }
+            result[itemId] = updatedAt
+        }
+    }
+
     func saveSyncCursor(itemId: String, cursor: String) async throws {
         if let existing = try await SyncCursorModel.find(itemId, on: fluent.db()) {
             existing.cursor = cursor
