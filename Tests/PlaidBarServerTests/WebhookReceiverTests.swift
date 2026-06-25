@@ -257,6 +257,48 @@ struct WebhookReceiverTests {
         }
     }
 
+
+    @Test("Stale cursor commit does not clear a newer pending transaction sync")
+    func staleCursorCommitDoesNotClearNewerPendingTransactionSync() async throws {
+        try await Self.withStatusStores { tokenStore, billingStore, eventStore, config in
+            let syncEventAt = Date(timeIntervalSince1970: 1_800_000_000)
+            let signal = WebhookItemSignal(
+                itemId: "item-webhook",
+                webhookType: "TRANSACTIONS",
+                webhookCode: "SYNC_UPDATES_AVAILABLE",
+                requestId: "request-sync-after-cursor",
+                idempotencyHash: "sync-after-cursor-\(UUID().uuidString)",
+                eventAt: syncEventAt,
+                receivedAt: syncEventAt,
+                needsSync: true
+            )
+            _ = try await eventStore.record(signal)
+
+            let statusRoutes = StatusRoutes(
+                tokenStore: tokenStore,
+                billingStore: billingStore,
+                webhookEventStore: eventStore,
+                config: config
+            )
+
+            try await tokenStore.saveSyncCursor(
+                itemId: "item-webhook",
+                cursor: "cursor-before-webhook",
+                updatedAt: syncEventAt.addingTimeInterval(-60)
+            )
+            let staleCommit = try await statusRoutes.statusSnapshot(includeItems: true)
+            #expect(try #require(staleCommit.itemStatuses?.first).needsSync)
+
+            try await tokenStore.saveSyncCursor(
+                itemId: "item-webhook",
+                cursor: "cursor-after-webhook",
+                updatedAt: syncEventAt.addingTimeInterval(60)
+            )
+            let freshCommit = try await statusRoutes.statusSnapshot(includeItems: true)
+            #expect(!((try #require(freshCommit.itemStatuses?.first)).needsSync))
+        }
+    }
+
     @Test("Consent-repair webhook codes persist their modeled item status")
     func consentRepairWebhookCodesPersistModeledStatus() async throws {
         let scenarios: [(code: String, expected: ItemConnectionStatus)] = [

@@ -2598,7 +2598,10 @@ final class AppState {
                     context: cacheContext
                 )
             }
-            try await serverClient.commitSyncCursors(batch.pendingCursors)
+            try await serverClient.commitSyncCursors(
+                batch.pendingCursors,
+                cursorUpdatedAts: batch.pendingCursorUpdatedAts
+            )
             lastSyncDate = Date()
             serverSyncedItemCount = statusItemCount
             await refreshItemStatuses()

@@ -1447,7 +1447,8 @@ struct PlaidBarCoreTests {
             modified: [],
             removed: [],
             hasMore: true,
-            pendingCursors: ["item_1": "cursor_page_1"]
+            pendingCursors: ["item_1": "cursor_page_1"],
+            pendingCursorUpdatedAts: ["item_1": Date(timeIntervalSince1970: 1)]
         ))
         batch.apply(SyncResponse(
             added: [
@@ -1458,7 +1459,11 @@ struct PlaidBarCoreTests {
             ],
             removed: ["remove", "new-page-1"],
             hasMore: false,
-            pendingCursors: ["item_1": "cursor_page_2", "item_2": "cursor_item_2"]
+            pendingCursors: ["item_1": "cursor_page_2", "item_2": "cursor_item_2"],
+            pendingCursorUpdatedAts: [
+                "item_1": Date(timeIntervalSince1970: 2),
+                "item_2": Date(timeIntervalSince1970: 3),
+            ]
         ))
 
         #expect(batch.hasChanges)
@@ -1466,6 +1471,10 @@ struct PlaidBarCoreTests {
         #expect(batch.transactions.first { $0.id == "modify" }?.amount == 35)
         #expect(Set(batch.transactions.map(\.id)).count == batch.transactions.count)
         #expect(batch.pendingCursors == ["item_1": "cursor_page_2", "item_2": "cursor_item_2"])
+        #expect(batch.pendingCursorUpdatedAts == [
+            "item_1": Date(timeIntervalSince1970: 2),
+            "item_2": Date(timeIntervalSince1970: 3),
+        ])
     }
 
     @Test("Transaction sync batch tracks cursors without marking empty pages changed")
@@ -1480,12 +1489,14 @@ struct PlaidBarCoreTests {
             modified: [],
             removed: [],
             hasMore: false,
-            pendingCursors: ["item_1": "cursor_empty"]
+            pendingCursors: ["item_1": "cursor_empty"],
+            pendingCursorUpdatedAts: ["item_1": Date(timeIntervalSince1970: 4)]
         ))
 
         #expect(!batch.hasChanges)
         #expect(batch.transactions == existing)
         #expect(batch.pendingCursors == ["item_1": "cursor_empty"])
+        #expect(batch.pendingCursorUpdatedAts == ["item_1": Date(timeIntervalSince1970: 4)])
     }
 
     @Test("Transaction sync batch treats equivalent non-empty deltas as unchanged")

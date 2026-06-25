@@ -231,12 +231,14 @@ actor TokenStore {
         }
     }
 
-    func saveSyncCursor(itemId: String, cursor: String) async throws {
+    func saveSyncCursor(itemId: String, cursor: String, updatedAt: Date = Date()) async throws {
         if let existing = try await SyncCursorModel.find(itemId, on: fluent.db()) {
             existing.cursor = cursor
+            existing.updatedAt = updatedAt
             try await existing.save(on: fluent.db())
         } else {
             let model = SyncCursorModel(itemId: itemId, cursor: cursor)
+            model.updatedAt = updatedAt
             try await model.save(on: fluent.db())
         }
     }
@@ -248,12 +250,12 @@ actor TokenStore {
     /// the check and the save and resurrect a `sync_cursors` row for a gone
     /// item.
     @discardableResult
-    func saveSyncCursorIfItemExists(itemId: String, cursor: String) async throws -> Bool {
+    func saveSyncCursorIfItemExists(itemId: String, cursor: String, updatedAt: Date = Date()) async throws -> Bool {
         await acquireCursorWriteLock()
         let outcome: Result<Bool, Error>
         do {
             if try await ItemModel.find(itemId, on: fluent.db()) != nil {
-                try await saveSyncCursor(itemId: itemId, cursor: cursor)
+                try await saveSyncCursor(itemId: itemId, cursor: cursor, updatedAt: updatedAt)
                 outcome = .success(true)
             } else {
                 outcome = .success(false)

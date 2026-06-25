@@ -73,7 +73,7 @@ final class SyncCursorModel: Model, @unchecked Sendable {
     @Field(key: "cursor")
     var cursor: String
 
-    @Timestamp(key: "updated_at", on: .update)
+    @Field(key: "updated_at")
     var updatedAt: Date?
 
     init() {}

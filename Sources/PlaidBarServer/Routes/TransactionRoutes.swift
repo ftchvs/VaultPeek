@@ -64,13 +64,18 @@ struct TransactionRoutes: Sendable {
             guard let nextCursor = result.nextCursor, !nextCursor.isEmpty else { return }
             cursors[result.itemId] = nextCursor
         }
+        let pendingCursorUpdatedAts = successfulResults.reduce(into: [String: Date]()) { updatedAts, result in
+            guard let nextCursor = result.nextCursor, !nextCursor.isEmpty, let cursorUpdatedAt = result.cursorUpdatedAt else { return }
+            updatedAts[result.itemId] = cursorUpdatedAt
+        }
 
         let syncResponse = SyncResponse(
             added: successfulResults.flatMap(\.added),
             modified: successfulResults.flatMap(\.modified),
             removed: successfulResults.flatMap(\.removed),
             hasMore: successfulResults.contains(where: \.hasMore),
-            pendingCursors: pendingCursors
+            pendingCursors: pendingCursors,
+            pendingCursorUpdatedAts: pendingCursorUpdatedAts
         )
 
         let data = try JSONEncoder().encode(syncResponse)
@@ -94,7 +99,8 @@ struct TransactionRoutes: Sendable {
             // resurrected for an item deleted mid-request.
             let persisted = try await tokenStore.saveSyncCursorIfItemExists(
                 itemId: itemId,
-                cursor: committableCursor
+                cursor: committableCursor,
+                updatedAt: commitRequest.cursorUpdatedAts[itemId] ?? Date()
             )
             guard persisted else {
                 throw HTTPError(.badRequest, message: "Cannot commit cursor for unknown item")
@@ -126,6 +132,7 @@ struct TransactionRoutes: Sendable {
         let removed: [String]
         let hasMore: Bool
         let nextCursor: String?
+        let cursorUpdatedAt: Date?
 
         static let skipped = ItemSyncResult(
             itemId: "",
@@ -135,7 +142,8 @@ struct TransactionRoutes: Sendable {
             modified: [],
             removed: [],
             hasMore: false,
-            nextCursor: nil
+            nextCursor: nil,
+            cursorUpdatedAt: nil
         )
     }
 
@@ -177,7 +185,8 @@ struct TransactionRoutes: Sendable {
                 modified: itemResult.modified,
                 removed: itemResult.removed,
                 hasMore: false,
-                nextCursor: itemResult.nextCursor
+                nextCursor: itemResult.nextCursor,
+                cursorUpdatedAt: itemResult.cursorUpdatedAt
             )
         } catch PlaidError.credentialsNotConfigured {
             // Setup state affects every item identically: surface the 503
@@ -196,7 +205,8 @@ struct TransactionRoutes: Sendable {
                 modified: [],
                 removed: [],
                 hasMore: false,
-                nextCursor: nil
+                nextCursor: nil,
+                cursorUpdatedAt: nil
             )
         }
     }
@@ -205,7 +215,13 @@ struct TransactionRoutes: Sendable {
         itemId: String,
         accessToken: String,
         persistedCursor: String?
-    ) async throws -> (added: [TransactionDTO], modified: [TransactionDTO], removed: [String], nextCursor: String?) {
+    ) async throws -> (
+        added: [TransactionDTO],
+        modified: [TransactionDTO],
+        removed: [String],
+        nextCursor: String?,
+        cursorUpdatedAt: Date?
+    ) {
         var mutationRestartCount = 0
 
         while true {
@@ -229,7 +245,13 @@ struct TransactionRoutes: Sendable {
         itemId: String,
         accessToken: String,
         persistedCursor: String?
-    ) async throws -> (added: [TransactionDTO], modified: [TransactionDTO], removed: [String], nextCursor: String?) {
+    ) async throws -> (
+        added: [TransactionDTO],
+        modified: [TransactionDTO],
+        removed: [String],
+        nextCursor: String?,
+        cursorUpdatedAt: Date?
+    ) {
         var cursor = persistedCursor
         var pageCount = 0
         var added: [TransactionDTO] = []
@@ -261,7 +283,7 @@ struct TransactionRoutes: Sendable {
             }
 
             guard response.hasMore else {
-                return (added, modified, removed, finalCursor)
+                return (added, modified, removed, finalCursor, finalCursor == nil ? nil : Date())
             }
         }
     }
