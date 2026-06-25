@@ -12,6 +12,17 @@ public enum AccountPresentation {
         return account.balances.effectiveBalance
     }
 
+    /// The currency used to format a single account's own figures. Falls back to
+    /// the app reporting currency (USD) when Plaid omits an ISO code, so the
+    /// dominant nil-code path stays byte-identical to the legacy `$` formatting.
+    /// The `.unknown`-distinct-from-USD invariant only governs cross-account
+    /// *aggregation* (handled by the MultiCurrency aggregates), never a lone
+    /// account's display.
+    public static func displayCurrency(for account: AccountDTO) -> CurrencyCode {
+        let code = account.balances.currency
+        return code.isResolved ? code : .usd
+    }
+
     public static func availableBalance(for account: AccountDTO) -> Double {
         if let available = account.balances.available {
             return available
@@ -68,7 +79,10 @@ public enum AccountPresentation {
         format: CurrencyFormat = .full,
         privacyMaskEnabled: Bool = false
     ) -> String {
-        PrivacyMaskPresentation.currency(displayBalance(for: account), format: format, isEnabled: privacyMaskEnabled)
+        PrivacyMaskPresentation.value(
+            accountCurrencyText(displayBalance(for: account), for: account, format: format),
+            isEnabled: privacyMaskEnabled
+        )
     }
 
     public static func dashboardRowSubtitle(
@@ -93,7 +107,11 @@ public enum AccountPresentation {
             return connectionLabel
         }
 
-        let availableText = "\(PrivacyMaskPresentation.currency(availableBalance(for: account), format: format, isEnabled: privacyMaskEnabled)) available"
+        let availableValue = PrivacyMaskPresentation.value(
+            accountCurrencyText(availableBalance(for: account), for: account, format: format),
+            isEnabled: privacyMaskEnabled
+        )
+        let availableText = "\(availableValue) available"
         let dueText = creditDueMetadataText(for: account, liability: liability, privacyMaskEnabled: privacyMaskEnabled)
 
         guard let utilization = account.balances.utilizationPercent else {
@@ -138,6 +156,14 @@ public enum AccountPresentation {
         return display.string(from: date)
     }
 
+    private static func accountCurrencyText(
+        _ amount: Double,
+        for account: AccountDTO,
+        format: CurrencyFormat = .full
+    ) -> String {
+        Formatters.currency(amount, in: displayCurrency(for: account), format: format)
+    }
+
     public static func dashboardAvailableTitle(for account: AccountDTO) -> String {
         account.type == .credit ? "Avail Credit" : "Available"
     }
@@ -160,7 +186,7 @@ public enum AccountPresentation {
             guard let limit = account.balances.limit, limit > 0 else {
                 return PrivacyMaskPresentation.compactValue
             }
-            return "\(PrivacyMaskPresentation.compactValue) of \(PrivacyMaskPresentation.currency(limit, format: format, isEnabled: true))"
+            return "\(PrivacyMaskPresentation.compactValue) of \(PrivacyMaskPresentation.compactValue)"
         }
 
         let status = utilizationStatusLabel(for: utilization, threshold: threshold)
@@ -168,7 +194,7 @@ public enum AccountPresentation {
             return "\(Formatters.percent(utilization, decimals: 0)), \(status)"
         }
 
-        return "\(Formatters.percent(utilization, decimals: 0)) of \(Formatters.currency(limit, format: format)), \(status)"
+        return "\(Formatters.percent(utilization, decimals: 0)) of \(accountCurrencyText(limit, for: account, format: format)), \(status)"
     }
 
     public static func rowAccessibilityLabel(
@@ -207,7 +233,11 @@ public enum AccountPresentation {
         }
 
         if account.type == .credit {
-            components.append("\(PrivacyMaskPresentation.currency(availableBalance(for: account), isEnabled: privacyMaskEnabled)) available credit")
+            let availableText = PrivacyMaskPresentation.value(
+                accountCurrencyText(availableBalance(for: account), for: account),
+                isEnabled: privacyMaskEnabled
+            )
+            components.append("\(availableText) available credit")
             components.append(creditDueMetadataText(for: account, liability: liability, privacyMaskEnabled: privacyMaskEnabled))
         }
 

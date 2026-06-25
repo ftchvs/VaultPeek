@@ -48,6 +48,32 @@ public enum Formatters {
         }
     }
 
+    /// Formats an amount in a specific ``CurrencyCode``, so non-USD balances and
+    /// transactions render in their native currency (e.g. `€1,200.00`, `GBP 80`).
+    /// The ``CurrencyCode/unknown`` bucket renders the bare number with no symbol,
+    /// since coercing it to `$` would imply a currency Plaid never reported.
+    public static func currency(
+        _ amount: Double,
+        in currencyCode: CurrencyCode,
+        format: CurrencyFormat = .full
+    ) -> String {
+        guard currencyCode.isResolved else {
+            return unknownCurrency(amount, format: format)
+        }
+        return currency(amount, format: format, currencyCode: currencyCode.rawValue)
+    }
+
+    private static func unknownCurrency(_ amount: Double, format: CurrencyFormat) -> String {
+        switch format {
+        case .full:
+            return String(format: "%.2f", amount)
+        case .compact:
+            return String(format: "%.0f", amount)
+        case .abbreviated:
+            return abbreviatedCurrency(amount, currencyCode: "")
+        }
+    }
+
     private static func abbreviatedCurrency(_ amount: Double, currencyCode: String) -> String {
         let sign = amount < 0 ? "-" : ""
         let magnitude = abs(amount)

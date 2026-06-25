@@ -83,6 +83,9 @@ public enum ControlValuePresentation {
         guard let snapshot else {
             return withheld(.unavailable, metric: "Safe to spend")
         }
+        if snapshot.hasMixedCurrencyBalances {
+            return withheld(.unavailable, metric: "Safe to spend")
+        }
         let amount = snapshot.safeToSpend
         let formatted = Formatters.currency(
             amount,

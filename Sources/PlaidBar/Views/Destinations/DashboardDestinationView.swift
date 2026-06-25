@@ -289,13 +289,37 @@ struct DashboardDestinationView: View {
             asOf: Date()
         )
         let freshness = appState.lastSyncDate
+        let netWorthAggregation = MultiCurrencyBalancePresentation.netWorth(accounts: appState.accounts)
+        let cashAggregation = MultiCurrencyBalancePresentation.totalCash(accounts: appState.accounts)
+        let cashHeadline = MultiCurrencyBalancePresentation.headline(
+            from: cashAggregation,
+            format: .compact,
+            privacyMaskEnabled: masked
+        )
+        let safeValue = cashHeadline.formattedTotal == nil
+            ? "By currency"
+            : PrivacyMaskPresentation.value(
+                Formatters.currency(
+                    safeToSpend.amount,
+                    in: cashAggregation.singleCurrency ?? .usd,
+                    format: .compact
+                ),
+                isEnabled: masked
+            )
+        let safeDetail = cashHeadline.formattedTotal == nil
+            ? cashHeadline.disclosure
+            : "Through end of month · \(safeToSpend.confidence.label) confidence"
 
         let netWorth = HeroMetric(
             id: "netWorth",
             label: "Net worth",
-            value: PrivacyMaskPresentation.currency(summary.netWorth, format: .compact, isEnabled: masked),
+            value: MultiCurrencyBalancePresentation.displayText(
+                from: netWorthAggregation,
+                format: .compact,
+                privacyMaskEnabled: masked
+            ),
             systemImage: "chart.line.uptrend.xyaxis",
-            detail: accountCountDetail(summary.accountCount),
+            detail: metricDetail(for: netWorthAggregation, fallback: accountCountDetail(summary.accountCount)),
             accent: SemanticColors.brand,
             provenance: FigureProvenance.netWorth(
                 accounts: appState.accounts,
@@ -307,9 +331,9 @@ struct DashboardDestinationView: View {
         let safe = HeroMetric(
             id: "safeToSpend",
             label: "Safe to spend",
-            value: PrivacyMaskPresentation.currency(safeToSpend.amount, format: .compact, isEnabled: masked),
+            value: safeValue,
             systemImage: safeToSpend.confidence.iconName,
-            detail: "Through end of month · \(safeToSpend.confidence.label) confidence",
+            detail: safeDetail,
             accent: safeToSpend.amount >= 0 ? SemanticColors.positive : SemanticColors.warning,
             provenance: FigureProvenance.safeToSpend(
                 result: safeToSpend,
@@ -332,6 +356,11 @@ struct DashboardDestinationView: View {
 
     private func accountCountDetail(_ count: Int) -> String {
         count == 1 ? "Across 1 account" : "Across \(count) accounts"
+    }
+
+    private func metricDetail(for aggregation: CurrencyAggregation, fallback: String) -> String {
+        let headline = MultiCurrencyBalancePresentation.headline(from: aggregation, format: .compact)
+        return headline.formattedTotal == nil ? headline.disclosure : fallback
     }
 }
 
