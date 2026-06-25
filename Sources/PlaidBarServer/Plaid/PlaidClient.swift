@@ -26,6 +26,14 @@ protocol PlaidClientProtocol: Sendable {
 
     func getLiabilities(accessToken: String) async throws -> PlaidLiabilitiesResponse
 
+    func getInvestmentHoldings(accessToken: String) async throws -> PlaidHoldingsResponse
+
+    func getInvestmentTransactions(
+        accessToken: String,
+        startDate: String,
+        endDate: String
+    ) async throws -> PlaidInvestmentTransactionsResponse
+
     func syncTransactions(
         accessToken: String,
         cursor: String?
@@ -39,6 +47,30 @@ extension PlaidClientProtocol {
     /// omit the call; only the real `PlaidClient` hits `/liabilities/get`.
     func getLiabilities(accessToken: String) async throws -> PlaidLiabilitiesResponse {
         PlaidLiabilitiesResponse(liabilities: nil, requestId: nil)
+    }
+
+    /// Default: no holdings. Lets test doubles and non-Plaid providers omit the
+    /// Investments product; only the real `PlaidClient` hits
+    /// `/investments/holdings/get`.
+    func getInvestmentHoldings(accessToken: String) async throws -> PlaidHoldingsResponse {
+        PlaidHoldingsResponse(accounts: [], holdings: [], securities: [], item: nil, requestId: nil)
+    }
+
+    /// Default: no investment transactions. Only the real `PlaidClient` hits
+    /// `/investments/transactions/get`.
+    func getInvestmentTransactions(
+        accessToken: String,
+        startDate: String,
+        endDate: String
+    ) async throws -> PlaidInvestmentTransactionsResponse {
+        PlaidInvestmentTransactionsResponse(
+            accounts: [],
+            securities: [],
+            investmentTransactions: [],
+            totalInvestmentTransactions: 0,
+            item: nil,
+            requestId: nil
+        )
     }
 }
 
@@ -149,6 +181,33 @@ actor PlaidClient: PlaidClientProtocol {
             accessToken: accessToken
         )
         return try await post("/liabilities/get", body: body)
+    }
+
+    // MARK: - Investments
+
+    func getInvestmentHoldings(accessToken: String) async throws -> PlaidHoldingsResponse {
+        let body = PlaidAuthenticatedRequest(
+            clientId: config.plaidClientId,
+            secret: config.plaidSecret,
+            accessToken: accessToken
+        )
+        return try await post("/investments/holdings/get", body: body)
+    }
+
+    func getInvestmentTransactions(
+        accessToken: String,
+        startDate: String,
+        endDate: String
+    ) async throws -> PlaidInvestmentTransactionsResponse {
+        let body = PlaidInvestmentTransactionsRequest(
+            clientId: config.plaidClientId,
+            secret: config.plaidSecret,
+            accessToken: accessToken,
+            startDate: startDate,
+            endDate: endDate,
+            options: .init(count: 250, offset: 0)
+        )
+        return try await post("/investments/transactions/get", body: body)
     }
 
     // MARK: - Transactions Sync

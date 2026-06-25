@@ -80,6 +80,16 @@ actor ServerClient {
         return try await get(url)
     }
 
+    /// Plaid Investments holdings + securities for every linked item that has the
+    /// `investments` product. The server joins per-item responses; items without
+    /// the scope contribute nothing (never an error).
+    func getInvestmentHoldings() async throws -> InvestmentsResponse {
+        guard let url = ServerEndpoint.investmentHoldingsURL(baseURL: baseURL) else {
+            throw ServerClientError.requestFailed
+        }
+        return try await get(url)
+    }
+
     /// Raw image bytes for a merchant logo, fetched + on-disk-cached by the local
     /// server's authenticated proxy. The app never reaches a logo CDN directly.
     func merchantLogoData(for logoURL: String) async throws -> Data {

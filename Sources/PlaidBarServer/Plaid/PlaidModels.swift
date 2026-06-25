@@ -260,6 +260,75 @@ struct PlaidApr: Decodable, Sendable {
     let interestChargeAmount: Double?
 }
 
+// MARK: - Investments (/investments/holdings/get, /investments/transactions/get)
+
+struct PlaidInvestmentTransactionsRequest: Encodable, Sendable {
+    let clientId: String
+    let secret: String
+    let accessToken: String
+    /// `YYYY-MM-DD` inclusive window start.
+    let startDate: String
+    /// `YYYY-MM-DD` inclusive window end.
+    let endDate: String
+    let options: Options
+
+    struct Options: Encodable, Sendable {
+        let count: Int
+        let offset: Int
+    }
+}
+
+struct PlaidHoldingsResponse: Decodable, Sendable {
+    let accounts: [PlaidAccount]
+    let holdings: [PlaidHolding]
+    let securities: [PlaidSecurity]
+    let item: PlaidItem?
+    let requestId: String?
+}
+
+struct PlaidHolding: Decodable, Sendable {
+    let accountId: String
+    let securityId: String
+    let quantity: Double
+    let institutionPrice: Double?
+    let institutionValue: Double?
+    let costBasis: Double?
+    let isoCurrencyCode: String?
+}
+
+struct PlaidSecurity: Decodable, Sendable {
+    let securityId: String
+    let name: String?
+    let tickerSymbol: String?
+    let type: String?
+    let closePrice: Double?
+    let isoCurrencyCode: String?
+}
+
+struct PlaidInvestmentTransactionsResponse: Decodable, Sendable {
+    let accounts: [PlaidAccount]
+    let securities: [PlaidSecurity]
+    let investmentTransactions: [PlaidInvestmentTransaction]
+    let totalInvestmentTransactions: Int?
+    let item: PlaidItem?
+    let requestId: String?
+}
+
+struct PlaidInvestmentTransaction: Decodable, Sendable {
+    let investmentTransactionId: String
+    let accountId: String
+    let securityId: String?
+    let date: String
+    let name: String
+    let quantity: Double
+    let price: Double
+    let amount: Double
+    let fees: Double?
+    let type: String?
+    let subtype: String?
+    let isoCurrencyCode: String?
+}
+
 struct PlaidTransactionsSyncResponse: Decodable, Sendable {
     let added: [PlaidTransaction]
     let modified: [PlaidTransaction]

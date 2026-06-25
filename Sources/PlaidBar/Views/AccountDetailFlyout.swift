@@ -72,6 +72,10 @@ struct AccountDetailFlyout: View {
                         .scrollEdgeDepth(reduceMotion: reduceMotion)
                     balancesSection(summary: summary)
                         .scrollEdgeDepth(reduceMotion: reduceMotion)
+                    if account.type == .investment, !holdingRows.isEmpty {
+                        holdingsSection()
+                            .scrollEdgeDepth(reduceMotion: reduceMotion)
+                    }
                     if appState.shouldMaskFinancialValues {
                         privateDetailsPlaceholder()
                             .scrollEdgeDepth(reduceMotion: reduceMotion)
@@ -259,6 +263,43 @@ struct AccountDetailFlyout: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Private details hidden while VaultPeek is private")
+    }
+
+    // MARK: Holdings (Plaid Investments — AND-644)
+
+    /// The display rows for this investment account's positions, joined to their
+    /// securities and Privacy-Mask-aware, computed by the shared Core helper so
+    /// the app never recomputes market values.
+    private var holdingRows: [InvestmentHoldingsPresentation.HoldingRow] {
+        InvestmentHoldingsPresentation.rows(
+            forAccount: account.id,
+            holdings: appState.investments.holdings,
+            securities: appState.investments.securities,
+            privacyMaskEnabled: appState.shouldMaskFinancialValues
+        )
+    }
+
+    private func holdingsSection() -> some View {
+        let summary = InvestmentHoldingsPresentation.summary(
+            holdings: appState.investments.holdings,
+            accountId: account.id,
+            privacyMaskEnabled: appState.shouldMaskFinancialValues
+        )
+        return VStack(alignment: .leading, spacing: Spacing.sm) {
+            HStack(alignment: .firstTextBaseline) {
+                FlyoutSectionLabel("Holdings")
+                Spacer(minLength: Spacing.xs)
+                Text(summary.totalMarketValueText)
+                    .dataText()
+            }
+
+            ForEach(holdingRows) { row in
+                HoldingRowView(row: row)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Holdings. \(summary.accessibilityLabel)")
     }
 
     // MARK: Changes (30D vs prior 30D)
@@ -532,6 +573,73 @@ private struct FlyoutChangeRow: View {
         }
         let direction = delta > 0 ? "up" : "down"
         return "\(title) \(Formatters.currency(total, format: .full)) in the last 30 days, \(direction) \(Formatters.currency(abs(delta), format: .full)) versus the prior 30 days"
+    }
+}
+
+// MARK: - Holding Row (Plaid Investments — AND-644)
+
+/// One investment holding rendered in the account inspector: security name +
+/// ticker/type, quantity, market value, and an unrealized gain/loss cue.
+///
+/// Accessibility (ACCESSIBILITY.md): the gain/loss is never communicated by
+/// color alone. The shared `InvestmentHoldingsPresentation` row supplies a
+/// directional glyph (arrow up / down / dash — a *shape*) and a sign-prefixed
+/// amount string; color is layered on top of those redundant cues, and the
+/// whole row carries a spoken VoiceOver label. All currency strings are already
+/// Privacy-Mask-aware (masked at the Core layer), so this view does no masking
+/// of its own.
+private struct HoldingRowView: View {
+    let row: InvestmentHoldingsPresentation.HoldingRow
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                Text(row.securityName)
+                    .font(.subheadline)
+                    .lineLimit(1)
+                Text(subtitle)
+                    .microText()
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: Spacing.xs)
+
+            VStack(alignment: .trailing, spacing: Spacing.xxs) {
+                Text(row.marketValueText)
+                    .dataText()
+                if let gainText = row.gainText, let direction = row.gainDirection {
+                    HStack(spacing: Spacing.xxs) {
+                        Image(systemName: direction.glyphName)
+                            .font(.caption2.weight(.medium))
+                        Text(gainText)
+                            .font(.caption2.weight(.medium))
+                            .monospacedDigit()
+                    }
+                    .foregroundStyle(tint(for: direction))
+                    .lineLimit(1)
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(row.accessibilityLabel)
+    }
+
+    /// Ticker (or type) + masked-aware quantity, e.g. "AAPL · 50 shares".
+    private var subtitle: String {
+        let lead = row.tickerSymbol ?? row.securityTypeLabel
+        guard let lead, !lead.isEmpty else { return row.quantityText }
+        return "\(lead) · \(row.quantityText)"
+    }
+
+    /// Color is *additive* on top of the glyph + sign cues, never the sole
+    /// signal. `.flat` stays neutral.
+    private func tint(for direction: InvestmentHoldingsPresentation.Direction) -> Color {
+        switch direction {
+        case .gain: return SemanticColors.positive
+        case .loss: return SemanticColors.negative
+        case .flat: return .secondary
+        }
     }
 }
 
