@@ -4,8 +4,8 @@ import Foundation
 /// (AND-567).
 ///
 /// Owns the offset/limit/`hasMore` arithmetic for an infinite-scroll list backed
-/// by a paged store (the SwiftData `CachedTransaction` cache, or any ordered
-/// collection). Keeping this free of SwiftData and SwiftUI means the page-on-demand
+/// by a paged store (the file-backed `CachedTransaction` cache, or any ordered
+/// collection). Keeping this free of the storage layer and SwiftUI means the page-on-demand
 /// boundary conditions — last partial page, empty history, a `total` that shrinks
 /// under the loaded window after a re-sync — are unit-tested in isolation rather
 /// than discovered in a scrolling view.

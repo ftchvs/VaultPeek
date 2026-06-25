@@ -595,8 +595,8 @@ final class AppState {
     /// destination ever reads it, so with `WindowFirstFeatureFlag` OFF nothing
     /// touches goals storage and the popover boot path is byte-identical.
     let goalsStore = GoalsStore()
-    /// Disposable SwiftData read-model cache for instant cold render (AND-566).
-    /// Opened lazily and behind `try?`; `nil` whenever SwiftData is unavailable
+    /// Disposable file-backed read-model cache for instant cold render (AND-566).
+    /// Opened lazily and behind `try?`; `nil` whenever the cache is unavailable
     /// or the store fails to open, in which case the app behaves exactly as it
     /// did before this cache existed (the JSON/UserDefaults cold path). Opened
     /// against the directory it was created for so a server-directory change
@@ -605,7 +605,7 @@ final class AppState {
     /// `AppState+ReadModelCache.swift` can read/mutate it; still module-scoped.
     var readModelCacheStore: ReadModelCacheStore?
     var readModelCacheStoreDirectoryPath: String?
-    /// Disposable per-transaction SwiftData cache for large-history paging
+    /// Disposable per-transaction file-backed cache for large-history paging
     /// (AND-567). Like ``readModelCacheStore`` it is lazily opened, scoped to the
     /// active data directory, never the source of truth, and gated by
     /// ``readModelCacheEnabled``. The AND-567 wiring extension in
@@ -3377,7 +3377,7 @@ final class AppState {
     /// mismatches fall through to the normal post-connect cache path without
     /// surfacing an error during boot.
     private func preloadCachedDataBeforeFirstConnect() async {
-        // Fast path: paint frame 1 from the disposable SwiftData read-model cache
+        // Fast path: paint frame 1 from the disposable file-backed read-model cache
         // before the (slower) JSON warm path and well before the HTTP refresh
         // (AND-566). Best-effort; on any failure or miss it leaves `accounts` /
         // `transactions` empty so the JSON path below runs exactly as before.

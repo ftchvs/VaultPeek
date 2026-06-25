@@ -8,7 +8,7 @@ import SwiftUI
 /// `@Observable` data source for the virtualized, page-on-demand transaction list
 /// (AND-567).
 ///
-/// It drives the disposable per-transaction SwiftData cache
+/// It drives the disposable per-transaction file-backed cache
 /// (``TransactionCacheStore``) through the pure ``PagedTransactionFeed``
 /// accumulator: page 0 loads on appear, the next page loads when the list scrolls
 /// near the end. Only one page (``PlaidBarConstants/transactionPageSize`` rows) is
@@ -19,7 +19,7 @@ import SwiftUI
 /// available. When the cache is unavailable — `readModelCacheEnabled == false`,
 /// the store fails to open, or no environment context is known yet — the source
 /// stays in ``Mode/fallback`` and ``rows`` is exactly the in-memory array the list
-/// renders today. The SwiftData path is a pure optimization layered on top; if any
+/// renders today. The cache path is a pure optimization layered on top; if any
 /// part of it fails, rendering is byte-for-byte today's behavior.
 @MainActor
 @Observable
@@ -62,7 +62,7 @@ final class PagedTransactionSource {
         self.feed = PagedTransactionFeed(pageSize: pageSize, total: 0)
     }
 
-    /// An in-memory-only source: no SwiftData store, so it stays on the fallback
+    /// An in-memory-only source: no cache store, so it stays on the fallback
     /// path (today's rows) but renders them through the virtualized `LazyVStack`.
     /// Used for per-account surfaces where the global cache's scope does not apply
     /// but the list should still virtualize a large per-account history.

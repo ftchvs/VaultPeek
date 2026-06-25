@@ -3,8 +3,8 @@ import Foundation
 /// Pure, testable mapping between the authoritative in-memory DTOs and the
 /// disposable ``DashboardReadModel`` cache payload (AND-566).
 ///
-/// Kept free of SwiftData and of any I/O so the DTO↔read-model transform can be
-/// unit-tested in isolation. The SwiftData persistence layer (app target) calls
+/// Kept free of the persistence layer and of any I/O so the DTO↔read-model transform can be
+/// unit-tested in isolation. The file-backed cache layer (app target) calls
 /// into this to build the row it stores and to read a hydrated model back; it
 /// never re-derives these numbers itself.
 public enum DashboardReadModelMapper {

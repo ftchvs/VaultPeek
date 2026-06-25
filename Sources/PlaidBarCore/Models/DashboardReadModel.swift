@@ -6,15 +6,15 @@ import Foundation
 ///
 /// This is a **read-model cache**, never a source of truth. The authoritative
 /// data path stays the in-memory DTOs + JSON ledger + UserDefaults caches the
-/// app already keeps. This struct is the serialized shape the SwiftData
-/// disposable store persists after a successful refresh/decode and reads back
+/// app already keeps. This struct is the serialized shape the disposable
+/// file-backed store persists after a successful refresh/decode and reads back
 /// on the next launch. If it is missing, stale, or fails to decode, the app
 /// falls back to exactly its prior behavior (empty/loading → HTTP refresh).
 ///
 /// It carries the same `Sendable` DTOs the dashboard already renders
 /// (``AccountDTO`` / ``TransactionDTO``) plus a small derived summary so the
 /// menu-bar headline can render without recomputation. It is a pure value type
-/// so it can be unit-tested and mapped without touching SwiftData.
+/// so it can be unit-tested and mapped without touching the cache store.
 ///
 /// ## Privacy
 /// This read-model holds financial values and Plaid identifiers (account/item

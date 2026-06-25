@@ -6,8 +6,8 @@ import Foundation
 /// The virtualized list view owns only rendering; this value type owns the
 /// "what's loaded, what loads next, are we done" state machine so the
 /// append-page / dedup-across-pages / stop-at-end logic is unit-tested rather than
-/// tangled in a SwiftUI `onAppear`. It is deliberately free of SwiftData and
-/// SwiftUI: the view (or an `@Observable` source) feeds it pages read from the
+/// tangled in a SwiftUI `onAppear`. It is deliberately free of the storage layer
+/// and SwiftUI: the view (or an `@Observable` source) feeds it pages read from the
 /// ``TransactionCacheStore`` and asks it for the next ``TransactionPageWindow``.
 ///
 /// Rows are newest-first and de-duplicated by id across pages, so a transaction
