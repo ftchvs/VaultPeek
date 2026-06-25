@@ -46,8 +46,8 @@ extension AppState {
 
     /// Lazily opens (or re-opens) the on-disk per-transaction store for the active
     /// data directory. Returns `nil` — and stays disabled for this call — when the
-    /// cache is feature-disabled, in demo mode, or when SwiftData fails to open the
-    /// store. Reopens when the active storage directory changes so the store always
+    /// cache is feature-disabled, in demo mode, or when the file-backed store fails
+    /// to open. Reopens when the active storage directory changes so the store always
     /// matches the environment whose key it is asked about.
     func transactionCacheStoreIfAvailable() -> TransactionCacheStore? {
         guard readModelCacheEnabled, !isDemoMode else { return nil }
@@ -110,7 +110,7 @@ extension AppState {
     }
 
     /// Builds a data source for the virtualized transaction list. When the cache is
-    /// available it pages from SwiftData; otherwise (disabled / unavailable / no
+    /// available it pages from the file-backed store; otherwise (disabled / unavailable / no
     /// context yet) the source stays on `fallback` and the list renders exactly the
     /// in-memory rows it does today — no regression.
     func makePagedTransactionSource(fallback: [TransactionDTO]) -> PagedTransactionSource {

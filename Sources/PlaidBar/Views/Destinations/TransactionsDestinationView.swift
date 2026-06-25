@@ -39,7 +39,7 @@ struct TransactionsDestinationView: View {
 
     /// Large-history paging engine (AND-567), reused verbatim: page 0 loads on
     /// appear, the next page loads as the table nears the end of the loaded rows.
-    /// When the disposable SwiftData cache is unavailable/disabled the source stays
+    /// When the disposable file-backed cache is unavailable/disabled the source stays
     /// on the in-memory `appState.transactions` fallback, so a small history (or a
     /// cache-less environment) renders exactly today's rows — no regression. The
     /// source's `rows` are the *input* to the pure ``TransactionWorkspace`` pipeline

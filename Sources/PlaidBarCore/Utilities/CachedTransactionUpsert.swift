@@ -3,14 +3,15 @@ import Foundation
 /// Pure, testable upsert/dedup decision for the disposable per-transaction cache
 /// (AND-567).
 ///
-/// The SwiftData `CachedTransaction` row is keyed `@Attribute(.unique)` on the
-/// stable Plaid `transaction_id`, so re-syncing a transaction must *replace* the
-/// existing row rather than duplicate it. This type decides — given the ids
+/// The file-backed ``TransactionCacheStore`` keeps one `CachedTransaction` per
+/// stable Plaid `transaction_id` — its `Codable` snapshot is a dictionary keyed on
+/// a unique key derived from that id — so re-syncing a transaction must *replace*
+/// the existing row rather than duplicate it. This type decides — given the ids
 /// already in the store and the freshly decoded authoritative DTOs — which ids are
 /// inserts and which are updates, and collapses duplicate ids *within* the
 /// incoming batch (a sync page can re-list the same id; the newest occurrence
-/// wins). Keeping the decision out of the `@ModelActor` lets the boundary
-/// conditions be unit-tested without SwiftData.
+/// wins). Keeping the decision out of the storage actor lets the boundary
+/// conditions be unit-tested without standing up the cache store.
 public enum CachedTransactionUpsert {
     /// The classification of an incoming batch against the store's existing ids.
     public struct Plan: Sendable, Equatable {

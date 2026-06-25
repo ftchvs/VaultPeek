@@ -67,7 +67,7 @@ extension AppState {
     /// Lazily opens (or re-opens) the on-disk disposable store for the active
     /// data directory. Returns `nil` — and stays disabled for this call — when
     /// the cache is feature-disabled, when in demo mode (demo data is never
-    /// cached), or when SwiftData fails to open the store. Reopens when the
+    /// cached), or when the file-backed store fails to open. Reopens when the
     /// active storage directory changes (e.g. sandbox↔production switch) so the
     /// store always matches the environment whose key it is asked about.
     func readModelCacheStoreIfAvailable() -> ReadModelCacheStore? {
@@ -87,7 +87,7 @@ extension AppState {
             readModelCacheStoreDirectoryPath = directoryPath
             return store
         } catch {
-            // SwiftData unavailable / store unopenable: behave exactly as before
+            // Cache unavailable / store unopenable: behave exactly as before
             // the cache existed. Logged without any financial material.
             AppState.readModelCacheLogger.error(
                 "Read-model cache unavailable: \(String(describing: error), privacy: .public)"
