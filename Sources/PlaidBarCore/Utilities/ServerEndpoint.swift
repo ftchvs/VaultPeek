@@ -37,6 +37,14 @@ public enum ServerEndpoint {
         url(baseURL: baseURL, path: "/api/accounts/\(percentEncodedPathComponent(itemId))")
     }
 
+    public static func investmentHoldingsURL(baseURL: String) -> URL? {
+        url(baseURL: baseURL, path: "/api/investments/holdings")
+    }
+
+    public static func investmentTransactionsURL(baseURL: String) -> URL? {
+        url(baseURL: baseURL, path: "/api/investments/transactions")
+    }
+
     public static func categoryBudgetsURL(baseURL: String) -> URL? {
         url(baseURL: baseURL, path: "/api/budgets")
     }

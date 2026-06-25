@@ -69,6 +69,11 @@ final class AppState {
     /// from Plaid Liabilities, refreshed alongside accounts. Empty for items
     /// linked without the `liabilities` scope. Latest-only — no history.
     var liabilities: [LiabilityDTO] = []
+    /// Latest Plaid Investments holdings + securities (AND-644), refreshed
+    /// alongside accounts. Empty for items linked without the `investments`
+    /// scope. The brokerage accounts inside also arrive via `accounts`, so this
+    /// supplements with positions rather than replacing balances.
+    var investments: InvestmentsResponse = InvestmentsResponse()
     var transactions: [TransactionDTO] = [] {
         didSet {
             _cachedTransactionDerivedIndex = nil
@@ -2450,6 +2455,21 @@ final class AppState {
         }
     }
 
+    /// Fetches the latest Plaid Investments holdings (AND-644). Best-effort and
+    /// supplementary, exactly like ``refreshLiabilities()``: a failure (e.g.
+    /// items linked without the `investments` scope) leaves the previous set in
+    /// place and never disturbs the dashboard.
+    func refreshHoldings() async {
+        if isDemoMode {
+            investments = DemoFixtures.investments
+            return
+        }
+        guard serverConnected, serverCredentialsConfigured != false else { return }
+        if let fetched = try? await serverClient.getInvestmentHoldings() {
+            investments = fetched
+        }
+    }
+
     func syncTransactions() async {
         if refreshDemoDataIfNeeded() { return }
 
@@ -2778,6 +2798,7 @@ final class AppState {
             await refreshAccounts(live: useLive)
             await syncTransactions()
             await refreshLiabilities()
+            await refreshHoldings()
         }
         if serverConnected {
             await refreshCategoryBudgets()
@@ -3296,6 +3317,7 @@ final class AppState {
                     await refreshAccounts()
                     await syncTransactions()
                     await refreshLiabilities()
+                    await refreshHoldings()
                 }
             }
             await refreshCategoryBudgets()
@@ -4394,6 +4416,7 @@ final class AppState {
         // stay testable. See DemoFixtures and DemoFixturesTests.
         accounts = DemoFixtures.accounts
         liabilities = DemoFixtures.liabilities()
+        investments = DemoFixtures.investments
         transactions = DemoFixtures.transactions()
         // Seed review metadata, categorization rules, and category budgets so
         // --demo actually surfaces the Review Inbox + budget/category state

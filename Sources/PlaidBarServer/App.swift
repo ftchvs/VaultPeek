@@ -102,6 +102,8 @@ struct PlaidBarServer: AsyncParsableCommand {
         .register(with: api)
         AccountRoutes(plaidClient: plaidClient, tokenStore: tokenStore)
             .register(with: api)
+        InvestmentRoutes(plaidClient: plaidClient, tokenStore: tokenStore)
+            .register(with: api)
         MerchantLogoRoutes(
             cacheDirectory: URL(fileURLWithPath: serverConfig.dataDirectoryPath, isDirectory: true)
                 .appendingPathComponent("logo-cache", isDirectory: true)
