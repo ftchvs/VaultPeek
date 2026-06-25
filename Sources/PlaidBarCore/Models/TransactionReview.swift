@@ -97,6 +97,15 @@ public struct TransactionReviewMetadata: Codable, Sendable, Identifiable, Equata
     /// decoded as `nil` when absent) so records written before AND-582 still
     /// decode and behave identically.
     public var userNote: String?
+    /// `true` when this row was marked reviewed by the opt-in high-confidence
+    /// auto-review pass (AND-553) rather than by an explicit user action. The
+    /// inbox / review table flag these rows so the user can see what was cleared
+    /// for them, and the app can bulk-undo the whole auto-review batch. Defaults
+    /// to `false` and decodes as `false` when absent, so records written before
+    /// AND-553 still decode and behave identically. A manual review/ignore action
+    /// on the row clears the flag — once the user acts, it is no longer an
+    /// auto-review.
+    public var autoReviewed: Bool
 
     public init(
         id: String,
@@ -110,7 +119,8 @@ public struct TransactionReviewMetadata: Codable, Sendable, Identifiable, Equata
         lastSeenAmount: Double? = nil,
         lastSeenName: String? = nil,
         lastSeenPending: Bool? = nil,
-        userNote: String? = nil
+        userNote: String? = nil,
+        autoReviewed: Bool = false
     ) {
         self.id = id
         self.status = status
@@ -124,6 +134,7 @@ public struct TransactionReviewMetadata: Codable, Sendable, Identifiable, Equata
         self.lastSeenName = lastSeenName
         self.lastSeenPending = lastSeenPending
         self.userNote = userNote
+        self.autoReviewed = autoReviewed
     }
 
     public init(from decoder: any Decoder) throws {
@@ -143,6 +154,10 @@ public struct TransactionReviewMetadata: Codable, Sendable, Identifiable, Equata
         // default to nil. Matches the forward-compatible decode used for
         // `TransactionDTO.isLowConfidenceCategory`.
         userNote = try container.decodeIfPresent(String.self, forKey: .userNote)
+        // New field (AND-553) — absent before auto-review existed, so default to
+        // false: a record predating it is treated as a manual review, never an
+        // auto-review.
+        autoReviewed = try container.decodeIfPresent(Bool.self, forKey: .autoReviewed) ?? false
     }
 }
 
@@ -204,6 +219,13 @@ public struct TransactionReviewItem: Sendable, Identifiable, Equatable {
     /// pairs this with a text+icon "Suggested" badge (never color alone). Nil
     /// when the category came straight from the user override or Plaid.
     public let categorySource: LocalAICategoryResolutionSource?
+    /// `true` when this row was cleared by the opt-in high-confidence auto-review
+    /// pass rather than an explicit user action (AND-553). Surfaces only on rows
+    /// that reopened after being auto-reviewed (e.g. the charge changed) so the
+    /// user can see the auto-review provenance; a freshly auto-reviewed row leaves
+    /// the inbox like any other reviewed row. Always `false` for `.needsReview`
+    /// rows that have never been auto-reviewed.
+    public let wasAutoReviewed: Bool
 
     public init(
         transaction: TransactionDTO,
@@ -214,7 +236,8 @@ public struct TransactionReviewItem: Sendable, Identifiable, Equatable {
         isTransfer: Bool,
         excludedFromBudgets: Bool,
         matchedRuleIds: [UUID],
-        categorySource: LocalAICategoryResolutionSource? = nil
+        categorySource: LocalAICategoryResolutionSource? = nil,
+        wasAutoReviewed: Bool = false
     ) {
         self.id = transaction.id
         self.transaction = transaction
@@ -226,6 +249,7 @@ public struct TransactionReviewItem: Sendable, Identifiable, Equatable {
         self.excludedFromBudgets = excludedFromBudgets
         self.matchedRuleIds = matchedRuleIds
         self.categorySource = categorySource
+        self.wasAutoReviewed = wasAutoReviewed
     }
 
     /// Whether `effectiveCategory` was filled by the on-device NL tier rather
@@ -256,6 +280,7 @@ public enum TransactionReviewInbox {
         rules: [TransactionRule],
         recurring: [RecurringTransaction],
         now: Date,
+        sortOrder: ReviewInboxSortOrder = .priority,
         nlCategorizer: NLMerchantCategorizer = NLMerchantCategorizer()
     ) -> TransactionReviewInboxSnapshot {
         let metadataById = Dictionary(uniqueKeysWithValues: metadata.map { ($0.id, $0) })
@@ -414,18 +439,17 @@ public enum TransactionReviewInbox {
                 isTransfer: isTransfer,
                 excludedFromBudgets: metadata?.excludedFromBudgets ?? isTransfer,
                 matchedRuleIds: matchedRules.map(\.id),
-                categorySource: categorySource
+                categorySource: categorySource,
+                wasAutoReviewed: metadata?.autoReviewed ?? false
             )
         }
-        .sorted { lhs, rhs in
-            let lhsPriority = lhs.reasonCodes.map(\.priority).min() ?? Int.max
-            let rhsPriority = rhs.reasonCodes.map(\.priority).min() ?? Int.max
-            if lhsPriority != rhsPriority { return lhsPriority < rhsPriority }
-            if lhs.transaction.date != rhs.transaction.date { return lhs.transaction.date > rhs.transaction.date }
-            return lhs.id < rhs.id
-        }
 
-        return TransactionReviewInboxSnapshot(items: items)
+        // Order by the chosen sort (AND-553). `.priority` — the default — is the
+        // historical order exactly (the comparator lives in `ReviewInboxSorting`);
+        // `.confidenceLowFirst` floats Plaid's LOW/UNKNOWN categorizations up and
+        // falls back to that same historical order within each confidence band.
+        let sortedItems = ReviewInboxSorting.sorted(items, order: sortOrder)
+        return TransactionReviewInboxSnapshot(items: sortedItems)
     }
 
     private static func normalizedMerchantKey(_ transaction: TransactionDTO) -> String {

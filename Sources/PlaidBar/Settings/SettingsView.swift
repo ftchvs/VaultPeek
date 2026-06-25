@@ -841,6 +841,15 @@ struct GeneralSettingsView: View {
                 .fixedSize(horizontal: false, vertical: true)
             }
 
+            Section("Review Inbox") {
+                // AND-553: opt-in auto-review for the safest rows. Off by default,
+                // so a user who never enables it sees no rows resolved for them.
+                Toggle("Auto-review high-confidence transactions", isOn: $state.autoReviewHighConfidenceEnabled)
+                Text("Automatically marks reviewed only the safest rows — high-confidence, already-categorized, ordinary-value transactions. Transfers and unusual or changed charges are never auto-reviewed and always wait for you. Auto-reviewed rows are flagged and you can undo them with ⌘Z.")
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             Section("Local data") {
                 LabeledContent("Storage path") {
                     VStack(alignment: .trailing, spacing: Spacing.xs) {

@@ -59,6 +59,8 @@ final class AppState {
         static let windowFirstOrientationDismissedContextPrefix = "windowFirstOrientation.dismissed.context"
         static let lastTransactionCacheContext = "cache.lastTransactionCacheContext"
         static let categoryBudgetCache = "cache.categoryBudgets"
+        static let reviewInboxSortOrder = ReviewInboxSortOrder.storageKey
+        static let reviewAutoReviewHighConfidence = ReviewAutoReviewPreference.storageKey
     }
 
     // MARK: - State
@@ -107,6 +109,42 @@ final class AppState {
         }
     }
     var hasLoadedTransactionReviewStorage = false
+
+    /// How the Review Inbox orders its rows (AND-553). UserDefaults-backed so the
+    /// choice persists, and changing it invalidates the memoized snapshot so the
+    /// next read re-sorts. Defaults to `.priority` — the historical order — so a
+    /// user who never touches the control sees today's ordering exactly. Seeded
+    /// from UserDefaults in `init` (below) so a stored choice is honored at boot.
+    var reviewInboxSortOrder: ReviewInboxSortOrder = .priority {
+        didSet {
+            guard reviewInboxSortOrder != oldValue else { return }
+            _cachedTransactionReviewInboxSnapshot = nil
+            UserDefaults.standard.set(reviewInboxSortOrder.rawValue, forKey: Keys.reviewInboxSortOrder)
+        }
+    }
+
+    /// Whether the opt-in high-confidence auto-review pass is enabled (AND-553).
+    /// Off by default: a not-opted-in user has nothing resolved on their behalf,
+    /// matching today's behavior byte-for-byte. UserDefaults-backed so the choice
+    /// persists; seeded in `init`. Turning it ON triggers a one-shot
+    /// `applyHighConfidenceAutoReview()` so the inbox immediately reflects the
+    /// choice; turning it OFF stops future auto-review but leaves already-cleared
+    /// rows as they are (they remain ⌘Z / bulk-undoable).
+    var autoReviewHighConfidenceEnabled: Bool = false {
+        didSet {
+            guard autoReviewHighConfidenceEnabled != oldValue, !isLoadingReviewPreferences else { return }
+            UserDefaults.standard.set(autoReviewHighConfidenceEnabled, forKey: Keys.reviewAutoReviewHighConfidence)
+            if autoReviewHighConfidenceEnabled {
+                applyHighConfidenceAutoReview()
+            }
+        }
+    }
+
+    /// Suppresses the `autoReviewHighConfidenceEnabled` didSet side effects while
+    /// seeding the stored value at boot, so loading the persisted preference does
+    /// not itself trigger an auto-review pass before data is loaded.
+    private var isLoadingReviewPreferences = false
+
     var isLoading = false
     /// True from launch until the first `loadInitialData()` pass completes.
     /// While booting, data surfaces render loading/skeleton states instead
@@ -827,6 +865,7 @@ final class AppState {
         loadWatchlistTargets(defaults: defaults)
         loadAppLockPreferences(defaults: defaults)
         loadLocalAISettings(defaults: defaults)
+        loadReviewPreferences(defaults: defaults)
         // Balance history
         loadPersistedBalanceHistory()
         loadPersistedWeeklyReviewState()
@@ -1002,6 +1041,31 @@ final class AppState {
             selectedInsightWindow = window
         } else {
             selectedInsightWindow = .lastMonth
+        }
+    }
+
+    /// Seeds the Review Inbox sort order and auto-review opt-in from UserDefaults
+    /// at boot (AND-553). Both default to today's behavior when unset (priority
+    /// order; auto-review off). The auto-review didSet side effect is suppressed
+    /// during this load so seeding the stored value never kicks off an
+    /// auto-review pass before data has loaded — the explicit pass runs from
+    /// `applyHighConfidenceAutoReview` after the inbox is populated.
+    private func loadReviewPreferences(defaults: UserDefaults) {
+        isLoadingReviewPreferences = true
+        defer { isLoadingReviewPreferences = false }
+
+        if let stored = defaults.string(forKey: Keys.reviewInboxSortOrder),
+           let order = ReviewInboxSortOrder(rawValue: stored)
+        {
+            reviewInboxSortOrder = order
+        } else {
+            reviewInboxSortOrder = .priority
+        }
+
+        if defaults.object(forKey: Keys.reviewAutoReviewHighConfidence) != nil {
+            autoReviewHighConfidenceEnabled = defaults.bool(forKey: Keys.reviewAutoReviewHighConfidence)
+        } else {
+            autoReviewHighConfidenceEnabled = ReviewAutoReviewPreference.defaultValue.isEnabled
         }
     }
 
@@ -1577,7 +1641,8 @@ final class AppState {
             metadata: transactionReviewMetadata,
             rules: transactionRules,
             recurring: recurringTransactions,
-            now: Date()
+            now: Date(),
+            sortOrder: reviewInboxSortOrder
         )
         _cachedTransactionReviewInboxSnapshot = snapshot
         return snapshot
@@ -4485,6 +4550,9 @@ final class AppState {
             metadata.lastSeenAmount = transaction.amount
             metadata.lastSeenName = transaction.name
             metadata.lastSeenPending = transaction.pending
+            // An explicit user approve is never an auto-review — clear any prior
+            // auto-review provenance (AND-553).
+            metadata.autoReviewed = false
         }
     }
 
@@ -4495,6 +4563,7 @@ final class AppState {
             metadata.lastSeenAmount = transaction.amount
             metadata.lastSeenName = transaction.name
             metadata.lastSeenPending = transaction.pending
+            metadata.autoReviewed = false
         }
     }
 
@@ -4507,6 +4576,7 @@ final class AppState {
             metadata.lastSeenAmount = transaction.amount
             metadata.lastSeenName = transaction.name
             metadata.lastSeenPending = transaction.pending
+            metadata.autoReviewed = false
         }
     }
 
@@ -4532,6 +4602,7 @@ final class AppState {
             metadata.status = .needsReview
             metadata.reviewedAt = nil
             metadata.reviewReasonCodes = []
+            metadata.autoReviewed = false
         }
     }
 
@@ -4546,6 +4617,7 @@ final class AppState {
             metadata.lastSeenAmount = transaction.amount
             metadata.lastSeenName = transaction.name
             metadata.lastSeenPending = transaction.pending
+            metadata.autoReviewed = false
         }
     }
 
@@ -4559,6 +4631,7 @@ final class AppState {
             metadata.lastSeenAmount = transaction.amount
             metadata.lastSeenName = transaction.name
             metadata.lastSeenPending = transaction.pending
+            metadata.autoReviewed = false
         }
     }
 
@@ -4662,6 +4735,32 @@ final class AppState {
         return resolvableIDs.count
     }
 
+    /// Runs the opt-in high-confidence auto-review pass (AND-553).
+    ///
+    /// The conservative eligibility decision — which rows are safe to clear
+    /// automatically — lives entirely in the pure, unit-tested
+    /// `ReviewAutoReviewPolicy` (never transfers or unusual/changed charges; only
+    /// high-confidence, already-categorized, ordinary-value rows). This method
+    /// just applies the resulting ids through the SAME approve path as a manual
+    /// review, additionally stamping each as `autoReviewed = true` so the row is
+    /// flagged and the whole pass is bulk-undoable in ONE ⌘Z. A no-op when the
+    /// preference is off or nothing qualifies (so the inbox is untouched).
+    ///
+    /// - Returns: the number of rows auto-reviewed (0 when nothing qualified).
+    @discardableResult
+    func applyHighConfidenceAutoReview() -> Int {
+        guard autoReviewHighConfidenceEnabled else { return 0 }
+        let ids = ReviewAutoReviewPolicy.autoReviewableIDs(in: transactionReviewInboxSnapshot)
+        let resolvableIDs = ids.filter { id in transactions.contains(where: { $0.id == id }) }
+        guard !resolvableIDs.isEmpty else { return 0 }
+        pushReviewUndoState()
+        for id in resolvableIDs {
+            approveReviewItemWithoutUndo(id, autoReviewed: true)
+        }
+        persistReviewStorage()
+        return resolvableIDs.count
+    }
+
     func undoLastReviewAction() {
         guard let previous = reviewUndoStack.popLast() else { return }
         transactionReviewMetadata = previous.metadata
@@ -4683,7 +4782,13 @@ final class AppState {
         persistReviewStorage()
     }
 
-    private func approveReviewItemWithoutUndo(_ id: String) {
+    /// Marks one row reviewed without pushing its own undo snapshot (the caller
+    /// owns the batch snapshot). `autoReviewed` stamps the AND-553 provenance: the
+    /// opt-in auto-review pass passes `true` so the row is flagged and the pass is
+    /// bulk-undoable; every manual path passes `false` (the default) so an explicit
+    /// review is never mislabeled as automatic — and a later manual approve of a
+    /// previously auto-reviewed row clears the flag.
+    private func approveReviewItemWithoutUndo(_ id: String, autoReviewed: Bool = false) {
         guard let transaction = transactions.first(where: { $0.id == id }) else { return }
         var byId = Dictionary(uniqueKeysWithValues: transactionReviewMetadata.map { ($0.id, $0) })
         var metadata = byId[id] ?? TransactionReviewMetadata(id: id)
@@ -4693,6 +4798,7 @@ final class AppState {
         metadata.lastSeenAmount = transaction.amount
         metadata.lastSeenName = transaction.name
         metadata.lastSeenPending = transaction.pending
+        metadata.autoReviewed = autoReviewed
         byId[id] = metadata
         transactionReviewMetadata = byId.values.sorted { $0.id < $1.id }
     }
@@ -4712,6 +4818,11 @@ final class AppState {
         guard changed else { return }
         transactionReviewMetadata = byId.values.sorted { $0.id < $1.id }
         persistReviewStorage()
+        // When the opt-in pass is enabled (AND-553), sweep the freshly-seeded rows
+        // so newly synced high-confidence charges are auto-cleared as they arrive.
+        // A no-op when the preference is off (default), so sync behavior is
+        // unchanged for a not-opted-in user.
+        applyHighConfidenceAutoReview()
     }
 
     private func pushReviewUndoState() {
