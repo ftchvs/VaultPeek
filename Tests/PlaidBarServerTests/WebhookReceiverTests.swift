@@ -207,9 +207,95 @@ struct WebhookReceiverTests {
             let pending = try await statusRoutes.statusSnapshot(includeItems: true)
             #expect(try #require(pending.itemStatuses?.first).needsSync)
 
-            try await tokenStore.updateItemStatus(id: "item-webhook", status: ItemConnectionStatus.connected.rawValue)
+            try await tokenStore.saveSyncCursor(itemId: "item-webhook", cursor: "cursor-after-sync")
             let refreshed = try await statusRoutes.statusSnapshot(includeItems: true)
             #expect(!((try #require(refreshed.itemStatuses?.first)).needsSync))
+        }
+    }
+
+    @Test("Status-changing webhook does not clear an earlier pending transaction sync")
+    func statusChangingWebhookDoesNotClearPendingTransactionSync() async throws {
+        try await Self.withStatusStores { tokenStore, billingStore, eventStore, config in
+            let signal = WebhookItemSignal(
+                itemId: "item-webhook",
+                webhookType: "TRANSACTIONS",
+                webhookCode: "SYNC_UPDATES_AVAILABLE",
+                requestId: "request-sync-before-status",
+                idempotencyHash: "sync-before-status-\(UUID().uuidString)",
+                eventAt: Date(timeIntervalSince1970: 1_800_000_000),
+                receivedAt: Date(timeIntervalSince1970: 1_800_000_000),
+                needsSync: true
+            )
+            _ = try await eventStore.record(signal)
+
+            let statusRoutes = StatusRoutes(
+                tokenStore: tokenStore,
+                billingStore: billingStore,
+                webhookEventStore: eventStore,
+                config: config
+            )
+            let pending = try await statusRoutes.statusSnapshot(includeItems: true)
+            #expect(try #require(pending.itemStatuses?.first).needsSync)
+
+            let webhookRoute = WebhookRoutes(
+                verifier: StrictPlaidWebhookVerifier(signatureValidator: AcceptingSignatureValidator()),
+                tokenStore: tokenStore,
+                eventStore: eventStore,
+                now: { Date(timeIntervalSince1970: 1_800_000_600) }
+            )
+            let body = Self.payload(webhookCode: "PENDING_EXPIRATION", timestamp: "2027-01-15T08:10:00Z")
+            _ = try await webhookRoute.receive(
+                request: Self.request(body: body, jwt: Self.jwt(iat: 1_800_000_600, body: Data(body.utf8))),
+                context: WebhookTestContext(source: WebhookTestContextSource())
+            )
+
+            let afterStatusWebhook = try await statusRoutes.statusSnapshot(includeItems: true)
+            let item = try #require(afterStatusWebhook.itemStatuses?.first)
+            #expect(item.status == .pendingExpiration)
+            #expect(item.lastWebhookEvent == "ITEM.PENDING_EXPIRATION")
+            #expect(item.needsSync)
+        }
+    }
+
+
+    @Test("Stale cursor commit does not clear a newer pending transaction sync")
+    func staleCursorCommitDoesNotClearNewerPendingTransactionSync() async throws {
+        try await Self.withStatusStores { tokenStore, billingStore, eventStore, config in
+            let syncEventAt = Date(timeIntervalSince1970: 1_800_000_000)
+            let signal = WebhookItemSignal(
+                itemId: "item-webhook",
+                webhookType: "TRANSACTIONS",
+                webhookCode: "SYNC_UPDATES_AVAILABLE",
+                requestId: "request-sync-after-cursor",
+                idempotencyHash: "sync-after-cursor-\(UUID().uuidString)",
+                eventAt: syncEventAt,
+                receivedAt: syncEventAt,
+                needsSync: true
+            )
+            _ = try await eventStore.record(signal)
+
+            let statusRoutes = StatusRoutes(
+                tokenStore: tokenStore,
+                billingStore: billingStore,
+                webhookEventStore: eventStore,
+                config: config
+            )
+
+            try await tokenStore.saveSyncCursor(
+                itemId: "item-webhook",
+                cursor: "cursor-before-webhook",
+                updatedAt: syncEventAt.addingTimeInterval(-60)
+            )
+            let staleCommit = try await statusRoutes.statusSnapshot(includeItems: true)
+            #expect(try #require(staleCommit.itemStatuses?.first).needsSync)
+
+            try await tokenStore.saveSyncCursor(
+                itemId: "item-webhook",
+                cursor: "cursor-after-webhook",
+                updatedAt: syncEventAt.addingTimeInterval(60)
+            )
+            let freshCommit = try await statusRoutes.statusSnapshot(includeItems: true)
+            #expect(!((try #require(freshCommit.itemStatuses?.first)).needsSync))
         }
     }
 

@@ -64,16 +64,23 @@ struct TransactionRoutes: Sendable {
             guard let nextCursor = result.nextCursor, !nextCursor.isEmpty else { return }
             cursors[result.itemId] = nextCursor
         }
+        let pendingCursorUpdatedAts = successfulResults.reduce(into: [String: Date]()) { updatedAts, result in
+            guard let nextCursor = result.nextCursor, !nextCursor.isEmpty, let cursorUpdatedAt = result.cursorUpdatedAt else { return }
+            updatedAts[result.itemId] = cursorUpdatedAt
+        }
 
         let syncResponse = SyncResponse(
             added: successfulResults.flatMap(\.added),
             modified: successfulResults.flatMap(\.modified),
             removed: successfulResults.flatMap(\.removed),
             hasMore: successfulResults.contains(where: \.hasMore),
-            pendingCursors: pendingCursors
+            pendingCursors: pendingCursors,
+            pendingCursorUpdatedAts: pendingCursorUpdatedAts
         )
 
-        let data = try JSONEncoder().encode(syncResponse)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(syncResponse)
         return Response(
             status: .ok,
             headers: [.contentType: "application/json"],
@@ -86,7 +93,14 @@ struct TransactionRoutes: Sendable {
         request: Request,
         context: some RequestContext
     ) async throws -> HTTPResponse.Status {
-        let commitRequest = try await request.decode(as: SyncCursorCommitRequest.self, context: context)
+        // Decode with an explicit `.iso8601` strategy rather than the default
+        // context decoder. The app encodes `cursorUpdatedAts` as ISO-8601 date
+        // strings (`ServerClient`'s encoder), but the router's default
+        // `BasicRequestContext` decoder uses `.deferredToDate`, which would throw
+        // a `typeMismatch` on a populated map and fail the whole commit — leaving
+        // cursors unpersisted and `needsSync` permanently stuck. Mirrors the
+        // explicit-decoder convention in `BillingRoutes`/`ReviewRoutes`.
+        let commitRequest = try await Self.decodeCommitRequest(request)
         for (itemId, cursor) in commitRequest.cursors {
             guard let committableCursor = Self.normalizedCommittableCursor(cursor) else { continue }
             // Atomic existence-check + save: closes the TOCTOU between the
@@ -94,7 +108,8 @@ struct TransactionRoutes: Sendable {
             // resurrected for an item deleted mid-request.
             let persisted = try await tokenStore.saveSyncCursorIfItemExists(
                 itemId: itemId,
-                cursor: committableCursor
+                cursor: committableCursor,
+                updatedAt: commitRequest.cursorUpdatedAts[itemId] ?? Date()
             )
             guard persisted else {
                 throw HTTPError(.badRequest, message: "Cannot commit cursor for unknown item")
@@ -104,6 +119,23 @@ struct TransactionRoutes: Sendable {
     }
 
     // MARK: - Helpers
+
+    /// Upper bound for the small JSON cursor-commit payload.
+    private static let maxCommitBodyBytes = 256 * 1024
+
+    /// Decode a cursor-commit body with an explicit ISO-8601 date strategy so the
+    /// `cursorUpdatedAts` timestamps round-trip with what the app encoded.
+    private static func decodeCommitRequest(_ request: Request) async throws -> SyncCursorCommitRequest {
+        let buffer = try await request.body.collect(upTo: Self.maxCommitBodyBytes)
+        let data = Data(buffer: buffer)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        do {
+            return try decoder.decode(SyncCursorCommitRequest.self, from: data)
+        } catch {
+            throw HTTPError(.badRequest, message: "Malformed sync cursor commit")
+        }
+    }
 
     static func shouldFailSync(attemptedItemCount: Int, successfulItemCount: Int) -> Bool {
         attemptedItemCount > 0 && successfulItemCount == 0
@@ -126,6 +158,7 @@ struct TransactionRoutes: Sendable {
         let removed: [String]
         let hasMore: Bool
         let nextCursor: String?
+        let cursorUpdatedAt: Date?
 
         static let skipped = ItemSyncResult(
             itemId: "",
@@ -135,7 +168,8 @@ struct TransactionRoutes: Sendable {
             modified: [],
             removed: [],
             hasMore: false,
-            nextCursor: nil
+            nextCursor: nil,
+            cursorUpdatedAt: nil
         )
     }
 
@@ -177,7 +211,8 @@ struct TransactionRoutes: Sendable {
                 modified: itemResult.modified,
                 removed: itemResult.removed,
                 hasMore: false,
-                nextCursor: itemResult.nextCursor
+                nextCursor: itemResult.nextCursor,
+                cursorUpdatedAt: itemResult.cursorUpdatedAt
             )
         } catch PlaidError.credentialsNotConfigured {
             // Setup state affects every item identically: surface the 503
@@ -196,7 +231,8 @@ struct TransactionRoutes: Sendable {
                 modified: [],
                 removed: [],
                 hasMore: false,
-                nextCursor: nil
+                nextCursor: nil,
+                cursorUpdatedAt: nil
             )
         }
     }
@@ -205,7 +241,13 @@ struct TransactionRoutes: Sendable {
         itemId: String,
         accessToken: String,
         persistedCursor: String?
-    ) async throws -> (added: [TransactionDTO], modified: [TransactionDTO], removed: [String], nextCursor: String?) {
+    ) async throws -> (
+        added: [TransactionDTO],
+        modified: [TransactionDTO],
+        removed: [String],
+        nextCursor: String?,
+        cursorUpdatedAt: Date?
+    ) {
         var mutationRestartCount = 0
 
         while true {
@@ -229,7 +271,13 @@ struct TransactionRoutes: Sendable {
         itemId: String,
         accessToken: String,
         persistedCursor: String?
-    ) async throws -> (added: [TransactionDTO], modified: [TransactionDTO], removed: [String], nextCursor: String?) {
+    ) async throws -> (
+        added: [TransactionDTO],
+        modified: [TransactionDTO],
+        removed: [String],
+        nextCursor: String?,
+        cursorUpdatedAt: Date?
+    ) {
         var cursor = persistedCursor
         var pageCount = 0
         var added: [TransactionDTO] = []
@@ -261,7 +309,7 @@ struct TransactionRoutes: Sendable {
             }
 
             guard response.hasMore else {
-                return (added, modified, removed, finalCursor)
+                return (added, modified, removed, finalCursor, finalCursor == nil ? nil : Date())
             }
         }
     }

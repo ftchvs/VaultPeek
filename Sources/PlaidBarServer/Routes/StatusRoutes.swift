@@ -72,6 +72,7 @@ struct StatusRoutes: Sendable {
     private func safeItemStatuses() async throws -> [ItemStatus] {
         let items = try await tokenStore.getAllItems()
         let webhookEvents = try await webhookEventStore?.latestEventsByItem() ?? [:]
+        let syncCursorUpdatedAts = try await tokenStore.syncCursorUpdatedAtsByItem()
         // The sync signal is read from a *separate*, sync-only projection so a
         // later non-sync webhook (e.g. PENDING_EXPIRATION) cannot mask an earlier
         // still-pending SYNC_UPDATES_AVAILABLE. The latest-overall event still
@@ -81,7 +82,8 @@ struct StatusRoutes: Sendable {
             Self.safeItemStatus(
                 from: $0,
                 webhookEvent: webhookEvents[$0.id ?? ""],
-                syncEvent: syncEvents[$0.id ?? ""]
+                syncEvent: syncEvents[$0.id ?? ""],
+                syncCursorUpdatedAt: syncCursorUpdatedAts[$0.id ?? ""]
             )
         }
     }
@@ -89,7 +91,8 @@ struct StatusRoutes: Sendable {
     private static func safeItemStatus(
         from item: ItemModel,
         webhookEvent: WebhookItemSignal? = nil,
-        syncEvent: WebhookItemSignal? = nil
+        syncEvent: WebhookItemSignal? = nil,
+        syncCursorUpdatedAt: Date? = nil
     ) -> ItemStatus {
         ItemStatus(
             id: item.id ?? "",
@@ -98,18 +101,22 @@ struct StatusRoutes: Sendable {
             lastSync: item.updatedAt,
             lastWebhookAt: webhookEvent?.effectiveDate,
             lastWebhookEvent: webhookEvent.map { "\($0.webhookType).\($0.webhookCode)" },
-            needsSync: Self.needsPollingSync(item: item, syncEvent: syncEvent)
+            needsSync: Self.needsPollingSync(syncEvent: syncEvent, syncCursorUpdatedAt: syncCursorUpdatedAt)
         )
     }
 
     /// Whether the item still has unconsumed sync work pending. Driven by the
     /// item's latest *sync-relevant* webhook (sticky — see
-    /// `WebhookEventStore.latestSyncEventsByItem`), cleared once the item's
-    /// `updatedAt` (its last refresh) advances past the sync event.
-    private static func needsPollingSync(item: ItemModel, syncEvent: WebhookItemSignal?) -> Bool {
+    /// `WebhookEventStore.latestSyncEventsByItem`), cleared once the committed
+    /// transaction sync cursor advances past the sync event. Item status-only
+    /// writes also update `items.updated_at`, so using the item row timestamp
+    /// here would incorrectly clear a pending transaction sync when a later
+    /// non-sync webhook such as `PENDING_EXPIRATION` only changed connection
+    /// status.
+    private static func needsPollingSync(syncEvent: WebhookItemSignal?, syncCursorUpdatedAt: Date?) -> Bool {
         guard let syncEvent else { return false }
-        guard let lastSync = item.updatedAt else { return true }
-        return lastSync < syncEvent.effectiveDate
+        guard let syncCursorUpdatedAt else { return true }
+        return syncCursorUpdatedAt < syncEvent.effectiveDate
     }
 
     static func includesItems(_ request: Request) -> Bool {

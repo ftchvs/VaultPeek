@@ -162,12 +162,12 @@ actor ServerClient {
         return try await get(url)
     }
 
-    func commitSyncCursors(_ cursors: [String: String]) async throws {
+    func commitSyncCursors(_ cursors: [String: String], cursorUpdatedAts: [String: Date] = [:]) async throws {
         guard !cursors.isEmpty else { return }
         guard let url = ServerEndpoint.transactionCursorCommitURL(baseURL: baseURL) else {
             throw ServerClientError.requestFailed
         }
-        try await post(url, body: SyncCursorCommitRequest(cursors: cursors))
+        try await post(url, body: SyncCursorCommitRequest(cursors: cursors, cursorUpdatedAts: cursorUpdatedAts))
     }
 
     func createLinkToken() async throws -> LinkResponse {

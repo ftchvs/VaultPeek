@@ -1091,12 +1091,26 @@ struct PlaidBarServerTests {
     }
 
     private static func decodeBody<T: Decodable>(_ response: Response) async throws -> T {
+        let data = try await responseData(response)
+        return try JSONDecoder().decode(T.self, from: data)
+    }
+
+    private static func decodeSyncBody(_ response: Response) async throws -> SyncResponse {
+        try decodeSyncData(try await responseData(response))
+    }
+
+    private static func decodeSyncData(_ data: Data) throws -> SyncResponse {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode(SyncResponse.self, from: data)
+    }
+
+    private static func responseData(_ response: Response) async throws -> Data {
         let collector = ResponseBodyCollector()
         let writer = CollectingResponseBodyWriter(collector: collector)
         try await response.body.write(writer)
         var buffer = await collector.collectedBuffer()
-        let data = buffer.readData(length: buffer.readableBytes) ?? Data()
-        return try JSONDecoder().decode(T.self, from: data)
+        return buffer.readData(length: buffer.readableBytes) ?? Data()
     }
 
     private static func responseString(_ response: Response) async throws -> String {
@@ -1790,7 +1804,7 @@ struct PlaidBarServerTests {
                 context: TestRequestContext(source: TestRequestContextSource())
             )
 
-            let sync: SyncResponse = try await Self.decodeBody(response)
+            let sync = try await Self.decodeSyncBody(response)
             #expect(sync.added.map(\.id) == ["tx-a", "tx-c"])
             #expect(sync.added.map(\.itemId) == ["item-a", "item-c"])
             #expect(sync.pendingCursors == ["item-a": "cursor-a", "item-c": "cursor-c"])
@@ -1838,7 +1852,8 @@ struct PlaidBarServerTests {
                 request: Self.makeRequest(path: "/api/transactions/sync"),
                 context: TestRequestContext(source: TestRequestContextSource())
             )
-            let response: SyncResponse = try await Self.decodeBody(httpResponse)
+            let responseData = try await Self.responseData(httpResponse)
+            let response = try Self.decodeSyncData(responseData)
             let calls = await client.recordedSyncCalls()
 
             #expect(calls.map(\.accessToken) == [accessToken, accessToken])
@@ -1846,6 +1861,11 @@ struct PlaidBarServerTests {
             #expect(response.added.map(\.id) == ["tx-page-1", "tx-page-2"])
             #expect(response.hasMore == false)
             #expect(response.pendingCursors == [itemId: "cursor-2"])
+            let payload = try #require(try JSONSerialization.jsonObject(
+                with: responseData
+            ) as? [String: Any])
+            let cursorUpdatedAts = try #require(payload["pendingCursorUpdatedAts"] as? [String: String])
+            #expect(cursorUpdatedAts[itemId] != nil)
         }
     }
 
@@ -1894,7 +1914,7 @@ struct PlaidBarServerTests {
                 request: Self.makeRequest(path: "/api/transactions/sync"),
                 context: TestRequestContext(source: TestRequestContextSource())
             )
-            let response: SyncResponse = try await Self.decodeBody(httpResponse)
+            let response = try await Self.decodeSyncBody(httpResponse)
             let calls = await client.recordedSyncCalls()
 
             #expect(calls.map(\.cursor) == ["persisted-cursor", "stale-cursor", "persisted-cursor", "fresh-cursor-1"])
@@ -1937,7 +1957,7 @@ struct PlaidBarServerTests {
                 request: Self.makeRequest(path: "/api/transactions/sync"),
                 context: TestRequestContext(source: TestRequestContextSource())
             )
-            let response: SyncResponse = try await Self.decodeBody(httpResponse)
+            let response = try await Self.decodeSyncBody(httpResponse)
 
             #expect(response.added.map(\.id) == ["ok-page"])
             #expect(response.pendingCursors == ["a-item-ok": "ok-cursor"])
@@ -2006,6 +2026,67 @@ struct PlaidBarServerTests {
         }
     }
 
+    @Test("Cursor commit decodes ISO-8601 cursorUpdatedAts over the HTTP boundary")
+    func cursorCommitDecodesISO8601UpdatedAts() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plaidbar-cursor-commit-iso8601-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let databasePath = directory.appendingPathComponent("plaidbar-test.sqlite").path
+        let logger = Logger(label: "com.ftchvs.plaidbar-server-tests.cursor-commit-iso8601")
+        let client = DelayedRefreshPlaidClient(syncOutcomes: [:])
+
+        try await withTokenStore(databasePath: databasePath, logger: logger) { store, fluent in
+            try await ItemModel(
+                id: "item-a",
+                accessToken: "keychain:item-a",
+                institutionId: "ins-a",
+                institutionName: "Institution A"
+            ).save(on: fluent.db())
+            let route = TransactionRoutes(plaidClient: client, tokenStore: store, maxConcurrentItemRefreshes: 2)
+
+            // Mirror the real app client: ServerClient encodes the commit body —
+            // including the `cursorUpdatedAts` dates — with `.iso8601`. The server
+            // must decode that wire format. The router's default context decoder
+            // uses `.deferredToDate` and would throw a `typeMismatch` on these
+            // ISO-8601 date strings, so this drives the real HTTP decode boundary
+            // (regression guard for AND-667 cursor-commit decoding).
+            let cursorUpdatedAt = Date(timeIntervalSince1970: 1_800_000_000)
+            let commit = SyncCursorCommitRequest(
+                cursors: ["item-a": "cursor-after-sync"],
+                cursorUpdatedAts: ["item-a": cursorUpdatedAt]
+            )
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let body = try encoder.encode(commit)
+            var headers = HTTPFields()
+            headers[.contentType] = "application/json"
+            let request = Request(
+                head: HTTPRequest(
+                    method: .post,
+                    scheme: nil,
+                    authority: nil,
+                    path: "/api/transactions/sync/cursors",
+                    headerFields: headers
+                ),
+                body: RequestBody(buffer: ByteBuffer(data: body))
+            )
+
+            let status = try await route.commitSyncCursors(
+                request: request,
+                context: TestRequestContext(source: TestRequestContextSource())
+            )
+
+            #expect(status == .ok)
+            #expect(try await store.getSyncCursor(itemId: "item-a") == "cursor-after-sync")
+            // The cursor's observation time round-trips intact, so a stale cursor
+            // committed after a newer sync webhook stays stale (the PR's intent).
+            let updatedAts = try await store.syncCursorUpdatedAtsByItem()
+            #expect(updatedAts["item-a"] == cursorUpdatedAt)
+        }
+    }
+
     @Test("Concurrent syncs for the same item coalesce onto a single Plaid pass")
     func concurrentItemSyncsCoalesce() async throws {
         let directory = FileManager.default.temporaryDirectory
@@ -2043,8 +2124,8 @@ struct PlaidBarServerTests {
                 context: TestRequestContext(source: TestRequestContextSource())
             )
 
-            let firstSync: SyncResponse = try await Self.decodeBody(try await first)
-            let secondSync: SyncResponse = try await Self.decodeBody(try await second)
+            let firstSync = try await Self.decodeSyncBody(try await first)
+            let secondSync = try await Self.decodeSyncBody(try await second)
 
             // Both callers observe the same coalesced result.
             #expect(firstSync.added.map(\.id) == ["tx-a"])
