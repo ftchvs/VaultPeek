@@ -32,7 +32,8 @@ public enum SpendingSummary {
         currentStart: String,
         previousStart: String,
         metadata: [TransactionReviewMetadata]? = nil,
-        rules: [TransactionRule]? = nil
+        rules: [TransactionRule]? = nil,
+        splits: [TransactionSplit] = []
     ) -> SpendingPeriodSummary {
         let currentExpenses = expenseTransactions(
             from: transactions,
@@ -47,7 +48,8 @@ public enum SpendingSummary {
         let categories = spendingByCategory(
             from: currentExpenses,
             metadata: metadata,
-            rules: rules
+            rules: rules,
+            splits: splits
         )
         let currentTotal = categories.reduce(0) { $0 + $1.1 }
         let previousTotal = previousExpenses.reduce(0) { $0 + $1.displayAmount }
@@ -71,16 +73,30 @@ public enum SpendingSummary {
     public static func spendingByCategory(
         from transactions: [TransactionDTO],
         metadata: [TransactionReviewMetadata]? = nil,
-        rules: [TransactionRule]? = nil
+        rules: [TransactionRule]? = nil,
+        splits: [TransactionSplit] = []
     ) -> [(SpendingCategory, Double)] {
         let expenses = expenseTransactions(from: transactions)
+        let splitIndex = TransactionSplitResolver.index(splits)
 
         // Legacy path: no review state supplied → bucket by raw Plaid category.
+        // Split-aware: a transaction with a valid split contributes its allocation
+        // rows (each by its own category, honoring its exclude flag). With no
+        // splits this is byte-identical to the pre-AND-550 grouping.
         guard metadata != nil || rules != nil else {
-            let grouped = Dictionary(grouping: expenses) { $0.category ?? .other }
-            return grouped.map { category, transactions in
-                (category, transactions.reduce(0) { $0 + $1.displayAmount })
-            }.sorted { $0.1 > $1.1 }
+            var totals: [SpendingCategory: Double] = [:]
+            for transaction in expenses {
+                for row in TransactionSplitResolver.spendRows(
+                    for: transaction, splitsByTransactionId: splitIndex
+                ) {
+                    if row.isSplitExcluded { continue }
+                    let category = row.category ?? .other
+                    // Use the magnitude so a split allocation matches the legacy
+                    // `displayAmount` convention this summary uses.
+                    totals[category, default: 0] += abs(row.amount)
+                }
+            }
+            return totals.map { ($0.key, $0.value) }.sorted { $0.1 > $1.1 }
         }
 
         let metadataById = Dictionary(
@@ -91,29 +107,44 @@ public enum SpendingSummary {
 
         var totals: [SpendingCategory: Double] = [:]
         for transaction in expenses {
-            // Carry pending-phase review metadata into the posted charge (mirrors
-            // `CategoryBudgetPlanner.netSpendByCategory`): prefer the transaction's
-            // own record, then the carried-forward pending record.
-            let effectiveMetadata = metadataById[transaction.id]
-                ?? transaction.pendingTransactionId.flatMap { metadataById[$0] }
+            for row in TransactionSplitResolver.spendRows(
+                for: transaction, splitsByTransactionId: splitIndex
+            ) {
+                // A split allocation already declared its category and exclude flag,
+                // so it bypasses per-parent override/rule resolution and buckets by
+                // its own category.
+                if row.isSplitAllocation {
+                    if row.isSplitExcluded { continue }
+                    let category = row.category ?? .other
+                    totals[category, default: 0] += abs(row.amount)
+                    continue
+                }
 
-            let resolution = EffectiveCategoryResolver.resolve(
-                transaction: transaction,
-                metadata: effectiveMetadata,
-                rules: activeRules
-            )
+                // Un-split row: the existing override-aware path, unchanged.
+                // Carry pending-phase review metadata into the posted charge (mirrors
+                // `CategoryBudgetPlanner.netSpendByCategory`): prefer the transaction's
+                // own record, then the carried-forward pending record.
+                let effectiveMetadata = metadataById[transaction.id]
+                    ?? transaction.pendingTransactionId.flatMap { metadataById[$0] }
 
-            // Drop excluded rows (explicit user/rule exclusion or transfers) — the
-            // override surface can re-classify a row as a transfer the raw Plaid
-            // category did not flag.
-            if resolution.excludedFromBudgets || resolution.isTransfer { continue }
+                let resolution = EffectiveCategoryResolver.resolve(
+                    transaction: transaction,
+                    metadata: effectiveMetadata,
+                    rules: activeRules
+                )
 
-            // Fall back to the raw Plaid bucket (or `.other`) when no confident
-            // override/rule/Plaid category resolved, matching the legacy bucket —
-            // a display-only NL suggestion is never counted (it lives on
-            // `resolution.suggestedCategory`, not on the aggregation category).
-            let category = resolution.category ?? (transaction.category ?? .other)
-            totals[category, default: 0] += transaction.displayAmount
+                // Drop excluded rows (explicit user/rule exclusion or transfers) — the
+                // override surface can re-classify a row as a transfer the raw Plaid
+                // category did not flag.
+                if resolution.excludedFromBudgets || resolution.isTransfer { continue }
+
+                // Fall back to the raw Plaid bucket (or `.other`) when no confident
+                // override/rule/Plaid category resolved, matching the legacy bucket —
+                // a display-only NL suggestion is never counted (it lives on
+                // `resolution.suggestedCategory`, not on the aggregation category).
+                let category = resolution.category ?? (transaction.category ?? .other)
+                totals[category, default: 0] += abs(row.amount)
+            }
         }
 
         return totals.map { ($0.key, $0.value) }.sorted { $0.1 > $1.1 }

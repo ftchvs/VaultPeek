@@ -5,10 +5,11 @@ import Foundation
 /// AppKit, no I/O — string/Data math over Sendable DTOs, fully unit-testable.
 public enum DataExportBuilder {
     /// Bumped whenever the JSON envelope shape changes so importers can branch.
-    /// v2 adds the optional `budgets` array + `counts.budgets` (AND-645); the
-    /// new fields decode as empty/zero from a v1 file, so importers stay
+    /// v2 adds the optional `budgets` array + `counts.budgets` (AND-645); v3 adds
+    /// the optional `splits` array + `counts.splits` (AND-550). The new fields
+    /// decode as empty/zero from an older file, so importers stay
     /// backward-compatible.
-    public static let schemaVersion = 2
+    public static let schemaVersion = 3
 
     // MARK: - Masked-state gating (AND-645)
 
@@ -203,6 +204,37 @@ public enum DataExportBuilder {
             .sorted { $0.category.rawValue < $1.category.rawValue }
     }
 
+    /// CSV of transaction splits (AND-550). One row **per allocation**, so a split
+    /// transaction contributes N rows joined by the shared `transaction_id` — the
+    /// transactions CSV keeps its one-row-per-transaction contract while this file
+    /// carries the per-category breakdown. Rows are ordered by `transaction_id`
+    /// then allocation index for a deterministic, diff-able backup. `expected_total`
+    /// is the parent's signed amount the allocations must sum to (the invariant);
+    /// `amount` is the signed slice; `excluded_from_budgets` is the allocation's own
+    /// flag.
+    public static func splitsCSV(_ splits: [TransactionSplit]) -> String {
+        let header = row([
+            "transaction_id", "expected_total", "allocation_index",
+            "category", "category_name", "amount", "excluded_from_budgets",
+        ])
+        let rows = splits
+            .sorted { $0.transactionId < $1.transactionId }
+            .flatMap { split in
+                split.allocations.enumerated().map { index, allocation in
+                    row([
+                        split.transactionId,
+                        decimalString(split.expectedTotal),
+                        String(index),
+                        allocation.category.rawValue,
+                        allocation.category.displayName,
+                        decimalString(allocation.amount),
+                        allocation.excludedFromBudgets ? "true" : "false",
+                    ])
+                }
+            }
+        return ([header] + rows).joined(separator: "\n") + "\n"
+    }
+
     // MARK: - JSON
 
     /// Versioned, stable backup envelope: schemaVersion, exportedAt, environment,
@@ -218,12 +250,20 @@ public enum DataExportBuilder {
             public let transactions: Int
             public let balanceHistory: Int
             public let budgets: Int
+            public let splits: Int
 
-            public init(accounts: Int, transactions: Int, balanceHistory: Int, budgets: Int) {
+            public init(
+                accounts: Int,
+                transactions: Int,
+                balanceHistory: Int,
+                budgets: Int,
+                splits: Int = 0
+            ) {
                 self.accounts = accounts
                 self.transactions = transactions
                 self.balanceHistory = balanceHistory
                 self.budgets = budgets
+                self.splits = splits
             }
 
             public init(from decoder: any Decoder) throws {
@@ -233,6 +273,8 @@ public enum DataExportBuilder {
                 balanceHistory = try container.decode(Int.self, forKey: .balanceHistory)
                 // Absent in v1 envelopes → treat as zero.
                 budgets = try container.decodeIfPresent(Int.self, forKey: .budgets) ?? 0
+                // Absent in v1/v2 envelopes → treat as zero (AND-550).
+                splits = try container.decodeIfPresent(Int.self, forKey: .splits) ?? 0
             }
         }
 
@@ -244,6 +286,7 @@ public enum DataExportBuilder {
         public let transactions: [TransactionDTO]
         public let balanceHistory: [BalanceSnapshot]
         public let budgets: [CategoryBudgetDTO]
+        public let splits: [TransactionSplit]
 
         public init(
             schemaVersion: Int,
@@ -253,7 +296,8 @@ public enum DataExportBuilder {
             accounts: [AccountDTO],
             transactions: [TransactionDTO],
             balanceHistory: [BalanceSnapshot],
-            budgets: [CategoryBudgetDTO]
+            budgets: [CategoryBudgetDTO],
+            splits: [TransactionSplit] = []
         ) {
             self.schemaVersion = schemaVersion
             self.exportedAt = exportedAt
@@ -263,6 +307,7 @@ public enum DataExportBuilder {
             self.transactions = transactions
             self.balanceHistory = balanceHistory
             self.budgets = budgets
+            self.splits = splits
         }
 
         public init(from decoder: any Decoder) throws {
@@ -276,6 +321,8 @@ public enum DataExportBuilder {
             balanceHistory = try container.decode([BalanceSnapshot].self, forKey: .balanceHistory)
             // Absent in v1 envelopes → decode as no budgets.
             budgets = try container.decodeIfPresent([CategoryBudgetDTO].self, forKey: .budgets) ?? []
+            // Absent in v1/v2 envelopes → decode as no splits (AND-550).
+            splits = try container.decodeIfPresent([TransactionSplit].self, forKey: .splits) ?? []
         }
     }
 
@@ -284,12 +331,16 @@ public enum DataExportBuilder {
         transactions: [TransactionDTO],
         balanceHistory: [BalanceSnapshot],
         budgets: [CategoryBudgetDTO] = [],
+        splits: [TransactionSplit] = [],
         exportedAt: Date,
         environment: String? = nil
     ) -> Envelope {
         // Stable order: budgets are sorted by category raw value so the JSON
         // backup matches the CSV order and produces diff-able files.
         let orderedBudgets = budgets.sorted { $0.category.rawValue < $1.category.rawValue }
+        // Splits sorted by parent transaction id, matching `splitsCSV`, so the JSON
+        // and CSV exports stay diff-able and re-importable (AND-550).
+        let orderedSplits = splits.sorted { $0.transactionId < $1.transactionId }
         return Envelope(
             schemaVersion: schemaVersion,
             exportedAt: exportedAt,
@@ -298,12 +349,14 @@ public enum DataExportBuilder {
                 accounts: accounts.count,
                 transactions: transactions.count,
                 balanceHistory: balanceHistory.count,
-                budgets: orderedBudgets.count
+                budgets: orderedBudgets.count,
+                splits: orderedSplits.count
             ),
             accounts: accounts,
             transactions: transactions,
             balanceHistory: balanceHistory,
-            budgets: orderedBudgets
+            budgets: orderedBudgets,
+            splits: orderedSplits
         )
     }
 
@@ -312,6 +365,7 @@ public enum DataExportBuilder {
         transactions: [TransactionDTO],
         balanceHistory: [BalanceSnapshot],
         budgets: [CategoryBudgetDTO] = [],
+        splits: [TransactionSplit] = [],
         exportedAt: Date,
         environment: String? = nil
     ) throws -> Data {
@@ -320,6 +374,7 @@ public enum DataExportBuilder {
             transactions: transactions,
             balanceHistory: balanceHistory,
             budgets: budgets,
+            splits: splits,
             exportedAt: exportedAt,
             environment: environment
         )
