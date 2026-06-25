@@ -1,9 +1,32 @@
 import Foundation
 
-public enum TransactionReviewStatus: String, Codable, Sendable, Equatable, Hashable {
+public enum TransactionReviewStatus: String, Codable, Sendable, CaseIterable, Equatable, Hashable {
     case needsReview
     case reviewed
     case ignored
+
+    /// Human-readable status label. Shared by the transactions table and the
+    /// transaction inspector so the two surfaces read identically; previously
+    /// duplicated as a private `statusTitle` switch in both views. Mirrors
+    /// `TransactionReviewReason.displayName`.
+    public var displayName: String {
+        switch self {
+        case .needsReview: "Needs review"
+        case .reviewed: "Reviewed"
+        case .ignored: "Ignored"
+        }
+    }
+
+    /// SF Symbol name for this status's badge glyph. The glyph is always a
+    /// redundant layer alongside `title`, never the sole carrier of meaning
+    /// (ACCESSIBILITY.md). Color encoding stays in the view layer.
+    public var glyphName: String {
+        switch self {
+        case .needsReview: "exclamationmark.circle"
+        case .reviewed: "checkmark.circle"
+        case .ignored: "minus.circle"
+        }
+    }
 }
 
 public enum TransactionReviewReason: String, Codable, Sendable, CaseIterable, Equatable, Hashable {

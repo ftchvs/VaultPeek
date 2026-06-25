@@ -131,12 +131,12 @@ struct TransactionsTable: View {
 
     /// Review status — glyph + text, never color alone.
     private func statusCell(_ row: TransactionWorkspace.Row) -> some View {
-        Label(statusTitle(row.status), systemImage: statusGlyph(row.status))
+        Label(row.status.displayName, systemImage: row.status.glyphName)
             .font(.caption.weight(.medium))
             .labelStyle(.titleAndIcon)
             .foregroundStyle(statusColor(row.status))
             .lineLimit(1)
-            .accessibilityLabel("Status: \(statusTitle(row.status))")
+            .accessibilityLabel("Status: \(row.status.displayName)")
     }
 
     // MARK: - Context menu (single-row, via the existing review path)
@@ -197,22 +197,6 @@ struct TransactionsTable: View {
 
     private func categoryTitle(_ row: TransactionWorkspace.Row) -> String {
         (row.effectiveCategory ?? row.suggestedCategory)?.displayName ?? "Uncategorized"
-    }
-
-    private func statusTitle(_ status: TransactionReviewStatus) -> String {
-        switch status {
-        case .needsReview: "Needs review"
-        case .reviewed: "Reviewed"
-        case .ignored: "Ignored"
-        }
-    }
-
-    private func statusGlyph(_ status: TransactionReviewStatus) -> String {
-        switch status {
-        case .needsReview: "exclamationmark.circle"
-        case .reviewed: "checkmark.circle"
-        case .ignored: "minus.circle"
-        }
     }
 
     private func statusColor(_ status: TransactionReviewStatus) -> Color {

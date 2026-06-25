@@ -118,7 +118,7 @@ struct TransactionInspectorView: View {
 
     private func statusBadges(_ row: TransactionWorkspace.Row) -> some View {
         HStack(spacing: Spacing.xs) {
-            badge(statusTitle(row.status), systemImage: statusGlyph(row.status), tint: statusColor(row.status))
+            badge(row.status.displayName, systemImage: row.status.glyphName, tint: statusColor(row.status))
             if row.transaction.pending {
                 badge("Pending", systemImage: "clock", tint: SemanticColors.pending)
             }
@@ -395,22 +395,6 @@ struct TransactionInspectorView: View {
     private func amountText(_ row: TransactionWorkspace.Row) -> String {
         let prefix = row.transaction.isIncome ? "+" : ""
         return "\(prefix)\(Formatters.currency(row.transaction.displayAmount, format: .full))"
-    }
-
-    private func statusTitle(_ status: TransactionReviewStatus) -> String {
-        switch status {
-        case .needsReview: "Needs review"
-        case .reviewed: "Reviewed"
-        case .ignored: "Ignored"
-        }
-    }
-
-    private func statusGlyph(_ status: TransactionReviewStatus) -> String {
-        switch status {
-        case .needsReview: "exclamationmark.circle"
-        case .reviewed: "checkmark.circle"
-        case .ignored: "minus.circle"
-        }
     }
 
     private func statusColor(_ status: TransactionReviewStatus) -> Color {
