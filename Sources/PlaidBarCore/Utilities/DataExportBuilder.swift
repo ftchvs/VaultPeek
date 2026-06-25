@@ -5,7 +5,28 @@ import Foundation
 /// AppKit, no I/O — string/Data math over Sendable DTOs, fully unit-testable.
 public enum DataExportBuilder {
     /// Bumped whenever the JSON envelope shape changes so importers can branch.
-    public static let schemaVersion = 1
+    /// v2 adds the optional `budgets` array + `counts.budgets` (AND-645); the
+    /// new fields decode as empty/zero from a v1 file, so importers stay
+    /// backward-compatible.
+    public static let schemaVersion = 2
+
+    // MARK: - Masked-state gating (AND-645)
+
+    /// Pure, testable decision for whether a local export may run, given the
+    /// effective Privacy-Mask state. Keeping this out of the SwiftUI view lets
+    /// the gating rule be unit-tested: the export writes *real* balances,
+    /// accounts, transactions, and budgets to disk, so it must never run while
+    /// the UI is masked (Privacy Mask on) or locked (App Lock) — otherwise a
+    /// quick over-the-shoulder mask or a locked session could be bypassed by
+    /// silently writing the unmasked data to a file.
+    ///
+    /// `shouldMaskFinancialValues` is the app's single source of truth and is
+    /// `true` for *both* the manual Privacy Mask toggle and an active App Lock,
+    /// so a single input covers both cases. Export is allowed only when nothing
+    /// is masked.
+    public static func isExportAllowed(shouldMaskFinancialValues: Bool) -> Bool {
+        !shouldMaskFinancialValues
+    }
 
     // MARK: - CSV
 
@@ -145,21 +166,73 @@ public enum DataExportBuilder {
         return ([header] + rows).joined(separator: "\n") + "\n"
     }
 
+    /// CSV of the user's saved monthly category budgets (AND-645). Rows are
+    /// sorted by the Plaid category raw value so the output is deterministic
+    /// regardless of the `[SpendingCategory: Double]` dictionary iteration order
+    /// the app holds them in — stable column order is required for diff-able,
+    /// re-importable backups. `category` is the machine raw value (e.g.
+    /// `FOOD_AND_DRINK`), `category_name` the human label, both run through the
+    /// same field escaping/neutralization as every other column.
+    public static func budgetsCSV(_ budgets: [CategoryBudgetDTO]) -> String {
+        let header = row(["category", "category_name", "monthly_limit"])
+        let rows = budgets
+            .sorted { $0.category.rawValue < $1.category.rawValue }
+            .map { budget in
+                row([
+                    budget.category.rawValue,
+                    budget.category.displayName,
+                    decimalString(budget.monthlyLimit),
+                ])
+            }
+        return ([header] + rows).joined(separator: "\n") + "\n"
+    }
+
+    /// Convenience overload that accepts the app's in-memory
+    /// `[SpendingCategory: Double]` budget map and normalizes it into stably
+    /// ordered `CategoryBudgetDTO`s before serializing.
+    public static func budgetsCSV(_ budgets: [SpendingCategory: Double]) -> String {
+        budgetsCSV(budgetDTOs(from: budgets))
+    }
+
+    /// Normalizes the app's budget dictionary into a stably ordered DTO array
+    /// (sorted by category raw value) so both the CSV and the JSON envelope emit
+    /// budgets in the same deterministic order.
+    public static func budgetDTOs(from budgets: [SpendingCategory: Double]) -> [CategoryBudgetDTO] {
+        budgets
+            .map { CategoryBudgetDTO(category: $0.key, monthlyLimit: $0.value) }
+            .sorted { $0.category.rawValue < $1.category.rawValue }
+    }
+
     // MARK: - JSON
 
     /// Versioned, stable backup envelope: schemaVersion, exportedAt, environment,
-    /// per-array counts, then the three DTO arrays (reusing their Codable
+    /// per-array counts, then the DTO arrays (reusing their Codable
     /// conformances). Round-trips back into the original DTO arrays.
+    ///
+    /// `budgets` (and `counts.budgets`) were added in schemaVersion 2 (AND-645).
+    /// They decode as empty/zero when reading a v1 file that lacks them, so
+    /// older backups stay importable.
     public struct Envelope: Codable, Sendable, Equatable {
         public struct Counts: Codable, Sendable, Equatable {
             public let accounts: Int
             public let transactions: Int
             public let balanceHistory: Int
+            public let budgets: Int
 
-            public init(accounts: Int, transactions: Int, balanceHistory: Int) {
+            public init(accounts: Int, transactions: Int, balanceHistory: Int, budgets: Int) {
                 self.accounts = accounts
                 self.transactions = transactions
                 self.balanceHistory = balanceHistory
+                self.budgets = budgets
+            }
+
+            public init(from decoder: any Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                accounts = try container.decode(Int.self, forKey: .accounts)
+                transactions = try container.decode(Int.self, forKey: .transactions)
+                balanceHistory = try container.decode(Int.self, forKey: .balanceHistory)
+                // Absent in v1 envelopes → treat as zero.
+                budgets = try container.decodeIfPresent(Int.self, forKey: .budgets) ?? 0
             }
         }
 
@@ -170,6 +243,7 @@ public enum DataExportBuilder {
         public let accounts: [AccountDTO]
         public let transactions: [TransactionDTO]
         public let balanceHistory: [BalanceSnapshot]
+        public let budgets: [CategoryBudgetDTO]
 
         public init(
             schemaVersion: Int,
@@ -178,7 +252,8 @@ public enum DataExportBuilder {
             counts: Counts,
             accounts: [AccountDTO],
             transactions: [TransactionDTO],
-            balanceHistory: [BalanceSnapshot]
+            balanceHistory: [BalanceSnapshot],
+            budgets: [CategoryBudgetDTO]
         ) {
             self.schemaVersion = schemaVersion
             self.exportedAt = exportedAt
@@ -187,6 +262,20 @@ public enum DataExportBuilder {
             self.accounts = accounts
             self.transactions = transactions
             self.balanceHistory = balanceHistory
+            self.budgets = budgets
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+            exportedAt = try container.decode(Date.self, forKey: .exportedAt)
+            environment = try container.decodeIfPresent(String.self, forKey: .environment)
+            counts = try container.decode(Counts.self, forKey: .counts)
+            accounts = try container.decode([AccountDTO].self, forKey: .accounts)
+            transactions = try container.decode([TransactionDTO].self, forKey: .transactions)
+            balanceHistory = try container.decode([BalanceSnapshot].self, forKey: .balanceHistory)
+            // Absent in v1 envelopes → decode as no budgets.
+            budgets = try container.decodeIfPresent([CategoryBudgetDTO].self, forKey: .budgets) ?? []
         }
     }
 
@@ -194,21 +283,27 @@ public enum DataExportBuilder {
         accounts: [AccountDTO],
         transactions: [TransactionDTO],
         balanceHistory: [BalanceSnapshot],
+        budgets: [CategoryBudgetDTO] = [],
         exportedAt: Date,
         environment: String? = nil
     ) -> Envelope {
-        Envelope(
+        // Stable order: budgets are sorted by category raw value so the JSON
+        // backup matches the CSV order and produces diff-able files.
+        let orderedBudgets = budgets.sorted { $0.category.rawValue < $1.category.rawValue }
+        return Envelope(
             schemaVersion: schemaVersion,
             exportedAt: exportedAt,
             environment: environment,
             counts: Envelope.Counts(
                 accounts: accounts.count,
                 transactions: transactions.count,
-                balanceHistory: balanceHistory.count
+                balanceHistory: balanceHistory.count,
+                budgets: orderedBudgets.count
             ),
             accounts: accounts,
             transactions: transactions,
-            balanceHistory: balanceHistory
+            balanceHistory: balanceHistory,
+            budgets: orderedBudgets
         )
     }
 
@@ -216,6 +311,7 @@ public enum DataExportBuilder {
         accounts: [AccountDTO],
         transactions: [TransactionDTO],
         balanceHistory: [BalanceSnapshot],
+        budgets: [CategoryBudgetDTO] = [],
         exportedAt: Date,
         environment: String? = nil
     ) throws -> Data {
@@ -223,6 +319,7 @@ public enum DataExportBuilder {
             accounts: accounts,
             transactions: transactions,
             balanceHistory: balanceHistory,
+            budgets: budgets,
             exportedAt: exportedAt,
             environment: environment
         )
