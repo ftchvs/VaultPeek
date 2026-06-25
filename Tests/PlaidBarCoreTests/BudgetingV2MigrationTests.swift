@@ -178,4 +178,37 @@ struct BudgetingV2MigrationTests {
         let decoded = try JSONDecoder().decode(BudgetingV2Schema.self, from: data)
         #expect(decoded == schema)
     }
+
+    // MARK: - Data-safety guard (AND-546 acceptance: no saved budget is dropped)
+
+    @Test("Every saved v1 budget survives the migration — including the OTHER bucket that catches unmapped/legacy Plaid keys (no silent drop)")
+    func everySavedBudgetSurvivesMigration() {
+        // Build a saved-budget set with a distinct limit for EVERY SpendingCategory
+        // case — crucially including `.other` ("OTHER"), the bucket any unmapped or
+        // legacy Plaid category key collapses into. This is the worst case for a
+        // mapping filter: if `seed`'s `seededCategoryIds` filter dropped any case,
+        // the count would shrink here.
+        let savedV1: [CategoryBudgetDTO] = SpendingCategory.allCases.enumerated().map {
+            CategoryBudgetDTO(category: $1, monthlyLimit: Double(($0 + 1) * 10))
+        }
+
+        let schema = BudgetingV2Migration.seed(carryingForward: savedV1, month: "2026-06")
+
+        // GUARD 1: forward migration retains a v2 budget row for every saved v1
+        // budget — none silently dropped on the way in.
+        #expect(schema.budgets.count == savedV1.count)
+        let migratedIds = Set(schema.budgets.map(\.categoryId))
+        for budget in savedV1 {
+            #expect(migratedIds.contains(budget.category.rawValue))
+        }
+        // The OTHER bucket specifically survives (the unmapped/legacy-key home).
+        #expect(migratedIds.contains(SpendingCategory.other.rawValue))
+
+        // GUARD 2: reverse migration recovers every saved budget losslessly — same
+        // categories, same limits — so opting back out of v2 drops nothing.
+        let recovered = BudgetingV2Migration.reverseToV1Budgets(schema, month: "2026-06")
+        let expected = savedV1.sorted { $0.category.rawValue < $1.category.rawValue }
+        #expect(recovered == expected)
+        #expect(recovered.contains { $0.category == .other })
+    }
 }
