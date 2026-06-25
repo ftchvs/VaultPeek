@@ -118,6 +118,7 @@ extension AppState {
                 // two-hop persist-after-clear window the main-actor epoch alone
                 // cannot.
                 let capturedGeneration = await store.currentClearGeneration()
+                guard await gate.mayCommit(capturedEpoch: capturedEpoch) else { return }
                 try await store.replaceAll(
                     cacheKey: cacheKey,
                     transactions: snapshot,

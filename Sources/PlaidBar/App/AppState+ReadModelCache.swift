@@ -175,6 +175,7 @@ extension AppState {
                 // recheck above and this commit still wins — closing the two-hop
                 // persist-after-clear window the main-actor epoch alone cannot.
                 let capturedGeneration = await store.currentClearGeneration()
+                guard await gate.mayCommit(capturedEpoch: capturedEpoch) else { return }
                 try await store.save(model, ifNotClearedSince: capturedGeneration)
             } catch {
                 AppState.readModelCacheLogger.error(
