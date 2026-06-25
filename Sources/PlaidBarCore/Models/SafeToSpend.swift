@@ -110,7 +110,7 @@ public enum SafeToSpendComponentKind: String, Sendable, CaseIterable, Hashable {
 
 /// Confidence in the headline number. Ordered from least to most trustworthy so
 /// callers can compare and the UI can pick a matching cue.
-public enum SafeToSpendConfidence: String, Sendable, CaseIterable, Comparable {
+public enum SafeToSpendConfidence: String, Sendable, CaseIterable, Comparable, Codable {
     /// Inputs too thin to stand behind a number (no obligation history AND no
     /// income signal). The UI should treat `amount` as indicative only.
     case insufficientData
