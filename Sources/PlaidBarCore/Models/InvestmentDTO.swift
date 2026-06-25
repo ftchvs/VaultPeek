@@ -60,9 +60,14 @@ public struct HoldingDTO: Codable, Sendable, Equatable, Identifiable {
     public let costBasis: Double?
     public let isoCurrencyCode: String?
 
-    /// Stable identity for `Identifiable`/`ForEach`. A single account can hold
-    /// the same security only once in Plaid's model, so account+security is unique.
-    public var id: String { "\(accountId):\(securityId)" }
+    /// Stable, display-safe identity for `Identifiable`/`ForEach`.
+    ///
+    /// Never expose Plaid account/security identifiers as SwiftUI row ids. They
+    /// can end up in diagnostics or generated artifacts, so derive a deterministic
+    /// opaque id from the underlying identity instead.
+    public var id: String {
+        "holding-\(StableHash.hexPadded("\(accountId):\(securityId)"))"
+    }
 
     public init(
         accountId: String,

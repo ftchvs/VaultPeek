@@ -72,7 +72,9 @@ struct AccountDetailFlyout: View {
                         .scrollEdgeDepth(reduceMotion: reduceMotion)
                     balancesSection(summary: summary)
                         .scrollEdgeDepth(reduceMotion: reduceMotion)
-                    if account.type == .investment, !holdingRows.isEmpty {
+                    if account.type == .investment,
+                       !appState.shouldMaskFinancialValues,
+                       !holdingRows.isEmpty {
                         holdingsSection()
                             .scrollEdgeDepth(reduceMotion: reduceMotion)
                     }

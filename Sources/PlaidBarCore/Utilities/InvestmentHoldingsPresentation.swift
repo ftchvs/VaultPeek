@@ -176,9 +176,11 @@ public enum InvestmentHoldingsPresentation {
         security: SecurityDTO?,
         privacyMaskEnabled: Bool
     ) -> HoldingRow {
-        let name = securityName(security, fallbackId: holding.securityId)
-        let ticker = security?.tickerSymbol
-        let typeLabel = securityTypeLabel(security?.type)
+        let name = privacyMaskEnabled
+            ? "Investment holding"
+            : securityName(security, fallbackId: holding.securityId)
+        let ticker = privacyMaskEnabled ? nil : security?.tickerSymbol
+        let typeLabel = privacyMaskEnabled ? nil : securityTypeLabel(security?.type)
 
         // Quantity is a count of shares, not a balance — but it can reveal
         // position size, so mask it alongside currency under Privacy Mask.
@@ -281,7 +283,7 @@ public enum InvestmentHoldingsPresentation {
     static func securityName(_ security: SecurityDTO?, fallbackId: String) -> String {
         if let name = security?.name, !name.isEmpty { return name }
         if let ticker = security?.tickerSymbol, !ticker.isEmpty { return ticker }
-        return "Security \(fallbackId.prefix(8))"
+        return fallbackId.isEmpty ? "Unknown security" : "Unidentified security"
     }
 
     /// Title-cases Plaid's lower-case security type, with a friendly override for
