@@ -84,14 +84,15 @@ Use GitHub private vulnerability reporting if available, or contact the reposito
   `FinanceSnapshot` payloads. The cache is a **disposable** read-model:
   rebuildable from the authoritative in-memory/JSON data, never a source of truth,
   scoped per Plaid environment, and safe to delete at any time.
-  `clearReadModelCache()` deletes both stores on local reset and when the last
-  institution is removed, but **only when a usable `ReadModelCacheStore` can be
-  opened**; if the store cannot be opened it returns without deleting, so both
-  `.store` files can survive a reset on disk. `LocalDataStore.resetLocalData`
-  separately removes the JSON/scoped caches, Plaid SQLite files, pending-link
-  state, goals, and logo cache. Every cache read/write `throws` and callers wrap
-  in `try?`, so if a store file fails to open/read/write, the app falls back to
-  its existing JSON/UserDefaults cold path with no behavior change.
+  `clearReadModelCache()` and `clearTransactionCache()` delete their respective
+  stores on local reset and when the last institution is removed, but **only
+  when a usable cache store can be opened**; if a store cannot be opened the
+  clearer returns without deleting, so the matching `.store` file can survive a
+  reset on disk. `LocalDataStore.resetLocalData` separately removes the
+  JSON/scoped caches, Plaid SQLite files, pending-link state, goals, and logo
+  cache. Every cache read/write `throws` and callers wrap in `try?`, so if a
+  store file fails to open/read/write, the app falls back to its existing
+  JSON/UserDefaults cold path with no behavior change.
 - **Caveat — the cache follows `PLAIDBAR_DATA_DIR`.** The "never synced to
   iCloud" guarantee above is about iCloud Keychain and the App Group container,
   not the filesystem location of the data dir itself. These JSON read-model
@@ -101,10 +102,12 @@ Use GitHub private vulnerability reporting if available, or contact the reposito
   disposable cache — which holds derived financial read-model data such as
   balances, merchant names, amounts, and Plaid identifiers, though **never**
   Plaid secrets, access tokens, or any Keychain material — can be copied
-  off-device by that sync client. Plaid access tokens stay device-only
-  regardless (Keychain, `…ThisDeviceOnly`, non-synchronizable). To keep the
-  derived cache on-device, point `PLAIDBAR_DATA_DIR` at a local, non-synced
-  directory.
+  off-device by that sync client. Production macOS builds keep Plaid access
+  tokens in non-synchronizable `…ThisDeviceOnly` Keychain items and SQLite stores
+  only `keychain:<item_id>` references; test or fallback builds without usable
+  Keychain support can store token bytes in SQLite under `PLAIDBAR_DATA_DIR`.
+  To keep the derived cache and any fallback token rows on-device, point
+  `PLAIDBAR_DATA_DIR` at a local, non-synced directory.
 - `/api/status` is authenticated and exposes readiness metadata: version,
   environment, credential availability, storage path, linked item count,
   synced item count, sync readiness, and last sync time. With the opt-in
