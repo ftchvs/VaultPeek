@@ -1257,10 +1257,6 @@ private struct LocalInsightsCard: View {
         appState.summary(for: .lastMonth)
     }
 
-    private var bullets: [String] {
-        Array(primarySummary?.generatedBullets.prefix(3) ?? [])
-    }
-
     private var receipt: LocalAIInsightReceipt {
         LocalAIInsightReceipt.make(
             summary: primarySummary,

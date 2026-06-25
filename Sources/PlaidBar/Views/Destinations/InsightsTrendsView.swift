@@ -21,7 +21,6 @@ import SwiftUI
 /// a tight stack (AND-624).
 struct InsightsTrendsView: View {
     @Environment(AppState.self) private var appState
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     private var isMasked: Bool { appState.shouldMaskFinancialValues }
