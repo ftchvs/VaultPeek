@@ -31,7 +31,9 @@ protocol PlaidClientProtocol: Sendable {
     func getInvestmentTransactions(
         accessToken: String,
         startDate: String,
-        endDate: String
+        endDate: String,
+        count: Int,
+        offset: Int
     ) async throws -> PlaidInvestmentTransactionsResponse
 
     func syncTransactions(
@@ -61,7 +63,9 @@ extension PlaidClientProtocol {
     func getInvestmentTransactions(
         accessToken: String,
         startDate: String,
-        endDate: String
+        endDate: String,
+        count _: Int,
+        offset _: Int
     ) async throws -> PlaidInvestmentTransactionsResponse {
         PlaidInvestmentTransactionsResponse(
             accounts: [],
@@ -197,7 +201,9 @@ actor PlaidClient: PlaidClientProtocol {
     func getInvestmentTransactions(
         accessToken: String,
         startDate: String,
-        endDate: String
+        endDate: String,
+        count: Int,
+        offset: Int
     ) async throws -> PlaidInvestmentTransactionsResponse {
         let body = PlaidInvestmentTransactionsRequest(
             clientId: config.plaidClientId,
@@ -205,7 +211,7 @@ actor PlaidClient: PlaidClientProtocol {
             accessToken: accessToken,
             startDate: startDate,
             endDate: endDate,
-            options: .init(count: 250, offset: 0)
+            options: .init(count: count, offset: offset)
         )
         return try await post("/investments/transactions/get", body: body)
     }
