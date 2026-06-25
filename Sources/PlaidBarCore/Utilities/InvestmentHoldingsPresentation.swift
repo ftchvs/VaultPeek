@@ -281,7 +281,7 @@ public enum InvestmentHoldingsPresentation {
     static func securityName(_ security: SecurityDTO?, fallbackId: String) -> String {
         if let name = security?.name, !name.isEmpty { return name }
         if let ticker = security?.tickerSymbol, !ticker.isEmpty { return ticker }
-        return "Security \(fallbackId.prefix(8))"
+        return fallbackId.isEmpty ? "Unknown security" : "Unidentified security"
     }
 
     /// Title-cases Plaid's lower-case security type, with a friendly override for

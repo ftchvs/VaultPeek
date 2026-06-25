@@ -44,10 +44,13 @@ struct InvestmentHoldingsPresentationTests {
         #expect(noBasis.unrealizedGain == nil)
     }
 
-    @Test("Holding id combines account and security so it is stable and unique")
+    @Test("Holding id is stable but does not expose Plaid identifiers")
     func holdingIdentity() {
         let holding = HoldingDTO(accountId: "acct_a", securityId: "sec_vti", quantity: 1)
-        #expect(holding.id == "acct_a:sec_vti")
+        #expect(holding.id.hasPrefix("holding-"))
+        #expect(!holding.id.contains("acct_a"))
+        #expect(!holding.id.contains("sec_vti"))
+        #expect(holding.id == HoldingDTO(accountId: "acct_a", securityId: "sec_vti", quantity: 2).id)
     }
 
     // MARK: - Rows
@@ -122,8 +125,24 @@ struct InvestmentHoldingsPresentationTests {
             privacyMaskEnabled: false
         )
         #expect(rows.count == 1)
-        #expect(rows.first?.securityName == "Security sec_unkn")
+        #expect(rows.first?.securityName == "Unidentified security")
         #expect(rows.first?.securityTypeLabel == nil)
+    }
+
+    @Test("Missing-security fallback never renders raw security identifiers")
+    func missingSecurityFallbackHidesIdentifier() {
+        let rawSecurityID = "raw_security_identifier_123456"
+        let rows = InvestmentHoldingsPresentation.rows(
+            forAccount: "acct_a",
+            holdings: [HoldingDTO(accountId: "acct_a", securityId: rawSecurityID, quantity: 1, institutionValue: 100)],
+            securities: [],
+            privacyMaskEnabled: false
+        )
+
+        #expect(rows.first?.securityName == "Unidentified security")
+        #expect(rows.first?.securityName.contains(rawSecurityID) == false)
+        #expect(rows.first?.id.contains(rawSecurityID) == false)
+        #expect(rows.first?.id.contains("acct_a") == false)
     }
 
     // MARK: - Summary
