@@ -42,6 +42,7 @@ final class AppState {
         static let notifyRecurringChargeDueSoon = "notifyRecurringChargeDueSoon"
         static let notifyBrokenConnection = "notifyBrokenConnection"
         static let notifyWatchlist = "notifyWatchlist"
+        static let notifyCategoryBudget = "notifyCategoryBudget"
         static let watchlistTargets = "watchlistTargets"
         static let privacyMaskEnabled = "privacyMaskEnabled"
         static let appLockEnabled = UserDefaultsAppLockSettingsStore.defaultStorageKey
@@ -393,6 +394,14 @@ final class AppState {
         didSet {
             guard notifyWatchlist != oldValue else { return }
             UserDefaults.standard.set(notifyWatchlist, forKey: Keys.notifyWatchlist)
+        }
+    }
+    /// Gate for per-category budget alerts: nudge when a budgeted category nears
+    /// or exceeds its monthly limit (AND-642).
+    var notifyCategoryBudget: Bool = true {
+        didSet {
+            guard notifyCategoryBudget != oldValue else { return }
+            UserDefaults.standard.set(notifyCategoryBudget, forKey: Keys.notifyCategoryBudget)
         }
     }
     /// User-defined per-merchant / per-category spend watches (AND-501).
@@ -806,6 +815,9 @@ final class AppState {
         }
         if defaults.object(forKey: Keys.notifyWatchlist) != nil {
             notifyWatchlist = defaults.bool(forKey: Keys.notifyWatchlist)
+        }
+        if defaults.object(forKey: Keys.notifyCategoryBudget) != nil {
+            notifyCategoryBudget = defaults.bool(forKey: Keys.notifyCategoryBudget)
         }
         loadWatchlistTargets(defaults: defaults)
         loadAppLockPreferences(defaults: defaults)
@@ -3017,6 +3029,7 @@ final class AppState {
             loginRequired: notifyBrokenConnection,
             itemError: notifyBrokenConnection,
             watchlist: notifyWatchlist,
+            categoryBudgetAlert: notifyCategoryBudget,
             largeTransactionThreshold: largeTransactionThreshold,
             lowBalanceThreshold: lowBalanceThreshold,
             creditUtilizationThreshold: creditUtilizationThreshold
@@ -3027,7 +3040,9 @@ final class AppState {
             recurringTransactions: recurringTransactions,
             itemStatuses: itemStatuses,
             watchlistTargets: watchlistTargets,
+            budgetPresentation: categoryBudgetPresentation,
             isSyncStale: isSyncStale,
+            privacyMaskActive: shouldMaskFinancialValues,
             config: config
         )
     }
