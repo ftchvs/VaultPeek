@@ -176,9 +176,11 @@ public enum InvestmentHoldingsPresentation {
         security: SecurityDTO?,
         privacyMaskEnabled: Bool
     ) -> HoldingRow {
-        let name = securityName(security, fallbackId: holding.securityId)
-        let ticker = security?.tickerSymbol
-        let typeLabel = securityTypeLabel(security?.type)
+        let name = privacyMaskEnabled
+            ? "Investment holding"
+            : securityName(security, fallbackId: holding.securityId)
+        let ticker = privacyMaskEnabled ? nil : security?.tickerSymbol
+        let typeLabel = privacyMaskEnabled ? nil : securityTypeLabel(security?.type)
 
         // Quantity is a count of shares, not a balance — but it can reveal
         // position size, so mask it alongside currency under Privacy Mask.

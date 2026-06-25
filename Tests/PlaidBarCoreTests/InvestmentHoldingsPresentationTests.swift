@@ -106,13 +106,16 @@ struct InvestmentHoldingsPresentationTests {
             privacyMaskEnabled: true
         )
 
-        let vti = rows.first { $0.tickerSymbol == "VTI" }
-        #expect(vti?.marketValueText == PrivacyMaskPresentation.compactValue)
-        #expect(vti?.quantityText == PrivacyMaskPresentation.compactValue)
-        #expect(vti?.gainText == PrivacyMaskPresentation.compactValue)
-        // The security name and ticker are not financial values, so they survive.
-        #expect(vti?.securityName == "Vanguard Total Market ETF")
-        #expect(vti?.accessibilityLabel.contains("Privacy Mask") == true)
+        let row = rows.first
+        #expect(row?.securityName == "Investment holding")
+        #expect(row?.tickerSymbol == nil)
+        #expect(row?.securityTypeLabel == nil)
+        #expect(row?.marketValueText == PrivacyMaskPresentation.compactValue)
+        #expect(row?.quantityText == PrivacyMaskPresentation.compactValue)
+        #expect(row?.gainText == PrivacyMaskPresentation.compactValue)
+        #expect(row?.accessibilityLabel.contains("Vanguard") == false)
+        #expect(row?.accessibilityLabel.contains("VTI") == false)
+        #expect(row?.accessibilityLabel.contains("Privacy Mask") == true)
     }
 
     @Test("A holding whose security is missing still renders with a fallback name")
