@@ -220,15 +220,24 @@ public enum MenuBarSummary {
         case .netWorth:
             guard !accounts.isEmpty else { return PlaidBarConstants.appName }
             guard !privacyMaskEnabled else { return PrivacyMaskPresentation.heroValue }
-            return Formatters.currency(netWorth(from: accounts), format: currencyFormat)
+            return MultiCurrencyBalancePresentation.displayText(
+                from: MultiCurrencyBalancePresentation.netWorth(accounts: accounts),
+                format: currencyFormat
+            )
         case .netCash:
             guard !accounts.isEmpty else { return PlaidBarConstants.appName }
             guard !privacyMaskEnabled else { return PrivacyMaskPresentation.heroValue }
-            return Formatters.currency(netCash(from: accounts), format: currencyFormat)
+            return MultiCurrencyBalancePresentation.displayText(
+                from: MultiCurrencyBalancePresentation.netWorth(accounts: accounts),
+                format: currencyFormat
+            )
         case .totalCash:
             guard !accounts.isEmpty else { return PlaidBarConstants.appName }
             guard !privacyMaskEnabled else { return PrivacyMaskPresentation.heroValue }
-            return Formatters.currency(totalCash(from: accounts), format: currencyFormat)
+            return MultiCurrencyBalancePresentation.displayText(
+                from: MultiCurrencyBalancePresentation.totalCash(accounts: accounts),
+                format: currencyFormat
+            )
         case .creditUtilization:
             guard !accounts.isEmpty else { return PlaidBarConstants.appName }
             guard let utilization = creditUtilization(from: accounts) else { return "No credit" }

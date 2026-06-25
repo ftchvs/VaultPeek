@@ -89,6 +89,15 @@ struct MultiCurrencyTests {
         #expect(tx.currency == CurrencyCode("EUR"))
     }
 
+    @Test("Account row amounts render in the account's native currency")
+    func accountRowAmountUsesNativeCurrency() {
+        let account = depository(name: "Euro Savings", current: 2_000, currency: "EUR")
+        let text = AccountPresentation.rowAmountText(for: account, format: .compact)
+
+        #expect(text.contains("2,000"))
+        #expect(!text.contains("$"))
+    }
+
     // MARK: - Static conversion source
 
     @Test("Static rate table converts via the base and prices identity at 1")
@@ -98,7 +107,8 @@ struct MultiCurrencyTests {
         // 1 EUR = 1.08 USD per the stub table.
         #expect(rates.rate(from: CurrencyCode("EUR"), to: .usd) == 1.08)
         // Cross pair routed through USD base: EUR→GBP = 1.08 / 1.27.
-        let eurToGbp = try? #require(rates.rate(from: CurrencyCode("EUR"), to: CurrencyCode("GBP")))
+        let eurToGbp = rates.rate(from: CurrencyCode("EUR"), to: CurrencyCode("GBP"))
+        #expect(eurToGbp != nil)
         #expect(abs((eurToGbp ?? 0) - (1.08 / 1.27)) < 1e-9)
         // An unlisted currency cannot be priced.
         #expect(rates.rate(from: CurrencyCode("CHF"), to: .usd) == nil)
@@ -222,7 +232,8 @@ struct MultiCurrencyTests {
             (amount: 1_200, currency: CurrencyCode("EUR")),
         ])
         let rows = MultiCurrencyBalancePresentation.subtotalRows(from: aggregation)
-        let eurRow = try? #require(rows.first { $0.currency == CurrencyCode("EUR") })
+        let eurRow = rows.first { $0.currency == CurrencyCode("EUR") }
+        #expect(eurRow != nil)
         #expect(eurRow?.formattedAmount.contains("1,200") == true)
         // Currency identity is in the spoken label as text (non-color cue).
         #expect(eurRow?.accessibilityLabel.contains(CurrencyCode("EUR").accessibleName) == true)
@@ -269,6 +280,23 @@ struct MultiCurrencyTests {
         )
         #expect(unavailable.formattedTotal == nil)
         #expect(unavailable.disclosure.lowercased().contains("per currency"))
+    }
+
+    @Test("Menu bar balance modes use subtotals-only text for mixed currencies")
+    func menuBarMixedCurrencyAvoidsScalarBalance() {
+        let accounts = [
+            depository(name: "US Checking", current: 5_000, currency: "USD"),
+            depository(name: "Euro Savings", current: 2_000, currency: "EUR"),
+        ]
+
+        let text = MenuBarSummary.text(
+            mode: .netWorth,
+            accounts: accounts,
+            transactions: [],
+            currencyFormat: .compact
+        )
+
+        #expect(text == "By currency")
     }
 
     // MARK: - Helpers

@@ -87,6 +87,7 @@ struct DashboardDrillInSurfaceTests {
             availableBalance: 1_000,
             currentTitle: "Current",
             currentBalance: 1_050,
+            currency: .usd,
             utilizationPercent: utilizationPercent,
             limit: utilizationPercent == nil ? nil : 2_000,
             transactionCount: transactionCount,

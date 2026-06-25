@@ -56,6 +56,15 @@ public enum FinanceSnapshotBuilder {
         let totalBalance = includedCashAccounts
             .reduce(0) { $0 + $1.balances.effectiveBalance }
 
+        let cashAggregation = CurrencyAggregation.aggregate(
+            includedCashAccounts.map {
+                (amount: $0.balances.effectiveBalance, currency: $0.balances.currency)
+            }
+        )
+        let currencySubtotals = cashAggregation.subtotals.map {
+            FinanceSnapshot.CurrencySubtotal(currency: $0.currency, amount: $0.amount)
+        }
+
         let accountBalances = includedCashAccounts
             .map { account in
                 FinanceSnapshot.AccountBalance(
@@ -82,9 +91,7 @@ public enum FinanceSnapshotBuilder {
             calendar: calendar
         )
 
-        let currencyCode = accounts
-            .compactMap { $0.balances.isoCurrencyCode }
-            .first ?? "USD"
+        let currencyCode = cashAggregation.singleCurrency?.rawValue ?? "USD"
 
         // Defense in depth: a masked snapshot must be value-free *on disk*, not
         // merely withheld at read time. If anyone bypasses the read-time gate
@@ -97,6 +104,7 @@ public enum FinanceSnapshotBuilder {
                 safeToSpend: 0,
                 totalBalance: 0,
                 accountBalances: [],
+                currencySubtotals: [],
                 nextRecurringBills: [],
                 creditUtilization: nil,
                 isoCurrencyCode: currencyCode,
@@ -109,6 +117,7 @@ public enum FinanceSnapshotBuilder {
             safeToSpend: safeToSpend.amount,
             totalBalance: totalBalance,
             accountBalances: accountBalances,
+            currencySubtotals: currencySubtotals,
             nextRecurringBills: bills,
             creditUtilization: utilization,
             isoCurrencyCode: currencyCode,

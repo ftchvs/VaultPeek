@@ -208,9 +208,8 @@ struct AccountDetailFlyout: View {
         HStack(alignment: .top, spacing: Spacing.lg) {
             DetailValue(
                 title: summary.availableTitle,
-                value: PrivacyMaskPresentation.currency(
-                    summary.availableBalance,
-                    format: .compact,
+                value: PrivacyMaskPresentation.value(
+                    Formatters.currency(summary.availableBalance, in: summary.currency, format: .compact),
                     isEnabled: appState.shouldMaskFinancialValues
                 ),
                 tint: AppearanceTextColors.primary,
@@ -218,9 +217,8 @@ struct AccountDetailFlyout: View {
             )
             DetailValue(
                 title: summary.currentTitle,
-                value: PrivacyMaskPresentation.currency(
-                    summary.currentBalance,
-                    format: .compact,
+                value: PrivacyMaskPresentation.value(
+                    Formatters.currency(summary.currentBalance, in: summary.currency, format: .compact),
                     isEnabled: appState.shouldMaskFinancialValues
                 ),
                 tint: AppearanceTextColors.primary,

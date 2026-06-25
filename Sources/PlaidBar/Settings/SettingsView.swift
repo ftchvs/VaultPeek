@@ -1353,7 +1353,7 @@ struct AccountSettingsView: View {
     }
 
     private func balanceText(for account: AccountDTO) -> String {
-        Formatters.currency(AccountPresentation.displayBalance(for: account), format: .compact)
+        AccountPresentation.rowAmountText(for: account, format: .compact)
     }
 
     private func balanceTint(for account: AccountDTO) -> Color {

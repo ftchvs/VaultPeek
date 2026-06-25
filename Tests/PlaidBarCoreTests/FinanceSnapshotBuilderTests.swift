@@ -32,6 +32,9 @@ struct FinanceSnapshotBuilderTests {
         // NOT net worth — investments are excluded and credit debt is not
         // subtracted. Here: 3_000 + 5_000 = 8_000.
         #expect(snapshot.totalBalance == 8_000)
+        #expect(snapshot.currencySubtotals == [
+            FinanceSnapshot.CurrencySubtotal(currency: .unknown, amount: 8_000),
+        ])
         // Two depository accounts surface as display-safe balances.
         #expect(snapshot.accountBalances.count == 2)
         #expect(snapshot.accountBalances.contains { $0.displayName == "Checking" })
@@ -67,6 +70,7 @@ struct FinanceSnapshotBuilderTests {
         #expect(snapshot.isMasked)
         #expect(snapshot.safeToSpend == 0)
         #expect(snapshot.totalBalance == 0)
+        #expect(snapshot.currencySubtotals.isEmpty)
         #expect(snapshot.accountBalances.isEmpty)
         #expect(snapshot.nextRecurringBills.isEmpty)
         #expect(snapshot.creditUtilization == nil)
@@ -196,6 +200,27 @@ struct FinanceSnapshotBuilderTests {
         #expect(snapshot.topSpendingCategories.isEmpty)
     }
 
+    @Test("Builder preserves per-currency cash subtotals for App Intent readers")
+    func builderPreservesPerCurrencyCashSubtotals() {
+        let snapshot = FinanceSnapshotBuilder.make(
+            accounts: [
+                depository(name: "Checking", available: 4_000, currency: "USD"),
+                depository(name: "Euro Savings", available: 1_500, currency: "EUR"),
+            ],
+            recurringTransactions: [],
+            isMasked: false,
+            generatedAt: asOf
+        )
+
+        #expect(snapshot.hasMixedCurrencyBalances)
+        #expect(snapshot.currencySubtotals.contains {
+            $0.currency == .usd && $0.amount == 4_000
+        })
+        #expect(snapshot.currencySubtotals.contains {
+            $0.currency == CurrencyCode("EUR") && $0.amount == 1_500
+        })
+    }
+
     // MARK: - Helpers
 
     private func expense(
@@ -212,13 +237,13 @@ struct FinanceSnapshotBuilderTests {
     }
 
 
-    private func depository(name: String, available: Double) -> AccountDTO {
+    private func depository(name: String, available: Double, currency: String? = nil) -> AccountDTO {
         AccountDTO(
             id: "acct-\(name)",
             itemId: "item-1",
             name: name,
             type: .depository,
-            balances: BalanceDTO(available: available, current: available)
+            balances: BalanceDTO(available: available, current: available, isoCurrencyCode: currency)
         )
     }
 

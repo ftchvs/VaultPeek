@@ -161,6 +161,7 @@ public struct DashboardAccountDrillInSummary: Sendable, Equatable {
     public let availableBalance: Double
     public let currentTitle: String
     public let currentBalance: Double
+    public let currency: CurrencyCode
     public let utilizationPercent: Double?
     public let limit: Double?
     public let transactionCount: Int
@@ -178,8 +179,8 @@ public struct DashboardAccountDrillInSummary: Sendable, Equatable {
             "Selected account drill-in",
             displayName,
             subtitle,
-            "\(availableTitle) \(PrivacyMaskPresentation.currency(availableBalance, format: .full, isEnabled: privacyMaskEnabled))",
-            "\(currentTitle) \(PrivacyMaskPresentation.currency(currentBalance, format: .full, isEnabled: privacyMaskEnabled))",
+            "\(availableTitle) \(PrivacyMaskPresentation.value(Formatters.currency(availableBalance, in: currency), isEnabled: privacyMaskEnabled))",
+            "\(currentTitle) \(PrivacyMaskPresentation.value(Formatters.currency(currentBalance, in: currency), isEnabled: privacyMaskEnabled))",
             "Sync \(freshnessLabel)",
         ]
 
@@ -229,6 +230,7 @@ public struct DashboardAccountDrillInSummary: Sendable, Equatable {
             availableBalance: AccountPresentation.availableBalance(for: account),
             currentTitle: AccountPresentation.dashboardCurrentTitle(for: account),
             currentBalance: AccountPresentation.displayBalance(for: account),
+            currency: account.balances.currency,
             utilizationPercent: account.balances.utilizationPercent,
             limit: account.balances.limit,
             transactionCount: activitySnapshot.transactionCount,

@@ -37,6 +37,20 @@ public struct FinanceSnapshot: Codable, Sendable, Equatable {
         }
     }
 
+    /// Per-currency spendable balance subtotal. This lets App Intents and widgets
+    /// avoid collapsing mixed-currency accounts into one arbitrary headline.
+    public struct CurrencySubtotal: Codable, Sendable, Equatable, Identifiable {
+        public let currency: CurrencyCode
+        public let amount: Double
+
+        public var id: String { currency.rawValue }
+
+        public init(currency: CurrencyCode, amount: Double) {
+            self.currency = currency
+            self.amount = amount
+        }
+    }
+
     /// One upcoming recurring obligation, reduced to a merchant label, amount,
     /// and the next expected date string (`yyyy-MM-dd`).
     public struct UpcomingBill: Codable, Sendable, Equatable, Identifiable {
@@ -89,6 +103,8 @@ public struct FinanceSnapshot: Codable, Sendable, Equatable {
     public let totalBalance: Double
     /// Per-account spendable balances, display-safe.
     public let accountBalances: [AccountBalance]
+    /// Native-currency subtotals for ``accountBalances``.
+    public let currencySubtotals: [CurrencySubtotal]
     /// Upcoming recurring bills within the look-ahead window, soonest first.
     public let nextRecurringBills: [UpcomingBill]
     /// Aggregate credit utilization percent (0–100), nil when no credit limit
@@ -112,6 +128,7 @@ public struct FinanceSnapshot: Codable, Sendable, Equatable {
         safeToSpend: Double,
         totalBalance: Double,
         accountBalances: [AccountBalance],
+        currencySubtotals: [CurrencySubtotal] = [],
         nextRecurringBills: [UpcomingBill],
         creditUtilization: Double?,
         isoCurrencyCode: String = "USD",
@@ -123,6 +140,7 @@ public struct FinanceSnapshot: Codable, Sendable, Equatable {
         self.safeToSpend = safeToSpend
         self.totalBalance = totalBalance
         self.accountBalances = accountBalances
+        self.currencySubtotals = currencySubtotals
         self.nextRecurringBills = nextRecurringBills
         self.creditUtilization = creditUtilization
         self.isoCurrencyCode = isoCurrencyCode
@@ -137,7 +155,7 @@ public struct FinanceSnapshot: Codable, Sendable, Equatable {
     // empty defaults, so an upgrade never fails to read a pre-AND-586 snapshot.
     private enum CodingKeys: String, CodingKey {
         case safeToSpend, totalBalance, accountBalances, nextRecurringBills
-        case creditUtilization, isoCurrencyCode, generatedAt, isMasked
+        case currencySubtotals, creditUtilization, isoCurrencyCode, generatedAt, isMasked
         case periodSpending, topSpendingCategories
     }
 
@@ -146,6 +164,7 @@ public struct FinanceSnapshot: Codable, Sendable, Equatable {
         safeToSpend = try container.decode(Double.self, forKey: .safeToSpend)
         totalBalance = try container.decode(Double.self, forKey: .totalBalance)
         accountBalances = try container.decode([AccountBalance].self, forKey: .accountBalances)
+        currencySubtotals = try container.decodeIfPresent([CurrencySubtotal].self, forKey: .currencySubtotals) ?? []
         nextRecurringBills = try container.decode([UpcomingBill].self, forKey: .nextRecurringBills)
         creditUtilization = try container.decodeIfPresent(Double.self, forKey: .creditUtilization)
         isoCurrencyCode = try container.decodeIfPresent(String.self, forKey: .isoCurrencyCode) ?? "USD"
@@ -162,6 +181,7 @@ public struct FinanceSnapshot: Codable, Sendable, Equatable {
             safeToSpend: 0,
             totalBalance: 0,
             accountBalances: [],
+            currencySubtotals: [],
             nextRecurringBills: [],
             creditUtilization: nil,
             generatedAt: generatedAt,
@@ -184,6 +204,7 @@ public struct FinanceSnapshot: Codable, Sendable, Equatable {
             safeToSpend: 0,
             totalBalance: 0,
             accountBalances: [],
+            currencySubtotals: [],
             nextRecurringBills: [],
             creditUtilization: nil,
             isoCurrencyCode: isoCurrencyCode,
@@ -204,5 +225,29 @@ public struct FinanceSnapshot: Codable, Sendable, Equatable {
             && creditUtilization == nil
             && periodSpending == 0
             && topSpendingCategories.isEmpty
+    }
+
+    public var hasMixedCurrencyBalances: Bool {
+        let currencies = currencySubtotals.isEmpty
+            ? accountBalances.map { CurrencyCode($0.isoCurrencyCode) }
+            : currencySubtotals.map(\.currency)
+        return Set(currencies).count > 1
+    }
+
+    public var currencySubtotalText: String {
+        let subtotals = currencySubtotals.isEmpty
+            ? CurrencyAggregation.aggregate(accountBalances.map {
+                (amount: $0.balance, currency: CurrencyCode($0.isoCurrencyCode))
+            }).subtotals
+            : currencySubtotals.map {
+                CurrencyAggregation.Subtotal(currency: $0.currency, amount: $0.amount)
+            }
+        return MultiCurrencyBalancePresentation.subtotalRows(
+            from: CurrencyAggregation(subtotals: subtotals, convertedTotal: .unavailable),
+            format: .full,
+            privacyMaskEnabled: isMasked
+        )
+        .map { "\($0.currency.rawValue) \($0.formattedAmount)" }
+        .joined(separator: ", ")
     }
 }
