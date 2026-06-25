@@ -38,18 +38,26 @@ import Foundation
 /// migration-stable key. Additive — it does not alter ``CategoryGroup`` itself.
 public struct BudgetCategoryGroupV2: Codable, Sendable, Hashable, Identifiable {
     /// Stable identity — the seeded ``CategoryGroup`` `rawValue` (e.g. `HOUSING`).
-    /// A user-created group (a later epic) would use a fresh UUID string here; the
-    /// foundation only ever seeds the closed taxonomy, so every id round-trips back
-    /// to a ``CategoryGroup``.
+    /// A user-created group (AND-547) uses a fresh `"grp_<uuid>"` string here; a
+    /// seeded group keeps the closed-taxonomy `rawValue`, so every *seeded* id
+    /// round-trips back to a ``CategoryGroup`` while a custom one never collides.
     public let id: String
-    /// Human-readable group title (seeded from ``CategoryGroup/title``).
+    /// Human-readable group title (seeded from ``CategoryGroup/title``; user-editable
+    /// via the categories editor, AND-547).
     public let name: String
-    /// Top-to-bottom display order (seeded from ``CategoryGroup/sortIndex``).
+    /// Top-to-bottom display order (seeded from ``CategoryGroup/sortIndex``;
+    /// user-reorderable via the categories editor, AND-547).
     public let sortIndex: Int
     /// The ``CategoryGroup`` this row seeded from, when `id` is a seeded taxonomy
-    /// key. `nil` for a (future) user-created group with no v1 ancestor. Lets a
-    /// reverse migration map a v2 group back to its v1 origin losslessly.
+    /// key. `nil` for a user-created group (AND-547) with no v1 ancestor. Lets a
+    /// reverse migration map a v2 group back to its v1 origin losslessly, and lets
+    /// the editor distinguish a deletable custom group from a protected system one.
     public let seededFromGroup: CategoryGroup?
+
+    /// Whether this group was created by the user (AND-547) rather than seeded from
+    /// the closed taxonomy. Derived from ``seededFromGroup`` so the two can never
+    /// disagree: a seeded group always has an ancestor, a custom one never does.
+    public var isCustom: Bool { seededFromGroup == nil }
 
     public init(id: String, name: String, sortIndex: Int, seededFromGroup: CategoryGroup?) {
         self.id = id
@@ -79,49 +87,112 @@ public struct BudgetCategoryGroupV2: Codable, Sendable, Hashable, Identifiable {
 /// transaction — maps to its v2 row with no reclassification. `groupId` references
 /// the seeded ``BudgetCategoryGroupV2``.
 public struct BudgetCategoryV2: Codable, Sendable, Hashable, Identifiable {
-    /// Stable identity — the seeded ``SpendingCategory`` `rawValue`. A
-    /// user-created category (a later epic) would use a fresh UUID string; the
-    /// foundation only ever seeds the closed enum, so every id round-trips back to
-    /// a ``SpendingCategory`` via ``seededFromCategory``.
+    /// Stable identity — the seeded ``SpendingCategory`` `rawValue`. A user-created
+    /// category (AND-547) uses a fresh `"cat_<uuid>"` string; a seeded row keeps the
+    /// closed-enum `rawValue`, so every *seeded* id round-trips back to a
+    /// ``SpendingCategory`` via ``seededFromCategory`` while a custom one never
+    /// collides with — or shadows — a Plaid key.
     public let id: String
-    /// Display name (seeded from ``SpendingCategory/displayName``). User-editable in
-    /// a later epic; the foundation just carries the v1 name forward.
+    /// Display name (seeded from ``SpendingCategory/displayName``). User-renamable
+    /// via the categories editor (AND-547) for both system and custom rows.
     public let name: String
     /// SF Symbol for the category icon (seeded from ``SpendingCategory/iconName``).
     public let iconName: String
-    /// Parent group id (the seeded ``BudgetCategoryGroupV2/id``).
+    /// Optional user emoji glyph shown in place of (or alongside) ``iconName`` in
+    /// the editor and dashboard (AND-547). `nil` for a seeded row that the user has
+    /// not re-emoji'd, so a not-edited category renders exactly as v1 did.
+    /// Decoded as `nil` when absent, so a pre-AND-547 snapshot keeps the SF Symbol.
+    public let emoji: String?
+    /// Display color as a `#RRGGBB` hex string (seeded from
+    /// ``SpendingCategory/colorHex``). User-recolorable via the editor (AND-547).
+    /// Decoded as the seeded color (or a neutral fallback for a custom row) when
+    /// absent, so a pre-AND-547 snapshot keeps the v1 chart color.
+    public let colorHex: String
+    /// Parent group id (the seeded ``BudgetCategoryGroupV2/id``). User-movable
+    /// between groups via the editor (AND-547).
     public let groupId: String
+    /// Within-group display order (AND-547). Seeded rows default to `0` and fall
+    /// back to display-name ordering; the editor assigns explicit indices on
+    /// reorder. Decoded as `0` when absent so a pre-AND-547 snapshot is stable.
+    public let sortIndex: Int
     /// The ``SpendingCategory`` this row seeded from, preserving the exact v1
-    /// taxonomy link. `nil` only for a (future) user-created category with no v1
-    /// ancestor — never for a seeded row. Lets a reverse migration drop straight
-    /// back to the v1 enum key without a name lookup.
+    /// taxonomy link **even after a rename/recolor** — renaming a system category
+    /// never breaks its `systemKey → Plaid` mapping. `nil` only for a user-created
+    /// category (AND-547) with no v1 ancestor. Lets a reverse migration drop
+    /// straight back to the v1 enum key without a name lookup, and lets the editor
+    /// tell a deletable custom row from a protected system one.
     public let seededFromCategory: SpendingCategory?
+
+    /// Whether this category was created by the user (AND-547) rather than seeded
+    /// from the closed enum. Derived from ``seededFromCategory`` so a system row can
+    /// never be misclassified as deletable: a seeded row always has a v1 ancestor.
+    public var isCustom: Bool { seededFromCategory == nil }
 
     public init(
         id: String,
         name: String,
         iconName: String,
+        emoji: String? = nil,
+        colorHex: String,
         groupId: String,
+        sortIndex: Int = 0,
         seededFromCategory: SpendingCategory?
     ) {
         self.id = id
         self.name = name
         self.iconName = iconName
+        self.emoji = emoji
+        self.colorHex = colorHex
         self.groupId = groupId
+        self.sortIndex = sortIndex
         self.seededFromCategory = seededFromCategory
     }
 
     /// Seed a v2 category row from a ``SpendingCategory``, linking it to the group
-    /// the category rolls up into (``SpendingCategory/group``).
+    /// the category rolls up into (``SpendingCategory/group``) and carrying the v1
+    /// chart color forward so an unedited category is visually identical to v1.
     public init(seedingFrom category: SpendingCategory) {
         self.init(
             id: category.rawValue,
             name: category.displayName,
             iconName: category.iconName,
+            emoji: nil,
+            colorHex: category.colorHex,
             groupId: category.group.rawValue,
+            sortIndex: 0,
             seededFromCategory: category
         )
     }
+
+    // MARK: - Backward-compatible decoding
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, iconName, emoji, colorHex, groupId, sortIndex, seededFromCategory
+    }
+
+    /// Custom decoder so a snapshot written **before AND-547** (no `emoji` /
+    /// `colorHex` / `sortIndex` keys) still decodes: the new fields default rather
+    /// than throwing, keeping the v2 store self-healing and the upgrade additive.
+    /// A missing color falls back to the seeded ``SpendingCategory/colorHex`` when
+    /// the row links to one, else a neutral gray, so no row is ever color-less.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        iconName = try container.decode(String.self, forKey: .iconName)
+        emoji = try container.decodeIfPresent(String.self, forKey: .emoji)
+        groupId = try container.decode(String.self, forKey: .groupId)
+        sortIndex = try container.decodeIfPresent(Int.self, forKey: .sortIndex) ?? 0
+        let seeded = try container.decodeIfPresent(SpendingCategory.self, forKey: .seededFromCategory)
+        seededFromCategory = seeded
+        colorHex = try container.decodeIfPresent(String.self, forKey: .colorHex)
+            ?? seeded?.colorHex
+            ?? BudgetCategoryV2.neutralColorHex
+    }
+
+    /// Neutral fallback color for a custom row whose snapshot somehow omits one
+    /// (matches ``SpendingCategory/other`` so it reads as an unstyled category).
+    public static let neutralColorHex = "#BDC3C7"
 }
 
 // MARK: - Monthly budget (v2 — per-month + rollover)

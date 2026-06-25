@@ -54,7 +54,11 @@ public enum BudgetingV2Migration {
 
         // Categories ordered by (group display order, then category display name)
         // so the seeded leaf table is deterministic and reads naturally under each
-        // group header.
+        // group header. Each leaf is stamped with an explicit within-group
+        // `sortIndex` (0-based, contiguous per group) so the editor (AND-547) has a
+        // stable starting order to reorder against, rather than every seeded row
+        // sharing index 0.
+        var perGroupNextIndex: [String: Int] = [:]
         let categories = SpendingCategory.allCases
             .sorted { lhs, rhs in
                 if lhs.group.sortIndex != rhs.group.sortIndex {
@@ -62,7 +66,22 @@ public enum BudgetingV2Migration {
                 }
                 return lhs.displayName < rhs.displayName
             }
-            .map(BudgetCategoryV2.init(seedingFrom:))
+            .map { category -> BudgetCategoryV2 in
+                let groupId = category.group.rawValue
+                let index = perGroupNextIndex[groupId, default: 0]
+                perGroupNextIndex[groupId] = index + 1
+                let seeded = BudgetCategoryV2(seedingFrom: category)
+                return BudgetCategoryV2(
+                    id: seeded.id,
+                    name: seeded.name,
+                    iconName: seeded.iconName,
+                    emoji: seeded.emoji,
+                    colorHex: seeded.colorHex,
+                    groupId: seeded.groupId,
+                    sortIndex: index,
+                    seededFromCategory: seeded.seededFromCategory
+                )
+            }
 
         // Carry v1 budgets forward only when both a non-empty set AND a target
         // month are supplied. A budget for a category that somehow isn't in the

@@ -24,6 +24,13 @@ struct SettingsView: View {
                 }
                 .tag(SettingsTab.accounts.rawValue)
 
+            CategorySettingsView()
+                .environment(appState)
+                .tabItem {
+                    Label("Categories", systemImage: "tag")
+                }
+                .tag(SettingsTab.categories.rawValue)
+
             AppearanceSettingsView()
                 .tabItem {
                     Label("Appearance", systemImage: "paintbrush")
@@ -64,10 +71,46 @@ struct SettingsView: View {
 private enum SettingsTab: String {
     case general
     case accounts
+    case categories
     case appearance
     case notifications
     case privacy
     case about
+}
+
+/// Settings tab hosting the budgeting-v2 categories & groups editor (AND-547).
+///
+/// Builds a fresh ``CategoryEditorModel`` per appearance from the active environment
+/// (scoped to the same per-environment cache key the other caches use) and hands it
+/// the current v1 budgets + month so opting in carries the user's saved budgets
+/// forward. The editor is opt-in and additive: a user who never enables it sees no
+/// change to standard budgeting. This surface shows category labels (financial
+/// data), so it inherits the same Privacy Mask / App Lock gating as the rest of
+/// Settings via the shared scene environment.
+struct CategorySettingsView: View {
+    @Environment(AppState.self) private var appState
+    @State private var model: CategoryEditorModel?
+
+    var body: some View {
+        Group {
+            if let model {
+                CategoryEditorView(
+                    model: model,
+                    v1Budgets: DataExportBuilder.budgetDTOs(from: appState.categoryBudgets),
+                    currentMonth: appState.currentBudgetMonthKey()
+                )
+            } else {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .onAppear {
+            if model == nil {
+                model = appState.makeCategoryEditorModel()
+            }
+        }
+    }
 }
 
 struct AppearanceSettingsView: View {
