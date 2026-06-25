@@ -1557,6 +1557,15 @@ struct NotificationSettingsView: View {
 
             watchlistsSection(state: state)
 
+            Section("Budget alerts") {
+                Toggle("Category budget warnings", isOn: $state.notifyCategoryBudget)
+                    .disabled(areNotificationControlsDisabled)
+
+                Text("Get a heads-up when a category nears or exceeds its monthly budget. Alerts keep amounts out of the lock screen and respect Privacy Mask.")
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             Section("Connection alerts") {
                 Toggle("Broken connection or stale sync", isOn: $state.notifyBrokenConnection)
                     .disabled(areNotificationControlsDisabled)
