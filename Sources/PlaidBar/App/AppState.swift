@@ -55,6 +55,7 @@ final class AppState {
         static let setupCompletedOnce = "setup.completedOnce"
         static let setupCompletedContextPrefix = "setup.completedOnce.context"
         static let firstRunSnapshotDismissedContextPrefix = "firstRunSnapshot.dismissed.context"
+        static let windowFirstOrientationDismissedContextPrefix = "windowFirstOrientation.dismissed.context"
         static let lastTransactionCacheContext = "cache.lastTransactionCacheContext"
         static let categoryBudgetCache = "cache.categoryBudgets"
     }
@@ -187,6 +188,15 @@ final class AppState {
         didSet {
             guard oldValue != isFirstRunSnapshotDismissed else { return }
             persistFirstRunSnapshotDismissal(isFirstRunSnapshotDismissed)
+        }
+    }
+    /// Whether the one-time window-first orientation moment (AND-640) has been
+    /// dismissed. Persisted per environment + data directory (mirroring the
+    /// first-run snapshot flag) so it never re-shows once the user has seen it.
+    var isWindowFirstOrientationDismissed = false {
+        didSet {
+            guard oldValue != isWindowFirstOrientationDismissed else { return }
+            persistWindowFirstOrientationDismissal(isWindowFirstOrientationDismissed)
         }
     }
     var serverConnected = false
@@ -698,6 +708,7 @@ final class AppState {
         lockOnLaunchIfNeeded()
         isSetupComplete = storedSetupCompletion()
         isFirstRunSnapshotDismissed = storedFirstRunSnapshotDismissal()
+        isWindowFirstOrientationDismissed = storedWindowFirstOrientationDismissal()
         if isSetupComplete {
             persistSetupCompletion(true)
         }
@@ -2238,6 +2249,7 @@ final class AppState {
             persistTransactionCacheContext()
             refreshSetupCompletionForActiveContext()
             refreshFirstRunSnapshotDismissalForActiveContext()
+            refreshWindowFirstOrientationDismissalForActiveContext()
             if let itemStatuses = status.itemStatuses {
                 applyItemStatuses(itemStatuses, itemCount: status.itemCount, syncReady: status.syncReady)
             } else if !(await refreshItemStatuses()) {
@@ -3078,6 +3090,25 @@ final class AppState {
         isFirstRunSnapshotDismissed = true
     }
 
+    /// Dismisses the one-time window-first orientation moment (AND-640). The
+    /// `didSet` on `isWindowFirstOrientationDismissed` persists it per environment,
+    /// so it never re-shows on a future launch.
+    func dismissWindowFirstOrientation() {
+        isWindowFirstOrientationDismissed = true
+    }
+
+    /// Whether the window-first orientation moment should be shown now (AND-640).
+    /// Gated on the window-first feature flag (the moment only makes sense when the
+    /// window surface is live), the per-environment dismissal flag, and unlocked
+    /// content. Suppressed in demo so a transient demo session never burns the
+    /// one-time welcome for a real configured install.
+    var shouldShowWindowFirstOrientation: Bool {
+        WindowFirstFeatureFlag.resolved()
+            && !isWindowFirstOrientationDismissed
+            && !isDemoMode
+            && !isContentLocked
+    }
+
     func notificationPermissionStatus() async -> NotificationPermissionState {
         notificationPermissionState = await notificationService.checkPermissionStatus()
         return notificationPermissionState
@@ -3897,6 +3928,25 @@ final class AppState {
         }
     }
 
+    private func refreshWindowFirstOrientationDismissalForActiveContext() {
+        let storedValue = storedWindowFirstOrientationDismissal()
+        if isWindowFirstOrientationDismissed != storedValue {
+            isWindowFirstOrientationDismissed = storedValue
+        }
+    }
+
+    private func storedWindowFirstOrientationDismissal() -> Bool {
+        UserDefaults.standard.bool(forKey: windowFirstOrientationDismissalDefaultsKey)
+    }
+
+    private func persistWindowFirstOrientationDismissal(_ isDismissed: Bool) {
+        if isDismissed {
+            UserDefaults.standard.set(true, forKey: windowFirstOrientationDismissalDefaultsKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: windowFirstOrientationDismissalDefaultsKey)
+        }
+    }
+
     private var setupCompletionDefaultsKey: String {
         let environment = setupCompletionEnvironment.rawValue
         let path = activeStorageDirectoryURL.standardizedFileURL.path
@@ -3909,6 +3959,13 @@ final class AppState {
         let path = activeStorageDirectoryURL.standardizedFileURL.path
         let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? path
         return "\(Keys.firstRunSnapshotDismissedContextPrefix).\(environment).\(encodedPath)"
+    }
+
+    private var windowFirstOrientationDismissalDefaultsKey: String {
+        let environment = setupCompletionEnvironment.rawValue
+        let path = activeStorageDirectoryURL.standardizedFileURL.path
+        let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? path
+        return "\(Keys.windowFirstOrientationDismissedContextPrefix).\(environment).\(encodedPath)"
     }
 
     private var setupCompletionEnvironment: PlaidEnvironment {

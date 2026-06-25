@@ -546,6 +546,15 @@ struct PlaidBarApp: App {
                 // material (AND-588). The glass-vs-solid decision is the pure,
                 // unit-tested `WindowChromeGlass.chromeBackground(reduceTransparency:)`.
                 .appliesWindowChromeBackground()
+                // One-time window-first orientation moment (AND-640): on the first
+                // window open for a fresh install, explain the two surfaces (menu-bar
+                // glance + window workspace) and that App Lock / Privacy Mask cover
+                // both. Gated on the window-first flag + a per-environment dismissal
+                // flag (so it never re-shows), and suppressed in demo. The sheet
+                // carries only orientation copy (no financial values), so it is safe
+                // under Privacy Mask / App Lock. Modeled as a sheet here (not in the
+                // shell) so the orientation lives with the window scene that hosts it.
+                .modifier(WindowFirstOrientationSheet(appState: appState))
         }
         // Do not steal launch/activation: the window only appears when opened.
         .defaultLaunchBehavior(.suppressed)
@@ -957,6 +966,66 @@ private extension View {
 
     func appliesAppAppearance() -> some View {
         modifier(AppAppearanceApplier())
+    }
+}
+
+/// Presents the one-time window-first orientation moment (AND-640) as a sheet on
+/// the primary `Window`.
+///
+/// The whole gating decision is the pure `AppState.shouldShowWindowFirstOrientation`
+/// (window-first flag ON + not already dismissed + not demo + unlocked content).
+/// This modifier mirrors that into the sheet's `isPresented` binding and, on the
+/// user's dismissal, persists via `AppState.dismissWindowFirstOrientation()` so it
+/// never re-shows. `onAppear` covers "the window opened into this state" and
+/// `onChange` covers the flag/dismissal/lock state settling after the first
+/// server handshake — together they show the sheet exactly once on first window
+/// open. There is no theme flash: the sheet is plain SwiftUI inheriting the
+/// window's already-applied appearance.
+private struct WindowFirstOrientationSheet: ViewModifier {
+    @Bindable var appState: AppState
+
+    /// Local presentation state so the sheet has a real two-way binding (a sheet
+    /// must be able to set its `isPresented` to `false` on dismissal). It is driven
+    /// from the pure `shouldShowWindowFirstOrientation` gate, and dismissal flips it
+    /// false *and* persists so it never re-derives true.
+    @State private var isPresented = false
+    @State private var suppressNextDismissPersistence = false
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear { syncPresentation() }
+            .onChange(of: appState.shouldShowWindowFirstOrientation) { _, _ in
+                syncPresentation()
+            }
+            .sheet(isPresented: $isPresented, onDismiss: handleDismiss) {
+                WindowFirstOrientationView(
+                    onDismiss: {
+                        appState.dismissWindowFirstOrientation()
+                        isPresented = false
+                    }
+                )
+            }
+    }
+
+    private func syncPresentation() {
+        let shouldShow = appState.shouldShowWindowFirstOrientation
+        if shouldShow {
+            suppressNextDismissPersistence = false
+            isPresented = true
+        } else if isPresented {
+            suppressNextDismissPersistence = true
+            isPresented = false
+        }
+    }
+
+    private func handleDismiss() {
+        if suppressNextDismissPersistence {
+            suppressNextDismissPersistence = false
+            return
+        }
+
+        guard appState.shouldShowWindowFirstOrientation else { return }
+        appState.dismissWindowFirstOrientation()
     }
 }
 
