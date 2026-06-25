@@ -126,6 +126,35 @@ actor ServerClient {
         try await delete(url)
     }
 
+    // MARK: - Opt-in server-synced review state (AND-552)
+
+    /// Pull the server's stored review-state snapshot. Only called when the user
+    /// has enabled `ServerSyncedReviewFeatureFlag` (default OFF); a not-opted-in
+    /// app never reaches this.
+    func getReviewState() async throws -> ReviewStateSnapshotDTO {
+        guard let url = ServerEndpoint.reviewStateURL(baseURL: baseURL) else {
+            throw ServerClientError.requestFailed
+        }
+        return try await get(url)
+    }
+
+    /// Upload the device's review-state snapshot and return the server's merged
+    /// union (per-record last-writer-wins). Opt-in only.
+    func putReviewState(_ snapshot: ReviewStateSnapshotDTO) async throws -> ReviewStateSnapshotDTO {
+        guard let url = ServerEndpoint.reviewStateURL(baseURL: baseURL) else {
+            throw ServerClientError.requestFailed
+        }
+        return try await put(url, body: snapshot)
+    }
+
+    /// Clear all synced review state on the server (opt-out / reset). Opt-in only.
+    func clearReviewState() async throws {
+        guard let url = ServerEndpoint.reviewStateURL(baseURL: baseURL) else {
+            throw ServerClientError.requestFailed
+        }
+        try await delete(url)
+    }
+
     func syncTransactions(itemId: String? = nil) async throws -> SyncResponse {
         guard let url = ServerEndpoint.transactionSyncURL(baseURL: baseURL, itemId: itemId) else {
             throw ServerClientError.requestFailed

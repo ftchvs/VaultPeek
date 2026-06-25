@@ -53,12 +53,14 @@ struct PlaidBarServer: AsyncParsableCommand {
         await fluent.migrations.add(CreateCategoryBudgets())
         await fluent.migrations.add(CreateBillingSubscriptions())
         await fluent.migrations.add(CreateWebhookEvents())
+        await fluent.migrations.add(CreateReviewState())
         try await fluent.migrate()
         try ServerConfig.enforcePrivateSQLiteStorePermissions(at: serverConfig.databasePath)
 
         let plaidClient = PlaidClient(config: serverConfig)
         let tokenStore = TokenStore(fluent: fluent, logger: logger)
         let budgetStore = BudgetStore(fluent: fluent)
+        let reviewStateStore = ReviewStateStore(fluent: fluent)
         let billingStore = BillingSubscriptionStore(fluent: fluent)
         let webhookEventStore = WebhookEventStore(fluent: fluent)
         do {
@@ -119,6 +121,11 @@ struct PlaidBarServer: AsyncParsableCommand {
         )
             .register(with: api)
         BudgetRoutes(budgetStore: budgetStore)
+            .register(with: api)
+        // Opt-in server-synced review state (AND-552). The route is always wired,
+        // but only an app that has enabled `ServerSyncedReviewFeatureFlag`
+        // (default OFF) ever calls it, so the synced tables stay empty otherwise.
+        ReviewRoutes(reviewStateStore: reviewStateStore)
             .register(with: api)
         BillingRoutes(
             billingStore: billingStore,

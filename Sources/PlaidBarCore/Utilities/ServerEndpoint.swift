@@ -57,6 +57,14 @@ public enum ServerEndpoint {
         url(baseURL: baseURL, path: "/api/budgets/\(percentEncodedPathComponent(categoryId))")
     }
 
+    /// `/api/review` — opt-in server-synced review state (AND-552). `GET` pulls the
+    /// stored snapshot; `PUT` uploads a device snapshot and gets the merged union
+    /// back; `DELETE` clears the synced state (opt-out). Only reached when the user
+    /// has enabled ``ServerSyncedReviewFeatureFlag``.
+    public static func reviewStateURL(baseURL: String) -> URL? {
+        url(baseURL: baseURL, path: "/api/review")
+    }
+
     private static func percentEncodedPathComponent(_ value: String) -> String {
         var allowed = CharacterSet.urlPathAllowed
         allowed.remove(charactersIn: "/?#[]@!$&'()*+,;=")
