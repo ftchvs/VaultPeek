@@ -132,6 +132,10 @@ struct FinanceDashboardSnippetIntentTests {
         #expect(source.contains("struct SafeToSpendSnippetIntent: SnippetIntent"))
         #expect(source.contains("struct NextBillsSnippetIntent: SnippetIntent"))
         #expect(source.contains("struct CreditUtilizationSnippetIntent: SnippetIntent"))
+        let localAuthPolicies = source
+            .components(separatedBy: "static let authenticationPolicy: IntentAuthenticationPolicy = .requiresLocalDeviceAuthentication")
+            .count - 1
+        #expect(localAuthPolicies == 3, "each focused finance snippet must require local device authentication")
 
         // Each renders through the pure presentation, never inline figure math.
         #expect(source.contains("FinanceSnippetPresentation.safeToSpend(from:"))
@@ -148,6 +152,7 @@ struct FinanceDashboardSnippetIntentTests {
         let source = try dashboardSnippetIntentSource()
         #expect(source.contains("@available(macOS 26.0, *)"))
         #expect(source.contains("struct FinanceDashboardSnippetIntent: SnippetIntent"))
+        #expect(source.contains("static let authenticationPolicy: IntentAuthenticationPolicy = .requiresLocalDeviceAuthentication"))
         // Re-loads inside perform() (multiple-invocation contract) and renders the
         // pure SnippetDashboardPresentation model.
         #expect(source.contains("func perform() async throws"))

@@ -31,6 +31,7 @@ struct SafeToSpendSnippetIntent: SnippetIntent {
     static let description = IntentDescription(
         "A glance at your safe-to-spend amount, confidence, and horizon — inline in Spotlight."
     )
+    static let authenticationPolicy: IntentAuthenticationPolicy = .requiresLocalDeviceAuthentication
 
     @MainActor
     func perform() async throws -> some IntentResult & ShowsSnippetView {
@@ -90,6 +91,7 @@ struct NextBillsSnippetIntent: SnippetIntent {
     static let description = IntentDescription(
         "Your next few recurring bills with dates and amounts — inline in Spotlight."
     )
+    static let authenticationPolicy: IntentAuthenticationPolicy = .requiresLocalDeviceAuthentication
 
     @MainActor
     func perform() async throws -> some IntentResult & ShowsSnippetView {
@@ -153,6 +155,7 @@ struct CreditUtilizationSnippetIntent: SnippetIntent {
     static let description = IntentDescription(
         "Your aggregate credit utilization as a gauge — inline in Spotlight."
     )
+    static let authenticationPolicy: IntentAuthenticationPolicy = .requiresLocalDeviceAuthentication
 
     @MainActor
     func perform() async throws -> some IntentResult & ShowsSnippetView {

@@ -105,6 +105,24 @@ struct FinanceAppIntentsPackageTests {
         }
     }
 
+    @Test("Snapshot-reading finance intents require local device authentication")
+    func snapshotReadingFinanceIntentsRequireLocalDeviceAuthentication() throws {
+        let source = try financeAppIntentsPackageSource()
+        for intentName in [
+            "GetSafeToSpendIntent",
+            "GetTotalBalanceIntent",
+            "NextRecurringBillsIntent",
+            "GetCreditUtilizationIntent",
+            "ShowSpendingIntent",
+        ] {
+            let block = try #require(intentBlock(named: intentName, in: source))
+            #expect(
+                block.contains("public static let authenticationPolicy: IntentAuthenticationPolicy = .requiresLocalDeviceAuthentication"),
+                "\(intentName) reads the shared finance snapshot and must not run while the local device is locked"
+            )
+        }
+    }
+
     // MARK: - Deep-link URL building (openRouteIntent)
     //
     // The navigation intents open the window via `openRouteIntent(_:)`, which wraps
@@ -297,5 +315,22 @@ struct FinanceAppIntentsPackageTests {
             safeToSpendConfidence: confidence,
             safeToSpendHorizonEnd: horizonEnd
         )
+    }
+
+    private func financeAppIntentsPackageSource() throws -> String {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        return try String(
+            contentsOf: root.appending(path: "Sources/PlaidBarCore/AppIntents/FinanceAppIntentsPackage.swift"),
+            encoding: .utf8
+        )
+    }
+
+    private func intentBlock(named intentName: String, in source: String) -> String? {
+        guard let start = source.range(of: "public struct \(intentName): AppIntent")?.lowerBound else {
+            return nil
+        }
+        let rest = source[start...]
+        let end = rest.dropFirst().range(of: "\npublic struct ")?.lowerBound ?? source.endIndex
+        return String(source[start..<end])
     }
 }

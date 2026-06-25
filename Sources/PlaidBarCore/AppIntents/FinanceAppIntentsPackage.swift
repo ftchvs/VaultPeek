@@ -102,6 +102,7 @@ public struct GetSafeToSpendIntent: AppIntent {
     public static let description = IntentDescription(
         "How much you can safely spend through the current window, from local VaultPeek data."
     )
+    public static let authenticationPolicy: IntentAuthenticationPolicy = .requiresLocalDeviceAuthentication
 
     public init() {}
 
@@ -116,6 +117,7 @@ public struct GetTotalBalanceIntent: AppIntent {
     public static let description = IntentDescription(
         "Your total spendable balance across linked accounts, from local VaultPeek data."
     )
+    public static let authenticationPolicy: IntentAuthenticationPolicy = .requiresLocalDeviceAuthentication
 
     public init() {}
 
@@ -130,6 +132,7 @@ public struct NextRecurringBillsIntent: AppIntent {
     public static let description = IntentDescription(
         "Your upcoming recurring bills, from local VaultPeek data."
     )
+    public static let authenticationPolicy: IntentAuthenticationPolicy = .requiresLocalDeviceAuthentication
 
     public init() {}
 
@@ -144,6 +147,7 @@ public struct GetCreditUtilizationIntent: AppIntent {
     public static let description = IntentDescription(
         "Your aggregate credit-card utilization percentage, from local VaultPeek data."
     )
+    public static let authenticationPolicy: IntentAuthenticationPolicy = .requiresLocalDeviceAuthentication
 
     public init() {}
 
@@ -162,6 +166,7 @@ public struct ShowSpendingIntent: AppIntent {
     public static let description = IntentDescription(
         "Show how much you've spent this period and open VaultPeek to your budgets."
     )
+    public static let authenticationPolicy: IntentAuthenticationPolicy = .requiresLocalDeviceAuthentication
 
     public init() {}
 
