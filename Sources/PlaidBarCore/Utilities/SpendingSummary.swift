@@ -91,6 +91,12 @@ public enum SpendingSummary {
                 ) {
                     if row.isSplitExcluded { continue }
                     let category = row.category ?? .other
+                    // Income/transfer split allocations are never spend — mirror
+                    // `CategoryBudgetPlanner.netSpendByCategory`'s `excludedCategories`
+                    // so a `.transfer`/`.income` allocation drops out of the summary.
+                    if CategoryBudgetPlanner.excludedCategories.contains(category) {
+                        continue
+                    }
                     // Use the magnitude so a split allocation matches the legacy
                     // `displayAmount` convention this summary uses.
                     totals[category, default: 0] += abs(row.amount)
@@ -116,6 +122,12 @@ public enum SpendingSummary {
                 if row.isSplitAllocation {
                     if row.isSplitExcluded { continue }
                     let category = row.category ?? .other
+                    // Income/transfer split allocations are never spend — mirror
+                    // `CategoryBudgetPlanner.netSpendByCategory`'s `excludedCategories`
+                    // so a `.transfer`/`.income` allocation drops out of the summary.
+                    if CategoryBudgetPlanner.excludedCategories.contains(category) {
+                        continue
+                    }
                     totals[category, default: 0] += abs(row.amount)
                     continue
                 }

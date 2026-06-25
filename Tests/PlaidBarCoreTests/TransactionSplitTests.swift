@@ -344,6 +344,44 @@ struct TransactionSplitTests {
         #expect(split150.reduce(0) { $0 + $1.1 } == 150)
     }
 
+    @Test("A transfer/income split allocation is excluded from the summary (budget parity)")
+    func transferSplitAllocationIsExcludedFromSummary() {
+        // One purchase split into a real spend part, a transfer part, and an
+        // income part. Only the spend part should count — mirroring
+        // `CategoryBudgetPlanner.netSpendByCategory`, whose split branch drops
+        // `excludedCategories = [.income, .transfer, .transferOut]`.
+        let parent = tx("t1", 150, "2026-06-04", .shopping)
+        let split = TransactionSplit(
+            splitting: parent,
+            into: [
+                TransactionSplitAllocation(category: .foodAndDrink, amount: 90),
+                TransactionSplitAllocation(category: .transfer, amount: 40),
+                TransactionSplitAllocation(category: .income, amount: 20),
+            ]
+        )
+
+        // Legacy path (no metadata/rules): transfer/income allocations drop out.
+        let legacy = SpendingSummary.spendingByCategory(from: [parent], splits: [split])
+        let legacyByCategory = Dictionary(uniqueKeysWithValues: legacy)
+        #expect(legacyByCategory[.foodAndDrink] == 90)
+        #expect(legacyByCategory[.transfer] == nil)
+        #expect(legacyByCategory[.income] == nil)
+        #expect(legacy.reduce(0) { $0 + $1.1 } == 90)
+
+        // Override path (metadata supplied): same exclusion — the split
+        // allocation bypasses per-parent resolution but still drops transfers.
+        let override = SpendingSummary.spendingByCategory(
+            from: [parent],
+            metadata: [],
+            splits: [split]
+        )
+        let overrideByCategory = Dictionary(uniqueKeysWithValues: override)
+        #expect(overrideByCategory[.foodAndDrink] == 90)
+        #expect(overrideByCategory[.transfer] == nil)
+        #expect(overrideByCategory[.income] == nil)
+        #expect(override.reduce(0) { $0 + $1.1 } == 90)
+    }
+
     // MARK: - Exports respect splits
 
     @Test("splitsCSV emits one row per allocation, joined by transaction_id")
