@@ -6,7 +6,7 @@ import Testing
 struct FigureProvenanceTests {
     // MARK: - Net worth
 
-    @Test("Net worth provenance lists contributing accounts and excludes investments")
+    @Test("Net worth provenance lists contributing accounts including investments")
     func netWorthProvenance() {
         let accounts = [
             AccountDTO(id: "acct_checking", itemId: "item_1", name: "Everyday Checking", type: .depository, mask: "4321", balances: BalanceDTO(available: 4_200, current: 4_250)),
@@ -18,11 +18,11 @@ struct FigureProvenanceTests {
         let provenance = FigureProvenance.netWorth(accounts: accounts, freshness: freshness)
 
         #expect(provenance.figureTitle == "Net worth")
-        // Investments are excluded; only the two cash/debt accounts contribute.
-        #expect(provenance.sources.count == 2)
+        // Mirrors MenuBarSummary.netCash: investments contribute, debts subtract.
+        #expect(provenance.sources.count == 3)
         #expect(provenance.sources.contains { $0.label.contains("Everyday Checking") })
-        // The investment exclusion is surfaced explicitly.
-        #expect(provenance.exclusions.contains { $0.contains("Investment accounts (1)") })
+        #expect(provenance.sources.contains { $0.label.contains("Brokerage") })
+        #expect(!provenance.exclusions.contains { $0.contains("Investment accounts") })
         #expect(provenance.localOnlyBadge == "Local-only")
     }
 
@@ -37,8 +37,10 @@ struct FigureProvenanceTests {
         let blob = provenance.accessibilitySummary
             + provenance.sources.map { "\($0.id)\($0.label)\($0.accessibilityLabel)\($0.value ?? "")" }.joined()
         #expect(blob.contains("••9911"))
-        // The source `id` carries the account id for SwiftUI identity, but no
-        // user-visible label or accessibility string leaks the raw account/item id.
+        // Source IDs are synthetic for SwiftUI identity, and no user-visible label
+        // or accessibility string leaks the raw account/item id.
+        #expect(provenance.sources.allSatisfy { !$0.id.contains("acct_secret_id") })
+        #expect(provenance.sources.allSatisfy { !$0.id.contains("item_secret_id") })
         #expect(!provenance.accessibilitySummary.contains("acct_secret_id"))
         #expect(!provenance.accessibilitySummary.contains("item_secret_id"))
         #expect(provenance.sources.allSatisfy { !$0.label.contains("acct_secret_id") })
@@ -72,6 +74,24 @@ struct FigureProvenanceTests {
             + provenance.accessibilitySummary
         #expect(!blob.contains("12,345"))
         #expect(!blob.contains("12345"))
+    }
+
+    @Test("Masked account source labels hide last-4 digits")
+    func maskedAccountSourceLabelsHideLast4() {
+        let accounts = [
+            AccountDTO(id: "acct", itemId: "item", name: "Checking", type: .depository, mask: "9911", balances: BalanceDTO(current: 12_345.67)),
+        ]
+
+        let provenance = FigureProvenance.netWorth(
+            accounts: accounts,
+            freshness: nil,
+            privacyMaskEnabled: true
+        )
+
+        #expect(provenance.sources.first?.label == "Checking ••••")
+        let blob = provenance.sources.map { "\($0.id)\($0.label)\($0.accessibilityLabel)\($0.value ?? "")" }.joined()
+            + provenance.accessibilitySummary
+        #expect(!blob.contains("9911"))
     }
 
     // MARK: - Safe to spend
@@ -124,7 +144,7 @@ struct FigureProvenanceTests {
 
     // MARK: - Credit utilization
 
-    @Test("Credit-utilization provenance lists cards and excludes limit-less cards")
+    @Test("Credit-utilization provenance lists all cards and explains limit-less cards")
     func creditUtilizationProvenance() {
         let summary = WealthSummaryPresentation.CreditUtilizationSummary(
             percent: 24,
@@ -145,11 +165,12 @@ struct FigureProvenanceTests {
         )
 
         #expect(provenance.figureTitle == "Credit utilization")
-        // Only the card with a limit contributes a source row.
-        #expect(provenance.sources.count == 1)
+        // Mirrors WealthSummaryPresentation: no-limit cards still contribute used
+        // credit to the numerator, even though they cannot add to total limit.
+        #expect(provenance.sources.count == 2)
         #expect(provenance.sources.contains { $0.label.contains("Cashback Card") })
-        // The limit-less card is surfaced as an exclusion.
-        #expect(provenance.exclusions.contains { $0.contains("without a reported limit") })
+        #expect(provenance.sources.contains { $0.label.contains("Store Card") })
+        #expect(provenance.exclusions.contains { $0.contains("contribute used balance but not total limit") })
         // Unmasked derivation includes the status label.
         #expect(provenance.derivation.contains("Healthy"))
     }

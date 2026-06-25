@@ -96,34 +96,34 @@ public struct FigureProvenance: Equatable, Sendable {
 
     /// Provenance for the net-worth headline (`WealthSummaryPresentation.netWorth`).
     ///
-    /// Net worth is the sum of asset-account effective balances minus debt-account
-    /// balances. Every non-zero account is listed as a source row; debt accounts
-    /// are noted as subtractions. Investment accounts are excluded (the headline
-    /// reflects cash + debt only) and are listed as an explicit exclusion when any
-    /// are linked, so the number's boundary is visible rather than silent.
+    /// Net worth mirrors ``MenuBarSummary.netCash(from:)``: depository,
+    /// investment, and other accounts contribute their effective balances, while
+    /// credit and loan accounts subtract their latest current balance. Every
+    /// non-zero account is listed as a source row; debt accounts are shown as
+    /// negative contributions.
     public static func netWorth(
         accounts: [AccountDTO],
         freshness: Date?,
         privacyMaskEnabled: Bool = false,
         now: Date = Date()
     ) -> FigureProvenance {
-        let contributing = accounts.filter { $0.type != .investment }
+        let contributing = accounts
+            .map { account in (account, netWorthContribution(for: account)) }
+            .filter { $0.1 != 0 }
         let sources = contributing
-            .sorted { abs($0.balances.effectiveBalance) > abs($1.balances.effectiveBalance) }
+            .sorted { abs($0.1) > abs($1.1) }
             .prefix(maxSourceRows)
-            .map { account -> Source in
+            .enumerated()
+            .map { index, row -> Source in
                 sourceRow(
-                    for: account,
-                    amount: account.balances.effectiveBalance,
+                    id: "net-worth-source-\(index)",
+                    for: row.0,
+                    amount: row.1,
                     privacyMaskEnabled: privacyMaskEnabled
                 )
             }
 
         var exclusions: [String] = []
-        let investmentCount = accounts.count { $0.type == .investment }
-        if investmentCount > 0 {
-            exclusions.append("Investment accounts (\(investmentCount)) are not counted in this cash-and-debt net worth.")
-        }
         if contributing.count > maxSourceRows {
             exclusions.append("Showing the \(maxSourceRows) largest of \(contributing.count) contributing accounts.")
         }
@@ -131,7 +131,7 @@ public struct FigureProvenance: Equatable, Sendable {
 
         return make(
             figureTitle: "Net worth",
-            derivation: "Assets minus debts across your linked cash and credit accounts.",
+            derivation: "Assets minus debts across your linked accounts.",
             sources: Array(sources),
             freshness: freshness,
             exclusions: exclusions,
@@ -199,7 +199,7 @@ public struct FigureProvenance: Equatable, Sendable {
     ///
     /// Utilization is used credit over total limit across credit-card accounts.
     /// This lists the credit accounts as sources and notes that accounts without a
-    /// known limit are excluded from the ratio (they can't contribute a denominator).
+    /// known limit contribute used balance but cannot contribute a denominator.
     public static func creditUtilization(
         summary: WealthSummaryPresentation.CreditUtilizationSummary,
         creditAccounts: [AccountDTO],
@@ -207,14 +207,15 @@ public struct FigureProvenance: Equatable, Sendable {
         privacyMaskEnabled: Bool = false,
         now: Date = Date()
     ) -> FigureProvenance {
-        let withLimit = creditAccounts.filter { ($0.balances.limit ?? 0) > 0 }
-        let withoutLimit = creditAccounts.count - withLimit.count
+        let withoutLimit = creditAccounts.count { ($0.balances.limit ?? 0) <= 0 }
 
-        let sources = withLimit
+        let sources = creditAccounts
             .sorted { abs($0.balances.current ?? 0) > abs($1.balances.current ?? 0) }
             .prefix(maxSourceRows)
-            .map { account -> Source in
+            .enumerated()
+            .map { index, account -> Source in
                 sourceRow(
+                    id: "credit-utilization-source-\(index)",
                     for: account,
                     amount: abs(account.balances.current ?? 0),
                     privacyMaskEnabled: privacyMaskEnabled,
@@ -224,10 +225,10 @@ public struct FigureProvenance: Equatable, Sendable {
 
         var exclusions: [String] = []
         if withoutLimit > 0 {
-            exclusions.append("\(withoutLimit) card\(withoutLimit == 1 ? "" : "s") without a reported limit are excluded from the ratio.")
+            exclusions.append("\(withoutLimit) card\(withoutLimit == 1 ? "" : "s") without a reported limit contribute used balance but not total limit.")
         }
-        if withLimit.count > maxSourceRows {
-            exclusions.append("Showing the \(maxSourceRows) largest of \(withLimit.count) cards with a limit.")
+        if creditAccounts.count > maxSourceRows {
+            exclusions.append("Showing the \(maxSourceRows) largest of \(creditAccounts.count) credit cards.")
         }
         exclusions.append("Based on the balance and limit each bank last reported.")
 
@@ -249,6 +250,17 @@ public struct FigureProvenance: Equatable, Sendable {
 
     /// Cap on rendered source rows so the popover stays a glance, not a ledger.
     private static let maxSourceRows = 6
+
+    private static func netWorthContribution(for account: AccountDTO) -> Double {
+        switch account.type {
+        case .depository, .investment:
+            return account.balances.effectiveBalance
+        case .credit, .loan:
+            return -abs(account.balances.current ?? 0)
+        case .other:
+            return account.balances.effectiveBalance
+        }
+    }
 
     private static func make(
         figureTitle: String,
@@ -286,12 +298,13 @@ public struct FigureProvenance: Equatable, Sendable {
     /// last-4 when present; the value is the privacy-mask-aware balance. No raw
     /// account/item IDs ever appear.
     private static func sourceRow(
+        id: String,
         for account: AccountDTO,
         amount: Double,
         privacyMaskEnabled: Bool,
         forceCreditGlyph: Bool = false
     ) -> Source {
-        let suffix = account.mask.map { " ••\($0)" } ?? ""
+        let suffix = account.mask.map { privacyMaskEnabled ? " ••••" : " ••\($0)" } ?? ""
         let label = account.name + suffix
         let value = privacyMaskEnabled
             ? PrivacyMaskPresentation.compactValue
@@ -301,7 +314,7 @@ public struct FigureProvenance: Equatable, Sendable {
             : "balance \(Formatters.currency(amount, format: .full))"
         let glyph = forceCreditGlyph ? "creditcard" : account.type.provenanceGlyph
         return Source(
-            id: account.id,
+            id: id,
             label: label,
             value: value,
             systemImage: glyph,
