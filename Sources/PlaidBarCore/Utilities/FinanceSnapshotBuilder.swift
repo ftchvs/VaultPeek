@@ -115,7 +115,12 @@ public enum FinanceSnapshotBuilder {
             generatedAt: generatedAt,
             isMasked: isMasked,
             periodSpending: spending.total,
-            topSpendingCategories: spending.categories
+            topSpendingCategories: spending.categories,
+            // Carry the confidence + horizon the calculator already produced so the
+            // safe-to-spend snippet shows the same cue + "through <date>" the in-app
+            // view does (AND-637) without re-deriving them on the read side.
+            safeToSpendConfidence: safeToSpend.confidence,
+            safeToSpendHorizonEnd: safeToSpend.horizonEnd
         )
     }
 

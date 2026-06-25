@@ -39,6 +39,13 @@ final class NavigationModel {
         /// The Transaction Workspace sort order's raw value (AND-582). Absent ⇒
         /// the default newest-first sort.
         static let transactionSort = "navigation.transactionSort"
+        /// The detached-dashboard intent (AND-600), migrated off the retired
+        /// `AppState.isDashboardDetached` flag. Kept identical to the key the
+        /// Settings toggle and the `DetachedDashboardWindowController`
+        /// `frameAutosaveName` neighborhood used — `DetachedDashboardPreferences`
+        /// owns it — so an upgrading user's persisted "floating window" preference
+        /// decodes exactly as before.
+        static let dashboardDetached = DetachedDashboardPreferences.detachedStorageKey
     }
 
     /// The pure state. Mutations route through the typed accessors below (which
@@ -49,6 +56,13 @@ final class NavigationModel {
     /// While hydrating from UserDefaults, suppress write-back so loading a value
     /// does not immediately persist it again.
     private var isHydrating = false
+    /// When true, the persisted detached-dashboard intent is ignored at hydration
+    /// (resolved to `false`). A headless snapshot render must never spawn the
+    /// floating window — it would intercept the renderer's popover open — so this
+    /// carries the deterministic override that previously lived in
+    /// `AppState.loadSettings` via `DetachedDashboardPreferences.resolvedDetachedIntent`
+    /// (AND-600).
+    private let isRenderingSnapshot: Bool
 
     /// Creates a window's navigation model.
     ///
@@ -57,11 +71,20 @@ final class NavigationModel {
     ///     two models can prove independent selection without sharing global
     ///     defaults; production uses `.standard`.
     ///   - persistRestore: when `true` (default), the last filter / selection /
-    ///     heatmap metric are restored from `defaults`. A fresh second window can
-    ///     opt out to start from defaults.
-    init(defaults: UserDefaults = .standard, persistRestore: Bool = true) {
+    ///     heatmap metric (and the detached-dashboard intent) are restored from
+    ///     `defaults`. A fresh second window can opt out to start from defaults.
+    ///   - isRenderingSnapshot: when `true`, the persisted detached intent is
+    ///     ignored (resolved to `false`) so a headless snapshot render never spawns
+    ///     the floating window. Defaults to `false`; production resolves it from
+    ///     `CommandLineOptions` at the `AppState` construction site.
+    init(
+        defaults: UserDefaults = .standard,
+        persistRestore: Bool = true,
+        isRenderingSnapshot: Bool = false
+    ) {
         self.defaults = defaults
         self.state = NavigationState()
+        self.isRenderingSnapshot = isRenderingSnapshot
         if persistRestore {
             hydrate()
         }
@@ -96,6 +119,51 @@ final class NavigationModel {
             state.heatmapMode = newValue
             persistHeatmapMode()
         }
+    }
+
+    // MARK: - Surface presentation façade (AND-600)
+
+    /// Whether this window's menu-bar popover is presented. Migrated off the
+    /// retired single `AppState.isPopoverPresented` flag; ephemeral per-window
+    /// session state, **not** persisted (a relaunch never auto-opens the popover).
+    /// Bound by `menuBarExtraAccess(isPresented:)` so it stays the popover's
+    /// presentation source of truth, now scoped to the window's model.
+    var isPopoverPresented: Bool {
+        get { state.isPopoverPresented }
+        set { state.setPopoverPresented(newValue) }
+    }
+
+    /// Whether this window's dashboard lives in the detached floating window
+    /// (AND-384/600). Migrated off the retired single `AppState.isDashboardDetached`
+    /// flag. This is the durable intent — set/cleared it persists to
+    /// `DetachedDashboardPreferences.detachedStorageKey`, so the floating window
+    /// reopens on the next launch exactly as before. The
+    /// `DetachedDashboardCoordinator` reads/writes it to bridge to the AppKit panel.
+    var isDashboardDetached: Bool {
+        get { state.isDashboardDetached }
+        set {
+            guard state.isDashboardDetached != newValue else { return }
+            state.isDashboardDetached = newValue
+            persistDashboardDetached()
+        }
+    }
+
+    /// Detach the dashboard into the floating window: set the intent AND dismiss
+    /// the popover in one transition (only one surface up at a time), persisting
+    /// the intent. The pure `NavigationState.detachDashboard()` owns the rule; this
+    /// mirrors the detach to disk so the floating window reopens next launch.
+    func detachDashboard() {
+        let wasDetached = state.isDashboardDetached
+        state.detachDashboard()
+        if state.isDashboardDetached != wasDetached { persistDashboardDetached() }
+    }
+
+    /// Re-dock the dashboard back into the menu-bar popover, persisting the cleared
+    /// intent so a relaunch lands in the popover.
+    func redockDashboard() {
+        let wasDetached = state.isDashboardDetached
+        state.redockDashboard()
+        if state.isDashboardDetached != wasDetached { persistDashboardDetached() }
     }
 
     // MARK: - Transaction Workspace façade (AND-582)
@@ -295,6 +363,21 @@ final class NavigationModel {
            let sort = TransactionWorkspace.Sort(rawValue: rawSort) {
             restored.transactionSort = sort
         }
+        // Detached-dashboard intent (AND-384/600). A headless snapshot render
+        // ignores the persisted intent so the popover-capture path stays
+        // deterministic regardless of host/CI defaults — otherwise a stale
+        // `dashboard.detached = true` would spawn the floating window and intercept
+        // the renderer's popover open. The stored value is left untouched (no
+        // write-back during hydration) so the real user preference survives.
+        let storedDetached = defaults.object(forKey: Keys.dashboardDetached) != nil
+            ? defaults.bool(forKey: Keys.dashboardDetached)
+            : nil
+        restored.isDashboardDetached = DetachedDashboardPreferences.resolvedDetachedIntent(
+            storedValue: storedDetached,
+            isRenderingSnapshot: isRenderingSnapshot
+        )
+        // `isPopoverPresented` is deliberately not hydrated: a relaunch never
+        // auto-opens the popover. It stays at its `NavigationState()` default.
         state = restored
     }
 
@@ -328,5 +411,10 @@ final class NavigationModel {
     private func persistTransactionSort() {
         guard !isHydrating else { return }
         defaults.set(state.transactionSort.rawValue, forKey: Keys.transactionSort)
+    }
+
+    private func persistDashboardDetached() {
+        guard !isHydrating else { return }
+        defaults.set(state.isDashboardDetached, forKey: Keys.dashboardDetached)
     }
 }

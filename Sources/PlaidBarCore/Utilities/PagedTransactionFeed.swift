@@ -65,6 +65,76 @@ public struct PagedTransactionFeed: Sendable, Equatable {
         total = max(0, newTotal)
     }
 
+    /// Merges the *new head* of a freshly-synced, newest-first in-memory history
+    /// into the loaded rows — without re-reading the cache or resetting the feed
+    /// (AND-632).
+    ///
+    /// ## The bug this fixes
+    /// In paged mode the list renders ``loaded`` (the cache pages), not the live
+    /// in-memory array. So an in-session sync that prepends newer transactions to
+    /// `appState.transactions` left them invisible until the view was recreated:
+    /// the source only refreshed the render-dead fallback, never the paged rows.
+    ///
+    /// ## Why this is the safe shape (vs. re-reading page 0)
+    /// The earlier fix re-seeded from the cache, which (a) could read the *old*
+    /// cache before the detached persist committed — resurrecting stale rows — and
+    /// (b) dropped later loaded pages, so active-filter matches on those pages
+    /// vanished. This instead **only prepends** rows already in hand from the live
+    /// array, touching nothing already loaded:
+    /// - No cache read → no not-yet-committed-cache race.
+    /// - Later pages are untouched → an active filter draining later pages keeps
+    ///   its matches; nothing needs re-keying or re-draining.
+    /// - Deduped by id → a row can never render twice.
+    ///
+    /// ## What counts as the "new head"
+    /// Walks `liveNewestFirst` from the front, collecting rows whose id is **not**
+    /// already loaded, and **stops at the first id that is** — that boundary is
+    /// where the live head meets the already-loaded window, so everything before it
+    /// is provably newer than every loaded row. The collected prefix is prepended
+    /// (newest-first order preserved) and `total` grows by the number added so the
+    /// window math still tracks the live size.
+    ///
+    /// ## Guard against wholesale replacement
+    /// Prepending is only sound when the live array and the loaded rows share
+    /// lineage (a head-append, not an environment switch / full replace). The
+    /// signal: the current head of ``loaded`` still appears somewhere in
+    /// `liveNewestFirst`. If it does not — the histories are unrelated, or the
+    /// loaded head row was *removed* by the sync — this is a no-op; a wholesale
+    /// replace is the caller's `reset(total:)` path, never a blind prepend that
+    /// would stack the entire live array on top of stale rows.
+    ///
+    /// Returns the number of rows prepended (0 when nothing merged), so the caller
+    /// can decide whether a downstream invalidation is worth doing.
+    @discardableResult
+    public mutating func mergeHead(from liveNewestFirst: [TransactionDTO]) -> Int {
+        // Nothing loaded yet → the page path has not engaged; there is nothing to
+        // prepend *onto* (the source is still rendering the in-memory fallback).
+        guard let loadedHeadId = loaded.first?.id else { return 0 }
+
+        // Lineage check: the loaded head must still be present in the live array,
+        // proving this is an append at the head and not a wholesale replacement.
+        // (Linear scan, but it short-circuits at the boundary below in the common
+        // case where the new head is a small prefix.)
+        guard liveNewestFirst.contains(where: { $0.id == loadedHeadId }) else { return 0 }
+
+        var newHead: [TransactionDTO] = []
+        for row in liveNewestFirst {
+            // Stop at the first row already loaded: that is the boundary between the
+            // freshly-synced head and the already-paged window. Everything collected
+            // before it is strictly newer than every loaded row.
+            if loadedIds.contains(row.id) { break }
+            newHead.append(row)
+        }
+        guard !newHead.isEmpty else { return 0 }
+
+        loaded.insert(contentsOf: newHead, at: 0)
+        for row in newHead { loadedIds.insert(row.id) }
+        // The history grew by exactly the rows we prepended; keep `total` in step so
+        // `nextWindow` / `hasMore` continue to track the live size.
+        total += newHead.count
+        return newHead.count
+    }
+
     /// Resets to the empty, unloaded state for a fresh `total` — used when the
     /// underlying data is replaced wholesale (environment switch, full refresh) so
     /// stale rows never persist in the feed.

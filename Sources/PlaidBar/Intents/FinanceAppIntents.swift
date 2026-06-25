@@ -86,5 +86,32 @@ struct PlaidBarShortcutsProvider: AppShortcutsProvider {
             shortTitle: "Credit Utilization",
             systemImageName: "creditcard"
         )
+        // Focused rich snippets (AND-637). The package's minimum deployment is
+        // macOS 26, so these `@available(macOS 26.0, *)` SnippetIntents are always
+        // available here — no #available gate is needed at this call site.
+        AppShortcut(
+            intent: SafeToSpendSnippetIntent(),
+            phrases: [
+                "Show my safe to spend snippet in \(.applicationName)",
+            ],
+            shortTitle: "Safe to Spend Snippet",
+            systemImageName: "wallet.pass"
+        )
+        AppShortcut(
+            intent: NextBillsSnippetIntent(),
+            phrases: [
+                "Show my next bills snippet in \(.applicationName)",
+            ],
+            shortTitle: "Next Bills Snippet",
+            systemImageName: "calendar.badge.clock"
+        )
+        AppShortcut(
+            intent: CreditUtilizationSnippetIntent(),
+            phrases: [
+                "Show my credit utilization snippet in \(.applicationName)",
+            ],
+            shortTitle: "Credit Utilization Snippet",
+            systemImageName: "creditcard"
+        )
     }
 }

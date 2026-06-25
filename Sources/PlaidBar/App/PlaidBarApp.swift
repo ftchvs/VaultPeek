@@ -85,7 +85,7 @@ struct PlaidBarApp: App {
         if CommandLine.arguments.contains("--show-popover") {
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(700))
-                state.isPopoverPresented = true
+                state.navigationModel.isPopoverPresented = true
 
                 // Debug aid: when the status item is hidden in menu bar
                 // overflow, macOS anchors the popover window beyond every
@@ -137,6 +137,7 @@ struct PlaidBarApp: App {
                 .forcedAppColorScheme(Self.forcedColorScheme)
                 .appliesAppAppearance()
                 .appliesAppTextSize()
+                .appliesAppAccent()
         } else {
             MainPopover()
                 .environment(appState)
@@ -176,6 +177,7 @@ struct PlaidBarApp: App {
                 // so this control is the only way users can enlarge VaultPeek's
                 // text (AND-570).
                 .appliesAppTextSize()
+                .appliesAppAccent()
         }
     }
 
@@ -204,9 +206,9 @@ struct PlaidBarApp: App {
                 // popover, a Settings-only toggle would not take effect until
                 // then, and — critically — a status-item click while detached
                 // (before the popover ever mounted) would set
-                // `isPopoverPresented = true` with no observer installed yet, so
-                // SwiftUI would open the popover instead of raising the floating
-                // window (AND-384).
+                // `navigationModel.isPopoverPresented = true` with no observer
+                // installed yet, so SwiftUI would open the popover instead of
+                // raising the floating window (AND-384).
                 .task {
                     // Legacy detached-dashboard sync (window-first OFF only). On
                     // the default window-first path `detachedDashboard` is nil and
@@ -259,21 +261,22 @@ struct PlaidBarApp: App {
                 // A `--detach` launch override also has a visible detached window
                 // but intentionally leaves the persisted detached preference off,
                 // so include window visibility in the intercept.
-                .onChange(of: appState.isPopoverPresented) { _, isPresented in
+                .onChange(of: appState.navigationModel.isPopoverPresented) { _, isPresented in
                     // Legacy detached-window intercept (window-first OFF only).
                     // With window-first ON `detachedDashboard` is nil, so the
                     // guard short-circuits and the menu bar mounts the glance.
                     guard let detachedDashboard,
                           isPresented,
-                          appState.isDashboardDetached || detachedDashboard.isWindowVisible else { return }
-                    appState.isPopoverPresented = false
+                          appState.navigationModel.isDashboardDetached
+                              || detachedDashboard.isWindowVisible else { return }
+                    appState.navigationModel.isPopoverPresented = false
                     detachedDashboard.handleMenuBarActivation(
                         appState: appState,
                         forcedColorScheme: Self.forcedColorScheme,
                         reduceMotion: reduceMotion
                     )
                 }
-                .onChange(of: appState.isDashboardDetached) { _, _ in
+                .onChange(of: appState.navigationModel.isDashboardDetached) { _, _ in
                     detachedDashboard?.sync(
                         appState: appState,
                         forcedColorScheme: Self.forcedColorScheme,
@@ -335,12 +338,12 @@ struct PlaidBarApp: App {
                 // Opening the popover while locked prompts for authentication to
                 // reveal balances; `unlockApp()` is a no-op when App Lock is off
                 // or already unlocked.
-                .onChange(of: appState.isPopoverPresented) { _, isPresented in
+                .onChange(of: appState.navigationModel.isPopoverPresented) { _, isPresented in
                     guard isPresented, appState.isAppLocked else { return }
                     Task { await appState.unlockApp() }
                 }
         }
-        .menuBarExtraAccess(isPresented: $appState.isPopoverPresented) { statusItem in
+        .menuBarExtraAccess(isPresented: popoverPresentedBinding) { statusItem in
             // Attach the unreviewed-count badge to the live status item, then
             // paint the current count immediately so it is correct on first
             // appearance (not only after the next count/mask change). The button
@@ -370,7 +373,7 @@ struct PlaidBarApp: App {
                         ) == true {
                             return
                         }
-                        appState.isPopoverPresented = true
+                        appState.navigationModel.isPopoverPresented = true
                     },
                     openInWindow: {
                         // Window-first (default): "Open in window" routes into the
@@ -404,7 +407,7 @@ struct PlaidBarApp: App {
                         NSApplication.shared.activate(ignoringOtherApps: true)
                     },
                     dismissPopover: {
-                        appState.isPopoverPresented = false
+                        appState.navigationModel.isPopoverPresented = false
                     },
                     togglePrivacyMask: {
                         appState.togglePrivacyMask()
@@ -497,6 +500,9 @@ struct PlaidBarApp: App {
                 // Scale the Settings window too, so the user sees the text-size
                 // change reflected in the very control they are adjusting (AND-570).
                 .appliesAppTextSize()
+                // Tint Settings too, so the accent picker's effect is visible in
+                // the very window the user is adjusting (AND-647).
+                .appliesAppAccent()
         }
 
         // Window-first primary workspace (Epic 1 / AND-591). The scene is
@@ -527,6 +533,7 @@ struct PlaidBarApp: App {
                 // competing setter to flash a wrong first-paint theme.
                 .appliesAppAppearance()
                 .appliesAppTextSize()
+                .appliesAppAccent()
                 // Elevate `.accessory → .regular` while this window is on screen and
                 // drop back when the last managed window closes, via the shared
                 // refcounted coordinator (AND-620). SwiftUI gives a
@@ -545,6 +552,15 @@ struct PlaidBarApp: App {
                 // material (AND-588). The glass-vs-solid decision is the pure,
                 // unit-tested `WindowChromeGlass.chromeBackground(reduceTransparency:)`.
                 .appliesWindowChromeBackground()
+                // One-time window-first orientation moment (AND-640): on the first
+                // window open for a fresh install, explain the two surfaces (menu-bar
+                // glance + window workspace) and that App Lock / Privacy Mask cover
+                // both. Gated on the window-first flag + a per-environment dismissal
+                // flag (so it never re-shows), and suppressed in demo. The sheet
+                // carries only orientation copy (no financial values), so it is safe
+                // under Privacy Mask / App Lock. Modeled as a sheet here (not in the
+                // shell) so the orientation lives with the window scene that hosts it.
+                .modifier(WindowFirstOrientationSheet(appState: appState))
         }
         // Do not steal launch/activation: the window only appears when opened.
         .defaultLaunchBehavior(.suppressed)
@@ -554,6 +570,20 @@ struct PlaidBarApp: App {
         // never collapses below a usable width.
         .windowResizability(.contentMinSize)
         .defaultSize(width: 1080, height: 720)
+    }
+
+    /// Two-way binding to the menu-bar popover's presentation flag, which now
+    /// lives on the per-window `NavigationModel` (AND-600). Built explicitly rather
+    /// than via `$appState.navigationModel.isPopoverPresented` because
+    /// `navigationModel` is a `let` on `AppState`, so the `@State` projection can't
+    /// form a writable key-path through it; reading/writing the settable property on
+    /// the `@Observable` model directly is equivalent and keeps `menuBarExtraAccess`
+    /// the single presentation source of truth.
+    private var popoverPresentedBinding: Binding<Bool> {
+        Binding(
+            get: { appState.navigationModel.isPopoverPresented },
+            set: { appState.navigationModel.isPopoverPresented = $0 }
+        )
     }
 
     // MARK: - Window-first command map (AND-596)
@@ -676,7 +706,7 @@ struct PlaidBarApp: App {
         ) == true {
             return
         }
-        appState.isPopoverPresented = true
+        appState.navigationModel.isPopoverPresented = true
     }
 
     /// Brings VaultPeek to the front and shows the dashboard. Window-first
@@ -698,7 +728,7 @@ struct PlaidBarApp: App {
             return
         }
         NSApplication.shared.activate(ignoringOtherApps: true)
-        appState.isPopoverPresented = true
+        appState.navigationModel.isPopoverPresented = true
     }
 
     /// QA aid: "--appearance light|dark" pins the whole app to one appearance
@@ -745,6 +775,14 @@ struct PlaidBarApp: App {
         default:
             return nil
         }
+    }
+
+    /// The accent color forced by the `--accent` CLI flag (QA/screenshot aid:
+    /// `--accent system|blue|purple|…`), or `nil` to follow the stored preference.
+    /// Mirrors `forcedColorScheme`/`forcedTextSizePreference`; lets a QA pass cover
+    /// a specific brand accent without leaving a durable preference behind (AND-647).
+    static var forcedAccentColor: AppAccentColor? {
+        CommandLineOptions.value(for: "--accent").flatMap(AppAccentColor.init(rawValue:))
     }
 
     /// The in-app text-size preference forced by the `--text-size` CLI flag
@@ -847,6 +885,35 @@ struct AppTextSizeApplier: ViewModifier {
     }
 }
 
+/// Applies the stored accent-color preference as the SwiftUI `.tint` at the scene
+/// root, so every surface that reads `Color.accentColor`/`SemanticColors.brand`
+/// (hero glyphs, active controls, selection washes) re-tints live when the user
+/// picks a different accent (AND-647). The accent is **decorative/brand only** —
+/// it is never used to convey over/under budget, gain/loss, currency, or status,
+/// which keep their own semantic colors plus non-color cues. "System" applies no
+/// tint so the macOS accent is inherited. The `--accent` CLI override (QA aid)
+/// wins over the stored preference, mirroring `AppTextSizeApplier`. Reading
+/// `@AppStorage` here re-tints the whole subtree the instant the Settings picker
+/// changes the value.
+struct AppAccentApplier: ViewModifier {
+    @AppStorage(AppAccentColor.storageKey) private var accentRaw = AppAccentColor.defaultValue.rawValue
+
+    private var resolvedTint: Color? {
+        let stored = AppAccentColor(rawValue: accentRaw) ?? .system
+        guard let swatch = AppAccentColor.resolvedSwatch(
+            cliOverride: PlaidBarApp.forcedAccentColor,
+            storedAccent: stored
+        ) else { return nil }
+        return Color(accentSwatch: swatch)
+    }
+
+    func body(content: Content) -> some View {
+        // `.tint(nil)` is a no-op that follows the system accent, so "System"
+        // never overrides the user's macOS-wide choice.
+        content.tint(resolvedTint)
+    }
+}
+
 /// Applies the window-first shell's **chrome** background (Epic 10 /
 /// AND-588). Liquid Glass is for the navigation layer only — the window
 /// container behind the sidebar / toolbar / nav bars — never lists, tables,
@@ -945,6 +1012,66 @@ private extension View {
     }
 }
 
+/// Presents the one-time window-first orientation moment (AND-640) as a sheet on
+/// the primary `Window`.
+///
+/// The whole gating decision is the pure `AppState.shouldShowWindowFirstOrientation`
+/// (window-first flag ON + not already dismissed + not demo + unlocked content).
+/// This modifier mirrors that into the sheet's `isPresented` binding and, on the
+/// user's dismissal, persists via `AppState.dismissWindowFirstOrientation()` so it
+/// never re-shows. `onAppear` covers "the window opened into this state" and
+/// `onChange` covers the flag/dismissal/lock state settling after the first
+/// server handshake — together they show the sheet exactly once on first window
+/// open. There is no theme flash: the sheet is plain SwiftUI inheriting the
+/// window's already-applied appearance.
+private struct WindowFirstOrientationSheet: ViewModifier {
+    @Bindable var appState: AppState
+
+    /// Local presentation state so the sheet has a real two-way binding (a sheet
+    /// must be able to set its `isPresented` to `false` on dismissal). It is driven
+    /// from the pure `shouldShowWindowFirstOrientation` gate, and dismissal flips it
+    /// false *and* persists so it never re-derives true.
+    @State private var isPresented = false
+    @State private var suppressNextDismissPersistence = false
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear { syncPresentation() }
+            .onChange(of: appState.shouldShowWindowFirstOrientation) { _, _ in
+                syncPresentation()
+            }
+            .sheet(isPresented: $isPresented, onDismiss: handleDismiss) {
+                WindowFirstOrientationView(
+                    onDismiss: {
+                        appState.dismissWindowFirstOrientation()
+                        isPresented = false
+                    }
+                )
+            }
+    }
+
+    private func syncPresentation() {
+        let shouldShow = appState.shouldShowWindowFirstOrientation
+        if shouldShow {
+            suppressNextDismissPersistence = false
+            isPresented = true
+        } else if isPresented {
+            suppressNextDismissPersistence = true
+            isPresented = false
+        }
+    }
+
+    private func handleDismiss() {
+        if suppressNextDismissPersistence {
+            suppressNextDismissPersistence = false
+            return
+        }
+
+        guard appState.shouldShowWindowFirstOrientation else { return }
+        appState.dismissWindowFirstOrientation()
+    }
+}
+
 extension View {
     /// Applies the stored in-app text-size preference at this point in the tree
     /// (AND-570). Used at every scene/window root — the popover, Settings, and
@@ -953,6 +1080,16 @@ extension View {
     /// in `App/` can share the one definition.
     func appliesAppTextSize() -> some View {
         modifier(AppTextSizeApplier())
+    }
+
+    /// Applies the stored accent-color preference as the SwiftUI `.tint` at this
+    /// point in the tree (AND-647). Used at every scene/window root — the popover,
+    /// menu-bar label, Settings, and the three detached AppKit-hosted windows — so
+    /// the chosen brand accent tints every surface uniformly. Internal (not
+    /// file-private) so the window controllers in `App/` can share the one
+    /// definition, exactly like `appliesAppTextSize()`.
+    func appliesAppAccent() -> some View {
+        modifier(AppAccentApplier())
     }
 
     /// Applies the window-first shell's chrome background (Liquid Glass on chrome

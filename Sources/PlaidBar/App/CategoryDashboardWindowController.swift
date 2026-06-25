@@ -181,6 +181,8 @@ final class CategoryDashboardWindowController: NSObject, NSWindowDelegate {
                 // Category Dashboard scales with the same control as the popover
                 // (AND-570). Reads @AppStorage, so it tracks live changes.
                 .appliesAppTextSize()
+                // Tint with the same accent preference as every other surface (AND-647).
+                .appliesAppAccent()
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         )
     }

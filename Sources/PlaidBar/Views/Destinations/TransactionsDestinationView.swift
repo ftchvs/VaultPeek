@@ -119,10 +119,15 @@ struct TransactionsDestinationView: View {
             pagedSource = appState.makePagedTransactionSource(fallback: appState.transactions)
             await pagedSource.loadFirstPageIfNeeded()
         }
-        // Keep the fallback rows fresh when a refresh replaces the in-memory array,
-        // so the list reflects new data even before/without a cache page.
+        // Reconcile the rendered rows when an in-session sync replaces the in-memory
+        // array: refresh the fallback AND, in paged mode, merge the new head rows
+        // into the loaded pages so a mid-session sync's newest transactions surface
+        // immediately instead of staying hidden behind the cache pages until the
+        // view is recreated (AND-632). The merge re-reads no cache and drops no
+        // loaded page, so it neither races the detached persist nor strands an
+        // active filter's later-page matches.
         .onChange(of: appState.transactions) { _, latest in
-            pagedSource.updateFallback(latest)
+            pagedSource.resyncHead(latest)
         }
         // While a filter or search is active, drain remaining pages so the facet
         // applies to the WHOLE history, not just the pages scrolled so far —

@@ -187,6 +187,31 @@ struct WindowFigureCaption: ViewModifier {
     }
 }
 
+// MARK: - Component scale (popover vs window)
+
+/// The surface a *shared* sub-component is rendering on, so one view can pick the
+/// right type ramp for its host (AND-625).
+///
+/// A handful of presentational sub-components (e.g. ``RecurringObligationsSection``,
+/// ``BalanceTimeMachineView``) are re-hosted verbatim in both the compact menu-bar
+/// popover and the desk-distance window workspace. Without this hint they read at
+/// popover caption-scale (`.caption2`/`.microText`) everywhere, so inside a window
+/// card their figures look shrunken next to the window's own `.body`-scale rows.
+///
+/// `.popover` is the default so every existing popover/glance call site stays
+/// byte-for-byte unchanged (flag-OFF parity); window call sites pass `.window`,
+/// which swaps the figure/caption roles to their window counterparts
+/// (``WindowDataText`` / ``WindowFigureCaption``). It carries no color and no
+/// financial meaning — only which type ramp to read at — so it is safe to thread
+/// through `Sendable` views.
+enum ComponentScale: Sendable {
+    /// Compact, arm's-length menu-bar popover (the default). Caption-scale figures.
+    case popover
+    /// Desk-distance window workspace. `.body`-scale tabular figures and `.caption2`
+    /// sub-labels, matching the window's own rows.
+    case window
+}
+
 extension View {
     /// Window page identity (`largeTitle`, bold).
     func windowLargeTitle() -> some View { modifier(WindowLargeTitle()) }

@@ -26,15 +26,27 @@ import PlaidBarCore
 /// commit *after* the clear that fires when the user removes their last
 /// institution — resurrecting removed-account balances on the next cold start.
 ///
-/// `ReadModelCacheClearGate` closes that race: a monotonic clear epoch is bumped
-/// synchronously on the main actor the instant a clear is requested, *before* the
-/// clear's own off-main work begins. Every scheduled write captures the epoch it
-/// was scheduled under and re-checks it (still on the main actor) immediately
-/// before committing; if a clear has been requested since, the write is dropped.
-/// Because both the epoch bump and the capture/recheck run synchronously on the
-/// main actor, a clear that is *requested after* a persist in program order is
-/// always observed by that persist — so a clear can never be overwritten by a
-/// stale write.
+/// `ReadModelCacheClearGate` closes the wide part of that race: a monotonic clear
+/// epoch is bumped synchronously on the main actor the instant a clear is
+/// requested, *before* the clear's own off-main work begins. Every scheduled write
+/// captures the epoch it was scheduled under and re-checks it (still on the main
+/// actor) immediately before committing; if a clear has been requested since, the
+/// write is dropped. Because both the epoch bump and the capture/recheck run
+/// synchronously on the main actor, a clear that is *requested after* a persist in
+/// program order is always observed by that persist.
+///
+/// ## Two-hop residual closed at the store actor (AND-633)
+/// The main-actor epoch recheck and the store write are *separate awaits*, so a
+/// clear could still bump the epoch and enqueue `clearAll()` in the narrow window
+/// between `mayCommit` returning `true` and the persist's `save` reaching the store
+/// actor — letting a stale write commit after the clear. ``ReadModelCacheStore``
+/// closes that window with a second, store-actor-level guard: it owns a monotonic
+/// clear generation (bumped by `clearAll()`); the persist captures
+/// `currentClearGeneration()` and passes it to `save(_:ifNotClearedSince:)`, which
+/// re-validates the generation **as its first action on the store actor**, where it
+/// is FIFO-ordered against `clearAll()`. The generation check and the row write are
+/// one atomic actor hop, so no clear can interleave between them — a clear always
+/// wins. The main-actor epoch is retained as a cheap fast-drop for the common case.
 @MainActor
 final class ReadModelCacheClearGate {
     static let shared = ReadModelCacheClearGate()
@@ -66,10 +78,17 @@ extension AppState {
 
     /// Lazily opens (or re-opens) the on-disk disposable store for the active
     /// data directory. Returns `nil` — and stays disabled for this call — when
-    /// the cache is feature-disabled, when in demo mode (demo data is never
-    /// cached), or when the file-backed store fails to open. Reopens when the
-    /// active storage directory changes (e.g. sandbox↔production switch) so the
-    /// store always matches the environment whose key it is asked about.
+    /// the cache is feature-disabled or when in demo mode (demo data is never
+    /// cached). Reopens when the active storage directory changes (e.g.
+    /// sandbox↔production switch) so the store always matches the environment whose
+    /// key it is asked about.
+    ///
+    /// Opening does **no** disk I/O and cannot fail: the backing file is read and
+    /// decoded lazily on the store actor's executor, so this never blocks the
+    /// MainActor with a full decode (AND-656 finding 3). An incompatible/corrupt
+    /// file (e.g. a pre-JSON SwiftData `.store`) is self-healed into a disposable
+    /// miss on that first off-main read rather than disabling the cache (AND-656
+    /// finding 2).
     func readModelCacheStoreIfAvailable() -> ReadModelCacheStore? {
         guard readModelCacheEnabled, !isDemoMode else { return nil }
 
@@ -81,21 +100,10 @@ extension AppState {
             return existing
         }
 
-        do {
-            let store = try ReadModelCacheStore(onDiskIn: directory)
-            readModelCacheStore = store
-            readModelCacheStoreDirectoryPath = directoryPath
-            return store
-        } catch {
-            // Cache unavailable / store unopenable: behave exactly as before
-            // the cache existed. Logged without any financial material.
-            AppState.readModelCacheLogger.error(
-                "Read-model cache unavailable: \(String(describing: error), privacy: .public)"
-            )
-            readModelCacheStore = nil
-            readModelCacheStoreDirectoryPath = nil
-            return nil
-        }
+        let store = ReadModelCacheStore(onDiskIn: directory)
+        readModelCacheStore = store
+        readModelCacheStoreDirectoryPath = directoryPath
+        return store
     }
 
     /// The environment+directory-scoped key for the active context, or `nil`
@@ -156,10 +164,19 @@ extension AppState {
         let capturedEpoch = gate.currentEpoch
         Task.detached {
             do {
-                // Re-check on the main actor right before committing: if a clear
-                // raced ahead, drop this stale write rather than resurrect rows.
+                // First line of defense: a cheap main-actor epoch recheck drops the
+                // wide race where a clear was requested after this write was
+                // scheduled.
                 guard await gate.mayCommit(capturedEpoch: capturedEpoch) else { return }
-                try await store.save(model)
+                // Second line of defense (AND-633): capture the store's clear
+                // generation and pass it INTO the atomic, clear-gated save. The
+                // check and the write are one store-actor hop, FIFO-ordered against
+                // `clearAll()`, so a clear that lands in the gap between the epoch
+                // recheck above and this commit still wins — closing the two-hop
+                // persist-after-clear window the main-actor epoch alone cannot.
+                let capturedGeneration = await store.currentClearGeneration()
+                guard await gate.mayCommit(capturedEpoch: capturedEpoch) else { return }
+                try await store.save(model, ifNotClearedSince: capturedGeneration)
             } catch {
                 AppState.readModelCacheLogger.error(
                     "Read-model cache write failed: \(String(describing: error), privacy: .public)"
@@ -168,8 +185,11 @@ extension AppState {
         }
     }
 
-    /// Wipes the disposable cache alongside the JSON/SQLite caches on local reset
-    /// and on the empty-accounts path (last institution removed).
+    /// Wipes **only the read-model store** alongside the JSON/SQLite caches on local
+    /// reset and on the empty-accounts path (last institution removed). The
+    /// per-transaction store is wiped separately by ``clearTransactionCache()``
+    /// (AND-657) — both route through the same ``ReadModelCacheClearGate`` epoch so
+    /// they clear in the same program order.
     ///
     /// Bumps the clear epoch synchronously *first* so any persist already
     /// scheduled in program order observes the clear and drops its write — the
