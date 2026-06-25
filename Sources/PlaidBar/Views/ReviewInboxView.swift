@@ -368,6 +368,16 @@ struct ReviewInboxView: View {
                     .accessibilityLabel(headerPresentation.highPriorityAccessibilityLabel ?? highPriorityBadge)
             }
 
+            // Confidence-aware sort control (AND-553). Re-orders the listed rows
+            // between the historical "most urgent" order and "low confidence
+            // first", which floats Plaid's LOW/UNKNOWN categorizations to the top.
+            // The current order rides the menu label text + glyph (never color
+            // alone). Shown only with rows to order; the pure ordering lives in
+            // Core (`ReviewInboxSorting`) so the control just flips a stored enum.
+            if !appState.shouldMaskFinancialValues, snapshot.totalCount > 0 {
+                sortControl
+            }
+
             // Bulk "Mark N reviewed": staging a plan opens the blast-radius
             // confirmation. Hidden while masked (rows hidden) or when the inbox
             // has nothing to resolve. The N rides the label text + icon, never
@@ -415,6 +425,33 @@ struct ReviewInboxView: View {
             .help("Undo last review action")
             .accessibilityLabel("Undo last review action")
         }
+    }
+
+    /// The confidence-aware sort control (AND-553). A compact menu that flips the
+    /// stored `appState.reviewInboxSortOrder`; each option carries its title + a
+    /// glyph so the choice never reads by color alone (ACCESSIBILITY.md). Changing
+    /// it invalidates the cached snapshot so the rows immediately re-order.
+    private var sortControl: some View {
+        @Bindable var state = appState
+        return Menu {
+            Picker("Sort", selection: $state.reviewInboxSortOrder) {
+                ForEach(ReviewInboxSortOrder.allCases) { order in
+                    Label(order.title, systemImage: order.glyphName).tag(order)
+                }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+        } label: {
+            Label("Sort: \(appState.reviewInboxSortOrder.title)", systemImage: "arrow.up.arrow.down")
+                .font(.caption2.weight(.semibold))
+                .labelStyle(.iconOnly)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .controlSize(.mini)
+        .fixedSize()
+        .help("Sort the review queue: \(ReviewInboxSortOrder.allCases.map(\.title).joined(separator: " or "))")
+        .accessibilityLabel("Sort review queue, currently \(appState.reviewInboxSortOrder.title)")
     }
 
     private var privateInboxPlaceholder: some View {
@@ -853,6 +890,13 @@ private struct ReviewInboxRow: View {
                         suggestedBadge
                     }
 
+                    // Flags a row that the opt-in auto-review pass cleared and that
+                    // later reopened (AND-553) — pairs a glyph AND the word
+                    // "Auto-reviewed" so the provenance never rides on color alone.
+                    if item.wasAutoReviewed {
+                        autoReviewedBadge
+                    }
+
                     Text(Formatters.displayTransactionDate(item.transaction.date))
                         .microText()
                         .foregroundStyle(.tertiary)
@@ -880,6 +924,23 @@ private struct ReviewInboxRow: View {
                 Capsule().stroke(SemanticColors.brand.opacity(0.18), lineWidth: 1)
             }
             .accessibilityLabel("Category suggested on device")
+    }
+
+    // Auto-review provenance badge (AND-553). Shown on a row that the opt-in
+    // high-confidence pass cleared and that later reopened, so the user can see it
+    // was resolved automatically. Glyph + text carry the meaning together.
+    private var autoReviewedBadge: some View {
+        Label("Auto-reviewed", systemImage: "checkmark.seal")
+            .font(.caption2.weight(.semibold))
+            .labelStyle(.titleAndIcon)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Color.secondary.opacity(0.10), in: Capsule())
+            .overlay {
+                Capsule().stroke(Color.secondary.opacity(0.18), lineWidth: 1)
+            }
+            .accessibilityLabel("Automatically reviewed")
     }
 
     private var reasonChips: some View {
@@ -1074,7 +1135,8 @@ private struct ReviewInboxRow: View {
         let baseCategory = displayCategory?.displayName ?? "Uncategorized"
         let category = isShowingSuggestion ? "\(baseCategory) (suggested on device)" : baseCategory
         let amount = Formatters.currency(item.transaction.displayAmount, format: .full)
-        return "\(item.effectiveMerchantName), \(amount), \(category), reasons: \(reasons)"
+        let autoReviewed = item.wasAutoReviewed ? ", automatically reviewed" : ""
+        return "\(item.effectiveMerchantName), \(amount), \(category), reasons: \(reasons)\(autoReviewed)"
     }
 
     private func tint(for reason: TransactionReviewReason) -> Color {
