@@ -169,6 +169,38 @@ struct PlaidBarTests {
         #expect(appStateSource.contains("clearPublishedSystemSnapshotsForDemoEntry()"))
     }
 
+    @Test("Foundation Models availability uses the public framework gate (AND-656)")
+    func foundationModelsProbeUsesPublicFrameworkGate() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let probeSource = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Services/FoundationModelsAvailabilityProbe.swift"),
+            encoding: .utf8
+        )
+        let merchantSource = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Services/FoundationModelsMerchantCategorizer.swift"),
+            encoding: .utf8
+        )
+        let incomeSource = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Services/FoundationModelsIncomeCategorizer.swift"),
+            encoding: .utf8
+        )
+        let insightSource = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Services/FoundationModelsInsightModel.swift"),
+            encoding: .utf8
+        )
+        let sources = [probeSource, merchantSource, incomeSource, insightSource]
+
+        for source in sources {
+            #expect(source.contains("#if canImport(FoundationModels)"))
+            #expect(!source.contains("FoundationModelsMacros"))
+        }
+
+        #expect(probeSource.contains("SystemLanguageModel.default.availability"))
+        #expect(merchantSource.contains("@Generable"))
+        #expect(incomeSource.contains("@Generable"))
+        #expect(insightSource.contains("@Generable"))
+    }
+
     // MARK: - Account Type Categorization
 
     @Test("AccountDTO types correctly categorized")
