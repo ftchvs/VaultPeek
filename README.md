@@ -592,6 +592,8 @@ when the local app created the Hosted Link session.
 | `GET` | `/api/accounts` | List all accounts (cached) |
 | `GET` | `/api/accounts/balances` | Real-time balances |
 | `DELETE` | `/api/accounts/:itemId` | Remove a bank connection |
+| `GET` | `/api/investments/holdings` | Investment accounts, holdings, and securities across items, reduced to secret-free DTOs. Best-effort per item: items without the Plaid `investments` product contribute nothing rather than failing the request |
+| `GET` | `/api/investments/transactions` | Recent investment transactions (90-day lookback, paginated server-side; best-effort per item) |
 | `GET` | `/api/transactions/sync` | Incremental transaction sync |
 | `GET` | `/api/budgets` | List saved category budgets (display-safe monthly limits only) |
 | `PUT` | `/api/budgets/:category` | Upsert a category's monthly limit (body `{ "monthlyLimit": Double }`); income/transfer categories are rejected |
@@ -638,12 +640,12 @@ Post-1.0 priorities:
 
 Deferred product candidates:
 
-- [ ] Budget alerts per category
-- [ ] Multi-currency support
-- [ ] Investment account tracking (Plaid Investments)
+- [x] Budget alerts per category (AND-642)
+- [x] Multi-currency support — per-currency aggregates + honest mixed-currency glance (AND-643)
+- [ ] Investment account tracking (Plaid Investments) — server endpoints and detail surfaces exist for items linked with the `investments` product; default Link configuration does not request that product yet
 - [x] CSV/JSON export for tax/accounting (Settings → Local data → Export & Backup)
 - [ ] Webhook support for real-time updates
-- [ ] Dark/light theme customization
+- [x] Dark/light theme + accent color customization (Settings; AND-647)
 - [ ] [Teller](https://teller.io/) as alternative provider
 
 ## Inspiration
