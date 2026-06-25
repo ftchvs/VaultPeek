@@ -76,6 +76,7 @@ struct AppearanceSettingsView: View {
     @AppStorage(AppContrastPreference.storageKey) private var contrastRaw = AppContrastPreference.defaultValue.rawValue
     @AppStorage(DecorativeEffectsPreference.storageKey) private var decorativeRaw = DecorativeEffectsPreference.defaultValue.rawValue
     @AppStorage(AppDensityPreference.storageKey) private var densityRaw = AppDensityPreference.defaultValue.rawValue
+    @AppStorage(AppAccentColor.storageKey) private var accentRaw = AppAccentColor.defaultValue.rawValue
     @AppStorage(TextSizePreference.storageKey) private var textSizeRaw = TextSizePreference.defaultValue.rawValue
     @AppStorage(HapticFeedbackPreference.storageKey) private var hapticRaw = HapticFeedbackPreference.defaultValue.rawValue
     @Environment(\.colorSchemeContrast) private var systemContrast
@@ -88,6 +89,7 @@ struct AppearanceSettingsView: View {
     private var contrastPreference: AppContrastPreference { AppContrastPreference(rawValue: contrastRaw) ?? .followSystem }
     private var decorativePreference: DecorativeEffectsPreference { DecorativeEffectsPreference(rawValue: decorativeRaw) ?? .followSystem }
     private var density: AppDensityPreference { AppDensityPreference(rawValue: densityRaw) ?? .comfortable }
+    private var accent: AppAccentColor { AppAccentColor(rawValue: accentRaw) ?? .system }
     private var textSize: TextSizePreference { TextSizePreference(rawValue: textSizeRaw) ?? .default }
     private var hapticPreference: HapticFeedbackPreference { HapticFeedbackPreference(rawValue: hapticRaw) ?? .on }
 
@@ -208,7 +210,31 @@ struct AppearanceSettingsView: View {
                 }
                 .accessibilityValue(density.title)
 
-                Text("Light or Dark force VaultPeek regardless of the system setting. macOS Reduce Motion, Reduce Transparency, and Increase Contrast always take priority, and the --appearance launch flag overrides Appearance here. Density currently adjusts the preview and Appearance chrome; broader per-surface spacing is rolling out separately.")
+                // Accent color (AND-647): a decorative/brand tint only. The picker
+                // labels every option by name (not color alone), and the row also
+                // shows the resolved swatch with a name caption so the choice is
+                // legible to color-blind users and VoiceOver. "System" follows the
+                // macOS accent and applies no override.
+                Picker("Accent Color", selection: Binding(
+                    get: { accent },
+                    set: { accentRaw = $0.rawValue }
+                )) {
+                    ForEach(AppAccentColor.allCases) { option in
+                        Label {
+                            Text(option.title)
+                        } icon: {
+                            AccentSwatchDot(accent: option)
+                        }
+                        .tag(option)
+                    }
+                }
+                .accessibilityValue(accent.title)
+                .accessibilityHint("Sets the decorative accent tint for VaultPeek. Does not change any financial or status colors.")
+
+                AccentSwatchPreviewRow(accent: accent)
+                    .padding(.vertical, Spacing.xxs)
+
+                Text("Light or Dark force VaultPeek regardless of the system setting. macOS Reduce Motion, Reduce Transparency, and Increase Contrast always take priority, and the --appearance launch flag overrides Appearance here. Density currently adjusts the preview and Appearance chrome; broader per-surface spacing is rolling out separately. Accent is a decorative brand tint only — it never changes the colors that show over/under budget, gains and losses, or sync status.")
                     .detailText()
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -366,6 +392,81 @@ private struct AppearancePreviewCard: View {
         .accessibilityLabel(
             "Live preview of the popover at \(setting.displayPercent) percent transparency, with sample data only."
         )
+    }
+}
+
+/// A small color swatch for an accent option, used as the leading icon in the
+/// accent `Picker` rows (AND-647). "System" shows a hatched/neutral dot so it
+/// reads distinctly from the colored options even in grayscale. The swatch is
+/// purely decorative — the picker row always carries the accent's name too, so
+/// meaning never depends on the color (ACCESSIBILITY.md).
+private struct AccentSwatchDot: View {
+    let accent: AppAccentColor
+
+    var body: some View {
+        Group {
+            if let color = SemanticColors.resolvedAccent(for: accent) {
+                Circle().fill(color)
+            } else {
+                // "System": a neutral ring (no fill) so it never masquerades as a
+                // concrete colored accent and stays distinguishable in grayscale.
+                Circle()
+                    .strokeBorder(Color.secondary, lineWidth: 1.5)
+                    .background(Circle().fill(Color.secondary.opacity(0.12)))
+            }
+        }
+        .frame(width: 12, height: 12)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Privacy-safe live preview of the chosen accent (AND-647). Shows the resolved
+/// swatch with its name, plus a sample "active control" chip and selection wash so
+/// the user sees how the decorative tint reads — with synthetic labels only, never
+/// real account data. The accent is brand decoration: this preview deliberately
+/// shows no finance value colored by it.
+private struct AccentSwatchPreviewRow: View {
+    let accent: AppAccentColor
+
+    private var resolvedColor: Color {
+        // Fall back to the live system accent when "System" is selected, so the
+        // preview reflects what the user will actually see.
+        SemanticColors.resolvedAccent(for: accent) ?? Color.accentColor
+    }
+
+    var body: some View {
+        HStack(spacing: Spacing.sm) {
+            RoundedRectangle(cornerRadius: Radius.control)
+                .fill(resolvedColor)
+                .frame(width: 28, height: 20)
+                .overlay {
+                    RoundedRectangle(cornerRadius: Radius.control)
+                        .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                }
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(accent.title)
+                    .font(.callout.weight(.medium))
+                Text(accent == .system ? "Follows the macOS accent" : "Decorative tint only")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: Spacing.sm)
+
+            // A sample "active" control to show the tint in context. Uses a
+            // checkmark glyph so the accented state reads without relying on the
+            // color alone.
+            Label("Active", systemImage: "checkmark.circle.fill")
+                .font(.caption.weight(.medium))
+                .labelStyle(.titleAndIcon)
+                .foregroundStyle(resolvedColor)
+                .padding(.horizontal, Spacing.sm)
+                .padding(.vertical, Spacing.chipVertical)
+                .background(resolvedColor.opacity(0.14), in: Capsule())
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Accent preview: \(accent.title). Decorative tint only; does not change any financial or status colors.")
     }
 }
 
