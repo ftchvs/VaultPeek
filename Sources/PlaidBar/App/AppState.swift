@@ -4076,6 +4076,8 @@ final class AppState {
             }
             return
         }
+        let systemSurfaceMaskEnabled = shouldMaskFinancialValues
+            || ((try? PrivacyMaskControlCommandReader.peek()?.maskEnabled) == true)
         // Keep the App Intents snapshot fresh on the same path that already
         // recomputes summaries for the widget (AND-512).
         writeFinanceSnapshot(updatedAt: updatedAt)
@@ -4100,7 +4102,7 @@ final class AppState {
             balanceHistory: balanceHistory,
             updatedAt: updatedAt,
             isDemo: isDemoMode,
-            isMasked: shouldMaskFinancialValues
+            isMasked: systemSurfaceMaskEnabled
         )
         let debouncer = glanceSnapshotWriteDebouncer
         Task { [snapshot, debouncer, generation] in

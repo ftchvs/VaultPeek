@@ -129,6 +129,9 @@ struct PlaidBarTests {
             encoding: .utf8
         )
 
+        let glanceMakeRange = try #require(appStateSource.range(of: "let snapshot = GlanceSnapshot.make"))
+        let glanceMakeBlock = String(appStateSource[glanceMakeRange.lowerBound...].prefix(500))
+
         #expect(widgetSource.contains("GlanceSnapshotStore.redactIfAvailable()"))
         #expect(widgetSource.contains("deleteSearchableItems("))
         #expect(widgetSource.contains("withDomainIdentifiers: [PlaidBarConstants.accountSpotlightDomainIdentifier]"))
@@ -136,6 +139,8 @@ struct PlaidBarTests {
         #expect(focusSource.contains("MainActor.run"))
         #expect(focusSource.contains("AccountSpotlightIndexer.clear()"))
         #expect(appStateSource.contains("PrivacyMaskControlCommandReader.peek()?.maskEnabled"))
+        #expect(glanceMakeBlock.contains("isMasked: systemSurfaceMaskEnabled"))
+        #expect(!glanceMakeBlock.contains("isMasked: shouldMaskFinancialValues"))
         #expect(appStateSource.contains("queued OFF command must restore the"))
         #expect(appStateSource.contains("clearPublishedSystemSnapshotsForDemoEntry()"))
     }
