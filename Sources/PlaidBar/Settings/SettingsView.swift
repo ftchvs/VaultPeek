@@ -37,6 +37,13 @@ struct SettingsView: View {
                 }
                 .tag(SettingsTab.appearance.rawValue)
 
+            RulesSettingsView()
+                .environment(appState)
+                .tabItem {
+                    Label("Rules", systemImage: "wand.and.stars")
+                }
+                .tag(SettingsTab.rules.rawValue)
+
             NotificationSettingsView()
                 .environment(appState)
                 .tabItem {
@@ -73,6 +80,7 @@ private enum SettingsTab: String {
     case accounts
     case categories
     case appearance
+    case rules
     case notifications
     case privacy
     case about

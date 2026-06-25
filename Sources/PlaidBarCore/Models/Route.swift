@@ -154,6 +154,7 @@ public enum SettingsRouteTab: String, CaseIterable, Sendable, Hashable, Codable 
     case general
     case accounts
     case appearance
+    case rules
     case notifications
     case privacy
     case about

@@ -4604,6 +4604,41 @@ final class AppState {
         persistReviewStorage()
     }
 
+    // MARK: - Rules management (AND-551)
+
+    /// Update (or insert) a categorization rule from the rules-manager surface.
+    ///
+    /// Routes through the pure `TransactionRuleManager.applyingEdit`, which
+    /// normalizes the rule's free-text fields and **preserves the existing rule's
+    /// `id` and `createdAt`** so an edit never silently re-ranks the rule relative
+    /// to its peers (conflict precedence is by `createdAt`). The change is undoable
+    /// (one ⌘Z restores the prior rule set) and persisted through the same serial
+    /// writer as every other review-storage mutation. Caches invalidate via
+    /// `transactionRules.didSet`.
+    ///
+    /// Editing a rule deliberately does **not** touch review metadata: re-running
+    /// the matcher over already-reviewed transactions is the resolver's job at
+    /// aggregation time, not a retroactive metadata rewrite here.
+    func updateTransactionRule(_ rule: TransactionRule) {
+        pushReviewUndoState()
+        transactionRules = TransactionRuleManager.applyingEdit(rule, to: transactionRules)
+        persistReviewStorage()
+    }
+
+    /// Delete a categorization rule from the rules-manager surface.
+    ///
+    /// Per AC #2, deleting a rule must **not** retroactively un-review past
+    /// transactions: this only drops the rule from the matcher set
+    /// (`TransactionRuleManager.deleting`), leaving every `.reviewed` /`.ignored`
+    /// metadata record exactly as it was. Undoable and persisted like every other
+    /// review mutation.
+    func deleteTransactionRule(id: UUID) {
+        guard transactionRules.contains(where: { $0.id == id }) else { return }
+        pushReviewUndoState()
+        transactionRules = TransactionRuleManager.deleting(ruleID: id, from: transactionRules)
+        persistReviewStorage()
+    }
+
     /// Marks a batch of inbox rows reviewed in a single, undoable step (AND-528).
     ///
     /// The blast radius — exactly which transaction ids resolve — is decided by the
