@@ -101,11 +101,11 @@ GET  /oauth/callback?state=...  → Hosted Link success/error page
 GET  /api/accounts              → [AccountDTO]
 GET  /api/accounts/balances     → [AccountDTO] (real-time)
 DELETE /api/accounts/:itemId    → 204 No Content
-GET  /api/investments/holdings  → InvestmentsResponse (holdings + securities; feeds net worth)
+GET  /api/investments/holdings  → InvestmentsResponse (accounts + holdings + securities; best-effort per item)
 GET  /api/investments/transactions → [InvestmentTransactionDTO] (90-day lookback)
 GET  /api/transactions/sync     → SyncResponse
-GET  /api/budgets               → [CategoryBudget]
-GET  /api/review                → ReviewSyncDTO (opt-in synced review state)
+GET  /api/budgets               → CategoryBudgetsResponse
+GET  /api/review                → ReviewStateSnapshotDTO (opt-in synced review state)
 GET  /api/status                → ServerStatus
 GET  /api/items                 → [ItemStatus]
 ```
