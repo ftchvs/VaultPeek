@@ -38,6 +38,43 @@ public enum TransactionReviewReason: String, Codable, Sendable, CaseIterable, Eq
     public var isHighPriority: Bool {
         priority == 0 || self == .unusualAmount
     }
+
+    /// SF Symbol name for this reason's leading glyph. Shared by the inbox row
+    /// and the inspector legend so the two surfaces read consistently; the glyph
+    /// is always a redundant layer alongside the `displayName` text, never the
+    /// sole carrier of meaning (ACCESSIBILITY.md).
+    public var glyphName: String {
+        switch self {
+        case .uncategorized: "tag"
+        case .newMerchant: "person.crop.circle.badge.questionmark"
+        case .unusualAmount: "chart.line.uptrend.xyaxis"
+        case .possibleTransfer: "arrow.left.arrow.right"
+        case .recurringChanged: "calendar.badge.exclamationmark"
+        case .pendingChanged: "clock.badge.exclamationmark"
+        case .changedSinceReview: "arrow.triangle.2.circlepath"
+        }
+    }
+
+    /// Plain-language explanation of *why* a transaction surfaced for this
+    /// reason, shown in the inspector legend.
+    public var explanation: String {
+        switch self {
+        case .uncategorized:
+            "No category yet. Recategorize so it counts toward the right budget."
+        case .newMerchant:
+            "First time you've seen this merchant. Confirm it's expected."
+        case .unusualAmount:
+            "Larger or more unusual than this merchant's usual charges."
+        case .possibleTransfer:
+            "Looks like a transfer or card payment. Mark transfer to exclude it from budgets."
+        case .recurringChanged:
+            "A recurring charge changed amount or timing."
+        case .pendingChanged:
+            "This pending charge changed before it posted."
+        case .changedSinceReview:
+            "Changed since you last reviewed it, so it reopened."
+        }
+    }
 }
 
 public struct TransactionReviewMetadata: Codable, Sendable, Identifiable, Equatable {

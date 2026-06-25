@@ -287,7 +287,7 @@ struct ReviewDestinationView: View {
         private func reasonRow(_ reason: TransactionReviewReason) -> some View {
             let tint: Color = reason.isHighPriority ? SemanticColors.warning : .secondary
             return HStack(alignment: .top, spacing: WindowMetrics.sm) {
-                Image(systemName: ReviewReasonGuide.systemImage(for: reason))
+                Image(systemName: reason.glyphName)
                     .font(.body)
                     .foregroundStyle(tint)
                     .frame(width: 24, alignment: .center)
@@ -307,7 +307,7 @@ struct ReviewDestinationView: View {
                                 .background(SemanticColors.warning.opacity(0.12), in: Capsule())
                         }
                     }
-                    Text(ReviewReasonGuide.explanation(for: reason))
+                    Text(reason.explanation)
                         .windowSupportingText()
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -315,7 +315,7 @@ struct ReviewDestinationView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .combine)
             .accessibilityLabel(
-                "\(reason.displayName)\(reason.isHighPriority ? ", high priority" : ""). \(ReviewReasonGuide.explanation(for: reason))"
+                "\(reason.displayName)\(reason.isHighPriority ? ", high priority" : ""). \(reason.explanation)"
             )
         }
 
@@ -362,42 +362,6 @@ private enum ReviewShortcutGuide {
         Shortcut(key: "I", action: "Ignore", systemImage: "eye.slash"),
         Shortcut(key: "⌘Z", action: "Undo last action", systemImage: "arrow.uturn.backward"),
     ]
-}
-
-/// Plain-language explanations + glyphs for each review reason code, for the
-/// inspector legend. The glyphs mirror the inbox row's leading glyph so the two
-/// surfaces read consistently; the copy explains *why* a transaction surfaced.
-private enum ReviewReasonGuide {
-    static func systemImage(for reason: TransactionReviewReason) -> String {
-        switch reason {
-        case .uncategorized: "tag"
-        case .newMerchant: "person.crop.circle.badge.questionmark"
-        case .unusualAmount: "chart.line.uptrend.xyaxis"
-        case .possibleTransfer: "arrow.left.arrow.right"
-        case .recurringChanged: "calendar.badge.exclamationmark"
-        case .pendingChanged: "clock.badge.exclamationmark"
-        case .changedSinceReview: "arrow.triangle.2.circlepath"
-        }
-    }
-
-    static func explanation(for reason: TransactionReviewReason) -> String {
-        switch reason {
-        case .uncategorized:
-            "No category yet. Recategorize so it counts toward the right budget."
-        case .newMerchant:
-            "First time you've seen this merchant. Confirm it's expected."
-        case .unusualAmount:
-            "Larger or more unusual than this merchant's usual charges."
-        case .possibleTransfer:
-            "Looks like a transfer or card payment. Mark transfer to exclude it from budgets."
-        case .recurringChanged:
-            "A recurring charge changed amount or timing."
-        case .pendingChanged:
-            "This pending charge changed before it posted."
-        case .changedSinceReview:
-            "Changed since you last reviewed it, so it reopened."
-        }
-    }
 }
 
 #if canImport(PreviewsMacros)
