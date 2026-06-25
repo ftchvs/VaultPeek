@@ -52,9 +52,13 @@ The app talks to the server through `ServerClient`. The server exposes:
 - `GET /oauth/callback`
 - `GET /api/accounts`
 - `GET /api/accounts/balances`
+- `GET /api/investments/holdings`
+- `GET /api/investments/transactions`
 - `GET /api/transactions/sync`
 - `POST /api/transactions/cursors`
 - `DELETE /api/accounts/:itemId`
+- `GET /api/budgets`, `PUT`/`DELETE /api/budgets/:category`
+- `GET`/`PUT`/`DELETE /api/review` (opt-in server-synced review state)
 
 `/health` and `/oauth/callback` are public on localhost. `/api/*` requires the
 local bearer token stored in the VaultPeek data directory.
