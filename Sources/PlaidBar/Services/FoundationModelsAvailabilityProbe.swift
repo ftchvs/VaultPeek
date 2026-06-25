@@ -1,15 +1,7 @@
 import Foundation
 import PlaidBarCore
 
-// Gate on BOTH the framework and its macro module. On a CLT-only macOS 26 you
-// can `import FoundationModels` but not `FoundationModelsMacros`, so the
-// `@Generable`/`@Guide` macros the categorizers rely on are unavailable even
-// though `SystemLanguageModel.default.availability` may report `.available`.
-// The merchant/income categorizers already dual-gate on the same condition, so
-// matching it here keeps the probe (the single source of truth for the FM tier
-// state) from reporting `.available` for a configuration that cannot compile or
-// run the macro-backed generation path (AND-656).
-#if canImport(FoundationModels) && canImport(FoundationModelsMacros)
+#if canImport(FoundationModels)
 import FoundationModels
 #endif
 
@@ -36,7 +28,7 @@ struct FoundationModelsAvailabilityProbe: Sendable {
     /// Safe to call on any OS/build: returns `.unsupported` whenever Foundation
     /// Models cannot be queried here.
     func currentState() -> LocalAIFoundationModelsTierState {
-        #if canImport(FoundationModels) && canImport(FoundationModelsMacros)
+        #if canImport(FoundationModels)
         if #available(macOS 26, *) {
             return Self.map(SystemLanguageModel.default.availability)
         } else {
@@ -48,7 +40,7 @@ struct FoundationModelsAvailabilityProbe: Sendable {
     }
 }
 
-#if canImport(FoundationModels) && canImport(FoundationModelsMacros)
+#if canImport(FoundationModels)
 @available(macOS 26, *)
 extension FoundationModelsAvailabilityProbe {
     /// Maps `SystemLanguageModel.Availability` to the Core tier state. Unknown or

@@ -145,28 +145,13 @@ struct PlaidBarTests {
         #expect(appStateSource.contains("clearPublishedSystemSnapshotsForDemoEntry()"))
     }
 
-    @Test("Foundation Models availability probe gates on the macro module (AND-656)")
-    func foundationModelsProbeGatesOnMacroAvailability() throws {
+    @Test("Foundation Models availability uses the public framework gate (AND-656)")
+    func foundationModelsProbeUsesPublicFrameworkGate() throws {
         let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         let probeSource = try String(
             contentsOf: root.appending(path: "Sources/PlaidBar/Services/FoundationModelsAvailabilityProbe.swift"),
             encoding: .utf8
         )
-
-        // Every `#if canImport(FoundationModels)` in the probe must also require
-        // `canImport(FoundationModelsMacros)`. On a CLT-only macOS 26 the framework
-        // imports but the `@Generable`/`@Guide` macros do not, so a bare guard would
-        // let the probe report `.available` for a build that cannot compile or run
-        // the macro-backed generation path the categorizers depend on (AND-656).
-        let bareGuards = probeSource.components(separatedBy: "#if canImport(FoundationModels)").count - 1
-        let dualGuards = probeSource
-            .components(separatedBy: "#if canImport(FoundationModels) && canImport(FoundationModelsMacros)").count - 1
-        #expect(bareGuards > 0)
-        #expect(bareGuards == dualGuards)
-
-        // The probe (the single source of truth for the FM tier state) must stay in
-        // lockstep with the categorizers, which already dual-gate on the same
-        // condition. If the categorizers' guard ever changes, this fails loudly.
         let merchantSource = try String(
             contentsOf: root.appending(path: "Sources/PlaidBar/Services/FoundationModelsMerchantCategorizer.swift"),
             encoding: .utf8
@@ -175,8 +160,21 @@ struct PlaidBarTests {
             contentsOf: root.appending(path: "Sources/PlaidBar/Services/FoundationModelsIncomeCategorizer.swift"),
             encoding: .utf8
         )
-        #expect(merchantSource.contains("#if canImport(FoundationModels) && canImport(FoundationModelsMacros)"))
-        #expect(incomeSource.contains("#if canImport(FoundationModels) && canImport(FoundationModelsMacros)"))
+        let insightSource = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Services/FoundationModelsInsightModel.swift"),
+            encoding: .utf8
+        )
+        let sources = [probeSource, merchantSource, incomeSource, insightSource]
+
+        for source in sources {
+            #expect(source.contains("#if canImport(FoundationModels)"))
+            #expect(!source.contains("FoundationModelsMacros"))
+        }
+
+        #expect(probeSource.contains("SystemLanguageModel.default.availability"))
+        #expect(merchantSource.contains("@Generable"))
+        #expect(incomeSource.contains("@Generable"))
+        #expect(insightSource.contains("@Generable"))
     }
 
     // MARK: - Account Type Categorization

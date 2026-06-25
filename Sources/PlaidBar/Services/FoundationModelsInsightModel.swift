@@ -1,7 +1,7 @@
 import Foundation
 import PlaidBarCore
 
-#if canImport(FoundationModels) && canImport(FoundationModelsMacros)
+#if canImport(FoundationModels)
 import FoundationModels
 #endif
 
@@ -23,7 +23,7 @@ import FoundationModels
 /// schema into the Core `FoundationModelsInsightContent` → display string.
 ///
 /// Availability/reversibility: the whole type is gated behind
-/// `#available(macOS 26, *)` + `#if canImport(FoundationModels) && canImport(FoundationModelsMacros)`. When Foundation
+/// `#available(macOS 26, *)` + `#if canImport(FoundationModels)`. When Foundation
 /// Models is not the active/available tier, the routing decision
 /// (`FoundationModelsInsightRouting`) never selects this engine and the existing
 /// path runs byte-identically. `summarize` additionally re-checks availability
@@ -31,7 +31,7 @@ import FoundationModels
 /// route degrades to the deterministic fallback rather than rendering nothing.
 struct FoundationModelsInsightModel: LocalInsightModel {
     func summarize(_ prompt: LocalInsightModelPrompt, maxTokens: Int) async throws -> String {
-        #if canImport(FoundationModels) && canImport(FoundationModelsMacros)
+        #if canImport(FoundationModels)
         if #available(macOS 26, *) {
             return try await Self.generate(prompt: prompt, maxTokens: maxTokens)
         } else {
@@ -43,7 +43,7 @@ struct FoundationModelsInsightModel: LocalInsightModel {
     }
 }
 
-#if canImport(FoundationModels) && canImport(FoundationModelsMacros)
+#if canImport(FoundationModels)
 @available(macOS 26, *)
 extension FoundationModelsInsightModel {
     /// The schema-guaranteed spending insight. The system prompt
