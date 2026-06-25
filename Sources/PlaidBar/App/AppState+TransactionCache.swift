@@ -37,7 +37,18 @@ import PlaidBarCore
 /// `beginClear()` unconditionally as its first line (even when no store is open).
 /// Because the epoch bump and the capture/recheck both run synchronously on the
 /// main actor, a clear requested after a persist in program order is always
-/// observed by that persist — so a clear can never be overwritten by a stale write.
+/// observed by that persist.
+///
+/// ## Two-hop residual closed at the store actor (AND-633)
+/// As with the read-model cache, the main-actor epoch recheck and the store
+/// `replaceAll` are separate awaits, leaving a narrow window where a clear could
+/// land in between. ``TransactionCacheStore`` closes it the same way: it owns a
+/// monotonic clear generation (bumped by `clearAll()`), and the persist captures
+/// `currentClearGeneration()` and passes it to
+/// `replaceAll(cacheKey:transactions:ifNotClearedSince:)`, which re-validates the
+/// generation **as its first action on the store actor** (FIFO-ordered against
+/// `clearAll()`). The check and the row replace are one atomic actor hop, so a
+/// clear always wins. The main-actor epoch is retained as a cheap fast-drop.
 extension AppState {
     nonisolated static let transactionCacheLogger = Logger(
         subsystem: "com.ftchvs.PlaidBar",
@@ -97,10 +108,23 @@ extension AppState {
         let capturedEpoch = gate.currentEpoch
         Task.detached {
             do {
-                // Re-check on the main actor right before committing: if a clear
-                // raced ahead, drop this stale write rather than resurrect rows.
+                // First line of defense: a cheap main-actor epoch recheck drops the
+                // wide race where a clear was requested after this persist was
+                // scheduled.
                 guard await gate.mayCommit(capturedEpoch: capturedEpoch) else { return }
-                try await store.replaceAll(cacheKey: cacheKey, transactions: snapshot)
+                // Second line of defense (AND-633): capture the store's clear
+                // generation and pass it INTO the atomic, clear-gated replaceAll.
+                // The check and the row replace are one store-actor hop, FIFO-ordered
+                // against `clearAll()`, so a clear that lands in the gap between the
+                // epoch recheck above and this commit still wins — closing the
+                // two-hop persist-after-clear window the main-actor epoch alone
+                // cannot.
+                let capturedGeneration = await store.currentClearGeneration()
+                try await store.replaceAll(
+                    cacheKey: cacheKey,
+                    transactions: snapshot,
+                    ifNotClearedSince: capturedGeneration
+                )
             } catch {
                 AppState.transactionCacheLogger.error(
                     "Transaction cache write failed: \(String(describing: error), privacy: .public)"

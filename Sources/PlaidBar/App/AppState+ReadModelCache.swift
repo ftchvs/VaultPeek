@@ -26,15 +26,27 @@ import PlaidBarCore
 /// commit *after* the clear that fires when the user removes their last
 /// institution — resurrecting removed-account balances on the next cold start.
 ///
-/// `ReadModelCacheClearGate` closes that race: a monotonic clear epoch is bumped
-/// synchronously on the main actor the instant a clear is requested, *before* the
-/// clear's own off-main work begins. Every scheduled write captures the epoch it
-/// was scheduled under and re-checks it (still on the main actor) immediately
-/// before committing; if a clear has been requested since, the write is dropped.
-/// Because both the epoch bump and the capture/recheck run synchronously on the
-/// main actor, a clear that is *requested after* a persist in program order is
-/// always observed by that persist — so a clear can never be overwritten by a
-/// stale write.
+/// `ReadModelCacheClearGate` closes the wide part of that race: a monotonic clear
+/// epoch is bumped synchronously on the main actor the instant a clear is
+/// requested, *before* the clear's own off-main work begins. Every scheduled write
+/// captures the epoch it was scheduled under and re-checks it (still on the main
+/// actor) immediately before committing; if a clear has been requested since, the
+/// write is dropped. Because both the epoch bump and the capture/recheck run
+/// synchronously on the main actor, a clear that is *requested after* a persist in
+/// program order is always observed by that persist.
+///
+/// ## Two-hop residual closed at the store actor (AND-633)
+/// The main-actor epoch recheck and the store write are *separate awaits*, so a
+/// clear could still bump the epoch and enqueue `clearAll()` in the narrow window
+/// between `mayCommit` returning `true` and the persist's `save` reaching the store
+/// actor — letting a stale write commit after the clear. ``ReadModelCacheStore``
+/// closes that window with a second, store-actor-level guard: it owns a monotonic
+/// clear generation (bumped by `clearAll()`); the persist captures
+/// `currentClearGeneration()` and passes it to `save(_:ifNotClearedSince:)`, which
+/// re-validates the generation **as its first action on the store actor**, where it
+/// is FIFO-ordered against `clearAll()`. The generation check and the row write are
+/// one atomic actor hop, so no clear can interleave between them — a clear always
+/// wins. The main-actor epoch is retained as a cheap fast-drop for the common case.
 @MainActor
 final class ReadModelCacheClearGate {
     static let shared = ReadModelCacheClearGate()
@@ -156,10 +168,18 @@ extension AppState {
         let capturedEpoch = gate.currentEpoch
         Task.detached {
             do {
-                // Re-check on the main actor right before committing: if a clear
-                // raced ahead, drop this stale write rather than resurrect rows.
+                // First line of defense: a cheap main-actor epoch recheck drops the
+                // wide race where a clear was requested after this write was
+                // scheduled.
                 guard await gate.mayCommit(capturedEpoch: capturedEpoch) else { return }
-                try await store.save(model)
+                // Second line of defense (AND-633): capture the store's clear
+                // generation and pass it INTO the atomic, clear-gated save. The
+                // check and the write are one store-actor hop, FIFO-ordered against
+                // `clearAll()`, so a clear that lands in the gap between the epoch
+                // recheck above and this commit still wins — closing the two-hop
+                // persist-after-clear window the main-actor epoch alone cannot.
+                let capturedGeneration = await store.currentClearGeneration()
+                try await store.save(model, ifNotClearedSince: capturedGeneration)
             } catch {
                 AppState.readModelCacheLogger.error(
                     "Read-model cache write failed: \(String(describing: error), privacy: .public)"
