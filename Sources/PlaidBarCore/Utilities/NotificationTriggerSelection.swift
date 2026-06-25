@@ -258,7 +258,7 @@ public enum NotificationTriggerSelection {
                 now: now,
                 calendar: calendar
             ) {
-                append(categoryBudgetAlertDecision(for: alert, privacyMaskActive: privacyMaskActive))
+                append(categoryBudgetAlertDecision(for: alert))
             }
         }
 
@@ -536,30 +536,25 @@ public enum NotificationTriggerSelection {
     /// it sits in the same band, and the next month re-arms with a new month key.
     ///
     /// ## Privacy
-    /// The body never carries an amount. When Privacy Mask is active it omits the
-    /// category name too — a masked surface must not leak *which* category is
-    /// under pressure to the lock screen. When unmasked the body names the
-    /// category and its status (e.g. "Dining is over its monthly budget"), still
-    /// without any dollar figure (the exact spend lives in-app, behind the mask /
-    /// App Lock). An `.over` band raises severity to `.warning`; a `.nearing`
-    /// band is an advisory `.informational` heads-up.
+    /// The body never carries an amount **and never names the category**. A
+    /// delivered notification renders on the lock screen, which the in-app
+    /// Privacy Mask / App Lock cannot guard — so, like every other trigger here
+    /// (the shared invariant asserted in `NotificationTriggerEvaluationTests`,
+    /// which forbids a merchant/category name in any body even when
+    /// `privacyMaskActive == false`), the body stays generic regardless of mask
+    /// state; the exact category and spend live in-app, behind the mask / App
+    /// Lock. An `.over` band raises severity to `.warning`; a `.nearing` band is
+    /// an advisory `.informational` heads-up.
     private static func categoryBudgetAlertDecision(
-        for alert: CategoryBudgetAlertEvaluator.Alert,
-        privacyMaskActive: Bool
+        for alert: CategoryBudgetAlertEvaluator.Alert
     ) -> NotificationTriggerDecision {
         let isOver = alert.band == .over
-        let body: String
-        if privacyMaskActive {
-            // Masked: no category name, no amount — status verb only.
-            body = isOver
-                ? "A budget category is over its monthly limit. Open VaultPeek for details."
-                : "A budget category is nearing its monthly limit. Open VaultPeek for details."
-        } else {
-            let name = alert.category.displayName
-            body = isOver
-                ? "\(name) is over its monthly budget. Open VaultPeek for details."
-                : "\(name) is nearing its monthly budget. Open VaultPeek for details."
-        }
+        // Generic body only — never the category name, never an amount. A
+        // notification renders on the lock screen, so leaking *which* category is
+        // under pressure there would defeat the in-app Privacy Mask / App Lock.
+        let body = isOver
+            ? "A budget category is over its monthly limit. Open VaultPeek for details."
+            : "A budget category is nearing its monthly limit. Open VaultPeek for details."
         return NotificationTriggerDecision(
             kind: .categoryBudgetAlert,
             dedupKey: dedupKey(

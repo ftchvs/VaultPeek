@@ -136,13 +136,16 @@ struct CategoryBudgetAlertEvaluatorTests {
 
         let budgetDecisions = evaluation.decisions.filter { $0.kind == .categoryBudgetAlert }
         #expect(budgetDecisions.count == 2)
-        // Over is a warning; nearing is an advisory informational heads-up.
-        let overDecision = budgetDecisions.first { $0.dedupKey.contains(SpendingCategory.foodAndDrink.rawValue.lowercased()) || $0.body.contains("Food & Drink") }
-        #expect(overDecision?.severity == .warning)
+        // Over is a warning; nearing is an advisory informational heads-up. Bodies
+        // are intentionally generic (lock-screen safe) and dedup keys are hashed,
+        // so the two decisions are distinguished by band severity/title, not by a
+        // category name.
+        let overDecision = budgetDecisions.first { $0.severity == .warning }
         #expect(overDecision?.title == "Over budget")
-        let nearingDecision = budgetDecisions.first { $0.body.contains("Shopping") }
-        #expect(nearingDecision?.severity == .informational)
+        #expect(overDecision?.body.contains("over") == true)
+        let nearingDecision = budgetDecisions.first { $0.severity == .informational }
         #expect(nearingDecision?.title == "Budget warning")
+        #expect(nearingDecision?.body.contains("nearing") == true)
     }
 
     @Test("A category fires once at nearing then again when it escalates to over, not every refresh")
@@ -200,8 +203,8 @@ struct CategoryBudgetAlertEvaluatorTests {
 
     // MARK: - Privacy
 
-    @Test("Unmasked body names the category and status but never an amount")
-    func unmaskedBodyHasNoAmount() {
+    @Test("Unmasked body stays generic — never the category name or an amount (lock-screen safe)")
+    func unmaskedBodyIsLockScreenSafe() {
         let presentation = CategoryBudgetPresentation(items: [
             item(.foodAndDrink, limit: 100, spent: 137.42),
         ])
@@ -212,7 +215,10 @@ struct CategoryBudgetAlertEvaluatorTests {
             calendar: utcCalendar
         )
         let body = evaluation.decisions.first { $0.kind == .categoryBudgetAlert }?.body ?? ""
-        #expect(body.contains("Food & Drink"))
+        // A delivered notification renders on the lock screen, which the in-app
+        // Privacy Mask cannot guard — so the body must never name the category,
+        // even when the in-app surface is unmasked (matches every other trigger).
+        #expect(!body.contains("Food & Drink"))
         #expect(body.contains("over"))
         // No amount, no dollar sign, no raw figures.
         #expect(!body.contains("$"))
