@@ -88,4 +88,12 @@ public struct TransactionDTO: Codable, Sendable, Identifiable, Hashable {
     public var displayAmount: Double {
         abs(amount)
     }
+
+    /// Normalized currency identity for this transaction. Wraps the raw Plaid
+    /// `iso_currency_code`; an absent/empty code resolves to
+    /// ``CurrencyCode/unknown`` so a transaction is rendered in its own native
+    /// currency, never coerced to USD.
+    public var currency: CurrencyCode {
+        CurrencyCode(isoCurrencyCode)
+    }
 }

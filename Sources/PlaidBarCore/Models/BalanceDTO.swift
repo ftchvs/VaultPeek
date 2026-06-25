@@ -23,6 +23,13 @@ public struct BalanceDTO: Codable, Sendable, Hashable {
         available ?? current ?? 0
     }
 
+    /// Normalized currency identity for this balance. Wraps the raw Plaid
+    /// `iso_currency_code`; an absent/empty code resolves to
+    /// ``CurrencyCode/unknown`` (never silently assumed to be USD).
+    public var currency: CurrencyCode {
+        CurrencyCode(isoCurrencyCode)
+    }
+
     /// Credit utilization percentage (0-100), nil if not a credit account
     public var utilizationPercent: Double? {
         guard let limit, limit > 0, let current else { return nil }

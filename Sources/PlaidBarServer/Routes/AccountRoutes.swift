@@ -188,7 +188,12 @@ struct AccountRoutes: Sendable {
                     available: account.balances.available,
                     current: account.balances.current,
                     limit: account.balances.limit,
+                    // Plaid sets exactly one of iso/unofficial. Prefer the ISO
+                    // code; fall back to the unofficial code (crypto, points,
+                    // some neobanks) so non-ISO balances still carry a native
+                    // currency identity for multi-currency display (AND-643).
                     isoCurrencyCode: account.balances.isoCurrencyCode
+                        ?? account.balances.unofficialCurrencyCode
                 ),
                 institutionName: item.institutionName
             )
