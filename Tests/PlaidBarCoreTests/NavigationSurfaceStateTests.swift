@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import PlaidBarCore
 
@@ -102,7 +103,7 @@ struct NavigationSurfaceStateTests {
         // Window B has its popover open; window A detaching must not reach across
         // and close B's popover — the cross-surface bug the global flag invited.
         var windowA = NavigationState()
-        var windowB = NavigationState(isPopoverPresented: true)
+        let windowB = NavigationState(isPopoverPresented: true)
 
         windowA.detachDashboard()
 
