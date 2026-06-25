@@ -58,6 +58,18 @@ struct WebhookReceiverTests {
         }
     }
 
+    @Test("Verifier body-hash comparison is length-checked and constant-time")
+    func verifierBodyHashComparison() {
+        let body = Data(Self.payload(webhookCode: "SYNC_UPDATES_AVAILABLE").utf8)
+        let hash = StrictPlaidWebhookVerifier.sha256Hex(body)
+        let changedLast = hash.last == "0" ? "1" : "0"
+        let sameLengthMismatch = String(hash.dropLast()) + changedLast
+
+        #expect(StrictPlaidWebhookVerifier.constantTimeEquals(hash, hash))
+        #expect(!StrictPlaidWebhookVerifier.constantTimeEquals(hash, sameLengthMismatch))
+        #expect(!StrictPlaidWebhookVerifier.constantTimeEquals(hash, hash + "0"))
+    }
+
     @Test("Duplicate delivery is idempotent and stores metadata only")
     func duplicateDeliveryIsIdempotent() async throws {
         try await Self.withStores { tokenStore, eventStore in

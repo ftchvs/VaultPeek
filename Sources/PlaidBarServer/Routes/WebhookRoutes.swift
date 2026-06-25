@@ -47,7 +47,7 @@ struct StrictPlaidWebhookVerifier: PlaidWebhookVerifier {
         }
 
         guard let bodyHash = claims.requestBodySHA256 ?? claims.bodySHA256,
-              bodyHash == Self.sha256Hex(body)
+              Self.constantTimeEquals(bodyHash, Self.sha256Hex(body))
         else {
             throw PlaidWebhookVerificationError.bodyHashMismatch
         }
@@ -69,6 +69,19 @@ struct StrictPlaidWebhookVerifier: PlaidWebhookVerifier {
 
     static func sha256Hex(_ data: Data) -> String {
         SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// Length-checked constant-time comparison for webhook body hashes.
+    static func constantTimeEquals(_ lhs: String, _ rhs: String) -> Bool {
+        let lhsBytes = Array(lhs.utf8)
+        let rhsBytes = Array(rhs.utf8)
+        guard lhsBytes.count == rhsBytes.count else { return false }
+
+        var difference: UInt8 = 0
+        for index in lhsBytes.indices {
+            difference |= lhsBytes[index] ^ rhsBytes[index]
+        }
+        return difference == 0
     }
 }
 
@@ -238,9 +251,19 @@ struct WebhookRoutes: Sendable {
             receivedAt: now(),
             bodyHash: StrictPlaidWebhookVerifier.sha256Hex(body)
         )
-        let result = try await eventStore.record(signal)
-        if result.disposition == .stored {
-            try await apply(signal)
+        // Serialize record-and-apply per item id. `record`'s find-then-save and
+        // `apply`'s status read-modify-write each straddle suspending Fluent
+        // calls, so without a per-item gate two concurrent distinct-hash
+        // deliveries for the same item could both resolve `.stored` and apply
+        // interleaved status mutations (last-writer-wins). Holding the lock
+        // across both makes the out-of-order check, the save, and the status RMW
+        // atomic for one item; distinct items stay concurrent.
+        let result = try await eventStore.withItemLock(itemId: signal.itemId) {
+            let result = try await eventStore.record(signal)
+            if result.disposition == .stored {
+                try await apply(signal)
+            }
+            return result
         }
 
         return try Self.jsonResponse(WebhookReceiveResponse(disposition: result.disposition.rawValue))

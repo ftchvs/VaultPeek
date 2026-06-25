@@ -99,8 +99,33 @@ struct WebhookStoreResult: Sendable, Equatable {
 actor WebhookEventStore {
     private let fluent: Fluent
 
+    // Serializes `record` (existence check -> out-of-order check -> save -> the
+    // caller's status RMW) per item id. The find-then-save and the downstream
+    // `apply` straddle several suspending Fluent calls, so an actor method alone
+    // is not atomic across them: two concurrent distinct-hash deliveries for the
+    // same item could both resolve `.stored` and both apply a status mutation in
+    // an interleaved, last-writer-wins fashion. A per-item in-process FIFO gate
+    // (mirroring `TokenStore`'s lock idiom) fully orders deliveries for one item
+    // while leaving distinct items concurrent. The companion server is a single
+    // local process, so an in-process gate is sufficient.
+    private var lockedItemIds: Set<String> = []
+    private var itemWaiters: [String: [CheckedContinuation<Void, Never>]] = [:]
+
     init(fluent: Fluent) {
         self.fluent = fluent
+    }
+
+    /// Runs `body` while holding the per-item serialization lock, so the
+    /// out-of-order decision, the save, and any status mutation the caller
+    /// performs on `body`'s result are atomic for a single item. Distinct items
+    /// never contend.
+    func withItemLock<T: Sendable>(
+        itemId: String,
+        _ body: @Sendable () async throws -> T
+    ) async rethrows -> T {
+        await acquireItemLock(itemId: itemId)
+        defer { releaseItemLock(itemId: itemId) }
+        return try await body()
     }
 
     func record(_ signal: WebhookItemSignal) async throws -> WebhookStoreResult {
@@ -109,7 +134,19 @@ actor WebhookEventStore {
         }
 
         let latest = try await latestEvent(itemId: signal.itemId)
-        let isOutOfOrder = latest.map { $0.effectiveDate > signal.effectiveDate } ?? false
+        // Out-of-order is a statement about *event* ordering. Comparing a stored
+        // `receivedAt` against a new `eventAt` (or vice versa) mixes two
+        // unrelated clocks — the delivery clock and Plaid's event clock — and can
+        // spuriously flag (or miss) reordering. Only decide ordering when BOTH
+        // the stored latest event and the incoming signal carry an `eventAt`;
+        // absent that, treat the delivery as in-order (`.stored`) and rely on the
+        // status mapper to avoid regressions.
+        let isOutOfOrder: Bool
+        if let latestEventAt = latest?.eventAt, let signalEventAt = signal.eventAt {
+            isOutOfOrder = latestEventAt > signalEventAt
+        } else {
+            isOutOfOrder = false
+        }
         let model = WebhookEventModel(
             itemId: signal.itemId,
             webhookType: signal.webhookType,
@@ -155,6 +192,65 @@ actor WebhookEventStore {
                 result[signal.itemId] = signal
             }
         }
+    }
+
+    /// The latest *sync-relevant* webhook per item, independent of any later
+    /// non-sync delivery. `latestEventsByItem` collapses each item to its single
+    /// max-`effectiveDate` event, so a later non-sync code (e.g.
+    /// `PENDING_EXPIRATION`) hides an earlier still-pending
+    /// `SYNC_UPDATES_AVAILABLE`, silently dropping the sync signal. Filtering to
+    /// `needsSync` events *before* the max reduce keeps the sync signal sticky
+    /// until the owning item's refresh advances past it (see
+    /// `StatusRoutes.needsPollingSync`).
+    func latestSyncEventsByItem() async throws -> [String: WebhookItemSignal] {
+        let events = try await WebhookEventModel.query(on: fluent.db()).all()
+        return events
+            .compactMap(Self.signal(from:))
+            .filter(\.needsSync)
+            .reduce(into: [:]) { result, signal in
+                guard let existing = result[signal.itemId] else {
+                    result[signal.itemId] = signal
+                    return
+                }
+                if existing.effectiveDate < signal.effectiveDate {
+                    result[signal.itemId] = signal
+                }
+            }
+    }
+
+    // MARK: - Per-item serialization lock
+
+    private func acquireItemLock(itemId: String) async {
+        if !lockedItemIds.contains(itemId) {
+            lockedItemIds.insert(itemId)
+            return
+        }
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            itemWaiters[itemId, default: []].append(continuation)
+        }
+        // Resumed: the lock was handed off to us; the id stays in `lockedItemIds`.
+    }
+
+    private func releaseItemLock(itemId: String) {
+        if var waiters = itemWaiters[itemId], !waiters.isEmpty {
+            let next = waiters.removeFirst()
+            if waiters.isEmpty {
+                itemWaiters[itemId] = nil
+            } else {
+                itemWaiters[itemId] = waiters
+            }
+            next.resume()
+        } else {
+            lockedItemIds.remove(itemId)
+        }
+    }
+
+    /// Test seam: the number of persisted event rows for an item. Used to assert
+    /// no write is lost when concurrent distinct-hash deliveries are serialized.
+    func allEventCountForTest(itemId: String) async throws -> Int {
+        try await WebhookEventModel.query(on: fluent.db())
+            .filter(\.$itemId == itemId)
+            .count()
     }
 
     private static func signal(from model: WebhookEventModel) -> WebhookItemSignal? {
