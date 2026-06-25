@@ -85,7 +85,7 @@ struct PlaidBarApp: App {
         if CommandLine.arguments.contains("--show-popover") {
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(700))
-                state.isPopoverPresented = true
+                state.navigationModel.isPopoverPresented = true
 
                 // Debug aid: when the status item is hidden in menu bar
                 // overflow, macOS anchors the popover window beyond every
@@ -204,9 +204,9 @@ struct PlaidBarApp: App {
                 // popover, a Settings-only toggle would not take effect until
                 // then, and — critically — a status-item click while detached
                 // (before the popover ever mounted) would set
-                // `isPopoverPresented = true` with no observer installed yet, so
-                // SwiftUI would open the popover instead of raising the floating
-                // window (AND-384).
+                // `navigationModel.isPopoverPresented = true` with no observer
+                // installed yet, so SwiftUI would open the popover instead of
+                // raising the floating window (AND-384).
                 .task {
                     // Legacy detached-dashboard sync (window-first OFF only). On
                     // the default window-first path `detachedDashboard` is nil and
@@ -259,21 +259,22 @@ struct PlaidBarApp: App {
                 // A `--detach` launch override also has a visible detached window
                 // but intentionally leaves the persisted detached preference off,
                 // so include window visibility in the intercept.
-                .onChange(of: appState.isPopoverPresented) { _, isPresented in
+                .onChange(of: appState.navigationModel.isPopoverPresented) { _, isPresented in
                     // Legacy detached-window intercept (window-first OFF only).
                     // With window-first ON `detachedDashboard` is nil, so the
                     // guard short-circuits and the menu bar mounts the glance.
                     guard let detachedDashboard,
                           isPresented,
-                          appState.isDashboardDetached || detachedDashboard.isWindowVisible else { return }
-                    appState.isPopoverPresented = false
+                          appState.navigationModel.isDashboardDetached
+                              || detachedDashboard.isWindowVisible else { return }
+                    appState.navigationModel.isPopoverPresented = false
                     detachedDashboard.handleMenuBarActivation(
                         appState: appState,
                         forcedColorScheme: Self.forcedColorScheme,
                         reduceMotion: reduceMotion
                     )
                 }
-                .onChange(of: appState.isDashboardDetached) { _, _ in
+                .onChange(of: appState.navigationModel.isDashboardDetached) { _, _ in
                     detachedDashboard?.sync(
                         appState: appState,
                         forcedColorScheme: Self.forcedColorScheme,
@@ -335,12 +336,12 @@ struct PlaidBarApp: App {
                 // Opening the popover while locked prompts for authentication to
                 // reveal balances; `unlockApp()` is a no-op when App Lock is off
                 // or already unlocked.
-                .onChange(of: appState.isPopoverPresented) { _, isPresented in
+                .onChange(of: appState.navigationModel.isPopoverPresented) { _, isPresented in
                     guard isPresented, appState.isAppLocked else { return }
                     Task { await appState.unlockApp() }
                 }
         }
-        .menuBarExtraAccess(isPresented: $appState.isPopoverPresented) { statusItem in
+        .menuBarExtraAccess(isPresented: popoverPresentedBinding) { statusItem in
             // Attach the unreviewed-count badge to the live status item, then
             // paint the current count immediately so it is correct on first
             // appearance (not only after the next count/mask change). The button
@@ -370,7 +371,7 @@ struct PlaidBarApp: App {
                         ) == true {
                             return
                         }
-                        appState.isPopoverPresented = true
+                        appState.navigationModel.isPopoverPresented = true
                     },
                     openInWindow: {
                         // Window-first (default): "Open in window" routes into the
@@ -404,7 +405,7 @@ struct PlaidBarApp: App {
                         NSApplication.shared.activate(ignoringOtherApps: true)
                     },
                     dismissPopover: {
-                        appState.isPopoverPresented = false
+                        appState.navigationModel.isPopoverPresented = false
                     },
                     togglePrivacyMask: {
                         appState.togglePrivacyMask()
@@ -556,6 +557,20 @@ struct PlaidBarApp: App {
         .defaultSize(width: 1080, height: 720)
     }
 
+    /// Two-way binding to the menu-bar popover's presentation flag, which now
+    /// lives on the per-window `NavigationModel` (AND-600). Built explicitly rather
+    /// than via `$appState.navigationModel.isPopoverPresented` because
+    /// `navigationModel` is a `let` on `AppState`, so the `@State` projection can't
+    /// form a writable key-path through it; reading/writing the settable property on
+    /// the `@Observable` model directly is equivalent and keeps `menuBarExtraAccess`
+    /// the single presentation source of truth.
+    private var popoverPresentedBinding: Binding<Bool> {
+        Binding(
+            get: { appState.navigationModel.isPopoverPresented },
+            set: { appState.navigationModel.isPopoverPresented = $0 }
+        )
+    }
+
     // MARK: - Window-first command map (AND-596)
 
     /// Destinations that own a `⌘N` shortcut (Dashboard…Accounts), in shortcut
@@ -676,7 +691,7 @@ struct PlaidBarApp: App {
         ) == true {
             return
         }
-        appState.isPopoverPresented = true
+        appState.navigationModel.isPopoverPresented = true
     }
 
     /// Brings VaultPeek to the front and shows the dashboard. Window-first
@@ -698,7 +713,7 @@ struct PlaidBarApp: App {
             return
         }
         NSApplication.shared.activate(ignoringOtherApps: true)
-        appState.isPopoverPresented = true
+        appState.navigationModel.isPopoverPresented = true
     }
 
     /// QA aid: "--appearance light|dark" pins the whole app to one appearance

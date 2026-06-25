@@ -18,7 +18,8 @@ import SwiftUI
 ///
 /// Frame (origin + size) is persisted by AppKit via `frameAutosaveName`, so the
 /// window reopens where the user left it. Open/closed intent is persisted
-/// separately by `AppState.isDashboardDetached`. Window appearance is left to
+/// separately by the per-window `NavigationModel.isDashboardDetached` (AND-600).
+/// Window appearance is left to
 /// inherit the single `NSApp.appearance` owner (pinned only for the `--appearance`
 /// QA override) so flipping Light/Dark updates the window live.
 ///
