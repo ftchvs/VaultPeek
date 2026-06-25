@@ -147,4 +147,24 @@ final class PagedTransactionSource {
     func updateFallback(_ transactions: [TransactionDTO]) {
         fallbackTransactions = transactions
     }
+
+    /// Reconciles the rendered rows with a freshly-synced in-memory history
+    /// (AND-632).
+    ///
+    /// Always refreshes the fallback so the regression-safe path stays current. In
+    /// **paged** mode it additionally merges the live array's *new head* into the
+    /// loaded pages via the pure ``PagedTransactionFeed/mergeHead(from:)`` — so an
+    /// in-session sync's newest transactions appear immediately instead of staying
+    /// hidden behind the cache pages until the view is recreated.
+    ///
+    /// Crucially this never re-reads the cache and never drops a loaded page:
+    /// - No cache read → no race against the not-yet-committed detached persist
+    ///   (the regression that pulled the first attempt, PR #624).
+    /// - Loaded later pages are untouched → an active filter that drained later
+    ///   pages keeps its matches; nothing needs re-draining or re-keying.
+    func resyncHead(_ transactions: [TransactionDTO]) {
+        fallbackTransactions = transactions
+        guard mode == .paged else { return }
+        feed.mergeHead(from: transactions)
+    }
 }
