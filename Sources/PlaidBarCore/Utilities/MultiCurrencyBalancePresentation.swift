@@ -49,6 +49,60 @@ public enum MultiCurrencyBalancePresentation {
         )
     }
 
+    public static func totalCash(
+        accounts: [AccountDTO],
+        reportingCurrency: CurrencyCode = .usd,
+        conversionSource: any CurrencyConversionSource = NoConversionSource()
+    ) -> CurrencyAggregation {
+        CurrencyAggregation.aggregate(
+            accounts
+                .filter { $0.type == .depository }
+                .map { (amount: $0.balances.effectiveBalance, currency: $0.balances.currency) },
+            reportingCurrency: reportingCurrency,
+            conversionSource: conversionSource
+        )
+    }
+
+    public static func totalAssets(
+        accounts: [AccountDTO],
+        reportingCurrency: CurrencyCode = .usd,
+        conversionSource: any CurrencyConversionSource = NoConversionSource()
+    ) -> CurrencyAggregation {
+        CurrencyAggregation.aggregate(
+            accounts
+                .filter { !AccountPresentation.isDebt($0) }
+                .map { (amount: max($0.balances.effectiveBalance, 0), currency: $0.balances.currency) },
+            reportingCurrency: reportingCurrency,
+            conversionSource: conversionSource
+        )
+    }
+
+    public static func totalDebt(
+        accounts: [AccountDTO],
+        reportingCurrency: CurrencyCode = .usd,
+        conversionSource: any CurrencyConversionSource = NoConversionSource()
+    ) -> CurrencyAggregation {
+        CurrencyAggregation.aggregate(
+            accounts
+                .filter(AccountPresentation.isDebt)
+                .map { (amount: AccountPresentation.displayBalance(for: $0), currency: $0.balances.currency) },
+            reportingCurrency: reportingCurrency,
+            conversionSource: conversionSource
+        )
+    }
+
+    public static func displayText(
+        from aggregation: CurrencyAggregation,
+        format: CurrencyFormat = .full,
+        privacyMaskEnabled: Bool = false
+    ) -> String {
+        headline(
+            from: aggregation,
+            format: format,
+            privacyMaskEnabled: privacyMaskEnabled
+        ).formattedTotal ?? "By currency"
+    }
+
     /// Formats per-currency subtotals as display rows. `privacyMaskEnabled`
     /// suppresses the figure but keeps the currency identity visible (you can see
     /// you have EUR without seeing how much).

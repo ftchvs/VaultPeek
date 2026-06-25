@@ -82,6 +82,31 @@ struct FinanceIntentQueriesTests {
         #expect(value == 8_400)
     }
 
+    @Test("Mixed-currency balances do not return arbitrary numeric value intents")
+    func mixedCurrencyBalancesReturnMessageInsteadOfScalarValues() {
+        let mixed = snapshot(
+            totalBalance: 8_400,
+            currencySubtotals: [
+                FinanceSnapshot.CurrencySubtotal(currency: .usd, amount: 5_000),
+                FinanceSnapshot.CurrencySubtotal(currency: CurrencyCode("EUR"), amount: 2_000),
+            ]
+        )
+
+        for resolution in [
+            FinanceIntentQueries.safeToSpend(from: mixed),
+            FinanceIntentQueries.totalBalance(from: mixed),
+            FinanceIntentQueries.showSpending(from: mixed),
+        ] {
+            guard case let .message(text) = resolution else {
+                Issue.record("Expected .message for mixed currencies, got \(resolution)")
+                continue
+            }
+            #expect(text.contains("multiple currencies"))
+            #expect(text.contains("USD"))
+            #expect(text.contains("EUR"))
+        }
+    }
+
     @Test("Credit utilization returns the percent value")
     func creditUtilizationReturnsValue() {
         guard case let .value(value, dialog) = FinanceIntentQueries.creditUtilization(from: snapshot(creditUtilization: 42)) else {
@@ -205,7 +230,8 @@ struct FinanceIntentQueriesTests {
         creditUtilization: Double? = 20,
         isMasked: Bool = false,
         periodSpending: Double = 0,
-        categories: [FinanceSnapshot.CategorySpend] = []
+        categories: [FinanceSnapshot.CategorySpend] = [],
+        currencySubtotals: [FinanceSnapshot.CurrencySubtotal] = []
     ) -> FinanceSnapshot {
         FinanceSnapshot(
             safeToSpend: safeToSpend,
@@ -213,6 +239,7 @@ struct FinanceIntentQueriesTests {
             accountBalances: [
                 FinanceSnapshot.AccountBalance(displayName: "Checking", balance: totalBalance),
             ],
+            currencySubtotals: currencySubtotals,
             nextRecurringBills: bills,
             creditUtilization: creditUtilization,
             generatedAt: Date(timeIntervalSince1970: 1_780_000_000),

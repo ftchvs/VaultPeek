@@ -246,31 +246,34 @@ struct AccountsDestinationView: View {
     private var heroMetrics: [HeroMetric] {
         let masked = appState.shouldMaskFinancialValues
         let summary = wealthSummary
+        let netWorthAggregation = MultiCurrencyBalancePresentation.netWorth(accounts: appState.accounts)
+        let assetsAggregation = MultiCurrencyBalancePresentation.totalAssets(accounts: appState.accounts)
+        let debtAggregation = MultiCurrencyBalancePresentation.totalDebt(accounts: appState.accounts)
 
         let netWorth = HeroMetric(
             id: "netWorth",
             label: "Net worth",
-            value: PrivacyMaskPresentation.currency(summary.netWorth, format: .compact, isEnabled: masked),
+            value: metricValue(for: netWorthAggregation, masked: masked),
             systemImage: "chart.line.uptrend.xyaxis",
-            detail: accountCountDetail(summary.accountCount),
+            detail: metricDetail(for: netWorthAggregation, fallback: accountCountDetail(summary.accountCount)),
             accent: SemanticColors.brand
         )
 
         let assets = HeroMetric(
             id: "totalAssets",
             label: "Total assets",
-            value: PrivacyMaskPresentation.currency(summary.totalAssets, format: .compact, isEnabled: masked),
+            value: metricValue(for: assetsAggregation, masked: masked),
             systemImage: "banknote",
-            detail: "Cash and savings on hand",
+            detail: metricDetail(for: assetsAggregation, fallback: "Cash and savings on hand"),
             accent: SemanticColors.positive
         )
 
         let debt = HeroMetric(
             id: "totalDebt",
             label: "Total debt",
-            value: PrivacyMaskPresentation.currency(summary.totalDebt, format: .compact, isEnabled: masked),
+            value: metricValue(for: debtAggregation, masked: masked),
             systemImage: "creditcard",
-            detail: "Credit and loan balances",
+            detail: metricDetail(for: debtAggregation, fallback: "Credit and loan balances"),
             accent: summary.totalDebt > 0 ? SemanticColors.warning : .secondary
         )
 
@@ -279,6 +282,19 @@ struct AccountsDestinationView: View {
 
     private func accountCountDetail(_ count: Int) -> String {
         count == 1 ? "Across 1 account" : "Across \(count) accounts"
+    }
+
+    private func metricValue(for aggregation: CurrencyAggregation, masked: Bool) -> String {
+        MultiCurrencyBalancePresentation.displayText(
+            from: aggregation,
+            format: .compact,
+            privacyMaskEnabled: masked
+        )
+    }
+
+    private func metricDetail(for aggregation: CurrencyAggregation, fallback: String) -> String {
+        let headline = MultiCurrencyBalancePresentation.headline(from: aggregation, format: .compact)
+        return headline.formattedTotal == nil ? headline.disclosure : fallback
     }
 
     // MARK: - Selection (shared NavigationState.selectedAccountID)

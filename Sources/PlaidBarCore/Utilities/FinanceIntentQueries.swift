@@ -27,6 +27,7 @@ public enum FinanceIntentResolution: Sendable, Equatable {
 public enum FinanceIntentQueries {
     static let lockedDialog = "Your finances are locked. Unlock VaultPeek to see this."
     static let unavailableDialog = "VaultPeek hasn't synced yet. Open VaultPeek to get started."
+    static let mixedCurrencyDialog = "VaultPeek has balances in multiple currencies. Open VaultPeek to review the per-currency totals."
 
     /// Guard shared by every query: returns a non-`value` resolution when the
     /// snapshot is missing or masked, otherwise `nil` to proceed.
@@ -43,11 +44,19 @@ public enum FinanceIntentQueries {
         return nil
     }
 
+    private static func mixedCurrencyGate(_ snapshot: FinanceSnapshot) -> FinanceIntentResolution? {
+        guard snapshot.hasMixedCurrencyBalances else { return nil }
+        let subtotals = snapshot.currencySubtotalText
+        let suffix = subtotals.isEmpty ? "" : " Current subtotals: \(subtotals)."
+        return .message(mixedCurrencyDialog + suffix)
+    }
+
     // MARK: - Safe to spend
 
     public static func safeToSpend(from snapshot: FinanceSnapshot?) -> FinanceIntentResolution {
         if let blocked = gate(snapshot) { return blocked }
         guard let snapshot else { return .unavailable(spokenDialog: unavailableDialog) }
+        if let blocked = mixedCurrencyGate(snapshot) { return blocked }
         let amount = snapshot.safeToSpend
         let formatted = Formatters.currency(amount, format: .full, currencyCode: snapshot.isoCurrencyCode)
         let dialog: String = amount < 0
@@ -61,6 +70,7 @@ public enum FinanceIntentQueries {
     public static func totalBalance(from snapshot: FinanceSnapshot?) -> FinanceIntentResolution {
         if let blocked = gate(snapshot) { return blocked }
         guard let snapshot else { return .unavailable(spokenDialog: unavailableDialog) }
+        if let blocked = mixedCurrencyGate(snapshot) { return blocked }
         let amount = snapshot.totalBalance
         let formatted = Formatters.currency(amount, format: .full, currencyCode: snapshot.isoCurrencyCode)
         return .value(amount, spokenDialog: "Your total balance is \(formatted).")
@@ -74,6 +84,7 @@ public enum FinanceIntentQueries {
     public static func nextRecurringBills(from snapshot: FinanceSnapshot?) -> FinanceIntentResolution {
         if let blocked = gate(snapshot) { return blocked }
         guard let snapshot else { return .unavailable(spokenDialog: unavailableDialog) }
+        if let blocked = mixedCurrencyGate(snapshot) { return blocked }
 
         let bills = snapshot.nextRecurringBills
         guard !bills.isEmpty else {
@@ -103,6 +114,7 @@ public enum FinanceIntentQueries {
     public static func showSpending(from snapshot: FinanceSnapshot?) -> FinanceIntentResolution {
         if let blocked = gate(snapshot) { return blocked }
         guard let snapshot else { return .unavailable(spokenDialog: unavailableDialog) }
+        if let blocked = mixedCurrencyGate(snapshot) { return blocked }
 
         let total = snapshot.periodSpending
         let formattedTotal = Formatters.currency(total, format: .full, currencyCode: snapshot.isoCurrencyCode)
