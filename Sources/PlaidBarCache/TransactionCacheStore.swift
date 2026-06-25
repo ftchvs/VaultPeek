@@ -1,6 +1,20 @@
 import Foundation
 import PlaidBarCore
 
+/// Outcome of a clear-gated `replaceAll`: either the rows were committed (carrying
+/// the upsert plan so callers/tests can assert the blast radius) or the persist was
+/// dropped because a `clearAll()` won the two-hop race (AND-633).
+public enum ClearGatedWriteResult: Sendable {
+    case committed(CachedTransactionUpsert.Plan)
+    case dropped
+
+    /// `true` when the write was dropped because a clear won.
+    public var wasDropped: Bool {
+        if case .dropped = self { return true }
+        return false
+    }
+}
+
 /// Actor-isolated store for the **disposable per-transaction** cache that feeds
 /// the virtualized large-history list (AND-567).
 ///
@@ -29,6 +43,15 @@ public actor TransactionCacheStore {
     /// `clearAll`). The cached ordering (``orderCache``) is keyed off this so a
     /// write invalidates the memoized sort without needing to clear it eagerly.
     private var dataGeneration: UInt64 = 0
+
+    /// Monotonic **clear** generation, bumped only by `clearAll()`. Distinct from
+    /// `dataGeneration` (which bumps on every write): a clear-gated persist must be
+    /// dropped only when a *clear* — not an ordinary upsert — has landed since it
+    /// captured its token. Lets a scheduled `replaceAll` re-validate, **on this
+    /// actor**, that no clear raced in after it captured a token, closing the
+    /// two-hop persist-after-clear window the main-actor `ReadModelCacheClearGate`
+    /// epoch alone cannot (AND-633).
+    private var clearGeneration: UInt64 = 0
 
     /// Memoized newest-first row ordering for one `cacheKey`, plus the generation
     /// it was built for. Reused across consecutive reads of the same key within one
@@ -158,13 +181,46 @@ public actor TransactionCacheStore {
 
     /// Removes every cached transaction (any environment). Used on local-data reset
     /// and before reseeding a different environment.
+    ///
+    /// Bumps `clearGeneration` so any persist that captured an earlier generation
+    /// and reaches `replaceAll(cacheKey:transactions:ifNotClearedSince:)` afterwards
+    /// on this actor drops itself rather than repopulating wiped rows (AND-633).
     public func clearAll() throws {
+        clearGeneration &+= 1
         // The store becomes empty regardless of any on-disk content, so a clear
         // unconditionally wins and rewrites a fresh empty snapshot without first
         // decoding a (possibly incompatible) file.
         rowsByUniqueKey = [:]
         try persist()
         invalidateOrderCache()
+    }
+
+    /// The current clear generation. A scheduled persist captures this on the store
+    /// actor when it is about to commit, then passes it to
+    /// `replaceAll(cacheKey:transactions:ifNotClearedSince:)` so the persist drops
+    /// itself if a `clearAll()` raced in between (AND-633).
+    public func currentClearGeneration() -> UInt64 {
+        clearGeneration
+    }
+
+    /// Atomic clear-gated `replaceAll`. Re-checks the clear generation **as the
+    /// first action on this actor** and, if a `clearAll()` has run since
+    /// `capturedGeneration` was taken, drops the persist entirely (returning a
+    /// dropped result) rather than repopulating removed-institution transactions.
+    /// Because the generation check and the row replace are one actor-isolated hop,
+    /// no `clearAll()` can interleave between them — closing the two-hop window the
+    /// main-actor epoch gate leaves open (AND-633).
+    ///
+    /// Returns `.committed(plan)` when the rows were replaced, `.dropped` when the
+    /// persist was dropped because a clear won.
+    @discardableResult
+    public func replaceAll(
+        cacheKey: String,
+        transactions: [TransactionDTO],
+        ifNotClearedSince capturedGeneration: UInt64
+    ) throws -> ClearGatedWriteResult {
+        guard capturedGeneration == clearGeneration else { return .dropped }
+        return .committed(try replaceAll(cacheKey: cacheKey, transactions: transactions))
     }
 
     // MARK: - Reads

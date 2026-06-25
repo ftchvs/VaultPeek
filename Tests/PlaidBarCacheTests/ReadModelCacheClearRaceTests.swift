@@ -79,6 +79,85 @@ struct ReadModelCacheClearRaceTests {
         #expect(try await store.load(cacheKey: key) == nil)
     }
 
+    // MARK: - Store-actor clear generation (AND-633: two-hop window)
+
+    /// The two-hop residual the store-actor generation closes: with the *old*
+    /// pattern, a persist that passed the main-actor epoch recheck could still
+    /// commit after a clear that landed before its `save` reached the store actor.
+    /// The atomic `save(_:ifNotClearedSince:)` re-validates the generation on the
+    /// store actor, so a clear that bumped it since capture drops the write.
+    @Test("save dropped when clear bumped the store generation after capture (AND-633)")
+    func saveDroppedWhenClearRacedAfterGenerationCapture() async throws {
+        let store = try ReadModelCacheStore(inMemory: true)
+        let key = "sandbox|/x"
+
+        // Prior non-empty refresh seeded a row, then the user removed their last
+        // institution. The persist captured the generation BEFORE the clear...
+        try await store.save(nonEmptyModel(cacheKey: key))
+        let capturedGeneration = await store.currentClearGeneration()
+
+        // ...the clear lands in the two-hop window (bumping the store generation)...
+        try await store.clearAll()
+
+        // ...and the stale persist finally reaches the store actor. The atomic
+        // re-check must observe the bumped generation and drop the write.
+        let committed = try await store.save(
+            nonEmptyModel(cacheKey: key),
+            ifNotClearedSince: capturedGeneration
+        )
+
+        #expect(committed == false)
+        #expect(try await store.load(cacheKey: key) == nil)
+    }
+
+    /// The happy path: when no clear intervenes between capturing the generation and
+    /// committing, the clear-gated save behaves like a normal save.
+    @Test("clear-gated save commits when no clear intervened (AND-633)")
+    func clearGatedSaveCommitsWhenNoClearIntervened() async throws {
+        let store = try ReadModelCacheStore(inMemory: true)
+        let key = "sandbox|/x"
+
+        let capturedGeneration = await store.currentClearGeneration()
+        let committed = try await store.save(
+            nonEmptyModel(cacheKey: key),
+            ifNotClearedSince: capturedGeneration
+        )
+
+        #expect(committed == true)
+        #expect(try await store.load(cacheKey: key) != nil)
+    }
+
+    /// Concurrency stress: fan out clear-gated saves and clears that all capture the
+    /// SAME starting generation, with a terminal clear. Whatever the interleaving,
+    /// the atomic generation check guarantees the terminal clear is never overwritten
+    /// — the cold-start load is always a clean miss.
+    @Test("interleaved clear-gated saves never survive a terminal clear (AND-633)")
+    func interleavedClearGatedSavesNeverSurviveTerminalClear() async throws {
+        let store = try ReadModelCacheStore(inMemory: true)
+        let key = "sandbox|/x"
+        let model = nonEmptyModel(cacheKey: key)
+
+        await withThrowingTaskGroup(of: Void.self) { group in
+            for _ in 0..<16 {
+                group.addTask {
+                    let captured = await store.currentClearGeneration()
+                    _ = try await store.save(model, ifNotClearedSince: captured)
+                }
+            }
+            while let _ = try? await group.next() {}
+        }
+
+        // Terminal clear bumps the generation; any concurrently captured save that
+        // reaches the actor afterwards re-checks and drops itself.
+        try await store.clearAll()
+        // A late stale persist that captured an earlier generation must still drop.
+        let staleGeneration: UInt64 = 0
+        let committed = try await store.save(model, ifNotClearedSince: staleGeneration)
+
+        #expect(committed == false)
+        #expect(try await store.load(cacheKey: key) == nil)
+    }
+
     /// Many interleaved persists followed by a terminal clear must always resolve
     /// to an empty cache — the clear is the last serialized store operation, so
     /// no in-flight write can survive it.
