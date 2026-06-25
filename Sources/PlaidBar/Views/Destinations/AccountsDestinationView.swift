@@ -127,7 +127,7 @@ struct AccountsDestinationView: View {
             // Self-heal: if the selected account falls out of the list (removed /
             // disconnected), clear it so the inspector returns to its prompt instead
             // of pointing at a vanished account. Mirrors the popover's reconcile.
-            .onChange(of: accounts.map(\.id)) { _, ids in
+            .onChange(of: filteredAccounts.map(\.id)) { _, ids in
                 navigationModel.reconcileSelection(visibleAccountIDs: ids)
             }
     }
@@ -332,17 +332,30 @@ struct AccountsDestinationView: View {
     /// from `AppState.navigationModel`.
     struct Inspector: View {
         @Environment(AppState.self) private var appState
+        @Environment(\.shellSearchQuery) private var searchQuery
 
         private var navigationModel: NavigationModel { appState.navigationModel }
+
+        private var trimmedQuery: String {
+            searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        private var visibleAccounts: [AccountDTO] {
+            let query = trimmedQuery
+            guard !query.isEmpty else { return appState.accounts }
+            return appState.accounts.filter {
+                AccountPresentation.displayName(for: $0).localizedCaseInsensitiveContains(query)
+            }
+        }
 
         /// The selected account resolved against the live (visible) accounts — `nil`
         /// when nothing is selected or the selection is no longer present, which
         /// content-gates the inspector to its prompt.
         private var selectedAccount: AccountDTO? {
             guard let id = navigationModel.resolvedSelectedID(
-                visibleAccountIDs: appState.accounts.map(\.id)
+                visibleAccountIDs: visibleAccounts.map(\.id)
             ) else { return nil }
-            return appState.accounts.first { $0.id == id }
+            return visibleAccounts.first { $0.id == id }
         }
 
         var body: some View {

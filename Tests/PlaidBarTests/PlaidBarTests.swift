@@ -1075,7 +1075,9 @@ struct PlaidBarTests {
         // The shell routes its single field to both Dashboard and Accounts and
         // injects the neutral, unified env key (not the old Dashboard-specific one).
         #expect(shell.contains("case .dashboard, .accounts: true"))
+        #expect(shell.contains("let isSearchEnabled = destinationSupportsSearch(destination) && !appState.isContentLocked"))
         #expect(shell.contains(".environment(\\.shellSearchQuery,"))
+        #expect(shell.contains("searchText = \"\""))
         #expect(!shell.contains("dashboardSearchQuery"))
 
         // Accounts reads the shared query and filters by display name (never a masked
@@ -1083,6 +1085,8 @@ struct PlaidBarTests {
         #expect(accounts.contains("@Environment(\\.shellSearchQuery)"))
         #expect(accounts.contains("localizedCaseInsensitiveContains(query)"))
         #expect(accounts.contains("ContentUnavailableView.search(text:"))
+        #expect(accounts.contains(".onChange(of: filteredAccounts.map(\\.id))"))
+        #expect(accounts.contains("visibleAccounts.map(\\.id)"))
     }
 }
 

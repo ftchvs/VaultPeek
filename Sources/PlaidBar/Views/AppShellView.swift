@@ -104,6 +104,7 @@ struct AppShellView: View {
         )
 
         let destination = appState.navigationModel.destination
+        let isSearchEnabled = destinationSupportsSearch(destination) && !appState.isContentLocked
 
         // Column policy per destination (driven by the pure
         // `RouteDestination.prefersThreeColumnLayout` in PlaidBarCore). 3-column
@@ -137,7 +138,7 @@ struct AppShellView: View {
                 // propagation pass migrates those to the shell field one at a time.
                 .modifier(
                     ShellSearchable(
-                        isEnabled: destinationSupportsSearch(destination),
+                        isEnabled: isSearchEnabled,
                         text: $searchText,
                         prompt: searchPrompt(for: destination)
                     )
@@ -155,7 +156,7 @@ struct AppShellView: View {
         // filter their own rows (the shell owns the field, each canvas owns the
         // filtering). Cleared for non-adopting destinations so a stale query never
         // leaks in.
-        .environment(\.shellSearchQuery, destinationSupportsSearch(destination) ? searchText : "")
+        .environment(\.shellSearchQuery, isSearchEnabled ? searchText : "")
         // Reroute the legacy "open detached window" affordances into in-window
         // navigation (AND-616). The Dashboard canvas embeds
         // `CategoryDashboardCard` (its "Open dashboard" button) and the Review
@@ -239,8 +240,13 @@ struct AppShellView: View {
         )
         .onChange(of: appState.isContentLocked) { _, isLocked in
             // A locked window must not keep the ⌘K palette mounted underneath the
-            // gate; dismiss it so unlocking returns to the bare workspace.
-            if isLocked { paletteModel.dismiss() }
+            // gate; dismiss it so unlocking returns to the bare workspace. The
+            // toolbar search field lives in chrome outside the lock overlay, so
+            // clear it too instead of preserving account names under the gate.
+            if isLocked {
+                paletteModel.dismiss()
+                searchText = ""
+            }
         }
     }
 
