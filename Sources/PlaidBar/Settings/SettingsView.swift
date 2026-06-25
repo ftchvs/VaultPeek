@@ -76,6 +76,7 @@ struct AppearanceSettingsView: View {
     @AppStorage(AppContrastPreference.storageKey) private var contrastRaw = AppContrastPreference.defaultValue.rawValue
     @AppStorage(DecorativeEffectsPreference.storageKey) private var decorativeRaw = DecorativeEffectsPreference.defaultValue.rawValue
     @AppStorage(AppDensityPreference.storageKey) private var densityRaw = AppDensityPreference.defaultValue.rawValue
+    @AppStorage(AppAccentColor.storageKey) private var accentRaw = AppAccentColor.defaultValue.rawValue
     @AppStorage(TextSizePreference.storageKey) private var textSizeRaw = TextSizePreference.defaultValue.rawValue
     @AppStorage(HapticFeedbackPreference.storageKey) private var hapticRaw = HapticFeedbackPreference.defaultValue.rawValue
     @Environment(\.colorSchemeContrast) private var systemContrast
@@ -88,6 +89,7 @@ struct AppearanceSettingsView: View {
     private var contrastPreference: AppContrastPreference { AppContrastPreference(rawValue: contrastRaw) ?? .followSystem }
     private var decorativePreference: DecorativeEffectsPreference { DecorativeEffectsPreference(rawValue: decorativeRaw) ?? .followSystem }
     private var density: AppDensityPreference { AppDensityPreference(rawValue: densityRaw) ?? .comfortable }
+    private var accent: AppAccentColor { AppAccentColor(rawValue: accentRaw) ?? .system }
     private var textSize: TextSizePreference { TextSizePreference(rawValue: textSizeRaw) ?? .default }
     private var hapticPreference: HapticFeedbackPreference { HapticFeedbackPreference(rawValue: hapticRaw) ?? .on }
 
@@ -208,7 +210,31 @@ struct AppearanceSettingsView: View {
                 }
                 .accessibilityValue(density.title)
 
-                Text("Light or Dark force VaultPeek regardless of the system setting. macOS Reduce Motion, Reduce Transparency, and Increase Contrast always take priority, and the --appearance launch flag overrides Appearance here. Density currently adjusts the preview and Appearance chrome; broader per-surface spacing is rolling out separately.")
+                // Accent color (AND-647): a decorative/brand tint only. The picker
+                // labels every option by name (not color alone), and the row also
+                // shows the resolved swatch with a name caption so the choice is
+                // legible to color-blind users and VoiceOver. "System" follows the
+                // macOS accent and applies no override.
+                Picker("Accent Color", selection: Binding(
+                    get: { accent },
+                    set: { accentRaw = $0.rawValue }
+                )) {
+                    ForEach(AppAccentColor.allCases) { option in
+                        Label {
+                            Text(option.title)
+                        } icon: {
+                            AccentSwatchDot(accent: option)
+                        }
+                        .tag(option)
+                    }
+                }
+                .accessibilityValue(accent.title)
+                .accessibilityHint("Sets the decorative accent tint for VaultPeek. Does not change any financial or status colors.")
+
+                AccentSwatchPreviewRow(accent: accent)
+                    .padding(.vertical, Spacing.xxs)
+
+                Text("Light or Dark force VaultPeek regardless of the system setting. macOS Reduce Motion, Reduce Transparency, and Increase Contrast always take priority, and the --appearance launch flag overrides Appearance here. Density currently adjusts the preview and Appearance chrome; broader per-surface spacing is rolling out separately. Accent is a decorative brand tint only — it never changes the colors that show over/under budget, gains and losses, or sync status.")
                     .detailText()
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -369,6 +395,81 @@ private struct AppearancePreviewCard: View {
     }
 }
 
+/// A small color swatch for an accent option, used as the leading icon in the
+/// accent `Picker` rows (AND-647). "System" shows a hatched/neutral dot so it
+/// reads distinctly from the colored options even in grayscale. The swatch is
+/// purely decorative — the picker row always carries the accent's name too, so
+/// meaning never depends on the color (ACCESSIBILITY.md).
+private struct AccentSwatchDot: View {
+    let accent: AppAccentColor
+
+    var body: some View {
+        Group {
+            if let color = SemanticColors.resolvedAccent(for: accent) {
+                Circle().fill(color)
+            } else {
+                // "System": a neutral ring (no fill) so it never masquerades as a
+                // concrete colored accent and stays distinguishable in grayscale.
+                Circle()
+                    .strokeBorder(Color.secondary, lineWidth: 1.5)
+                    .background(Circle().fill(Color.secondary.opacity(0.12)))
+            }
+        }
+        .frame(width: 12, height: 12)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Privacy-safe live preview of the chosen accent (AND-647). Shows the resolved
+/// swatch with its name, plus a sample "active control" chip and selection wash so
+/// the user sees how the decorative tint reads — with synthetic labels only, never
+/// real account data. The accent is brand decoration: this preview deliberately
+/// shows no finance value colored by it.
+private struct AccentSwatchPreviewRow: View {
+    let accent: AppAccentColor
+
+    private var resolvedColor: Color {
+        // Fall back to the live system accent when "System" is selected, so the
+        // preview reflects what the user will actually see.
+        SemanticColors.resolvedAccent(for: accent) ?? Color.accentColor
+    }
+
+    var body: some View {
+        HStack(spacing: Spacing.sm) {
+            RoundedRectangle(cornerRadius: Radius.control)
+                .fill(resolvedColor)
+                .frame(width: 28, height: 20)
+                .overlay {
+                    RoundedRectangle(cornerRadius: Radius.control)
+                        .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                }
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(accent.title)
+                    .font(.callout.weight(.medium))
+                Text(accent == .system ? "Follows the macOS accent" : "Decorative tint only")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: Spacing.sm)
+
+            // A sample "active" control to show the tint in context. Uses a
+            // checkmark glyph so the accented state reads without relying on the
+            // color alone.
+            Label("Active", systemImage: "checkmark.circle.fill")
+                .font(.caption.weight(.medium))
+                .labelStyle(.titleAndIcon)
+                .foregroundStyle(resolvedColor)
+                .padding(.horizontal, Spacing.sm)
+                .padding(.vertical, Spacing.chipVertical)
+                .background(resolvedColor.opacity(0.14), in: Capsule())
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Accent preview: \(accent.title). Decorative tint only; does not change any financial or status colors.")
+    }
+}
+
 /// Privacy-safe live preview of the in-app text size (AND-570). Synthetic labels
 /// scaled by the caller's `.dynamicTypeSize` — never real account data — so the
 /// user sees the effect of the Text Size picker the instant it changes. Uses a
@@ -486,6 +587,11 @@ struct GeneralSettingsView: View {
 
     var body: some View {
         @Bindable var state = appState
+        // The detached-dashboard intent moved onto the per-window navigation model
+        // (AND-600); bind directly off it since `appState.navigationModel` is a
+        // `let` (a `$state.navigationModel.…` chain can't form a writable binding
+        // through a `let`).
+        @Bindable var nav = appState.navigationModel
 
         Form {
             Section {
@@ -576,11 +682,11 @@ struct GeneralSettingsView: View {
 
                 // AND-384: pop the dashboard out of the menu bar into a
                 // floating desktop window the user can drag anywhere and that
-                // survives app-switches. Bound to AppState (single source of
-                // truth, persisted to the dashboard.detached key), so toggling
+                // survives app-switches. Bound to the per-window navigation model
+                // (AND-600; persisted to the dashboard.detached key), so toggling
                 // here opens/closes the floating window and stays in sync with
                 // the in-dashboard pin/dock control.
-                Toggle("Keep dashboard in a floating window", isOn: $state.isDashboardDetached)
+                Toggle("Keep dashboard in a floating window", isOn: $nav.isDashboardDetached)
                 Text("Detaches the dashboard from the menu bar into a movable desktop window that stays open when you switch apps. Click the menu bar item to bring it back to the front; dock it again from the window or this toggle.")
                     .detailText()
                     .fixedSize(horizontal: false, vertical: true)
@@ -590,7 +696,7 @@ struct GeneralSettingsView: View {
                 // original "monitor at a glance while you work" behavior — as an
                 // explicit opt-in rather than the default.
                 Toggle("Keep the floating window on top", isOn: $keepDashboardOnTop)
-                    .disabled(!state.isDashboardDetached)
+                    .disabled(!state.navigationModel.isDashboardDetached)
                 Text("Floats the window above other windows on every Space without taking focus from the app you're working in. Off (default): it behaves like a normal window — one Space, normal order, and visible in Mission Control and the Dock.")
                     .detailText()
                     .fixedSize(horizontal: false, vertical: true)
@@ -731,7 +837,7 @@ struct GeneralSettingsView: View {
 
             Section("Export & Backup") {
                 VStack(alignment: .leading, spacing: Spacing.sm) {
-                    Text("Export a portable copy of your accounts, transactions, and balance history. VaultPeek never uploads these files — they are written only to the folder you choose. Pick a local folder to keep them on this Mac; a synced location (iCloud Drive, Dropbox, a network share) will copy them off-device.")
+                    Text("Export a portable copy of your accounts, transactions, budgets, and balance history. VaultPeek never uploads these files — they are written only to the folder you choose. Pick a local folder to keep them on this Mac; a synced location (iCloud Drive, Dropbox, a network share) will copy them off-device.")
                         .detailText()
                         .fixedSize(horizontal: false, vertical: true)
 
@@ -750,7 +856,7 @@ struct GeneralSettingsView: View {
                     if appState.shouldMaskFinancialValues {
                         Label(
                             appState.isContentLocked
-                                ? "Export is disabled while App Lock is locked, so real balances, accounts, and transactions are never written to disk. Unlock VaultPeek to export."
+                                ? "Export is disabled while App Lock is locked, so real balances, accounts, transactions, and budgets are never written to disk. Unlock VaultPeek to export."
                                 : "Export is disabled while Privacy Mask is on, so real balances are never written to disk. Turn off Privacy Mask to export.",
                             systemImage: appState.isContentLocked ? "lock" : "eye.slash"
                         )
@@ -815,7 +921,7 @@ struct GeneralSettingsView: View {
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
-    // MARK: - Export & Backup (AND-492)
+    // MARK: - Export & Backup (AND-492, budgets added AND-645)
 
     private var isExportDisabled: Bool {
         // Gate on the effective mask state, not just the manual Privacy Mask
@@ -823,8 +929,11 @@ struct GeneralSettingsView: View {
         // active. Settings is a separate scene reachable from the status-item
         // menu while the dashboard is locked, so without this a locked session
         // (Privacy Mask off) could still write the full accounts/transactions/
-        // balances export to disk, bypassing App Lock (Codex P1).
-        appState.shouldMaskFinancialValues
+        // balances/budgets export to disk, bypassing App Lock (Codex P1). The
+        // rule itself lives in `DataExportBuilder` so it is unit-testable.
+        !DataExportBuilder.isExportAllowed(
+            shouldMaskFinancialValues: appState.shouldMaskFinancialValues
+        )
     }
 
     /// Documented backup file path, e.g. `~/.vaultpeek/plaidbar-sandbox.sqlite`.
@@ -855,6 +964,7 @@ struct GeneralSettingsView: View {
         let documents: [(name: String, contents: String)] = [
             ("accounts.csv", DataExportBuilder.accountsCSV(appState.accounts)),
             ("transactions.csv", DataExportBuilder.transactionsCSV(appState.transactions)),
+            ("budgets.csv", DataExportBuilder.budgetsCSV(appState.categoryBudgets)),
             ("balance-history.csv", DataExportBuilder.balanceHistoryCSV(appState.balanceHistory)),
         ]
         // Surface write failures (unwritable/unavailable folder, full disk)
@@ -885,6 +995,7 @@ struct GeneralSettingsView: View {
                 accounts: appState.accounts,
                 transactions: appState.transactions,
                 balanceHistory: appState.balanceHistory,
+                budgets: DataExportBuilder.budgetDTOs(from: appState.categoryBudgets),
                 exportedAt: Date(),
                 environment: appState.serverEnvironment?.rawValue
             )
@@ -1556,6 +1667,15 @@ struct NotificationSettingsView: View {
             }
 
             watchlistsSection(state: state)
+
+            Section("Budget alerts") {
+                Toggle("Category budget warnings", isOn: $state.notifyCategoryBudget)
+                    .disabled(areNotificationControlsDisabled)
+
+                Text("Get a heads-up when a category nears or exceeds its monthly budget. Alerts keep amounts out of the lock screen and respect Privacy Mask.")
+                    .detailText()
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             Section("Connection alerts") {
                 Toggle("Broken connection or stale sync", isOn: $state.notifyBrokenConnection)

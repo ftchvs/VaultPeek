@@ -178,6 +178,8 @@ final class ReviewTableWindowController: NSObject, NSWindowDelegate {
                 // Scale the detached review Table with the same in-app text-size
                 // preference as every other surface (AND-570).
                 .appliesAppTextSize()
+                // Tint with the same accent preference as every other surface (AND-647).
+                .appliesAppAccent()
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         )
     }

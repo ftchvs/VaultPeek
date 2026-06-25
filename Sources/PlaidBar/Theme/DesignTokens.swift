@@ -1,3 +1,4 @@
+import PlaidBarCore
 import SwiftUI
 
 // MARK: - Semantic Colors
@@ -43,11 +44,28 @@ enum SemanticColors {
 
     // MARK: - Brand Identity
 
-    /// Primary app accent — hero icons, step dots, active controls.
-    static let brand = Color(nsColor: .systemBlue)
+    /// Primary app accent — hero icons, step dots, active controls. This is the
+    /// **decorative** brand tint and is deliberately `Color.accentColor`, which
+    /// follows the resolved app accent preference (AND-647): the scene roots set
+    /// `.tint(...)` from `AppAccentColor`, so every surface using `brand` re-tints
+    /// when the user picks a different accent, and "System" inherits the macOS
+    /// accent. It carries no financial/status meaning — those keep their own
+    /// semantic colors plus non-color cues (ACCESSIBILITY.md).
+    static let brand = Color.accentColor
 
-    /// Secondary accent — sandbox mode icon, complementary highlights.
+    /// Secondary accent — sandbox mode icon, complementary highlights. Stays a
+    /// fixed warm hue (independent of the chosen accent) so the sandbox-mode
+    /// indicator does not collide with a warm primary accent.
     static let brandSecondary = Color(nsColor: .systemOrange)
+
+    /// Bridges the SwiftUI-free Core accent choice to a concrete `Color`, or `nil`
+    /// to follow the system accent (no app-level tint override). This 1:1 mapping
+    /// is the only place the Core `AppAccentColor`/`AppAccentSwatch` meets SwiftUI —
+    /// parity with the `ForcedColorScheme → ColorScheme` bridge — so the choice →
+    /// swatch decision stays pure and unit-tested in Core.
+    static func resolvedAccent(for accent: AppAccentColor) -> Color? {
+        accent.swatch.map(Color.init(accentSwatch:))
+    }
 
     // MARK: - Recurring
 
@@ -78,6 +96,15 @@ enum SemanticColors {
 enum AppearanceTextColors {
     static let primary = Color(nsColor: .labelColor)
     static let secondary = Color(nsColor: .secondaryLabelColor)
+}
+
+extension Color {
+    /// Builds a `Color` from a SwiftUI-free Core `AppAccentSwatch` (sRGB). Used by
+    /// `SemanticColors.resolvedAccent(for:)` to bridge the Core accent choice into
+    /// SwiftUI; the swatch components are unit-tested in Core (AND-647).
+    init(accentSwatch swatch: AppAccentSwatch) {
+        self.init(.sRGB, red: swatch.red, green: swatch.green, blue: swatch.blue)
+    }
 }
 
 // MARK: - Spacing (8pt grid)

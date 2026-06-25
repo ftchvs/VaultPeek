@@ -12,7 +12,8 @@ import CoreGraphics
 public enum DetachedDashboardPreferences {
     /// `@AppStorage` key for the user preference that the dashboard should live
     /// in a floating desktop window instead of the menu-bar popover. This is the
-    /// durable intent; `AppState.isDashboardDetached` mirrors it at runtime.
+    /// durable intent; the per-window `NavigationModel.isDashboardDetached`
+    /// (AND-600) mirrors it at runtime.
     public static let detachedStorageKey = "dashboard.detached"
 
     /// `@AppStorage` key for "keep the floating dashboard window on top". When

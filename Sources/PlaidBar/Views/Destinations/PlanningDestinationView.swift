@@ -280,7 +280,8 @@ struct PlanningDestinationView: View {
             RecurringObligationsSection(
                 presentation: presentation,
                 onOpenSubscriptions: nil,
-                privacyMaskEnabled: isMasked
+                privacyMaskEnabled: isMasked,
+                scale: .window
             )
             .loadingRedaction(appState.loadState(for: .recurring))
         }

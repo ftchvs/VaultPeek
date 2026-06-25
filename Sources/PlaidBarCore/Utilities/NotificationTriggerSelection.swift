@@ -13,10 +13,16 @@ public struct NotificationTriggers: Sendable {
     public var itemError: Bool
     /// Gate for watchlist spend nudges (AND-501).
     public var watchlist: Bool
+    /// Gate for per-category budget alerts (AND-642).
+    public var categoryBudgetAlert: Bool
     public var largeTransactionThreshold: Double
     public var lowBalanceThreshold: Double
     public var creditUtilizationThreshold: Double
     public var recurringDueSoonDays: Int
+    /// `under`/`nearing` boundary for category-budget alerts, as a fraction of
+    /// the limit. Defaults to ``CategoryBudgetStatus/nearingThreshold`` so the
+    /// alert band matches the in-app budget UI (AND-642).
+    public var budgetAlertNearThreshold: Double
 
     public init(
         largeTransaction: Bool = true,
@@ -29,10 +35,12 @@ public struct NotificationTriggers: Sendable {
         loginRequired: Bool = true,
         itemError: Bool = true,
         watchlist: Bool = true,
+        categoryBudgetAlert: Bool = true,
         largeTransactionThreshold: Double = 500,
         lowBalanceThreshold: Double = 100,
         creditUtilizationThreshold: Double = 30,
-        recurringDueSoonDays: Int = 3
+        recurringDueSoonDays: Int = 3,
+        budgetAlertNearThreshold: Double = CategoryBudgetStatus.nearingThreshold
     ) {
         self.largeTransaction = largeTransaction
         self.lowBalance = lowBalance
@@ -44,10 +52,12 @@ public struct NotificationTriggers: Sendable {
         self.loginRequired = loginRequired
         self.itemError = itemError
         self.watchlist = watchlist
+        self.categoryBudgetAlert = categoryBudgetAlert
         self.largeTransactionThreshold = largeTransactionThreshold
         self.lowBalanceThreshold = lowBalanceThreshold
         self.creditUtilizationThreshold = creditUtilizationThreshold
         self.recurringDueSoonDays = recurringDueSoonDays
+        self.budgetAlertNearThreshold = budgetAlertNearThreshold
     }
 }
 
@@ -64,6 +74,8 @@ public enum NotificationTriggerKind: String, Codable, CaseIterable, Sendable {
     case recurringChargeDueSoon = "recurring-charge-due-soon"
     case merchantWatch = "merchant-watch"
     case categoryWatch = "category-watch"
+    /// A budgeted category reaching its `nearing`/`over` band this month (AND-642).
+    case categoryBudgetAlert = "category-budget-alert"
 
     public var clearsWhenResolved: Bool {
         switch self {
@@ -72,8 +84,12 @@ public enum NotificationTriggerKind: String, Codable, CaseIterable, Sendable {
             true
         // A crossed watchlist threshold is a one-shot like largeTransaction:
         // the spend already happened, so it should not auto-clear when the
-        // month-to-date sum later changes.
-        case .largeTransaction, .recurringChargeDetected, .merchantWatch, .categoryWatch:
+        // month-to-date sum later changes. A category-budget alert is keyed on
+        // its band, and within a month spend only climbs (under → nearing →
+        // over), so a delivered band-crossing should likewise not auto-resolve —
+        // each higher band carries its own one-shot key.
+        case .largeTransaction, .recurringChargeDetected, .merchantWatch, .categoryWatch,
+             .categoryBudgetAlert:
             false
         }
     }
@@ -132,7 +148,9 @@ public enum NotificationTriggerSelection {
         recurringTransactions: [RecurringTransaction] = [],
         itemStatuses: [ItemStatus] = [],
         watchlistTargets: [WatchlistTarget] = [],
+        budgetPresentation: CategoryBudgetPresentation = .empty,
         isSyncStale: Bool = false,
+        privacyMaskActive: Bool = false,
         now: Date = Date(),
         calendar: Calendar = .current,
         config: NotificationTriggers = NotificationTriggers(),
@@ -230,6 +248,17 @@ public enum NotificationTriggerSelection {
                 calendar: calendar
             ) {
                 append(watchlistDecision(for: match))
+            }
+        }
+
+        if config.categoryBudgetAlert {
+            for alert in CategoryBudgetAlertEvaluator.evaluate(
+                presentation: budgetPresentation,
+                nearThreshold: config.budgetAlertNearThreshold,
+                now: now,
+                calendar: calendar
+            ) {
+                append(categoryBudgetAlertDecision(for: alert))
             }
         }
 
@@ -498,6 +527,46 @@ public enum NotificationTriggerSelection {
         )
     }
 
+    /// Decision for a budgeted category crossing its `nearing`/`over` band
+    /// (AND-642).
+    ///
+    /// De-dup grain: `category + month + band`. Within a month spend climbs
+    /// monotonically (under → nearing → over), so a category fires once when it
+    /// nears its limit and once more if it exceeds — never on every refresh while
+    /// it sits in the same band, and the next month re-arms with a new month key.
+    ///
+    /// ## Privacy
+    /// The body never carries an amount **and never names the category**. A
+    /// delivered notification renders on the lock screen, which the in-app
+    /// Privacy Mask / App Lock cannot guard — so, like every other trigger here
+    /// (the shared invariant asserted in `NotificationTriggerEvaluationTests`,
+    /// which forbids a merchant/category name in any body even when
+    /// `privacyMaskActive == false`), the body stays generic regardless of mask
+    /// state; the exact category and spend live in-app, behind the mask / App
+    /// Lock. An `.over` band raises severity to `.warning`; a `.nearing` band is
+    /// an advisory `.informational` heads-up.
+    private static func categoryBudgetAlertDecision(
+        for alert: CategoryBudgetAlertEvaluator.Alert
+    ) -> NotificationTriggerDecision {
+        let isOver = alert.band == .over
+        // Generic body only — never the category name, never an amount. A
+        // notification renders on the lock screen, so leaking *which* category is
+        // under pressure there would defeat the in-app Privacy Mask / App Lock.
+        let body = isOver
+            ? "A budget category is over its monthly limit. Open VaultPeek for details."
+            : "A budget category is nearing its monthly limit. Open VaultPeek for details."
+        return NotificationTriggerDecision(
+            kind: .categoryBudgetAlert,
+            dedupKey: dedupKey(
+                kind: .categoryBudgetAlert,
+                sourceID: "\(alert.category.rawValue)#\(alert.monthKey)#\(alert.band.rawValue)"
+            ),
+            title: isOver ? "Over budget" : "Budget warning",
+            body: body,
+            severity: isOver ? .warning : .informational
+        )
+    }
+
     /// Whether the given trigger family is enabled in `config`, i.e. whether its
     /// block in `evaluate()` actually ran this pass. Mirrors the per-family
     /// gating above so delivered-key resolution only happens for re-evaluated
@@ -527,6 +596,8 @@ public enum NotificationTriggerSelection {
             config.recurringChargeDueSoon
         case .merchantWatch, .categoryWatch:
             config.watchlist
+        case .categoryBudgetAlert:
+            config.categoryBudgetAlert
         }
     }
 

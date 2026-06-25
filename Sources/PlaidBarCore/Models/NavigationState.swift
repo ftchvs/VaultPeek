@@ -94,6 +94,23 @@ public struct NavigationState: Sendable, Equatable, Codable {
     /// (`Route.from(weeklyReview:)`) still lands triage.
     public var reviewWorkspaceMode: ReviewWorkspaceMode
 
+    // MARK: Surface presentation state (AND-600 — retired single-surface AppState flags)
+
+    /// Whether this window's menu-bar popover surface is presented. Previously the
+    /// single `AppState.isPopoverPresented` flag — a global property of the whole
+    /// app, so it could only describe one surface. Held per-window here so each
+    /// window's presentation is independent. Ephemeral session state, **not**
+    /// persisted (a relaunch never auto-opens the popover).
+    public var isPopoverPresented: Bool
+
+    /// Whether this window's dashboard lives in the detached floating desktop
+    /// window instead of the menu-bar popover (AND-384). Previously the single
+    /// `AppState.isDashboardDetached` flag. Held per-window here so two windows
+    /// hold independent detach intent. This is the durable intent; the
+    /// `NavigationModel` wrapper persists it to `DetachedDashboardPreferences`'
+    /// key so the floating window reopens on the next launch, exactly as before.
+    public var isDashboardDetached: Bool
+
     public init(
         destination: RouteDestination = .dashboard,
         dashboardFilter: DashboardAccountFilterKind = .all,
@@ -106,7 +123,9 @@ public struct NavigationState: Sendable, Equatable, Codable {
         budgetCategorySelection: SpendingCategory? = nil,
         alertSelection: String = "",
         acknowledgedAlertIDs: Set<String> = [],
-        reviewWorkspaceMode: ReviewWorkspaceMode = .triage
+        reviewWorkspaceMode: ReviewWorkspaceMode = .triage,
+        isPopoverPresented: Bool = false,
+        isDashboardDetached: Bool = false
     ) {
         self.destination = destination
         self.dashboardFilter = dashboardFilter
@@ -120,6 +139,8 @@ public struct NavigationState: Sendable, Equatable, Codable {
         self.alertSelection = alertSelection
         self.acknowledgedAlertIDs = acknowledgedAlertIDs
         self.reviewWorkspaceMode = reviewWorkspaceMode
+        self.isPopoverPresented = isPopoverPresented
+        self.isDashboardDetached = isDashboardDetached
     }
 
     // MARK: - Pure transitions
@@ -326,5 +347,26 @@ public struct NavigationState: Sendable, Equatable, Codable {
     /// "Open review table" affordance to land the table before navigating to Review.
     public mutating func setReviewWorkspaceMode(_ mode: ReviewWorkspaceMode) {
         reviewWorkspaceMode = mode
+    }
+
+    // MARK: - Surface presentation transitions (AND-600)
+
+    /// Present or dismiss this window's menu-bar popover surface.
+    public mutating func setPopoverPresented(_ isPresented: Bool) {
+        isPopoverPresented = isPresented
+    }
+
+    /// Mark the dashboard detached into the floating window. Dismisses the popover —
+    /// only one surface is up at a time (the rule the
+    /// `DetachedDashboardCoordinator.detach` path enforced when these flags lived on
+    /// `AppState`).
+    public mutating func detachDashboard() {
+        isDashboardDetached = true
+        isPopoverPresented = false
+    }
+
+    /// Re-dock the dashboard back into the menu-bar popover.
+    public mutating func redockDashboard() {
+        isDashboardDetached = false
     }
 }

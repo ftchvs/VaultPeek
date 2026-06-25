@@ -45,7 +45,8 @@ struct DashboardRecurringCard: View {
             RecurringObligationsSection(
                 presentation: presentation,
                 onOpenSubscriptions: onOpen,
-                privacyMaskEnabled: appState.shouldMaskFinancialValues
+                privacyMaskEnabled: appState.shouldMaskFinancialValues,
+                scale: .window
             )
         }
     }

@@ -98,7 +98,7 @@ struct DashboardOverviewColumn: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     /// The shell's unified `.searchable` query (AND-624). Empty ⇒ no filter, so the
     /// flag-OFF popover (which never injects it) is unchanged.
-    @Environment(\.dashboardSearchQuery) private var searchQuery
+    @Environment(\.shellSearchQuery) private var searchQuery
 
     /// Routed by the destination to the Accounts destination (no local inspector
     /// on a 2-column canvas).
@@ -199,7 +199,7 @@ struct DashboardOverviewColumn: View {
             appState.accounts.contains { $0.id == entry.accountId }
         }) {
             Divider().opacity(0.4)
-            BalanceTimeMachineView()
+            BalanceTimeMachineView(scale: .window)
         }
     }
 

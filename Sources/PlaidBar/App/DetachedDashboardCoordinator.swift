@@ -2,7 +2,8 @@ import AppKit
 import PlaidBarCore
 import SwiftUI
 
-/// Bridges the declarative `AppState.isDashboardDetached` flag and the menu-bar
+/// Bridges the per-window `NavigationModel.isDashboardDetached` intent (AND-600,
+/// migrated off the retired `AppState.isDashboardDetached` flag) and the menu-bar
 /// popover to the imperative `DetachedDashboardWindowController` (AND-384).
 ///
 /// Owned by the app scene as `@State` so it lives for the process lifetime and
@@ -31,8 +32,9 @@ final class DetachedDashboardCoordinator {
     /// dismiss the menu-bar popover so only one surface is up.
     func detach(appState: AppState, forcedColorScheme: ColorScheme?, reduceMotion: Bool) {
         nonPersistedLaunchOverrideActive = false
-        appState.isDashboardDetached = true
-        appState.isPopoverPresented = false
+        // `detachDashboard()` sets the intent AND dismisses the popover in one
+        // pure transition (one surface up at a time), persisting the intent.
+        appState.navigationModel.detachDashboard()
         present(appState: appState, forcedColorScheme: forcedColorScheme, reduceMotion: reduceMotion)
     }
 
@@ -41,15 +43,15 @@ final class DetachedDashboardCoordinator {
     /// from the menu-bar item on the next click.
     func redock(appState: AppState, reduceMotion: Bool) {
         nonPersistedLaunchOverrideActive = false
-        appState.isDashboardDetached = false
+        appState.navigationModel.redockDashboard()
         controller?.hide(reduceMotion: reduceMotion)
     }
 
     /// Reconciles the window with the persisted/observed `isDashboardDetached`
-    /// flag. Call from `.onChange(of: appState.isDashboardDetached)` and once at
-    /// launch to restore a window that was open when the app last quit.
+    /// intent. Call from `.onChange(of: appState.navigationModel.isDashboardDetached)`
+    /// and once at launch to restore a window that was open when the app last quit.
     func sync(appState: AppState, forcedColorScheme: ColorScheme?, reduceMotion: Bool) {
-        if appState.isDashboardDetached {
+        if appState.navigationModel.isDashboardDetached {
             present(appState: appState, forcedColorScheme: forcedColorScheme, reduceMotion: reduceMotion)
         } else {
             // Docking (e.g. the user turning off "Keep dashboard in a floating
@@ -67,7 +69,7 @@ final class DetachedDashboardCoordinator {
     /// raising the window; the caller then keeps `isPopoverPresented` false.
     @discardableResult
     func handleMenuBarActivation(appState: AppState, forcedColorScheme: ColorScheme?, reduceMotion: Bool) -> Bool {
-        guard appState.isDashboardDetached || nonPersistedLaunchOverrideActive else { return false }
+        guard appState.navigationModel.isDashboardDetached || nonPersistedLaunchOverrideActive else { return false }
         present(appState: appState, forcedColorScheme: forcedColorScheme, reduceMotion: reduceMotion)
         controller?.raise()
         return true
@@ -78,7 +80,7 @@ final class DetachedDashboardCoordinator {
     /// `dashboard.detached` preference behind (parity with `--show-popover`).
     func presentForLaunchOverride(appState: AppState, forcedColorScheme: ColorScheme?, reduceMotion: Bool) {
         nonPersistedLaunchOverrideActive = true
-        appState.isPopoverPresented = false
+        appState.navigationModel.isPopoverPresented = false
         present(appState: appState, forcedColorScheme: forcedColorScheme, reduceMotion: reduceMotion)
     }
 

@@ -18,6 +18,11 @@ struct RecurringObligationsSection: View {
     /// When true, recurring amounts and the monthly total are masked while
     /// Privacy Mask or App Lock is active.
     var privacyMaskEnabled: Bool = false
+    /// Which surface is hosting these rows. `.popover` (the default) keeps the
+    /// compact glance scale; window canvases pass `.window` so the rows read at
+    /// desk-distance type (``WindowDataText`` / ``WindowFigureCaption``) instead of
+    /// shrunken popover caption-scale (AND-625).
+    var scale: ComponentScale = .popover
 
     /// Keep the narrow column dense: show the most relevant few, summarize the
     /// rest. Attention-first ordering means flagged items are never hidden
@@ -31,7 +36,7 @@ struct RecurringObligationsSection: View {
 
                 VStack(alignment: .leading, spacing: Spacing.xs) {
                     ForEach(Array(presentation.items.prefix(visibleLimit))) { item in
-                        RecurringObligationRow(item: item, privacyMaskEnabled: privacyMaskEnabled)
+                        RecurringObligationRow(item: item, privacyMaskEnabled: privacyMaskEnabled, scale: scale)
                     }
                 }
 
@@ -50,15 +55,12 @@ struct RecurringObligationsSection: View {
 
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
-            Text("Recurring")
-                .sectionTitle()
+            titleLabel
                 .foregroundStyle(.secondary)
 
             Spacer(minLength: Spacing.sm)
 
-            Text("~\(PrivacyMaskPresentation.currency(presentation.estimatedMonthlyTotal, format: .compact, isEnabled: privacyMaskEnabled))/mo")
-                .microText()
-                .monospacedDigit()
+            monthlyTotalLabel
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .accessibilityHidden(true)
@@ -74,6 +76,32 @@ struct RecurringObligationsSection: View {
                 .help("Open recurring payments")
                 .accessibilityLabel("Open recurring payments")
             }
+        }
+    }
+
+    /// "Recurring" card head — `sectionTitle` (caption, uppercase) in the popover,
+    /// `windowCardTitle` (`title3`) on a window canvas so the head matches the
+    /// window's other section heads (AND-625).
+    @ViewBuilder
+    private var titleLabel: some View {
+        switch scale {
+        case .popover:
+            Text("Recurring").sectionTitle()
+        case .window:
+            Text("Recurring").windowCardTitle()
+        }
+    }
+
+    /// Estimated monthly total — caption-scale in the popover, window tabular
+    /// (``WindowDataText``) on a window canvas so it aligns with the rows' figures.
+    @ViewBuilder
+    private var monthlyTotalLabel: some View {
+        let text = "~\(PrivacyMaskPresentation.currency(presentation.estimatedMonthlyTotal, format: .compact, isEnabled: privacyMaskEnabled))/mo"
+        switch scale {
+        case .popover:
+            Text(text).microText().monospacedDigit()
+        case .window:
+            Text(text).windowDataText()
         }
     }
 
@@ -94,13 +122,13 @@ struct RecurringObligationsSection: View {
 private struct RecurringObligationRow: View {
     let item: RecurringObligationsPresentation.Item
     var privacyMaskEnabled: Bool = false
+    var scale: ComponentScale = .popover
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xxs) {
             HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
                 Label {
-                    Text(item.merchantName)
-                        .font(.subheadline)
+                    merchantNameLabel
                         .lineLimit(1)
                 } icon: {
                     Image(systemName: item.frequency.iconName)
@@ -110,16 +138,13 @@ private struct RecurringObligationRow: View {
 
                 Spacer(minLength: Spacing.sm)
 
-                Text(PrivacyMaskPresentation.currency(item.expectedAmount, format: .compact, isEnabled: privacyMaskEnabled))
-                    .font(.subheadline.weight(.semibold))
-                    .monospacedDigit()
+                amountLabel
                     .foregroundStyle(AppearanceTextColors.primary)
                     .lineLimit(1)
             }
 
             HStack(spacing: Spacing.xs) {
-                Text("\(item.frequency.displayName) · next \(Formatters.displayTransactionDate(item.nextExpectedDate))")
-                    .microText()
+                detailLabel
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
 
@@ -136,6 +161,43 @@ private struct RecurringObligationRow: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel)
+    }
+
+    /// Merchant name — popover `.subheadline`, window `.body` (``WindowBodyText``).
+    @ViewBuilder
+    private var merchantNameLabel: some View {
+        switch scale {
+        case .popover:
+            Text(item.merchantName).font(.subheadline)
+        case .window:
+            Text(item.merchantName).windowBodyText()
+        }
+    }
+
+    /// Expected amount — popover `.subheadline` semibold, window tabular
+    /// (``WindowDataText``) so the figure aligns with the window's other rows.
+    @ViewBuilder
+    private var amountLabel: some View {
+        let text = PrivacyMaskPresentation.currency(item.expectedAmount, format: .compact, isEnabled: privacyMaskEnabled)
+        switch scale {
+        case .popover:
+            Text(text).font(.subheadline.weight(.semibold)).monospacedDigit()
+        case .window:
+            Text(text).windowDataText()
+        }
+    }
+
+    /// Cadence + next-date detail line — popover `microText`, window
+    /// `windowFigureCaption` so the sub-label reads at the window's caption scale.
+    @ViewBuilder
+    private var detailLabel: some View {
+        let text = "\(item.frequency.displayName) · next \(Formatters.displayTransactionDate(item.nextExpectedDate))"
+        switch scale {
+        case .popover:
+            Text(text).microText()
+        case .window:
+            Text(text).windowFigureCaption()
+        }
     }
 
     /// Deterministic flag order so badges don't reshuffle between renders.
