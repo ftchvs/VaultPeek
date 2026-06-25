@@ -165,6 +165,17 @@ final class PagedTransactionSource {
     func resyncHead(_ transactions: [TransactionDTO]) {
         fallbackTransactions = transactions
         guard mode == .paged else { return }
-        feed.mergeHead(from: transactions)
+        feed.mergeHead(from: Self.newestFirstPreservingSameDateOrder(transactions))
+    }
+
+    private static func newestFirstPreservingSameDateOrder(_ transactions: [TransactionDTO]) -> [TransactionDTO] {
+        transactions.enumerated()
+            .sorted { lhs, rhs in
+                if lhs.element.date != rhs.element.date {
+                    return lhs.element.date > rhs.element.date
+                }
+                return lhs.offset < rhs.offset
+            }
+            .map(\.element)
     }
 }
