@@ -78,7 +78,9 @@ struct TransactionRoutes: Sendable {
             pendingCursorUpdatedAts: pendingCursorUpdatedAts
         )
 
-        let data = try JSONEncoder().encode(syncResponse)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(syncResponse)
         return Response(
             status: .ok,
             headers: [.contentType: "application/json"],

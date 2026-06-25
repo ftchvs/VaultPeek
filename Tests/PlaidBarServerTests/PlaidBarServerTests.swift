@@ -1091,12 +1091,26 @@ struct PlaidBarServerTests {
     }
 
     private static func decodeBody<T: Decodable>(_ response: Response) async throws -> T {
+        let data = try await responseData(response)
+        return try JSONDecoder().decode(T.self, from: data)
+    }
+
+    private static func decodeSyncBody(_ response: Response) async throws -> SyncResponse {
+        try decodeSyncData(try await responseData(response))
+    }
+
+    private static func decodeSyncData(_ data: Data) throws -> SyncResponse {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode(SyncResponse.self, from: data)
+    }
+
+    private static func responseData(_ response: Response) async throws -> Data {
         let collector = ResponseBodyCollector()
         let writer = CollectingResponseBodyWriter(collector: collector)
         try await response.body.write(writer)
         var buffer = await collector.collectedBuffer()
-        let data = buffer.readData(length: buffer.readableBytes) ?? Data()
-        return try JSONDecoder().decode(T.self, from: data)
+        return buffer.readData(length: buffer.readableBytes) ?? Data()
     }
 
     private static func responseString(_ response: Response) async throws -> String {
@@ -1790,7 +1804,7 @@ struct PlaidBarServerTests {
                 context: TestRequestContext(source: TestRequestContextSource())
             )
 
-            let sync: SyncResponse = try await Self.decodeBody(response)
+            let sync = try await Self.decodeSyncBody(response)
             #expect(sync.added.map(\.id) == ["tx-a", "tx-c"])
             #expect(sync.added.map(\.itemId) == ["item-a", "item-c"])
             #expect(sync.pendingCursors == ["item-a": "cursor-a", "item-c": "cursor-c"])
@@ -1838,7 +1852,8 @@ struct PlaidBarServerTests {
                 request: Self.makeRequest(path: "/api/transactions/sync"),
                 context: TestRequestContext(source: TestRequestContextSource())
             )
-            let response: SyncResponse = try await Self.decodeBody(httpResponse)
+            let responseData = try await Self.responseData(httpResponse)
+            let response = try Self.decodeSyncData(responseData)
             let calls = await client.recordedSyncCalls()
 
             #expect(calls.map(\.accessToken) == [accessToken, accessToken])
@@ -1846,6 +1861,11 @@ struct PlaidBarServerTests {
             #expect(response.added.map(\.id) == ["tx-page-1", "tx-page-2"])
             #expect(response.hasMore == false)
             #expect(response.pendingCursors == [itemId: "cursor-2"])
+            let payload = try #require(try JSONSerialization.jsonObject(
+                with: responseData
+            ) as? [String: Any])
+            let cursorUpdatedAts = try #require(payload["pendingCursorUpdatedAts"] as? [String: String])
+            #expect(cursorUpdatedAts[itemId] != nil)
         }
     }
 
@@ -1894,7 +1914,7 @@ struct PlaidBarServerTests {
                 request: Self.makeRequest(path: "/api/transactions/sync"),
                 context: TestRequestContext(source: TestRequestContextSource())
             )
-            let response: SyncResponse = try await Self.decodeBody(httpResponse)
+            let response = try await Self.decodeSyncBody(httpResponse)
             let calls = await client.recordedSyncCalls()
 
             #expect(calls.map(\.cursor) == ["persisted-cursor", "stale-cursor", "persisted-cursor", "fresh-cursor-1"])
@@ -1937,7 +1957,7 @@ struct PlaidBarServerTests {
                 request: Self.makeRequest(path: "/api/transactions/sync"),
                 context: TestRequestContext(source: TestRequestContextSource())
             )
-            let response: SyncResponse = try await Self.decodeBody(httpResponse)
+            let response = try await Self.decodeSyncBody(httpResponse)
 
             #expect(response.added.map(\.id) == ["ok-page"])
             #expect(response.pendingCursors == ["a-item-ok": "ok-cursor"])
@@ -2043,8 +2063,8 @@ struct PlaidBarServerTests {
                 context: TestRequestContext(source: TestRequestContextSource())
             )
 
-            let firstSync: SyncResponse = try await Self.decodeBody(try await first)
-            let secondSync: SyncResponse = try await Self.decodeBody(try await second)
+            let firstSync = try await Self.decodeSyncBody(try await first)
+            let secondSync = try await Self.decodeSyncBody(try await second)
 
             // Both callers observe the same coalesced result.
             #expect(firstSync.added.map(\.id) == ["tx-a"])
