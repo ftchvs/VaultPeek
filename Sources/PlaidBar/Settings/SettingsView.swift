@@ -837,7 +837,7 @@ struct GeneralSettingsView: View {
 
             Section("Export & Backup") {
                 VStack(alignment: .leading, spacing: Spacing.sm) {
-                    Text("Export a portable copy of your accounts, transactions, and balance history. VaultPeek never uploads these files — they are written only to the folder you choose. Pick a local folder to keep them on this Mac; a synced location (iCloud Drive, Dropbox, a network share) will copy them off-device.")
+                    Text("Export a portable copy of your accounts, transactions, budgets, and balance history. VaultPeek never uploads these files — they are written only to the folder you choose. Pick a local folder to keep them on this Mac; a synced location (iCloud Drive, Dropbox, a network share) will copy them off-device.")
                         .detailText()
                         .fixedSize(horizontal: false, vertical: true)
 
@@ -856,7 +856,7 @@ struct GeneralSettingsView: View {
                     if appState.shouldMaskFinancialValues {
                         Label(
                             appState.isContentLocked
-                                ? "Export is disabled while App Lock is locked, so real balances, accounts, and transactions are never written to disk. Unlock VaultPeek to export."
+                                ? "Export is disabled while App Lock is locked, so real balances, accounts, transactions, and budgets are never written to disk. Unlock VaultPeek to export."
                                 : "Export is disabled while Privacy Mask is on, so real balances are never written to disk. Turn off Privacy Mask to export.",
                             systemImage: appState.isContentLocked ? "lock" : "eye.slash"
                         )
@@ -921,7 +921,7 @@ struct GeneralSettingsView: View {
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
-    // MARK: - Export & Backup (AND-492)
+    // MARK: - Export & Backup (AND-492, budgets added AND-645)
 
     private var isExportDisabled: Bool {
         // Gate on the effective mask state, not just the manual Privacy Mask
@@ -929,8 +929,11 @@ struct GeneralSettingsView: View {
         // active. Settings is a separate scene reachable from the status-item
         // menu while the dashboard is locked, so without this a locked session
         // (Privacy Mask off) could still write the full accounts/transactions/
-        // balances export to disk, bypassing App Lock (Codex P1).
-        appState.shouldMaskFinancialValues
+        // balances/budgets export to disk, bypassing App Lock (Codex P1). The
+        // rule itself lives in `DataExportBuilder` so it is unit-testable.
+        !DataExportBuilder.isExportAllowed(
+            shouldMaskFinancialValues: appState.shouldMaskFinancialValues
+        )
     }
 
     /// Documented backup file path, e.g. `~/.vaultpeek/plaidbar-sandbox.sqlite`.
@@ -961,6 +964,7 @@ struct GeneralSettingsView: View {
         let documents: [(name: String, contents: String)] = [
             ("accounts.csv", DataExportBuilder.accountsCSV(appState.accounts)),
             ("transactions.csv", DataExportBuilder.transactionsCSV(appState.transactions)),
+            ("budgets.csv", DataExportBuilder.budgetsCSV(appState.categoryBudgets)),
             ("balance-history.csv", DataExportBuilder.balanceHistoryCSV(appState.balanceHistory)),
         ]
         // Surface write failures (unwritable/unavailable folder, full disk)
@@ -991,6 +995,7 @@ struct GeneralSettingsView: View {
                 accounts: appState.accounts,
                 transactions: appState.transactions,
                 balanceHistory: appState.balanceHistory,
+                budgets: DataExportBuilder.budgetDTOs(from: appState.categoryBudgets),
                 exportedAt: Date(),
                 environment: appState.serverEnvironment?.rawValue
             )
