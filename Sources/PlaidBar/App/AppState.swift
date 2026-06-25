@@ -1,6 +1,7 @@
 import SwiftUI
 import PlaidBarCore
 import PlaidBarCache
+import AppIntents
 import Combine
 import OSLog
 import WidgetKit
@@ -4244,6 +4245,7 @@ final class AppState {
             Task {
                 await clearGlanceSnapshot()
                 await MainActor.run {
+                    ControlCenter.shared.reloadAllControls()
                     WidgetCenter.shared.reloadTimelines(ofKind: "PlaidBarGlanceWidget")
                 }
             }
@@ -4296,6 +4298,7 @@ final class AppState {
                 }
                 guard changed else { return }
                 await MainActor.run {
+                    ControlCenter.shared.reloadAllControls()
                     WidgetCenter.shared.reloadTimelines(ofKind: "PlaidBarGlanceWidget")
                 }
             }
@@ -4382,11 +4385,13 @@ final class AppState {
         // Drop the display-only Spotlight account index on the same reset /
         // data-wipe path so removed-account names don't linger in search (AND-513).
         AccountSpotlightIndexer.clear()
-        // Tell WidgetKit to drop the already-issued timeline entry so the widget
-        // surface stops showing pre-clear balances immediately. This covers
-        // every clear path — the explicit reset/data-wipe (`resetLocalData`) and
-        // removing the last institution — not just the empty-accounts write
-        // branch, which previously reloaded on its own (AND-385 Codex review).
+        // Tell WidgetKit/Control Center to drop the already-issued timeline/control
+        // entries so system surfaces stop showing pre-clear balances immediately.
+        // This covers every clear path — the explicit reset/data-wipe
+        // (`resetLocalData`) and removing the last institution — not just the
+        // empty-accounts write branch, which previously reloaded on its own
+        // (AND-385 Codex review).
+        ControlCenter.shared.reloadAllControls()
         WidgetCenter.shared.reloadTimelines(ofKind: "PlaidBarGlanceWidget")
     }
 
@@ -4397,6 +4402,7 @@ final class AppState {
         try? GlanceSnapshotStore.clear()
         try? AppGroupSnapshotStore.clear()
         AccountSpotlightIndexer.clear()
+        ControlCenter.shared.reloadAllControls()
         WidgetCenter.shared.reloadTimelines(ofKind: "PlaidBarGlanceWidget")
     }
 
