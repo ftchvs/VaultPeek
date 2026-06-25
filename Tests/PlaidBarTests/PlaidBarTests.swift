@@ -87,6 +87,30 @@ struct PlaidBarTests {
         #expect(Set(pngs) == expected, "got PNGs: \(pngs)")
     }
 
+    @Test("Window-first orientation waits for unlocked content and persists user dismissal")
+    func windowFirstOrientationRequiresUnlockedContent() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let appStateSource = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/App/AppState.swift"),
+            encoding: .utf8
+        )
+        let appSource = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/App/PlaidBarApp.swift"),
+            encoding: .utf8
+        )
+
+        let gateRange = try #require(appStateSource.range(of: "var shouldShowWindowFirstOrientation: Bool"))
+        let gateBlock = String(appStateSource[gateRange.lowerBound...].prefix(500))
+        #expect(gateBlock.contains("&& !isContentLocked"))
+
+        let modifierRange = try #require(appSource.range(of: "private struct WindowFirstOrientationSheet"))
+        let modifierBlock = String(appSource[modifierRange.lowerBound...].prefix(2_500))
+        #expect(modifierBlock.contains(".sheet(isPresented: $isPresented, onDismiss: handleDismiss)"))
+        #expect(modifierBlock.contains("suppressNextDismissPersistence = true"))
+        #expect(modifierBlock.contains("guard appState.shouldShowWindowFirstOrientation else { return }"))
+        #expect(modifierBlock.contains("appState.dismissWindowFirstOrientation()"))
+    }
+
     @Test("Window-first Goals and Planning mask amount-derived progress while Privacy Mask is active")
     func windowFirstGoalsProgressUsesPrivacyMask() throws {
         let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)

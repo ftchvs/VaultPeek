@@ -3108,13 +3108,14 @@ final class AppState {
 
     /// Whether the window-first orientation moment should be shown now (AND-640).
     /// Gated on the window-first feature flag (the moment only makes sense when the
-    /// window surface is live) and the per-environment dismissal flag, and
-    /// suppressed in demo so a transient demo session never burns the one-time
-    /// welcome for a real configured install.
+    /// window surface is live), the per-environment dismissal flag, and unlocked
+    /// content. Suppressed in demo so a transient demo session never burns the
+    /// one-time welcome for a real configured install.
     var shouldShowWindowFirstOrientation: Bool {
         WindowFirstFeatureFlag.resolved()
             && !isWindowFirstOrientationDismissed
             && !isDemoMode
+            && !isContentLocked
     }
 
     func notificationPermissionStatus() async -> NotificationPermissionState {

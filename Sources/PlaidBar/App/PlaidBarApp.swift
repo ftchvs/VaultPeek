@@ -958,13 +958,14 @@ private extension View {
 /// the primary `Window`.
 ///
 /// The whole gating decision is the pure `AppState.shouldShowWindowFirstOrientation`
-/// (window-first flag ON + not already dismissed + not demo). This modifier mirrors
-/// that into the sheet's `isPresented` binding and, on the user's "Got it",
-/// persists dismissal via `AppState.dismissWindowFirstOrientation()` so it never
-/// re-shows. `onAppear` covers "the window opened into this state" and `onChange`
-/// covers the flag/dismissal settling after the first server handshake — together
-/// they show the sheet exactly once on first window open. There is no theme flash:
-/// the sheet is plain SwiftUI inheriting the window's already-applied appearance.
+/// (window-first flag ON + not already dismissed + not demo + unlocked content).
+/// This modifier mirrors that into the sheet's `isPresented` binding and, on the
+/// user's dismissal, persists via `AppState.dismissWindowFirstOrientation()` so it
+/// never re-shows. `onAppear` covers "the window opened into this state" and
+/// `onChange` covers the flag/dismissal/lock state settling after the first
+/// server handshake — together they show the sheet exactly once on first window
+/// open. There is no theme flash: the sheet is plain SwiftUI inheriting the
+/// window's already-applied appearance.
 private struct WindowFirstOrientationSheet: ViewModifier {
     @Bindable var appState: AppState
 
@@ -973,6 +974,7 @@ private struct WindowFirstOrientationSheet: ViewModifier {
     /// from the pure `shouldShowWindowFirstOrientation` gate, and dismissal flips it
     /// false *and* persists so it never re-derives true.
     @State private var isPresented = false
+    @State private var suppressNextDismissPersistence = false
 
     func body(content: Content) -> some View {
         content
@@ -980,7 +982,7 @@ private struct WindowFirstOrientationSheet: ViewModifier {
             .onChange(of: appState.shouldShowWindowFirstOrientation) { _, _ in
                 syncPresentation()
             }
-            .sheet(isPresented: $isPresented) {
+            .sheet(isPresented: $isPresented, onDismiss: handleDismiss) {
                 WindowFirstOrientationView(
                     onDismiss: {
                         appState.dismissWindowFirstOrientation()
@@ -992,9 +994,23 @@ private struct WindowFirstOrientationSheet: ViewModifier {
 
     private func syncPresentation() {
         let shouldShow = appState.shouldShowWindowFirstOrientation
-        if shouldShow != isPresented {
-            isPresented = shouldShow
+        if shouldShow {
+            suppressNextDismissPersistence = false
+            isPresented = true
+        } else if isPresented {
+            suppressNextDismissPersistence = true
+            isPresented = false
         }
+    }
+
+    private func handleDismiss() {
+        if suppressNextDismissPersistence {
+            suppressNextDismissPersistence = false
+            return
+        }
+
+        guard appState.shouldShowWindowFirstOrientation else { return }
+        appState.dismissWindowFirstOrientation()
     }
 }
 
