@@ -46,9 +46,16 @@ extension AppState {
 
     /// Lazily opens (or re-opens) the on-disk per-transaction store for the active
     /// data directory. Returns `nil` — and stays disabled for this call — when the
-    /// cache is feature-disabled, in demo mode, or when the file-backed store fails
-    /// to open. Reopens when the active storage directory changes so the store always
-    /// matches the environment whose key it is asked about.
+    /// cache is feature-disabled or in demo mode. Reopens when the active storage
+    /// directory changes so the store always matches the environment whose key it is
+    /// asked about.
+    ///
+    /// Opening does **no** disk I/O and cannot fail: the (potentially large) backing
+    /// file is read and decoded lazily on the store actor's executor, so this never
+    /// blocks the MainActor with a full-history decode (AND-656 finding 3). An
+    /// incompatible/corrupt file (e.g. a pre-JSON SwiftData `.store`) is self-healed
+    /// into a disposable miss on that first off-main read rather than disabling the
+    /// cache (AND-656 finding 2).
     func transactionCacheStoreIfAvailable() -> TransactionCacheStore? {
         guard readModelCacheEnabled, !isDemoMode else { return nil }
 
@@ -60,19 +67,10 @@ extension AppState {
             return existing
         }
 
-        do {
-            let store = try TransactionCacheStore(onDiskIn: directory)
-            transactionCacheStore = store
-            transactionCacheStoreDirectoryPath = directoryPath
-            return store
-        } catch {
-            AppState.transactionCacheLogger.error(
-                "Transaction cache unavailable: \(String(describing: error), privacy: .public)"
-            )
-            transactionCacheStore = nil
-            transactionCacheStoreDirectoryPath = nil
-            return nil
-        }
+        let store = TransactionCacheStore(onDiskIn: directory)
+        transactionCacheStore = store
+        transactionCacheStoreDirectoryPath = directoryPath
+        return store
     }
 
     /// Best-effort persist of the current authoritative transactions into the
