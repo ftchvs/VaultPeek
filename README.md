@@ -596,6 +596,14 @@ when the local app created the Hosted Link session.
 | `GET` | `/api/budgets` | List saved category budgets (display-safe monthly limits only) |
 | `PUT` | `/api/budgets/:category` | Upsert a category's monthly limit (body `{ "monthlyLimit": Double }`); income/transfer categories are rejected |
 | `DELETE` | `/api/budgets/:category` | Remove a category's budget |
+| `GET` | `/api/review` | Pull the opt-in synced review-state snapshot (overrides + rules); empty unless the user enabled server-synced review. Display-safe values only — no Plaid tokens |
+| `PUT` | `/api/review` | Upload a device review-state snapshot; the server merges it (per-record last-writer-wins) and returns the union. Opt-in only |
+| `DELETE` | `/api/review` | Clear all synced review state (opt-out / reset) |
+
+> `/api/review` is the **opt-in** server-synced review surface (AND-552). It is
+> off by default (`ServerSyncedReviewFeatureFlag`); with sync off nothing is sent
+> or stored and behavior is byte-identical to local-first. See `SECURITY.md` for
+> the trust-boundary change (the server then stores user category overrides).
 
 ## Roadmap
 

@@ -108,6 +108,32 @@ Use GitHub private vulnerability reporting if available, or contact the reposito
   Keychain support can store token bytes in SQLite under `PLAIDBAR_DATA_DIR`.
   To keep the derived cache and any fallback token rows on-device, point
   `PLAIDBAR_DATA_DIR` at a local, non-synced directory.
+- **Trust-boundary change — opt-in server-synced review state (AND-552).** By
+  default the local server **never** stores transaction *review state* — the
+  per-transaction overrides a user sets in the Review Inbox (chosen category,
+  merchant rename, transfer flag, budget exclusion, free-text note, review
+  status) and their categorization rules. That state is app-local JSON only.
+  AND-552 adds an **optional** multi-device sync that, *only when the user
+  explicitly opts in*, persists exactly that review state on the local server
+  (the `review_metadata` / `review_rules` SQLite tables, served by
+  `/api/review` behind the same bearer-token middleware as every other `/api`
+  route). This deliberately **expands the server's stored data surface beyond
+  Plaid limits and token references**: with sync on, the server SQLite holds the
+  user's category overrides, merchant renames, and notes — display-safe derived
+  values, **never** a Plaid token, access secret, or Keychain material. The
+  opt-in is gated by `ServerSyncedReviewFeatureFlag` (default **OFF**); with it
+  off — the default for a fresh install and every existing user — the app never
+  constructs or sends a review snapshot, the `/api/review` tables stay empty,
+  and behavior is byte-identical to before AND-552, so **no review data leaves
+  the device without explicit consent**. Like the read-model cache, the synced
+  tables live in the environment-scoped SQLite under `PLAIDBAR_DATA_DIR`
+  (default local `~/.vaultpeek/`), so pointing the data dir at a cloud-synced
+  folder can copy this review state off-device (see the `PLAIDBAR_DATA_DIR`
+  caveat above). Opting back out clears the server-side tables
+  (`DELETE /api/review`). Conflicting edits across devices resolve by per-record
+  last-writer-wins on each record's `updatedAt` clock
+  (`ReviewStateConflictResolver`), so a sync never invents a category the user
+  did not choose.
 - `/api/status` is authenticated and exposes readiness metadata: version,
   environment, credential availability, storage path, linked item count,
   synced item count, sync readiness, and last sync time. With the opt-in
