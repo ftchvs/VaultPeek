@@ -33,7 +33,11 @@ extension View {
 /// Gentle opacity pulse for skeleton surfaces. Under Reduce Motion the
 /// skeleton stays static — redaction alone carries the loading meaning, so
 /// nothing depends on the movement.
-private struct SkeletonPulse: ViewModifier {
+///
+/// `internal` (AND-664 #3) so every skeleton surface shares one pulse instead of
+/// re-deriving the opacity inline. The shared modifier reacts to a *runtime*
+/// Reduce-Motion change via `onChange`, which a build-time-only read does not.
+struct SkeletonPulse: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isDimmed = false
 
