@@ -1694,6 +1694,49 @@ struct PlaidBarServerTests {
         #expect(ItemStatusMapping.status(forWebhookCode: "ITEM_LOGIN_REQUIRED", currentStatus: .connected) == .loginRequired)
     }
 
+    @Test("Transient token-vault/Keychain failures map to .providerOutage, not a hard .error")
+    func itemStatusMappingTreatsTokenVaultFailuresAsTransient() {
+        // A Keychain/token-vault failure while resolving an item's access token
+        // is frequently transient (device locked, Keychain temporarily
+        // unavailable, an ACL prompt). It must NOT permanently mark the item as
+        // errored — that would surface a broken connection and trigger needless
+        // reconnect/recovery UX for a recoverable hiccup (AND-669). It maps to
+        // the non-actionable, auto-retried `.providerOutage` state instead.
+        let tokenVaultErrors: [PlaidTokenVaultError] = [
+            .keychainUnavailable,
+            .keychainLoadFailed(-25300),
+            .keychainSaveFailed(-34018),
+            .keychainDeleteFailed(-25300)
+        ]
+        for error in tokenVaultErrors {
+            let status = ItemStatusMapping.status(forAPIError: error)
+            #expect(status == .providerOutage)
+            // Explicitly assert the bug is gone: never the hard error state.
+            #expect(status != .error)
+            // And it stays in the transient/retryable, non-reconnect lane.
+            #expect(status.isProviderOutage)
+            #expect(status.needsUpdateMode == false)
+        }
+
+        // Corrupt or empty token bytes are terminal from the item refresh path:
+        // re-reading the same Keychain entry will keep throwing, so do not hide
+        // that recovery behind "we'll retry automatically".
+        #expect(ItemStatusMapping.status(forAPIError: PlaidTokenVaultError.invalidStoredToken) == .error)
+
+        // A genuine Plaid item error still maps to the hard `.error` state — the
+        // transient special-case must not swallow real connection failures.
+        let genuineItemError = PlaidError.apiError(
+            statusCode: 400,
+            errorType: "ITEM_ERROR",
+            errorCode: "ITEM_NOT_FOUND",
+            errorMessage: "synthetic item error"
+        )
+        #expect(ItemStatusMapping.status(forAPIError: genuineItemError) == .error)
+        // A non-Plaid, non-token-vault error remains a hard `.error` too.
+        struct UnrelatedError: Error {}
+        #expect(ItemStatusMapping.status(forAPIError: UnrelatedError()) == .error)
+    }
+
     @Test("Webhook ERROR and repaired-with-new-accounts codes map correctly and preserve hard errors")
     func webhookItemStatusMappingHandlesErrorAndRepairedWithNewAccounts() {
         // A bare ITEM `ERROR` keeps the item degraded (login needed) rather than
