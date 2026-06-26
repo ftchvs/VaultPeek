@@ -169,6 +169,25 @@ struct PlaidBarTests {
         #expect(appStateSource.contains("clearPublishedSystemSnapshotsForDemoEntry()"))
     }
 
+    @Test("Finance snapshot save is generation-gated immediately before App Group commit")
+    func financeSnapshotCommitIsGenerationGatedBeforeSave() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let appStateSource = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/App/AppState.swift"),
+            encoding: .utf8
+        )
+        let methodRange = try #require(appStateSource.range(of: "private func writeFinanceSnapshot"))
+        let method = String(appStateSource[methodRange.lowerBound...].prefix(2_500))
+        let generationGuard = try #require(
+            method.range(of: "guard self.glanceSnapshotWriteGeneration == generation else { return }")
+        )
+        let saveCall = try #require(method.range(of: "try AppGroupSnapshotStore.save(snapshot)"))
+        let commitWindow = String(method[generationGuard.upperBound..<saveCall.lowerBound])
+
+        #expect(generationGuard.upperBound < saveCall.lowerBound)
+        #expect(!commitWindow.contains("Task.detached"))
+    }
+
     @Test("Foundation Models availability uses the public framework gate (AND-656)")
     func foundationModelsProbeUsesPublicFrameworkGate() throws {
         let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)

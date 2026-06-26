@@ -184,6 +184,107 @@ struct CacheStoreOpenRobustnessTests {
         #expect(counter.fileExistsCallCount >= 1, "the first read triggers the deferred load")
     }
 
+    // MARK: - AND-670: a corrupt *row payload* is a disposable miss, not a throw
+
+    /// Corrupts only the inner `payload` blob of a stored read-model row while
+    /// leaving the surrounding `Snapshot` JSON (and the queryable `schemaVersion`
+    /// scalar) intact, so the whole-store decode in `loadedRows()` still succeeds
+    /// and the failure surfaces at the per-row `DashboardReadModel` decode in
+    /// `load(cacheKey:)`.
+    private func corruptRowPayload(at storeURL: URL) throws {
+        let raw = try Data(contentsOf: storeURL)
+        var json = try #require(
+            try JSONSerialization.jsonObject(with: raw) as? [String: Any]
+        )
+        var rows = try #require(json["rows"] as? [String: Any])
+        for key in rows.keys {
+            var row = try #require(rows[key] as? [String: Any])
+            // Replace the base64 payload with bytes that are valid base64 but do
+            // NOT decode as a `DashboardReadModel`.
+            row["payload"] = Data([0x7B, 0x6E, 0x6F, 0x70, 0x65]).base64EncodedString()
+            rows[key] = row
+        }
+        json["rows"] = rows
+        let mutated = try JSONSerialization.data(withJSONObject: json)
+        try mutated.write(to: storeURL)
+    }
+
+    @Test("read-model: a corrupt row payload reads as a miss (not a throw) and self-heals")
+    func readModelCorruptRowPayloadIsDisposableMiss() async throws {
+        let directory = makeTempDirectory("rm-corrupt-payload")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let storeURL = directory.appendingPathComponent(ReadModelCacheStore.storeFilename)
+        let key = "sandbox|/x"
+
+        // Seed a valid row, then corrupt ONLY its inner payload blob on disk.
+        do {
+            let seed = ReadModelCacheStore(onDiskIn: directory)
+            try await seed.save(sampleReadModel(cacheKey: key))
+        }
+        try corruptRowPayload(at: storeURL)
+
+        // The corrupt per-row payload is a clean miss — `load` returns nil rather
+        // than throwing, so the caller's `try?` sees a value, not a failure.
+        let store = ReadModelCacheStore(onDiskIn: directory)
+        #expect(try await store.load(cacheKey: key) == nil)
+
+        // ...and the bad row was purged, so the cache is not permanently broken: a
+        // subsequent write rebuilds a clean, decodable row.
+        let model = sampleReadModel(cacheKey: key)
+        try await store.save(model)
+        #expect(try await store.load(cacheKey: key) == model)
+
+        // A fresh actor over the same directory reads the rebuilt row back.
+        let reopened = ReadModelCacheStore(onDiskIn: directory)
+        #expect(try await reopened.load(cacheKey: key) == model)
+    }
+
+    // MARK: - AND-670: BudgetingV2Store opens lazily (no work before needed)
+
+    @Test("budgeting-v2: constructing the store performs no disk I/O (lazy open)")
+    func budgetingV2OpenIsLazy() async throws {
+        let directory = makeTempDirectory("bv2-lazy")
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        // Seed a real on-disk snapshot so an *eager* open would have to read + decode
+        // it. The lazy contract means construction must not touch disk.
+        let seeded = try BudgetingV2Store(onDiskIn: directory)
+        try await seeded.seedV2(cacheKey: "sandbox|/x")
+
+        let counter = CountingFileManager()
+        let store = try BudgetingV2Store(onDiskIn: directory, fileManager: counter)
+
+        // Opening touched disk zero times — no `fileExists`, no read, no decode.
+        #expect(counter.fileExistsCallCount == 0, "open must not probe or read the backing file")
+
+        // The first operation hydrates lazily (now disk is touched) and still reads
+        // the seeded snapshot correctly.
+        #expect(try await store.isOptedIn(cacheKey: "sandbox|/x") == true)
+        #expect(counter.fileExistsCallCount >= 1, "the first operation triggers the deferred load")
+    }
+
+    @Test("budgeting-v2: opening over an incompatible file does no work and reads as not-opted-in")
+    func budgetingV2IncompatibleFileIsDisposableMiss() async throws {
+        let directory = makeTempDirectory("bv2-incompat")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let storeURL = directory.appendingPathComponent(BudgetingV2Store.storeFilename)
+        try writeIncompatibleFile(at: storeURL)
+
+        let counter = CountingFileManager()
+        // Construction never throws or reads, even over a corrupt file (lazy open).
+        let store = try BudgetingV2Store(onDiskIn: directory, fileManager: counter)
+        #expect(counter.fileExistsCallCount == 0, "a cold/missing/corrupt store does no work at open")
+
+        // The incompatible file self-heals into a clean miss: not opted in → v1.
+        #expect(try await store.isOptedIn(cacheKey: "sandbox|/x") == false)
+
+        // ...and the store is not permanently broken — a seed rebuilds it.
+        try await store.seedV2(cacheKey: "sandbox|/x")
+        #expect(try await store.isOptedIn(cacheKey: "sandbox|/x") == true)
+        let reopened = try BudgetingV2Store(onDiskIn: directory)
+        #expect(try await reopened.isOptedIn(cacheKey: "sandbox|/x") == true)
+    }
+
     @Test("transaction: replaceAll never decodes a pre-existing incompatible file")
     func transactionReplaceAllOverIncompatibleFile() async throws {
         let directory = makeTempDirectory("tx-replace")
