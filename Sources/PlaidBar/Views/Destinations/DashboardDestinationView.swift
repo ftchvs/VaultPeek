@@ -308,7 +308,7 @@ struct DashboardDestinationView: View {
             )
         let safeDetail = cashHeadline.formattedTotal == nil
             ? cashHeadline.disclosure
-            : "Through end of month · \(safeToSpend.confidence.label) confidence"
+            : safeToSpend.confidence.dashboardDetailCue
 
         let netWorth = HeroMetric(
             id: "netWorth",

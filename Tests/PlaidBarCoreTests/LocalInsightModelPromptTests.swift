@@ -101,7 +101,7 @@ struct LocalInsightModelPromptTests {
     func includesDisplaySafeAggregates() {
         let prompt = LocalInsightPromptBuilder.make(from: input()).user
 
-        #expect(prompt.contains("Last Month"))
+        #expect(prompt.contains("Last 30 days"))
         #expect(prompt.contains("2026-05-13"))
         #expect(prompt.contains("18 transactions"))
         #expect(prompt.contains("Food & Drink"))
