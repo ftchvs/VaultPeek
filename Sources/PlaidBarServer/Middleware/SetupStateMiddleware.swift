@@ -43,7 +43,7 @@ struct SetupStateMiddleware<Context: RequestContext>: RouterMiddleware {
     /// credentials. Status and item readiness endpoints are deliberately
     /// absent: they serve local metadata that setup guidance relies on.
     static var plaidBackedPathPrefixes: [String] {
-        ["/api/link", "/api/accounts", "/api/transactions"]
+        ["/api/link", "/api/accounts", "/api/transactions", "/api/investments"]
     }
 
     static func isPlaidBackedPath(_ path: String) -> Bool {
