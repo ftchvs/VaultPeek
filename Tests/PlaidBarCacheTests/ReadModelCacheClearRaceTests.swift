@@ -88,7 +88,7 @@ struct ReadModelCacheClearRaceTests {
     /// store actor, so a clear that bumped it since capture drops the write.
     @Test("save dropped when clear bumped the store generation after capture (AND-633)")
     func saveDroppedWhenClearRacedAfterGenerationCapture() async throws {
-        let store = try ReadModelCacheStore(inMemory: true)
+        let store = ReadModelCacheStore(inMemory: true)
         let key = "sandbox|/x"
 
         // Prior non-empty refresh seeded a row, then the user removed their last
@@ -114,7 +114,7 @@ struct ReadModelCacheClearRaceTests {
     /// committing, the clear-gated save behaves like a normal save.
     @Test("clear-gated save commits when no clear intervened (AND-633)")
     func clearGatedSaveCommitsWhenNoClearIntervened() async throws {
-        let store = try ReadModelCacheStore(inMemory: true)
+        let store = ReadModelCacheStore(inMemory: true)
         let key = "sandbox|/x"
 
         let capturedGeneration = await store.currentClearGeneration()
@@ -133,7 +133,7 @@ struct ReadModelCacheClearRaceTests {
     /// — the cold-start load is always a clean miss.
     @Test("interleaved clear-gated saves never survive a terminal clear (AND-633)")
     func interleavedClearGatedSavesNeverSurviveTerminalClear() async throws {
-        let store = try ReadModelCacheStore(inMemory: true)
+        let store = ReadModelCacheStore(inMemory: true)
         let key = "sandbox|/x"
         let model = nonEmptyModel(cacheKey: key)
 
