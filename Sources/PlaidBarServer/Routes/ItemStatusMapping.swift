@@ -23,6 +23,19 @@ enum ItemStatusMapping {
         return status(forPlaidCode: errorCode) ?? .error
     }
 
+    /// Whether `error`/`status` represents a transient token-vault failure that
+    /// was downgraded to the non-actionable `.providerOutage` state (rather than
+    /// the hard `.error` reconnect lane). Callers use this to emit a diagnostic
+    /// log so an item parked in "we'll retry automatically" stays visible in the
+    /// field. The terminal `.invalidStoredToken` variant maps to `.error`, so it
+    /// is deliberately NOT reported here.
+    static func didDowngradeTokenVaultFailure(
+        _ error: Error,
+        toStatus status: ItemConnectionStatus
+    ) -> Bool {
+        error is PlaidTokenVaultError && status == .providerOutage
+    }
+
     static func status(forWebhookCode code: String, currentStatus: ItemConnectionStatus) -> ItemConnectionStatus? {
         let normalized = normalize(code)
         switch normalized {

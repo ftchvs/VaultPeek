@@ -161,10 +161,7 @@ struct AccountRoutes: Sendable {
                 // reporting a misleading per-item refresh failure.
                 throw PlaidError.credentialsNotConfigured
             } catch {
-                try await tokenStore.updateItemStatus(
-                    id: itemId,
-                    status: ItemStatusMapping.status(forAPIError: error).rawValue
-                )
+                try await tokenStore.updateItemStatus(id: itemId, forAPIError: error)
                 return AccountRefreshResult(attempted: true, succeeded: false, accounts: [])
             }
         }

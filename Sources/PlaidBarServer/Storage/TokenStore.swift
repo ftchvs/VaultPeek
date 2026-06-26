@@ -217,6 +217,23 @@ actor TokenStore {
         try await item.save(on: fluent.db())
     }
 
+    /// Maps a per-item refresh/sync failure to its connection status and persists
+    /// it. When a transient token-vault/Keychain failure is downgraded to the
+    /// non-actionable `.providerOutage` state, emit an item-id-only diagnostic so
+    /// an item parked in "we'll retry automatically" is findable in the field
+    /// (mirrors the best-effort `deleteItem` Keychain logging — the item id is an
+    /// opaque identifier, never token material). The terminal `.invalidStoredToken`
+    /// variant maps to the hard `.error` reconnect lane and is not logged here.
+    func updateItemStatus(id: String, forAPIError error: Error) async throws {
+        let status = ItemStatusMapping.status(forAPIError: error)
+        if ItemStatusMapping.didDowngradeTokenVaultFailure(error, toStatus: status) {
+            logger.warning(
+                "Token-vault failure for item \(id) downgraded to provider-outage (auto-retried): \(String(describing: error))"
+            )
+        }
+        try await updateItemStatus(id: id, status: status.rawValue)
+    }
+
     // MARK: - Sync Cursors
 
     func getSyncCursor(itemId: String) async throws -> String? {

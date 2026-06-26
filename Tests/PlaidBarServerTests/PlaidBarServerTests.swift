@@ -1724,8 +1724,17 @@ struct PlaidBarServerTests {
 
         // Corrupt or empty token bytes are terminal from the item refresh path:
         // re-reading the same Keychain entry will keep throwing, so do not hide
-        // that recovery behind "we'll retry automatically".
-        #expect(ItemStatusMapping.status(forAPIError: PlaidTokenVaultError.invalidStoredToken) == .error)
+        // that recovery behind "we'll retry automatically" (AND-718). It must land
+        // in a state that surfaces a reconnect path.
+        let terminalStatus = ItemStatusMapping.status(forAPIError: PlaidTokenVaultError.invalidStoredToken)
+        #expect(terminalStatus == .error)
+        // Fail-on-revert: a regression to `.providerOutage` would silently strip
+        // the reconnect affordance. Assert it is NOT the transient lane, and that
+        // it satisfies the exact predicate the recovery UX keys off of
+        // (`WeeklyReview.needsReconnect`: `status == .error || needsUpdateMode`).
+        #expect(terminalStatus != .providerOutage)
+        #expect(terminalStatus.isProviderOutage == false)
+        #expect(terminalStatus == .error || terminalStatus.needsUpdateMode)
 
         // A genuine Plaid item error still maps to the hard `.error` state — the
         // transient special-case must not swallow real connection failures.
@@ -1739,6 +1748,46 @@ struct PlaidBarServerTests {
         // A non-Plaid, non-token-vault error remains a hard `.error` too.
         struct UnrelatedError: Error {}
         #expect(ItemStatusMapping.status(forAPIError: UnrelatedError()) == .error)
+    }
+
+    @Test("Only transient token-vault downgrades are flagged for the diagnostic log")
+    func itemStatusMappingFlagsTransientTokenVaultDowngradesForLogging() {
+        // The downgrade-diagnostic predicate (used to emit an item-id-only server
+        // log when a token-vault failure is parked in the auto-retried
+        // `.providerOutage` lane, AND-718) fires for every transient variant...
+        let transient: [PlaidTokenVaultError] = [
+            .keychainUnavailable,
+            .keychainLoadFailed(-25300),
+            .keychainSaveFailed(-34018),
+            .keychainDeleteFailed(-25300)
+        ]
+        for error in transient {
+            let status = ItemStatusMapping.status(forAPIError: error)
+            #expect(ItemStatusMapping.didDowngradeTokenVaultFailure(error, toStatus: status))
+        }
+
+        // ...but NOT for the terminal `.invalidStoredToken` variant — it maps to
+        // `.error`, so it is a reconnect, not a silent downgrade, and must not be
+        // mislabeled as an auto-retried outage in the logs.
+        let terminal = PlaidTokenVaultError.invalidStoredToken
+        #expect(
+            !ItemStatusMapping.didDowngradeTokenVaultFailure(
+                terminal,
+                toStatus: ItemStatusMapping.status(forAPIError: terminal)
+            )
+        )
+
+        // ...and never for a non-token-vault error, even if it lands on
+        // `.providerOutage` (a genuine Plaid-side outage code).
+        let providerOutage = PlaidError.apiError(
+            statusCode: 503,
+            errorType: "INSTITUTION_ERROR",
+            errorCode: "INSTITUTION_DOWN",
+            errorMessage: "synthetic outage"
+        )
+        let outageStatus = ItemStatusMapping.status(forAPIError: providerOutage)
+        #expect(outageStatus == .providerOutage)
+        #expect(!ItemStatusMapping.didDowngradeTokenVaultFailure(providerOutage, toStatus: outageStatus))
     }
 
     @Test("Webhook ERROR and repaired-with-new-accounts codes map correctly and preserve hard errors")
