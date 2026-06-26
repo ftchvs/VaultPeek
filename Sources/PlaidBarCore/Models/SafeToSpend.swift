@@ -142,6 +142,15 @@ public enum SafeToSpendConfidence: String, Sendable, CaseIterable, Comparable, C
         }
     }
 
+    /// Full detail cue for the Dashboard "Safe to spend" hero — the horizon
+    /// period text joined to `label`. `label` already reads as a complete phrase
+    /// ("On track", "Lower confidence", "Estimate only"), so this never appends
+    /// the literal word "confidence": doing so produced the duplicated "Lower
+    /// confidence confidence" and the ungrammatical "On track confidence".
+    public var dashboardDetailCue: String {
+        "Through end of month · \(label)"
+    }
+
     /// SF Symbol paired with `label` so the cue is never color-only.
     public var iconName: String {
         switch self {

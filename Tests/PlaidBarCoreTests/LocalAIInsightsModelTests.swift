@@ -45,7 +45,12 @@ struct LocalAIInsightsModelTests {
     @Test("Each window has a distinct compact, long, and accessibility label")
     func windowLabels() {
         #expect(LocalAIInsightWindow.last7days.displayName == "Last 7D")
-        #expect(LocalAIInsightWindow.lastMonth.displayName == "Last Month")
+        // `.lastMonth` uses the honest rolling-window label "Last 30 days" (not
+        // "Last Month"): the deterministic summary sentence is built from
+        // `displayName`, while the segmented picker shows `longDisplayName`. They
+        // must agree, so the user never reads "Last Month: …" under a "Last 30
+        // days" control.
+        #expect(LocalAIInsightWindow.lastMonth.displayName == "Last 30 days")
         #expect(LocalAIInsightWindow.yearOverYear.displayName == "YoY")
 
         #expect(LocalAIInsightWindow.last7days.longDisplayName == "Last 7 days")
@@ -55,6 +60,21 @@ struct LocalAIInsightsModelTests {
         #expect(LocalAIInsightWindow.last7days.accessibilityName == "Last 7 days")
         #expect(LocalAIInsightWindow.lastMonth.accessibilityName == "Last 30 days")
         #expect(LocalAIInsightWindow.yearOverYear.accessibilityName == "Year over year")
+    }
+
+    @Test("The summary-sentence label agrees with the picker label for .lastMonth")
+    func lastMonthSummaryAgreesWithPicker() {
+        // Bug guard: the segmented control reads `longDisplayName` and the
+        // deterministic summary sentence reads `displayName`. For `.lastMonth`
+        // they must say the same thing so the period the user picks matches the
+        // period the summary names.
+        let window = LocalAIInsightWindow.lastMonth
+        #expect(window.displayName == window.longDisplayName)
+
+        let input = Self.makeInput(window: .lastMonth, expenseTotal: 1200, incomeTotal: 3000, net: 1800)
+        let text = LocalAIDeterministicSummary.summaryText(for: input)
+        #expect(text.hasPrefix("\(window.longDisplayName):"))
+        #expect(!text.contains("Last Month"))
 
         // SF Symbols pair text with a shape so the selector never rides on color
         // alone, and the three symbols are distinct.
@@ -98,7 +118,7 @@ struct LocalAIInsightsModelTests {
     func deterministicSummaryHeadline() {
         let input = Self.makeInput(window: .lastMonth, expenseTotal: 1200, incomeTotal: 3000, net: 1800)
         let text = LocalAIDeterministicSummary.summaryText(for: input)
-        #expect(text.hasPrefix("Last Month:"))
+        #expect(text.hasPrefix("Last 30 days:"))
         #expect(text.contains("expenses"))
         #expect(text.contains("income"))
         #expect(text.contains("net cashflow"))

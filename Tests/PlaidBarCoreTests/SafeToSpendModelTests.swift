@@ -76,6 +76,26 @@ struct SafeToSpendModelTests {
         #expect(SafeToSpendConfidence.insufficientData.iconName == "questionmark.circle")
     }
 
+    @Test("Dashboard confidence cue prefixes the horizon and never duplicates 'confidence'")
+    func dashboardConfidenceCueGoldenStrings() {
+        // Golden strings: the cue is the horizon period text plus the label, with
+        // no trailing literal " confidence" — the label already reads as a full
+        // phrase, so appending the word produced "Lower confidence confidence" and
+        // the ungrammatical "On track confidence" / "Estimate only confidence".
+        #expect(SafeToSpendConfidence.insufficientData.dashboardDetailCue == "Through end of month · Estimate only")
+        #expect(SafeToSpendConfidence.lowConfidence.dashboardDetailCue == "Through end of month · Lower confidence")
+        #expect(SafeToSpendConfidence.ok.dashboardDetailCue == "Through end of month · On track")
+
+        // No cue may contain the word "confidence" twice (the original bug).
+        for confidence in SafeToSpendConfidence.allCases {
+            let occurrences = confidence.dashboardDetailCue
+                .lowercased()
+                .components(separatedBy: "confidence")
+                .count - 1
+            #expect(occurrences <= 1)
+        }
+    }
+
     // MARK: Horizon
 
     @Test("End-of-month horizon resolves to the month's final day")
