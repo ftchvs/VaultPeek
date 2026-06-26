@@ -157,7 +157,11 @@ struct BudgetsDestinationView: View {
             remainingTile = HeroMetric(
                 id: "remaining",
                 label: summary.isAggregateOver ? "Over budget" : "Left this month",
-                value: heroCurrency(abs(remaining), masked: masked),
+                // AND-731: the same `summary.remaining` figure also appears in the
+                // status panel rendered at `.full` ("$247.79"). Render the hero at
+                // the same precision here so one labeled value never reads as two
+                // different numbers ("$248" vs "$247.79") on the same screen.
+                value: reconciledHeroCurrency(abs(remaining), masked: masked),
                 systemImage: summary.isAggregateOver ? "exclamationmark.triangle.fill" : "checkmark.circle",
                 detail: summary.remainingDetail,
                 accent: summary.isAggregateOver ? SemanticColors.negative : SemanticColors.positive
@@ -180,6 +184,16 @@ struct BudgetsDestinationView: View {
     /// uses, so the two destinations' headline numbers read identically.
     private func heroCurrency(_ amount: Double, masked: Bool) -> String {
         PrivacyMaskPresentation.currency(amount, format: .compact, isEnabled: masked)
+    }
+
+    /// Hero currency for a figure that **also** appears elsewhere on this screen
+    /// (the "Left this month" / "Over budget" remaining value, shown again in the
+    /// status panel). Rendered at `.full` to match the panel's `currency(_:)` exactly
+    /// (AND-731) so a single labeled value never reads as two different numbers
+    /// ("$248" vs "$247.79"). Other hero tiles (Budgeted, Spent) are not duplicated,
+    /// so they keep the compact `heroCurrency`.
+    private func reconciledHeroCurrency(_ amount: Double, masked: Bool) -> String {
+        PrivacyMaskPresentation.currency(amount, format: .full, isEnabled: masked, style: .compact)
     }
 
     /// Masked-aware currency for the flat table's money columns — matches the

@@ -252,7 +252,14 @@ struct AccountsDestinationView: View {
     private var heroMetrics: [HeroMetric] {
         let masked = appState.shouldMaskFinancialValues
         let summary = wealthSummary
-        let netWorthAggregation = MultiCurrencyBalancePresentation.netWorth(accounts: appState.accounts)
+        // Net worth is derived from the *rounded* assets and debt at the hero's own
+        // `.compact` precision (AND-731) so the displayed trio reconciles on screen:
+        // displayed net worth == displayed assets − displayed debt. The plain
+        // `netWorth` aggregation rounds independently and could read $1 off its parts.
+        let netWorthAggregation = MultiCurrencyBalancePresentation.reconciledNetWorth(
+            accounts: appState.accounts,
+            format: .compact
+        )
         let assetsAggregation = MultiCurrencyBalancePresentation.totalAssets(accounts: appState.accounts)
         let debtAggregation = MultiCurrencyBalancePresentation.totalDebt(accounts: appState.accounts)
 
