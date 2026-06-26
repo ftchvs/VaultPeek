@@ -30,6 +30,11 @@ struct InsightsAIInsightView: View {
     @Environment(\.openSettings) private var openSettings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// Whether the secondary "how this summary was produced / why deterministic"
+    /// detail is expanded. Collapsed by default so the card leads with the insight,
+    /// not the disclaimer (AND-728).
+    @State private var showProvenanceDetails = false
+
     private var summaries: [LocalAIActivitySummary] {
         appState.localAIActivitySummaries
     }
@@ -354,27 +359,63 @@ struct InsightsAIInsightView: View {
         .accessibilityLabel("Evidence")
     }
 
-    /// Provenance / consent receipt lines — confidence, runtime limitations, and
-    /// the reversible-action note — each as a bulleted detail line.
+    /// Provenance / consent receipt. The single confidence cue always reads; the
+    /// secondary "why deterministic / runtime unavailable" detail collapses behind
+    /// a disclosure so it never outweighs the insight above it (AND-728). The same
+    /// detail also lives on the phase pill's `.help` tooltip.
     private var provenance: some View {
         VStack(alignment: .leading, spacing: WindowMetrics.xs) {
-            ForEach(Array(provenanceLines.enumerated()), id: \.offset) { _, line in
-                HStack(alignment: .top, spacing: WindowMetrics.sm) {
-                    Circle()
-                        .fill(.secondary)
-                        .frame(width: 4, height: 4)
-                        .padding(.top, 7)
-                        .accessibilityHidden(true)
-                    Text(line)
-                        .windowSupportingText()
-                        .fixedSize(horizontal: false, vertical: true)
+            provenanceBullet(receipt.confidence)
+
+            if !secondaryProvenanceLines.isEmpty {
+                Button {
+                    withAnimation(MotionTokens.animation(MotionTokens.standard, reduceMotion: reduceMotion)) {
+                        showProvenanceDetails.toggle()
+                    }
+                } label: {
+                    HStack(spacing: Spacing.xxs) {
+                        Image(systemName: showProvenanceDetails ? "chevron.down" : "chevron.right")
+                            .windowFigureCaption()
+                            .accessibilityHidden(true)
+                        Text(showProvenanceDetails ? "Hide details" : "About this summary")
+                            .windowSupportingText()
+                    }
+                    .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(showProvenanceDetails ? "Hide summary details" : "About this summary")
+                .accessibilityHint("Shows how this summary was produced and its limitations.")
+
+                if showProvenanceDetails {
+                    VStack(alignment: .leading, spacing: WindowMetrics.xs) {
+                        ForEach(Array(secondaryProvenanceLines.enumerated()), id: \.offset) { _, line in
+                            provenanceBullet(line)
+                        }
+                    }
+                    .transition(.opacity)
+                    .accessibilityElement(children: .contain)
                 }
             }
         }
     }
 
-    private var provenanceLines: [String] {
-        var lines: [String] = [receipt.confidence]
+    private func provenanceBullet(_ line: String) -> some View {
+        HStack(alignment: .top, spacing: WindowMetrics.sm) {
+            Circle()
+                .fill(.secondary)
+                .frame(width: 4, height: 4)
+                .padding(.top, 7)
+                .accessibilityHidden(true)
+            Text(line)
+                .windowSupportingText()
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// The collapsible secondary lines: the runtime-unavailable note and up to two
+    /// limitations. Excludes the always-visible confidence cue.
+    private var secondaryProvenanceLines: [String] {
+        var lines: [String] = []
         if let unavailableState = receipt.unavailableState {
             lines.append(unavailableState)
         }

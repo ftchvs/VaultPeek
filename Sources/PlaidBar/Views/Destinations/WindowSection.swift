@@ -120,8 +120,8 @@ struct WindowHeroMetricTile: View {
             }
         }
         .padding(WindowMetrics.md)
-        .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
-        .windowCardSurface()
+        .frame(maxWidth: .infinity, minHeight: 76, alignment: .leading)
+        .windowHeroSurface(accent: accent)
         .accessibilityElement(children: .contain)
     }
 
@@ -190,6 +190,47 @@ extension View {
     /// reserved for the shell chrome applied at the scene/shell level.
     func windowCardSurface() -> some View {
         modifier(WindowCardSurface())
+    }
+}
+
+// MARK: - Window hero surface
+
+/// A higher-presence card surface for the dashboard hero metrics (AND-726). The
+/// heroes carry the screen's most important numbers, so they earn more weight
+/// than a plain section card: a slightly stronger solid fill, an accent-tinted
+/// hairline, and a leading accent **rail** keyed to the metric's meaning
+/// (positive / warning / brand). The rail and tint *reinforce* the existing
+/// glyph + label/detail text; meaning is never carried by color alone, and the
+/// rail is hidden from VoiceOver (ACCESSIBILITY.md). Stays solid (glass is
+/// chrome, not data) and is unchanged under Reduce Transparency.
+private struct WindowHeroSurface: ViewModifier {
+    let accent: Color
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: WindowMetrics.cardCornerRadius)
+        content
+            .background(.quaternary.opacity(reduceTransparency ? 1.0 : 0.85), in: shape)
+            .overlay {
+                shape.strokeBorder(accent.opacity(0.22), lineWidth: 1)
+            }
+            .overlay(alignment: .leading) {
+                Capsule(style: .continuous)
+                    .fill(accent)
+                    .frame(width: 3)
+                    .padding(.vertical, WindowMetrics.sm)
+                    .padding(.leading, WindowMetrics.xs)
+                    .accessibilityHidden(true)
+            }
+            .clipShape(shape)
+    }
+}
+
+extension View {
+    /// The higher-presence hero-metric surface (accent rail + tinted hairline).
+    /// See ``WindowHeroSurface``.
+    func windowHeroSurface(accent: Color) -> some View {
+        modifier(WindowHeroSurface(accent: accent))
     }
 }
 
