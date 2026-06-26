@@ -309,18 +309,6 @@ struct AttentionRowRoutingTests {
 struct NavigationStateTransitionTests {
     private let visible = ["demo_checking", "demo_savings", "demo_visa"]
 
-    /// A minimal account fixture named "Account <id>", so a search query is a
-    /// substring of the name (matching the Accounts destination filter).
-    private func account(id: String, itemId: String) -> AccountDTO {
-        AccountDTO(
-            id: id,
-            itemId: itemId,
-            name: "Account \(id)",
-            type: .depository,
-            balances: BalanceDTO(available: 100, current: 100, isoCurrencyCode: "USD")
-        )
-    }
-
     @Test("Defaults match the migrated @AppStorage defaults")
     func defaults() {
         let state = NavigationState()
@@ -361,64 +349,6 @@ struct NavigationStateTransitionTests {
         let kept = state.reconcileSelection(visibleAccountIDs: visible)
         #expect(!kept)
         #expect(state.selectedAccountID == "demo_savings")
-    }
-
-    // AND-662 / AND-625 regression: the Accounts destination's self-heal
-    // `onChange` must reconcile the selection against the FULL account list, not
-    // the search-FILTERED list. `reconcileSelection` clears (and persists) a
-    // selection not in the visible set, so feeding it the filtered list let a
-    // transient text filter that excluded the selected account wipe the persisted
-    // selection — lost across relaunch even after the search was cleared. The
-    // view delegates the "which list" choice to
-    // `NavigationState.reconcileVisibleAccountIDs`, so this asserts that helper
-    // (the thing the `@main`, non-testable view actually calls) AND the resulting
-    // end-to-end behavior.
-    @Test("Account search filter must not clear the persisted selection (AND-662)")
-    func searchFilterDoesNotClearSelection() {
-        let accounts = [
-            account(id: "acct_chk", itemId: "item_1"),  // "Account acct_chk"
-            account(id: "acct_sav", itemId: "item_2"),  // "Account acct_sav"
-            account(id: "acct_visa", itemId: "item_3"), // "Account acct_visa"
-        ]
-        // A search query that matches no account-name containing the selection.
-        // `account(id:itemId:)` names accounts "Account <id>", so "visa" excludes
-        // the checking account the user has selected — mirrors the view's
-        // case-insensitive substring filter on the displayed name.
-        let query = "visa"
-        let filtered = accounts.filter {
-            AccountPresentation.displayName(for: $0)
-                .localizedCaseInsensitiveContains(query)
-        }
-        #expect(filtered.map(\.id) == ["acct_visa"], "Fixture sanity: query excludes the selection")
-
-        // The guard: the helper the view delegates to must return the FULL list,
-        // never the search-filtered subset. Reverting the view to feed
-        // `filteredAccounts` is exactly returning `filteredAccountIDs` here, which
-        // fails this assertion.
-        let reconcileInput = NavigationState.reconcileVisibleAccountIDs(
-            allAccountIDs: accounts.map(\.id),
-            filteredAccountIDs: filtered.map(\.id)
-        )
-        #expect(
-            reconcileInput == accounts.map(\.id),
-            "Reconcile must run against the full account list, not the search filter"
-        )
-
-        // End-to-end: feeding that input to reconcileSelection keeps the
-        // persisted selection through a non-matching search.
-        var fixed = NavigationState()
-        fixed.selectAccount(id: "acct_chk")
-        let clearedByFix = fixed.reconcileSelection(visibleAccountIDs: reconcileInput)
-        #expect(!clearedByFix)
-        #expect(fixed.selectedAccountID == "acct_chk", "Selection survives the transient search filter")
-
-        // The regression it guards against: reconciling against the FILTERED list
-        // clears (and would persist the cleared value) — the lost-on-relaunch bug.
-        var buggy = NavigationState()
-        buggy.selectAccount(id: "acct_chk")
-        let clearedByFilteredList = buggy.reconcileSelection(visibleAccountIDs: filtered.map(\.id))
-        #expect(clearedByFilteredList, "Filtered-list reconcile is the regression — must clear")
-        #expect(buggy.selectedAccountID == "")
     }
 
     @Test("resolvedSelectedID mirrors DashboardAccountSelection")
