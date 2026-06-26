@@ -114,6 +114,35 @@ struct MultiCurrencyTests {
         #expect(rates.rate(from: CurrencyCode("CHF"), to: .usd) == nil)
     }
 
+    @Test("Static rate table returns nil when the target currency's stored rate is zero (AND-665)")
+    func staticConversionZeroTargetRateIsNil() {
+        // Exercises the divide-by-zero guard at CurrencyAggregation.swift line 75
+        // (`toInBase != 0`). A currency stored with a 0 base rate would otherwise
+        // produce a division by zero when used as the conversion target; the guard
+        // must yield nil so callers fall back to per-currency subtotals rather than
+        // an infinite/NaN figure.
+        let rates = StaticCurrencyConversionRates(
+            base: .usd,
+            unitsOfBasePerCurrency: [
+                CurrencyCode("EUR"): 1.08,
+                CurrencyCode("ZRO"): 0, // pathological: priced at 0 units of base
+            ]
+        )
+
+        // Converting TO the zero-rate currency divides by zero → guarded to nil.
+        #expect(rates.rate(from: .usd, to: CurrencyCode("ZRO")) == nil)
+        #expect(rates.rate(from: CurrencyCode("EUR"), to: CurrencyCode("ZRO")) == nil)
+        // And convert(...) propagates that nil rather than producing an Inf/NaN amount.
+        #expect(rates.convert(100, from: .usd, to: CurrencyCode("ZRO")) == nil)
+
+        // The guard is scoped to the *target*: converting FROM the zero-rate currency
+        // is well-defined (numerator 0) and stays priced, so a real foreign target is
+        // still handled rather than over-guarded.
+        #expect(rates.rate(from: CurrencyCode("ZRO"), to: .usd) == 0)
+        // Identity still prices at 1 even for the zero-rate currency.
+        #expect(rates.rate(from: CurrencyCode("ZRO"), to: CurrencyCode("ZRO")) == 1)
+    }
+
     @Test("NoConversionSource prices only identity")
     func noConversionSource() {
         let source = NoConversionSource()
