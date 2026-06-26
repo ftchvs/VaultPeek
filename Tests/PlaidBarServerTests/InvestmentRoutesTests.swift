@@ -344,13 +344,20 @@ struct InvestmentRoutesSetupStateTests {
         return headers
     }
 
-    /// Wires the real `SetupStateMiddleware` (in `missingBoth` setup state) and
-    /// `InvestmentRoutes` behind the bearer-token middleware. `seedItem` controls
-    /// whether a linked item exists, so we exercise both the prefix gating (no
-    /// items: middleware blocks before the handler) and the handler re-throw
-    /// (one item: the credential-less Plaid call is reached and must propagate).
+    /// Wires the real `SetupStateMiddleware` and `InvestmentRoutes` behind the
+    /// bearer-token middleware. `seedItem` controls whether a linked item
+    /// exists; `credentialDiagnosis` controls whether the middleware's prefix
+    /// gate short-circuits.
+    ///
+    /// With `.missingBoth` (the default) the prefix gate blocks `/api/investments`
+    /// before the handler runs, so these tests exercise the *gating*. With
+    /// `.configured` the gate passes through to the handler, so the request
+    /// actually reaches the credential-less Plaid call — that is the only way to
+    /// exercise the handler's `catch PlaidError.credentialsNotConfigured`
+    /// re-throw and the middleware's *outer* catch-net that turns it into a 503.
     private func withInvestmentsAPI(
         seedItem: Bool,
+        credentialDiagnosis: CredentialSetupDiagnosis = .missingBoth,
         _ body: @Sendable (any TestClientProtocol) async throws -> Void
     ) async throws {
         let logger = Logger(label: "com.ftchvs.plaidbar-server-tests.investments-setup")
@@ -379,7 +386,7 @@ struct InvestmentRoutesSetupStateTests {
             let api = router.group("api")
             api.add(middleware: APITokenMiddleware(authToken: apiToken))
             api.add(middleware: SetupStateMiddleware(
-                credentialDiagnosis: .missingBoth,
+                credentialDiagnosis: credentialDiagnosis,
                 plaidEnvironment: .sandbox
             ))
             InvestmentRoutes(
@@ -422,11 +429,12 @@ struct InvestmentRoutesSetupStateTests {
         }
     }
 
-    @Test("Holdings re-throws credentialsNotConfigured for a linked item instead of swallowing it into 200-empty")
-    func holdingsRethrowsCredentialsNotConfiguredForLinkedItem() async throws {
-        // With an item present the handler reaches the credential-less Plaid
-        // call; the regression is swallowing the error into an empty 200. The
-        // re-throw surfaces through the middleware catch-net as the setup 503.
+    @Test("Holdings stays 503 in setup state even when an item is already linked")
+    func holdingsGatedByMiddlewareWithLinkedItem() async throws {
+        // In `.missingBoth` the prefix gate short-circuits to 503 *before* the
+        // handler runs, regardless of whether an item is linked. This guards
+        // the prefix-gating only — it does NOT reach the handler re-throw (see
+        // `holdingsRethrowsCredentialsNotConfiguredWhenCredentialsConfigured`).
         try await withInvestmentsAPI(seedItem: true) { client in
             let response = try await client.execute(
                 uri: "/api/investments/holdings",
@@ -437,9 +445,48 @@ struct InvestmentRoutesSetupStateTests {
         }
     }
 
-    @Test("Investment transactions re-throw credentialsNotConfigured for a linked item instead of swallowing it into 200-empty")
-    func transactionsRethrowCredentialsNotConfiguredForLinkedItem() async throws {
+    @Test("Investment transactions stay 503 in setup state even when an item is already linked")
+    func transactionsGatedByMiddlewareWithLinkedItem() async throws {
         try await withInvestmentsAPI(seedItem: true) { client in
+            let response = try await client.execute(
+                uri: "/api/investments/transactions",
+                method: .get,
+                headers: authHeaders
+            )
+            #expect(response.status == .serviceUnavailable)
+        }
+    }
+
+    // MARK: - Handler re-throw (true guard)
+    //
+    // The tests above all run with `.missingBoth`, so the prefix gate
+    // short-circuits before the handler executes — reverting *only* the
+    // handler's `catch PlaidError.credentialsNotConfigured` re-throw would leave
+    // them green. The two tests below set `.configured` so the prefix gate is
+    // bypassed and the request actually reaches the handler. With a linked item
+    // and a Plaid double that throws `credentialsNotConfigured`, the only path
+    // to a 503 is: handler re-throws → middleware's *outer* catch converts it.
+    // Remove the re-throw clause and the handler's `catch { return … }` swallows
+    // the error into a misleading 200-empty, so these tests go red — proving
+    // they genuinely guard the re-throw.
+
+    @Test("Holdings re-throws credentialsNotConfigured (reaching the handler) so a linked item surfaces 503, not 200-empty")
+    func holdingsRethrowsCredentialsNotConfiguredWhenCredentialsConfigured() async throws {
+        try await withInvestmentsAPI(seedItem: true, credentialDiagnosis: .configured) { client in
+            let response = try await client.execute(
+                uri: "/api/investments/holdings",
+                method: .get,
+                headers: authHeaders
+            )
+            // Without the handler re-throw this would be `.ok` with an empty
+            // payload (the per-item `catch` swallows the error).
+            #expect(response.status == .serviceUnavailable)
+        }
+    }
+
+    @Test("Investment transactions re-throw credentialsNotConfigured (reaching the handler) so a linked item surfaces 503, not 200-empty")
+    func transactionsRethrowCredentialsNotConfiguredWhenCredentialsConfigured() async throws {
+        try await withInvestmentsAPI(seedItem: true, credentialDiagnosis: .configured) { client in
             let response = try await client.execute(
                 uri: "/api/investments/transactions",
                 method: .get,
