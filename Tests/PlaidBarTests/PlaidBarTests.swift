@@ -1195,6 +1195,70 @@ struct PlaidBarTests {
         #expect(accounts.contains(".onChange(of: accounts.map(\\.id))"))
         #expect(accounts.contains("visibleAccounts.map(\\.id)"))
     }
+
+    /// Source-invariant guard for AND-671: each activity-heatmap cell must carry a
+    /// per-cell textual affordance (`.help` + `.accessibilityLabel`) so the day's
+    /// meaning never rides on tint/opacity alone (ACCESSIBILITY.md). Both window
+    /// grids (`DashboardYearHeatmapGrid`, `InsightsActivityHeatmapGrid`) source the
+    /// label from the single masked Core helper `SpendingHeatmap.cellLabel`. The
+    /// `@main` app target isn't unit-testable, so this string-matches the wiring.
+    @Test("Activity heatmap cells attach per-cell .help/.accessibilityLabel from masked Core label (AND-671)")
+    func activityHeatmapCellsCarryPerCellLabel() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let dashboard = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/Destinations/DashboardOverviewColumn.swift"),
+            encoding: .utf8
+        )
+        let insights = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/Destinations/InsightsTrendsView.swift"),
+            encoding: .utf8
+        )
+
+        // Both window grids: per-cell help + accessibility label, single-sourced from
+        // the mask-aware Core label (date + masked value + count).
+        for source in [dashboard, insights] {
+            #expect(source.contains("SpendingHeatmap.cellLabel(for: day, mode: layout.mode, isPrivacyMasked: isPrivacyMasked)"))
+            #expect(source.contains(".help(label)"))
+            #expect(source.contains(".accessibilityLabel(label)"))
+            // The grid threads the real mask state in, rather than hardcoding a value.
+            #expect(source.contains("var isPrivacyMasked: Bool = false"))
+        }
+
+        // Call sites pass the live Privacy Mask state into each grid.
+        #expect(dashboard.contains("DashboardYearHeatmapGrid(layout: layout, isPrivacyMasked: appState.shouldMaskFinancialValues)"))
+        #expect(insights.contains("InsightsActivityHeatmapGrid(layout: layout, isPrivacyMasked: isMasked)"))
+    }
+
+    /// Source-invariant guard for the AND-671 follow-up: the popover heatmap
+    /// (`MainPopover.swift`) renders its interactive cells AND the focused-day
+    /// caption *while Privacy Mask is on*, so both must source their text from the
+    /// mask-aware Core helpers with the live `appState.shouldMaskFinancialValues`
+    /// threaded in — otherwise the per-cell hover/VoiceOver label or the selected
+    /// day's caption would leak the real value. The `@main` app target isn't
+    /// unit-testable, so this string-matches the wiring so it can't be dropped.
+    @Test("Popover heatmap cell help and focused-day caption thread the live Privacy Mask state (AND-671)")
+    func popoverHeatmapMasksCellHelpAndFocusedCaption() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let popover = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/MainPopover.swift"),
+            encoding: .utf8
+        )
+
+        // Per-cell hover/VoiceOver label is sourced from the mask-aware Core label,
+        // and the cell is constructed with the live Privacy Mask state.
+        #expect(popover.contains("SpendingHeatmap.cellLabel(for: day, mode: mode, isPrivacyMasked: isPrivacyMasked)"))
+        #expect(popover.contains("var isPrivacyMasked: Bool = false"))
+        #expect(popover.contains("isPrivacyMasked: appState.shouldMaskFinancialValues"))
+
+        // Focused-day caption: the summary (whose captionText drives the visual
+        // Text and whose accessibilityLabel drives the VoiceOver label) is built
+        // with the live mask flag, so a selected cell never leaks its value.
+        #expect(popover.contains(
+            "SpendingHeatmap.focusedDaySummary(for: selectedDay, in: layout, isPrivacyMasked: appState.shouldMaskFinancialValues)"
+        ))
+        #expect(popover.contains("Text(summary.captionText)"))
+        #expect(popover.contains(".accessibilityLabel(summary.accessibilityLabel)"))
+    }
 }
 
 /// Deterministic `FMMerchantCategorizing` stub for the categorization-tier tests.
