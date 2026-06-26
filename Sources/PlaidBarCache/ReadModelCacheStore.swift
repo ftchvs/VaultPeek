@@ -153,8 +153,15 @@ public actor ReadModelCacheStore {
 
     /// Reads the cached read-model for `cacheKey`. Returns `nil` on a miss or
     /// when the stored row is from an older schema (which is also purged so the
-    /// store self-heals). A decode failure throws so the caller's `try?` can drop
-    /// back to today's cold path.
+    /// store self-heals).
+    ///
+    /// A corrupt/incompatible **row payload** (the inner `DashboardReadModel`
+    /// blob fails to decode) is treated as a disposable cache *miss*, not a hard
+    /// failure (AND-670): the bad row is purged and `nil` is returned so the next
+    /// refresh rebuilds it. This mirrors how an undecodable *whole-store* file is
+    /// self-healed in ``loadedRows()`` — the disposable cache never permanently
+    /// disables itself, and the authoritative source is always the live in-memory
+    /// data.
     public func load(cacheKey: String) throws -> DashboardReadModel? {
         var rows = loadedRows()
         guard let row = rows[cacheKey] else { return nil }
@@ -164,7 +171,17 @@ public actor ReadModelCacheStore {
             try? persist()
             return nil
         }
-        let model = try Self.decoder.decode(DashboardReadModel.self, from: row.payload)
+        let model: DashboardReadModel
+        do {
+            model = try Self.decoder.decode(DashboardReadModel.self, from: row.payload)
+        } catch {
+            // Undecodable row payload (corrupt/incompatible): purge the row so the
+            // store self-heals into a clean miss instead of surfacing the throw.
+            rows.removeValue(forKey: cacheKey)
+            rowsByKey = rows
+            try? persist()
+            return nil
+        }
         guard model.isCurrentSchema else { return nil }
         return model
     }
