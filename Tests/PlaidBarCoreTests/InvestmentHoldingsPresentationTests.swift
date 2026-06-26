@@ -9,12 +9,15 @@ struct InvestmentHoldingsPresentationTests {
         SecurityDTO(id: "sec_cash", name: "Cash Sweep", tickerSymbol: nil, type: "cash", closePrice: 1),
     ]
 
+    // These fixtures are USD positions; the `$` assertions below depend on the
+    // currency being explicit (AND-660 — an absent code resolves to the unknown
+    // bucket, which renders the bare number, not `$`).
     private func holdings() -> [HoldingDTO] {
         [
-            HoldingDTO(accountId: "acct_a", securityId: "sec_vti", quantity: 90, institutionPrice: 250, institutionValue: 22_500, costBasis: 18_000),
-            HoldingDTO(accountId: "acct_a", securityId: "sec_aapl", quantity: 50, institutionPrice: 200, institutionValue: 10_000, costBasis: 11_500),
-            HoldingDTO(accountId: "acct_a", securityId: "sec_cash", quantity: 2_800, institutionPrice: 1, institutionValue: 2_800, costBasis: 2_800),
-            HoldingDTO(accountId: "acct_b", securityId: "sec_vti", quantity: 4, institutionPrice: 250, institutionValue: 1_000, costBasis: 900),
+            HoldingDTO(accountId: "acct_a", securityId: "sec_vti", quantity: 90, institutionPrice: 250, institutionValue: 22_500, costBasis: 18_000, isoCurrencyCode: "USD"),
+            HoldingDTO(accountId: "acct_a", securityId: "sec_aapl", quantity: 50, institutionPrice: 200, institutionValue: 10_000, costBasis: 11_500, isoCurrencyCode: "USD"),
+            HoldingDTO(accountId: "acct_a", securityId: "sec_cash", quantity: 2_800, institutionPrice: 1, institutionValue: 2_800, costBasis: 2_800, isoCurrencyCode: "USD"),
+            HoldingDTO(accountId: "acct_b", securityId: "sec_vti", quantity: 4, institutionPrice: 250, institutionValue: 1_000, costBasis: 900, isoCurrencyCode: "USD"),
         ]
     }
 
@@ -194,9 +197,9 @@ struct InvestmentHoldingsPresentationTests {
         // their basis). AAPL's $10,000 market value contributes to the total but is
         // excluded from the gain numerator so value and basis stay comparable.
         let mixed = [
-            HoldingDTO(accountId: "acct_a", securityId: "sec_vti", quantity: 90, institutionValue: 22_500, costBasis: 18_000),
-            HoldingDTO(accountId: "acct_a", securityId: "sec_aapl", quantity: 50, institutionValue: 10_000, costBasis: nil),
-            HoldingDTO(accountId: "acct_a", securityId: "sec_cash", quantity: 2_800, institutionValue: 2_800, costBasis: 2_800),
+            HoldingDTO(accountId: "acct_a", securityId: "sec_vti", quantity: 90, institutionValue: 22_500, costBasis: 18_000, isoCurrencyCode: "USD"),
+            HoldingDTO(accountId: "acct_a", securityId: "sec_aapl", quantity: 50, institutionValue: 10_000, costBasis: nil, isoCurrencyCode: "USD"),
+            HoldingDTO(accountId: "acct_a", securityId: "sec_cash", quantity: 2_800, institutionValue: 2_800, costBasis: 2_800, isoCurrencyCode: "USD"),
         ]
         let summary = InvestmentHoldingsPresentation.summary(
             holdings: mixed,
@@ -274,9 +277,80 @@ struct InvestmentHoldingsPresentationTests {
 
     @Test("Signed currency uses an explicit sign so direction reads without color")
     func signedCurrencyText() {
-        #expect(InvestmentHoldingsPresentation.signedCurrency(250, masked: false) == "+$250.00")
-        #expect(InvestmentHoldingsPresentation.signedCurrency(-250, masked: false) == "−$250.00")
-        #expect(InvestmentHoldingsPresentation.signedCurrency(0, masked: false) == "$0.00")
-        #expect(InvestmentHoldingsPresentation.signedCurrency(250, masked: true) == PrivacyMaskPresentation.compactValue)
+        #expect(InvestmentHoldingsPresentation.signedCurrency(250, in: .usd, masked: false) == "+$250.00")
+        #expect(InvestmentHoldingsPresentation.signedCurrency(-250, in: .usd, masked: false) == "−$250.00")
+        #expect(InvestmentHoldingsPresentation.signedCurrency(0, in: .usd, masked: false) == "$0.00")
+        #expect(InvestmentHoldingsPresentation.signedCurrency(250, in: .usd, masked: true) == PrivacyMaskPresentation.compactValue)
+    }
+
+    // AND-660 #1: a holding/portfolio in a non-USD currency must render and
+    // aggregate in that currency — never collapsed into a fabricated `$` total.
+    @Test("Signed currency renders the holding's own currency, not $")
+    func signedCurrencyNonUSD() {
+        // EUR renders as the bare code + native formatting (no `$`).
+        let eurGain = InvestmentHoldingsPresentation.signedCurrency(250, in: CurrencyCode("EUR"), masked: false)
+        #expect(eurGain.hasPrefix("+"))
+        #expect(!eurGain.contains("$"))
+
+        let eurLoss = InvestmentHoldingsPresentation.signedCurrency(-250, in: CurrencyCode("EUR"), masked: false)
+        #expect(eurLoss.hasPrefix("\u{2212}")) // typographic minus, not ASCII hyphen
+        #expect(!eurLoss.contains("$"))
+    }
+
+    @Test("Single-currency EUR holding renders value and gain in EUR, never $")
+    func rowsRenderNativeCurrency() {
+        let eurHoldings = [
+            HoldingDTO(accountId: "acct_eu", securityId: "sec_vti", quantity: 4, institutionPrice: 250, institutionValue: 1_000, costBasis: 900, isoCurrencyCode: "EUR"),
+        ]
+        let rows = InvestmentHoldingsPresentation.rows(
+            forAccount: "acct_eu",
+            holdings: eurHoldings,
+            securities: securities,
+            privacyMaskEnabled: false
+        )
+        #expect(rows.count == 1)
+        // The market value and gain render in EUR — never a dollar glyph. `.full`
+        // uses the locale currency symbol (€), so the contract is "no `$`", which
+        // mirrors the established MultiCurrencyTests formatter assertions.
+        #expect(!(rows.first?.marketValueText.contains("$") ?? true))
+        #expect(!(rows.first?.gainText?.contains("$") ?? true))
+        #expect(rows.first?.marketValueText.contains("1,000") ?? false)
+    }
+
+    @Test("Mixed EUR/USD portfolio never collapses into one fabricated $ total (AND-660)")
+    func summaryMixedCurrencyDoesNotCollapse() {
+        // Two USD positions + one EUR position. The naive (buggy) behavior summed
+        // all three market values into a single scalar and labeled it `$`. With
+        // the AND-660 fix the summary groups per currency and the displayed total
+        // names both currencies — never a lone `$` figure pretending EUR is USD.
+        let mixed = [
+            HoldingDTO(accountId: "acct_a", securityId: "sec_vti", quantity: 40, institutionPrice: 250, institutionValue: 10_000, costBasis: 9_000, isoCurrencyCode: "USD"),
+            HoldingDTO(accountId: "acct_a", securityId: "sec_aapl", quantity: 25, institutionPrice: 200, institutionValue: 5_000, costBasis: 4_000, isoCurrencyCode: "USD"),
+            HoldingDTO(accountId: "acct_a", securityId: "sec_vti", quantity: 8, institutionPrice: 250, institutionValue: 2_000, costBasis: 1_800, isoCurrencyCode: "EUR"),
+        ]
+        let summary = InvestmentHoldingsPresentation.summary(
+            holdings: mixed,
+            accountId: "acct_a",
+            privacyMaskEnabled: false
+        )
+
+        // The aggregation keeps both currencies — it is multi-currency and its
+        // per-currency subtotals carry both USD (15,000) and EUR (2,000).
+        #expect(summary.isMultiCurrency)
+        #expect(summary.marketValueAggregation.subtotals.count == 2)
+        let byCurrency = Dictionary(
+            uniqueKeysWithValues: summary.marketValueAggregation.subtotals.map { ($0.currency, $0.amount) }
+        )
+        #expect(byCurrency[CurrencyCode("USD")] == 15_000)
+        #expect(byCurrency[CurrencyCode("EUR")] == 2_000)
+
+        // The DISPLAYED total is a per-currency breakdown (e.g. "€2,000.00 ·
+        // $15,000.00") — NOT a single `$17,000` figure (the old cross-currency
+        // collapse). With no conversion source the headline is unavailable, so both
+        // currencies are listed; the USD subtotal keeps its `$`, EUR its own symbol.
+        #expect(summary.totalMarketValueText.contains("15,000"))
+        #expect(summary.totalMarketValueText.contains("2,000"))
+        #expect(summary.totalMarketValueText.contains("·")) // per-currency separator
+        #expect(summary.totalMarketValueText != "$17,000.00")
     }
 }

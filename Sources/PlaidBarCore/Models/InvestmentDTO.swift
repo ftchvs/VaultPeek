@@ -104,6 +104,14 @@ public struct HoldingDTO: Codable, Sendable, Equatable, Identifiable {
         guard let costBasis else { return nil }
         return marketValue - costBasis
     }
+
+    /// Normalized currency identity for this holding's market value/cost basis.
+    /// Wraps the raw Plaid `iso_currency_code`; an absent/empty code resolves to
+    /// ``CurrencyCode/unknown`` (never silently assumed to be USD), so a EUR
+    /// position is grouped and rendered as EUR rather than mislabeled `$`.
+    public var currency: CurrencyCode {
+        CurrencyCode(isoCurrencyCode)
+    }
 }
 
 /// A buy/sell/dividend/fee event inside an investment account, from Plaid
