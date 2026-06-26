@@ -189,6 +189,34 @@ struct PlaidBarTests {
         #expect(!commitWindow.contains("Task.detached"))
     }
 
+    @Test("Glance snapshot save re-checks generation inside debounced operation")
+    func glanceSnapshotDebouncedCommitIsGenerationGatedBeforeSave() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let appStateSource = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/App/AppState.swift"),
+            encoding: .utf8
+        )
+        let methodRange = try #require(appStateSource.range(of: "private func writeGlanceSnapshot"))
+        let method = String(appStateSource[methodRange.lowerBound...].prefix(4_500))
+        let operationRange = try #require(method.range(of: "await debouncer.schedule(snapshot)"))
+        let methodAfterOperationStarts = String(method[operationRange.lowerBound...])
+        let generationGuard = try #require(
+            methodAfterOperationStarts.range(of: "guard self.glanceSnapshotWriteGeneration == generation else { return false }")
+        )
+        let saveCall = try #require(
+            methodAfterOperationStarts.range(of: "return try GlanceSnapshotStore.saveIfChanged(snapshot)")
+        )
+        let commitWindow = String(methodAfterOperationStarts[generationGuard.upperBound..<saveCall.lowerBound])
+
+        #expect(generationGuard.upperBound < saveCall.lowerBound)
+        #expect(
+            String(methodAfterOperationStarts[..<generationGuard.lowerBound])
+                .contains("changed = try await MainActor.run")
+        )
+        #expect(!commitWindow.contains("await"))
+        #expect(!commitWindow.contains("scheduler.sleep"))
+    }
+
     @Test("Foundation Models availability uses the public framework gate (AND-656)")
     func foundationModelsProbeUsesPublicFrameworkGate() throws {
         let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)

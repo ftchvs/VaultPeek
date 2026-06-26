@@ -4334,7 +4334,10 @@ final class AppState {
             await debouncer.schedule(snapshot) { snapshot in
                 let changed: Bool
                 do {
-                    changed = try GlanceSnapshotStore.saveIfChanged(snapshot)
+                    changed = try await MainActor.run {
+                        guard self.glanceSnapshotWriteGeneration == generation else { return false }
+                        return try GlanceSnapshotStore.saveIfChanged(snapshot)
+                    }
                 } catch {
                     // A genuine write failure was previously indistinguishable
                     // from the "no change" skip below. Surface it (no balance
