@@ -76,89 +76,22 @@ public enum SpendingSummary {
         rules: [TransactionRule]? = nil,
         splits: [TransactionSplit] = []
     ) -> [(SpendingCategory, Double)] {
-        let expenses = expenseTransactions(from: transactions)
-        let splitIndex = TransactionSplitResolver.index(splits)
-
-        // Legacy path: no review state supplied → bucket by raw Plaid category.
-        // Split-aware: a transaction with a valid split contributes its allocation
-        // rows (each by its own category, honoring its exclude flag). With no
-        // splits this is byte-identical to the pre-AND-550 grouping.
-        guard metadata != nil || rules != nil else {
-            var totals: [SpendingCategory: Double] = [:]
-            for transaction in expenses {
-                for row in TransactionSplitResolver.spendRows(
-                    for: transaction, splitsByTransactionId: splitIndex
-                ) {
-                    if row.isSplitExcluded { continue }
-                    let category = row.category ?? .other
-                    // Income/transfer split allocations are never spend — mirror
-                    // `CategoryBudgetPlanner.netSpendByCategory`'s `excludedCategories`
-                    // so a `.transfer`/`.income` allocation drops out of the summary.
-                    if CategoryBudgetPlanner.excludedCategories.contains(category) {
-                        continue
-                    }
-                    // Use the magnitude so a split allocation matches the legacy
-                    // `displayAmount` convention this summary uses.
-                    totals[category, default: 0] += abs(row.amount)
-                }
-            }
-            return totals.map { ($0.key, $0.value) }.sorted { $0.1 > $1.1 }
-        }
-
-        let metadataById = Dictionary(
-            (metadata ?? []).map { ($0.id, $0) },
-            uniquingKeysWith: { first, _ in first }
+        // Shares the one override-aware bucketing loop with `CategoryBudgetPlanner`
+        // (AND-664 #1). The summary surface windows its own input via
+        // `expenseTransactions` (so no inline `dateRange`), uses the `abs` magnitude
+        // convention (its rows are display amounts, not signed), and — because that
+        // pre-filter already drops income/transfers — does **not** drop a row that
+        // *resolved* to an excluded bucket (`excludePostResolution: false`),
+        // preserving the legacy behavior exactly.
+        let totals = OverrideAwareSpendKernel.bucketedSpend(
+            from: expenseTransactions(from: transactions),
+            metadata: metadata,
+            rules: rules,
+            splitIndex: TransactionSplitResolver.index(splits),
+            dateRange: nil,
+            amount: abs,
+            excludePostResolution: false
         )
-        let activeRules = rules ?? []
-
-        var totals: [SpendingCategory: Double] = [:]
-        for transaction in expenses {
-            for row in TransactionSplitResolver.spendRows(
-                for: transaction, splitsByTransactionId: splitIndex
-            ) {
-                // A split allocation already declared its category and exclude flag,
-                // so it bypasses per-parent override/rule resolution and buckets by
-                // its own category.
-                if row.isSplitAllocation {
-                    if row.isSplitExcluded { continue }
-                    let category = row.category ?? .other
-                    // Income/transfer split allocations are never spend — mirror
-                    // `CategoryBudgetPlanner.netSpendByCategory`'s `excludedCategories`
-                    // so a `.transfer`/`.income` allocation drops out of the summary.
-                    if CategoryBudgetPlanner.excludedCategories.contains(category) {
-                        continue
-                    }
-                    totals[category, default: 0] += abs(row.amount)
-                    continue
-                }
-
-                // Un-split row: the existing override-aware path, unchanged.
-                // Carry pending-phase review metadata into the posted charge (mirrors
-                // `CategoryBudgetPlanner.netSpendByCategory`): prefer the transaction's
-                // own record, then the carried-forward pending record.
-                let effectiveMetadata = metadataById[transaction.id]
-                    ?? transaction.pendingTransactionId.flatMap { metadataById[$0] }
-
-                let resolution = EffectiveCategoryResolver.resolve(
-                    transaction: transaction,
-                    metadata: effectiveMetadata,
-                    rules: activeRules
-                )
-
-                // Drop excluded rows (explicit user/rule exclusion or transfers) — the
-                // override surface can re-classify a row as a transfer the raw Plaid
-                // category did not flag.
-                if resolution.excludedFromBudgets || resolution.isTransfer { continue }
-
-                // Fall back to the raw Plaid bucket (or `.other`) when no confident
-                // override/rule/Plaid category resolved, matching the legacy bucket —
-                // a display-only NL suggestion is never counted (it lives on
-                // `resolution.suggestedCategory`, not on the aggregation category).
-                let category = resolution.category ?? (transaction.category ?? .other)
-                totals[category, default: 0] += abs(row.amount)
-            }
-        }
-
         return totals.map { ($0.key, $0.value) }.sorted { $0.1 > $1.1 }
     }
 
