@@ -201,11 +201,19 @@ struct PlaidBarTests {
         let scheduleCall = try #require(method.range(of: "await debouncer.schedule(snapshot)"))
         let afterSchedule = String(method[scheduleCall.upperBound...])
         let generationGuard = try #require(
-            afterSchedule.range(of: "guard await MainActor.run(body: { self.glanceSnapshotWriteGeneration == generation }) else { return }")
+            afterSchedule.range(of: "guard self.glanceSnapshotWriteGeneration == generation else { return false }")
         )
-        let saveCall = try #require(afterSchedule.range(of: "changed = try GlanceSnapshotStore.saveIfChanged(snapshot)"))
+        let saveCall = try #require(
+            afterSchedule.range(of: "return try GlanceSnapshotStore.saveIfChanged(snapshot)")
+        )
+        let commitWindow = String(afterSchedule[generationGuard.upperBound..<saveCall.lowerBound])
 
         #expect(generationGuard.upperBound < saveCall.lowerBound)
+        #expect(
+            String(afterSchedule[..<generationGuard.lowerBound])
+                .contains("changed = try await MainActor.run")
+        )
+        #expect(!commitWindow.contains("await"))
     }
 
     @Test("Foundation Models availability uses the public framework gate (AND-656)")
