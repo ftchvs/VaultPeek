@@ -117,8 +117,18 @@ struct CategoryStatusBar: View {
     }
 
     /// Verdict text/glyph tint — a redundant cue, never the only signal.
-    private var verdictTint: Color {
-        switch model.status {
+    private var verdictTint: Color { model.status.verdictTint }
+}
+
+extension Optional where Wrapped == CategoryBudgetStatus {
+    /// The single budget-verdict tint shared by every category-status surface
+    /// (AND-664 #4): the status bar, the Budgets table, and the category dashboard
+    /// all mapped this identically. It is a **redundant** color cue layered over a
+    /// glyph + text verdict, never the only signal (ACCESSIBILITY.md) — so the exact
+    /// mapping (over → negative, nearing → warning, under / no-budget → secondary)
+    /// is the accessibility contract and is single-sourced here.
+    var verdictTint: Color {
+        switch self {
         case .over: SemanticColors.negative
         case .nearing: SemanticColors.warning
         case .under: .secondary
