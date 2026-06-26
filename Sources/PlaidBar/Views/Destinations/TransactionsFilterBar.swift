@@ -78,6 +78,7 @@ struct TransactionsFilterBar: View {
     private var facetRow: some View {
         HStack(spacing: Spacing.sm) {
             accountPicker
+            categoryGroupPicker
             categoryPicker
             dateRangePicker
             amountPicker
@@ -100,6 +101,22 @@ struct TransactionsFilterBar: View {
         .pickerStyle(.menu)
         .fixedSize()
         .accessibilityLabel("Filter by account")
+    }
+
+    /// Parent-group facet (AND-730). The Dashboard spend-donut deep-links here, so
+    /// the active group is a visible, clearable control rather than an invisible
+    /// filter. Groups follow the canonical display order; the label carries text (not
+    /// color) so the facet reads without distinguishing hues.
+    private var categoryGroupPicker: some View {
+        Picker("Group", selection: $filter.categoryGroup) {
+            Text("All groups").tag(CategoryGroup?.none)
+            ForEach(CategoryGroup.displayOrder, id: \.self) { group in
+                Text(group.title).tag(CategoryGroup?.some(group))
+            }
+        }
+        .pickerStyle(.menu)
+        .fixedSize()
+        .accessibilityLabel("Filter by category group")
     }
 
     private var categoryPicker: some View {

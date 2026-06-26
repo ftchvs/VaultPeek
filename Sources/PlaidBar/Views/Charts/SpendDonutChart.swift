@@ -14,12 +14,24 @@ import SwiftUI
 /// legend lists every slice's group, amount, and share, so the breakdown reads
 /// without distinguishing hues; the chart itself is one VoiceOver element whose label
 /// is the model's spoken summary, and each legend row is its own labeled element.
+///
+/// Drill-in (AND-730): when an `onSelectGroup` handler is supplied, each legend row
+/// becomes a button (with a "Show <group> transactions" hint and a chevron cue) that
+/// hands its ``CategoryGroup`` back, so the host can deep-link to the Transactions
+/// ledger pre-filtered to that group — closing the analyze→act loop. With no handler
+/// (the popover / preview default) the legend stays a read-only breakdown.
 struct SpendDonutChart: View {
     let model: SpendDonutModel
     /// When true (Privacy Mask on), every amount the donut exposes — center total,
     /// legend amounts, and the VoiceOver figures — is masked. Slice geometry, group
     /// titles, and shares still render so the chart's shape and structure stay legible.
     var isPrivacyMasked: Bool = false
+    /// Optional drill-in: when provided, each legend row (and ring slice) becomes a
+    /// button that hands its ``CategoryGroup`` back so the host can deep-link to the
+    /// Transactions ledger pre-filtered to that group (AND-730, closing the
+    /// analyze→act loop). `nil` (the popover / preview default) keeps the legend a
+    /// read-only breakdown, so nothing about the existing surface changes.
+    var onSelectGroup: (@MainActor (CategoryGroup) -> Void)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var revealFraction: CGFloat = 0
@@ -87,27 +99,65 @@ struct SpendDonutChart: View {
     private var legend: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             ForEach(model.slices) { slice in
-                HStack(spacing: Spacing.sm) {
-                    Image(systemName: glyph(for: slice.group))
-                        .font(.caption)
-                        .foregroundStyle(color(for: slice.group))
-                        .frame(width: Sizing.glyphSmall, alignment: .center)
-                        .accessibilityHidden(true)
-                    Text(slice.title)
-                        .font(.caption)
-                        .lineLimit(1)
-                    Spacer(minLength: Spacing.sm)
-                    Text(slice.shareText)
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                    Text(masked(slice.amountText))
-                        .font(.caption.weight(.medium))
-                        .monospacedDigit()
-                        .frame(minWidth: 64, alignment: .trailing)
-                }
+                legendRow(for: slice)
+            }
+        }
+    }
+
+    /// One legend row. When a drill-in is wired (`onSelectGroup` set) the row is a
+    /// button that deep-links to the group's transactions; otherwise it is a plain,
+    /// read-only breakdown line (the popover / preview default). Either way the row
+    /// is a single VoiceOver element carrying the same group/amount/share label —
+    /// the button form just adds an "isButton" trait and a "show transactions" hint,
+    /// so the affordance is keyboard- and VoiceOver-reachable and never relies on
+    /// color.
+    @ViewBuilder
+    private func legendRow(for slice: SpendDonutModel.Slice) -> some View {
+        if let onSelectGroup {
+            Button {
+                onSelectGroup(slice.group)
+            } label: {
+                legendRowContent(for: slice)
+            }
+            .buttonStyle(.plain)
+            .contentShape(.rect)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(legendAccessibilityLabel(for: slice))
+            .accessibilityHint("Show \(slice.title) transactions")
+        } else {
+            legendRowContent(for: slice)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(legendAccessibilityLabel(for: slice))
+        }
+    }
+
+    private func legendRowContent(for slice: SpendDonutModel.Slice) -> some View {
+        HStack(spacing: Spacing.sm) {
+            Image(systemName: glyph(for: slice.group))
+                .font(.caption)
+                .foregroundStyle(color(for: slice.group))
+                .frame(width: Sizing.glyphSmall, alignment: .center)
+                .accessibilityHidden(true)
+            Text(slice.title)
+                .font(.caption)
+                .lineLimit(1)
+            Spacer(minLength: Spacing.sm)
+            Text(slice.shareText)
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+            Text(masked(slice.amountText))
+                .font(.caption.weight(.medium))
+                .monospacedDigit()
+                .frame(minWidth: 64, alignment: .trailing)
+            // A subtle chevron signals the row is actionable without relying on
+            // color (ACCESSIBILITY.md); hidden from VoiceOver since the row's
+            // button trait + hint already convey "actionable".
+            if onSelectGroup != nil {
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
             }
         }
     }

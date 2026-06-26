@@ -1408,6 +1408,59 @@ struct PlaidBarTests {
         #expect(popover.contains(".accessibilityLabel(summary.accessibilityLabel)"))
     }
 
+    // MARK: - Donut → Transactions drill-in (AND-730)
+
+    /// Source-invariant guard for AND-730: the Dashboard spend-donut legend rows are
+    /// actionable and deep-link to the Transactions ledger pre-filtered to the tapped
+    /// ``CategoryGroup``. The app target is an `@main` executable that can't be
+    /// `@testable import`ed, so this pins the wiring (the filter→ledger *math* is
+    /// unit-tested in PlaidBarCoreTests). Three seams:
+    ///   1. `SpendDonutChart` exposes an `onSelectGroup` handler and, when present,
+    ///      wraps each legend row in a `Button` with a "Show … transactions" hint
+    ///      (keyboard + VoiceOver reachable, never color-only).
+    ///   2. `CategoryDashboardCard` supplies that handler **only in the window**
+    ///      (`inWindow`) and routes via `openRoute(.transactions(filter:))` carrying
+    ///      the group (and nothing else — no amounts leak under Privacy Mask).
+    ///   3. The Transactions filter bar surfaces a clearable group facet so the
+    ///      deep-linked filter is visible and reversible.
+    @Test("Dashboard spend-donut legend deep-links to Transactions filtered by category group (AND-730)")
+    func spendDonutLegendDeepLinksToTransactions() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let donut = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/Charts/SpendDonutChart.swift"),
+            encoding: .utf8
+        )
+        let card = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/CategoryDashboardCard.swift"),
+            encoding: .utf8
+        )
+        let filterBar = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/Destinations/TransactionsFilterBar.swift"),
+            encoding: .utf8
+        )
+
+        // 1. The donut takes an optional per-group drill-in handler and, when set,
+        // makes the legend row a button with an accessible "Show … transactions" hint.
+        #expect(donut.contains("var onSelectGroup: (@MainActor (CategoryGroup) -> Void)?"))
+        #expect(donut.contains("if let onSelectGroup {"))
+        #expect(donut.contains("onSelectGroup(slice.group)"))
+        #expect(donut.contains(".accessibilityHint(\"Show \\(slice.title) transactions\")"))
+
+        // 2. The card wires the handler only in the window and deep-links to the
+        // Transactions destination carrying the tapped group (and only the group).
+        #expect(card.contains("@Environment(\\.openRoute) private var openRoute"))
+        #expect(card.contains("onSelectGroup: donutDrillIn"))
+        #expect(card.contains("guard inWindow else { return nil }"))
+        #expect(card.contains(
+            "openRoute(.transactions(filter: TransactionFilterCriteria(categoryGroup: group)))"
+        ))
+
+        // 3. The filter bar exposes the group facet so the deep-linked filter is a
+        // visible, clearable control.
+        #expect(filterBar.contains("$filter.categoryGroup"))
+        #expect(filterBar.contains("Filter by category group"))
+    }
+
     @Test("Dashboard surfaces a Goals glance card that routes to Goals and masks amounts (AND-730)")
     func dashboardGoalsCardWiring() throws {
         let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)

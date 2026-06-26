@@ -162,6 +162,46 @@ struct TransactionWorkspaceTests {
         #expect(out.map(\.id) == ["old"])
     }
 
+    @Test("Category-group facet matches the effective category's parent group (AND-730)")
+    func categoryGroupFacet() {
+        // `.travel` rolls up into the Entertainment group; only "old" is travel.
+        let filter = TransactionWorkspace.Filter(categoryGroup: .entertainment)
+        let out = TransactionWorkspace.filtered(rows(), by: filter, now: now)
+        #expect(out.map(\.id) == ["old"])
+    }
+
+    @Test("Category-group facet keeps every leaf in the group (AND-730)")
+    func categoryGroupFacetSpansLeaves() {
+        // Two different leaves (foodAndDrink + transportation) that both live under
+        // distinct groups — only the foodAndDining group's rows survive.
+        let transactions = [
+            tx("coffee", category: .foodAndDrink),
+            tx("groceries", category: .foodAndDrink),
+            tx("uber", category: .transportation),
+        ]
+        let built = TransactionWorkspace.rows(transactions: transactions, metadata: [], rules: [])
+        let filter = TransactionWorkspace.Filter(categoryGroup: .foodAndDining)
+        let out = TransactionWorkspace.filtered(built, by: filter, now: now)
+        #expect(Set(out.map(\.id)) == ["coffee", "groceries"])
+    }
+
+    @Test("Category-group facet excludes uncategorized rows (AND-730)")
+    func categoryGroupFacetExcludesUncategorized() {
+        let transactions = [tx("uncat", category: nil)]
+        let built = TransactionWorkspace.rows(transactions: transactions, metadata: [], rules: [])
+        let filter = TransactionWorkspace.Filter(categoryGroup: .other)
+        // A row with no effective category never matches a group facet — matching the
+        // donut, which only charts categorized spend.
+        #expect(TransactionWorkspace.filtered(built, by: filter, now: now).isEmpty)
+    }
+
+    @Test("A category-group facet is active and a nil one is not (AND-730)")
+    func categoryGroupActivity() {
+        #expect(TransactionWorkspace.Filter(categoryGroup: .shopping).isActive)
+        #expect(!TransactionWorkspace.Filter(categoryGroup: nil).isActive)
+        #expect(TransactionWorkspace.Filter().cleared().categoryGroup == nil)
+    }
+
     @Test("Date range facet drops rows older than the window")
     func dateFacet() {
         let filter = TransactionWorkspace.Filter(dateRange: .last30Days)
@@ -342,6 +382,49 @@ struct NavigationStateTransactionTests {
         two.selectTransaction(id: "tx2")
         #expect(one.selectedTransactionID == "tx1")
         #expect(two.selectedTransactionID == "tx2")
+    }
+
+    // MARK: - Donut → Transactions deep-link (AND-730)
+
+    @Test("TransactionFilterCriteria maps its category group + facets into a workspace filter (AND-730)")
+    func criteriaToWorkspaceFilter() {
+        let criteria = TransactionFilterCriteria(
+            searchText: "coffee",
+            category: .foodAndDrink,
+            categoryGroup: .foodAndDining,
+            accountId: "acc1"
+        )
+        let filter = criteria.workspaceFilter
+        #expect(filter.searchText == "coffee")
+        #expect(filter.category == .foodAndDrink)
+        #expect(filter.categoryGroup == .foodAndDining)
+        #expect(filter.accountID == "acc1")
+        // A nil accountId becomes the "" all-accounts sentinel.
+        #expect(TransactionFilterCriteria().workspaceFilter.accountID == "")
+    }
+
+    @Test("apply(.transactions(filter:)) pre-applies the carried category group (AND-730)")
+    func applyTransactionsFilterDeepLink() {
+        var state = NavigationState()
+        state.selectTransaction(id: "stale")
+        state.apply(.transactions(filter: TransactionFilterCriteria(categoryGroup: .shopping)))
+        #expect(state.destination == .transactions)
+        #expect(state.transactionFilter.categoryGroup == .shopping)
+        // A real filter change clears the now-possibly-hidden row selection.
+        #expect(state.selectedTransactionID == "")
+    }
+
+    @Test("apply(.transactions()) with no criteria leaves the existing filter intact (AND-730)")
+    func applyBareTransactionsKeepsFilter() {
+        var state = NavigationState()
+        state.setTransactionFilter(TransactionWorkspace.Filter(categoryGroup: .housing))
+        state.selectTransaction(id: "tx1")
+        state.apply(.transactions())
+        #expect(state.destination == .transactions)
+        // A bare navigation must not wipe the user's current filter…
+        #expect(state.transactionFilter.categoryGroup == .housing)
+        // …nor clear the selection (no filter change occurred).
+        #expect(state.selectedTransactionID == "tx1")
     }
 }
 
