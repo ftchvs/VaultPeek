@@ -679,6 +679,16 @@ final class AppState {
     private var localAIInsightsService = LocalAIInsightsService()
     private let notificationService: any NotificationServiceProtocol
     private var refreshTask: Task<Void, Never>?
+    /// Single-flight handle for `refreshDashboard(force:)` (AND-670). The refresh
+    /// loop, ad-hoc `Task { await refreshDashboard() }` spawns (command palette,
+    /// recovery actions, glance/popover buttons), and the glance-command path can
+    /// all request a refresh concurrently. Without a guard, two refresh bodies
+    /// interleave their account/transaction reconciliation, so a slower in-flight
+    /// refresh can commit *after* — and clobber — a newer result. Each call chains
+    /// off this handle (awaits the prior body, then runs its own as the new
+    /// handle), so refresh bodies are serialized: at most one runs at a time and a
+    /// newer request's result is always the one that lands last.
+    private var inFlightRefreshTask: Task<Void, Never>?
     private var localAISummaryRefreshTask: Task<Void, Never>?
     /// Observer tokens for the OS power-state / thermal-state change
     /// notifications that drive energy-aware background refresh (AND-568).
@@ -2861,7 +2871,37 @@ final class AppState {
     /// automatic one (the background loop — fetches only when due per
     /// `automaticRefreshPolicy`). Connectivity is re-probed either way so the
     /// loop keeps self-healing and notifications stay current.
+    ///
+    /// Single-flighted (AND-670): the body runs through `inFlightRefreshTask` so
+    /// the refresh loop, ad-hoc `Task { await refreshDashboard() }` spawns, and the
+    /// glance-command path can never interleave two reconciliations. Each call
+    /// awaits any in-flight body before starting its own, so the result that lands
+    /// last is always the most recently requested one. The `await` here still
+    /// completes only after a refresh body finished, so every caller (button taps,
+    /// recovery actions, the loop) keeps its existing "returns once refreshed"
+    /// contract.
     func refreshDashboard(force: Bool = true) async {
+        // Chain off any in-flight refresh so two bodies never run concurrently.
+        // Capturing the prior handle and awaiting it (rather than cancelling)
+        // preserves the existing semantics: an already-running refresh always
+        // completes, and this newer request runs to completion right after it.
+        let previous = inFlightRefreshTask
+        let task = Task { @MainActor in
+            await previous?.value
+            await performRefreshDashboard(force: force)
+        }
+        inFlightRefreshTask = task
+        await task.value
+        // Clear the handle only when this task is still the latest one, so a
+        // newer chained request keeps the link to its predecessor intact.
+        if inFlightRefreshTask == task {
+            inFlightRefreshTask = nil
+        }
+    }
+
+    /// The actual refresh body. Always invoked through `refreshDashboard(force:)`'s
+    /// single-flight gate (AND-670) so it never runs concurrently with itself.
+    private func performRefreshDashboard(force: Bool) async {
         if refreshDemoDataIfNeeded() { return }
 
         if await consumePendingGlanceCommand() { return }
