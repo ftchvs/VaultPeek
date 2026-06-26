@@ -219,10 +219,7 @@ struct TransactionRoutes: Sendable {
             // credential guidance instead of marking items errored.
             throw PlaidError.credentialsNotConfigured
         } catch {
-            try await tokenStore.updateItemStatus(
-                id: itemId,
-                status: ItemStatusMapping.status(forAPIError: error).rawValue
-            )
+            try await tokenStore.updateItemStatus(id: itemId, forAPIError: error)
             return ItemSyncResult(
                 itemId: itemId,
                 attempted: true,
