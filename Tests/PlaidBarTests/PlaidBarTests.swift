@@ -1228,6 +1228,37 @@ struct PlaidBarTests {
         #expect(dashboard.contains("DashboardYearHeatmapGrid(layout: layout, isPrivacyMasked: appState.shouldMaskFinancialValues)"))
         #expect(insights.contains("InsightsActivityHeatmapGrid(layout: layout, isPrivacyMasked: isMasked)"))
     }
+
+    /// Source-invariant guard for the AND-671 follow-up: the popover heatmap
+    /// (`MainPopover.swift`) renders its interactive cells AND the focused-day
+    /// caption *while Privacy Mask is on*, so both must source their text from the
+    /// mask-aware Core helpers with the live `appState.shouldMaskFinancialValues`
+    /// threaded in — otherwise the per-cell hover/VoiceOver label or the selected
+    /// day's caption would leak the real value. The `@main` app target isn't
+    /// unit-testable, so this string-matches the wiring so it can't be dropped.
+    @Test("Popover heatmap cell help and focused-day caption thread the live Privacy Mask state (AND-671)")
+    func popoverHeatmapMasksCellHelpAndFocusedCaption() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let popover = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/MainPopover.swift"),
+            encoding: .utf8
+        )
+
+        // Per-cell hover/VoiceOver label is sourced from the mask-aware Core label,
+        // and the cell is constructed with the live Privacy Mask state.
+        #expect(popover.contains("SpendingHeatmap.cellLabel(for: day, mode: mode, isPrivacyMasked: isPrivacyMasked)"))
+        #expect(popover.contains("var isPrivacyMasked: Bool = false"))
+        #expect(popover.contains("isPrivacyMasked: appState.shouldMaskFinancialValues"))
+
+        // Focused-day caption: the summary (whose captionText drives the visual
+        // Text and whose accessibilityLabel drives the VoiceOver label) is built
+        // with the live mask flag, so a selected cell never leaks its value.
+        #expect(popover.contains(
+            "SpendingHeatmap.focusedDaySummary(for: selectedDay, in: layout, isPrivacyMasked: appState.shouldMaskFinancialValues)"
+        ))
+        #expect(popover.contains("Text(summary.captionText)"))
+        #expect(popover.contains(".accessibilityLabel(summary.accessibilityLabel)"))
+    }
 }
 
 /// Deterministic `FMMerchantCategorizing` stub for the categorization-tier tests.

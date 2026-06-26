@@ -135,4 +135,64 @@ struct HeatmapFocusSummaryTests {
         #expect(!label.contains("$"))
         #expect(label.contains("0 transactions"))
     }
+
+    // MARK: - Focused-day caption masking (AND-671 follow-up)
+
+    @Test("Unmasked focused-day summary still shows the real amount in both surfaces")
+    func focusedSummaryUnmaskedShowsValue() {
+        let summary = SpendingHeatmap.focusedDaySummary(for: "2026-01-01", in: layout(mode: .spending))
+
+        #expect(summary != nil)
+        #expect(summary?.captionText.contains("$") == true)
+        #expect(summary?.accessibilityLabel.contains("$") == true)
+        #expect(summary?.captionText.contains(PrivacyMaskPresentation.compactValue) == false)
+        #expect(summary?.accessibilityLabel.contains(PrivacyMaskPresentation.compactValue) == false)
+    }
+
+    @Test("Masked focused-day summary hides the amount in caption AND VoiceOver label, keeps date + count")
+    func focusedSummaryMaskedHidesAmountInBothSurfaces() {
+        let summary = SpendingHeatmap.focusedDaySummary(
+            for: "2026-01-01",
+            in: layout(mode: .spending),
+            isPrivacyMasked: true
+        )
+
+        #expect(summary != nil)
+
+        // The amount token is withheld from BOTH the visual caption and the
+        // VoiceOver accessibility label — the live `Text(summary.captionText)`
+        // and `.accessibilityLabel(summary.accessibilityLabel)` in MainPopover
+        // must never render the real value while Privacy Mask is on.
+        #expect(summary?.amountText == PrivacyMaskPresentation.compactValue)
+        #expect(summary?.captionText.contains(PrivacyMaskPresentation.compactValue) == true)
+        #expect(summary?.accessibilityLabel.contains(PrivacyMaskPresentation.compactValue) == true)
+        #expect(summary?.captionText.contains("$") == false)
+        #expect(summary?.accessibilityLabel.contains("$") == false)
+        #expect(summary?.captionText.contains("120") == false)
+        #expect(summary?.accessibilityLabel.contains("120") == false)
+
+        // … but the structural date and the non-financial transaction count stay,
+        // so the focused-day caption still carries meaning when masked.
+        let datePrefix = Formatters.displayTransactionDate("2026-01-01")
+        #expect(summary?.transactionText == "3 transactions")
+        #expect(summary?.captionText.contains(datePrefix) == true)
+        #expect(summary?.captionText.contains("3 transactions") == true)
+        #expect(summary?.accessibilityLabel.contains(datePrefix) == true)
+        #expect(summary?.accessibilityLabel.contains("3 transactions") == true)
+    }
+
+    @Test("Masked focused-day net-cashflow summary drops the sign prefix (no +/- leak)")
+    func focusedSummaryMaskedNetCashflowDropsSignPrefix() {
+        // 2026-01-02 stored -300 → income → would render with a "+" prefix
+        // unmasked; masked, the whole token (prefix included) collapses.
+        let summary = SpendingHeatmap.focusedDaySummary(
+            for: "2026-01-02",
+            in: layout(mode: .netCashflow),
+            isPrivacyMasked: true
+        )
+
+        #expect(summary?.amountText == PrivacyMaskPresentation.compactValue)
+        #expect(summary?.captionText.contains("+") == false)
+        #expect(summary?.accessibilityLabel.contains("+") == false)
+    }
 }

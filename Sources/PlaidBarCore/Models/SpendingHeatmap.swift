@@ -299,9 +299,17 @@ public enum SpendingHeatmap {
     /// selected (the caller shows the range total instead) or when the selected
     /// day key is not present in the layout (stale selection after a data or
     /// range change). Reuses the layout's already-derived `days`.
+    ///
+    /// When `isPrivacyMasked` is `true` the amount token — in both the inline
+    /// `captionText` and the VoiceOver `accessibilityLabel` — collapses to
+    /// `••••` (reusing `amountText`/`cellLabel`'s mask behavior) while the date
+    /// and the non-financial transaction count remain, so the focused-day
+    /// caption never leaks the selected day's value visually or to VoiceOver
+    /// while Privacy Mask is on (ACCESSIBILITY.md / SECURITY.md).
     public static func focusedDaySummary(
         for selectedDay: String?,
-        in layout: SpendingHeatmapLayout
+        in layout: SpendingHeatmapLayout,
+        isPrivacyMasked: Bool = false
     ) -> SpendingHeatmapFocusSummary? {
         guard let selectedDay,
               let day = layout.days.first(where: { $0.date == selectedDay })
@@ -310,14 +318,14 @@ public enum SpendingHeatmap {
         }
 
         let dateText = Formatters.displayTransactionDate(day.date)
-        let amount = amountText(for: day, mode: layout.mode)
+        let amount = amountText(for: day, mode: layout.mode, isPrivacyMasked: isPrivacyMasked)
         let count = transactionText(for: day)
         return SpendingHeatmapFocusSummary(
             dateText: dateText,
             amountText: amount,
             transactionText: count,
             captionText: "\(dateText) · \(amount) · \(count)",
-            accessibilityLabel: cellLabel(for: day, mode: layout.mode)
+            accessibilityLabel: cellLabel(for: day, mode: layout.mode, isPrivacyMasked: isPrivacyMasked)
         )
     }
 

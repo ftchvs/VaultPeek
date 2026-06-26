@@ -1063,7 +1063,7 @@ private struct BalanceActivityHeatmap: View {
 
     @ViewBuilder
     private func focusedDayCaption(for layout: SpendingHeatmapLayout) -> some View {
-        if let summary = SpendingHeatmap.focusedDaySummary(for: selectedDay, in: layout), !isInitialLoad {
+        if let summary = SpendingHeatmap.focusedDaySummary(for: selectedDay, in: layout, isPrivacyMasked: appState.shouldMaskFinancialValues), !isInitialLoad {
             HStack(spacing: 4) {
                 Image(systemName: "calendar")
                     .font(.system(size: 9, weight: .semibold))
