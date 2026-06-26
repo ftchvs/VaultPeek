@@ -4291,7 +4291,7 @@ final class AppState {
         }
         let systemSurfaceMaskEnabled = shouldMaskFinancialValues
             || ((try? PrivacyMaskControlCommandReader.peek()?.maskEnabled) == true)
-        // Bump and capture the write generation up front so *both* off-actor
+        // Bump and capture the write generation up front so *both* snapshot
         // publishes below — the App Group finance snapshot and the glance snapshot
         // — are gated on the same token (AND-670). A clear path
         // (`clearGlanceSnapshot` / `clearPublishedSystemSnapshotsForDemoEntry`)
@@ -4303,7 +4303,7 @@ final class AppState {
         let generation = glanceSnapshotWriteGeneration
         // Keep the App Intents snapshot fresh on the same path that already
         // recomputes summaries for the widget (AND-512). Guarded by `generation`
-        // so its detached save cannot land after a newer clear/write (AND-670).
+        // so its commit cannot land after a newer clear/write (AND-670).
         writeFinanceSnapshot(updatedAt: updatedAt, generation: generation)
         // Trail the authoritative in-memory data into the disposable read-model
         // cache so the next cold start renders instantly (AND-566). This is the
@@ -4364,10 +4364,9 @@ final class AppState {
     /// `isMasked == true` so the intents withhold the figures past the lock.
     ///
     /// `generation` is the `glanceSnapshotWriteGeneration` token captured by the
-    /// caller (`writeGlanceSnapshot`). The detached App Group save re-checks it on
-    /// the MainActor before committing so a stale snapshot cannot overwrite a newer
-    /// write — or resurrect figures a clear already wiped — exactly like the glance
-    /// snapshot `Task` (AND-670).
+    /// caller (`writeGlanceSnapshot`). The App Group commit re-checks it on the
+    /// MainActor before writing so a stale snapshot cannot overwrite a newer write
+    /// — or resurrect figures a clear already wiped (AND-670).
     private func writeFinanceSnapshot(updatedAt: Date = Date(), generation: Int) {
         // Defense in depth alongside `writeGlanceSnapshot`'s guard: never publish
         // demo fixtures to the shared App Group `FinanceSnapshot` that backs the
@@ -4404,24 +4403,21 @@ final class AppState {
             creditUtilizationThreshold: creditUtilizationThreshold,
             generatedAt: updatedAt
         )
-        // Generation-gated, off-actor write (AND-670): re-check the captured
-        // generation on the MainActor first, so a clear/newer write that bumped
-        // `glanceSnapshotWriteGeneration` after this snapshot was built drops this
-        // stale save instead of resurrecting pre-clear figures into the App Group
-        // `FinanceSnapshot`. Mirrors the glance snapshot `Task`'s guard. The file IO
-        // itself then runs off the main actor (the snapshot is `Sendable` and the
-        // store a stateless enum), preserving the prior non-blocking contract.
+        // Generation-gated commit (AND-670): re-check the captured generation on
+        // the MainActor immediately before writing. Keeping this small App Group
+        // snapshot write on the same executor as clears closes the clear-vs-save
+        // race; if a clear wins before this task runs, the generation mismatch
+        // drops the stale snapshot, and if a clear runs after this synchronous
+        // commit it removes the just-written file.
         Task { [generation] in
             guard self.glanceSnapshotWriteGeneration == generation else { return }
-            await Task.detached(priority: .utility) {
-                do {
-                    try AppGroupSnapshotStore.save(snapshot)
-                } catch {
-                    AppState.glanceSnapshotLogger.error(
-                        "Failed to write finance snapshot: \(String(describing: error), privacy: .public)"
-                    )
-                }
-            }.value
+            do {
+                try AppGroupSnapshotStore.save(snapshot)
+            } catch {
+                AppState.glanceSnapshotLogger.error(
+                    "Failed to write finance snapshot: \(String(describing: error), privacy: .public)"
+                )
+            }
         }
         // Keep the display-only Spotlight account index in lockstep with the
         // finance snapshot: this is the shared seam for account load/refresh
