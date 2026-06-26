@@ -149,6 +149,36 @@ struct LocalAIInsightReceiptTests {
         #expect(!receipt.headline.contains("categoryEvidenceAccountSecret"))
     }
 
+    @Test("Privacy Mask withholds receipt counts, category details, and generated free text")
+    func privacyMaskWithholdsReceiptMetadata() {
+        let input = makeInput(transactionCount: 7, includeCategorySuggestion: true)
+        let summary = LocalAIActivitySummary(
+            window: .last7days,
+            availability: Self.disabledAvailability,
+            input: input,
+            generatedSummary: "Last 7D: 7 rows reviewed with Food & Drink as top category.",
+            generatedBullets: [],
+            evidence: input.evidence
+        )
+
+        let receipt = LocalAIInsightReceipt.make(
+            summary: summary,
+            availability: Self.disabledAvailability,
+            privacyMaskEnabled: true
+        )
+        let rendered = ([receipt.headline, receipt.confidence, receipt.accessibilitySummary] +
+            receipt.evidenceChips.flatMap { [$0.label, $0.value] })
+            .joined(separator: " ")
+
+        #expect(receipt.headline == "Spending insight hidden while Privacy Mask is on")
+        #expect(receipt.evidenceChips.first { $0.id == "transactions" }?.value == PrivacyMaskPresentation.compactValue)
+        #expect(!receipt.evidenceChips.contains { $0.id == "top-category" })
+        #expect(!receipt.evidenceChips.contains { $0.id == "category-hints" })
+        #expect(!rendered.contains("7"))
+        #expect(!rendered.contains("Food & Drink"))
+        #expect(!rendered.contains("Category hints"))
+    }
+
     private static let disabledAvailability = LocalAIAvailability(
         state: .disabled,
         detail: "No local AI runtime is configured. VaultPeek is using deterministic local summaries and category hints only."
