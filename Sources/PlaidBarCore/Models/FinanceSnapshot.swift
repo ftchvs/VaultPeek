@@ -107,9 +107,15 @@ public struct FinanceSnapshot: Codable, Sendable, Equatable {
     public let currencySubtotals: [CurrencySubtotal]
     /// Upcoming recurring bills within the look-ahead window, soonest first.
     public let nextRecurringBills: [UpcomingBill]
-    /// Aggregate credit utilization percent (0–100), nil when no credit limit
-    /// is known.
+    /// Credit utilization percent (0–100), nil when no credit limit is known.
+    /// For mixed-currency credit cards, this is the highest single-currency
+    /// utilization, not a pooled cross-currency denominator.
     public let creditUtilization: Double?
+    /// Currency backing ``creditUtilization`` when known.
+    public let creditUtilizationCurrency: CurrencyCode?
+    /// True when ``creditUtilization`` reports one highest-utilization currency
+    /// group while other credit-card currencies also exist.
+    public let creditUtilizationIsMultiCurrency: Bool
     /// ISO currency code for the headline figures (best-effort; "USD" default).
     public let isoCurrencyCode: String
     /// When the snapshot was produced.
@@ -141,6 +147,8 @@ public struct FinanceSnapshot: Codable, Sendable, Equatable {
         currencySubtotals: [CurrencySubtotal] = [],
         nextRecurringBills: [UpcomingBill],
         creditUtilization: Double?,
+        creditUtilizationCurrency: CurrencyCode? = nil,
+        creditUtilizationIsMultiCurrency: Bool = false,
         isoCurrencyCode: String = "USD",
         generatedAt: Date,
         isMasked: Bool,
@@ -155,6 +163,8 @@ public struct FinanceSnapshot: Codable, Sendable, Equatable {
         self.currencySubtotals = currencySubtotals
         self.nextRecurringBills = nextRecurringBills
         self.creditUtilization = creditUtilization
+        self.creditUtilizationCurrency = creditUtilizationCurrency
+        self.creditUtilizationIsMultiCurrency = creditUtilizationIsMultiCurrency
         self.isoCurrencyCode = isoCurrencyCode
         self.generatedAt = generatedAt
         self.isMasked = isMasked
@@ -169,7 +179,8 @@ public struct FinanceSnapshot: Codable, Sendable, Equatable {
     // empty defaults, so an upgrade never fails to read a pre-AND-586 snapshot.
     private enum CodingKeys: String, CodingKey {
         case safeToSpend, totalBalance, accountBalances, nextRecurringBills
-        case currencySubtotals, creditUtilization, isoCurrencyCode, generatedAt, isMasked
+        case currencySubtotals, creditUtilization, creditUtilizationCurrency
+        case creditUtilizationIsMultiCurrency, isoCurrencyCode, generatedAt, isMasked
         case periodSpending, topSpendingCategories
         case safeToSpendConfidence, safeToSpendHorizonEnd
     }
@@ -182,6 +193,8 @@ public struct FinanceSnapshot: Codable, Sendable, Equatable {
         currencySubtotals = try container.decodeIfPresent([CurrencySubtotal].self, forKey: .currencySubtotals) ?? []
         nextRecurringBills = try container.decode([UpcomingBill].self, forKey: .nextRecurringBills)
         creditUtilization = try container.decodeIfPresent(Double.self, forKey: .creditUtilization)
+        creditUtilizationCurrency = try container.decodeIfPresent(CurrencyCode.self, forKey: .creditUtilizationCurrency)
+        creditUtilizationIsMultiCurrency = try container.decodeIfPresent(Bool.self, forKey: .creditUtilizationIsMultiCurrency) ?? false
         isoCurrencyCode = try container.decodeIfPresent(String.self, forKey: .isoCurrencyCode) ?? "USD"
         generatedAt = try container.decode(Date.self, forKey: .generatedAt)
         isMasked = try container.decode(Bool.self, forKey: .isMasked)
@@ -269,5 +282,16 @@ public struct FinanceSnapshot: Codable, Sendable, Equatable {
         )
         .map { "\($0.currency.rawValue) \($0.formattedAmount)" }
         .joined(separator: ", ")
+    }
+
+    public var creditUtilizationScopeLabel: String? {
+        guard creditUtilizationIsMultiCurrency,
+              let creditUtilizationCurrency
+        else { return nil }
+
+        if creditUtilizationCurrency.isResolved {
+            return "\(creditUtilizationCurrency.rawValue) credit-card group"
+        }
+        return "credit-card group without a reported currency"
     }
 }

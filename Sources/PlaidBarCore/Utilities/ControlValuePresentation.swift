@@ -124,9 +124,12 @@ public enum ControlValuePresentation {
             )
         }
         let formatted = Formatters.percent(percent, decimals: 0)
+        let accessibility = snapshot.creditUtilizationScopeLabel.map {
+            "Credit utilization \(formatted), highest in the \($0)"
+        } ?? "Credit utilization \(formatted)"
         return ControlValueDisplay(
             value: formatted,
-            accessibilityLabel: "Credit utilization \(formatted)",
+            accessibilityLabel: accessibility,
             systemImage: "creditcard",
             isWithheld: false
         )

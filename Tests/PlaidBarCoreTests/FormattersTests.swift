@@ -18,7 +18,15 @@ struct FormattersTests {
     func nonUsdCurrency() {
         #expect(!Formatters.currency(1_000, format: .full, currencyCode: "EUR").isEmpty)
         #expect(!Formatters.currency(1_000, format: .compact, currencyCode: "EUR").isEmpty)
-        #expect(Formatters.currency(1_500, format: .abbreviated, currencyCode: "EUR") == "EUR1.5K")
+        // AND-660 #4: an abbreviated non-USD figure separates the currency-code
+        // symbol from the magnitude with a non-breaking space (U+00A0) so it does
+        // not read as `EUR1.5K`. USD (the `$` glyph) keeps no separator.
+        #expect(Formatters.currency(1_500, format: .abbreviated, currencyCode: "EUR") == "EUR\u{00A0}1.5K")
+        #expect(Formatters.currency(2_400_000, format: .abbreviated, currencyCode: "GBP") == "GBP\u{00A0}2.4M")
+        #expect(Formatters.currency(-3_000, format: .abbreviated, currencyCode: "JPY") == "-JPY\u{00A0}3.0K")
+        #expect(Formatters.currency(750, format: .abbreviated, currencyCode: "CAD") == "CAD\u{00A0}750")
+        // USD stays byte-identical to the pre-AND-660 output (no separator).
+        #expect(Formatters.currency(1_500, format: .abbreviated, currencyCode: "USD") == "$1.5K")
     }
 
     @Test("Percent formats with the requested precision")

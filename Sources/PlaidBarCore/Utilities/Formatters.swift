@@ -78,14 +78,20 @@ public enum Formatters {
         let sign = amount < 0 ? "-" : ""
         let magnitude = abs(amount)
         let symbol = currencyCode == "USD" ? "$" : currencyCode
+        // A symbol that is the bare currency code (e.g. `EUR`) — rather than a
+        // glyph like `$` — needs a separator so it does not run into the
+        // magnitude as `EUR1.2K`. Use a non-breaking space so the figure never
+        // wraps between the code and the number. `$` (and the unknown-currency
+        // empty symbol) keep no separator, so USD output is byte-identical.
+        let separator = (symbol.isEmpty || symbol == "$") ? "" : "\u{00A0}"
 
         switch magnitude {
         case 1_000_000...:
-            return "\(sign)\(symbol)\(String(format: "%.1fM", magnitude / 1_000_000))"
+            return "\(sign)\(symbol)\(separator)\(String(format: "%.1fM", magnitude / 1_000_000))"
         case 1_000...:
-            return "\(sign)\(symbol)\(String(format: "%.1fK", magnitude / 1_000))"
+            return "\(sign)\(symbol)\(separator)\(String(format: "%.1fK", magnitude / 1_000))"
         default:
-            return "\(sign)\(symbol)\(String(format: "%.0f", magnitude))"
+            return "\(sign)\(symbol)\(separator)\(String(format: "%.0f", magnitude))"
         }
     }
 

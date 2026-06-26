@@ -154,8 +154,8 @@ struct FigureProvenanceTests {
             exceedsThreshold: false
         )
         let creditAccounts = [
-            AccountDTO(id: "card_a", itemId: "item", name: "Cashback Card", type: .credit, balances: BalanceDTO(current: -1_200, limit: 5_000)),
-            AccountDTO(id: "card_b", itemId: "item", name: "Store Card", type: .credit, balances: BalanceDTO(current: -50)), // no limit
+            AccountDTO(id: "card_a", itemId: "item", name: "Cashback Card", type: .credit, balances: BalanceDTO(current: -1_200, limit: 5_000, isoCurrencyCode: "USD")),
+            AccountDTO(id: "card_b", itemId: "item", name: "Store Card", type: .credit, balances: BalanceDTO(current: -50, isoCurrencyCode: "USD")), // no limit
         ]
 
         let provenance = FigureProvenance.creditUtilization(
@@ -175,6 +175,39 @@ struct FigureProvenanceTests {
         #expect(provenance.derivation.contains("Healthy"))
     }
 
+    @Test("Credit-utilization provenance is scoped to the headline currency")
+    func creditUtilizationProvenanceScopesToHeadlineCurrency() {
+        let summary = WealthSummaryPresentation.CreditUtilizationSummary(
+            percent: 90,
+            usedCredit: 900,
+            totalLimit: 1_000,
+            statusLabel: "High",
+            exceedsThreshold: true,
+            currency: CurrencyCode("EUR"),
+            isMultiCurrency: true
+        )
+        let creditAccounts = [
+            AccountDTO(id: "usd_card", itemId: "item", name: "USD Card", type: .credit, balances: BalanceDTO(current: -1_000, limit: 10_000, isoCurrencyCode: "USD")),
+            AccountDTO(id: "eur_card", itemId: "item", name: "EUR Card", type: .credit, balances: BalanceDTO(current: -900, limit: 1_000, isoCurrencyCode: "EUR")),
+            AccountDTO(id: "eur_store", itemId: "item", name: "EUR Store Card", type: .credit, balances: BalanceDTO(current: -25, isoCurrencyCode: "EUR")),
+        ]
+
+        let provenance = FigureProvenance.creditUtilization(
+            summary: summary,
+            creditAccounts: creditAccounts,
+            freshness: nil
+        )
+
+        #expect(provenance.sources.count == 2)
+        #expect(provenance.sources.contains { $0.label.contains("EUR Card") })
+        #expect(provenance.sources.contains { $0.label.contains("EUR Store Card") })
+        #expect(!provenance.sources.contains { $0.label.contains("USD Card") })
+        #expect(provenance.sources.allSatisfy { !($0.value?.contains("$") ?? false) })
+        #expect(provenance.sources.contains { $0.value?.contains("900") ?? false })
+        #expect(provenance.derivation.contains("EUR"))
+        #expect(provenance.exclusions.contains { $0.contains("not pooled") })
+    }
+
     @Test("Masked credit-utilization derivation drops the status label and amounts")
     func maskedCreditUtilizationHidesValues() {
         let summary = WealthSummaryPresentation.CreditUtilizationSummary(
@@ -185,7 +218,7 @@ struct FigureProvenanceTests {
             exceedsThreshold: true
         )
         let creditAccounts = [
-            AccountDTO(id: "card", itemId: "item", name: "Card", type: .credit, balances: BalanceDTO(current: -4_400, limit: 5_000)),
+            AccountDTO(id: "card", itemId: "item", name: "Card", type: .credit, balances: BalanceDTO(current: -4_400, limit: 5_000, isoCurrencyCode: "USD")),
         ]
 
         let provenance = FigureProvenance.creditUtilization(

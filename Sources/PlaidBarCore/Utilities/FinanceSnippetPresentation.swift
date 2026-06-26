@@ -309,9 +309,12 @@ public enum FinanceSnippetPresentation {
         let clamped = min(max(percent, 0), 100)
         let isHigh = percent >= warningThreshold
         let formatted = Formatters.percent(percent)
-        let a11y = isHigh
-            ? "Credit utilization \(formatted). High — above your \(Formatters.percent(warningThreshold)) warning level."
-            : "Credit utilization \(formatted)."
+        var a11y = snapshot.creditUtilizationScopeLabel.map {
+            "Credit utilization \(formatted). Highest in the \($0)."
+        } ?? "Credit utilization \(formatted)."
+        if isHigh {
+            a11y += " High — above your \(Formatters.percent(warningThreshold)) warning level."
+        }
 
         return CreditUtilizationModel(
             percentText: formatted,

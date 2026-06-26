@@ -64,16 +64,76 @@ public enum MenuBarSummary {
             .reduce(0) { $0 + AccountPresentation.displayBalance(for: $1) }
     }
 
+    /// A credit-utilization figure scoped to a *single* currency. Used credit and
+    /// total limit are only ever summed within one currency, so the ratio is
+    /// always meaningful (AND-660). Pooling a EUR balance against a USD limit — the
+    /// pre-AND-660 bug — produced a fabricated denominator and an arbitrary ratio
+    /// that fed alerts, App Intents, and AI insights.
+    public struct CurrencyUtilization: Sendable, Equatable {
+        public let currency: CurrencyCode
+        public let usedCredit: Double
+        public let totalLimit: Double
+        public let percent: Double
+
+        public init(currency: CurrencyCode, usedCredit: Double, totalLimit: Double, percent: Double) {
+            self.currency = currency
+            self.usedCredit = usedCredit
+            self.totalLimit = totalLimit
+            self.percent = percent
+        }
+    }
+
+    /// Per-currency credit utilization: groups credit-card accounts by their own
+    /// currency and computes used/limit/percent *within* each currency, never
+    /// across currencies (AND-660). Only currencies whose cards report a positive
+    /// total limit are included (a denominator of 0 yields no meaningful ratio).
+    /// Sorted by descending utilization, then currency, so the worst (most
+    /// alert-worthy) currency is first and ties are deterministic.
+    public static func creditUtilizationByCurrency(from accounts: [AccountDTO]) -> [CurrencyUtilization] {
+        var usedByCurrency: [CurrencyCode: Double] = [:]
+        var limitByCurrency: [CurrencyCode: Double] = [:]
+
+        for account in accounts where account.type == .credit {
+            let currency = account.balances.currency
+            // A negative/garbage limit cannot anchor a denominator; clamp at 0 so
+            // a stray value never inflates or deflates the ratio.
+            limitByCurrency[currency, default: 0] += max(account.balances.limit ?? 0, 0)
+            usedByCurrency[currency, default: 0] += abs(account.balances.current ?? 0)
+        }
+
+        return limitByCurrency
+            .compactMap { currency, totalLimit -> CurrencyUtilization? in
+                guard totalLimit > 0 else { return nil }
+                let usedCredit = usedByCurrency[currency] ?? 0
+                return CurrencyUtilization(
+                    currency: currency,
+                    usedCredit: usedCredit,
+                    totalLimit: totalLimit,
+                    percent: (usedCredit / totalLimit) * 100
+                )
+            }
+            .sorted { lhs, rhs in
+                if lhs.percent != rhs.percent { return lhs.percent > rhs.percent }
+                return lhs.currency < rhs.currency
+            }
+    }
+
+    /// The single utilization currency-group that best represents the user's
+    /// credit risk: the **highest** per-currency utilization (AND-660). This is
+    /// the figure surfaced as the headline and the one that decides whether the
+    /// high-utilization alert fires — so a maxed-out EUR card still trips the
+    /// threshold even when a large USD limit would dilute a pooled ratio.
+    /// Returns `nil` when no currency reports a positive total limit.
+    public static func worstCreditUtilization(from accounts: [AccountDTO]) -> CurrencyUtilization? {
+        creditUtilizationByCurrency(from: accounts).first
+    }
+
+    /// Headline credit-utilization percentage. **Per-currency** as of AND-660: the
+    /// worst single-currency utilization, never a cross-currency pooled ratio.
+    /// A same-currency portfolio is byte-identical to the pre-AND-660 value
+    /// (one currency group → the old `used / limit`).
     public static func creditUtilization(from accounts: [AccountDTO]) -> Double? {
-        let creditBalances = accounts
-            .filter { $0.type == .credit }
-            .map(\.balances)
-
-        let totalLimit = creditBalances.reduce(0) { $0 + ($1.limit ?? 0) }
-        guard totalLimit > 0 else { return nil }
-
-        let usedCredit = creditBalances.reduce(0) { $0 + abs($1.current ?? 0) }
-        return (usedCredit / totalLimit) * 100
+        worstCreditUtilization(from: accounts)?.percent
     }
 
     /// Highest single-card utilization (used/limit) across all credit cards,

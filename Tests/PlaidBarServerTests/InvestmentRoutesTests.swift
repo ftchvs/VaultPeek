@@ -138,6 +138,42 @@ struct InvestmentRoutesTests {
         #expect(result.securities.contains { $0.tickerSymbol == "VTI" })
     }
 
+    @Test("Investment mapping preserves unofficial currencies when ISO is absent")
+    func mapsUnofficialInvestmentCurrencies() {
+        let response = PlaidHoldingsResponse(
+            accounts: [
+                PlaidAccount(
+                    accountId: "acct_crypto",
+                    balances: PlaidBalances(available: nil, current: 0.5, limit: nil, isoCurrencyCode: nil, unofficialCurrencyCode: "XBT"),
+                    mask: nil,
+                    name: "Crypto Brokerage",
+                    officialName: nil,
+                    type: "investment",
+                    subtype: "crypto exchange"
+                ),
+            ],
+            holdings: [
+                PlaidHolding(accountId: "acct_crypto", securityId: "sec_btc", quantity: 0.5, institutionPrice: 60_000, institutionValue: 30_000, costBasis: 20_000, isoCurrencyCode: nil, unofficialCurrencyCode: "XBT"),
+            ],
+            securities: [
+                PlaidSecurity(securityId: "sec_btc", name: "Bitcoin", tickerSymbol: "BTC", type: "cryptocurrency", closePrice: 60_000, isoCurrencyCode: nil, unofficialCurrencyCode: "XBT"),
+            ],
+            item: nil,
+            requestId: "req-crypto"
+        )
+
+        let result = InvestmentRoutes.investmentsResponse(
+            from: response,
+            item: item(),
+            itemId: "item-1"
+        )
+
+        #expect(result.accounts.first?.balances.isoCurrencyCode == "XBT")
+        #expect(result.holdings.first?.isoCurrencyCode == "XBT")
+        #expect(result.holdings.first?.currency == CurrencyCode("XBT"))
+        #expect(result.securities.first?.isoCurrencyCode == "XBT")
+    }
+
     @Test("An unknown Plaid account type maps to .other rather than crashing")
     func unknownAccountTypeFallsBack() {
         var response = holdingsResponse()
@@ -246,6 +282,29 @@ struct InvestmentRoutesTests {
         #expect(dto.securityId == "sec_vti")
         #expect(dto.amount == 2_500)
         #expect(dto.type == "buy")
+    }
+
+    @Test("Investment transaction mapping preserves unofficial currency")
+    func mapsInvestmentTransactionUnofficialCurrency() {
+        let plaid = PlaidInvestmentTransaction(
+            investmentTransactionId: "itx-crypto",
+            accountId: "acct_crypto",
+            securityId: "sec_btc",
+            date: "2026-06-01",
+            name: "Buy BTC",
+            quantity: 0.1,
+            price: 60_000,
+            amount: 6_000,
+            fees: nil,
+            type: "buy",
+            subtype: "buy",
+            isoCurrencyCode: nil,
+            unofficialCurrencyCode: "XBT"
+        )
+
+        let dto = InvestmentRoutes.investmentTransactionDTO(from: plaid)
+
+        #expect(dto.isoCurrencyCode == "XBT")
     }
 
     @Test("Merge de-duplicates accounts and securities by id across items")

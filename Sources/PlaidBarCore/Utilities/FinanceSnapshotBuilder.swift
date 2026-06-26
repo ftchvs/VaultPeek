@@ -10,7 +10,7 @@ import Foundation
 ///   used to build `accountBalances`), matching the intent's "spendable balance
 ///   across linked accounts" — not net worth.
 /// - `creditUtilization` ← ``WealthSummaryPresentation`` credit-utilization rule
-///   (recomputed from the same depository/credit balances)
+///   (same worst single-currency group and scope metadata)
 /// - `nextRecurringBills` ← the supplied recurring streams, filtered to dated
 ///   outflows within the horizon and sorted soonest-first.
 public enum FinanceSnapshotBuilder {
@@ -81,7 +81,8 @@ public enum FinanceSnapshotBuilder {
             calendar: calendar
         )
 
-        let utilization = creditUtilizationPercent(from: accounts)
+        let utilizationGroups = MenuBarSummary.creditUtilizationByCurrency(from: accounts)
+        let utilization = utilizationGroups.first
 
         let spending = monthToDateSpending(
             transactions: transactions,
@@ -119,7 +120,9 @@ public enum FinanceSnapshotBuilder {
             accountBalances: accountBalances,
             currencySubtotals: currencySubtotals,
             nextRecurringBills: bills,
-            creditUtilization: utilization,
+            creditUtilization: utilization?.percent,
+            creditUtilizationCurrency: utilization?.currency,
+            creditUtilizationIsMultiCurrency: utilizationGroups.count > 1,
             isoCurrencyCode: currencyCode,
             generatedAt: generatedAt,
             isMasked: isMasked,
@@ -216,19 +219,4 @@ public enum FinanceSnapshotBuilder {
         }
     }
 
-    // MARK: - Credit utilization
-
-    /// Aggregate credit utilization (0–100), nil when no credit limit is known.
-    /// Same rule as ``WealthSummaryPresentation`` (`used / limit * 100`).
-    private static func creditUtilizationPercent(from accounts: [AccountDTO]) -> Double? {
-        let creditBalances = accounts
-            .filter { $0.type == .credit }
-            .map(\.balances)
-
-        let totalLimit = creditBalances.reduce(0) { $0 + max($1.limit ?? 0, 0) }
-        guard totalLimit > 0 else { return nil }
-
-        let usedCredit = creditBalances.reduce(0) { $0 + abs($1.current ?? 0) }
-        return (usedCredit / totalLimit) * 100
-    }
 }

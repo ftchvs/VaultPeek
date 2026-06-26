@@ -311,6 +311,30 @@ struct MultiCurrencyTests {
         #expect(unavailable.disclosure.lowercased().contains("per currency"))
     }
 
+    @Test("Display text renders per-currency amounts when no conversion total exists")
+    func displayTextFallsBackToPerCurrencyAmounts() {
+        let aggregation = CurrencyAggregation.aggregate([
+            (amount: 5_000, currency: .usd),
+            (amount: 2_000, currency: CurrencyCode("EUR")),
+        ])
+
+        let text = MultiCurrencyBalancePresentation.displayText(
+            from: aggregation,
+            format: .compact
+        )
+        #expect(text.contains("5,000"))
+        #expect(text.contains("2,000"))
+        #expect(text.contains("·"))
+        #expect(text != "By currency")
+
+        let masked = MultiCurrencyBalancePresentation.displayText(
+            from: aggregation,
+            format: .compact,
+            privacyMaskEnabled: true
+        )
+        #expect(masked == PrivacyMaskPresentation.compactValue)
+    }
+
     @Test("Menu bar shows the dominant currency's subtotal (no fabricated $ sum) for mixed currencies")
     func menuBarMixedCurrencyShowsDominantSubtotal() {
         // USD subtotal 5,000 dominates the EUR 2,000 subtotal by absolute value.

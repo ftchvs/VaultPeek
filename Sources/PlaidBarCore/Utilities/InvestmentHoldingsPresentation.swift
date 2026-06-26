@@ -100,6 +100,15 @@ public enum InvestmentHoldingsPresentation {
     /// basis, and the aggregate unrealized gain with a directional cue.
     public struct Summary: Sendable, Equatable {
         public let holdingsCount: Int
+        /// Per-currency aggregation of the holdings' market values (AND-660). The
+        /// source of truth for the displayed total: mixed currencies stay grouped
+        /// here and never collapse into a single fabricated `$` figure.
+        public let marketValueAggregation: CurrencyAggregation
+        /// Scalar sum of every holding's market value, *regardless of currency*.
+        /// Retained only as the net-worth inclusion input (callers fold investment
+        /// value into a USD net worth today); it is **not** a display figure and
+        /// must not be rendered with a `$` when ``marketValueAggregation`` is
+        /// multi-currency. Prefer ``totalMarketValueText`` for display.
         public let totalMarketValue: Double
         public let totalCostBasis: Double?
         public let totalGain: Double?
@@ -108,8 +117,13 @@ public enum InvestmentHoldingsPresentation {
         public let totalGainText: String?
         public let accessibilityLabel: String
 
+        /// True when the holdings span more than one currency, so the displayed
+        /// total is a per-currency breakdown rather than a single headline figure.
+        public var isMultiCurrency: Bool { marketValueAggregation.isMultiCurrency }
+
         public init(
             holdingsCount: Int,
+            marketValueAggregation: CurrencyAggregation,
             totalMarketValue: Double,
             totalCostBasis: Double?,
             totalGain: Double?,
@@ -119,6 +133,7 @@ public enum InvestmentHoldingsPresentation {
             accessibilityLabel: String
         ) {
             self.holdingsCount = holdingsCount
+            self.marketValueAggregation = marketValueAggregation
             self.totalMarketValue = totalMarketValue
             self.totalCostBasis = totalCostBasis
             self.totalGain = totalGain
@@ -188,18 +203,22 @@ public enum InvestmentHoldingsPresentation {
             ? PrivacyMaskPresentation.compactValue
             : "\(formatQuantity(holding.quantity)) shares"
 
-        let marketValueText = PrivacyMaskPresentation.currency(
-            holding.marketValue,
-            isEnabled: privacyMaskEnabled
-        )
+        // Render the value/gain in the holding's *own* currency so a EUR
+        // position never reads as `$` (AND-660). Masked figures still collapse to
+        // the placeholder; only the unmasked path threads the currency.
+        let currency = holding.currency
+        let marketValueText = privacyMaskEnabled
+            ? PrivacyMaskPresentation.compactValue
+            : Formatters.currency(holding.marketValue, in: currency)
 
         let gain = holding.unrealizedGain
         let gainDirection = gain.map(Direction.of)
-        let gainText: String? = gain.map { signedCurrency($0, masked: privacyMaskEnabled) }
+        let gainText: String? = gain.map { signedCurrency($0, in: currency, masked: privacyMaskEnabled) }
 
         let accessibilityLabel = holdingAccessibilityLabel(
             name: name,
             ticker: ticker,
+            currency: currency,
             marketValue: holding.marketValue,
             quantity: holding.quantity,
             gain: gain,
@@ -232,6 +251,12 @@ public enum InvestmentHoldingsPresentation {
     ) -> Summary {
         let scoped = accountId.map { id in holdings.filter { $0.accountId == id } } ?? holdings
 
+        // Group market value per currency so a mixed EUR/USD portfolio never
+        // collapses into a single fabricated `$` scalar (AND-660). The scalar
+        // `totalMarketValue` remains for net-worth inclusion only.
+        let marketValueAggregation = CurrencyAggregation.aggregate(
+            scoped.map { (amount: $0.marketValue, currency: $0.currency) }
+        )
         let totalMarketValue = scoped.reduce(0) { $0 + $1.marketValue }
 
         // Cost basis is summable only over the holdings that actually report it.
@@ -243,7 +268,13 @@ public enum InvestmentHoldingsPresentation {
             : basisHoldings.reduce(0) { $0 + ($1.costBasis ?? 0) }
 
         // Gain aggregates over the same basis-reporting holdings so value and
-        // basis stay comparable.
+        // basis stay comparable. Grouped per currency so a EUR gain and a USD
+        // gain are never summed into a meaningless cross-currency number.
+        let gainAggregation: CurrencyAggregation? = basisHoldings.isEmpty
+            ? nil
+            : CurrencyAggregation.aggregate(
+                basisHoldings.map { (amount: $0.marketValue - ($0.costBasis ?? 0), currency: $0.currency) }
+            )
         let totalGain: Double? = totalCostBasis.map { basis in
             basisHoldings.reduce(0) { $0 + $1.marketValue } - basis
         }
@@ -251,23 +282,65 @@ public enum InvestmentHoldingsPresentation {
 
         return Summary(
             holdingsCount: scoped.count,
+            marketValueAggregation: marketValueAggregation,
             totalMarketValue: totalMarketValue,
             totalCostBasis: totalCostBasis,
             totalGain: totalGain,
             gainDirection: direction,
-            totalMarketValueText: PrivacyMaskPresentation.currency(
-                totalMarketValue,
-                isEnabled: privacyMaskEnabled
+            totalMarketValueText: marketValueText(
+                from: marketValueAggregation,
+                privacyMaskEnabled: privacyMaskEnabled
             ),
-            totalGainText: totalGain.map { signedCurrency($0, masked: privacyMaskEnabled) },
+            totalGainText: gainAggregation.map {
+                gainText(from: $0, privacyMaskEnabled: privacyMaskEnabled)
+            },
             accessibilityLabel: summaryAccessibilityLabel(
                 holdingsCount: scoped.count,
-                totalMarketValue: totalMarketValue,
-                totalGain: totalGain,
+                marketValueAggregation: marketValueAggregation,
+                gainAggregation: gainAggregation,
                 direction: direction,
                 privacyMaskEnabled: privacyMaskEnabled
             )
         )
+    }
+
+    /// Display text for the rolled-up market value. Single currency (or a
+    /// priceable conversion) renders one figure; mixed unpriceable currencies
+    /// render a per-currency breakdown, never a fabricated `$` total (AND-660).
+    private static func marketValueText(
+        from aggregation: CurrencyAggregation,
+        privacyMaskEnabled: Bool
+    ) -> String {
+        let headline = MultiCurrencyBalancePresentation.headline(
+            from: aggregation,
+            format: .full,
+            privacyMaskEnabled: privacyMaskEnabled
+        )
+        if let total = headline.formattedTotal { return total }
+        return MultiCurrencyBalancePresentation.subtotalRows(
+            from: aggregation,
+            format: .full,
+            privacyMaskEnabled: privacyMaskEnabled
+        )
+        .map(\.formattedAmount)
+        .joined(separator: " · ")
+    }
+
+    /// Sign-prefixed display text for the rolled-up unrealized gain. Single
+    /// currency renders one signed figure; mixed currencies render a per-currency
+    /// list so EUR and USD gains are never summed (AND-660).
+    private static func gainText(
+        from aggregation: CurrencyAggregation,
+        privacyMaskEnabled: Bool
+    ) -> String {
+        if privacyMaskEnabled { return PrivacyMaskPresentation.compactValue }
+        if let single = aggregation.singleCurrency,
+           let subtotal = aggregation.subtotals.first {
+            return signedCurrency(subtotal.amount, in: single, masked: false)
+        }
+        return aggregation.subtotals
+            .map { signedCurrency($0.amount, in: $0.currency, masked: false) }
+            .joined(separator: " · ")
     }
 
     /// The total market value of all supplied holdings — the figure that should
@@ -319,16 +392,22 @@ public enum InvestmentHoldingsPresentation {
 
     /// A sign-prefixed currency string so the direction reads textually even in
     /// monochrome / for VoiceOver — never relying on color. Masked under Privacy
-    /// Mask.
-    static func signedCurrency(_ amount: Double, masked: Bool) -> String {
+    /// Mask. Rendered in `currency`'s own native format (AND-660) so a EUR gain
+    /// shows as EUR, not `$`.
+    static func signedCurrency(_ amount: Double, in currency: CurrencyCode, masked: Bool) -> String {
+        if masked { return PrivacyMaskPresentation.compactValue }
         // Uses the typographic U+2212 MINUS SIGN (not ASCII hyphen-minus) for a
-        // negative gain — preserved exactly via the `minusGlyph` knob.
-        Formatters.signedCurrency(amount, format: .full, minusGlyph: "\u{2212}", masked: masked)
+        // negative gain, and the holding's native currency for the magnitude.
+        let magnitude = Formatters.currency(abs(amount), in: currency, format: .full)
+        if amount > 0 { return "+\(magnitude)" }
+        if amount < 0 { return "\u{2212}\(magnitude)" }
+        return magnitude
     }
 
     private static func holdingAccessibilityLabel(
         name: String,
         ticker: String?,
+        currency: CurrencyCode,
         marketValue: Double,
         quantity: Double,
         gain: Double?,
@@ -344,17 +423,17 @@ public enum InvestmentHoldingsPresentation {
         }
 
         parts.append("\(formatQuantity(quantity)) shares")
-        parts.append("worth \(Formatters.currency(marketValue))")
+        parts.append("worth \(Formatters.currency(marketValue, in: currency))")
         if let gain, let gainDirection {
-            parts.append("\(gainDirection.spokenWord) \(Formatters.currency(abs(gain)))")
+            parts.append("\(gainDirection.spokenWord) \(Formatters.currency(abs(gain), in: currency))")
         }
         return parts.joined(separator: ", ")
     }
 
     private static func summaryAccessibilityLabel(
         holdingsCount: Int,
-        totalMarketValue: Double,
-        totalGain: Double?,
+        marketValueAggregation: CurrencyAggregation,
+        gainAggregation: CurrencyAggregation?,
         direction: Direction,
         privacyMaskEnabled: Bool
     ) -> String {
@@ -362,9 +441,22 @@ public enum InvestmentHoldingsPresentation {
         if privacyMaskEnabled {
             return "\(positions), value hidden while Privacy Mask is on"
         }
-        var label = "\(positions), total value \(Formatters.currency(totalMarketValue))"
-        if let totalGain {
-            label += ", \(direction.spokenWord) \(Formatters.currency(abs(totalGain)))"
+        // Name the total per currency so VoiceOver never speaks a fabricated `$`
+        // figure for a mixed-currency portfolio (AND-660).
+        let valueText = marketValueText(from: marketValueAggregation, privacyMaskEnabled: false)
+        var label = "\(positions), total value \(valueText)"
+        if let gainAggregation {
+            // Single currency keeps the prior "<direction> <amount>" phrasing; a
+            // mixed-currency gain reads as a per-currency list.
+            if let single = gainAggregation.singleCurrency,
+               let subtotal = gainAggregation.subtotals.first {
+                label += ", \(Direction.of(subtotal.amount).spokenWord) \(Formatters.currency(abs(subtotal.amount), in: single))"
+            } else {
+                let perCurrency = gainAggregation.subtotals
+                    .map { "\(Direction.of($0.amount).spokenWord) \(Formatters.currency(abs($0.amount), in: $0.currency))" }
+                    .joined(separator: ", ")
+                label += ", \(perCurrency)"
+            }
         }
         return label
     }

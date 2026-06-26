@@ -263,6 +263,21 @@ struct FinanceAppIntentsPackageTests {
         #expect(model.accessibilityLabel.lowercased().contains("high"))
     }
 
+    @Test("Mixed-currency credit-utilization snippet names the scoped currency")
+    func creditUtilizationSnippetNamesMixedCurrencyScope() {
+        let model = FinanceSnippetPresentation.creditUtilization(
+            from: snapshot(
+                creditUtilization: 90,
+                creditUtilizationCurrency: CurrencyCode("EUR"),
+                creditUtilizationIsMultiCurrency: true
+            )
+        )
+
+        #expect(model.percentText == Formatters.percent(90))
+        #expect(model.accessibilityLabel.contains("Highest"))
+        #expect(model.accessibilityLabel.contains("EUR"))
+    }
+
     @Test("Utilization over 100% clamps the gauge fraction to 1")
     func creditUtilizationSnippetClampsAbove100() {
         let model = FinanceSnippetPresentation.creditUtilization(from: snapshot(creditUtilization: 130))
@@ -294,6 +309,8 @@ struct FinanceAppIntentsPackageTests {
         totalBalance: Double = 5_000,
         bills: [FinanceSnapshot.UpcomingBill] = [],
         creditUtilization: Double? = 20,
+        creditUtilizationCurrency: CurrencyCode? = nil,
+        creditUtilizationIsMultiCurrency: Bool = false,
         isMasked: Bool = false,
         periodSpending: Double = 0,
         categories: [FinanceSnapshot.CategorySpend] = [],
@@ -308,6 +325,8 @@ struct FinanceAppIntentsPackageTests {
             ],
             nextRecurringBills: bills,
             creditUtilization: creditUtilization,
+            creditUtilizationCurrency: creditUtilizationCurrency,
+            creditUtilizationIsMultiCurrency: creditUtilizationIsMultiCurrency,
             generatedAt: asOf,
             isMasked: isMasked,
             periodSpending: periodSpending,

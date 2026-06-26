@@ -140,6 +140,7 @@ struct InvestmentRoutes: Sendable {
                     current: account.balances.current,
                     limit: account.balances.limit,
                     isoCurrencyCode: account.balances.isoCurrencyCode
+                        ?? account.balances.unofficialCurrencyCode
                 ),
                 institutionName: item.institutionName
             )
@@ -153,6 +154,7 @@ struct InvestmentRoutes: Sendable {
                 institutionValue: holding.institutionValue,
                 costBasis: holding.costBasis,
                 isoCurrencyCode: holding.isoCurrencyCode
+                    ?? holding.unofficialCurrencyCode
             )
         }
         let securities = response.securities.map { security in
@@ -163,6 +165,7 @@ struct InvestmentRoutes: Sendable {
                 type: security.type,
                 closePrice: security.closePrice,
                 isoCurrencyCode: security.isoCurrencyCode
+                    ?? security.unofficialCurrencyCode
             )
         }
         return InvestmentsResponse(accounts: accounts, holdings: holdings, securities: securities)
@@ -182,6 +185,7 @@ struct InvestmentRoutes: Sendable {
             type: plaid.type,
             subtype: plaid.subtype,
             isoCurrencyCode: plaid.isoCurrencyCode
+                ?? plaid.unofficialCurrencyCode
         )
     }
 
