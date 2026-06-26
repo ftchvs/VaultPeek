@@ -283,12 +283,19 @@ public enum BudgetRebalancePlanner {
             maxSurplusFraction > 0
         else { return [] }
 
-        let monthRows = schema.budgets.filter { $0.month == month && $0.monthlyLimit > 0 }
+        let monthRows = schema.budgets.filter { $0.month == month }
         guard !monthRows.isEmpty else { return [] }
 
         // Sources: categories under budget, ranked by how much we may pull (a cushion
         // share of the surplus). Destinations: categories over budget, ranked by how
         // far over. Both deterministic (amount desc, then category id asc).
+        //
+        // The zero-limit exclusion applies to *sources only* — you can't pull budget
+        // from a category that has none, and `pullable` below is naturally `0` when
+        // `monthlyLimit == 0`. A zero-limit category is still a legitimate
+        // *destination*: a brand-new or just-zeroed category that is overspent
+        // (`spend > 0`, so `remaining < 0`) must be eligible to receive a share, or
+        // "redistribute within a fixed total" silently drops it (AND-672).
         var sources: [(categoryId: String, available: Double)] = []
         var destinations: [(categoryId: String, overage: Double)] = []
 
@@ -297,6 +304,7 @@ public enum BudgetRebalancePlanner {
             let remaining = row.monthlyLimit - spend
             if remaining > 0 {
                 // Pull at most a fraction of the surplus, but never more than the limit.
+                // `0` when the limit is `0`, so a zero-limit row is never a source.
                 let pullable = min(remaining * maxSurplusFraction, row.monthlyLimit)
                 if pullable > 0 {
                     sources.append((row.categoryId, pullable))
