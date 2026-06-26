@@ -20,6 +20,10 @@ struct CategoryDashboardCard: View {
     /// Opens the detached full dashboard window. Injected by the app scene; a
     /// no-op in previews / headless renders.
     @Environment(\.openCategoryDashboard) private var openCategoryDashboard
+    /// Deep-links a ``Route`` into the window-first primary window. No-op by default
+    /// (popover / preview / headless), so the donut drill-in only activates in the
+    /// window workspace (AND-730).
+    @Environment(\.openRoute) private var openRoute
 
     /// Mounts the shared card on the **window** workspace rather than the popover.
     /// In the window the card backs onto the solid window surface
@@ -47,7 +51,11 @@ struct CategoryDashboardCard: View {
                 if model.isEmpty {
                     emptyState
                 } else {
-                    SpendDonutChart(model: model.donut, isPrivacyMasked: isMasked)
+                    SpendDonutChart(
+                        model: model.donut,
+                        isPrivacyMasked: isMasked,
+                        onSelectGroup: donutDrillIn
+                    )
 
                     if !model.topGroups.isEmpty {
                         topGroups(model)
@@ -181,6 +189,23 @@ struct CategoryDashboardCard: View {
         }
         .buttonStyle(.plain)
         .accessibilityHint("Opens the full category dashboard in a window")
+    }
+
+    // MARK: - Donut drill-in (AND-730)
+
+    /// The donut/legend drill-in closure, supplied **only on the window workspace**
+    /// (`inWindow`) where a Transactions destination exists to land on. In the
+    /// popover it is `nil`, so the legend stays a read-only breakdown (and even if it
+    /// weren't, `openRoute` is a no-op there). Tapping a slice/legend row deep-links
+    /// to the Transactions ledger pre-filtered to that ``CategoryGroup``, closing the
+    /// analyze→act loop. Carrying only the group (not amounts) means the affordance
+    /// leaks nothing under Privacy Mask — the Transactions surface re-applies its own
+    /// mask.
+    private var donutDrillIn: (@MainActor (CategoryGroup) -> Void)? {
+        guard inWindow else { return nil }
+        return { group in
+            openRoute(.transactions(filter: TransactionFilterCriteria(categoryGroup: group)))
+        }
     }
 
     // MARK: - Helpers

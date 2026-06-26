@@ -305,6 +305,11 @@ final class NavigationModel {
         // relaunch like a manual selection / destination switch did.
         persistDestination()
         persistSelectedAccountID()
+        // A `.transactions(filter:)` deep-link (e.g. the Dashboard spend-donut →
+        // category-group filter, AND-730) folds its criteria into the workspace
+        // filter inside `state.apply`; mirror that to disk so the pre-applied filter
+        // survives a relaunch like a manual filter change did.
+        persistTransactionFilter()
     }
 
     func deselectAccount() {

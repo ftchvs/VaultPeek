@@ -5,19 +5,42 @@ import Foundation
 public struct TransactionFilterCriteria: Equatable, Sendable, Codable, Hashable {
     public let searchText: String
     public let category: SpendingCategory?
+    /// A parent ``CategoryGroup`` to filter to — the group-level facet a Dashboard
+    /// spend-donut slice / legend row deep-links into (AND-730). Purely additive
+    /// (defaults to `nil`), so existing leaf-`category` deep-links are unchanged.
+    public let categoryGroup: CategoryGroup?
     public let accountId: String?
     public let startDate: String?
 
     public init(
         searchText: String = "",
         category: SpendingCategory? = nil,
+        categoryGroup: CategoryGroup? = nil,
         accountId: String? = nil,
         startDate: String? = nil
     ) {
         self.searchText = searchText
         self.category = category
+        self.categoryGroup = categoryGroup
         self.accountId = accountId
         self.startDate = startDate
+    }
+
+    /// Translates these criteria into the window-first ledger's
+    /// ``TransactionWorkspace/Filter`` (AND-730). Lets a typed
+    /// ``Route/transactions(filter:focus:)`` deep-link pre-apply a category-group
+    /// (donut) or leaf-category filter when the window's Transactions destination
+    /// consumes the route. The `startDate` is intentionally dropped — the workspace
+    /// models date as a relative ``TransactionWorkspace/DateRange`` rather than an
+    /// absolute lower bound — so a donut/legend link carries only the facets the
+    /// ledger represents.
+    public var workspaceFilter: TransactionWorkspace.Filter {
+        TransactionWorkspace.Filter(
+            accountID: accountId ?? "",
+            category: category,
+            categoryGroup: categoryGroup,
+            searchText: searchText
+        )
     }
 }
 

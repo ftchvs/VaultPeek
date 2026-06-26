@@ -125,8 +125,14 @@ public extension TransactionWorkspace {
     struct Filter: Sendable, Codable, Hashable {
         /// Empty string ⇒ all accounts (matches the dashboard "" sentinel).
         public var accountID: String
-        /// `nil` ⇒ all categories. Matches the row's *effective* category.
+        /// `nil` ⇒ all categories. Matches the row's *effective* leaf category.
         public var category: SpendingCategory?
+        /// `nil` ⇒ all category groups. Matches when the row's *effective* category
+        /// rolls up into this ``CategoryGroup`` — the group-level facet a Dashboard
+        /// donut slice / legend deep-links into (AND-730). It composes (AND) with the
+        /// leaf `category` facet, though the two are normally set independently: the
+        /// donut sets the group, the filter bar sets the leaf.
+        public var categoryGroup: CategoryGroup?
         public var dateRange: DateRange
         public var amountBand: AmountBand
         public var status: StatusFilter
@@ -136,6 +142,7 @@ public extension TransactionWorkspace {
         public init(
             accountID: String = "",
             category: SpendingCategory? = nil,
+            categoryGroup: CategoryGroup? = nil,
             dateRange: DateRange = .allTime,
             amountBand: AmountBand = .any,
             status: StatusFilter = .any,
@@ -143,6 +150,7 @@ public extension TransactionWorkspace {
         ) {
             self.accountID = accountID
             self.category = category
+            self.categoryGroup = categoryGroup
             self.dateRange = dateRange
             self.amountBand = amountBand
             self.status = status
@@ -154,6 +162,7 @@ public extension TransactionWorkspace {
         public var isActive: Bool {
             !accountID.isEmpty
                 || category != nil
+                || categoryGroup != nil
                 || dateRange != .allTime
                 || amountBand != .any
                 || status != .any
@@ -386,6 +395,13 @@ public extension TransactionWorkspace {
                 // Match against the *effective* (override-aware) category so a
                 // recategorized row filters where the user expects it.
                 guard row.effectiveCategory == category else { return false }
+            }
+            if let group = filter.categoryGroup {
+                // Match the row's *effective* category's parent group (a donut slice
+                // is a group, not a leaf). An uncategorized row never matches a group
+                // facet, so it is excluded — matching the donut, which only charts
+                // categorized spend.
+                guard row.effectiveCategory?.group == group else { return false }
             }
             if let lowerBound, row.transaction.date < lowerBound {
                 return false

@@ -164,9 +164,19 @@ public struct NavigationState: Sendable, Equatable, Codable {
             // An account deep-link selects that account on the dashboard surface
             // too, so the existing inspector follows the link.
             if let itemID { selectedAccountID = itemID }
+        case .transactions(let criteria, _):
+            // A Transactions deep-link that carries filter criteria (e.g. the
+            // Dashboard spend-donut → "show this group's transactions", AND-730)
+            // pre-applies them as the active ledger filter. `setTransactionFilter`
+            // clears any stale row selection on a real change, so the inspector
+            // returns to its prompt rather than pointing at a now-hidden row. A
+            // `nil`/empty criteria leaves the workspace filter untouched, so a bare
+            // `.transactions()` navigation does not wipe the user's current filter.
+            if let criteria {
+                setTransactionFilter(criteria.workspaceFilter)
+            }
         case .dashboard,
              .review,
-             .transactions,
              .budgets,
              .planning,
              .goals,
