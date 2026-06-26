@@ -328,10 +328,7 @@ public struct FigureProvenance: Equatable, Sendable {
     }
 
     private static func signedCurrency(_ amount: Double) -> String {
-        let magnitude = Formatters.currency(abs(amount), format: .compact)
-        if amount > 0 { return "+\(magnitude)" }
-        if amount < 0 { return "-\(magnitude)" }
-        return magnitude
+        Formatters.signedCurrency(amount, format: .compact)
     }
 
     private static func signedSpokenCurrency(_ amount: Double) -> String {

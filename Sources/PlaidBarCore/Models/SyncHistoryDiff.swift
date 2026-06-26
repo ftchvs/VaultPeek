@@ -128,9 +128,6 @@ public enum SyncHistoryDiff {
     }
 
     private static func signedCurrency(_ amount: Double) -> String {
-        let formatted = Formatters.currency(abs(amount))
-        if amount > 0 { return "+\(formatted)" }
-        if amount < 0 { return "-\(formatted)" }
-        return formatted
+        Formatters.signedCurrency(amount, format: .full)
     }
 }

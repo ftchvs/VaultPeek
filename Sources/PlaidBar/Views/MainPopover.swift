@@ -1156,12 +1156,11 @@ private struct BalanceActivityHeatmap: View {
     }
 
     private func cashflowText(for value: Double) -> String {
-        guard !appState.shouldMaskFinancialValues else {
-            return PrivacyMaskPresentation.compactValue
-        }
-        let displayAmount = SpendingHeatmap.displayCashflowAmount(value)
-        let prefix = displayAmount > 0 ? "+" : displayAmount < 0 ? "-" : ""
-        return "\(prefix)\(Formatters.currency(abs(displayAmount), format: .compact))"
+        Formatters.signedCurrency(
+            SpendingHeatmap.displayCashflowAmount(value),
+            format: .compact,
+            masked: appState.shouldMaskFinancialValues
+        )
     }
 }
 

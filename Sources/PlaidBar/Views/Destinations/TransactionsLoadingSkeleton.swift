@@ -5,9 +5,6 @@ import SwiftUI
 /// implying real data; the rows are decorative and hidden from VoiceOver, which
 /// reads the single status label instead.
 struct TransactionsLoadingSkeleton: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var shimmer = false
-
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.rowVertical) {
             ForEach(0..<8, id: \.self) { _ in
@@ -17,12 +14,10 @@ struct TransactionsLoadingSkeleton: View {
         }
         .padding(.horizontal, Spacing.lg)
         .padding(.vertical, Spacing.sm)
-        .opacity(reduceMotion ? 0.6 : (shimmer ? 0.4 : 0.7))
-        .animation(
-            reduceMotion ? nil : .easeInOut(duration: 0.9).repeatForever(autoreverses: true),
-            value: shimmer
-        )
-        .onAppear { shimmer = true }
+        // Reuse the shared SkeletonPulse (AND-664 #3) instead of a hand-rolled
+        // build-time `reduceMotion` read; this also makes the pulse react to a
+        // runtime Reduce-Motion change via the modifier's `onChange`.
+        .modifier(SkeletonPulse())
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Loading transactions")

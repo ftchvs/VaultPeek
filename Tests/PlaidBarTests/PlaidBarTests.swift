@@ -1182,6 +1182,76 @@ struct PlaidBarTests {
         #expect(!wealthFlyout.contains("scale: .window"))
     }
 
+    // MARK: - Consolidated finance presentation (AND-664)
+
+    /// Source-invariant guard for AND-664 #3: `TransactionsLoadingSkeleton` reuses
+    /// the shared `SkeletonPulse` modifier instead of a hand-rolled build-time
+    /// `reduceMotion` shimmer, and `SkeletonPulse` is promoted to `internal`
+    /// (no longer `private`) so it can be shared. The app target is an `@main`
+    /// executable that can't be `@testable import`ed, so this pins the call sites.
+    @Test("TransactionsLoadingSkeleton reuses the shared internal SkeletonPulse (AND-664 #3)")
+    func transactionsSkeletonReusesSharedPulse() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let skeletonSource = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/Destinations/TransactionsLoadingSkeleton.swift"),
+            encoding: .utf8
+        )
+        let loadingSource = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/LoadingSkeletons.swift"),
+            encoding: .utf8
+        )
+
+        // The skeleton now applies the shared modifier and dropped its hand-rolled
+        // shimmer state + inline animation.
+        #expect(skeletonSource.contains(".modifier(SkeletonPulse())"))
+        #expect(!skeletonSource.contains("@State private var shimmer"))
+        #expect(!skeletonSource.contains("repeatForever"))
+
+        // SkeletonPulse is shareable (internal) and reacts to runtime Reduce-Motion.
+        #expect(loadingSource.contains("struct SkeletonPulse: ViewModifier"))
+        #expect(!loadingSource.contains("private struct SkeletonPulse"))
+        #expect(loadingSource.contains(".onChange(of: reduceMotion)"))
+    }
+
+    /// Source-invariant guard for AND-664 #4: the three category-status surfaces
+    /// (status bar, Budgets table, category dashboard) all resolve their verdict
+    /// tint through the one shared `CategoryBudgetStatus?` `verdictTint` extension
+    /// rather than re-declaring the byte-identical `switch`. That mapping encodes an
+    /// accessibility contract (over → negative, nearing → warning, under/nil →
+    /// secondary), so single-sourcing it prevents drift.
+    @Test("Category status surfaces share one verdictTint mapping (AND-664 #4)")
+    func categoryStatusSurfacesShareVerdictTint() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let statusBar = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/CategoryStatusBar.swift"),
+            encoding: .utf8
+        )
+        let budgets = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/Destinations/BudgetsDestinationView.swift"),
+            encoding: .utf8
+        )
+        let dashboard = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/CategoryDashboardWindow.swift"),
+            encoding: .utf8
+        )
+
+        // The shared extension exists with the exact accessibility mapping.
+        #expect(statusBar.contains("extension Optional where Wrapped == CategoryBudgetStatus"))
+        #expect(statusBar.contains("var verdictTint: Color"))
+        #expect(statusBar.contains("case .over: SemanticColors.negative"))
+        #expect(statusBar.contains("case .nearing: SemanticColors.warning"))
+        #expect(statusBar.contains("case .under: .secondary"))
+        #expect(statusBar.contains("case nil: .secondary"))
+
+        // All three surfaces route through it; the two destinations' status-tint
+        // helpers now delegate (a one-line body) instead of re-declaring the switch.
+        // (A blanket `!contains("case .nearing: …")` would over-match the unrelated
+        // `BudgetsStatusSummary.Health` tint, so assert the delegation precisely.)
+        #expect(statusBar.contains("model.status.verdictTint"))
+        #expect(budgets.contains("private func statusTint(_ status: CategoryBudgetStatus?) -> Color {\n        status.verdictTint\n    }"))
+        #expect(dashboard.contains("private func statusTint(_ status: CategoryBudgetStatus?) -> Color {\n        status.verdictTint\n    }"))
+    }
+
     /// Source-invariant guard for AND-625 part (2): the window shell's unified
     /// `.searchable` field now propagates to a second destination (Accounts), which
     /// filters its account list by the shared `\.shellSearchQuery` environment value

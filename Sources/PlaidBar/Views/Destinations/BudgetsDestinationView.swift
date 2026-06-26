@@ -196,13 +196,9 @@ struct BudgetsDestinationView: View {
 
     /// Redundant color cue for the table's status column — the glyph + label already
     /// carry the verdict (ACCESSIBILITY.md), so tint is never the only signal.
+    /// Single-sourced via the shared `verdictTint` mapping (AND-664 #4).
     private func statusTint(_ status: CategoryBudgetStatus?) -> Color {
-        switch status {
-        case .over: SemanticColors.negative
-        case .nearing: SemanticColors.warning
-        case .under: .secondary
-        case nil: .secondary
-        }
+        status.verdictTint
     }
 
     // MARK: - Donut (hero visual)

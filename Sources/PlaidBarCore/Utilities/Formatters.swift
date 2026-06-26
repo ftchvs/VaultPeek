@@ -89,6 +89,35 @@ public enum Formatters {
         }
     }
 
+    /// Sign-prefixed currency string so direction reads textually — never by color
+    /// alone (ACCESSIBILITY.md) — and so VoiceOver/monochrome render it correctly.
+    /// `+` for positive, the chosen `minusGlyph` for negative, and **no** prefix for
+    /// zero; the magnitude is always `currency(abs(amount), format:)`.
+    ///
+    /// AND-664 #2 single-sources the half-dozen hand-rolled copies that all built
+    /// `prefix + currency(abs(amount))`. The knobs preserve each prior call site's
+    /// exact output: `format` (compact vs full), `minusGlyph` (the ASCII
+    /// hyphen-minus `-` most sites use, or the typographic U+2212 `−` the
+    /// investment row deliberately uses), and `masked` (the sites that replace the
+    /// whole value with the Privacy-Mask placeholder when masking is on).
+    ///
+    /// - Parameter minusGlyph: the glyph used for a negative amount. Defaults to the
+    ///   ASCII hyphen-minus `"-"`.
+    /// - Parameter masked: when `true`, returns `PrivacyMaskPresentation.compactValue`
+    ///   instead of any amount — for the sites that mask the value at this layer.
+    public static func signedCurrency(
+        _ amount: Double,
+        format: CurrencyFormat = .full,
+        minusGlyph: String = "-",
+        masked: Bool = false
+    ) -> String {
+        if masked { return PrivacyMaskPresentation.compactValue }
+        let magnitude = currency(abs(amount), format: format)
+        if amount > 0 { return "+\(magnitude)" }
+        if amount < 0 { return "\(minusGlyph)\(magnitude)" }
+        return magnitude
+    }
+
     // MARK: - Dates
 
     private static let transactionDateFormatter: DateFormatter = {

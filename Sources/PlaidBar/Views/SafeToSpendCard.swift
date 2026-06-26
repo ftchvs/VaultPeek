@@ -187,8 +187,7 @@ private struct SafeToSpendBreakdownRow: View {
     }
 
     private var amountText: String {
-        guard !privacyMaskEnabled else { return PrivacyMaskPresentation.compactValue }
-        return signPrefix + Formatters.currency(abs(component.amount), format: .compact)
+        Formatters.signedCurrency(component.amount, format: .compact, masked: privacyMaskEnabled)
     }
 
     private var accessibilityAmountText: String {
@@ -197,12 +196,6 @@ private struct SafeToSpendBreakdownRow: View {
         if component.amount > 0 { return "plus \(magnitude)" }
         if component.amount < 0 { return "minus \(magnitude)" }
         return magnitude
-    }
-
-    private var signPrefix: String {
-        if component.amount > 0 { return "+" }
-        if component.amount < 0 { return "-" }
-        return ""
     }
 
     private var amountTint: Color {

@@ -542,7 +542,7 @@ private struct FlyoutChangeRow: View {
                 HStack(spacing: Spacing.xxs) {
                     Image(systemName: delta > 0 ? "arrow.up.right" : "arrow.down.right")
                         .font(.caption2.weight(.medium))
-                    Text("\(deltaPrefix)\(Formatters.currency(abs(delta), format: .compact)) vs prior")
+                    Text("\(Formatters.signedCurrency(delta, format: .compact)) vs prior")
                         .font(.caption2.weight(.medium))
                         .monospacedDigit()
                 }
@@ -556,10 +556,6 @@ private struct FlyoutChangeRow: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityText)
-    }
-
-    private var deltaPrefix: String {
-        delta > 0 ? "+" : "-"
     }
 
     private var deltaTint: Color {
