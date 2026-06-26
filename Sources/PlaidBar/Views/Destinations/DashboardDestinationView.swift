@@ -161,15 +161,18 @@ struct DashboardDestinationView: View {
         .accessibilityElement(children: .contain)
     }
 
-    /// The right/secondary **Money & insights** column — three cards: recurring
-    /// obligations, the category dashboard, and the local-insight teaser (plus the
-    /// first-run snapshot when present, which is transient). Each re-hosted card
-    /// self-cards, so they are mounted directly under the column banner.
+    /// The right/secondary **Money & insights** column — recurring obligations, the
+    /// savings-goals glance (AND-730), the category dashboard, and the local-insight
+    /// teaser (plus the first-run snapshot when present, which is transient). Each
+    /// re-hosted card self-cards, so they are mounted directly under the column
+    /// banner.
     private var secondaryColumn: some View {
         VStack(alignment: .leading, spacing: WindowMetrics.lg) {
             columnHeader("Money & insights", systemImage: "chart.pie")
 
             DashboardRecurringCard(onOpen: { openRoute(.planning(section: .recurring)) })
+
+            DashboardGoalsCard(onOpen: { openRoute(.goals()) })
 
             CategoryDashboardCard(inWindow: true)
 

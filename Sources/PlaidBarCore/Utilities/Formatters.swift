@@ -4,6 +4,19 @@ public enum CurrencyFormat: String, Sendable {
     case full       // $12,450.32
     case abbreviated // $12.4K
     case compact    // $12,450
+
+    /// Number of fraction digits this format renders. The single source of truth
+    /// for the rounding-consistency policy (AND-731): a figure shown twice on one
+    /// screen, or an aggregate derived from displayed parts, must round to the same
+    /// precision so the on-screen numbers reconcile. `abbreviated` collapses to a
+    /// K/M magnitude with no meaningful cents, so it shares the whole-unit
+    /// precision of `compact`.
+    public var displayFractionDigits: Int {
+        switch self {
+        case .full: return 2
+        case .compact, .abbreviated: return 0
+        }
+    }
 }
 
 public enum Formatters {
@@ -26,6 +39,16 @@ public enum Formatters {
         f.maximumFractionDigits = 0
         return f
     }()
+
+    /// Rounds `amount` to the precision `format` will *display* (AND-731). Use this
+    /// when an aggregate must reconcile with its displayed parts (e.g. net worth ==
+    /// displayed assets − displayed debt): round each part with this first, derive
+    /// the aggregate from the rounded parts, then format — so the on-screen figures
+    /// add up even though the underlying doubles carry sub-cent precision.
+    public static func displayRounded(_ amount: Double, format: CurrencyFormat) -> Double {
+        let scale = pow(10.0, Double(format.displayFractionDigits))
+        return (amount * scale).rounded() / scale
+    }
 
     public static func currency(_ amount: Double, format: CurrencyFormat = .full, currencyCode: String = "USD") -> String {
         switch format {

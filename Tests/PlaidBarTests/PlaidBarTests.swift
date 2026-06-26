@@ -1313,6 +1313,37 @@ struct PlaidBarTests {
         #expect(accounts.contains("visibleAccounts.map(\\.id)"))
     }
 
+    /// Source-invariant guard for AND-731: a money figure must render identically
+    /// across surfaces. The Accounts hero must derive net worth from the *rounded*
+    /// assets and debt (`reconciledNetWorth`) so the displayed trio reconciles
+    /// (displayed net worth == displayed assets − displayed debt), and the Budgets
+    /// hero's duplicated "Left this month" value must render at the same `.full`
+    /// precision the status panel uses, not a divergent `.compact`. The `@main` app
+    /// target isn't unit-testable, so this string-matches the wiring; the numeric
+    /// behavior is proven in `RoundingConsistencyTests`.
+    @Test("Money figures reconcile across surfaces (AND-731)")
+    func moneyFiguresReconcileAcrossSurfaces() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let accounts = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/Destinations/AccountsDestinationView.swift"),
+            encoding: .utf8
+        )
+        let budgets = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/Destinations/BudgetsDestinationView.swift"),
+            encoding: .utf8
+        )
+
+        // Accounts net worth hero is reconciled from the rounded parts, not summed
+        // independently.
+        #expect(accounts.contains("MultiCurrencyBalancePresentation.reconciledNetWorth("))
+        #expect(!accounts.contains("MultiCurrencyBalancePresentation.netWorth(accounts: appState.accounts)"))
+
+        // Budgets "Left this month" hero renders at full precision to match the
+        // status panel's `currency(_:)` (which uses `.full`).
+        #expect(budgets.contains("reconciledHeroCurrency(abs(remaining), masked: masked)"))
+        #expect(budgets.contains("PrivacyMaskPresentation.currency(amount, format: .full, isEnabled: masked, style: .compact)"))
+    }
+
     /// Source-invariant guard for AND-671: each activity-heatmap cell must carry a
     /// per-cell textual affordance (`.help` + `.accessibilityLabel`) so the day's
     /// meaning never rides on tint/opacity alone (ACCESSIBILITY.md). Both window
@@ -1428,6 +1459,39 @@ struct PlaidBarTests {
         // visible, clearable control.
         #expect(filterBar.contains("$filter.categoryGroup"))
         #expect(filterBar.contains("Filter by category group"))
+    }
+
+    @Test("Dashboard surfaces a Goals glance card that routes to Goals and masks amounts (AND-730)")
+    func dashboardGoalsCardWiring() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let dashboard = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/Destinations/DashboardDestinationView.swift"),
+            encoding: .utf8
+        )
+        let card = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/Destinations/DashboardGoalsCard.swift"),
+            encoding: .utf8
+        )
+
+        // The dashboard mounts the goals glance card and deep-links it to the Goals
+        // workspace (not an in-place inspector — the 2-column dashboard has none).
+        #expect(dashboard.contains("DashboardGoalsCard(onOpen: { openRoute(.goals()) })"))
+
+        // The card reads the same local-first store the Goals workspace uses and the
+        // Core-tested top-N preview, so the two surfaces can never disagree.
+        #expect(card.contains("appState.goalsStore"))
+        #expect(card.contains("DashboardGoalsPreview.make(from: store.goals)"))
+        #expect(card.contains("await store.loadIfNeeded()"))
+
+        // Progress is carried by text + the bar; the percent runs through the
+        // mask-aware helper, never the raw "%"-interpolated figure.
+        #expect(!card.contains(#"\(goal.percentComplete)%"#))
+        #expect(card.contains("percent(goal.percentComplete)"))
+        #expect(card.contains("isMasked: isMasked"))
+
+        // An empty goal list shows the quiet affordance, not a blank/broken card.
+        #expect(card.contains("Set a savings goal"))
+        #expect(card.contains("Open Goals"))
     }
 }
 
