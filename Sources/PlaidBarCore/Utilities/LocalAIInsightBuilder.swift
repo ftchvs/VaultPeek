@@ -78,8 +78,7 @@ public enum LocalAIDeterministicSummary {
     }
 
     public static func signedCurrency(_ amount: Double) -> String {
-        let prefix = amount > 0 ? "+" : amount < 0 ? "-" : ""
-        return "\(prefix)\(Formatters.currency(abs(amount), format: .compact))"
+        Formatters.signedCurrency(amount, format: .compact)
     }
 }
 

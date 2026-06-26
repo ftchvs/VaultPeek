@@ -152,8 +152,7 @@ public enum LocalInsightPromptBuilder {
     }
 
     private static func signedMoney(_ value: Double) -> String {
-        let prefix = value > 0 ? "+" : value < 0 ? "-" : ""
-        return "\(prefix)\(Formatters.currency(abs(value), format: .full))"
+        Formatters.signedCurrency(value, format: .full)
     }
 
     private static func plural(_ count: Int) -> String {

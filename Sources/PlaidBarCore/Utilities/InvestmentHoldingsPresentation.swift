@@ -321,11 +321,9 @@ public enum InvestmentHoldingsPresentation {
     /// monochrome / for VoiceOver — never relying on color. Masked under Privacy
     /// Mask.
     static func signedCurrency(_ amount: Double, masked: Bool) -> String {
-        guard !masked else { return PrivacyMaskPresentation.compactValue }
-        let magnitude = Formatters.currency(abs(amount))
-        if amount > 0 { return "+\(magnitude)" }
-        if amount < 0 { return "−\(magnitude)" }
-        return magnitude
+        // Uses the typographic U+2212 MINUS SIGN (not ASCII hyphen-minus) for a
+        // negative gain — preserved exactly via the `minusGlyph` knob.
+        Formatters.signedCurrency(amount, format: .full, minusGlyph: "\u{2212}", masked: masked)
     }
 
     private static func holdingAccessibilityLabel(

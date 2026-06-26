@@ -27,6 +27,87 @@ struct FormattersTests {
         #expect(Formatters.percent(42, decimals: 0) == "42%")
     }
 
+    // MARK: - signedCurrency (AND-664 #2)
+
+    @Test("signedCurrency prefixes by sign and renders the abs magnitude")
+    func signedCurrencySign() {
+        // Positive → "+", negative → minusGlyph, zero → no prefix.
+        #expect(Formatters.signedCurrency(30, format: .compact) == "+\(Formatters.currency(30, format: .compact))")
+        #expect(Formatters.signedCurrency(-30, format: .compact) == "-\(Formatters.currency(30, format: .compact))")
+        #expect(Formatters.signedCurrency(0, format: .compact) == Formatters.currency(0, format: .compact))
+        // No leading "+0"/"-0" on zero.
+        #expect(!Formatters.signedCurrency(0, format: .full).hasPrefix("+"))
+        #expect(!Formatters.signedCurrency(0, format: .full).hasPrefix("-"))
+    }
+
+    @Test("signedCurrency honors the requested format")
+    func signedCurrencyFormat() {
+        #expect(Formatters.signedCurrency(-1_234.56, format: .full) == "-\(Formatters.currency(1_234.56, format: .full))")
+        #expect(Formatters.signedCurrency(-1_234.56, format: .compact) == "-\(Formatters.currency(1_234.56, format: .compact))")
+        // Full and compact differ (decimals), so the two outputs must not be equal.
+        #expect(Formatters.signedCurrency(1_234.56, format: .full) != Formatters.signedCurrency(1_234.56, format: .compact))
+    }
+
+    @Test("signedCurrency uses the supplied minus glyph for negatives only")
+    func signedCurrencyMinusGlyph() {
+        // The investment row deliberately uses the typographic U+2212 MINUS SIGN.
+        #expect(Formatters.signedCurrency(-50, minusGlyph: "\u{2212}") == "\u{2212}\(Formatters.currency(50, format: .full))")
+        // Positive and zero never use the minus glyph.
+        #expect(!Formatters.signedCurrency(50, minusGlyph: "\u{2212}").contains("\u{2212}"))
+        #expect(!Formatters.signedCurrency(0, minusGlyph: "\u{2212}").contains("\u{2212}"))
+        // The default glyph is the ASCII hyphen-minus, distinct from U+2212.
+        #expect(Formatters.signedCurrency(-50) != Formatters.signedCurrency(-50, minusGlyph: "\u{2212}"))
+        #expect(Formatters.signedCurrency(-50).contains("-"))
+    }
+
+    @Test("signedCurrency masks the whole value when masked, regardless of sign")
+    func signedCurrencyMasked() {
+        for amount in [-99.0, 0.0, 42.0] {
+            #expect(Formatters.signedCurrency(amount, masked: true) == PrivacyMaskPresentation.compactValue)
+        }
+        // Unmasked is never the placeholder for a real amount.
+        #expect(Formatters.signedCurrency(42, masked: false) != PrivacyMaskPresentation.compactValue)
+    }
+
+    /// Equivalence: each consolidated call site (AND-664 #2) must render exactly
+    /// what its prior hand-rolled `prefix + currency(abs(...))` produced. This pins
+    /// the per-site parameterization (format / glyph / mask) against a fresh
+    /// re-derivation of the old inline logic.
+    @Test("Consolidated signed-currency sites render identically to their old inline logic")
+    func consolidatedSitesUnchanged() {
+        func oldFull(_ a: Double) -> String {
+            let p = a > 0 ? "+" : a < 0 ? "-" : ""
+            return "\(p)\(Formatters.currency(abs(a), format: .full))"
+        }
+        func oldCompact(_ a: Double) -> String {
+            let p = a > 0 ? "+" : a < 0 ? "-" : ""
+            return "\(p)\(Formatters.currency(abs(a), format: .compact))"
+        }
+        func oldInvestment(_ a: Double, masked: Bool) -> String {
+            guard !masked else { return PrivacyMaskPresentation.compactValue }
+            let m = Formatters.currency(abs(a), format: .full)
+            if a > 0 { return "+\(m)" }
+            if a < 0 { return "\u{2212}\(m)" }
+            return m
+        }
+
+        for amount in [-1_234.56, -1.0, 0.0, 1.0, 4_545.0, 99_999.99] {
+            // LocalAIInsightBuilder / FigureProvenance / MainPopover.cashflowText /
+            // SafeToSpendCard.amountText (compact, ASCII minus).
+            #expect(Formatters.signedCurrency(amount, format: .compact) == oldCompact(amount))
+            // SpendingHeatmap.amountText / LocalInsightModelPrompt.signedMoney /
+            // SyncHistoryDiff.signedCurrency / AccountDetailFlyout delta (full, ASCII minus).
+            #expect(Formatters.signedCurrency(amount, format: .full) == oldFull(amount))
+            // InvestmentHoldingsPresentation.signedCurrency (full, U+2212, maskable).
+            #expect(Formatters.signedCurrency(amount, format: .full, minusGlyph: "\u{2212}", masked: false) == oldInvestment(amount, masked: false))
+            #expect(Formatters.signedCurrency(amount, format: .full, minusGlyph: "\u{2212}", masked: true) == oldInvestment(amount, masked: true))
+        }
+
+        // The public LocalAIDeterministicSummary delegate keeps its compact output.
+        #expect(LocalAIDeterministicSummary.signedCurrency(-12.5) == oldCompact(-12.5))
+        #expect(LocalAIDeterministicSummary.signedCurrency(12.5) == oldCompact(12.5))
+    }
+
     @Test("Display date special-cases today and yesterday")
     func displayDate() throws {
         #expect(Formatters.displayDate(Date()) == "Today")

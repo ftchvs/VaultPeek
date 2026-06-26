@@ -262,9 +262,7 @@ public enum SpendingHeatmap {
         case .spending:
             return Formatters.currency(day.value, format: .full)
         case .netCashflow:
-            let displayAmount = displayCashflowAmount(day.value)
-            let prefix = displayAmount > 0 ? "+" : displayAmount < 0 ? "-" : ""
-            return "\(prefix)\(Formatters.currency(abs(displayAmount), format: .full))"
+            return Formatters.signedCurrency(displayCashflowAmount(day.value), format: .full)
         }
     }
 
