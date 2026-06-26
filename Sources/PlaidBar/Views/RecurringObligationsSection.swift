@@ -241,18 +241,19 @@ private struct FlagBadge: View {
     }
 }
 
+/// A quiet, icon-only "low confidence" cue (AND-729). The full "Low confidence"
+/// text capsule, repeated on every estimated row, read as a wall of hedges and
+/// competed with the actionable attention flags. Reduced to a single subtle
+/// glyph with the wording on hover: the actionable ``FlagBadge``s stay loud
+/// (text + capsule), while the confidence caveat recedes. The glyph shape — not
+/// color — carries the cue, and the row's accessibility label still voices "low
+/// confidence" (never color alone, ACCESSIBILITY.md).
 private struct LowConfidenceBadge: View {
     var body: some View {
-        Label {
-            Text(RecurringConfidenceLevel.low.label)
-        } icon: {
-            Image(systemName: RecurringConfidenceLevel.low.iconName)
-        }
-        .font(.caption2.weight(.medium))
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, Spacing.xs)
-        .padding(.vertical, Spacing.chipVertical)
-        .background(.quinary, in: Capsule())
-        .lineLimit(1)
+        Image(systemName: RecurringConfidenceLevel.low.iconName)
+            .font(.caption2.weight(.medium))
+            .foregroundStyle(.tertiary)
+            .help(RecurringConfidenceLevel.low.label)
+            .accessibilityHidden(true)
     }
 }
