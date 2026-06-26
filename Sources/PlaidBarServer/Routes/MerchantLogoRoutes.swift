@@ -28,9 +28,9 @@ struct MerchantLogoRoutes: Sendable {
     /// Hard ceiling on a single buffered logo response. Brand logos are small
     /// PNG/SVG assets (a few KB); 2 MB leaves generous headroom while bounding
     /// the in-memory buffer so a misbehaving or compromised upstream can't pin
-    /// arbitrary memory in the proxy. Enforced both via the advertised
-    /// `Content-Length` (fast reject before the body streams) and the actual
-    /// byte count (a chunked or lying upstream can't bypass the cap).
+    /// arbitrary memory in the proxy. Enforced before streaming via advertised
+    /// `Content-Length` and during streaming so a chunked or lying upstream
+    /// can't grow the local buffer past the cap.
     static let maxLogoBytes = 2 * 1024 * 1024
 
     /// Content types we are willing to serve back. The upstream `Content-Type`
@@ -85,28 +85,37 @@ struct MerchantLogoRoutes: Sendable {
             return CachedLogo(data: cached, contentType: Self.sniffContentType(of: cached))
         }
 
-        let (data, response) = try await session.data(from: url)
+        let (bytes, response) = try await session.bytes(from: url)
         guard let http = response as? HTTPURLResponse,
-              (200..<300).contains(http.statusCode),
-              !data.isEmpty
+              (200..<300).contains(http.statusCode)
         else {
             throw HTTPError(.notFound, message: "Logo unavailable")
         }
-        // Reject anything larger than the cap. The advertised `Content-Length`
-        // is checked first so an oversized response is refused before its body
-        // is buffered; the materialized byte count is checked too, since a
-        // chunked or dishonest upstream can omit/understate the header.
+        // URLSession follows redirects, so an allowed Plaid URL could redirect
+        // elsewhere; re-validate the FINAL host before reading any body bytes so
+        // the allowlist applies to the bytes actually served.
+        guard let finalHost = http.url?.host, Self.allowedHosts.contains(finalHost) else {
+            throw HTTPError(.notFound, message: "Logo redirected to a disallowed host")
+        }
+
+        let advertisedContentLength = Self.advertisedContentLength(http)
+        // Reject an honest oversized response before streaming the body.
         guard !Self.exceedsLogoSizeLimit(
-            advertisedContentLength: Self.advertisedContentLength(http),
-            actualByteCount: data.count
+            advertisedContentLength: advertisedContentLength,
+            actualByteCount: 0
         ) else {
             throw HTTPError(.notFound, message: "Logo exceeds size limit")
         }
-        // URLSession follows redirects, so an allowed Plaid URL could redirect
-        // elsewhere; re-validate the FINAL host so the allowlist applies to the
-        // bytes actually served, never caching from a non-allowlisted host.
-        guard let finalHost = http.url?.host, Self.allowedHosts.contains(finalHost) else {
-            throw HTTPError(.notFound, message: "Logo redirected to a disallowed host")
+
+        var data = Data()
+        data.reserveCapacity(min(advertisedContentLength ?? 0, Self.maxLogoBytes))
+        for try await byte in bytes {
+            guard Self.appendLogoByte(byte, to: &data) else {
+                throw HTTPError(.notFound, message: "Logo exceeds size limit")
+            }
+        }
+        guard !data.isEmpty else {
+            throw HTTPError(.notFound, message: "Logo unavailable")
         }
 
         try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
@@ -123,6 +132,17 @@ struct MerchantLogoRoutes: Sendable {
             return true
         }
         return actualByteCount > maxLogoBytes
+    }
+
+    /// Appends one streamed byte without letting the local logo buffer exceed
+    /// ``maxLogoBytes``. Returns `false` before mutating once the buffer is full,
+    /// so the caller can abort a chunked or understated response at the boundary.
+    static func appendLogoByte(_ byte: UInt8, to data: inout Data) -> Bool {
+        guard data.count < maxLogoBytes else {
+            return false
+        }
+        data.append(byte)
+        return true
     }
 
     /// Parses the upstream `Content-Length` if present and well-formed. A

@@ -108,6 +108,19 @@ struct ServerMemoryBoundsTests {
         ))
     }
 
+    @Test("Logo proxy streaming append stops before the buffer exceeds the cap")
+    func logoProxyStreamingAppendStopsAtCap() {
+        var full = Data(count: MerchantLogoRoutes.maxLogoBytes)
+        #expect(!MerchantLogoRoutes.appendLogoByte(0x00, to: &full))
+        #expect(full.count == MerchantLogoRoutes.maxLogoBytes)
+
+        var oneByteUnder = Data(count: MerchantLogoRoutes.maxLogoBytes - 1)
+        #expect(MerchantLogoRoutes.appendLogoByte(0x00, to: &oneByteUnder))
+        #expect(oneByteUnder.count == MerchantLogoRoutes.maxLogoBytes)
+        #expect(!MerchantLogoRoutes.appendLogoByte(0x00, to: &oneByteUnder))
+        #expect(oneByteUnder.count == MerchantLogoRoutes.maxLogoBytes)
+    }
+
     @Test("Logo proxy passes through a recognized image Content-Type and falls back otherwise")
     func logoProxyDerivesContentType() throws {
         let url = try #require(URL(string: "https://plaid-merchant-logos.plaid.com/x.png"))
