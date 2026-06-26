@@ -300,6 +300,44 @@ struct BudgetRebalancePlannerTests {
         #expect(BudgetRebalancePlanner.monthTotal(in: current, month: "2026-06") == totalBefore)
     }
 
+    @Test("A zero-limit overspent category is an eligible rebalance destination (AND-672)")
+    func zeroLimitDestinationReceivesShare() {
+        // `travel` was just zeroed (limit 0) but already has spend, so it is
+        // overspent and a legitimate destination. `shopping` carries the surplus.
+        let start = schema([
+            budget("2026-06", shopping, 600), // surplus: spent 100 → headroom 500
+            budget("2026-06", travel, 0),     // zero-limit but overspent (spent 90)
+        ])
+        let totalBefore = BudgetRebalancePlanner.monthTotal(in: start, month: "2026-06")
+        #expect(totalBefore == 600)
+
+        let suggestions = BudgetRebalancePlanner.suggestRebalances(
+            in: start,
+            month: "2026-06",
+            spendByCategory: [shopping: 100, travel: 90],
+            asOf: asOf
+        )
+
+        // (a) The zero-limit category must receive a positive share — not be dropped.
+        #expect(!suggestions.isEmpty)
+        let toTravel = suggestions.filter { $0.move.destinationCategoryId == travel }
+        #expect(!toTravel.isEmpty)
+        #expect(toTravel.allSatisfy { $0.move.amount > 0 })
+        #expect(toTravel.contains { $0.move.sourceCategoryId == shopping })
+
+        // (b) Applying every suggestion keeps the month total invariant.
+        var current = start
+        for suggestion in suggestions {
+            let result = BudgetRebalancePlanner.apply(suggestion.move, to: current, asOf: asOf)
+            #expect(result.applied)
+            current = result.schema
+        }
+        #expect(BudgetRebalancePlanner.monthTotal(in: current, month: "2026-06") == totalBefore)
+        // The once-zero-limit destination now holds a positive limit.
+        let travelRow = BudgetRebalancePlanner.row(in: current, month: "2026-06", categoryId: travel)
+        #expect((travelRow?.monthlyLimit ?? 0) > 0)
+    }
+
     @Test("No suggestions when nothing is over budget")
     func noOverageNoSuggestions() {
         let start = schema([

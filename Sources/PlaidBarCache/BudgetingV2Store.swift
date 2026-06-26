@@ -37,7 +37,13 @@ public actor BudgetingV2Store {
 
     private let storeURL: URL?
     private let fileManager: FileManager
-    private var rowsByCacheKey: [String: BudgetingV2Schema]
+    /// In-memory rows, lazily hydrated from disk on first access. `nil` means the
+    /// store has not yet read its backing file — opening the actor performs **no**
+    /// disk I/O (AND-670), so construction never blocks (or fails) before the v2
+    /// snapshot is actually needed. The read+decode is deferred to ``loadedRows()``
+    /// on the actor's own executor, mirroring ``ReadModelCacheStore`` (AND-656
+    /// finding 3).
+    private var rowsByCacheKey: [String: BudgetingV2Schema]?
 
     private static var encoder: JSONEncoder {
         let encoder = JSONEncoder()
@@ -52,14 +58,46 @@ public actor BudgetingV2Store {
         return decoder
     }
 
+    /// Opens the store **without** touching disk (AND-670). Construction is a pure
+    /// handoff of the URL; the backing file is read lazily on the actor's executor
+    /// (see ``loadedRows()``). The `throws` is retained for source compatibility
+    /// with the existing factory/callers (which wrap construction in `try?`), even
+    /// though opening no longer reads or decodes anything.
     init(storeURL: URL?, fileManager: FileManager = .default) throws {
         self.storeURL = storeURL
         self.fileManager = fileManager
-        if let storeURL, fileManager.fileExists(atPath: storeURL.path) {
+        self.rowsByCacheKey = nil
+    }
+
+    // MARK: - Lazy load / self-heal
+
+    /// The in-memory rows, hydrating from disk on first access.
+    ///
+    /// An **incompatible or corrupt backing file** is treated as a disposable miss,
+    /// not a hard failure (AND-670): the unreadable file is discarded and the store
+    /// starts empty so the next ``seedV2``/``save`` rebuilds it. The store never
+    /// permanently disables itself and never loses real data — the authoritative v1
+    /// budgeting records are untouched, and a not-opted-in user simply stays on v1.
+    private func loadedRows() -> [String: BudgetingV2Schema] {
+        if let rowsByCacheKey { return rowsByCacheKey }
+
+        guard let storeURL, fileManager.fileExists(atPath: storeURL.path) else {
+            rowsByCacheKey = [:]
+            return [:]
+        }
+
+        do {
             let data = try Data(contentsOf: storeURL)
-            self.rowsByCacheKey = try Self.decoder.decode(Snapshot.self, from: data).rowsByCacheKey
-        } else {
-            self.rowsByCacheKey = [:]
+            let rows = try Self.decoder.decode(Snapshot.self, from: data).rowsByCacheKey
+            rowsByCacheKey = rows
+            return rows
+        } catch {
+            // Undecodable file (incompatible/corrupt): discard it so the store
+            // self-heals into a clean miss instead of staying permanently broken.
+            // `storeURL` is already unwrapped by the guard above.
+            try? fileManager.removeItem(at: storeURL)
+            rowsByCacheKey = [:]
+            return [:]
         }
     }
 
@@ -77,7 +115,9 @@ public actor BudgetingV2Store {
         month: String? = nil
     ) throws -> BudgetingV2Schema {
         let schema = BudgetingV2Migration.seed(carryingForward: v1Budgets, month: month)
-        rowsByCacheKey[cacheKey] = schema
+        var rows = loadedRows()
+        rows[cacheKey] = schema
+        rowsByCacheKey = rows
         try persist()
         return schema
     }
@@ -86,7 +126,9 @@ public actor BudgetingV2Store {
     /// snapshot (a later epic's editor mutates the snapshot and saves it back). The
     /// store holds one snapshot per environment, so a save is an upsert.
     public func save(cacheKey: String, schema: BudgetingV2Schema) throws {
-        rowsByCacheKey[cacheKey] = schema
+        var rows = loadedRows()
+        rows[cacheKey] = schema
+        rowsByCacheKey = rows
         try persist()
     }
 
@@ -94,12 +136,15 @@ public actor BudgetingV2Store {
 
     /// Load the v2 schema for `cacheKey`. Returns `nil` on a miss **or** when the
     /// stored snapshot is from an older schema version — in which case the stale row
-    /// is purged so the store self-heals (the caller reseeds). A decode failure
-    /// throws so the caller's `try?` can drop back to v1.
+    /// is purged so the store self-heals (the caller reseeds). An incompatible or
+    /// corrupt backing file reads as a miss via ``loadedRows()`` (AND-670) rather
+    /// than throwing, so a not-opted-in user stays on v1.
     public func load(cacheKey: String) throws -> BudgetingV2Schema? {
-        guard let schema = rowsByCacheKey[cacheKey] else { return nil }
+        var rows = loadedRows()
+        guard let schema = rows[cacheKey] else { return nil }
         guard !BudgetingV2Migration.needsMigration(schema) else {
-            rowsByCacheKey.removeValue(forKey: cacheKey)
+            rows.removeValue(forKey: cacheKey)
+            rowsByCacheKey = rows
             try? persist()
             return nil
         }
@@ -136,14 +181,18 @@ public actor BudgetingV2Store {
     /// environment switch). Safe to call when no snapshot exists. v1 budgeting is
     /// unaffected.
     public func clear(cacheKey: String) throws {
-        rowsByCacheKey.removeValue(forKey: cacheKey)
+        var rows = loadedRows()
+        rows.removeValue(forKey: cacheKey)
+        rowsByCacheKey = rows
         try persist()
     }
 
     /// Remove every v2 snapshot (local-data reset). Used alongside the other
-    /// disposable caches' `clearAll`.
+    /// disposable caches' `clearAll`. The store becomes empty regardless of any
+    /// on-disk content, so this never needs to decode an incompatible file —
+    /// a clear unconditionally wins and rewrites a fresh empty snapshot.
     public func clearAll() throws {
-        rowsByCacheKey.removeAll()
+        rowsByCacheKey = [:]
         try persist()
     }
 
@@ -151,7 +200,7 @@ public actor BudgetingV2Store {
 
     private func persist() throws {
         guard let storeURL else { return }
-        let data = try Self.encoder.encode(Snapshot(rowsByCacheKey: rowsByCacheKey))
+        let data = try Self.encoder.encode(Snapshot(rowsByCacheKey: rowsByCacheKey ?? [:]))
         try fileManager.createDirectory(
             at: storeURL.deletingLastPathComponent(),
             withIntermediateDirectories: true,

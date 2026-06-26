@@ -43,9 +43,43 @@ struct SyncResponseTests {
 
     @Test("Decoding reads present pending cursor fields")
     func decodePendingCursors() throws {
-        let json = #"{"added":[],"modified":[],"removed":[],"hasMore":true,"pendingCursors":{"item-1":"c1"},"pendingCursorUpdatedAts":{"item-1":1800000100}}"#
-        let response = try JSONDecoder().decode(SyncResponse.self, from: Data(json.utf8))
+        // The wire contract for cursor-update timestamps is ISO-8601 date
+        // strings: the server encodes `SyncResponse` with an `.iso8601`
+        // `JSONEncoder` (TransactionRoutes) and the app's `ServerClient`
+        // decodes with an `.iso8601` `JSONDecoder`. Decode the way production
+        // does so this test exercises the real round-trip rather than the
+        // default `.deferredToDate` reference-date strategy.
+        let updatedAt = Date(timeIntervalSince1970: 1_800_000_100)
+        let json = #"""
+        {"added":[],"modified":[],"removed":[],"hasMore":true,"pendingCursors":{"item-1":"c1"},"pendingCursorUpdatedAts":{"item-1":"2027-01-15T08:01:40Z"}}
+        """#
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let response = try decoder.decode(SyncResponse.self, from: Data(json.utf8))
         #expect(response.pendingCursors["item-1"] == "c1")
-        #expect(response.pendingCursorUpdatedAts["item-1"] == Date(timeIntervalSince1970: 1_800_000_100))
+        #expect(response.pendingCursorUpdatedAts["item-1"] == updatedAt)
+    }
+
+    @Test("Cursor update times round-trip losslessly through the ISO-8601 wire contract")
+    func cursorUpdatedAtsRoundTripISO8601() throws {
+        // Mirrors the production encode/decode pair: server encodes the response
+        // with `.iso8601`, the app decodes with `.iso8601`. The timestamp must
+        // survive the round-trip so a committed cursor's observation time is
+        // preserved (the basis of #685's "pending until cursor commit" clear).
+        let updatedAt = Date(timeIntervalSince1970: 1_800_000_100)
+        let original = SyncResponse(
+            added: [],
+            modified: [],
+            removed: [],
+            hasMore: false,
+            pendingCursors: ["item-1": "c1"],
+            pendingCursorUpdatedAts: ["item-1": updatedAt]
+        )
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(SyncResponse.self, from: try encoder.encode(original))
+        #expect(decoded.pendingCursorUpdatedAts["item-1"] == updatedAt)
     }
 }

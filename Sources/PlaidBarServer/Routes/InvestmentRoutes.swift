@@ -35,10 +35,16 @@ struct InvestmentRoutes: Sendable {
                 let accessToken = try tokenStore.accessToken(for: item)
                 let response = try await plaidClient.getInvestmentHoldings(accessToken: accessToken)
                 return Self.investmentsResponse(from: response, item: item, itemId: itemId)
+            } catch PlaidError.credentialsNotConfigured {
+                // Setup state affects every item identically: surface the 503
+                // credential guidance (via `SetupStateMiddleware`) instead of
+                // swallowing it into a misleading empty-but-successful refresh.
+                // Mirrors `AccountRoutes`.
+                throw PlaidError.credentialsNotConfigured
             } catch {
-                // A missing `investments` scope (or any per-item failure) yields
-                // an empty contribution; the request still succeeds for items
-                // that do hold investments.
+                // A missing `investments` scope (or any other per-item failure)
+                // yields an empty contribution; the request still succeeds for
+                // items that do hold investments.
                 return InvestmentsResponse()
             }
         }
@@ -62,6 +68,10 @@ struct InvestmentRoutes: Sendable {
                     endDate: endDate
                 )
                 return transactions.map(Self.investmentTransactionDTO(from:))
+            } catch PlaidError.credentialsNotConfigured {
+                // Setup state surfaces the 503 credential guidance instead of an
+                // empty-but-successful refresh. Mirrors `AccountRoutes`.
+                throw PlaidError.credentialsNotConfigured
             } catch {
                 return []
             }

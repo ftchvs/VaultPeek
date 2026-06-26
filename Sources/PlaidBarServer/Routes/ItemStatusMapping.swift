@@ -3,6 +3,20 @@ import PlaidBarCore
 
 enum ItemStatusMapping {
     static func status(forAPIError error: Error) -> ItemConnectionStatus {
+        // A token-vault / Keychain availability failure (device locked, Keychain
+        // temporarily unavailable, an ACL prompt the background server can't
+        // satisfy) is transient, not a genuine Plaid item fault. Treat those like
+        // provider outages: degraded, non-actionable, and auto-retried. A corrupt
+        // stored token is different: re-reading the same invalid bytes will not
+        // self-heal, so keep it in the hard-error recovery lane.
+        if let tokenVaultError = error as? PlaidTokenVaultError {
+            switch tokenVaultError {
+            case .keychainUnavailable, .keychainSaveFailed, .keychainLoadFailed, .keychainDeleteFailed:
+                return .providerOutage
+            case .invalidStoredToken:
+                return .error
+            }
+        }
         guard case PlaidError.apiError(_, _, let errorCode, _) = error else {
             return .error
         }
