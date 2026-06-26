@@ -195,10 +195,48 @@ struct BillingRoutes: Sendable {
     }
 }
 
+/// Bounded, in-memory set of recently processed Stripe webhook event ids used
+/// to make billing-webhook application idempotent.
+///
+/// The set is FIFO-capped at ``capacity`` ids: once full, recording a new id
+/// evicts the oldest. This keeps memory bounded under an unbounded stream of
+/// distinct events while preserving idempotency for the *recent* window — the
+/// only window that matters in practice, since Stripe's retries for a single
+/// event arrive close together (minutes/hours), far inside a multi-thousand-id
+/// window. State is intentionally not persisted across restarts: a replay after
+/// a restart re-applies an idempotent `save` (same normalized status/plan/dates),
+/// so correctness is preserved even when an id is no longer remembered — only the
+/// in-memory footprint is bounded.
 actor StripeBillingEventStore {
-    private var processedEventIDs: Set<String> = []
+    /// Maximum number of recent event ids retained. ~4096 ids (short Stripe
+    /// `evt_…` strings) is a few hundred KB at most, far more than any realistic
+    /// retry window needs, yet a hard ceiling on growth.
+    static let defaultCapacity = 4096
 
-    func recordIfNew(_ eventID: String) -> Bool {
-        processedEventIDs.insert(eventID).inserted
+    private let capacity: Int
+    private var processedEventIDs: Set<String> = []
+    /// Insertion order of `processedEventIDs`, oldest first, for FIFO eviction.
+    private var insertionOrder: [String] = []
+
+    init(capacity: Int = StripeBillingEventStore.defaultCapacity) {
+        self.capacity = max(1, capacity)
     }
+
+    /// Records `eventID` and returns `true` if it had not been seen within the
+    /// retained window. A return of `false` means a duplicate (de-dup hit).
+    func recordIfNew(_ eventID: String) -> Bool {
+        guard processedEventIDs.insert(eventID).inserted else {
+            return false
+        }
+        insertionOrder.append(eventID)
+        if insertionOrder.count > capacity {
+            let evicted = insertionOrder.removeFirst()
+            processedEventIDs.remove(evicted)
+        }
+        return true
+    }
+
+    /// Number of event ids currently retained. Exposed for tests asserting the
+    /// bound holds.
+    var count: Int { processedEventIDs.count }
 }
