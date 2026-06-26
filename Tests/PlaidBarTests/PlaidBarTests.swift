@@ -166,6 +166,7 @@ struct PlaidBarTests {
         #expect(glanceMakeBlock.contains("isMasked: systemSurfaceMaskEnabled"))
         #expect(!glanceMakeBlock.contains("isMasked: shouldMaskFinancialValues"))
         #expect(appStateSource.contains("queued OFF command must restore the"))
+        #expect(appStateSource.contains("ControlCenter.shared.reloadAllControls()"))
         #expect(appStateSource.contains("clearPublishedSystemSnapshotsForDemoEntry()"))
     }
 
