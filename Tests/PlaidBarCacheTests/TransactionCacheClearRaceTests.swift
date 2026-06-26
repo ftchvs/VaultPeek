@@ -107,7 +107,7 @@ struct TransactionCacheClearRaceTests {
     /// store actor, so a clear that bumped it since capture drops the persist.
     @Test("replaceAll dropped when clear bumped the store generation after capture (AND-633)")
     func replaceAllDroppedWhenClearRacedAfterGenerationCapture() async throws {
-        let store = try TransactionCacheStore(inMemory: true)
+        let store = TransactionCacheStore(inMemory: true)
         let key = Self.key
 
         // Prior non-empty refresh seeded history; the persist captured the store
@@ -134,7 +134,7 @@ struct TransactionCacheClearRaceTests {
     /// and committing, the clear-gated persist commits like a normal replaceAll.
     @Test("clear-gated replaceAll commits when no clear intervened (AND-633)")
     func clearGatedReplaceAllCommitsWhenNoClearIntervened() async throws {
-        let store = try TransactionCacheStore(inMemory: true)
+        let store = TransactionCacheStore(inMemory: true)
         let key = Self.key
 
         let capturedGeneration = await store.currentClearGeneration()
@@ -153,7 +153,7 @@ struct TransactionCacheClearRaceTests {
     /// leaves the clear-gated persist eligible to commit.
     @Test("non-clear write between capture and commit does not drop the persist (AND-633)")
     func ordinaryWriteDoesNotDropClearGatedPersist() async throws {
-        let store = try TransactionCacheStore(inMemory: true)
+        let store = TransactionCacheStore(inMemory: true)
         let key = Self.key
 
         let capturedGeneration = await store.currentClearGeneration()
@@ -180,7 +180,7 @@ struct TransactionCacheClearRaceTests {
     /// read is always a clean miss.
     @Test("interleaved clear-gated persists never survive a terminal clear (AND-633)")
     func interleavedClearGatedPersistsNeverSurviveTerminalClear() async throws {
-        let store = try TransactionCacheStore(inMemory: true)
+        let store = TransactionCacheStore(inMemory: true)
         let key = Self.key
         let txns = removedInstitutionTransactions()
 

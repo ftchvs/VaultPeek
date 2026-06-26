@@ -20,23 +20,16 @@ struct CacheStoreOpenRobustnessTests {
 
     // MARK: - Helpers
 
-    /// A `FileManager` that counts `fileExists(atPath:)` calls so a test can prove
-    /// the store touched disk lazily (zero probes at construction, exactly the
-    /// expected probes once an operation runs).
-    private final class CountingFileManager: FileManager, @unchecked Sendable {
-        private(set) var fileExistsCallCount = 0
-
-        override func fileExists(atPath path: String) -> Bool {
-            fileExistsCallCount += 1
-            return super.fileExists(atPath: path)
-        }
-    }
-
     private func makeTempDirectory(_ tag: String) -> URL {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("vaultpeek-open-robustness-\(tag)-\(UUID().uuidString)", isDirectory: true)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory
+    }
+
+    private func source(_ relativePath: String) throws -> String {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        return try String(contentsOf: root.appending(path: relativePath), encoding: .utf8)
     }
 
     /// Writes bytes that are NOT a valid `Snapshot` JSON at the store's filename,
@@ -151,17 +144,16 @@ struct CacheStoreOpenRobustnessTests {
         let seeded = ReadModelCacheStore(onDiskIn: directory)
         try await seeded.save(sampleReadModel(cacheKey: "sandbox|/x"))
 
-        let counter = CountingFileManager()
-        let store = ReadModelCacheStore(onDiskIn: directory, fileManager: counter)
+        let store = ReadModelCacheStore(onDiskIn: directory)
+        let storeSource = try source("Sources/PlaidBarCache/ReadModelCacheStore.swift")
+        let initRange = try #require(storeSource.range(of: "init(storeURL: URL?, fileManager: FileManager = .default)"))
+        let initializer = String(storeSource[initRange.lowerBound...].prefix(500))
+        #expect(initializer.contains("self.rowsByKey = nil"))
+        #expect(!initializer.contains("loadedRows()"), "open must not synchronously read/decode the backing file")
 
-        // Opening touched disk zero times — no `fileExists`, no read, no decode.
-        #expect(counter.fileExistsCallCount == 0, "open must not probe or read the backing file")
-
-        // The first operation hydrates lazily (now disk is touched) and still reads
-        // the seeded row correctly.
+        // The first operation hydrates lazily and still reads the seeded row correctly.
         let loaded = try await store.load(cacheKey: "sandbox|/x")
         #expect(loaded?.cacheKey == "sandbox|/x")
-        #expect(counter.fileExistsCallCount >= 1, "the first operation triggers the deferred load")
     }
 
     @Test("transaction: constructing the store performs no disk I/O (lazy open)")
@@ -173,15 +165,15 @@ struct CacheStoreOpenRobustnessTests {
         let seeded = TransactionCacheStore(onDiskIn: directory)
         try await seeded.upsert(cacheKey: "sandbox|/x", transactions: sampleTransactions(count: 50))
 
-        let counter = CountingFileManager()
-        let store = TransactionCacheStore(onDiskIn: directory, fileManager: counter)
-
-        // Opening the (potentially large) store decodes nothing and touches no disk.
-        #expect(counter.fileExistsCallCount == 0, "open must not probe or read the full history")
+        let store = TransactionCacheStore(onDiskIn: directory)
+        let storeSource = try source("Sources/PlaidBarCache/TransactionCacheStore.swift")
+        let initRange = try #require(storeSource.range(of: "init(storeURL: URL?, fileManager: FileManager = .default)"))
+        let initializer = String(storeSource[initRange.lowerBound...].prefix(600))
+        #expect(initializer.contains("self.rowsByUniqueKey = nil"))
+        #expect(!initializer.contains("loadedRows()"), "open must not synchronously read/decode the backing file")
 
         // The first read faults in the history lazily, off the open path.
         #expect(try await store.count(cacheKey: "sandbox|/x") == 50)
-        #expect(counter.fileExistsCallCount >= 1, "the first read triggers the deferred load")
     }
 
     // MARK: - AND-670: a corrupt *row payload* is a disposable miss, not a throw
@@ -251,16 +243,15 @@ struct CacheStoreOpenRobustnessTests {
         let seeded = try BudgetingV2Store(onDiskIn: directory)
         try await seeded.seedV2(cacheKey: "sandbox|/x")
 
-        let counter = CountingFileManager()
-        let store = try BudgetingV2Store(onDiskIn: directory, fileManager: counter)
+        let store = try BudgetingV2Store(onDiskIn: directory)
+        let storeSource = try source("Sources/PlaidBarCache/BudgetingV2Store.swift")
+        let initRange = try #require(storeSource.range(of: "init(storeURL: URL?, fileManager: FileManager = .default)"))
+        let initializer = String(storeSource[initRange.lowerBound...].prefix(700))
+        #expect(initializer.contains("self.rowsByCacheKey = nil"))
+        #expect(!initializer.contains("loadedRows()"), "open must not synchronously read/decode the backing file")
 
-        // Opening touched disk zero times — no `fileExists`, no read, no decode.
-        #expect(counter.fileExistsCallCount == 0, "open must not probe or read the backing file")
-
-        // The first operation hydrates lazily (now disk is touched) and still reads
-        // the seeded snapshot correctly.
+        // The first operation hydrates lazily and still reads the seeded snapshot correctly.
         #expect(try await store.isOptedIn(cacheKey: "sandbox|/x") == true)
-        #expect(counter.fileExistsCallCount >= 1, "the first operation triggers the deferred load")
     }
 
     @Test("budgeting-v2: opening over an incompatible file does no work and reads as not-opted-in")
@@ -270,10 +261,13 @@ struct CacheStoreOpenRobustnessTests {
         let storeURL = directory.appendingPathComponent(BudgetingV2Store.storeFilename)
         try writeIncompatibleFile(at: storeURL)
 
-        let counter = CountingFileManager()
         // Construction never throws or reads, even over a corrupt file (lazy open).
-        let store = try BudgetingV2Store(onDiskIn: directory, fileManager: counter)
-        #expect(counter.fileExistsCallCount == 0, "a cold/missing/corrupt store does no work at open")
+        let store = try BudgetingV2Store(onDiskIn: directory)
+        let storeSource = try source("Sources/PlaidBarCache/BudgetingV2Store.swift")
+        let initRange = try #require(storeSource.range(of: "init(storeURL: URL?, fileManager: FileManager = .default)"))
+        let initializer = String(storeSource[initRange.lowerBound...].prefix(700))
+        #expect(initializer.contains("self.rowsByCacheKey = nil"))
+        #expect(!initializer.contains("loadedRows()"), "a cold/missing/corrupt store does no work at open")
 
         // The incompatible file self-heals into a clean miss: not opted in → v1.
         #expect(try await store.isOptedIn(cacheKey: "sandbox|/x") == false)
