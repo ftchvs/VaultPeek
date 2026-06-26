@@ -148,7 +148,7 @@ struct CacheStoreOpenRobustnessTests {
         let storeSource = try source("Sources/PlaidBarCache/ReadModelCacheStore.swift")
         let initRange = try #require(storeSource.range(of: "init(storeURL: URL?, fileManager: FileManager = .default)"))
         let initializer = String(storeSource[initRange.lowerBound...].prefix(500))
-        #expect(initializer.contains("self.rowsByCacheKey = nil"))
+        #expect(initializer.contains("self.rowsByKey = nil"))
         #expect(!initializer.contains("loadedRows()"), "open must not synchronously read/decode the backing file")
 
         // The first operation hydrates lazily and still reads the seeded row correctly.
