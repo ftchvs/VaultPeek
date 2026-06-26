@@ -257,7 +257,16 @@ public enum SpendingHeatmap {
     /// Signed, mode-aware amount string for a single day (e.g. "$120.00" for
     /// spend, "+$300.00" / "-$75.00" for net cashflow). Single source of truth
     /// for both the cell label and the focused-day caption.
-    public static func amountText(for day: SpendingHeatmapDay, mode: SpendingHeatmapMode) -> String {
+    ///
+    /// When `isPrivacyMasked` is `true` the whole amount token — sign prefix
+    /// included — collapses to `••••` so a per-cell label/help never leaks the
+    /// day's value while Privacy Mask is on (ACCESSIBILITY.md / SECURITY.md).
+    public static func amountText(
+        for day: SpendingHeatmapDay,
+        mode: SpendingHeatmapMode,
+        isPrivacyMasked: Bool = false
+    ) -> String {
+        guard !isPrivacyMasked else { return PrivacyMaskPresentation.compactValue }
         switch mode {
         case .spending:
             return Formatters.currency(day.value, format: .full)
@@ -273,9 +282,17 @@ public enum SpendingHeatmap {
         "\(day.transactionCount) transaction\(day.transactionCount == 1 ? "" : "s")"
     }
 
-    /// Full cell label / pointer-help sentence for a single day.
-    public static func cellLabel(for day: SpendingHeatmapDay, mode: SpendingHeatmapMode) -> String {
-        "\(Formatters.displayTransactionDate(day.date)): \(amountText(for: day, mode: mode)) across \(transactionText(for: day))"
+    /// Full cell label / pointer-help sentence for a single day. The date and
+    /// transaction count are always present; the amount honors `isPrivacyMasked`
+    /// (shown as `••••` when masked) so the per-cell `.help`/`.accessibilityLabel`
+    /// affordance carries the cell's meaning textually without leaking the value
+    /// while Privacy Mask is on. Single source of truth for every heatmap surface.
+    public static func cellLabel(
+        for day: SpendingHeatmapDay,
+        mode: SpendingHeatmapMode,
+        isPrivacyMasked: Bool = false
+    ) -> String {
+        "\(Formatters.displayTransactionDate(day.date)): \(amountText(for: day, mode: mode, isPrivacyMasked: isPrivacyMasked)) across \(transactionText(for: day))"
     }
 
     /// Summary for the focused-day caption. Returns `nil` when nothing is

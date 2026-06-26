@@ -954,6 +954,7 @@ private struct BalanceActivityHeatmap: View {
                                             peakValue: layout.peakValue,
                                             mode: layout.mode,
                                             size: cell,
+                                            isPrivacyMasked: appState.shouldMaskFinancialValues,
                                             isSelected: selectedDay == day.date,
                                             focusBinding: $focusedDay,
                                             reduceMotion: reduceMotion,
@@ -1185,6 +1186,11 @@ private struct BalanceHeatmapCell: View {
     let peakValue: Double
     let mode: SpendingHeatmapMode
     let size: CGFloat
+    /// Unlike the window grids, the popover heatmap renders its interactive cells
+    /// even while Privacy Mask is on, so the per-cell help/label MUST mask the
+    /// amount here (it would otherwise leak the day's value on hover / to
+    /// VoiceOver). Same single Core label source (AND-671).
+    var isPrivacyMasked: Bool = false
     var isSelected: Bool = false
     var focusBinding: FocusState<String?>.Binding
     var reduceMotion: Bool = false
@@ -1221,7 +1227,7 @@ private struct BalanceHeatmapCell: View {
     }
 
     private var helpText: String {
-        SpendingHeatmap.cellLabel(for: day, mode: mode)
+        SpendingHeatmap.cellLabel(for: day, mode: mode, isPrivacyMasked: isPrivacyMasked)
     }
 
     static func fillColor(intensity: Double, value: Double, mode: SpendingHeatmapMode) -> Color {

@@ -83,4 +83,56 @@ struct HeatmapFocusSummaryTests {
         #expect(parts?[1] == summary?.amountText)
         #expect(parts?[2] == summary?.transactionText)
     }
+
+    // MARK: - Per-cell label masking (AND-671)
+
+    private let spendDay = SpendingHeatmapDay(date: "2026-01-01", value: 120, transactionCount: 3)
+    private let zeroDay = SpendingHeatmapDay(date: "2026-01-03", value: 0, transactionCount: 0)
+
+    @Test("Unmasked cell label shows the date, real amount, and count")
+    func cellLabelUnmaskedShowsValue() {
+        let label = SpendingHeatmap.cellLabel(for: spendDay, mode: .spending)
+
+        #expect(label.contains("3 transactions"))
+        #expect(label.contains(SpendingHeatmap.amountText(for: spendDay, mode: .spending)))
+        // The real currency amount is present, not the mask token.
+        #expect(label.contains("$"))
+        #expect(!label.contains(PrivacyMaskPresentation.compactValue))
+    }
+
+    @Test("Masked cell label hides the amount but keeps the date and count")
+    func cellLabelMaskedHidesAmountOnly() {
+        let label = SpendingHeatmap.cellLabel(for: spendDay, mode: .spending, isPrivacyMasked: true)
+
+        // Amount is withheld …
+        #expect(label.contains(PrivacyMaskPresentation.compactValue))
+        #expect(!label.contains("$"))
+        #expect(!label.contains("120"))
+        // … but the structural date and the (non-financial) transaction count remain,
+        // so the cell still carries meaning textually for hover / VoiceOver.
+        #expect(label.contains("3 transactions"))
+        let datePrefix = Formatters.displayTransactionDate(spendDay.date)
+        #expect(label.contains(datePrefix))
+    }
+
+    @Test("Masked net-cashflow amount drops the sign prefix entirely (no +/- leak)")
+    func cellLabelMaskedNetCashflowDropsSignPrefix() {
+        // -300 stored → income → would render with a "+" prefix unmasked. Masked,
+        // the whole token (prefix included) must collapse to the mask glyph.
+        let incomeDay = SpendingHeatmapDay(date: "2026-01-02", value: -300, transactionCount: 1)
+        let masked = SpendingHeatmap.amountText(for: incomeDay, mode: .netCashflow, isPrivacyMasked: true)
+
+        #expect(masked == PrivacyMaskPresentation.compactValue)
+        #expect(!masked.contains("+"))
+        #expect(!masked.contains("-"))
+    }
+
+    @Test("Masked zero/empty day still hides the $0 amount and keeps a zero count")
+    func cellLabelMaskedZeroDay() {
+        let label = SpendingHeatmap.cellLabel(for: zeroDay, mode: .spending, isPrivacyMasked: true)
+
+        #expect(label.contains(PrivacyMaskPresentation.compactValue))
+        #expect(!label.contains("$"))
+        #expect(label.contains("0 transactions"))
+    }
 }

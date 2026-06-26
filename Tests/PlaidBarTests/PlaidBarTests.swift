@@ -1195,6 +1195,39 @@ struct PlaidBarTests {
         #expect(accounts.contains(".onChange(of: filteredAccounts.map(\\.id))"))
         #expect(accounts.contains("visibleAccounts.map(\\.id)"))
     }
+
+    /// Source-invariant guard for AND-671: each activity-heatmap cell must carry a
+    /// per-cell textual affordance (`.help` + `.accessibilityLabel`) so the day's
+    /// meaning never rides on tint/opacity alone (ACCESSIBILITY.md). Both window
+    /// grids (`DashboardYearHeatmapGrid`, `InsightsActivityHeatmapGrid`) source the
+    /// label from the single masked Core helper `SpendingHeatmap.cellLabel`. The
+    /// `@main` app target isn't unit-testable, so this string-matches the wiring.
+    @Test("Activity heatmap cells attach per-cell .help/.accessibilityLabel from masked Core label (AND-671)")
+    func activityHeatmapCellsCarryPerCellLabel() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let dashboard = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/Destinations/DashboardOverviewColumn.swift"),
+            encoding: .utf8
+        )
+        let insights = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/Destinations/InsightsTrendsView.swift"),
+            encoding: .utf8
+        )
+
+        // Both window grids: per-cell help + accessibility label, single-sourced from
+        // the mask-aware Core label (date + masked value + count).
+        for source in [dashboard, insights] {
+            #expect(source.contains("SpendingHeatmap.cellLabel(for: day, mode: layout.mode, isPrivacyMasked: isPrivacyMasked)"))
+            #expect(source.contains(".help(label)"))
+            #expect(source.contains(".accessibilityLabel(label)"))
+            // The grid threads the real mask state in, rather than hardcoding a value.
+            #expect(source.contains("var isPrivacyMasked: Bool = false"))
+        }
+
+        // Call sites pass the live Privacy Mask state into each grid.
+        #expect(dashboard.contains("DashboardYearHeatmapGrid(layout: layout, isPrivacyMasked: appState.shouldMaskFinancialValues)"))
+        #expect(insights.contains("InsightsActivityHeatmapGrid(layout: layout, isPrivacyMasked: isMasked)"))
+    }
 }
 
 /// Deterministic `FMMerchantCategorizing` stub for the categorization-tier tests.

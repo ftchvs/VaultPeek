@@ -109,7 +109,7 @@ struct InsightsTrendsView: View {
                     // information without relying on color or translucency.
                     heatmapTextAlternative(layout: layout)
                 } else {
-                    InsightsActivityHeatmapGrid(layout: layout)
+                    InsightsActivityHeatmapGrid(layout: layout, isPrivacyMasked: isMasked)
                 }
             }
             .loadingRedaction(appState.loadState(for: .activityHeatmap))
@@ -165,6 +165,12 @@ struct InsightsTrendsView: View {
 /// this view is shown only when neither is active.
 struct InsightsActivityHeatmapGrid: View {
     let layout: SpendingHeatmapLayout
+    /// Whether Privacy Mask is active. The parent only renders this grid when
+    /// masking is OFF (the masked branch shows a text alternative), so this is
+    /// `false` in practice — but it is threaded honestly into the per-cell label
+    /// source so the affordance never leaks a value if the grid is ever shown
+    /// while masked (defense in depth; single Core label source).
+    var isPrivacyMasked: Bool = false
 
     private let spacing: CGFloat = 3
     /// Desk-distance cell bounds — larger than the popover's 5...9pt glance cells so
@@ -207,9 +213,16 @@ struct InsightsActivityHeatmapGrid: View {
     private func cellView(for day: SpendingHeatmapDay?, size: CGFloat) -> some View {
         if let day {
             let intensity = SpendingHeatmap.cellIntensity(for: day, peakValue: layout.peakValue)
+            // Per-cell textual affordance: the cell's meaning otherwise rides on
+            // tint/opacity alone (ACCESSIBILITY.md). The label is the single Core
+            // source (date + masked value + count), so pointer-hover and VoiceOver
+            // get the same sentence and Privacy Mask is honored (AND-671).
+            let label = SpendingHeatmap.cellLabel(for: day, mode: layout.mode, isPrivacyMasked: isPrivacyMasked)
             RoundedRectangle(cornerRadius: Radius.cell)
                 .fill(Color.primary.opacity(0.12 + 0.6 * intensity))
                 .frame(width: size, height: size)
+                .help(label)
+                .accessibilityLabel(label)
         } else {
             RoundedRectangle(cornerRadius: Radius.cell)
                 .fill(.clear)
