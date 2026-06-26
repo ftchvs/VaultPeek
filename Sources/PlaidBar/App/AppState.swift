@@ -4334,7 +4334,15 @@ final class AppState {
             await debouncer.schedule(snapshot) { snapshot in
                 let changed: Bool
                 do {
-                    changed = try GlanceSnapshotStore.saveIfChanged(snapshot)
+                    changed = try await MainActor.run {
+                        // The debouncer intentionally delays before invoking this
+                        // closure; a clear/demo-entry path can bump the generation
+                        // and wipe App Group files during that delay. Re-check and
+                        // commit on the MainActor with no suspension between them so
+                        // stale snapshots cannot republish after a clear (AND-720).
+                        guard self.glanceSnapshotWriteGeneration == generation else { return false }
+                        return try GlanceSnapshotStore.saveIfChanged(snapshot)
+                    }
                 } catch {
                     // A genuine write failure was previously indistinguishable
                     // from the "no change" skip below. Surface it (no balance
