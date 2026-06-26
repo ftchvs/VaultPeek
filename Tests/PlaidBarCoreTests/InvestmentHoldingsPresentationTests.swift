@@ -185,6 +185,43 @@ struct InvestmentHoldingsPresentationTests {
         #expect(summary.totalGainText == nil)
     }
 
+    @Test("Summary mixes basis and no-basis holdings: market value spans all, gain spans basis-only (AND-665)")
+    func summaryMixedCostBasis() {
+        // Three scoped holdings; only VTI and Cash report a cost basis, AAPL does
+        // not. This pins the asymmetry at InvestmentHoldingsPresentation.swift
+        // lines 235-249: totalMarketValue covers EVERY holding, while totalGain is
+        // computed over ONLY the basis-reporting holdings (their market value minus
+        // their basis). AAPL's $10,000 market value contributes to the total but is
+        // excluded from the gain numerator so value and basis stay comparable.
+        let mixed = [
+            HoldingDTO(accountId: "acct_a", securityId: "sec_vti", quantity: 90, institutionValue: 22_500, costBasis: 18_000),
+            HoldingDTO(accountId: "acct_a", securityId: "sec_aapl", quantity: 50, institutionValue: 10_000, costBasis: nil),
+            HoldingDTO(accountId: "acct_a", securityId: "sec_cash", quantity: 2_800, institutionValue: 2_800, costBasis: 2_800),
+        ]
+        let summary = InvestmentHoldingsPresentation.summary(
+            holdings: mixed,
+            accountId: "acct_a",
+            privacyMaskEnabled: false
+        )
+
+        // Count and market value span ALL three holdings, including the basisless AAPL.
+        #expect(summary.holdingsCount == 3)
+        #expect(summary.totalMarketValue == 35_300) // 22_500 + 10_000 + 2_800
+
+        // Cost basis sums only the two holdings that report it.
+        #expect(summary.totalCostBasis == 20_800) // 18_000 + 2_800
+
+        // Gain numerator = market value of the BASIS holdings only (22_500 + 2_800),
+        // minus the cost basis. AAPL's 10_000 is intentionally NOT in the numerator,
+        // so the gain is 4_500 — NOT 14_500 (which a naive totalMarketValue - basis
+        // would wrongly produce by counting AAPL's unbacked market value as gain).
+        #expect(summary.totalGain == 4_500) // (22_500 + 2_800) - 20_800
+        #expect(summary.totalGain != 35_300 - 20_800) // guards against the naive formula
+        #expect(summary.gainDirection == .gain)
+        #expect(summary.totalMarketValueText == "$35,300.00")
+        #expect(summary.totalGainText == "+$4,500.00")
+    }
+
     @Test("Summary masks value and gain under Privacy Mask")
     func summaryPrivacyMask() {
         let summary = InvestmentHoldingsPresentation.summary(
