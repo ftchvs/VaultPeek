@@ -46,6 +46,13 @@ struct PlaidBarApp: App {
     /// AND-591). Shared by the scene declaration and the
     /// `openWindow(id:)` affordances so they never drift.
     private static let mainWindowID = "main"
+    /// Stable frame-autosave name for the primary workspace `Window` (AND-593).
+    /// Applied once to the underlying `NSWindow` via ``MainWindowFrameAutosaver``
+    /// so AppKit persists the window's position+size to `UserDefaults` and restores
+    /// it across relaunch. Distinct from the legacy detached/Category/Review window
+    /// autosave names (`VaultPeekCategoryDashboard` etc.) so each window keeps its
+    /// own remembered frame.
+    private static let mainWindowFrameAutosaveName = "VaultPeekMainWindow"
     /// Window-first hybrid opt-in (`WindowFirstFeatureFlag`, default OFF). Resolved
     /// once at launch from the CLI override / stored preference. While OFF the
     /// "Open VaultPeek" affordance never targets the `Window` scene, so the app
@@ -543,6 +550,18 @@ struct PlaidBarApp: App {
                 // the window-first flag), so flag-OFF behavior is unchanged.
                 .onAppear { windowActivationPolicy.onWindowAppear() }
                 .onDisappear { windowActivationPolicy.onWindowDisappear() }
+                // Persist + restore the window's position/size across relaunch
+                // (AND-593). SwiftUI's declarative `Window` exposes no frame-origin
+                // hook, so — like `PopoverLeadingEdgeAnchor` and the legacy AppKit
+                // window controllers — reach the real `NSWindow` and apply a stable
+                // `frameAutosaveName` once; AppKit then writes the frame to
+                // `UserDefaults` and restores it on the next launch. Hosted in a
+                // zero-size `.background` representable so it never affects layout.
+                // Only reached when the window opens (behind the window-first flag),
+                // so flag-OFF behavior is unchanged.
+                .background(
+                    MainWindowFrameAutosaver(autosaveName: Self.mainWindowFrameAutosaveName)
+                )
                 // Liquid Glass on chrome only: the window
                 // background is the ultra-thin material; data surfaces inside stay
                 // opaque. Under Reduce Transparency (system setting or the reduced
