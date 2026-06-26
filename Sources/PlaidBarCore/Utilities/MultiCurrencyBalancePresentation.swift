@@ -49,6 +49,57 @@ public enum MultiCurrencyBalancePresentation {
         )
     }
 
+    /// Net worth whose **displayed** figure reconciles with the displayed assets
+    /// and debt at the same `format` (AND-731).
+    ///
+    /// Plain ``netWorth(accounts:…)`` sums signed balances at full precision, so its
+    /// rounded display (e.g. `$60,104`) can differ by a cent's worth of rounding
+    /// from `displayedAssets − displayedDebt` (e.g. `$66,162 − $6,057 = $60,105`) —
+    /// three independent rounding passes that don't add up on screen. This variant
+    /// rounds each per-currency asset and debt subtotal to the format's display
+    /// precision *first*, then forms net = roundedAssets − roundedDebt per currency,
+    /// so the three on-screen numbers always reconcile. The cross-currency converted
+    /// total (if any) is likewise rebuilt from these rounded subtotals.
+    ///
+    /// Use this for the Accounts/Dashboard hero trio where all three are shown
+    /// together; the unrounded ``netWorth`` remains correct for menu-bar glances and
+    /// any single-figure surface that does not also display its parts.
+    public static func reconciledNetWorth(
+        accounts: [AccountDTO],
+        format: CurrencyFormat,
+        reportingCurrency: CurrencyCode = .usd,
+        conversionSource: any CurrencyConversionSource = NoConversionSource()
+    ) -> CurrencyAggregation {
+        let assets = totalAssets(
+            accounts: accounts,
+            reportingCurrency: reportingCurrency,
+            conversionSource: conversionSource
+        )
+        let debt = totalDebt(
+            accounts: accounts,
+            reportingCurrency: reportingCurrency,
+            conversionSource: conversionSource
+        )
+
+        var roundedByCurrency: [CurrencyCode: Double] = [:]
+        for subtotal in assets.subtotals {
+            roundedByCurrency[subtotal.currency, default: 0]
+                += Formatters.displayRounded(subtotal.amount, format: format)
+        }
+        for subtotal in debt.subtotals {
+            // Debt subtotals are positive magnitudes; net worth subtracts them.
+            roundedByCurrency[subtotal.currency, default: 0]
+                -= Formatters.displayRounded(subtotal.amount, format: format)
+        }
+
+        let entries = roundedByCurrency.map { (amount: $0.value, currency: $0.key) }
+        return CurrencyAggregation.aggregate(
+            entries,
+            reportingCurrency: reportingCurrency,
+            conversionSource: conversionSource
+        )
+    }
+
     public static func totalCash(
         accounts: [AccountDTO],
         reportingCurrency: CurrencyCode = .usd,

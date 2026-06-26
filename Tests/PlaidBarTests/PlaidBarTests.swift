@@ -1313,6 +1313,37 @@ struct PlaidBarTests {
         #expect(accounts.contains("visibleAccounts.map(\\.id)"))
     }
 
+    /// Source-invariant guard for AND-731: a money figure must render identically
+    /// across surfaces. The Accounts hero must derive net worth from the *rounded*
+    /// assets and debt (`reconciledNetWorth`) so the displayed trio reconciles
+    /// (displayed net worth == displayed assets − displayed debt), and the Budgets
+    /// hero's duplicated "Left this month" value must render at the same `.full`
+    /// precision the status panel uses, not a divergent `.compact`. The `@main` app
+    /// target isn't unit-testable, so this string-matches the wiring; the numeric
+    /// behavior is proven in `RoundingConsistencyTests`.
+    @Test("Money figures reconcile across surfaces (AND-731)")
+    func moneyFiguresReconcileAcrossSurfaces() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let accounts = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/Destinations/AccountsDestinationView.swift"),
+            encoding: .utf8
+        )
+        let budgets = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/Destinations/BudgetsDestinationView.swift"),
+            encoding: .utf8
+        )
+
+        // Accounts net worth hero is reconciled from the rounded parts, not summed
+        // independently.
+        #expect(accounts.contains("MultiCurrencyBalancePresentation.reconciledNetWorth("))
+        #expect(!accounts.contains("MultiCurrencyBalancePresentation.netWorth(accounts: appState.accounts)"))
+
+        // Budgets "Left this month" hero renders at full precision to match the
+        // status panel's `currency(_:)` (which uses `.full`).
+        #expect(budgets.contains("reconciledHeroCurrency(abs(remaining), masked: masked)"))
+        #expect(budgets.contains("PrivacyMaskPresentation.currency(amount, format: .full, isEnabled: masked, style: .compact)"))
+    }
+
     /// Source-invariant guard for AND-671: each activity-heatmap cell must carry a
     /// per-cell textual affordance (`.help` + `.accessibilityLabel`) so the day's
     /// meaning never rides on tint/opacity alone (ACCESSIBILITY.md). Both window
