@@ -1192,7 +1192,7 @@ struct PlaidBarTests {
         #expect(accounts.contains("@Environment(\\.shellSearchQuery)"))
         #expect(accounts.contains("localizedCaseInsensitiveContains(query)"))
         #expect(accounts.contains("ContentUnavailableView.search(text:"))
-        #expect(accounts.contains(".onChange(of: filteredAccounts.map(\\.id))"))
+        #expect(accounts.contains(".onChange(of: accounts.map(\\.id))"))
         #expect(accounts.contains("visibleAccounts.map(\\.id)"))
     }
 }
