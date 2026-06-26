@@ -319,7 +319,10 @@ struct DashboardDestinationView: View {
                 privacyMaskEnabled: masked
             ),
             systemImage: "chart.line.uptrend.xyaxis",
-            detail: metricDetail(for: netWorthAggregation, fallback: accountCountDetail(summary.accountCount)),
+            detail: MultiCurrencyBalancePresentation.metricDetail(
+                from: netWorthAggregation,
+                fallback: AccountPresentation.accountCountDetail(summary.accountCount)
+            ),
             accent: SemanticColors.brand,
             provenance: FigureProvenance.netWorth(
                 accounts: appState.accounts,
@@ -352,15 +355,6 @@ struct DashboardDestinationView: View {
         )
 
         return [netWorth, safe, spend]
-    }
-
-    private func accountCountDetail(_ count: Int) -> String {
-        count == 1 ? "Across 1 account" : "Across \(count) accounts"
-    }
-
-    private func metricDetail(for aggregation: CurrencyAggregation, fallback: String) -> String {
-        let headline = MultiCurrencyBalancePresentation.headline(from: aggregation, format: .compact)
-        return headline.formattedTotal == nil ? headline.disclosure : fallback
     }
 }
 

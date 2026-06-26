@@ -114,6 +114,21 @@ public enum MultiCurrencyBalancePresentation {
         return perCurrency.isEmpty ? "By currency" : perCurrency
     }
 
+    /// Secondary detail copy for a hero metric backed by a currency aggregation.
+    /// When the aggregation has no single converted total — mixed, unpriceable
+    /// currencies — surface the honest per-currency ``Headline/disclosure``;
+    /// otherwise defer to the caller's contextual `fallback` copy. Mirrors the
+    /// inline detail logic the dashboard and accounts destinations each spelled
+    /// out verbatim. The disclosure is format-independent, so this intentionally
+    /// takes no `format`: the `.compact` headline matches the prior inline call.
+    public static func metricDetail(
+        from aggregation: CurrencyAggregation,
+        fallback: String
+    ) -> String {
+        let headline = headline(from: aggregation, format: .compact)
+        return headline.formattedTotal == nil ? headline.disclosure : fallback
+    }
+
     /// Formats per-currency subtotals as display rows. `privacyMaskEnabled`
     /// suppresses the figure but keeps the currency identity visible (you can see
     /// you have EUR without seeing how much).

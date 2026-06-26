@@ -261,7 +261,10 @@ struct AccountsDestinationView: View {
             label: "Net worth",
             value: metricValue(for: netWorthAggregation, masked: masked),
             systemImage: "chart.line.uptrend.xyaxis",
-            detail: metricDetail(for: netWorthAggregation, fallback: accountCountDetail(summary.accountCount)),
+            detail: MultiCurrencyBalancePresentation.metricDetail(
+                from: netWorthAggregation,
+                fallback: AccountPresentation.accountCountDetail(summary.accountCount)
+            ),
             accent: SemanticColors.brand
         )
 
@@ -270,7 +273,10 @@ struct AccountsDestinationView: View {
             label: "Total assets",
             value: metricValue(for: assetsAggregation, masked: masked),
             systemImage: "banknote",
-            detail: metricDetail(for: assetsAggregation, fallback: "Cash and savings on hand"),
+            detail: MultiCurrencyBalancePresentation.metricDetail(
+                from: assetsAggregation,
+                fallback: "Cash and savings on hand"
+            ),
             accent: SemanticColors.positive
         )
 
@@ -279,15 +285,14 @@ struct AccountsDestinationView: View {
             label: "Total debt",
             value: metricValue(for: debtAggregation, masked: masked),
             systemImage: "creditcard",
-            detail: metricDetail(for: debtAggregation, fallback: "Credit and loan balances"),
+            detail: MultiCurrencyBalancePresentation.metricDetail(
+                from: debtAggregation,
+                fallback: "Credit and loan balances"
+            ),
             accent: summary.totalDebt > 0 ? SemanticColors.warning : .secondary
         )
 
         return [netWorth, assets, debt]
-    }
-
-    private func accountCountDetail(_ count: Int) -> String {
-        count == 1 ? "Across 1 account" : "Across \(count) accounts"
     }
 
     private func metricValue(for aggregation: CurrencyAggregation, masked: Bool) -> String {
@@ -296,11 +301,6 @@ struct AccountsDestinationView: View {
             format: .compact,
             privacyMaskEnabled: masked
         )
-    }
-
-    private func metricDetail(for aggregation: CurrencyAggregation, fallback: String) -> String {
-        let headline = MultiCurrencyBalancePresentation.headline(from: aggregation, format: .compact)
-        return headline.formattedTotal == nil ? headline.disclosure : fallback
     }
 
     // MARK: - Selection (shared NavigationState.selectedAccountID)

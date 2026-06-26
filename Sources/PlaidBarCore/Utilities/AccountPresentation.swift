@@ -1,6 +1,13 @@
 import Foundation
 
 public enum AccountPresentation {
+    /// Pluralized "Across N accounts" detail copy. Pure presentation string used
+    /// as the contextual fallback under a net-worth hero metric when a single
+    /// converted total is available.
+    public static func accountCountDetail(_ count: Int) -> String {
+        count == 1 ? "Across 1 account" : "Across \(count) accounts"
+    }
+
     public static func isDebt(_ account: AccountDTO) -> Bool {
         account.type == .credit || account.type == .loan
     }
