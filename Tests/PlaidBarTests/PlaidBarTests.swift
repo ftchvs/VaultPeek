@@ -1376,6 +1376,39 @@ struct PlaidBarTests {
         #expect(popover.contains("Text(summary.captionText)"))
         #expect(popover.contains(".accessibilityLabel(summary.accessibilityLabel)"))
     }
+
+    @Test("Dashboard surfaces a Goals glance card that routes to Goals and masks amounts (AND-730)")
+    func dashboardGoalsCardWiring() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let dashboard = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/Destinations/DashboardDestinationView.swift"),
+            encoding: .utf8
+        )
+        let card = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/Destinations/DashboardGoalsCard.swift"),
+            encoding: .utf8
+        )
+
+        // The dashboard mounts the goals glance card and deep-links it to the Goals
+        // workspace (not an in-place inspector — the 2-column dashboard has none).
+        #expect(dashboard.contains("DashboardGoalsCard(onOpen: { openRoute(.goals()) })"))
+
+        // The card reads the same local-first store the Goals workspace uses and the
+        // Core-tested top-N preview, so the two surfaces can never disagree.
+        #expect(card.contains("appState.goalsStore"))
+        #expect(card.contains("DashboardGoalsPreview.make(from: store.goals)"))
+        #expect(card.contains("await store.loadIfNeeded()"))
+
+        // Progress is carried by text + the bar; the percent runs through the
+        // mask-aware helper, never the raw "%"-interpolated figure.
+        #expect(!card.contains(#"\(goal.percentComplete)%"#))
+        #expect(card.contains("percent(goal.percentComplete)"))
+        #expect(card.contains("isMasked: isMasked"))
+
+        // An empty goal list shows the quiet affordance, not a blank/broken card.
+        #expect(card.contains("Set a savings goal"))
+        #expect(card.contains("Open Goals"))
+    }
 }
 
 /// Deterministic `FMMerchantCategorizing` stub for the categorization-tier tests.
