@@ -96,11 +96,22 @@ public enum MultiCurrencyBalancePresentation {
         format: CurrencyFormat = .full,
         privacyMaskEnabled: Bool = false
     ) -> String {
-        headline(
+        let headline = headline(
             from: aggregation,
             format: format,
             privacyMaskEnabled: privacyMaskEnabled
-        ).formattedTotal ?? "By currency"
+        )
+        if let total = headline.formattedTotal { return total }
+        if privacyMaskEnabled { return PrivacyMaskPresentation.compactValue }
+
+        let perCurrency = subtotalRows(
+            from: aggregation,
+            format: format,
+            privacyMaskEnabled: privacyMaskEnabled
+        )
+        .map(\.formattedAmount)
+        .joined(separator: " · ")
+        return perCurrency.isEmpty ? "By currency" : perCurrency
     }
 
     /// Formats per-currency subtotals as display rows. `privacyMaskEnabled`

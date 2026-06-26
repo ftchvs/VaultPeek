@@ -143,6 +143,9 @@ public enum FinanceIntentQueries {
             return .message("No credit cards with a known limit are linked.")
         }
         let formatted = Formatters.percent(percent)
+        if let scope = snapshot.creditUtilizationScopeLabel {
+            return .value(percent, spokenDialog: "Your highest credit utilization is \(formatted) in the \(scope).")
+        }
         return .value(percent, spokenDialog: "Your credit utilization is \(formatted).")
     }
 

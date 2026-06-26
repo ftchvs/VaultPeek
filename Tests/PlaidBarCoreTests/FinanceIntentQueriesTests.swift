@@ -117,6 +117,23 @@ struct FinanceIntentQueriesTests {
         #expect(dialog.contains("utilization"))
     }
 
+    @Test("Mixed-currency credit utilization names the scoped currency")
+    func creditUtilizationMixedCurrencyDialogNamesScope() {
+        guard case let .value(value, dialog) = FinanceIntentQueries.creditUtilization(
+            from: snapshot(
+                creditUtilization: 90,
+                creditUtilizationCurrency: CurrencyCode("EUR"),
+                creditUtilizationIsMultiCurrency: true
+            )
+        ) else {
+            Issue.record("Expected .value")
+            return
+        }
+        #expect(value == 90)
+        #expect(dialog.contains("highest"))
+        #expect(dialog.contains("EUR"))
+    }
+
     @Test("Credit utilization without a known limit reports a message")
     func creditUtilizationWithoutLimitReportsMessage() {
         guard case .message = FinanceIntentQueries.creditUtilization(from: snapshot(creditUtilization: nil)) else {
@@ -228,6 +245,8 @@ struct FinanceIntentQueriesTests {
         totalBalance: Double = 5_000,
         bills: [FinanceSnapshot.UpcomingBill] = [],
         creditUtilization: Double? = 20,
+        creditUtilizationCurrency: CurrencyCode? = nil,
+        creditUtilizationIsMultiCurrency: Bool = false,
         isMasked: Bool = false,
         periodSpending: Double = 0,
         categories: [FinanceSnapshot.CategorySpend] = [],
@@ -242,6 +261,8 @@ struct FinanceIntentQueriesTests {
             currencySubtotals: currencySubtotals,
             nextRecurringBills: bills,
             creditUtilization: creditUtilization,
+            creditUtilizationCurrency: creditUtilizationCurrency,
+            creditUtilizationIsMultiCurrency: creditUtilizationIsMultiCurrency,
             generatedAt: Date(timeIntervalSince1970: 1_780_000_000),
             isMasked: isMasked,
             periodSpending: periodSpending,

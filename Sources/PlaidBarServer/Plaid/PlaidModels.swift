@@ -294,6 +294,7 @@ struct PlaidHolding: Decodable, Sendable {
     let institutionValue: Double?
     let costBasis: Double?
     let isoCurrencyCode: String?
+    var unofficialCurrencyCode: String? = nil
 }
 
 struct PlaidSecurity: Decodable, Sendable {
@@ -303,6 +304,7 @@ struct PlaidSecurity: Decodable, Sendable {
     let type: String?
     let closePrice: Double?
     let isoCurrencyCode: String?
+    var unofficialCurrencyCode: String? = nil
 }
 
 struct PlaidInvestmentTransactionsResponse: Decodable, Sendable {
@@ -327,6 +329,7 @@ struct PlaidInvestmentTransaction: Decodable, Sendable {
     let type: String?
     let subtype: String?
     let isoCurrencyCode: String?
+    var unofficialCurrencyCode: String? = nil
 }
 
 struct PlaidTransactionsSyncResponse: Decodable, Sendable {

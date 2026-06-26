@@ -64,6 +64,21 @@ struct ControlValuePresentationTests {
         #expect(display.systemImage == "creditcard")
     }
 
+    @Test("Mixed-currency credit utilization accessibility names the scoped currency")
+    func mixedCurrencyUtilizationNamesScope() {
+        let display = ControlValuePresentation.creditUtilization(
+            from: snapshot(
+                creditUtilization: 90,
+                creditUtilizationCurrency: CurrencyCode("EUR"),
+                creditUtilizationIsMultiCurrency: true
+            )
+        )
+
+        #expect(display.value == Formatters.percent(90, decimals: 0))
+        #expect(display.accessibilityLabel.contains("highest"))
+        #expect(display.accessibilityLabel.contains("EUR"))
+    }
+
     @Test("Masked credit utilization withholds the percent")
     func maskedUtilizationIsWithheld() {
         let display = ControlValuePresentation.creditUtilization(from: snapshot(creditUtilization: 73, isMasked: true))
@@ -98,6 +113,8 @@ struct ControlValuePresentationTests {
         safeToSpend: Double = 1_000,
         totalBalance: Double = 5_000,
         creditUtilization: Double? = 20,
+        creditUtilizationCurrency: CurrencyCode? = nil,
+        creditUtilizationIsMultiCurrency: Bool = false,
         isMasked: Bool = false
     ) -> FinanceSnapshot {
         FinanceSnapshot(
@@ -108,6 +125,8 @@ struct ControlValuePresentationTests {
             ],
             nextRecurringBills: [],
             creditUtilization: creditUtilization,
+            creditUtilizationCurrency: creditUtilizationCurrency,
+            creditUtilizationIsMultiCurrency: creditUtilizationIsMultiCurrency,
             generatedAt: Date(timeIntervalSince1970: 1_780_000_000),
             isMasked: isMasked
         )

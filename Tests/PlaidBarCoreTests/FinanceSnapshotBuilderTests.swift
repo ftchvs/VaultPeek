@@ -109,6 +109,8 @@ struct FinanceSnapshotBuilderTests {
             generatedAt: asOf
         )
         #expect(snapshot.creditUtilization == 90)
+        #expect(snapshot.creditUtilizationCurrency == CurrencyCode("EUR"))
+        #expect(snapshot.creditUtilizationIsMultiCurrency)
         // Guard against regression to the pooled denominator.
         #expect(snapshot.creditUtilization != 1_900 / 11_000 * 100)
     }

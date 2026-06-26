@@ -10,7 +10,7 @@ import Foundation
 ///   used to build `accountBalances`), matching the intent's "spendable balance
 ///   across linked accounts" — not net worth.
 /// - `creditUtilization` ← ``WealthSummaryPresentation`` credit-utilization rule
-///   (recomputed from the same depository/credit balances)
+///   (same worst single-currency group and scope metadata)
 /// - `nextRecurringBills` ← the supplied recurring streams, filtered to dated
 ///   outflows within the horizon and sorted soonest-first.
 public enum FinanceSnapshotBuilder {
@@ -81,7 +81,8 @@ public enum FinanceSnapshotBuilder {
             calendar: calendar
         )
 
-        let utilization = creditUtilizationPercent(from: accounts)
+        let utilizationGroups = MenuBarSummary.creditUtilizationByCurrency(from: accounts)
+        let utilization = utilizationGroups.first
 
         let spending = monthToDateSpending(
             transactions: transactions,
@@ -119,7 +120,9 @@ public enum FinanceSnapshotBuilder {
             accountBalances: accountBalances,
             currencySubtotals: currencySubtotals,
             nextRecurringBills: bills,
-            creditUtilization: utilization,
+            creditUtilization: utilization?.percent,
+            creditUtilizationCurrency: utilization?.currency,
+            creditUtilizationIsMultiCurrency: utilizationGroups.count > 1,
             isoCurrencyCode: currencyCode,
             generatedAt: generatedAt,
             isMasked: isMasked,
@@ -216,14 +219,4 @@ public enum FinanceSnapshotBuilder {
         }
     }
 
-    // MARK: - Credit utilization
-
-    /// Credit utilization (0–100), nil when no credit limit is known. **Per
-    /// currency** as of AND-660: the worst single-currency utilization, never a
-    /// cross-currency pooled ratio. This figure feeds the local-AI snapshot, so a
-    /// fabricated cross-currency denominator must never reach an insight prompt.
-    /// Same rule as ``WealthSummaryPresentation`` (`MenuBarSummary.creditUtilization`).
-    private static func creditUtilizationPercent(from accounts: [AccountDTO]) -> Double? {
-        MenuBarSummary.creditUtilization(from: accounts)
-    }
 }
