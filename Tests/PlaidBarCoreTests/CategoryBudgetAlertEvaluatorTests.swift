@@ -168,7 +168,8 @@ struct CategoryBudgetAlertEvaluatorTests {
             deliveredDedupKeys: [nearingKey!]
         )
         #expect(repeated.decisions.filter { $0.kind == .categoryBudgetAlert }.isEmpty)
-        // A one-shot band crossing does not auto-resolve when it stays put.
+        // The band is still active, so the delivered key is not resolved while the
+        // category sits in the same band — no in-band spam, no premature re-arm.
         #expect(repeated.resolvedDedupKeys.isEmpty)
 
         // Now it crosses into over: a distinct band key fires even though the
@@ -185,6 +186,53 @@ struct CategoryBudgetAlertEvaluatorTests {
         let overDecisions = escalated.decisions.filter { $0.kind == .categoryBudgetAlert }
         #expect(overDecisions.count == 1)
         #expect(overDecisions.first?.dedupKey != nearingKey)
+    }
+
+    @Test("A category re-fires after a refund drops it out of a band and it re-enters that band (AND-663)")
+    func refireAfterRefundDropsOutOfBand() {
+        // 1. Spend crosses into the nearing band → the alert fires.
+        let nearingPresentation = CategoryBudgetPresentation(items: [
+            item(.foodAndDrink, limit: 100, spent: 90),  // nearing (0.90)
+        ])
+        let first = NotificationTriggerSelection.evaluate(
+            budgetPresentation: nearingPresentation, now: fixedNow, calendar: utcCalendar
+        )
+        let nearingKey = first.decisions.first { $0.kind == .categoryBudgetAlert }?.dedupKey
+        #expect(nearingKey != nil)
+
+        // 2. A refund (or recategorization) drops month-to-date spend below the
+        // band: the band is no longer active, so the delivered key must RESOLVE,
+        // re-arming the alert for a future re-crossing. Before the fix this kind
+        // was sticky (clearsWhenResolved == false), so the key was never cleared
+        // and step 3 stayed suppressed for the rest of the month.
+        let refundedPresentation = CategoryBudgetPresentation(items: [
+            item(.foodAndDrink, limit: 100, spent: 40),  // under (0.40)
+        ])
+        let refunded = NotificationTriggerSelection.evaluate(
+            budgetPresentation: refundedPresentation,
+            now: fixedNow,
+            calendar: utcCalendar,
+            deliveredDedupKeys: [nearingKey!]
+        )
+        #expect(refunded.decisions.filter { $0.kind == .categoryBudgetAlert }.isEmpty)
+        #expect(refunded.resolvedDedupKeys.contains(nearingKey!))
+
+        // 3. Spend climbs back into the SAME nearing band. The caller removes
+        // resolved keys from its delivered set (see NotificationService), so we
+        // model that here: the second crossing produces a fresh alert. Before the
+        // fix the key was never resolved in step 2, so it stayed delivered and
+        // this crossing was suppressed for the rest of the month.
+        var delivered: Set<String> = [nearingKey!]
+        delivered.subtract(refunded.resolvedDedupKeys)
+        let reEntered = NotificationTriggerSelection.evaluate(
+            budgetPresentation: nearingPresentation,
+            now: fixedNow,
+            calendar: utcCalendar,
+            deliveredDedupKeys: delivered
+        )
+        let reEnteredDecisions = reEntered.decisions.filter { $0.kind == .categoryBudgetAlert }
+        #expect(reEnteredDecisions.count == 1)
+        #expect(reEnteredDecisions.first?.dedupKey == nearingKey)
     }
 
     @Test("Disabling the budget-alert family suppresses its decisions")
