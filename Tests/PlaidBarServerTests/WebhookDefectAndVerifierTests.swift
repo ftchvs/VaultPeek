@@ -109,11 +109,12 @@ struct WebhookDefectAndVerifierTests {
         }
     }
 
-    @Test("Sticky sync signal clears once the item refresh advances past it")
-    func stickySyncClearsAfterRefresh() async throws {
+    @Test("Sticky sync signal clears once the committed cursor advances past it")
+    func stickySyncClearsAfterCursorCommit() async throws {
         try await Self.withStatusStores { tokenStore, billingStore, eventStore, config in
             // Events dated "now" sit after the item's creation `updatedAt`, so the
-            // sync is pending; a later refresh bumps `updatedAt` past them.
+            // sync is pending until a transaction-sync cursor commit advances past
+            // them.
             let syncAt = Date()
             _ = try await eventStore.record(Self.signal(
                 hash: "sync-2",
@@ -137,9 +138,20 @@ struct WebhookDefectAndVerifierTests {
             )
             #expect(try #require(try await statusRoutes.statusSnapshot(includeItems: true).itemStatuses?.first).needsSync)
 
-            // Item refresh advances updatedAt to a fresh now, past the sync event.
-            try await Task.sleep(for: .milliseconds(20))
+            // A status-only write bumps `items.updated_at`, but per #685 the sync
+            // signal is driven by the committed *cursor* time, not the item row —
+            // so a non-sync status change alone must NOT clear a pending sync.
             try await tokenStore.updateItemStatus(id: "item-webhook", status: ItemConnectionStatus.connected.rawValue)
+            #expect(try #require(try await statusRoutes.statusSnapshot(includeItems: true).itemStatuses?.first).needsSync)
+
+            // Committing a transaction-sync cursor whose observation time is past
+            // the sync event is what clears the sticky signal (the cursor-commit
+            // boundary owns the clear, AND-667 / #685).
+            try await tokenStore.saveSyncCursorIfItemExists(
+                itemId: "item-webhook",
+                cursor: "cursor-after-sync",
+                updatedAt: syncAt.addingTimeInterval(2)
+            )
             let refreshed = try await statusRoutes.statusSnapshot(includeItems: true)
             #expect(!(try #require(refreshed.itemStatuses?.first).needsSync))
         }
