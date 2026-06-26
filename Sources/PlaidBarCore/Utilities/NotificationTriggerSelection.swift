@@ -79,17 +79,22 @@ public enum NotificationTriggerKind: String, Codable, CaseIterable, Sendable {
 
     public var clearsWhenResolved: Bool {
         switch self {
+        // A category-budget alert is a *stateful* band condition, like
+        // highUtilization/lowBalance: it auto-resolves when its band is no longer
+        // active. Spend is not monotonic within a month — a refund or
+        // recategorization can drop a category's month-to-date spend back below a
+        // band it had crossed. Clearing the delivered key when the band goes
+        // inactive re-arms it, so re-entering the same band later that month fires
+        // a fresh alert instead of being suppressed for the rest of the month
+        // (AND-663). While spend sits inside a band the key stays active, so it is
+        // never resolved and never re-fires — no in-band spam.
         case .itemError, .providerOutage, .loginRequired, .syncStale, .highUtilization, .lowBalance,
-             .recurringChargeChanged, .recurringChargeDueSoon:
+             .recurringChargeChanged, .recurringChargeDueSoon, .categoryBudgetAlert:
             true
         // A crossed watchlist threshold is a one-shot like largeTransaction:
         // the spend already happened, so it should not auto-clear when the
-        // month-to-date sum later changes. A category-budget alert is keyed on
-        // its band, and within a month spend only climbs (under → nearing →
-        // over), so a delivered band-crossing should likewise not auto-resolve —
-        // each higher band carries its own one-shot key.
-        case .largeTransaction, .recurringChargeDetected, .merchantWatch, .categoryWatch,
-             .categoryBudgetAlert:
+        // month-to-date sum later changes.
+        case .largeTransaction, .recurringChargeDetected, .merchantWatch, .categoryWatch:
             false
         }
     }
@@ -530,10 +535,13 @@ public enum NotificationTriggerSelection {
     /// Decision for a budgeted category crossing its `nearing`/`over` band
     /// (AND-642).
     ///
-    /// De-dup grain: `category + month + band`. Within a month spend climbs
-    /// monotonically (under → nearing → over), so a category fires once when it
+    /// De-dup grain: `category + month + band`. A category fires once when it
     /// nears its limit and once more if it exceeds — never on every refresh while
     /// it sits in the same band, and the next month re-arms with a new month key.
+    /// Because this kind ``NotificationTriggerKind/clearsWhenResolved``, a band
+    /// also re-arms *within* the month: if a refund or recategorization drops
+    /// spend back below a band, the delivered key clears, so re-crossing into that
+    /// same band fires a fresh alert rather than being suppressed (AND-663).
     ///
     /// ## Privacy
     /// The body never carries an amount **and never names the category**. A

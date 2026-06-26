@@ -16,9 +16,11 @@ import Foundation
 /// The de-dup contract (see ``NotificationTriggerSelection``) keys an alert on
 /// *category + month + band*, so a category fires **once** when it enters
 /// `nearing` and **once more** if it later escalates to `over` — but not on every
-/// refresh while it sits in the same band. Crossing `under → nearing → over` is
-/// monotonic within a month, so this models the "near or exceed" requirement
-/// without storing prior spend.
+/// refresh while it sits in the same band. This evaluator stays stateless; the
+/// notification layer treats the alert as a stateful band condition that clears
+/// when the band goes inactive (``NotificationTriggerKind/clearsWhenResolved``),
+/// so a refund or recategorization that drops spend out of a band re-arms it and
+/// a later re-crossing fires again within the same month (AND-663).
 ///
 /// ## Privacy
 /// This type emits no amounts — only the category and its band. The notification

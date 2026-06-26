@@ -680,6 +680,16 @@ final class AppState {
     private var localAIInsightsService = LocalAIInsightsService()
     private let notificationService: any NotificationServiceProtocol
     private var refreshTask: Task<Void, Never>?
+    /// Single-flight handle for `refreshDashboard(force:)` (AND-670). The refresh
+    /// loop, ad-hoc `Task { await refreshDashboard() }` spawns (command palette,
+    /// recovery actions, glance/popover buttons), and the glance-command path can
+    /// all request a refresh concurrently. Without a guard, two refresh bodies
+    /// interleave their account/transaction reconciliation, so a slower in-flight
+    /// refresh can commit *after* — and clobber — a newer result. Each call chains
+    /// off this handle (awaits the prior body, then runs its own as the new
+    /// handle), so refresh bodies are serialized: at most one runs at a time and a
+    /// newer request's result is always the one that lands last.
+    private var inFlightRefreshTask: Task<Void, Never>?
     private var localAISummaryRefreshTask: Task<Void, Never>?
     /// Observer tokens for the OS power-state / thermal-state change
     /// notifications that drive energy-aware background refresh (AND-568).
@@ -2862,7 +2872,37 @@ final class AppState {
     /// automatic one (the background loop — fetches only when due per
     /// `automaticRefreshPolicy`). Connectivity is re-probed either way so the
     /// loop keeps self-healing and notifications stay current.
+    ///
+    /// Single-flighted (AND-670): the body runs through `inFlightRefreshTask` so
+    /// the refresh loop, ad-hoc `Task { await refreshDashboard() }` spawns, and the
+    /// glance-command path can never interleave two reconciliations. Each call
+    /// awaits any in-flight body before starting its own, so the result that lands
+    /// last is always the most recently requested one. The `await` here still
+    /// completes only after a refresh body finished, so every caller (button taps,
+    /// recovery actions, the loop) keeps its existing "returns once refreshed"
+    /// contract.
     func refreshDashboard(force: Bool = true) async {
+        // Chain off any in-flight refresh so two bodies never run concurrently.
+        // Capturing the prior handle and awaiting it (rather than cancelling)
+        // preserves the existing semantics: an already-running refresh always
+        // completes, and this newer request runs to completion right after it.
+        let previous = inFlightRefreshTask
+        let task = Task { @MainActor in
+            await previous?.value
+            await performRefreshDashboard(force: force)
+        }
+        inFlightRefreshTask = task
+        await task.value
+        // Clear the handle only when this task is still the latest one, so a
+        // newer chained request keeps the link to its predecessor intact.
+        if inFlightRefreshTask == task {
+            inFlightRefreshTask = nil
+        }
+    }
+
+    /// The actual refresh body. Always invoked through `refreshDashboard(force:)`'s
+    /// single-flight gate (AND-670) so it never runs concurrently with itself.
+    private func performRefreshDashboard(force: Bool) async {
         if refreshDemoDataIfNeeded() { return }
 
         if await consumePendingGlanceCommand() { return }
@@ -4253,9 +4293,20 @@ final class AppState {
         }
         let systemSurfaceMaskEnabled = shouldMaskFinancialValues
             || ((try? PrivacyMaskControlCommandReader.peek()?.maskEnabled) == true)
+        // Bump and capture the write generation up front so *both* snapshot
+        // publishes below — the App Group finance snapshot and the glance snapshot
+        // — are gated on the same token (AND-670). A clear path
+        // (`clearGlanceSnapshot` / `clearPublishedSystemSnapshotsForDemoEntry`)
+        // also bumps this generation and wipes the App Group files, so a stale
+        // in-flight save that captured an earlier generation drops itself rather
+        // than resurrecting pre-clear figures onto Control Center / Siri /
+        // Spotlight surfaces.
+        glanceSnapshotWriteGeneration += 1
+        let generation = glanceSnapshotWriteGeneration
         // Keep the App Intents snapshot fresh on the same path that already
-        // recomputes summaries for the widget (AND-512).
-        writeFinanceSnapshot(updatedAt: updatedAt)
+        // recomputes summaries for the widget (AND-512). Guarded by `generation`
+        // so its commit cannot land after a newer clear/write (AND-670).
+        writeFinanceSnapshot(updatedAt: updatedAt, generation: generation)
         // Trail the authoritative in-memory data into the disposable read-model
         // cache so the next cold start renders instantly (AND-566). This is the
         // single post-refresh/mutation seam, so the cache always reflects the
@@ -4265,8 +4316,6 @@ final class AppState {
         // the virtualized large-history list can page on the next open (AND-567).
         // Same seam, same best-effort/detached contract; fallback-safe.
         persistTransactionCache()
-        glanceSnapshotWriteGeneration += 1
-        let generation = glanceSnapshotWriteGeneration
         // When Privacy Mask / App Lock is active, build a value-free snapshot so
         // the on-disk glance-snapshot.json carries no balances, today's change, or
         // sparkline for a widget / Control Center surface to leak (AND-517). The
@@ -4316,7 +4365,12 @@ final class AppState {
     /// with no duplicated calculation here. Values only; never tokens or ids.
     /// When App Lock / Privacy Mask is active the snapshot is written with
     /// `isMasked == true` so the intents withhold the figures past the lock.
-    private func writeFinanceSnapshot(updatedAt: Date = Date()) {
+    ///
+    /// `generation` is the `glanceSnapshotWriteGeneration` token captured by the
+    /// caller (`writeGlanceSnapshot`). The App Group commit re-checks it on the
+    /// MainActor before writing so a stale snapshot cannot overwrite a newer write
+    /// — or resurrect figures a clear already wiped (AND-670).
+    private func writeFinanceSnapshot(updatedAt: Date = Date(), generation: Int) {
         // Defense in depth alongside `writeGlanceSnapshot`'s guard: never publish
         // demo fixtures to the shared App Group `FinanceSnapshot` that backs the
         // unlabeled Control Center value controls / Siri / Spotlight / Shortcuts.
@@ -4352,9 +4406,14 @@ final class AppState {
             creditUtilizationThreshold: creditUtilizationThreshold,
             generatedAt: updatedAt
         )
-        // File IO off the main actor; the snapshot is `Sendable` and the store is
-        // a stateless enum, so a detached task is safe under strict concurrency.
-        Task.detached(priority: .utility) {
+        // Generation-gated commit (AND-670): re-check the captured generation on
+        // the MainActor immediately before writing. Keeping this small App Group
+        // snapshot write on the same executor as clears closes the clear-vs-save
+        // race; if a clear wins before this task runs, the generation mismatch
+        // drops the stale snapshot, and if a clear runs after this synchronous
+        // commit it removes the just-written file.
+        Task { [generation] in
+            guard self.glanceSnapshotWriteGeneration == generation else { return }
             do {
                 try AppGroupSnapshotStore.save(snapshot)
             } catch {

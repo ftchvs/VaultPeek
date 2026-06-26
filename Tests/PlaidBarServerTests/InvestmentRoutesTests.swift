@@ -1,4 +1,10 @@
 import Foundation
+import FluentKit
+import FluentSQLiteDriver
+import Hummingbird
+import HummingbirdFluent
+import HummingbirdTesting
+import Logging
 @testable import PlaidBarCore
 @testable import PlaidBarServer
 import Testing
@@ -272,5 +278,221 @@ struct InvestmentRoutesTests {
         #expect(end == "2026-06-24")
         #expect(start == "2026-03-26")
         #expect(start < end)
+    }
+}
+
+/// Setup-state behavior for the Investments routes (AND-661, AND-644 follow-up).
+///
+/// With no Plaid credentials configured, holdings and investment transactions
+/// must surface the setup-state `503` (so the app shows the credential-guidance
+/// state) instead of a misleading empty-but-successful `200`. This mirrors how
+/// `AccountRoutes` is gated: the `SetupStateMiddleware` prefix list blocks the
+/// route before the handler runs, and — as a safety net for any item already
+/// linked — the handler re-throws `PlaidError.credentialsNotConfigured` rather
+/// than swallowing it into an empty contribution.
+@Suite("Investment routes setup state")
+struct InvestmentRoutesSetupStateTests {
+    private let apiToken = "local-investments-token"
+
+    /// A Plaid double whose investment calls fail as if credentials were never
+    /// configured — the exact error the real `PlaidClient` throws in setup state.
+    private struct CredentialLessPlaidClient: PlaidClientProtocol {
+        func createLinkToken(clientUserId _: String, completionRedirectUri _: String) async throws -> PlaidLinkTokenResponse {
+            throw PlaidError.credentialsNotConfigured
+        }
+
+        func createUpdateLinkToken(clientUserId _: String, accessToken _: String, completionRedirectUri _: String) async throws -> PlaidLinkTokenResponse {
+            throw PlaidError.credentialsNotConfigured
+        }
+
+        func getLinkToken(_: String) async throws -> PlaidLinkTokenGetResponse {
+            throw PlaidError.credentialsNotConfigured
+        }
+
+        func exchangePublicToken(_: String) async throws -> PlaidTokenExchangeResponse {
+            throw PlaidError.credentialsNotConfigured
+        }
+
+        func getAccounts(accessToken _: String) async throws -> PlaidAccountsResponse {
+            throw PlaidError.credentialsNotConfigured
+        }
+
+        func getBalances(accessToken _: String) async throws -> PlaidAccountsResponse {
+            throw PlaidError.credentialsNotConfigured
+        }
+
+        func getInvestmentHoldings(accessToken _: String) async throws -> PlaidHoldingsResponse {
+            throw PlaidError.credentialsNotConfigured
+        }
+
+        func getInvestmentTransactions(accessToken _: String, startDate _: String, endDate _: String, count _: Int, offset _: Int) async throws -> PlaidInvestmentTransactionsResponse {
+            throw PlaidError.credentialsNotConfigured
+        }
+
+        func syncTransactions(accessToken _: String, cursor _: String?) async throws -> PlaidTransactionsSyncResponse {
+            throw PlaidError.credentialsNotConfigured
+        }
+
+        func removeItem(accessToken _: String) async throws {
+            throw PlaidError.credentialsNotConfigured
+        }
+    }
+
+    private var authHeaders: HTTPFields {
+        var headers = HTTPFields()
+        headers[.authorization] = "Bearer \(apiToken)"
+        return headers
+    }
+
+    /// Wires the real `SetupStateMiddleware` and `InvestmentRoutes` behind the
+    /// bearer-token middleware. `seedItem` controls whether a linked item
+    /// exists; `credentialDiagnosis` controls whether the middleware's prefix
+    /// gate short-circuits.
+    ///
+    /// With `.missingBoth` (the default) the prefix gate blocks `/api/investments`
+    /// before the handler runs, so these tests exercise the *gating*. With
+    /// `.configured` the gate passes through to the handler, so the request
+    /// actually reaches the credential-less Plaid call — that is the only way to
+    /// exercise the handler's `catch PlaidError.credentialsNotConfigured`
+    /// re-throw and the middleware's *outer* catch-net that turns it into a 503.
+    private func withInvestmentsAPI(
+        seedItem: Bool,
+        credentialDiagnosis: CredentialSetupDiagnosis = .missingBoth,
+        _ body: @Sendable (any TestClientProtocol) async throws -> Void
+    ) async throws {
+        let logger = Logger(label: "com.ftchvs.plaidbar-server-tests.investments-setup")
+        let fluent = Fluent(logger: logger)
+        fluent.databases.use(.sqlite(.memory), as: .sqlite)
+        await fluent.migrations.add(CreateItems())
+        await fluent.migrations.add(AddProviderToItems())
+        await fluent.migrations.add(AddOriginToItems())
+        await fluent.migrations.add(CreateSyncCursors())
+
+        var bodyError: Error?
+        do {
+            try await fluent.migrate()
+            if seedItem {
+                // A direct (non-`keychain:`) token resolves without Keychain, so
+                // `accessToken(for:)` succeeds and the credential-less Plaid call
+                // is the failure under test, not token resolution.
+                try await ItemModel(
+                    id: "item-1",
+                    accessToken: "plaintext-access-token",
+                    institutionName: "Fidelity"
+                ).save(on: fluent.db())
+            }
+
+            let router = Router()
+            let api = router.group("api")
+            api.add(middleware: APITokenMiddleware(authToken: apiToken))
+            api.add(middleware: SetupStateMiddleware(
+                credentialDiagnosis: credentialDiagnosis,
+                plaidEnvironment: .sandbox
+            ))
+            InvestmentRoutes(
+                plaidClient: CredentialLessPlaidClient(),
+                tokenStore: TokenStore(fluent: fluent)
+            ).register(with: api)
+
+            let app = Application(router: router, logger: logger)
+            try await app.test(.router) { client in
+                try await body(client)
+            }
+        } catch {
+            bodyError = error
+        }
+        try await fluent.shutdown()
+        if let bodyError { throw bodyError }
+    }
+
+    @Test("Holdings returns 503 setup state (not 200-empty) when no items are linked")
+    func holdingsGatedByMiddlewareWithoutItems() async throws {
+        try await withInvestmentsAPI(seedItem: false) { client in
+            let response = try await client.execute(
+                uri: "/api/investments/holdings",
+                method: .get,
+                headers: authHeaders
+            )
+            #expect(response.status == .serviceUnavailable)
+        }
+    }
+
+    @Test("Investment transactions return 503 setup state (not 200-empty) when no items are linked")
+    func transactionsGatedByMiddlewareWithoutItems() async throws {
+        try await withInvestmentsAPI(seedItem: false) { client in
+            let response = try await client.execute(
+                uri: "/api/investments/transactions",
+                method: .get,
+                headers: authHeaders
+            )
+            #expect(response.status == .serviceUnavailable)
+        }
+    }
+
+    @Test("Holdings stays 503 in setup state even when an item is already linked")
+    func holdingsGatedByMiddlewareWithLinkedItem() async throws {
+        // In `.missingBoth` the prefix gate short-circuits to 503 *before* the
+        // handler runs, regardless of whether an item is linked. This guards
+        // the prefix-gating only — it does NOT reach the handler re-throw (see
+        // `holdingsRethrowsCredentialsNotConfiguredWhenCredentialsConfigured`).
+        try await withInvestmentsAPI(seedItem: true) { client in
+            let response = try await client.execute(
+                uri: "/api/investments/holdings",
+                method: .get,
+                headers: authHeaders
+            )
+            #expect(response.status == .serviceUnavailable)
+        }
+    }
+
+    @Test("Investment transactions stay 503 in setup state even when an item is already linked")
+    func transactionsGatedByMiddlewareWithLinkedItem() async throws {
+        try await withInvestmentsAPI(seedItem: true) { client in
+            let response = try await client.execute(
+                uri: "/api/investments/transactions",
+                method: .get,
+                headers: authHeaders
+            )
+            #expect(response.status == .serviceUnavailable)
+        }
+    }
+
+    // MARK: - Handler re-throw (true guard)
+    //
+    // The tests above all run with `.missingBoth`, so the prefix gate
+    // short-circuits before the handler executes — reverting *only* the
+    // handler's `catch PlaidError.credentialsNotConfigured` re-throw would leave
+    // them green. The two tests below set `.configured` so the prefix gate is
+    // bypassed and the request actually reaches the handler. With a linked item
+    // and a Plaid double that throws `credentialsNotConfigured`, the only path
+    // to a 503 is: handler re-throws → middleware's *outer* catch converts it.
+    // Remove the re-throw clause and the handler's `catch { return … }` swallows
+    // the error into a misleading 200-empty, so these tests go red — proving
+    // they genuinely guard the re-throw.
+
+    @Test("Holdings re-throws credentialsNotConfigured (reaching the handler) so a linked item surfaces 503, not 200-empty")
+    func holdingsRethrowsCredentialsNotConfiguredWhenCredentialsConfigured() async throws {
+        try await withInvestmentsAPI(seedItem: true, credentialDiagnosis: .configured) { client in
+            let response = try await client.execute(
+                uri: "/api/investments/holdings",
+                method: .get,
+                headers: authHeaders
+            )
+            // Without the handler re-throw this would be `.ok` with an empty
+            // payload (the per-item `catch` swallows the error).
+            #expect(response.status == .serviceUnavailable)
+        }
+    }
+
+    @Test("Investment transactions re-throw credentialsNotConfigured (reaching the handler) so a linked item surfaces 503, not 200-empty")
+    func transactionsRethrowCredentialsNotConfiguredWhenCredentialsConfigured() async throws {
+        try await withInvestmentsAPI(seedItem: true, credentialDiagnosis: .configured) { client in
+            let response = try await client.execute(
+                uri: "/api/investments/transactions",
+                method: .get,
+                headers: authHeaders
+            )
+            #expect(response.status == .serviceUnavailable)
+        }
     }
 }

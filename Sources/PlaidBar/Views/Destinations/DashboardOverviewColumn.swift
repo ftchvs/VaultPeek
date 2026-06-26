@@ -43,7 +43,7 @@ struct DashboardActivityHeatmapCard: View {
             if appState.shouldMaskFinancialValues || reduceTransparency {
                 heatmapTextAlternative(layout: layout)
             } else {
-                DashboardYearHeatmapGrid(layout: layout)
+                DashboardYearHeatmapGrid(layout: layout, isPrivacyMasked: appState.shouldMaskFinancialValues)
             }
         }
         .loadingRedaction(appState.loadState(for: .activityHeatmap))
@@ -449,6 +449,12 @@ private struct DashboardOverviewFallback: View {
 /// under Privacy Mask / Reduce Transparency before reaching this view.
 struct DashboardYearHeatmapGrid: View {
     let layout: SpendingHeatmapLayout
+    /// Whether Privacy Mask is active. The parent only renders this grid when
+    /// masking is OFF (the masked branch shows a text alternative), so this is
+    /// `false` in practice — but it is threaded honestly into the per-cell label
+    /// source so the affordance never leaks a value if the grid is ever shown
+    /// while masked (defense in depth; single Core label source).
+    var isPrivacyMasked: Bool = false
 
     /// Gap between cells. A touch wider than the glance grid's 2pt so the larger
     /// cells read as a clean lattice at desk distance.
@@ -546,9 +552,16 @@ struct DashboardYearHeatmapGrid: View {
     private func cellView(for day: SpendingHeatmapDay?, size: CGFloat) -> some View {
         if let day {
             let intensity = SpendingHeatmap.cellIntensity(for: day, peakValue: layout.peakValue)
+            // Per-cell textual affordance: the cell's meaning otherwise rides on
+            // tint/opacity alone (ACCESSIBILITY.md). The label is the single Core
+            // source (date + masked value + count), so pointer-hover and VoiceOver
+            // get the same sentence and Privacy Mask is honored (AND-671).
+            let label = SpendingHeatmap.cellLabel(for: day, mode: layout.mode, isPrivacyMasked: isPrivacyMasked)
             RoundedRectangle(cornerRadius: Radius.control)
                 .fill(Color.primary.opacity(0.10 + 0.62 * intensity))
                 .frame(width: size, height: size)
+                .help(label)
+                .accessibilityLabel(label)
         } else {
             RoundedRectangle(cornerRadius: Radius.control)
                 .fill(.clear)
