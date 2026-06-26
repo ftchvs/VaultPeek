@@ -25,7 +25,7 @@ struct CategoryStatusBar: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.xxs) {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
             track
             verdictRow
         }
@@ -35,40 +35,41 @@ struct CategoryStatusBar: View {
 
     private var track: some View {
         GeometryReader { proxy in
-            Capsule()
-                .fill(.quaternary.opacity(0.5))
-                .overlay(alignment: .leading) {
-                    if !model.trackOnly {
-                        Capsule()
-                            .fill(fillTint)
-                            .frame(width: max(proxy.size.width * model.fillFraction, 2))
-                            .animation(
-                                MotionTokens.animation(MotionTokens.content, reduceMotion: reduceMotion),
-                                value: model.fillFraction
-                            )
-                    }
+            let width = proxy.size.width
+            ZStack(alignment: .leading) {
+                // Background track.
+                Capsule().fill(.quaternary.opacity(0.5))
+
+                // Actual-spend fill — one clean solid bar (no hatching).
+                if !model.trackOnly {
+                    Capsule()
+                        .fill(fillTint)
+                        .frame(width: max(width * model.fillFraction, 3))
+                        .animation(
+                            MotionTokens.animation(MotionTokens.content, reduceMotion: reduceMotion),
+                            value: model.fillFraction
+                        )
                 }
-                // Committed-recurring "ghost" segment (AND-559): a dashed outline
-                // spanning the share of the budget already spoken-for by detected
-                // recurring bills. The dash *pattern* — not a color — distinguishes
-                // it from the solid actual-spend fill; the amount is also voiced in
-                // the accessibility sentence, so it never reads by color alone.
-                .overlay(alignment: .leading) {
-                    if let committedFraction = model.committedFraction {
-                        Capsule()
-                            .strokeBorder(
-                                .secondary,
-                                style: StrokeStyle(lineWidth: 1.5, dash: [3, 2])
-                            )
-                            .frame(width: max(proxy.size.width * committedFraction, 3))
-                            .animation(
-                                MotionTokens.animation(MotionTokens.content, reduceMotion: reduceMotion),
-                                value: committedFraction
-                            )
-                    }
+
+                // Committed-recurring marker (AND-559): a single clean tick at the
+                // share of the budget already spoken-for by detected recurring bills.
+                // A *position* cue — not a hatch over the whole segment — and the
+                // amount is also voiced in the accessibility sentence, so the marker
+                // never reads by color alone.
+                if let committedFraction = model.committedFraction {
+                    Capsule()
+                        .fill(Color.primary.opacity(0.45))
+                        .frame(width: 2)
+                        .padding(.vertical, 1)
+                        .offset(x: min(max(width * committedFraction - 1, 0), width - 2))
+                        .animation(
+                            MotionTokens.animation(MotionTokens.content, reduceMotion: reduceMotion),
+                            value: committedFraction
+                        )
                 }
+            }
         }
-        .frame(height: 4)
+        .frame(height: 8)
         .accessibilityHidden(true)
     }
 
