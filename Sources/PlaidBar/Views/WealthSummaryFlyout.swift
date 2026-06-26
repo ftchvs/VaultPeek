@@ -43,7 +43,15 @@ struct WealthSummaryFlyout: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.lg) {
-                    WealthMetricGrid(presentation: presentation, privacyMaskEnabled: privacyMaskEnabled)
+                    WealthMetricGrid(
+                        presentation: presentation,
+                        // Per-currency assets/debt (AND-660): the tiles render a
+                        // per-currency breakdown for a mixed portfolio rather than
+                        // summing scalar Doubles across currencies under one `$`.
+                        assetsAggregation: MultiCurrencyBalancePresentation.totalAssets(accounts: appState.accounts),
+                        debtAggregation: MultiCurrencyBalancePresentation.totalDebt(accounts: appState.accounts),
+                        privacyMaskEnabled: privacyMaskEnabled
+                    )
                         .loadingRedaction(appState.loadState(for: .summaryCards))
                         .scrollEdgeDepth(reduceMotion: reduceMotion)
 
@@ -141,14 +149,14 @@ struct WealthSummaryFlyout: View {
         _ presentation: WealthSummaryPresentation,
         privacyMaskEnabled: Bool
     ) -> some View {
-        let netWorthText = PrivacyMaskPresentation.currency(
-            presentation.netWorth,
+        // Net worth is grouped per currency (AND-660), mirroring the Dashboard
+        // hero: a mixed-currency portfolio shows a per-currency breakdown, never a
+        // fabricated `$` total. Single-currency text is byte-identical to before.
+        let netWorthAggregation = MultiCurrencyBalancePresentation.netWorth(accounts: appState.accounts)
+        let netWorthText = MultiCurrencyBalancePresentation.displayText(
+            from: netWorthAggregation,
             format: .full,
-            isEnabled: privacyMaskEnabled,
-            // Masked hero shows dots (consistent with every other value),
-            // not the word "Private". The `.hero` word is reserved for the
-            // VoiceOver label below and the menu-bar title.
-            style: .compact
+            privacyMaskEnabled: privacyMaskEnabled
         )
         return VStack(alignment: .leading, spacing: Spacing.sm) {
             HStack(alignment: .firstTextBaseline) {
@@ -189,12 +197,13 @@ struct WealthSummaryFlyout: View {
         _ presentation: WealthSummaryPresentation,
         privacyMaskEnabled: Bool
     ) -> String {
-        let netWorth = PrivacyMaskPresentation.currency(
-            presentation.netWorth,
+        // Speak net worth per currency (AND-660): a mixed-currency portfolio
+        // names each currency rather than reading a fabricated `$` figure.
+        let netWorth = MultiCurrencyBalancePresentation.headline(
+            from: MultiCurrencyBalancePresentation.netWorth(accounts: appState.accounts),
             format: .full,
-            isEnabled: privacyMaskEnabled,
-            style: .hero
-        )
+            privacyMaskEnabled: privacyMaskEnabled
+        ).accessibilityLabel
         let netCashflow = privacyMaskEnabled
             ? PrivacyMaskPresentation.compactValue
             : cashflowText(presentation.cashflow.net, format: .full)
@@ -282,6 +291,11 @@ private struct WealthSyncPill: View {
 private struct WealthMetricGrid: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let presentation: WealthSummaryPresentation
+    /// Per-currency assets/debt aggregations (AND-660). The displayed figure comes
+    /// from these — a mixed-currency portfolio shows a per-currency breakdown
+    /// instead of a fabricated single-`$` scalar.
+    let assetsAggregation: CurrencyAggregation
+    let debtAggregation: CurrencyAggregation
     let privacyMaskEnabled: Bool
 
     private var columns: [GridItem] {
@@ -291,11 +305,23 @@ private struct WealthMetricGrid: View {
         ]
     }
 
+    private func aggregatedValue(_ aggregation: CurrencyAggregation) -> String {
+        MultiCurrencyBalancePresentation.displayText(
+            from: aggregation,
+            format: .compact,
+            privacyMaskEnabled: privacyMaskEnabled
+        )
+    }
+
     var body: some View {
+        // `presentation.totalDebt` stays the source of the yes/no "has debt" cue
+        // (tint + detail copy); it is currency-agnostic so a boolean over it is
+        // safe even when the displayed figure is per-currency.
+        let hasDebt = presentation.totalDebt > 0
         LazyVGrid(columns: columns, alignment: .leading, spacing: Spacing.sm) {
             WealthMetricTile(
                 title: "Assets",
-                value: PrivacyMaskPresentation.currency(presentation.totalAssets, format: .compact, isEnabled: privacyMaskEnabled),
+                value: aggregatedValue(assetsAggregation),
                 detail: "\(presentation.accountCount) accounts",
                 systemImage: "building.columns.fill",
                 reduceMotion: reduceMotion
@@ -303,10 +329,10 @@ private struct WealthMetricGrid: View {
 
             WealthMetricTile(
                 title: "Debt",
-                value: PrivacyMaskPresentation.currency(presentation.totalDebt, format: .compact, isEnabled: privacyMaskEnabled),
-                detail: presentation.totalDebt > 0 ? "Credit and loans" : "No debt synced",
+                value: aggregatedValue(debtAggregation),
+                detail: hasDebt ? "Credit and loans" : "No debt synced",
                 systemImage: "creditcard.fill",
-                tint: presentation.totalDebt > 0 ? SemanticColors.creditDebt : AppearanceTextColors.secondary,
+                tint: hasDebt ? SemanticColors.creditDebt : AppearanceTextColors.secondary,
                 reduceMotion: reduceMotion
             )
         }
@@ -672,14 +698,23 @@ private struct WealthCreditSection: View {
         _ summary: WealthSummaryPresentation.CreditUtilizationSummary,
         format: CurrencyFormat
     ) -> String {
-        PrivacyMaskPresentation.currency(summary.usedCredit, format: format, isEnabled: privacyMaskEnabled)
+        // Render used/limit in the utilization's own currency (AND-660): the
+        // headline ratio is per-currency, so a EUR card's figures read as EUR,
+        // not a fabricated `$`.
+        PrivacyMaskPresentation.value(
+            Formatters.currency(summary.usedCredit, in: summary.currency, format: format),
+            isEnabled: privacyMaskEnabled
+        )
     }
 
     private func limitValue(
         _ summary: WealthSummaryPresentation.CreditUtilizationSummary,
         format: CurrencyFormat
     ) -> String {
-        PrivacyMaskPresentation.currency(summary.totalLimit, format: format, isEnabled: privacyMaskEnabled)
+        PrivacyMaskPresentation.value(
+            Formatters.currency(summary.totalLimit, in: summary.currency, format: format),
+            isEnabled: privacyMaskEnabled
+        )
     }
 
     private func tint(_ summary: WealthSummaryPresentation.CreditUtilizationSummary) -> Color {
