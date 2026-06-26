@@ -119,6 +119,7 @@ public struct FigureProvenance: Equatable, Sendable {
                     id: "net-worth-source-\(index)",
                     for: row.0,
                     amount: row.1,
+                    currency: row.0.balances.currency,
                     privacyMaskEnabled: privacyMaskEnabled
                 )
             }
@@ -197,9 +198,10 @@ public struct FigureProvenance: Equatable, Sendable {
     /// Provenance for the credit-utilization figure
     /// (`WealthSummaryPresentation.CreditUtilizationSummary`).
     ///
-    /// Utilization is used credit over total limit across credit-card accounts.
-    /// This lists the credit accounts as sources and notes that accounts without a
-    /// known limit contribute used balance but cannot contribute a denominator.
+    /// Utilization is used credit over total limit for one credit-card currency.
+    /// This lists the scoped credit accounts as sources and notes that accounts
+    /// without a known limit contribute used balance but cannot contribute a
+    /// denominator.
     public static func creditUtilization(
         summary: WealthSummaryPresentation.CreditUtilizationSummary,
         creditAccounts: [AccountDTO],
@@ -207,9 +209,12 @@ public struct FigureProvenance: Equatable, Sendable {
         privacyMaskEnabled: Bool = false,
         now: Date = Date()
     ) -> FigureProvenance {
-        let withoutLimit = creditAccounts.count { ($0.balances.limit ?? 0) <= 0 }
+        let scopedCreditAccounts = creditAccounts.filter {
+            $0.balances.currency == summary.currency
+        }
+        let withoutLimit = scopedCreditAccounts.count { ($0.balances.limit ?? 0) <= 0 }
 
-        let sources = creditAccounts
+        let sources = scopedCreditAccounts
             .sorted { abs($0.balances.current ?? 0) > abs($1.balances.current ?? 0) }
             .prefix(maxSourceRows)
             .enumerated()
@@ -218,6 +223,7 @@ public struct FigureProvenance: Equatable, Sendable {
                     id: "credit-utilization-source-\(index)",
                     for: account,
                     amount: abs(account.balances.current ?? 0),
+                    currency: summary.currency,
                     privacyMaskEnabled: privacyMaskEnabled,
                     forceCreditGlyph: true
                 )
@@ -227,14 +233,17 @@ public struct FigureProvenance: Equatable, Sendable {
         if withoutLimit > 0 {
             exclusions.append("\(withoutLimit) card\(withoutLimit == 1 ? "" : "s") without a reported limit contribute used balance but not total limit.")
         }
-        if creditAccounts.count > maxSourceRows {
-            exclusions.append("Showing the \(maxSourceRows) largest of \(creditAccounts.count) credit cards.")
+        if summary.isMultiCurrency {
+            exclusions.append("Reports the highest-utilization \(summary.currency.rawValue) credit group; other credit currencies are tracked separately, not pooled into this ratio.")
+        }
+        if scopedCreditAccounts.count > maxSourceRows {
+            exclusions.append("Showing the \(maxSourceRows) largest of \(scopedCreditAccounts.count) \(summary.currency.rawValue) credit cards.")
         }
         exclusions.append("Based on the balance and limit each bank last reported.")
 
         let derivation = privacyMaskEnabled
-            ? "Balance used divided by total limit across your credit cards."
-            : "Balance used divided by total limit across your credit cards (\(summary.statusLabel))."
+            ? "Balance used divided by total limit for your \(summary.currency.rawValue) credit cards."
+            : "Balance used divided by total limit for your \(summary.currency.rawValue) credit cards (\(summary.statusLabel))."
 
         return make(
             figureTitle: "Credit utilization",
@@ -301,6 +310,7 @@ public struct FigureProvenance: Equatable, Sendable {
         id: String,
         for account: AccountDTO,
         amount: Double,
+        currency: CurrencyCode,
         privacyMaskEnabled: Bool,
         forceCreditGlyph: Bool = false
     ) -> Source {
@@ -308,10 +318,10 @@ public struct FigureProvenance: Equatable, Sendable {
         let label = account.name + suffix
         let value = privacyMaskEnabled
             ? PrivacyMaskPresentation.compactValue
-            : Formatters.currency(amount, format: .compact)
+            : Formatters.currency(amount, in: currency, format: .compact)
         let spokenValue = privacyMaskEnabled
             ? "balance hidden while Privacy Mask is on"
-            : "balance \(Formatters.currency(amount, format: .full))"
+            : "balance \(Formatters.currency(amount, in: currency, format: .full))"
         let glyph = forceCreditGlyph ? "creditcard" : account.type.provenanceGlyph
         return Source(
             id: id,
