@@ -1694,7 +1694,7 @@ struct PlaidBarServerTests {
         #expect(ItemStatusMapping.status(forWebhookCode: "ITEM_LOGIN_REQUIRED", currentStatus: .connected) == .loginRequired)
     }
 
-    @Test("Token-vault/Keychain failures map to transient .providerOutage, not a hard .error")
+    @Test("Transient token-vault/Keychain failures map to .providerOutage, not a hard .error")
     func itemStatusMappingTreatsTokenVaultFailuresAsTransient() {
         // A Keychain/token-vault failure while resolving an item's access token
         // is frequently transient (device locked, Keychain temporarily
@@ -1706,8 +1706,7 @@ struct PlaidBarServerTests {
             .keychainUnavailable,
             .keychainLoadFailed(-25300),
             .keychainSaveFailed(-34018),
-            .keychainDeleteFailed(-25300),
-            .invalidStoredToken
+            .keychainDeleteFailed(-25300)
         ]
         for error in tokenVaultErrors {
             let status = ItemStatusMapping.status(forAPIError: error)
@@ -1718,6 +1717,11 @@ struct PlaidBarServerTests {
             #expect(status.isProviderOutage)
             #expect(status.needsUpdateMode == false)
         }
+
+        // Corrupt or empty token bytes are terminal from the item refresh path:
+        // re-reading the same Keychain entry will keep throwing, so do not hide
+        // that recovery behind "we'll retry automatically".
+        #expect(ItemStatusMapping.status(forAPIError: PlaidTokenVaultError.invalidStoredToken) == .error)
 
         // A genuine Plaid item error still maps to the hard `.error` state — the
         // transient special-case must not swallow real connection failures.
