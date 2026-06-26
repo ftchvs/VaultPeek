@@ -50,16 +50,86 @@ struct WealthSummaryPresentationTests {
     func computesCreditUtilization() {
         let presentation = makePresentation(
             accounts: [
-                AccountDTO(id: "card-a", itemId: "item-a", name: "Card A", type: .credit, balances: BalanceDTO(current: -400, limit: 1_000)),
-                AccountDTO(id: "card-b", itemId: "item-b", name: "Card B", type: .credit, balances: BalanceDTO(current: -200, limit: 1_000)),
+                AccountDTO(id: "card-a", itemId: "item-a", name: "Card A", type: .credit, balances: BalanceDTO(current: -400, limit: 1_000, isoCurrencyCode: "USD")),
+                AccountDTO(id: "card-b", itemId: "item-b", name: "Card B", type: .credit, balances: BalanceDTO(current: -200, limit: 1_000, isoCurrencyCode: "USD")),
             ],
             creditUtilizationThreshold: 25
         )
 
+        // Two USD cards stay pooled WITHIN USD (single currency), so the ratio is
+        // unchanged from the pre-AND-660 behavior — per-currency only changes
+        // mixed-currency portfolios.
         #expect(presentation.creditUtilization?.usedCredit == 600)
         #expect(presentation.creditUtilization?.totalLimit == 2_000)
         #expect(presentation.creditUtilization?.percent == 30)
         #expect(presentation.creditUtilization?.statusLabel == "Warning")
+        #expect(presentation.creditUtilization?.exceedsThreshold == true)
+        #expect(presentation.creditUtilization?.currency == CurrencyCode("USD"))
+        #expect(presentation.creditUtilization?.isMultiCurrency == false)
+    }
+
+    // AND-660 #3 (highest stakes): used credit and limits must NEVER pool across
+    // currencies. A USD card at 10% utilization and a EUR card at 90% must report
+    // the WORST single-currency ratio (90% / EUR), not a fabricated cross-currency
+    // pooled number — and the threshold must still fire on the maxed EUR card.
+    @Test("Credit utilization is per-currency: USD+EUR mix does not pool into one ratio (AND-660)")
+    func creditUtilizationPerCurrency() {
+        // USD: 1,000 used of 10,000 limit = 10%.
+        // EUR: 900 used of 1,000 limit = 90%.
+        // Pooling (the old bug) would give (1,900 / 11,000) ≈ 17.3% — UNDER a 30%
+        // threshold, silently hiding the maxed EUR card. Per-currency must surface
+        // the 90% EUR group and trip the threshold.
+        let accounts = [
+            AccountDTO(id: "usd-card", itemId: "item-a", name: "USD Card", type: .credit, balances: BalanceDTO(current: -1_000, limit: 10_000, isoCurrencyCode: "USD")),
+            AccountDTO(id: "eur-card", itemId: "item-b", name: "EUR Card", type: .credit, balances: BalanceDTO(current: -900, limit: 1_000, isoCurrencyCode: "EUR")),
+        ]
+        let presentation = makePresentation(accounts: accounts, creditUtilizationThreshold: 30)
+
+        let util = presentation.creditUtilization
+        // Headline reports the worst currency group: EUR at 90%, NOT the ~17.3%
+        // pooled ratio.
+        #expect(util?.percent == 90)
+        #expect(util?.currency == CurrencyCode("EUR"))
+        #expect(util?.usedCredit == 900)
+        #expect(util?.totalLimit == 1_000)
+        #expect(util?.isMultiCurrency == true)
+        // The maxed EUR card trips the threshold even though a pooled ratio would
+        // have stayed under it.
+        #expect(util?.exceedsThreshold == true)
+        // Guard against regression to the pooled denominator/numerator.
+        #expect(util?.totalLimit != 11_000)
+        #expect(util?.usedCredit != 1_900)
+
+        // The shared menu-bar/alert path (feeds AttentionQueue → notifications +
+        // App Intents) must report the same worst-currency figure, NOT ~17.3%.
+        #expect(MenuBarSummary.creditUtilization(from: accounts) == 90)
+
+        // The per-currency groups expose BOTH currencies, each with its own
+        // self-consistent used/limit (never cross-currency summed).
+        let groups = MenuBarSummary.creditUtilizationByCurrency(from: accounts)
+        #expect(groups.count == 2)
+        #expect(groups.first?.currency == CurrencyCode("EUR")) // worst is first
+        #expect(groups.first?.percent == 90)
+        let usd = groups.first { $0.currency == CurrencyCode("USD") }
+        #expect(usd?.percent == 10)
+        #expect(usd?.usedCredit == 1_000)
+        #expect(usd?.totalLimit == 10_000)
+    }
+
+    @Test("Per-currency utilization keeps a low foreign card from inflating a high domestic one")
+    func creditUtilizationPerCurrencyDoesNotMaskGoodCard() {
+        // USD: 9,000 used of 10,000 = 90% (the worst). EUR: 100 used of 5,000 = 2%.
+        // Per-currency reports USD 90%; a naive pool would have been
+        // (9,100 / 15,000) ≈ 60.7%, understating the maxed USD card.
+        let presentation = makePresentation(
+            accounts: [
+                AccountDTO(id: "usd-card", itemId: "item-a", name: "USD Card", type: .credit, balances: BalanceDTO(current: -9_000, limit: 10_000, isoCurrencyCode: "USD")),
+                AccountDTO(id: "eur-card", itemId: "item-b", name: "EUR Card", type: .credit, balances: BalanceDTO(current: -100, limit: 5_000, isoCurrencyCode: "EUR")),
+            ],
+            creditUtilizationThreshold: 30
+        )
+        #expect(presentation.creditUtilization?.percent == 90)
+        #expect(presentation.creditUtilization?.currency == CurrencyCode("USD"))
         #expect(presentation.creditUtilization?.exceedsThreshold == true)
     }
 

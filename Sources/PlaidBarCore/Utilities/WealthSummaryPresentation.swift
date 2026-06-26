@@ -29,19 +29,33 @@ public struct WealthSummaryPresentation: Sendable, Equatable {
         public let totalLimit: Double
         public let statusLabel: String
         public let exceedsThreshold: Bool
+        /// The currency the headline `usedCredit`/`totalLimit`/`percent` are scoped
+        /// to (AND-660). Utilization is computed within one currency, never pooled
+        /// across currencies, so these figures must be rendered in this currency —
+        /// not a fabricated `$`.
+        public let currency: CurrencyCode
+        /// True when credit cards span more than one currency, so this summary
+        /// reports the *worst* single currency while others exist. The flyout/
+        /// provenance surface this so the headline is not mistaken for a portfolio-
+        /// wide ratio.
+        public let isMultiCurrency: Bool
 
         public init(
             percent: Double,
             usedCredit: Double,
             totalLimit: Double,
             statusLabel: String,
-            exceedsThreshold: Bool
+            exceedsThreshold: Bool,
+            currency: CurrencyCode = .usd,
+            isMultiCurrency: Bool = false
         ) {
             self.percent = percent
             self.usedCredit = usedCredit
             self.totalLimit = totalLimit
             self.statusLabel = statusLabel
             self.exceedsThreshold = exceedsThreshold
+            self.currency = currency
+            self.isMultiCurrency = isMultiCurrency
         }
     }
 
@@ -252,25 +266,27 @@ public struct WealthSummaryPresentation: Sendable, Equatable {
         from accounts: [AccountDTO],
         threshold: Double
     ) -> CreditUtilizationSummary? {
-        let creditBalances = accounts
-            .filter { $0.type == .credit }
-            .map(\.balances)
-
-        let totalLimit = creditBalances.reduce(0) { $0 + max($1.limit ?? 0, 0) }
-        guard totalLimit > 0 else { return nil }
-
-        let usedCredit = creditBalances.reduce(0) { $0 + abs($1.current ?? 0) }
-        let percent = (usedCredit / totalLimit) * 100
+        // Utilization is computed PER CURRENCY (AND-660): used credit and total
+        // limit are only ever summed within one currency, so the ratio is always
+        // meaningful. The headline reports the *worst* single currency — the
+        // alert-correct choice, so a maxed-out EUR card still trips the threshold
+        // even when a large USD limit would dilute a (formerly pooled) ratio.
+        let groups = MenuBarSummary.creditUtilizationByCurrency(from: accounts)
+        guard let worst = groups.first else { return nil }
 
         return CreditUtilizationSummary(
-            percent: percent,
-            usedCredit: usedCredit,
-            totalLimit: totalLimit,
+            percent: worst.percent,
+            usedCredit: worst.usedCredit,
+            totalLimit: worst.totalLimit,
             statusLabel: AccountPresentation.utilizationStatusLabel(
-                for: percent,
+                for: worst.percent,
                 threshold: threshold
             ),
-            exceedsThreshold: percent >= threshold
+            // A high-utilization in ANY currency exceeds the threshold — pooling
+            // can no longer hide a maxed card behind a large foreign limit.
+            exceedsThreshold: groups.contains { $0.percent >= threshold },
+            currency: worst.currency,
+            isMultiCurrency: groups.count > 1
         )
     }
 

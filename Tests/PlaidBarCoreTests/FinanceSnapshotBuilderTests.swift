@@ -93,6 +93,26 @@ struct FinanceSnapshotBuilderTests {
         #expect(!snapshot.isEmpty)
     }
 
+    // AND-660 #3: the AI/insight snapshot's utilization must be per-currency, so a
+    // fabricated cross-currency ratio never reaches a local-insight prompt.
+    @Test("Snapshot credit utilization is per-currency, never a pooled cross-currency ratio (AND-660)")
+    func snapshotUtilizationIsPerCurrency() {
+        // USD 10% + EUR 90%. Pooling would be ~17.3%; per-currency reports the
+        // worst (EUR 90%).
+        let snapshot = FinanceSnapshotBuilder.make(
+            accounts: [
+                credit(name: "USD Card", current: 1_000, limit: 10_000, currency: "USD"),
+                credit(name: "EUR Card", current: 900, limit: 1_000, currency: "EUR"),
+            ],
+            recurringTransactions: [],
+            isMasked: false,
+            generatedAt: asOf
+        )
+        #expect(snapshot.creditUtilization == 90)
+        // Guard against regression to the pooled denominator.
+        #expect(snapshot.creditUtilization != 1_900 / 11_000 * 100)
+    }
+
     @Test("Upcoming bills include dated outflows in-window and exclude income")
     func upcomingBillsFilterToOutflowsInWindow() throws {
         // asOf is 2026-05-29; end-of-month horizon is 2026-05-31. Build dated
@@ -247,13 +267,13 @@ struct FinanceSnapshotBuilderTests {
         )
     }
 
-    private func credit(name: String, current: Double, limit: Double) -> AccountDTO {
+    private func credit(name: String, current: Double, limit: Double, currency: String? = nil) -> AccountDTO {
         AccountDTO(
             id: "acct-\(name)",
             itemId: "item-1",
             name: name,
             type: .credit,
-            balances: BalanceDTO(current: current, limit: limit)
+            balances: BalanceDTO(current: current, limit: limit, isoCurrencyCode: currency)
         )
     }
 

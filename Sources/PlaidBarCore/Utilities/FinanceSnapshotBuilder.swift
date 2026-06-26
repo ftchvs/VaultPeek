@@ -218,17 +218,12 @@ public enum FinanceSnapshotBuilder {
 
     // MARK: - Credit utilization
 
-    /// Aggregate credit utilization (0–100), nil when no credit limit is known.
-    /// Same rule as ``WealthSummaryPresentation`` (`used / limit * 100`).
+    /// Credit utilization (0–100), nil when no credit limit is known. **Per
+    /// currency** as of AND-660: the worst single-currency utilization, never a
+    /// cross-currency pooled ratio. This figure feeds the local-AI snapshot, so a
+    /// fabricated cross-currency denominator must never reach an insight prompt.
+    /// Same rule as ``WealthSummaryPresentation`` (`MenuBarSummary.creditUtilization`).
     private static func creditUtilizationPercent(from accounts: [AccountDTO]) -> Double? {
-        let creditBalances = accounts
-            .filter { $0.type == .credit }
-            .map(\.balances)
-
-        let totalLimit = creditBalances.reduce(0) { $0 + max($1.limit ?? 0, 0) }
-        guard totalLimit > 0 else { return nil }
-
-        let usedCredit = creditBalances.reduce(0) { $0 + abs($1.current ?? 0) }
-        return (usedCredit / totalLimit) * 100
+        MenuBarSummary.creditUtilization(from: accounts)
     }
 }
