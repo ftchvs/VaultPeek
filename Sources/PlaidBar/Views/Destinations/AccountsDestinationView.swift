@@ -127,8 +127,21 @@ struct AccountsDestinationView: View {
             // Self-heal: if the selected account falls out of the list (removed /
             // disconnected), clear it so the inspector returns to its prompt instead
             // of pointing at a vanished account. Mirrors the popover's reconcile.
-            .onChange(of: filteredAccounts.map(\.id)) { _, ids in
-                navigationModel.reconcileSelection(visibleAccountIDs: ids)
+            //
+            // Observe the FULL account list, not `filteredAccounts` (AND-662). The
+            // cleared selection is persisted to UserDefaults, so reconciling against
+            // the search-filtered list let a transient text filter that excluded the
+            // selected account wipe the persisted selection — lost across relaunch
+            // even after the search was cleared (AND-625 regression). Account-set
+            // changes are the only legitimate trigger; a text filter is not one.
+            // `NavigationState.reconcileVisibleAccountIDs` owns (and tests) that
+            // choice, since this `@main` view cannot be unit-tested directly.
+            .onChange(of: accounts.map(\.id)) { _, allIDs in
+                let visibleIDs = NavigationState.reconcileVisibleAccountIDs(
+                    allAccountIDs: allIDs,
+                    filteredAccountIDs: filteredAccounts.map(\.id)
+                )
+                navigationModel.reconcileSelection(visibleAccountIDs: visibleIDs)
             }
     }
 

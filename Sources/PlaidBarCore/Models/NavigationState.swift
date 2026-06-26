@@ -212,6 +212,32 @@ public struct NavigationState: Sendable, Equatable, Codable {
         return true
     }
 
+    /// The id set the Accounts destination self-heal `onChange` must reconcile
+    /// against (AND-662). It is the **full** account list, never the
+    /// search-filtered subset.
+    ///
+    /// `reconcileSelection` clears (and persists) a selection that is not in the
+    /// set it is handed. The window Accounts destination filters its list by a
+    /// free-text search query, so reconciling against that filtered list let a
+    /// transient search that excluded the selected account wipe the persisted
+    /// selection — lost across relaunch even after the search cleared (the
+    /// AND-625 regression). The reconcile is meant to fire only when an account
+    /// is genuinely removed/disconnected, which changes the *full* list; a text
+    /// filter is not such a change. This pure helper makes "which list drives
+    /// reconcile" testable, since the SwiftUI view (`@main` target) is not.
+    ///
+    /// - Parameters:
+    ///   - allAccountIDs: every account's id (the full, unfiltered list).
+    ///   - filteredAccountIDs: the search-narrowed subset (intentionally unused;
+    ///     present so the call site documents that the filtered list is the
+    ///     wrong input and the choice is centralized here).
+    public static func reconcileVisibleAccountIDs(
+        allAccountIDs: [String],
+        filteredAccountIDs _: [String]
+    ) -> [String] {
+        allAccountIDs
+    }
+
     /// The selected id resolved against the currently visible accounts — `nil`
     /// when nothing is selected or the selection is no longer visible. Mirrors
     /// `DashboardAccountSelection.resolvedSelectedId`, exposed here so the
