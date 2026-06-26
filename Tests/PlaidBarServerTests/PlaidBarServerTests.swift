@@ -903,6 +903,10 @@ struct PlaidBarServerTests {
         #expect(Middleware.isPlaidBackedPath("/api/accounts/item-1"))
         #expect(Middleware.isPlaidBackedPath("/api/transactions/sync"))
         #expect(Middleware.isPlaidBackedPath("/api/transactions/sync/cursors"))
+        // Investments (AND-661): holdings/transactions need credentials too, so
+        // setup state must gate them rather than returning an empty success.
+        #expect(Middleware.isPlaidBackedPath("/api/investments/holdings"))
+        #expect(Middleware.isPlaidBackedPath("/api/investments/transactions"))
 
         // Readiness metadata stays available so setup guidance can render.
         #expect(!Middleware.isPlaidBackedPath("/api/status"))
