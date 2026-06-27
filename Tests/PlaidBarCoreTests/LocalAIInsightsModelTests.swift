@@ -42,16 +42,14 @@ struct LocalAIInsightsModelTests {
 
     // MARK: - Window labels
 
-    @Test("Each window has a distinct compact, long, and accessibility label")
+    @Test("Each window has expected display, long, and accessibility labels")
     func windowLabels() {
-        #expect(LocalAIInsightWindow.last7days.displayName == "Last 7D")
-        // `.lastMonth` uses the honest rolling-window label "Last 30 days" (not
-        // "Last Month"): the deterministic summary sentence is built from
-        // `displayName`, while the segmented picker shows `longDisplayName`. They
-        // must agree, so the user never reads "Last Month: …" under a "Last 30
-        // days" control.
+        #expect(LocalAIInsightWindow.last7days.displayName == "Last 7 days")
+        // `displayName` feeds deterministic summary headlines, while the
+        // segmented picker shows `longDisplayName`. They must agree, so the user
+        // never reads an abbreviated summary under a full picker label.
         #expect(LocalAIInsightWindow.lastMonth.displayName == "Last 30 days")
-        #expect(LocalAIInsightWindow.yearOverYear.displayName == "YoY")
+        #expect(LocalAIInsightWindow.yearOverYear.displayName == "Year over year")
 
         #expect(LocalAIInsightWindow.last7days.longDisplayName == "Last 7 days")
         #expect(LocalAIInsightWindow.lastMonth.longDisplayName == "Last 30 days")
@@ -62,19 +60,23 @@ struct LocalAIInsightsModelTests {
         #expect(LocalAIInsightWindow.yearOverYear.accessibilityName == "Year over year")
     }
 
-    @Test("The summary-sentence label agrees with the picker label for .lastMonth")
-    func lastMonthSummaryAgreesWithPicker() {
+    @Test("The summary-sentence labels agree with picker labels for every window")
+    func summaryLabelsAgreeWithPickerForEveryWindow() {
         // Bug guard: the segmented control reads `longDisplayName` and the
-        // deterministic summary sentence reads `displayName`. For `.lastMonth`
-        // they must say the same thing so the period the user picks matches the
+        // deterministic summary sentence reads `displayName`. They must say the
+        // same thing for every window so the period the user picks matches the
         // period the summary names.
-        let window = LocalAIInsightWindow.lastMonth
-        #expect(window.displayName == window.longDisplayName)
+        for window in LocalAIInsightWindow.allCases {
+            #expect(window.displayName == window.longDisplayName)
 
-        let input = Self.makeInput(window: .lastMonth, expenseTotal: 1200, incomeTotal: 3000, net: 1800)
-        let text = LocalAIDeterministicSummary.summaryText(for: input)
-        #expect(text.hasPrefix("\(window.longDisplayName):"))
-        #expect(!text.contains("Last Month"))
+            let input = Self.makeInput(window: window, expenseTotal: 1200, incomeTotal: 3000, net: 1800)
+            let text = LocalAIDeterministicSummary.summaryText(for: input)
+            #expect(text.hasPrefix("\(window.longDisplayName):"))
+        }
+        let monthText = LocalAIDeterministicSummary.summaryText(
+            for: Self.makeInput(window: .lastMonth, expenseTotal: 1200, incomeTotal: 3000, net: 1800)
+        )
+        #expect(!monthText.contains("Last Month"))
 
         // SF Symbols pair text with a shape so the selector never rides on color
         // alone, and the three symbols are distinct.

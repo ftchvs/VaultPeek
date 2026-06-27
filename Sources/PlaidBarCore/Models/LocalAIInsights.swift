@@ -9,18 +9,17 @@ public enum LocalAIInsightWindow: String, Codable, Sendable, CaseIterable, Hasha
         rawValue
     }
 
-    /// Compact label for tight chrome (pills, evidence chips, prompt period line).
+    /// User-facing label for tight chrome (pills, evidence chips, prompt period line).
     ///
-    /// `.lastMonth` reads "Last 30 days" — the same honest rolling-window label the
-    /// segmented selector uses (`longDisplayName`) — not "Last Month". The
-    /// deterministic summary sentence is built from this label while the picker
-    /// shows `longDisplayName`; they must agree so the user never reads a "Last
-    /// Month: …" summary under a "Last 30 days" control.
+    /// These labels intentionally match `longDisplayName`. The deterministic
+    /// summary sentence is built from this label while the picker shows
+    /// `longDisplayName`; they must agree so the user never reads an abbreviated
+    /// summary headline under a full picker control.
     public var displayName: String {
         switch self {
-        case .last7days: "Last 7D"
+        case .last7days: "Last 7 days"
         case .lastMonth: "Last 30 days"
-        case .yearOverYear: "YoY"
+        case .yearOverYear: "Year over year"
         }
     }
 
