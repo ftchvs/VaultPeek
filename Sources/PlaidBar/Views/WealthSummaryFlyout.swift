@@ -472,14 +472,14 @@ private struct WealthMixLegendRow: View {
                 .rollingTabularNumber(compactValue, reduceMotion: reduceMotion)
                 .lineLimit(1)
 
-            Text(percentText(segment.share))
+            Text(Formatters.percentFromShare(segment.share))
                 .microText()
                 .foregroundStyle(.secondary)
-                .rollingTabularNumber(percentText(segment.share), reduceMotion: reduceMotion)
+                .rollingTabularNumber(Formatters.percentFromShare(segment.share), reduceMotion: reduceMotion)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            "\(segment.title): \(PrivacyMaskPresentation.currency(segment.value, format: .full, isEnabled: privacyMaskEnabled)), \(percentText(segment.share))"
+            "\(segment.title): \(PrivacyMaskPresentation.currency(segment.value, format: .full, isEnabled: privacyMaskEnabled)), \(Formatters.percentFromShare(segment.share))"
         )
     }
 }
@@ -801,8 +801,4 @@ private func cashflowText(_ amount: Double, format: CurrencyFormat) -> String {
         return "-\(Formatters.currency(abs(amount), format: format))"
     }
     return Formatters.currency(0, format: format)
-}
-
-private func percentText(_ share: Double) -> String {
-    "\(Int((share * 100).rounded()))%"
 }
