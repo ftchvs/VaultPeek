@@ -100,7 +100,11 @@ public struct CategoryDashboardCardModel: Sendable, Hashable {
     public func attentionSummary(isBudgeted: Bool, privacyMaskEnabled: Bool) -> String? {
         guard isBudgeted else { return nil }
         if overBudgetCount == 0, nearingCount == 0 { return "On track" }
-        if privacyMaskEnabled { return "Budget attention hidden" }
+        if privacyMaskEnabled {
+            if overBudgetCount > 0, nearingCount > 0 { return "Over budget and nearing budget" }
+            if overBudgetCount > 0 { return "Over budget" }
+            return "Nearing budget"
+        }
         var parts: [String] = []
         if overBudgetCount > 0 { parts.append("\(overBudgetCount) over budget") }
         if nearingCount > 0 { parts.append("\(nearingCount) nearing") }

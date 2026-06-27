@@ -141,9 +141,22 @@ struct CategoryDashboardCardModelTests {
         ])
         let model = CategoryDashboardCardModel(presentation: p)
 
-        #expect(model.attentionSummary(isBudgeted: true, privacyMaskEnabled: true) == "Budget attention hidden")
+        #expect(model.attentionSummary(isBudgeted: true, privacyMaskEnabled: true) == "Over budget and nearing budget")
         #expect(model.attentionSummary(isBudgeted: true, privacyMaskEnabled: true)?.contains("1") != true)
         #expect(model.attentionSummary(isBudgeted: true, privacyMaskEnabled: false) == "1 over budget · 1 nearing")
+    }
+
+    @Test("attention summary preserves masked risk state without exact counts")
+    func attentionSummaryMasksCountsButPreservesRiskState() {
+        let overBudget = CategoryDashboardCardModel(presentation: presentation([
+            group(.foodAndDining, leaf: .foodAndDrink, spent: 250, limit: 200),
+        ]))
+        let nearing = CategoryDashboardCardModel(presentation: presentation([
+            group(.shopping, leaf: .shopping, spent: 90, limit: 100),
+        ]))
+
+        #expect(overBudget.attentionSummary(isBudgeted: true, privacyMaskEnabled: true) == "Over budget")
+        #expect(nearing.attentionSummary(isBudgeted: true, privacyMaskEnabled: true) == "Nearing budget")
     }
 
     @Test("overflow text masks exact hidden category count under Privacy Mask")
