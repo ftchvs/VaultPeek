@@ -90,8 +90,17 @@ public struct CategoryDashboardCardModel: Sendable, Hashable {
     /// no row is budgeted (so the card omits the line rather than claiming "on
     /// track" for an unbudgeted month).
     public func attentionSummary(isBudgeted: Bool) -> String? {
+        attentionSummary(isBudgeted: isBudgeted, privacyMaskEnabled: false)
+    }
+
+    /// Privacy-aware budget-pressure copy for surfaces that may render while
+    /// Privacy Mask/App Lock is active. Exact over/nearing counts are behavioral
+    /// finance metadata, so the masked variant keeps the risk state without the
+    /// count.
+    public func attentionSummary(isBudgeted: Bool, privacyMaskEnabled: Bool) -> String? {
         guard isBudgeted else { return nil }
         if overBudgetCount == 0, nearingCount == 0 { return "On track" }
+        if privacyMaskEnabled { return "Budget attention hidden" }
         var parts: [String] = []
         if overBudgetCount > 0 { parts.append("\(overBudgetCount) over budget") }
         if nearingCount > 0 { parts.append("\(nearingCount) nearing") }
@@ -101,7 +110,13 @@ public struct CategoryDashboardCardModel: Sendable, Hashable {
     /// `"+N more"` overflow caption for the open-dashboard link, or `nil` when the
     /// card already shows every spending group.
     public var overflowText: String? {
+        overflowText(privacyMaskEnabled: false)
+    }
+
+    /// Privacy-aware overflow caption. The exact number of hidden spending groups
+    /// is behavioral finance metadata, so masked surfaces use generic copy.
+    public func overflowText(privacyMaskEnabled: Bool) -> String? {
         guard overflowCount > 0 else { return nil }
-        return "+\(overflowCount) more"
+        return privacyMaskEnabled ? "More categories" : "+\(overflowCount) more"
     }
 }

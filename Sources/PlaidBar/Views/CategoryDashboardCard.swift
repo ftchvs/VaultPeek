@@ -96,7 +96,7 @@ struct CategoryDashboardCard: View {
 
             Spacer(minLength: Spacing.sm)
 
-            if let summary = model.attentionSummary(isBudgeted: isAnyBudgeted) {
+            if let summary = model.attentionSummary(isBudgeted: isAnyBudgeted, privacyMaskEnabled: isMasked) {
                 Label(summary, systemImage: attentionIcon(model))
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(attentionTint(model))
@@ -174,7 +174,7 @@ struct CategoryDashboardCard: View {
             HStack(spacing: Spacing.xs) {
                 Label("Open dashboard", systemImage: "rectangle.expand.vertical")
                     .font(.caption.weight(.semibold))
-                if let overflow = model.overflowText {
+                if let overflow = model.overflowText(privacyMaskEnabled: isMasked) {
                     Text(overflow)
                         .microText()
                         .foregroundStyle(.secondary)
@@ -255,7 +255,7 @@ struct CategoryDashboardCard: View {
         }
         let total = isMasked ? PrivacyMaskPresentation.compactValue : model.totalSpentText
         var sentence = "Spending by category. \(total) spent this month."
-        if let summary = model.attentionSummary(isBudgeted: isAnyBudgeted) {
+        if let summary = model.attentionSummary(isBudgeted: isAnyBudgeted, privacyMaskEnabled: isMasked) {
             sentence += " \(summary)."
         }
         return sentence
