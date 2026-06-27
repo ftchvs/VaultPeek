@@ -177,6 +177,9 @@ struct LocalAIInsightReceiptTests {
         #expect(!rendered.contains("7"))
         #expect(!rendered.contains("Food & Drink"))
         #expect(!rendered.contains("Category hints"))
+        #expect(!rendered.contains("local overlays"))
+        #expect(!rendered.contains("reversible"))
+        #expect(receipt.reversibleActionCopy == "Insight actions are hidden while Privacy Mask is on. Turn Privacy Mask off to review local-only actions.")
     }
 
     private static let disabledAvailability = LocalAIAvailability(
