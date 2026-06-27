@@ -125,17 +125,22 @@ struct LocalInsightModelPromptTests {
         #expect(!prompt.contains("Versus"))
     }
 
-    @Test("Comparison wording is window-aware (7d / 30d / YoY phrase differently)")
+    @Test("Comparison wording and period line are window-aware (7d / 30d / YoY phrase differently)")
     func windowAwareComparisonPhrasing() {
         let last7 = LocalInsightPromptBuilder.make(from: input(window: .last7days)).user
+        #expect(last7.contains("Period: Last 7 days"))
         #expect(last7.contains("Versus the prior 7 days"))
+        #expect(!last7.contains("Last 7D"))
         #expect(!last7.contains("a year ago"))
 
         let lastMonth = LocalInsightPromptBuilder.make(from: input(window: .lastMonth)).user
+        #expect(lastMonth.contains("Period: Last 30 days"))
         #expect(lastMonth.contains("Versus the prior 30 days"))
 
         let yoy = LocalInsightPromptBuilder.make(from: input(window: .yearOverYear)).user
+        #expect(yoy.contains("Period: Year over year"))
         #expect(yoy.contains("Versus the same period a year ago"))
+        #expect(!yoy.contains("YoY"))
         #expect(!yoy.contains("prior 30 days"))
         #expect(!yoy.contains("prior 7 days"))
     }
