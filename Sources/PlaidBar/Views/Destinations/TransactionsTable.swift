@@ -185,9 +185,7 @@ struct TransactionsTable: View {
     // MARK: - Formatting helpers
 
     private func amountText(_ row: TransactionWorkspace.Row) -> String {
-        if isMasked { return "••••" }
-        let prefix = row.transaction.isIncome ? "+" : ""
-        return "\(prefix)\(Formatters.currency(row.transaction.displayAmount, format: .full))"
+        row.signedAmountText(isMasked: isMasked)
     }
 
     private func amountColor(_ row: TransactionWorkspace.Row) -> Color {

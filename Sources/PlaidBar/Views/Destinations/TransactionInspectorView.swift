@@ -392,9 +392,11 @@ struct TransactionInspectorView: View {
 
     // MARK: - Formatting
 
+    // The inspector withholds its entire body under Privacy Mask / App Lock
+    // (see `isMasked` / `maskedPlaceholder`), so the amount is only ever rendered
+    // unmasked here.
     private func amountText(_ row: TransactionWorkspace.Row) -> String {
-        let prefix = row.transaction.isIncome ? "+" : ""
-        return "\(prefix)\(Formatters.currency(row.transaction.displayAmount, format: .full))"
+        row.signedAmountText(isMasked: false)
     }
 
     private func statusColor(_ status: TransactionReviewStatus) -> Color {
