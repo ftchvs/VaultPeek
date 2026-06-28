@@ -45,6 +45,7 @@ struct PrivacyMaskPresentationTests {
         #expect(AccountPresentation.dashboardRowSubtitle(
             for: account,
             connectionLabel: "Synced",
+            pendingCount: 3,
             privacyMaskEnabled: true
         ) == "Credit •••• • Synced")
         #expect(AccountPresentation.dashboardTrailingDetailText(
@@ -61,6 +62,7 @@ struct PrivacyMaskPresentationTests {
             for: account,
             amountText: "$1,250.00",
             connectionLabel: "Synced",
+            pendingCount: 3,
             privacyMaskEnabled: true
         )
         #expect(label.contains("Ending in 1234") == false)
@@ -71,6 +73,8 @@ struct PrivacyMaskPresentationTests {
         #expect(label.contains("Good") == false)
         #expect(label.contains("Warning") == false)
         #expect(label.contains("High") == false)
+        #expect(label.contains("3 pending") == false)
+        #expect(label.contains("pending transaction") == false)
     }
 
     @Test("Menu bar privacy mask preserves non-sensitive empty states")

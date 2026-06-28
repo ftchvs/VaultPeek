@@ -99,7 +99,7 @@ public enum AccountPresentation {
         privacyMaskEnabled: Bool = false
     ) -> String {
         let mask = account.mask.map { privacyMaskEnabled ? " ••••" : " •••• \($0)" } ?? ""
-        let pending = pendingCount > 0 ? " • \(pendingCount) pending" : ""
+        let pending = pendingCount > 0 && !privacyMaskEnabled ? " • \(pendingCount) pending" : ""
         return "\(account.institutionName ?? account.type.rawValue.capitalized)\(mask) • \(connectionLabel)\(pending)"
     }
 
@@ -252,7 +252,7 @@ public enum AccountPresentation {
             components.append(connectionLabel)
         }
 
-        if pendingCount > 0 {
+        if pendingCount > 0 && !privacyMaskEnabled {
             components.append("\(pendingCount) pending transaction\(pendingCount == 1 ? "" : "s")")
         }
 
