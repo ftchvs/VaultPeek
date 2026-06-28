@@ -168,6 +168,12 @@ struct ReviewInboxView: View {
                 // which rows resolve before confirming — never a bare count.
                 Text(plan.blastRadiusDescription())
             }
+            // Privacy Mask / App Lock can engage while the bulk confirmation is
+            // staged. The cached plan's dialog title/message include exact counts
+            // and blast-radius details, so drop it as soon as masking begins.
+            .onChange(of: appState.shouldMaskFinancialValues) { _, masked in
+                if masked { bulkReviewPlan = nil }
+            }
         }
     }
 
