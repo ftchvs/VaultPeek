@@ -2786,6 +2786,11 @@ final class AppState {
             // only; restore the user's real saved watchlist (or empty) so demo
             // Starbucks/Shopping targets never fire against real data.
             loadWatchlistTargets(defaults: .standard)
+            // Same for goals: loadDemoData() installs synthetic savings goals in
+            // the shared GoalsStore and marks it loaded. Restore/reload the user's
+            // local-first goals before the real flow can render or persist through
+            // the Goals workspace.
+            await goalsStore.restoreAfterDemo()
             // Demo fixtures may have been published to the shared App Group before
             // the demo guards landed, or by an older build; wipe both the glance and
             // finance snapshots (and the Spotlight account index) on demo exit so a

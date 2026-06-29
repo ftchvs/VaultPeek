@@ -1493,6 +1493,26 @@ struct PlaidBarTests {
         #expect(card.contains("Set a savings goal"))
         #expect(card.contains("Open Goals"))
     }
+
+    @Test("Demo goals never persist over real local-first goals")
+    func demoGoalsStayInMemoryOnlyAndRestoreOnExit() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let appState = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/App/AppState.swift"),
+            encoding: .utf8
+        )
+        let store = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Services/GoalsStore.swift"),
+            encoding: .utf8
+        )
+
+        #expect(store.contains("private var preDemoSnapshot: GoalsSnapshot?"))
+        #expect(store.contains("private var isShowingDemoGoals = false"))
+        #expect(store.contains("func restoreAfterDemo() async"))
+        #expect(store.contains("guard !isShowingDemoGoals else"))
+        #expect(appState.contains("goalsStore.loadDemoGoals(DemoFixtures.demoGoals())"))
+        #expect(appState.contains("await goalsStore.restoreAfterDemo()"))
+    }
 }
 
 /// Deterministic `FMMerchantCategorizing` stub for the categorization-tier tests.
