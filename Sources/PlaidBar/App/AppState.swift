@@ -4590,6 +4590,7 @@ final class AppState {
             DemoFixtures.demoBudgets().map { ($0.category, $0.monthlyLimit) },
             uniquingKeysWith: { first, _ in first }
         )
+        goalsStore.loadDemoGoals(DemoFixtures.demoGoals())
         balanceHistory = DemoFixtures.balanceHistory()
         // Seed demo watchlist nudges (AND-501) so the Settings Watchlists section
         // is populated and the evaluator fires against the demo transactions.

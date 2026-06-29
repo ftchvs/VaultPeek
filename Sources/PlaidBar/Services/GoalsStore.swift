@@ -67,6 +67,15 @@ final class GoalsStore {
         hasLoaded = true
     }
 
+    /// Replaces the in-memory list with synthetic demo fixtures without touching
+    /// the user's persisted `goals.json`. Demo mode should be useful on a clean
+    /// machine, but it must never overwrite local-first user data.
+    func loadDemoGoals(_ demoGoals: [Goal]) {
+        goals = Self.sortedForDisplay(demoGoals)
+        errorMessage = nil
+        hasLoaded = true
+    }
+
     // MARK: - CRUD (each mutation persists)
 
     /// Adds a new goal and persists. Returns the stored goal (with its id).

@@ -18,9 +18,7 @@ import SwiftUI
 ///
 /// When there are **no goals**, it shows a quiet "set a savings goal" empty
 /// affordance with an Open Goals action rather than self-hiding, so the dashboard
-/// grid keeps a uniform card rather than a hole and offers a next step. (Note:
-/// `--demo` seeds no goals today — AND-732 — so the demo render shows this empty
-/// state, which is expected.)
+/// grid keeps a uniform card rather than a hole and offers a next step.
 ///
 /// Progress is always carried by **text + the bar**, never color alone
 /// (ACCESSIBILITY.md); amounts honor Privacy Mask (`PrivacyMaskPresentation`).

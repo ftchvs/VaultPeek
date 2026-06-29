@@ -176,6 +176,52 @@ public enum DemoFixtures {
         ]
     }
 
+    /// Synthetic savings goals so `--demo` shows the Goals destination and
+    /// Dashboard goals card as a populated, evaluable surface instead of a
+    /// first-run empty prompt (AND-732). These are in-memory fixtures only; they
+    /// never touch Plaid or the user's persisted `goals.json`.
+    public static func demoGoals(
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> [Goal] {
+        func daysFromNow(_ days: Int) -> Date {
+            calendar.date(byAdding: .day, value: days, to: now) ?? now
+        }
+        func daysAgo(_ days: Int) -> Date {
+            calendar.date(byAdding: .day, value: -days, to: now) ?? now
+        }
+
+        return [
+            Goal(
+                id: UUID(uuidString: "00000000-0000-0000-0000-0000000000B1")!,
+                name: "Emergency fund",
+                targetAmount: 12_000,
+                targetDate: daysFromNow(180),
+                linkedCategory: .billsAndUtilities,
+                contributedAmount: 4_800,
+                createdAt: daysAgo(90)
+            ),
+            Goal(
+                id: UUID(uuidString: "00000000-0000-0000-0000-0000000000B2")!,
+                name: "Tahoe weekend",
+                targetAmount: 1_200,
+                targetDate: daysFromNow(45),
+                linkedCategory: .travel,
+                contributedAmount: 950,
+                createdAt: daysAgo(30)
+            ),
+            Goal(
+                id: UUID(uuidString: "00000000-0000-0000-0000-0000000000B3")!,
+                name: "New laptop",
+                targetAmount: 2_500,
+                targetDate: daysFromNow(120),
+                linkedCategory: .shopping,
+                contributedAmount: 700,
+                createdAt: daysAgo(60)
+            ),
+        ]
+    }
+
     /// Current-month-anchored spend rows used **only** to score `demoBudgets`
     /// against `CategoryBudgetPlanner` in `--demo`.
     ///
