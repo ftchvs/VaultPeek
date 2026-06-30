@@ -140,7 +140,9 @@ private struct DashboardGoalRow: View {
                     .windowSupportingText()
                     .lineLimit(1)
                 Spacer(minLength: WindowMetrics.sm)
-                paceLabel
+                if !isMasked {
+                    paceLabel
+                }
             }
         }
         .accessibilityElement(children: .ignore)
@@ -177,11 +179,13 @@ private struct DashboardGoalRow: View {
     private var accessibilityLabel: String {
         var parts = ["\(title), \(percent(goal.percentComplete)) funded"]
         parts.append("\(currency(goal.contributedAmount)) of \(currency(goal.targetAmount))")
-        if goal.isComplete {
-            parts.append("Funded")
-        } else {
-            let pace = goal.pace(asOf: Date())
-            if pace != .noDeadline { parts.append(pace.label) }
+        if !isMasked {
+            if goal.isComplete {
+                parts.append("Funded")
+            } else {
+                let pace = goal.pace(asOf: Date())
+                if pace != .noDeadline { parts.append(pace.label) }
+            }
         }
         return parts.joined(separator: ". ")
     }

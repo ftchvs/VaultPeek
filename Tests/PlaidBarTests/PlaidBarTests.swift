@@ -1489,6 +1489,13 @@ struct PlaidBarTests {
         #expect(card.contains("percent(goal.percentComplete)"))
         #expect(card.contains("isMasked: isMasked"))
 
+        // Masking also suppresses derived pace/status metadata. A goal being
+        // funded/behind pace is computed from private target/contributed amounts
+        // and dates, so visible and VoiceOver strings must not keep appending it
+        // after the mask turns on.
+        #expect(card.contains("if !isMasked {\n                    paceLabel\n                }"))
+        #expect(card.contains("if !isMasked {\n            if goal.isComplete {"))
+
         // An empty goal list shows the quiet affordance, not a blank/broken card.
         #expect(card.contains("Set a savings goal"))
         #expect(card.contains("Open Goals"))
