@@ -66,13 +66,21 @@ struct DashboardGoalsPreviewTests {
         #expect(none.overflowLabel == nil)
     }
 
-    @Test("Privacy Mask withholds dashboard goal names and exact overflow counts")
+    @Test("Privacy Mask withholds dashboard goal names, linked category icons, and exact overflow counts")
     func privacyMaskWithholdsMetadata() {
-        let goal = Goal(name: "Emergency Fund", targetAmount: 1000, contributedAmount: 500, createdAt: base)
+        let goal = Goal(
+            name: "Emergency Fund",
+            targetAmount: 1000,
+            linkedCategory: .healthAndFitness,
+            contributedAmount: 500,
+            createdAt: base
+        )
         let preview = DashboardGoalsPreview(goals: [goal], totalGoalCount: 4, overflowCount: 3)
 
         #expect(DashboardGoalsPreview.displayTitle(for: goal, isMasked: false) == "Emergency Fund")
         #expect(DashboardGoalsPreview.displayTitle(for: goal, isMasked: true) == "Goal hidden")
+        #expect(DashboardGoalsPreview.displayIconName(for: goal, isMasked: false) == SpendingCategory.healthAndFitness.iconName)
+        #expect(DashboardGoalsPreview.displayIconName(for: goal, isMasked: true) == "flag.fill")
         #expect(preview.displayOverflowLabel(isMasked: false) == "3 more goals")
         #expect(preview.displayOverflowLabel(isMasked: true) == "More goals")
     }

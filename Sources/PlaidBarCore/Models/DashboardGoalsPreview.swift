@@ -45,6 +45,11 @@ public struct DashboardGoalsPreview: Sendable, Equatable {
     /// dashboard must not render them while masked.
     public static let maskedGoalTitle = "Goal hidden"
 
+    /// Generic goal icon used while Privacy Mask is active. A linked category icon
+    /// can reveal goal intent (for example travel, medical, or home), so masked
+    /// dashboard rows keep a neutral flag glyph.
+    public static let maskedGoalIconName = "flag.fill"
+
     /// Generic overflow copy used while Privacy Mask is active. The exact hidden
     /// goal count is metadata, so the dashboard keeps the route affordance without
     /// exposing `overflowCount`.
@@ -53,6 +58,11 @@ public struct DashboardGoalsPreview: Sendable, Equatable {
     /// Dashboard-safe title copy for a featured goal.
     public static func displayTitle(for goal: Goal, isMasked: Bool) -> String {
         isMasked ? maskedGoalTitle : goal.name
+    }
+
+    /// Dashboard-safe SF Symbol for a featured goal.
+    public static func displayIconName(for goal: Goal, isMasked: Bool) -> String {
+        isMasked ? maskedGoalIconName : (goal.linkedCategory?.iconName ?? maskedGoalIconName)
     }
 
     /// Dashboard-safe overflow copy. Unmasked copy preserves the existing

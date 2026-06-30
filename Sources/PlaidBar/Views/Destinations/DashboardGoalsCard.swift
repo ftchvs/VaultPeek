@@ -118,7 +118,7 @@ private struct DashboardGoalRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: WindowMetrics.xs) {
             HStack(alignment: .firstTextBaseline, spacing: WindowMetrics.sm) {
-                Image(systemName: goal.linkedCategory?.iconName ?? "flag.fill")
+                Image(systemName: DashboardGoalsPreview.displayIconName(for: goal, isMasked: isMasked))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .frame(width: 20)
