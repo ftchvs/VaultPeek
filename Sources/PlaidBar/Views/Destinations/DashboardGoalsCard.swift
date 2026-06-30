@@ -48,9 +48,9 @@ struct DashboardGoalsCard: View {
                     ForEach(preview.goals) { goal in
                         DashboardGoalRow(goal: goal, isMasked: isMasked)
                     }
-                    if let overflow = preview.overflowLabel {
+                    if let overflow = preview.displayOverflowLabel(isMasked: isMasked) {
                         Button(action: onOpen) {
-                            Text("+ \(overflow)")
+                            Text(isMasked ? overflow : "+ \(overflow)")
                                 .windowSupportingText()
                         }
                         .buttonStyle(.plain)
@@ -123,7 +123,7 @@ private struct DashboardGoalRow: View {
                     .foregroundStyle(.secondary)
                     .frame(width: 20)
                     .accessibilityHidden(true)
-                Text(goal.name)
+                Text(title)
                     .windowCardTitle()
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
@@ -175,7 +175,7 @@ private struct DashboardGoalRow: View {
     }
 
     private var accessibilityLabel: String {
-        var parts = ["\(goal.name), \(percent(goal.percentComplete)) funded"]
+        var parts = ["\(title), \(percent(goal.percentComplete)) funded"]
         parts.append("\(currency(goal.contributedAmount)) of \(currency(goal.targetAmount))")
         if goal.isComplete {
             parts.append("Funded")
@@ -184,6 +184,10 @@ private struct DashboardGoalRow: View {
             if pace != .noDeadline { parts.append(pace.label) }
         }
         return parts.joined(separator: ". ")
+    }
+
+    private var title: String {
+        DashboardGoalsPreview.displayTitle(for: goal, isMasked: isMasked)
     }
 
     private func currency(_ amount: Double) -> String {

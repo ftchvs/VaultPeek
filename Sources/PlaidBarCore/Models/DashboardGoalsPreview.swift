@@ -40,6 +40,28 @@ public struct DashboardGoalsPreview: Sendable, Equatable {
         return overflowCount == 1 ? "1 more goal" : "\(overflowCount) more goals"
     }
 
+    /// Generic goal title used while Privacy Mask is active. Goal names can carry
+    /// real-world plan metadata ("House down payment", "Medical fund"), so the
+    /// dashboard must not render them while masked.
+    public static let maskedGoalTitle = "Goal hidden"
+
+    /// Generic overflow copy used while Privacy Mask is active. The exact hidden
+    /// goal count is metadata, so the dashboard keeps the route affordance without
+    /// exposing `overflowCount`.
+    public static let maskedOverflowLabel = "More goals"
+
+    /// Dashboard-safe title copy for a featured goal.
+    public static func displayTitle(for goal: Goal, isMasked: Bool) -> String {
+        isMasked ? maskedGoalTitle : goal.name
+    }
+
+    /// Dashboard-safe overflow copy. Unmasked copy preserves the existing
+    /// pluralized "+N more" semantics; masked copy withholds the exact count.
+    public func displayOverflowLabel(isMasked: Bool) -> String? {
+        guard overflowCount > 0 else { return nil }
+        return isMasked ? Self.maskedOverflowLabel : overflowLabel
+    }
+
     /// The default number of goals the dashboard features.
     public static let defaultLimit = 3
 
