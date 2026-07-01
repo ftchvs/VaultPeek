@@ -8,6 +8,30 @@ public enum AccountPresentation {
         count == 1 ? "Across 1 account" : "Across \(count) accounts"
     }
 
+    public static func removalDialogTitle(
+        institutionName: String,
+        privacyMaskEnabled: Bool = false
+    ) -> String {
+        privacyMaskEnabled ? "Remove linked institution?" : "Remove \(institutionName)?"
+    }
+
+    public static func removalDialogMessage(
+        linkedAccountCount: Int,
+        cachedTransactionCount: Int,
+        privacyMaskEnabled: Bool = false
+    ) -> String {
+        if privacyMaskEnabled {
+            return "This disconnects the linked Plaid institution and removes its linked accounts plus cached local transactions from VaultPeek. It does not close any bank account."
+        }
+
+        let accountCount = max(linkedAccountCount, 1)
+        let accountText = accountCount == 1 ? "1 linked account" : "\(accountCount) linked accounts"
+        let transactionText = cachedTransactionCount == 1
+            ? "1 cached local transaction"
+            : "\(cachedTransactionCount) cached local transactions"
+        return "This disconnects the linked Plaid institution and removes \(accountText) plus \(transactionText) from VaultPeek. It does not close any bank account."
+    }
+
     public static func isDebt(_ account: AccountDTO) -> Bool {
         account.type == .credit || account.type == .loan
     }
