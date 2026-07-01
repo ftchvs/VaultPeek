@@ -149,9 +149,10 @@ struct RoundingConsistencyTests {
             totalLimit: 1_000.00
         )
 
-        let remaining = try? #require(summary.remaining)
-        #expect(remaining != nil)
-        guard let remaining else { return }
+        guard let remaining = summary.remaining else {
+            Issue.record("Expected budgeted summary to expose a remaining amount")
+            return
+        }
         #expect(abs(remaining - 247.79) < 0.0001)
         #expect(!summary.isAggregateOver)
 
