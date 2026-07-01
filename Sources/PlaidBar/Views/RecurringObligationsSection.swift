@@ -168,10 +168,16 @@ private struct RecurringObligationRow: View {
     private var merchantNameLabel: some View {
         switch scale {
         case .popover:
-            Text(item.merchantName).font(.subheadline)
+            Text(displayMerchantName).font(.subheadline)
         case .window:
-            Text(item.merchantName).windowBodyText()
+            Text(displayMerchantName).windowBodyText()
         }
+    }
+
+    private var displayMerchantName: String {
+        privacyMaskEnabled
+            ? StrongMaskFormatter.merchantName(item.merchantName)
+            : item.merchantName
     }
 
     /// Expected amount — popover `.subheadline` semibold, window tabular
@@ -191,13 +197,19 @@ private struct RecurringObligationRow: View {
     /// `windowFigureCaption` so the sub-label reads at the window's caption scale.
     @ViewBuilder
     private var detailLabel: some View {
-        let text = "\(item.frequency.displayName) · next \(Formatters.displayTransactionDate(item.nextExpectedDate))"
+        let text = "\(item.frequency.displayName) · next \(displayNextExpectedDate)"
         switch scale {
         case .popover:
             Text(text).microText()
         case .window:
             Text(text).windowFigureCaption()
         }
+    }
+
+    private var displayNextExpectedDate: String {
+        privacyMaskEnabled
+            ? StrongMaskFormatter.date(item.nextExpectedDate)
+            : Formatters.displayTransactionDate(item.nextExpectedDate)
     }
 
     /// Deterministic flag order so badges don't reshuffle between renders.
@@ -207,10 +219,10 @@ private struct RecurringObligationRow: View {
 
     private var accessibilityLabel: String {
         var parts = [
-            item.merchantName,
+            displayMerchantName,
             item.frequency.displayName,
             "expected \(PrivacyMaskPresentation.currency(item.expectedAmount, format: .full, isEnabled: privacyMaskEnabled))",
-            "next \(Formatters.displayTransactionDate(item.nextExpectedDate))",
+            "next \(displayNextExpectedDate)",
         ]
         parts.append(contentsOf: orderedFlags.map(\.accessibilityDescription))
         if item.confidenceLevel == .low { parts.append("low confidence") }
