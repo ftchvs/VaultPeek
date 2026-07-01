@@ -1300,7 +1300,7 @@ private struct LocalInsightsCard: View {
             }
 
             VStack(alignment: .leading, spacing: 3) {
-                ForEach(Array(receiptDetailLines.enumerated()), id: \.offset) { _, detail in
+                ForEach(Array(receipt.detailLines.enumerated()), id: \.offset) { _, detail in
                     HStack(alignment: .top, spacing: 6) {
                         Circle()
                             .fill(Color.secondary.opacity(0.58))
@@ -1343,15 +1343,6 @@ private struct LocalInsightsCard: View {
         .glassSurface(.inset)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(receipt.accessibilitySummary)
-    }
-
-    private var receiptDetailLines: [String] {
-        var lines = [receipt.confidence]
-        if let unavailableState = receipt.unavailableState {
-            lines.append(unavailableState)
-        }
-        lines.append(contentsOf: receipt.limitations.prefix(2))
-        return Array(lines.prefix(3))
     }
 
     private var footerText: String {

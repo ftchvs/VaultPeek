@@ -373,6 +373,36 @@ public struct LocalAIInsightReceipt: Equatable, Sendable {
         self.accessibilitySummary = accessibilitySummary
     }
 
+    /// The provenance detail lines rendered beneath a receipt on the compact
+    /// glance surfaces (the Dashboard insight card and the menu-bar popover):
+    /// the confidence cue first, then the runtime-unavailable note when present,
+    /// then up to two limitations — the whole list capped at three lines. Pure
+    /// presentation over the receipt's own fields; the receipt is built
+    /// already-masked upstream, so this is mask-agnostic.
+    public var detailLines: [String] {
+        var lines = [confidence]
+        if let unavailableState {
+            lines.append(unavailableState)
+        }
+        lines.append(contentsOf: limitations.prefix(2))
+        return Array(lines.prefix(3))
+    }
+
+    /// The collapsible *secondary* provenance lines used where the confidence
+    /// cue is rendered separately (the Insights AI surface): the
+    /// runtime-unavailable note when present, then up to two limitations, capped
+    /// at three. Distinct from ``detailLines`` — here the three-line cap
+    /// excludes the confidence cue, so the two are not simply related by
+    /// prepending `confidence`.
+    public var secondaryProvenanceLines: [String] {
+        var lines: [String] = []
+        if let unavailableState {
+            lines.append(unavailableState)
+        }
+        lines.append(contentsOf: limitations.prefix(2))
+        return Array(lines.prefix(3))
+    }
+
     public static func make(
         summary: LocalAIActivitySummary?,
         availability: LocalAIAvailability,
