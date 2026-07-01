@@ -111,6 +111,91 @@ struct PlaidBarTests {
         #expect(modifierBlock.contains("appState.dismissWindowFirstOrientation()"))
     }
 
+    // MARK: - Primary window frame restoration (AND-593)
+
+    /// AND-593: the primary window-first `Window`'s position/size must persist and
+    /// restore across relaunch. Asserts the restoration wiring is present on the
+    /// `Window` scene: a stable frame-autosave name is applied to the primary
+    /// NSWindow (AppKit then persists+restores the frame via UserDefaults). The
+    /// app target is not in the unit-test binary, so this string-matches the
+    /// scene source — the repo's established pattern for app-target wiring.
+    @Test("Primary window frame is persisted/restored via a stable autosave name (AND-593)")
+    func primaryWindowFrameAutosaveIsWired() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let appSource = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/App/PlaidBarApp.swift"),
+            encoding: .utf8
+        )
+        let autosaverSource = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/App/MainWindowFrameAutosaver.swift"),
+            encoding: .utf8
+        )
+
+        // A stable autosave name keyed to the primary window, distinct from the
+        // legacy detached/Category/Review window names, drives AppKit's automatic
+        // frame persistence + restore.
+        #expect(appSource.contains("mainWindowFrameAutosaveName"))
+        #expect(appSource.contains(#""VaultPeekMainWindow""#))
+
+        // The restoration bridge calls `setFrameAutosaveName` on the discovered
+        // primary NSWindow — the one API that makes AppKit persist+restore the
+        // frame across relaunch.
+        #expect(autosaverSource.contains("setFrameAutosaveName"))
+        #expect(autosaverSource.contains(": NSViewRepresentable"))
+
+        // The autosaver is attached to the primary `Window` scene root, so the
+        // wiring actually reaches the window (not just declared in isolation). The
+        // attachment lives between the `Window(` declaration and its scene
+        // modifiers (`.defaultLaunchBehavior`), so search that span.
+        let windowRange = try #require(appSource.range(of: #"Window("VaultPeek", id: Self.mainWindowID)"#))
+        let sceneModifiersRange = try #require(
+            appSource.range(of: ".defaultLaunchBehavior(.suppressed)", range: windowRange.upperBound..<appSource.endIndex)
+        )
+        let windowBlock = String(appSource[windowRange.lowerBound..<sceneModifiersRange.lowerBound])
+        #expect(windowBlock.contains("MainWindowFrameAutosaver(autosaveName: Self.mainWindowFrameAutosaveName)"))
+    }
+
+    /// AND-593: appearance must be set **before first window paint** so the first
+    /// frame renders in the chosen Light/Dark with no flash. Asserts the ordering
+    /// structurally: the single authoritative `NSApp.appearance` writer
+    /// (`applyStoredAppearance()`) is invoked in the synchronous shell `init()` —
+    /// which runs before any scene `body` is built — and that the `init` applies it
+    /// ahead of constructing `AppState`/declaring scenes.
+    @Test("Stored appearance is applied in init before the window scene paints (AND-593)")
+    func appearanceIsAppliedBeforeFirstWindowPaint() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let appSource = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/App/PlaidBarApp.swift"),
+            encoding: .utf8
+        )
+
+        // The appearance applier lives in the synchronous `init()` (runs before
+        // SwiftUI builds any scene `body`), so the first paint already carries the
+        // chosen appearance.
+        let initRange = try #require(appSource.range(of: "init() {"))
+        let initBlock = String(appSource[initRange.lowerBound...].prefix(1_500))
+        let appearanceApply = try #require(initBlock.range(of: "Self.applyStoredAppearance()"))
+
+        // Ordering: appearance is applied before `AppState` is constructed (the
+        // state that backs every scene's content), so nothing paints first.
+        let stateConstruction = try #require(initBlock.range(of: "let state = AppState()"))
+        #expect(appearanceApply.upperBound < stateConstruction.lowerBound)
+
+        // The applier itself targets `NSApplication.appearance` — the only API that
+        // cascades the theme to chrome + AppKit materials before first paint, not
+        // just SwiftUI content.
+        let applierRange = try #require(appSource.range(of: "private static func applyStoredAppearance()"))
+        let applierBlock = String(appSource[applierRange.lowerBound...].prefix(600))
+        #expect(applierBlock.contains("AppAppearance.applyToNSApp("))
+
+        // And the primary window scene folds into that same single writer rather
+        // than introducing a second, competing setter that could flash a wrong
+        // first-paint theme.
+        let windowRange = try #require(appSource.range(of: #"Window("VaultPeek", id: Self.mainWindowID)"#))
+        let windowBlock = String(appSource[windowRange.lowerBound...].prefix(2_500))
+        #expect(windowBlock.contains(".appliesAppAppearance()"))
+    }
+
     @Test("Window-first Goals and Planning mask amount-derived progress while Privacy Mask is active")
     func windowFirstGoalsProgressUsesPrivacyMask() throws {
         let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
