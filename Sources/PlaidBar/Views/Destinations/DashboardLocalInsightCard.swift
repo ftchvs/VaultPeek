@@ -65,7 +65,7 @@ struct DashboardLocalInsightCard: View {
                 }
 
                 VStack(alignment: .leading, spacing: WindowMetrics.xs) {
-                    ForEach(Array(detailLines(receipt).enumerated()), id: \.offset) { _, detail in
+                    ForEach(Array(receipt.detailLines.enumerated()), id: \.offset) { _, detail in
                         HStack(alignment: .top, spacing: WindowMetrics.sm) {
                             Image(systemName: "circle.fill")
                                 .font(.system(size: 5))
@@ -118,15 +118,6 @@ struct DashboardLocalInsightCard: View {
         case .disabled, .checking: AppearanceTextColors.secondary
         case .unavailable: SemanticColors.warning
         }
-    }
-
-    private func detailLines(_ receipt: LocalAIInsightReceipt) -> [String] {
-        var lines = [receipt.confidence]
-        if let unavailableState = receipt.unavailableState {
-            lines.append(unavailableState)
-        }
-        lines.append(contentsOf: receipt.limitations.prefix(2))
-        return Array(lines.prefix(3))
     }
 
     private func evidenceChip(_ chip: LocalAIInsightReceipt.EvidenceChip) -> some View {

@@ -367,7 +367,7 @@ struct InsightsAIInsightView: View {
         VStack(alignment: .leading, spacing: WindowMetrics.xs) {
             provenanceBullet(receipt.confidence)
 
-            if !secondaryProvenanceLines.isEmpty {
+            if !receipt.secondaryProvenanceLines.isEmpty {
                 Button {
                     withAnimation(MotionTokens.animation(MotionTokens.standard, reduceMotion: reduceMotion)) {
                         showProvenanceDetails.toggle()
@@ -388,7 +388,7 @@ struct InsightsAIInsightView: View {
 
                 if showProvenanceDetails {
                     VStack(alignment: .leading, spacing: WindowMetrics.xs) {
-                        ForEach(Array(secondaryProvenanceLines.enumerated()), id: \.offset) { _, line in
+                        ForEach(Array(receipt.secondaryProvenanceLines.enumerated()), id: \.offset) { _, line in
                             provenanceBullet(line)
                         }
                     }
@@ -410,17 +410,6 @@ struct InsightsAIInsightView: View {
                 .windowSupportingText()
                 .fixedSize(horizontal: false, vertical: true)
         }
-    }
-
-    /// The collapsible secondary lines: the runtime-unavailable note and up to two
-    /// limitations. Excludes the always-visible confidence cue.
-    private var secondaryProvenanceLines: [String] {
-        var lines: [String] = []
-        if let unavailableState = receipt.unavailableState {
-            lines.append(unavailableState)
-        }
-        lines.append(contentsOf: receipt.limitations.prefix(2))
-        return Array(lines.prefix(3))
     }
 
     private var footer: some View {
