@@ -890,15 +890,21 @@ struct AccountDrillInActionBar: View {
                 Button {
                     onAction(action)
                 } label: {
-                    Label(action.title, systemImage: action.iconName)
+                    let labelContent = Label(action.title, systemImage: action.iconName)
                         .font(.caption.weight(.medium))
                         .foregroundStyle(action == .remove ? SemanticColors.negative : AppearanceTextColors.primary)
                         .padding(.horizontal, Spacing.sm)
                         .padding(.vertical, Spacing.chipVertical)
-                        .glassSurface(
-                            action == .remove ? .emphasized(SemanticColors.negative) : .inset,
-                            cornerRadius: Radius.control
-                        )
+
+                    // A ternary can't pick between `emphasizedDataSurface` and
+                    // `solidDataSurface` directly (different `ViewModifier` types
+                    // behind `some View`), so the destructive action branches the
+                    // surface call itself.
+                    if action == .remove {
+                        labelContent.emphasizedDataSurface(tint: SemanticColors.negative, cornerRadius: Radius.control)
+                    } else {
+                        labelContent.solidDataSurface(cornerRadius: Radius.control)
+                    }
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(action.accessibilityLabel(accountDisplayName: accountDisplayName))

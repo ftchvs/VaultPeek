@@ -427,7 +427,7 @@ private struct AppearancePreviewCard: View {
                     .monospacedDigit()
             }
             .padding(Spacing.sm)
-            .glassSurface(.inset)
+            .solidDataSurface(cornerRadius: Radius.panel)
         }
         .padding(outerPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -524,8 +524,8 @@ private struct AccentSwatchPreviewRow: View {
 /// Privacy-safe live preview of the in-app text size (AND-570). Synthetic labels
 /// scaled by the caller's `.dynamicTypeSize` — never real account data — so the
 /// user sees the effect of the Text Size picker the instant it changes. Uses a
-/// semantic text style and the hero-balance modifier so the preview tracks the
-/// same scaling path as the real dashboard surfaces.
+/// semantic text style and the display-balance modifier so the preview tracks
+/// the same scaling path as the real dashboard surfaces.
 private struct TextSizePreviewRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xxs) {
@@ -533,7 +533,7 @@ private struct TextSizePreviewRow: View {
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
             Text("$12,345.67")
-                .heroBalance()
+                .displayBalance()
             Text("Preview only — sample data")
                 .font(.footnote)
                 .foregroundStyle(.secondary)

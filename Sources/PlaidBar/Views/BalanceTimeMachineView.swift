@@ -146,7 +146,7 @@ struct BalanceTimeMachineView: View {
                 }
             }
             .padding(Spacing.sm)
-            .glassSurface(.inset)
+            .solidDataSurface(cornerRadius: Radius.panel)
         }
     }
 }

@@ -102,7 +102,7 @@ struct RecurringPaymentsView: View {
         }
         .padding(Spacing.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassSurface(.raised)
+        .solidDataSurface(cornerRadius: Radius.panel, fill: AnyShapeStyle(Color.primary.opacity(SurfaceTokens.controlFillOpacity)))
     }
 
     private var emptyState: some View {
@@ -151,6 +151,24 @@ private struct RecurringPaymentRow: View {
     let row: RecurringPaymentsSurfacePresentation.Row
 
     var body: some View {
+        Group {
+            // A ternary can't pick between `emphasizedDataSurface` and
+            // `solidDataSurface` directly (different `ViewModifier` types behind
+            // `some View`), so the attention state branches the surface call itself.
+            if row.needsAttention {
+                rowContent.emphasizedDataSurface(tint: SemanticColors.warning)
+            } else {
+                rowContent.solidDataSurface(
+                    cornerRadius: Radius.panel,
+                    fill: AnyShapeStyle(Color.primary.opacity(SurfaceTokens.controlFillOpacity))
+                )
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(row.accessibilityLabel)
+    }
+
+    private var rowContent: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
                 Text(row.merchantName)
@@ -207,9 +225,6 @@ private struct RecurringPaymentRow: View {
         }
         .padding(Spacing.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassSurface(row.needsAttention ? .emphasized(SemanticColors.warning) : .raised)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(row.accessibilityLabel)
     }
 }
 

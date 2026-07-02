@@ -54,7 +54,7 @@ struct PlanSelectionShell: View {
         }
         .padding(Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassSurface(.inset)
+        .solidDataSurface(cornerRadius: Radius.panel)
     }
 }
 
@@ -133,7 +133,7 @@ struct InstitutionUsageWidget: View {
         }
         .padding(Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassSurface(.inset)
+        .solidDataSurface(cornerRadius: Radius.panel)
         .alert("Managed plans are coming soon", isPresented: $showUpgradeNote) {
             Button("OK", role: .cancel) {}
             if let docsURL = URL(string: PlaidBarConstants.repositoryFileURL("docs/privacy.md")) {

@@ -126,7 +126,7 @@ private struct OrientationPointRow: View {
         }
         .padding(Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassSurface(.inset)
+        .solidDataSurface(cornerRadius: Radius.panel)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(point.accessibilityLabel)
     }

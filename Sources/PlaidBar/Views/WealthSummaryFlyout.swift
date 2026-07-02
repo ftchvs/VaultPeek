@@ -375,7 +375,7 @@ private struct WealthMetricTile: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Spacing.sm)
-        .glassSurface(.inset, cornerRadius: Radius.control)
+        .solidDataSurface(cornerRadius: Radius.control)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(title): \(value). \(detail)")
     }

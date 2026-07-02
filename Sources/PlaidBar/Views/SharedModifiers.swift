@@ -1,37 +1,16 @@
 import PlaidBarCore
 import SwiftUI
 
-// MARK: - Glass Surface Ranks
+// MARK: - Hero Accent + Emphasized Data Surfaces
 
-/// The popover's three-rank surface system. Ranks use *hierarchical* shape
-/// styles (not flat `Color` fills) so surfaces participate in macOS vibrancy
-/// over the `.regularMaterial` popover root, and respond to Reduce
-/// Transparency / Increase Contrast for free. Default surfaces draw no
-/// stroke — separation comes from spacing; hairlines are reserved for
-/// emphasized (attention) states.
-enum SurfaceRank {
-    /// Persistent left fly-out panel.
-    case leftPanel
-    /// Primary content panels: account list, fly-out, heatmap.
-    case raised
-    /// Quiet secondary surfaces: metric strips, legends, chips.
-    case inset
-    /// Decorative hero emphasis. Never carries finance meaning by itself.
-    case hero(Color)
-    /// Attention states only: tinted fill plus hairline.
-    case emphasized(Color)
-
-    var fill: AnyShapeStyle {
-        // Fills sit over the popover's `.ultraThinMaterial` root: the thinner
-        // material lets the desktop through, so panels need a little more body
-        // than over `.regularMaterial` to keep separation and keep `.secondary`
-        // text legible over a busy wallpaper.
-        switch self {
-        case .leftPanel: AnyShapeStyle(.quaternary.opacity(0.72))
-        case .raised: AnyShapeStyle(.quaternary)
-        case .inset: AnyShapeStyle(.quaternary.opacity(0.55))
-        case let .hero(tint):
-            AnyShapeStyle(
+extension View {
+    /// Decorative hero-accent solid surface: a tinted gradient wash, never
+    /// glass (R-08 — a financial figure must never sample translucency).
+    /// Never carries financial/status meaning by itself.
+    func heroAccentSurface(tint: Color = SemanticColors.brand) -> some View {
+        solidDataSurface(
+            cornerRadius: Radius.panel,
+            fill: AnyShapeStyle(
                 LinearGradient(
                     colors: [
                         tint.opacity(SurfaceTokens.heroGlowOpacity),
@@ -41,94 +20,23 @@ enum SurfaceRank {
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
-            )
-        case let .emphasized(tint): AnyShapeStyle(tint.opacity(0.12))
-        }
+            ),
+            stroke: tint.opacity(0.10)
+        )
     }
 
-    var depth: SurfaceTokens.SurfaceDepth {
-        switch self {
-        case .leftPanel:
-            SurfaceTokens.leftPanelDepth
-        case .raised:
-            SurfaceTokens.raisedDepth
-        case .inset:
-            SurfaceTokens.insetDepth
-        case .hero:
-            SurfaceTokens.heroDepth
-        case .emphasized:
-            SurfaceTokens.emphasizedDepth
-        }
-    }
-
-    func stroke(multiplier: Double) -> Color {
-        switch self {
-        case let .emphasized(tint):
-            tint.opacity(min(depth.strokeOpacity * multiplier, 0.22))
-        case let .hero(tint):
-            tint.opacity(min(depth.strokeOpacity * multiplier, 0.16))
-        case .leftPanel, .raised, .inset:
-            Color.primary.opacity(min(depth.strokeOpacity * multiplier, 0.16))
-        }
-    }
-
-    func innerStroke(multiplier: Double) -> Color {
-        Color.white.opacity(min(depth.innerStrokeOpacity * multiplier, 0.10))
-    }
-}
-
-private struct GlassSurface: ViewModifier {
-    let rank: SurfaceRank
-    let cornerRadius: CGFloat
-    @AppStorage(PopoverTransparencySetting.storageKey) private var popoverTransparency = PopoverTransparencySetting.defaultValue
-
-    func body(content: Content) -> some View {
-        let shape = RoundedRectangle(cornerRadius: cornerRadius)
-        let multiplier = PopoverTransparencySetting(value: popoverTransparency).surfaceDepthMultiplier
-
-        // Raised/inset ranks carry no underlay fill so the Liquid Glass material
-        // reads clean, but the emphasized rank keeps its tinted wash — attention
-        // states must survive the glass path.
-        content
-            .background(liquidGlassFill, in: shape)
-            .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
-            .overlay { surfaceStroke(shape: shape, multiplier: multiplier) }
-            .surfaceShadow(rank.depth.shadow, multiplier: multiplier)
-    }
-
-    private var liquidGlassFill: AnyShapeStyle {
-        switch rank {
-        case .raised, .inset:
-            AnyShapeStyle(.clear)
-        case .leftPanel, .hero, .emphasized:
-            rank.fill
-        }
-    }
-
-    private func surfaceStroke(shape: RoundedRectangle, multiplier: Double) -> some View {
-        shape.stroke(rank.stroke(multiplier: multiplier), lineWidth: 1)
-            .overlay {
-                shape
-                    .inset(by: 1)
-                    .stroke(rank.innerStroke(multiplier: multiplier), lineWidth: 0.5)
-            }
-    }
-}
-
-extension View {
-    func glassSurface(
-        _ rank: SurfaceRank = .raised,
-        cornerRadius: CGFloat = Radius.panel
-    ) -> some View {
-        modifier(GlassSurface(rank: rank, cornerRadius: cornerRadius))
-    }
-
-    func leftPanelSurface() -> some View {
-        glassSurface(.leftPanel, cornerRadius: SurfaceTokens.panelCornerRadius)
-    }
-
-    func heroAccentSurface(tint: Color = SemanticColors.brand) -> some View {
-        glassSurface(.hero(tint), cornerRadius: Radius.panel)
+    /// Solid attention-state data surface: tinted fill + tinted hairline
+    /// stroke. The emphasized-state counterpart to `solidDataSurface()` for
+    /// attention rows/cards that need a color wash while staying non-glass
+    /// (R-08). Attention states are the one place a tinted wash is
+    /// appropriate on a data surface — the tint plus an accompanying
+    /// icon/text label carries the meaning, never color alone.
+    func emphasizedDataSurface(tint: Color, cornerRadius: CGFloat = Radius.panel) -> some View {
+        solidDataSurface(
+            cornerRadius: cornerRadius,
+            fill: AnyShapeStyle(tint.opacity(0.12)),
+            stroke: tint.opacity(0.16)
+        )
     }
 
     /// Subtle scroll-edge depth (AND-383): a scrolling row fades as it approaches the
@@ -142,17 +50,6 @@ extension View {
             content
                 .opacity(reduceMotion || phase.isIdentity ? 1 : MotionTokens.scrollEdgeFadeOpacity)
         }
-    }
-}
-
-private extension View {
-    func surfaceShadow(_ shadow: SurfaceTokens.SurfaceShadow?, multiplier: Double) -> some View {
-        self.shadow(
-            color: Color.black.opacity((shadow?.opacity ?? 0) * multiplier),
-            radius: shadow?.radius ?? 0,
-            x: shadow?.x ?? 0,
-            y: shadow?.y ?? 0
-        )
     }
 }
 
@@ -202,10 +99,8 @@ struct SolidDataSurface: ViewModifier {
 }
 
 extension View {
-    /// Chrome-rank fill+stroke surface under native Liquid Glass. New surfaces
-    /// should prefer the rank-based `glassSurface(_:cornerRadius:)` vibrancy
-    /// system above; this remains for setup/attention chrome not yet migrated.
-    /// Chrome only — route data surfaces through ``solidDataSurface`` /
+    /// Chrome-rank fill+stroke surface under native Liquid Glass. Chrome
+    /// only — route data surfaces through ``solidDataSurface`` /
     /// ``nativeInsetSurface``.
     func nativePanelSurface(
         cornerRadius: CGFloat = SurfaceTokens.panelCornerRadius,
