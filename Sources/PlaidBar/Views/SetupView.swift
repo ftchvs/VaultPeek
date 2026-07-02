@@ -197,7 +197,7 @@ struct SetupView: View {
             }
             .padding(Spacing.md)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .glassSurface(.inset)
+            .solidDataSurface(cornerRadius: Radius.panel)
 
             // Plan preview + usage shell. Production shows the managed-plan
             // *preview* picker, but today's production path is still BYO Plaid
@@ -411,7 +411,7 @@ private struct FirstRunCompletionPanel: View {
         }
         .padding(Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassSurface(.inset)
+        .solidDataSurface(cornerRadius: Radius.panel)
     }
 
     private var icon: String {
@@ -467,7 +467,7 @@ private struct SetupRecoveryCallout: View {
         }
         .padding(Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassSurface(.emphasized(color))
+        .emphasizedDataSurface(tint: color)
         .accessibilityElement(children: .combine)
     }
 }
@@ -552,7 +552,7 @@ private struct OnboardingChoiceButton: View {
         .buttonStyle(.plain)
         .focusable(true)
         .hoverHighlight(cornerRadius: Radius.panel)
-        .glassSurface(.inset)
+        .solidDataSurface(cornerRadius: Radius.panel)
     }
 }
 
@@ -603,7 +603,7 @@ private struct OnboardingPreflightPanel: View {
         }
         .padding(Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassSurface(.inset)
+        .solidDataSurface(cornerRadius: Radius.panel)
     }
 
     private func preflightRow(_ row: OnboardingPreflightRow) -> some View {

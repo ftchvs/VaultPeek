@@ -47,7 +47,7 @@ struct RecurringObligationsSection: View {
                 }
             }
             .padding(Spacing.sm)
-            .glassSurface(.raised)
+            .solidDataSurface(cornerRadius: Radius.panel, fill: AnyShapeStyle(Color.primary.opacity(SurfaceTokens.controlFillOpacity)))
             .accessibilityElement(children: .contain)
             .accessibilityLabel(accessibilitySummary)
         }

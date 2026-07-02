@@ -86,7 +86,7 @@ struct CategoryDashboardWindow: View {
             SpendDonutChart(model: donut, isPrivacyMasked: isMasked)
         }
         .padding(Spacing.md)
-        .glassSurface(.raised)
+        .solidDataSurface(cornerRadius: Radius.panel, fill: AnyShapeStyle(Color.primary.opacity(SurfaceTokens.controlFillOpacity)))
     }
 
     // MARK: - Tree
@@ -103,7 +103,7 @@ struct CategoryDashboardWindow: View {
             )
         }
         .padding(Spacing.md)
-        .glassSurface(.raised)
+        .solidDataSurface(cornerRadius: Radius.panel, fill: AnyShapeStyle(Color.primary.opacity(SurfaceTokens.controlFillOpacity)))
     }
 
     // MARK: - Flat table
@@ -189,7 +189,7 @@ struct CategoryDashboardWindow: View {
             tableFooter(totals)
         }
         .padding(Spacing.md)
-        .glassSurface(.raised)
+        .solidDataSurface(cornerRadius: Radius.panel, fill: AnyShapeStyle(Color.primary.opacity(SurfaceTokens.controlFillOpacity)))
     }
 
     private func leftCell(_ row: CategoryDashboardTableRow) -> some View {
@@ -281,7 +281,7 @@ struct CategoryDashboardWindow: View {
         .frame(maxWidth: .infinity, minHeight: 220, alignment: .center)
         .multilineTextAlignment(.center)
         .padding(Spacing.lg)
-        .glassSurface(.raised)
+        .solidDataSurface(cornerRadius: Radius.panel, fill: AnyShapeStyle(Color.primary.opacity(SurfaceTokens.controlFillOpacity)))
     }
 
     // MARK: - Helpers

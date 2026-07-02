@@ -74,7 +74,7 @@ struct CategoryTreeView: View {
             }
         }
         .padding(Spacing.sm)
-        .glassSurface(.inset)
+        .solidDataSurface(cornerRadius: Radius.panel)
     }
 
     private func groupHeader(

@@ -82,7 +82,7 @@ struct CategoryDashboardCard: View {
         } else {
             content()
                 .padding(Spacing.sm)
-                .glassSurface(.raised)
+                .solidDataSurface(cornerRadius: Radius.panel, fill: AnyShapeStyle(Color.primary.opacity(SurfaceTokens.controlFillOpacity)))
         }
     }
 

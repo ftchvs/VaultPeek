@@ -43,7 +43,10 @@ struct CommandPalette: View {
         }
         .frame(width: 560)
         .frame(maxHeight: 420)
-        .glassSurface(.raised, cornerRadius: Radius.panel)
+        .solidDataSurface(
+            cornerRadius: Radius.panel,
+            fill: AnyShapeStyle(Color.primary.opacity(SurfaceTokens.controlFillOpacity))
+        )
         .shadow(radius: 24, y: 8)
         .padding(.top, Spacing.xl)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

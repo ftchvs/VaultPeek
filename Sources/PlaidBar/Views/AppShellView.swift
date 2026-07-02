@@ -490,7 +490,7 @@ private struct NotConnectedFooterButton: View {
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, Spacing.sm)
                 .padding(.vertical, Spacing.chipVertical)
-                .glassSurface(.inset)
+                .solidDataSurface(cornerRadius: Radius.panel)
         }
         .buttonStyle(.plain)
         .help("Open Settings to connect VaultPeek to your bank.")
@@ -526,7 +526,7 @@ private struct DataModeChip: View {
         }
         .padding(.horizontal, Spacing.sm)
         .padding(.vertical, Spacing.chipVertical)
-        .glassSurface(.inset)
+        .solidDataSurface(cornerRadius: Radius.panel)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Data mode: \(mode)")
     }

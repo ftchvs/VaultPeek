@@ -646,7 +646,7 @@ private struct ConditionalRaisedSurface: ViewModifier {
         if embedded {
             content
         } else {
-            content.glassSurface(.raised)
+            content.solidDataSurface(cornerRadius: Radius.panel, fill: AnyShapeStyle(Color.primary.opacity(SurfaceTokens.controlFillOpacity)))
         }
     }
 }

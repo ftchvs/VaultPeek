@@ -2,11 +2,11 @@ import SwiftUI
 
 // MARK: - Type Scale Notes (AND-515)
 //
-// Dynamic Type: the two display sizes (`DisplayBalance`, `HeroBalance`) scale
-// their fixed base point size (30pt / 28pt) with the user's text-size /
-// accessibility setting via `@ScaledMetric(relativeTo:)` — a plain
-// `.system(size:)` font does NOT scale, so the metric is what makes the hero
-// figure grow instead of staying pinned. They also opt into
+// Dynamic Type: the display size (`DisplayBalance`) scales its fixed base
+// point size (30pt) with the user's text-size / accessibility setting via
+// `@ScaledMetric(relativeTo:)` — a plain `.system(size:)` font does NOT
+// scale, so the metric is what makes the hero figure grow instead of staying
+// pinned. It also opts into
 // `.dynamicTypeSize(.xSmall ... .accessibility3)` to cap before the
 // layout-breaking AX4/AX5 steps. Every other modifier here is built on a semantic text style
 // (`.caption`, `.callout`, `.caption2`) and therefore scales with Dynamic Type
@@ -56,19 +56,6 @@ struct DisplayBalance: ViewModifier {
     func body(content: Content) -> some View {
         content
             .font(.system(size: size, weight: .semibold, design: .default).monospacedDigit())
-            .dynamicTypeSize(.xSmall ... .accessibility3)
-    }
-}
-
-/// Level 1 — Hero: legacy 28pt rounded balance header (detail surfaces).
-/// Dynamic Type (AND-515): `@ScaledMetric(relativeTo: .largeTitle)` scales the
-/// 28pt base with text-size; tabular digits preserved; same accessibility clamp.
-struct HeroBalance: ViewModifier {
-    @ScaledMetric(relativeTo: .largeTitle) private var size: CGFloat = 28
-
-    func body(content: Content) -> some View {
-        content
-            .font(.system(size: size, weight: .bold, design: .rounded).monospacedDigit())
             .dynamicTypeSize(.xSmall ... .accessibility3)
     }
 }
@@ -128,10 +115,6 @@ extension View {
     /// Reduce Motion). Pass the rendered string. See `RollingTabularNumber`.
     func rollingTabularNumber(_ value: String, reduceMotion: Bool) -> some View {
         modifier(RollingTabularNumber(value: value, reduceMotion: reduceMotion))
-    }
-
-    func heroBalance() -> some View {
-        modifier(HeroBalance())
     }
 
     func sectionTitle() -> some View {

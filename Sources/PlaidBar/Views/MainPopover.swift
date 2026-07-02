@@ -375,7 +375,7 @@ struct MainPopover: View {
             // growing the whole popover past the screen-bounded height. In the
             // detached window the panel owns the height, so the rail fills it.
             .frame(maxHeight: columnMaxHeight)
-            .leftPanelSurface()
+            .nativePanelSurface()
             .transition(.move(edge: .leading).combined(with: .opacity))
     }
 
@@ -444,10 +444,10 @@ struct MainPopover: View {
             // morph id are applied by ONE modifier so `.glassEffectID` lands
             // immediately after the `.glassEffect` on the SAME view, inside the
             // columns' shared GlassEffectContainer (`.glassGroup()`). Applying
-            // `.glassEffectID` to the composed result of `leftPanelSurface()`
-            // (as before) bound it to a wrapper view, not to the glass-bearing
-            // view buried in the modifier, so the show/hide morph silently
-            // no-op'd. A stable id across content swaps lets the inspector's
+            // `.glassEffectID` to the composed result of a surface-modifier
+            // view (as before) bound it to a wrapper view, not to the
+            // glass-bearing view buried in the modifier, so the show/hide
+            // morph silently no-op'd. A stable id across content swaps lets the inspector's
             // glass fluidly morph as drill-ins open/close instead of hard-cutting.
             .modifier(InspectorGlassMorphSurface(
                 morphID: Self.inspectorMorphID,
@@ -696,15 +696,19 @@ struct MainPopover: View {
 /// The inspector column's left-panel glass surface, with the Liquid Glass morph
 /// id bound on the SAME view as the glass effect (AND-511).
 ///
-/// This mirrors the visual of `leftPanelSurface()` (the shared `.leftPanel`
-/// `SurfaceRank`: fill + `.glassEffect(.regular)` + stroke + shadow) but applies
+/// This mirrors the visual of `nativePanelSurface()` (chrome fill +
+/// `.glassEffect(.regular)` + stroke, using the left-panel depth constants
+/// below for the extra inner-stroke/shadow treatment) but applies
 /// `.glassEffectID` *immediately after* the `.glassEffect`, on the same `content`,
-/// so the morph identity actually binds. The previous code applied
-/// `.glassEffectID` to the composed output of `leftPanelSurface()`, which is a
+/// so the morph identity actually binds. Applying `.glassEffectID` to the
+/// composed output of a surface-modifier view (as before) bound it to a
 /// wrapper view — not the glass-bearing view inside the modifier — so the
 /// show/hide morph silently no-op'd. The merge radius of the enclosing
 /// `GlassEffectContainer` (`SurfaceTokens.glassMergeRadius`, small) keeps this
 /// panel's glass from fusing with the rail across the wide center column.
+/// The left-panel depth constants (fill/stroke/shadow) are inlined here
+/// rather than routed through a shared rank type, since this is the one
+/// surface that needs the morph-ID binding on the same view as `.glassEffect`.
 private struct InspectorGlassMorphSurface: ViewModifier {
     let morphID: String
     let namespace: Namespace.ID
@@ -712,15 +716,16 @@ private struct InspectorGlassMorphSurface: ViewModifier {
     @AppStorage(PopoverTransparencySetting.storageKey)
     private var popoverTransparency = PopoverTransparencySetting.defaultValue
 
-    private let rank = SurfaceRank.leftPanel
     private var cornerRadius: CGFloat { SurfaceTokens.panelCornerRadius }
+    private var fill: AnyShapeStyle { AnyShapeStyle(.quaternary.opacity(0.72)) }
+    private var depth: SurfaceTokens.SurfaceDepth { SurfaceTokens.leftPanelDepth }
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius)
         let multiplier = PopoverTransparencySetting(value: popoverTransparency).surfaceDepthMultiplier
 
         content
-            .background(rank.fill, in: shape)
+            .background(fill, in: shape)
             // `.glassEffect` and `.glassEffectID` are adjacent on this same view,
             // inside the columns' GlassEffectContainer — the binding the morph
             // requires (AND-511).
@@ -728,18 +733,18 @@ private struct InspectorGlassMorphSurface: ViewModifier {
             .glassEffectID(morphID, in: namespace)
             .overlay {
                 shape
-                    .stroke(rank.stroke(multiplier: multiplier), lineWidth: 1)
+                    .stroke(Color.primary.opacity(min(depth.strokeOpacity * multiplier, 0.16)), lineWidth: 1)
                     .overlay {
                         shape
                             .inset(by: 1)
-                            .stroke(rank.innerStroke(multiplier: multiplier), lineWidth: 0.5)
+                            .stroke(Color.white.opacity(min(depth.innerStrokeOpacity * multiplier, 0.10)), lineWidth: 0.5)
                     }
             }
             .shadow(
-                color: Color.black.opacity((rank.depth.shadow?.opacity ?? 0) * multiplier),
-                radius: rank.depth.shadow?.radius ?? 0,
-                x: rank.depth.shadow?.x ?? 0,
-                y: rank.depth.shadow?.y ?? 0
+                color: Color.black.opacity((depth.shadow?.opacity ?? 0) * multiplier),
+                radius: depth.shadow?.radius ?? 0,
+                x: depth.shadow?.x ?? 0,
+                y: depth.shadow?.y ?? 0
             )
     }
 }
@@ -1019,7 +1024,7 @@ private struct BalanceActivityHeatmap: View {
             }
         }
         .padding(Spacing.sm)
-        .glassSurface(.raised)
+        .solidDataSurface(cornerRadius: Radius.panel, fill: AnyShapeStyle(Color.primary.opacity(SurfaceTokens.controlFillOpacity)))
         // Drop a selection that no longer maps to a day in the current range
         // (e.g. after a sync rolls the window forward), so the caption never
         // shows a stale date and the ring never points at a vanished cell.
@@ -1340,7 +1345,7 @@ private struct LocalInsightsCard: View {
             }
         }
         .padding(Spacing.sm)
-        .glassSurface(.inset)
+        .solidDataSurface(cornerRadius: Radius.panel)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(receipt.accessibilitySummary)
     }
@@ -1458,7 +1463,7 @@ private struct LocalInsightEvidenceChip: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, Spacing.sm)
         .padding(.vertical, Spacing.rowVertical)
-        .glassSurface(.inset, cornerRadius: Radius.control)
+        .solidDataSurface(cornerRadius: Radius.control)
         .help("\(chip.label): \(chip.value)")
     }
 
@@ -1478,6 +1483,23 @@ private struct DashboardStatusReadinessPanel: View {
     }
 
     var body: some View {
+        Group {
+            // A ternary can't pick between `emphasizedDataSurface` and
+            // `solidDataSurface` directly (different `ViewModifier` types behind
+            // `some View`), so the attention state branches the surface call itself.
+            if readinessNeedsAttention {
+                panelContent.emphasizedDataSurface(tint: tint)
+            } else {
+                panelContent.solidDataSurface(
+                    cornerRadius: Radius.panel,
+                    fill: AnyShapeStyle(Color.primary.opacity(SurfaceTokens.controlFillOpacity))
+                )
+            }
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private var panelContent: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 9) {
                 Image(systemName: icon)
@@ -1555,8 +1577,6 @@ private struct DashboardStatusReadinessPanel: View {
             }
         }
         .padding(Spacing.md)
-        .glassSurface(readinessNeedsAttention ? .emphasized(tint) : .raised)
-        .accessibilityElement(children: .contain)
     }
 
     private var icon: String {
@@ -1799,7 +1819,7 @@ private struct DashboardOverviewFallbackBanner: View {
         }
         .padding(Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassSurface(.emphasized(SemanticColors.brandSecondary))
+        .emphasizedDataSurface(tint: SemanticColors.brandSecondary)
     }
 }
 
@@ -1995,6 +2015,20 @@ private struct DashboardEmptyAccountState: View {
     }
 
     var body: some View {
+        // A ternary/`.map` can't pick between `emphasizedDataSurface` and
+        // `solidDataSurface` directly (different `ViewModifier` types behind
+        // `some View`), so the emphasis tint branches the surface call itself.
+        if let emphasizedTint {
+            emptyStateContent.emphasizedDataSurface(tint: emphasizedTint)
+        } else {
+            emptyStateContent.solidDataSurface(
+                cornerRadius: Radius.panel,
+                fill: AnyShapeStyle(Color.primary.opacity(SurfaceTokens.controlFillOpacity))
+            )
+        }
+    }
+
+    private var emptyStateContent: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 9) {
                 Image(systemName: icon)
@@ -2036,7 +2070,6 @@ private struct DashboardEmptyAccountState: View {
         }
         .padding(Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassSurface(emphasizedTint.map { SurfaceRank.emphasized($0) } ?? .raised)
     }
 
     private var title: String {

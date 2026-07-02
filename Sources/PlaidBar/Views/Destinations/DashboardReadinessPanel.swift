@@ -25,6 +25,23 @@ struct DashboardReadinessPanel: View {
     }
 
     var body: some View {
+        Group {
+            // A ternary can't pick between `emphasizedDataSurface` and
+            // `solidDataSurface` directly (different `ViewModifier` types behind
+            // `some View`), so the attention state branches the surface call itself.
+            if needsAttention {
+                panelContent.emphasizedDataSurface(tint: tint)
+            } else {
+                panelContent.solidDataSurface(
+                    cornerRadius: Radius.panel,
+                    fill: AnyShapeStyle(Color.primary.opacity(SurfaceTokens.controlFillOpacity))
+                )
+            }
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private var panelContent: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 9) {
                 Image(systemName: icon)
@@ -62,8 +79,6 @@ struct DashboardReadinessPanel: View {
             }
         }
         .padding(Spacing.md)
-        .glassSurface(needsAttention ? .emphasized(tint) : .raised)
-        .accessibilityElement(children: .contain)
     }
 
     private var icon: String {

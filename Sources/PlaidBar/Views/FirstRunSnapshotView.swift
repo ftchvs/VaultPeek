@@ -52,7 +52,7 @@ struct FirstRunSnapshotView: View {
         }
         .padding(Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassSurface(.hero(SemanticColors.brand))
+        .heroAccentSurface()
         .accessibilityElement(children: .contain)
         .accessibilityLabel(snapshot.maskedAccessibilitySummary(isMasked: isMasked))
     }
@@ -250,7 +250,7 @@ private struct SnapshotMetricTile: View {
         }
         .padding(Spacing.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassSurface(.inset)
+        .solidDataSurface(cornerRadius: Radius.panel)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel)
     }

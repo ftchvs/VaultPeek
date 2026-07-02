@@ -37,7 +37,7 @@ struct ConnectionHealthStripView: View {
                 Spacer(minLength: 0)
             }
             .padding(Spacing.sm)
-            .glassSurface(.inset)
+            .solidDataSurface(cornerRadius: Radius.panel)
         }
     }
 }
