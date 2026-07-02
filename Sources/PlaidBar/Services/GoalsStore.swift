@@ -31,6 +31,14 @@ final class GoalsStore {
 
     private let cache: LocalDataCacheService
     private let directoryProvider: @MainActor () -> URL
+    private var preDemoSnapshot: GoalsSnapshot?
+    private var isShowingDemoGoals = false
+
+    private struct GoalsSnapshot {
+        let goals: [Goal]
+        let hasLoaded: Bool
+        let errorMessage: String?
+    }
 
     /// - Parameters:
     ///   - cache: the local JSON cache actor. Default constructs its own so the
@@ -65,6 +73,49 @@ final class GoalsStore {
             errorMessage = "Goals failed to load: \(error.localizedDescription)"
         }
         hasLoaded = true
+    }
+
+    /// Replaces the in-memory list with synthetic demo fixtures without touching
+    /// the user's persisted `goals.json`. Demo mode should be useful on a clean
+    /// machine, but it must never overwrite local-first user data.
+    func loadDemoGoals(_ demoGoals: [Goal]) {
+        if preDemoSnapshot == nil {
+            preDemoSnapshot = GoalsSnapshot(
+                goals: goals,
+                hasLoaded: hasLoaded,
+                errorMessage: errorMessage
+            )
+        }
+        isShowingDemoGoals = true
+        goals = Self.sortedForDisplay(demoGoals)
+        errorMessage = nil
+        hasLoaded = true
+    }
+
+    /// Restores the real local-first goals after leaving demo mode. If goals had
+    /// already loaded before demo entry, restore that in-memory snapshot; otherwise
+    /// reload from disk so the demo fixture list cannot keep `loadIfNeeded()` from
+    /// reaching the user's saved `goals.json`.
+    func restoreAfterDemo() async {
+        let snapshot = preDemoSnapshot
+        preDemoSnapshot = nil
+        isShowingDemoGoals = false
+        guard let snapshot else {
+            hasLoaded = false
+            await reload()
+            return
+        }
+
+        if snapshot.hasLoaded {
+            goals = snapshot.goals
+            hasLoaded = true
+            errorMessage = snapshot.errorMessage
+        } else {
+            goals = []
+            errorMessage = nil
+            hasLoaded = false
+            await reload()
+        }
     }
 
     // MARK: - CRUD (each mutation persists)
@@ -102,6 +153,11 @@ final class GoalsStore {
     // MARK: - Persistence
 
     private func persist() async {
+        guard !isShowingDemoGoals else {
+            errorMessage = nil
+            return
+        }
+
         let snapshot = goals
         let directory = directoryProvider()
         do {

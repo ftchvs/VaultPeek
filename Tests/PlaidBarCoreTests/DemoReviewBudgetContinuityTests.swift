@@ -46,6 +46,22 @@ struct DemoReviewBudgetContinuityTests {
 
     // MARK: - Dashboard builds over the real demo fixtures
 
+    /// Demo mode must populate the goals surfaces, not just the Plaid-derived
+    /// dashboard fixtures. The fixtures stay Core-local and synthetic, then
+    /// `AppState.loadDemoData` loads them into the app-local `GoalsStore` without
+    /// persisting over real user goals.
+    @Test("Demo fixtures provide savings goals for dashboard and Goals workspace")
+    func demoFixturesProvideGoals() {
+        let goals = DemoFixtures.demoGoals(now: referenceDate, calendar: calendar)
+        let preview = DashboardGoalsPreview.make(from: goals, asOf: referenceDate)
+
+        #expect(goals.count >= 3, "demo goals should populate the full goals surface")
+        #expect(!preview.isEmpty, "demo dashboard goals preview should not be empty")
+        #expect(preview.goals.count == min(goals.count, DashboardGoalsPreview.defaultLimit))
+        #expect(Set(goals.map(\.id)).count == goals.count, "demo goal ids must be stable and unique")
+        #expect(goals.allSatisfy { $0.targetAmount > 0 && $0.contributedAmount > 0 })
+    }
+
     /// The Category Dashboard card / window builds its rollup from the main demo
     /// transactions (where the seeded overrides live) plus the seeded budgets,
     /// metadata, and rules. It must be non-empty and internally consistent so the
