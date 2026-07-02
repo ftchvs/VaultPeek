@@ -313,7 +313,7 @@ struct PlanningDestinationView: View {
                 goalsOverview(summary)
             }
         }
-        .accessibilityLabel(goalsAccessibilityLabel(summary))
+        .accessibilityLabel(planningGoalsAccessibilityLabel(summary))
     }
 
     private func goalsOverview(_ summary: GoalsSummary) -> some View {
@@ -340,13 +340,13 @@ struct PlanningDestinationView: View {
             }
 
             HStack(spacing: WindowMetrics.md) {
-                Label(summary.goalCountLabel, systemImage: "flag")
+                Label(planningGoalsSecondaryLabel(summary), systemImage: "flag")
                     .windowSupportingText()
-                if summary.fundedCount > 0 {
+                if !isMasked, summary.fundedCount > 0 {
                     Label("\(summary.fundedCount) funded", systemImage: "checkmark.seal")
                         .windowSupportingText()
                 }
-                if summary.behindCount > 0 {
+                if !isMasked, summary.behindCount > 0 {
                     Label("\(summary.behindCount) behind", systemImage: "exclamationmark.triangle")
                         .windowSupportingText()
                 }
@@ -354,8 +354,13 @@ struct PlanningDestinationView: View {
         }
     }
 
-    private func goalsAccessibilityLabel(_ summary: GoalsSummary) -> String {
+    private func planningGoalsSecondaryLabel(_ summary: GoalsSummary) -> String {
+        isMasked ? "Goal details hidden" : summary.goalCountLabel
+    }
+
+    private func planningGoalsAccessibilityLabel(_ summary: GoalsSummary) -> String {
         guard !summary.isEmpty else { return "Goals: no goals yet." }
+        if isMasked { return "Goals: details hidden while VaultPeek is private." }
         var parts = ["Goals: \(goalsPercent(summary.overallPercent)) of total saved across \(summary.goalCountLabel)"]
         if summary.fundedCount > 0 { parts.append("\(summary.fundedCount) funded") }
         if summary.behindCount > 0 { parts.append("\(summary.behindCount) behind") }

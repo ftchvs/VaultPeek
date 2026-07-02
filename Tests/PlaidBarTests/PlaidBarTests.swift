@@ -220,6 +220,13 @@ struct PlaidBarTests {
         #expect(planningSource.contains("goalsPercent(summary.overallPercent)"))
         #expect(planningSource.contains("if isMasked"))
         #expect(planningSource.contains("ProgressView(value: summary.overallFraction)"))
+        #expect(!planningSource.contains("Label(summary.goalCountLabel"))
+        #expect(planningSource.contains("Label(planningGoalsSecondaryLabel(summary)"))
+        #expect(planningSource.contains("isMasked ? \"Goal details hidden\" : summary.goalCountLabel"))
+        #expect(planningSource.contains("if !isMasked, summary.fundedCount > 0"))
+        #expect(planningSource.contains("if !isMasked, summary.behindCount > 0"))
+        #expect(planningSource.contains("planningGoalsAccessibilityLabel(summary)"))
+        #expect(planningSource.contains("if isMasked { return \"Goals: details hidden while VaultPeek is private.\" }"))
     }
 
     @Test("Control and Focus privacy mask paths redact snapshots and clear Spotlight")
