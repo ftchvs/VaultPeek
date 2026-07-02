@@ -1233,6 +1233,26 @@ struct PlaidBarTests {
         #expect(cache.count == 2, "no eviction when every cached id is still in the inbox")
     }
 
+    // MARK: - Recurring obligations Privacy Mask source invariants
+
+    @Test("Recurring obligations mask merchant and due-date detail copy while private")
+    func recurringObligationsMaskMerchantAndDueDateCopy() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let recurringSource = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/RecurringObligationsSection.swift"),
+            encoding: .utf8
+        )
+
+        #expect(recurringSource.contains("private var displayMerchantName: String"))
+        #expect(recurringSource.contains("StrongMaskFormatter.merchantName(item.merchantName)"))
+        #expect(recurringSource.contains("Text(displayMerchantName)"))
+        #expect(recurringSource.contains("private var displayNextExpectedDate: String"))
+        #expect(recurringSource.contains("StrongMaskFormatter.date(item.nextExpectedDate)"))
+        #expect(recurringSource.contains("let text = \"\\(item.frequency.displayName) · next \\(displayNextExpectedDate)\""))
+        #expect(recurringSource.contains("displayMerchantName,\n            item.frequency.displayName"))
+        #expect(recurringSource.contains("\"next \\(displayNextExpectedDate)\""))
+    }
+
     // MARK: - Window-scale shared sub-components + unified search (AND-625)
 
     /// Source-invariant guard for AND-625 part (1): the shared sub-components that
