@@ -227,6 +227,11 @@ struct PlaidBarTests {
         #expect(planningSource.contains("if !isMasked, summary.behindCount > 0"))
         #expect(planningSource.contains("planningGoalsAccessibilityLabel(summary)"))
         #expect(planningSource.contains("if isMasked { return \"Goals: details hidden while VaultPeek is private.\" }"))
+        let accessibilityLabelStart = try #require(planningSource.range(of: "private func planningGoalsAccessibilityLabel"))
+        let accessibilityLabelBody = String(planningSource[accessibilityLabelStart.lowerBound...].prefix(600))
+        let maskedGuard = try #require(accessibilityLabelBody.range(of: "if isMasked"))
+        let emptyGuard = try #require(accessibilityLabelBody.range(of: "guard !summary.isEmpty"))
+        #expect(maskedGuard.lowerBound < emptyGuard.lowerBound)
     }
 
     @Test("Control and Focus privacy mask paths redact snapshots and clear Spotlight")

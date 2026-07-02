@@ -359,8 +359,8 @@ struct PlanningDestinationView: View {
     }
 
     private func planningGoalsAccessibilityLabel(_ summary: GoalsSummary) -> String {
-        guard !summary.isEmpty else { return "Goals: no goals yet." }
         if isMasked { return "Goals: details hidden while VaultPeek is private." }
+        guard !summary.isEmpty else { return "Goals: no goals yet." }
         var parts = ["Goals: \(goalsPercent(summary.overallPercent)) of total saved across \(summary.goalCountLabel)"]
         if summary.fundedCount > 0 { parts.append("\(summary.fundedCount) funded") }
         if summary.behindCount > 0 { parts.append("\(summary.behindCount) behind") }
