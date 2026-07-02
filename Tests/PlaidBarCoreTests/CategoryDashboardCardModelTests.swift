@@ -133,6 +133,47 @@ struct CategoryDashboardCardModelTests {
         #expect(model.attentionSummary(isBudgeted: false) == nil)
     }
 
+    @Test("attention summary masks exact over and nearing counts under Privacy Mask")
+    func attentionSummaryMasksCounts() {
+        let p = presentation([
+            group(.foodAndDining, leaf: .foodAndDrink, spent: 250, limit: 200),
+            group(.shopping, leaf: .shopping, spent: 90, limit: 100),
+        ])
+        let model = CategoryDashboardCardModel(presentation: p)
+
+        #expect(model.attentionSummary(isBudgeted: true, privacyMaskEnabled: true) == "Over budget and nearing budget")
+        #expect(model.attentionSummary(isBudgeted: true, privacyMaskEnabled: true)?.contains("1") != true)
+        #expect(model.attentionSummary(isBudgeted: true, privacyMaskEnabled: false) == "1 over budget · 1 nearing")
+    }
+
+    @Test("attention summary preserves masked risk state without exact counts")
+    func attentionSummaryMasksCountsButPreservesRiskState() {
+        let overBudget = CategoryDashboardCardModel(presentation: presentation([
+            group(.foodAndDining, leaf: .foodAndDrink, spent: 250, limit: 200),
+        ]))
+        let nearing = CategoryDashboardCardModel(presentation: presentation([
+            group(.shopping, leaf: .shopping, spent: 90, limit: 100),
+        ]))
+
+        #expect(overBudget.attentionSummary(isBudgeted: true, privacyMaskEnabled: true) == "Over budget")
+        #expect(nearing.attentionSummary(isBudgeted: true, privacyMaskEnabled: true) == "Nearing budget")
+    }
+
+    @Test("overflow text masks exact hidden category count under Privacy Mask")
+    func overflowTextMasksCount() {
+        let p = presentation([
+            group(.shopping, leaf: .shopping, spent: 100),
+            group(.foodAndDining, leaf: .foodAndDrink, spent: 400),
+            group(.transportation, leaf: .transportation, spent: 250),
+            group(.entertainment, leaf: .entertainment, spent: 50),
+        ])
+        let model = CategoryDashboardCardModel(presentation: p, topGroupLimit: 2)
+
+        #expect(model.overflowText(privacyMaskEnabled: false) == "+2 more")
+        #expect(model.overflowText(privacyMaskEnabled: true) == "More categories")
+        #expect(model.overflowText(privacyMaskEnabled: true)?.contains("2") != true)
+    }
+
     @Test("currency code flows into the donut and headline formatting")
     func currencyCodeFlows() {
         let p = presentation([group(.foodAndDining, leaf: .foodAndDrink, spent: 300)])
