@@ -117,7 +117,7 @@ struct AccountDetailFlyout: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel(summary.accessibilityLabel(privacyMaskEnabled: appState.shouldMaskFinancialValues))
         .confirmationDialog(
-            "Remove \(institutionRemovalName)?",
+            removalDialogTitle,
             isPresented: $isConfirmingAccountRemoval,
             titleVisibility: .visible
         ) {
@@ -126,9 +126,7 @@ struct AccountDetailFlyout: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text(
-                "This disconnects the linked Plaid institution and removes \(institutionAccountCountText) plus \(institutionTransactionCountText) from VaultPeek. It does not close any bank account."
-            )
+            Text(removalDialogMessage)
         }
     }
 
@@ -479,24 +477,37 @@ struct AccountDetailFlyout: View {
 
     // MARK: Removal copy
 
+    private var removalDialogTitle: String {
+        AccountPresentation.removalDialogTitle(
+            institutionName: institutionRemovalName,
+            privacyMaskEnabled: appState.shouldMaskFinancialValues
+        )
+    }
+
+    private var removalDialogMessage: String {
+        AccountPresentation.removalDialogMessage(
+            linkedAccountCount: institutionAccountCount,
+            cachedTransactionCount: institutionTransactionCount,
+            privacyMaskEnabled: appState.shouldMaskFinancialValues
+        )
+    }
+
     private var institutionRemovalName: String {
         itemConnectionStatus?.institutionName ?? AccountPresentation.displayName(for: account)
     }
 
-    private var institutionAccountCountText: String {
-        let count = max(appState.accounts.count { $0.itemId == account.itemId }, 1)
-        return count == 1 ? "1 linked account" : "\(count) linked accounts"
+    private var institutionAccountCount: Int {
+        max(appState.accounts.count { $0.itemId == account.itemId }, 1)
     }
 
-    private var institutionTransactionCountText: String {
+    private var institutionTransactionCount: Int {
         // The dialog message is evaluated as part of the panel body, so gate
         // the full transaction scan on the dialog actually being presented.
-        guard isConfirmingAccountRemoval else { return "0 cached local transactions" }
+        guard isConfirmingAccountRemoval else { return 0 }
         let institutionAccountIds = Set(
             appState.accounts.filter { $0.itemId == account.itemId }.map(\.id)
         )
-        let count = appState.transactions.count { institutionAccountIds.contains($0.accountId) }
-        return count == 1 ? "1 cached local transaction" : "\(count) cached local transactions"
+        return appState.transactions.count { institutionAccountIds.contains($0.accountId) }
     }
 }
 
