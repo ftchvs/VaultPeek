@@ -387,7 +387,7 @@ public struct LocalAIInsightReceipt: Equatable, Sendable {
             EvidenceChip(
                 id: "transactions",
                 label: "Source rows",
-                value: "\(input.current.transactionCount)",
+                value: privacyMaskEnabled ? PrivacyMaskPresentation.compactValue : "\(input.current.transactionCount)",
                 systemImage: "list.bullet.rectangle"
             ),
             EvidenceChip(
@@ -398,7 +398,7 @@ public struct LocalAIInsightReceipt: Equatable, Sendable {
             ),
         ]
 
-        if let topCategory = input.current.categoryTotals.first {
+        if !privacyMaskEnabled, let topCategory = input.current.categoryTotals.first {
             chips.append(EvidenceChip(
                 id: "top-category",
                 label: "Top category",
@@ -419,7 +419,7 @@ public struct LocalAIInsightReceipt: Equatable, Sendable {
             ))
         }
 
-        if !input.categorySuggestions.isEmpty {
+        if !privacyMaskEnabled, !input.categorySuggestions.isEmpty {
             chips.append(EvidenceChip(
                 id: "category-hints",
                 label: "Category hints",
@@ -436,9 +436,11 @@ public struct LocalAIInsightReceipt: Equatable, Sendable {
         let redactedHeadline = redactKnownSourceIdentifiers(in: rawHeadline, input: input)
         // Mask any currency baked into the (possibly model-generated) headline so
         // Privacy Mask hides "$X expenses, $Y income…" like every other value.
-        let headline = PrivacyMaskPresentation.maskCurrencyTokens(in: redactedHeadline, isEnabled: privacyMaskEnabled)
-        let confidence = confidenceText(for: input, availability: availability)
-        let reversibleActionCopy = reversibleActionCopy(for: input)
+        let headline = privacyMaskEnabled
+            ? "Spending insight hidden while Privacy Mask is on"
+            : PrivacyMaskPresentation.maskCurrencyTokens(in: redactedHeadline, isEnabled: privacyMaskEnabled)
+        let confidence = confidenceText(for: input, availability: availability, privacyMaskEnabled: privacyMaskEnabled)
+        let reversibleActionCopy = reversibleActionCopy(for: input, privacyMaskEnabled: privacyMaskEnabled)
         let timeWindow = timeWindow(for: input)
         let accessibility = [
             "Local insight receipt.",
@@ -485,8 +487,13 @@ public struct LocalAIInsightReceipt: Equatable, Sendable {
 
     private static func confidenceText(
         for input: LocalAIActivitySummaryInput,
-        availability: LocalAIAvailability
+        availability: LocalAIAvailability,
+        privacyMaskEnabled: Bool
     ) -> String {
+        if privacyMaskEnabled {
+            return "Confidence hidden while Privacy Mask is on."
+        }
+
         if availability.state != .available {
             return "Deterministic confidence: local summary only; no model runtime contributed."
         }
@@ -541,9 +548,16 @@ public struct LocalAIInsightReceipt: Equatable, Sendable {
         }
     }
 
-    private static func reversibleActionCopy(for input: LocalAIActivitySummaryInput) -> String {
+    private static func reversibleActionCopy(
+        for input: LocalAIActivitySummaryInput,
+        privacyMaskEnabled: Bool
+    ) -> String {
         guard !input.categorySuggestions.isEmpty else {
             return "This receipt changes nothing. Review the source dashboard rows before taking action."
+        }
+
+        if privacyMaskEnabled {
+            return "Insight actions are hidden while Privacy Mask is on. Turn Privacy Mask off to review local-only actions."
         }
 
         return "Category hints are local overlays. Accepting or rejecting a hint is reversible and does not mutate raw Plaid records."
