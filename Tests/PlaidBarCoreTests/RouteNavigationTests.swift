@@ -116,16 +116,21 @@ struct RouteTests {
     @Test("Canonical route for each destination uses default selection")
     func canonicalRoutes() {
         for d in RouteDestination.allCases {
-            #expect(Route.canonical(for: d).destination == d)
+            // A deprecated-in-place destination's canonical route resolves to
+            // its redirect target (Gate-0, AND-979), not itself.
+            #expect(Route.canonical(for: d).destination == d.canonicalRedirect ?? d)
         }
         #expect(Route.canonical(for: .review) == .review())
         #expect(Route.canonical(for: .settings) == .settings())
+        #expect(Route.canonical(for: .planning) == .insights())
     }
 
     @Test("Weekly-review navigation targets map onto routes")
     func weeklyReviewMapping() {
         #expect(Route.from(weeklyReview: .reviewInbox) == .review())
-        #expect(Route.from(weeklyReview: .recurring) == .planning(section: .recurring))
+        // Planning folded into Insights 2026-07-02 (Gate-0, AND-979); the
+        // recurring detail now lives in Insights' Planning & Review column.
+        #expect(Route.from(weeklyReview: .recurring) == .insights())
         #expect(Route.from(weeklyReview: .safeToSpend) == .dashboard)
     }
 
@@ -373,11 +378,12 @@ struct NavigationStateTransitionTests {
     func applySetsDestinationForEveryRoute() {
         // `apply` is the single in-window navigation entry point (palette, keymap,
         // glance chip, App Intents). Applying any route must land on its
-        // destination — the core deep-link guarantee.
+        // destination — the core deep-link guarantee. A deprecated-in-place
+        // destination (Gate-0, AND-979) lands on its redirect target instead.
         for destination in RouteDestination.allCases {
             var state = NavigationState()
             state.apply(.canonical(for: destination))
-            #expect(state.destination == destination)
+            #expect(state.destination == destination.canonicalRedirect ?? destination)
         }
     }
 
@@ -404,6 +410,17 @@ struct NavigationStateTransitionTests {
         // Per-destination selection persists across a destination switch.
         #expect(state.selectedAccountID == "demo_checking")
         #expect(state.dashboardFilter == .cash)
+    }
+
+    @Test("go(to: .planning) redirects to Insights (deprecate-in-place, Gate-0 AND-979)")
+    func goToPlanningRedirectsToInsights() {
+        // Planning folded into Insights 2026-07-02. The case stays in
+        // RouteDestination for decode-safety (a persisted UserDefaults value or
+        // an already-indexed vaultpeek://route/planning deep link must still
+        // land somewhere live), but any live navigation call redirects it.
+        var state = NavigationState()
+        state.go(to: .planning)
+        #expect(state.destination == .insights)
     }
 
     @Test("NavigationState round-trips through Codable")

@@ -127,7 +127,12 @@ public struct CommandRegistry: Sendable, Equatable {
         var commands: [Command] = []
 
         // 1. Navigate — one per destination, in sidebar order (navigate class).
-        for destination in RouteDestination.allCases {
+        // Deprecated-in-place destinations (``RouteDestination/canonicalRedirect``,
+        // e.g. `.planning`) are excluded here too, matching the sidebar — a "Go to
+        // Planning" result that lands on Insights would read as two destinations
+        // when it is really one. Its search keywords still find Insights, folded
+        // into `navigateKeywords(.insights)` below.
+        for destination in RouteDestination.allCases where destination.canonicalRedirect == nil {
             commands.append(
                 Command(
                     id: navigateID(destination),
@@ -217,16 +222,23 @@ public struct CommandRegistry: Sendable, Equatable {
     }
 
     /// Search synonyms so a destination is reachable by its job, not just its
-    /// label (e.g. "spending" → Budgets, "subscriptions" → Planning).
+    /// label (e.g. "spending" → Budgets, "subscriptions" → Insights). Insights'
+    /// list absorbs Planning's former keywords (folded 2026-07-02, Gate-0
+    /// AND-979) so muscle-memory searches for "forecast"/"cashflow"/etc. still
+    /// find the right destination even though `.planning` no longer has its own
+    /// navigate command.
     private static func navigateKeywords(_ destination: RouteDestination) -> [String] {
         switch destination {
         case .dashboard: ["home", "overview", "net worth", "summary"]
         case .review: ["inbox", "triage", "approve", "categorize", "unreviewed"]
         case .transactions: ["ledger", "history", "spending", "payments"]
         case .budgets: ["spending", "categories", "limits", "over budget"]
-        case .planning: ["forecast", "recurring", "subscriptions", "runway", "cashflow"]
+        case .planning: ["forecast", "recurring", "subscriptions", "runway", "cashflow"] // unreachable: no navigate command (deprecated-in-place)
         case .goals: ["savings", "payoff", "targets", "progress"]
-        case .insights: ["receipts", "weekly review", "trends", "ai"]
+        case .insights: [
+                "receipts", "weekly review", "trends", "ai",
+                "forecast", "recurring", "subscriptions", "runway", "cashflow", "planning",
+            ]
         case .alerts: ["notifications", "warnings", "watchlist"]
         case .accounts: ["banks", "institutions", "balances", "connections"]
         case .settings: ["preferences", "configuration", "options"]

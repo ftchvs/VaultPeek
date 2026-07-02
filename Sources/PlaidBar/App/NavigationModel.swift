@@ -340,10 +340,13 @@ final class NavigationModel {
         var restored = NavigationState()
         // Restore the last destination (AND-597). Absent ⇒ the default Dashboard,
         // so an upgrading user — and the flag-OFF popover, which only ever shows
-        // Dashboard — is unchanged.
+        // Dashboard — is unchanged. A persisted destination that has since been
+        // deprecated-in-place (Gate-0, AND-979 — e.g. `.planning`) redirects to
+        // its live target, so an upgrading user's old selection still decodes to
+        // somewhere real instead of a destination nothing renders.
         if let rawDestination = defaults.string(forKey: Keys.destination),
            let destination = RouteDestination(rawValue: rawDestination) {
-            restored.destination = destination
+            restored.destination = destination.canonicalRedirect ?? destination
         }
         if let raw = defaults.string(forKey: Keys.dashboardFilter),
            let filter = DashboardAccountFilterKind(rawValue: raw) {

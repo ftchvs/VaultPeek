@@ -404,9 +404,12 @@ private struct SidebarView: View {
         }
     }
 
-    /// The destinations in a band, in `allCases` (sidebar) order.
+    /// The destinations in a band, in `allCases` (sidebar) order. Excludes
+    /// deprecated-in-place destinations (``RouteDestination/canonicalRedirect``,
+    /// e.g. `.planning`, folded into Insights 2026-07-02) — the case stays for
+    /// decode-safety, but it is no longer a selectable sidebar row.
     private func destinations(in band: RouteDestination.Band) -> [RouteDestination] {
-        RouteDestination.allCases.filter { $0.band == band }
+        RouteDestination.allCases.filter { $0.band == band && $0.canonicalRedirect == nil }
     }
 }
 
