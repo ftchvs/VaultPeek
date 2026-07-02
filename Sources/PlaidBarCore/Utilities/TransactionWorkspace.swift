@@ -337,6 +337,17 @@ public extension TransactionWorkspace {
         public var hasNote: Bool {
             !(note?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
         }
+
+        /// Signed, privacy-mask-aware amount string for the Amount column and the
+        /// inspector. Income carries a leading `+`; an outflow is unsigned. Withheld
+        /// under mask as the shared compact placeholder. Shared by `TransactionsTable`
+        /// and `TransactionInspectorView` (the inspector gates its whole body on the
+        /// mask separately, so it always calls this unmasked).
+        public func signedAmountText(isMasked: Bool) -> String {
+            if isMasked { return PrivacyMaskPresentation.compactValue }
+            let prefix = transaction.isIncome ? "+" : ""
+            return "\(prefix)\(Formatters.currency(transaction.displayAmount, format: .full))"
+        }
     }
 }
 
