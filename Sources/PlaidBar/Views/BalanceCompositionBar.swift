@@ -81,10 +81,6 @@ struct AnimatedBalanceCompositionBar: View {
     }
 
     private func segmentAccessibility(_ segment: BalanceCompositionBarSegment) -> String {
-        "\(segment.title), \(segment.accessibilityValueText), \(percentText(segment.share)) of balance mix"
+        "\(segment.title), \(segment.accessibilityValueText), \(Formatters.percentFromShare(segment.share)) of balance mix"
     }
-}
-
-private func percentText(_ share: Double) -> String {
-    "\(Int((share * 100).rounded()))%"
 }

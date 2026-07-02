@@ -151,4 +151,17 @@ struct FormattersTests {
     func relativeDate() {
         #expect(!Formatters.relativeDate(Date().addingTimeInterval(-3_600)).isEmpty)
     }
+
+    @Test("percentFromShare renders a whole-number percent from a 0...1 fraction")
+    func percentFromShare() {
+        // Pins the exact output of the previously-inline percentText(_:) helpers.
+        #expect(Formatters.percentFromShare(0) == "0%")
+        #expect(Formatters.percentFromShare(1) == "100%")
+        #expect(Formatters.percentFromShare(0.5) == "50%")
+        // Rounds to the nearest whole percent.
+        #expect(Formatters.percentFromShare(0.4267) == "43%")
+        #expect(Formatters.percentFromShare(0.4234) == "42%")
+        // Half rounds away from zero (Double.rounded() default).
+        #expect(Formatters.percentFromShare(0.005) == "1%")
+    }
 }

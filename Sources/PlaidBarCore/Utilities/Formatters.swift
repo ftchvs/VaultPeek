@@ -229,4 +229,12 @@ public enum Formatters {
     public static func percent(_ value: Double, decimals: Int = 1) -> String {
         String(format: "%.\(decimals)f%%", value)
     }
+
+    /// Format a fractional share (`0...1`) as a whole-number percent string, e.g. `0.4267` → `"43%"`.
+    /// Rounds to the nearest whole percent (half away from zero) with no decimal places — used for
+    /// compact composition/segment share labels. Unlike ``percent(_:decimals:)``, the input is a
+    /// fraction, not an already-scaled percentage value.
+    public static func percentFromShare(_ share: Double) -> String {
+        "\(Int((share * 100).rounded()))%"
+    }
 }
