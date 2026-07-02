@@ -137,12 +137,16 @@ enum Radius {
 // MARK: - Sizing
 
 /// Fixed-frame sizes for icons, chips, and rows so the same visual role
-/// always renders at the same size across surfaces.
+/// always renders at the same size across surfaces. The five roles shared
+/// with the window-scale token layer read from `RawSizing` (Gate-0, AND-980)
+/// so both surfaces stay numerically in sync from one source; the two
+/// popover-only glyph frames below have no window counterpart and stay
+/// literal.
 enum Sizing {
-    static let iconInline: CGFloat = 16
-    static let iconNav: CGFloat = 20
-    static let iconChip: CGFloat = 28
-    static let statusDot: CGFloat = 8
+    static let iconInline: CGFloat = CGFloat(RawSizing.iconInline)
+    static let iconNav: CGFloat = CGFloat(RawSizing.iconNav)
+    static let iconChip: CGFloat = CGFloat(RawSizing.iconChip)
+    static let statusDot: CGFloat = CGFloat(RawSizing.statusDot)
     /// Fixed glyph frame for inline row icons that need a tight bound (e.g.
     /// weekly-review checkbox/severity glyphs) without a backing tile.
     static let glyphSmall: CGFloat = 20
@@ -152,21 +156,27 @@ enum Sizing {
     /// Minimum clickable frame for borderless glyph controls. 28pt is the
     /// macOS pointer-target floor (compact control height); the 44pt HIG
     /// figure is a touch-input minimum and would break menu bar density.
-    static let hitTargetMin: CGFloat = 28
+    static let hitTargetMin: CGFloat = CGFloat(RawSizing.pointerTargetMin)
 }
 
 // MARK: - Motion
 
 /// The motion system: three durations, one reduce-motion gate. Every
 /// animation in the app flows through `animation(_:reduceMotion:)` so
-/// Reduce Motion disables movement in one place.
+/// Reduce Motion disables movement in one place. The four durations shared
+/// with the window-scale token layer read from `RawMotionDurations`
+/// (Gate-0, AND-980); the app-specific loop/decorative animations below have
+/// no window counterpart and stay literal.
 enum MotionTokens {
     /// Hover, press, chip toggles.
-    static let micro = Animation.easeOut(duration: 0.12)
+    static let micro = Animation.easeOut(duration: RawMotionDurations.micro)
     /// Selection, filter swaps, disclosure, banner entrances.
-    static let standard = Animation.easeInOut(duration: 0.2)
+    static let standard = Animation.easeInOut(duration: RawMotionDurations.standard)
     /// Drill-in/fly-out expansion and number transitions.
-    static let content = Animation.spring(response: 0.3, dampingFraction: 0.85)
+    static let content = Animation.spring(
+        response: RawMotionDurations.contentResponse,
+        dampingFraction: RawMotionDurations.contentDamping
+    )
     /// Refresh spinner movement. Always pass through `animation`.
     static let refreshSpin = Animation.linear(duration: 0.8).repeatForever(autoreverses: false)
     /// Refresh spinner settle when loading ends.
@@ -176,7 +186,7 @@ enum MotionTokens {
     /// Decorative background drift. Always pass through `animation`.
     static let backgroundDrift = Animation.easeInOut(duration: 18).repeatForever(autoreverses: true)
     /// Once-per-appearance left-to-right reveal for glance charts.
-    static let chartReveal = Animation.easeOut(duration: 0.55)
+    static let chartReveal = Animation.easeOut(duration: RawMotionDurations.chartReveal)
 
     static let staticLoadingOpacity = 0.62
     static let loadingPulseOpacity = 0.55

@@ -1,3 +1,4 @@
+import PlaidBarCore
 import SwiftUI
 
 // MARK: - Window-Scale Design Foundation (AND-624)
@@ -50,11 +51,16 @@ enum WindowMetrics {
     static let sm: CGFloat = 12
     /// Card content padding and header↔body spacing. Kept strictly tighter than
     /// the inter-card gap (``lg``) so cards read as crisply separated, RepoBar-dense
-    /// surfaces rather than one soft run.
-    static let md: CGFloat = 16
+    /// surfaces rather than one soft run. Reads from `RawSpacing.cardPadding`
+    /// (Gate-0, AND-980) — this token IS the one intra-card padding role the
+    /// redesign's token doctrine names; the invariant below is asserted in
+    /// `RawTokenInvariantTests`, not just documented here.
+    static let md: CGFloat = CGFloat(RawSpacing.cardPadding)
     /// Between cards within a column, and section header↔content. Strictly greater
     /// than the card padding (``md``) so the grid reads as separated, not crammed.
-    static let lg: CGFloat = 20
+    /// Reads from `RawSpacing.cardGap` (Gate-0, AND-980) — the one inter-card
+    /// gap role; `cardGap > cardPadding` is a tested Core invariant.
+    static let lg: CGFloat = CGFloat(RawSpacing.cardGap)
     /// Between major sections of a canvas (hero row ↔ the column grid).
     static let xl: CGFloat = 24
     /// The gap between the two canvas columns. ≥ the inter-card gap so the two
