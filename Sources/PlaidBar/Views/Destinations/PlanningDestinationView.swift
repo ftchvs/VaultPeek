@@ -302,7 +302,14 @@ struct PlanningDestinationView: View {
             .buttonStyle(.link)
             .accessibilityHint("Switches to the Goals workspace.")
         } content: {
-            if summary.isEmpty {
+            if isMasked {
+                ContentUnavailableView {
+                    Label("Goal details hidden", systemImage: "lock.fill")
+                } description: {
+                    Text("VaultPeek is private. Open Goals after unlocking to review goal details.")
+                }
+                .frame(maxWidth: .infinity, minHeight: 140)
+            } else if summary.isEmpty {
                 ContentUnavailableView {
                     Label("No goals yet", systemImage: "flag.checkered")
                 } description: {
