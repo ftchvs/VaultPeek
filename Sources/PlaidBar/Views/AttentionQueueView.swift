@@ -26,6 +26,15 @@ struct AttentionQueueView: View {
         return rows
     }
 
+    private var countPresentation: AttentionQueueCountPresentation.Result {
+        AttentionQueueCountPresentation.evaluate(
+            title: title,
+            rowCount: rows.count,
+            maximumRowCount: AttentionQueue.maximumRowCount,
+            isMasked: appState.shouldMaskFinancialValues
+        )
+    }
+
     var body: some View {
         if !rows.isEmpty {
             VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -36,7 +45,7 @@ struct AttentionQueueView: View {
 
                     Spacer()
 
-                    Text("\(rows.count)/\(AttentionQueue.maximumRowCount)")
+                    Text(countPresentation.visibleText)
                         .microText()
                         .foregroundStyle(.secondary)
                         .accessibilityHidden(true)
@@ -51,7 +60,7 @@ struct AttentionQueueView: View {
                 }
             }
             .accessibilityElement(children: .contain)
-            .accessibilityLabel("\(title), \(rows.count) item\(rows.count == 1 ? "" : "s")")
+            .accessibilityLabel(countPresentation.accessibilityLabel)
         }
     }
 
