@@ -14,6 +14,28 @@ struct AttentionQueueTests {
         #expect(AttentionQueueSeverity.blocked.statusSymbolName == "xmark.octagon.fill")
     }
 
+    @Test("Visible count text is withheld under Privacy Mask")
+    func visibleCountTextWithheldWhenMasked() {
+        #expect(AttentionQueue.countText(rowCount: 2, isMasked: false) == "2/3")
+        #expect(AttentionQueue.countText(rowCount: 2, isMasked: true) == nil)
+    }
+
+    @Test("Container accessibility label withholds exact item counts under Privacy Mask")
+    func containerAccessibilityLabelWithholdsCountsWhenMasked() {
+        #expect(
+            AttentionQueue.containerAccessibilityLabel(title: "Attention", rowCount: 1, isMasked: false)
+                == "Attention, 1 item"
+        )
+        #expect(
+            AttentionQueue.containerAccessibilityLabel(title: "Attention", rowCount: 2, isMasked: false)
+                == "Attention, 2 items"
+        )
+        #expect(
+            AttentionQueue.containerAccessibilityLabel(title: "Attention", rowCount: 2, isMasked: true)
+                == "Attention, private items"
+        )
+    }
+
     @Test("Queue row accessibility labels include status text backup")
     func accessibilityLabelsIncludeStatusTextBackup() {
         let queue = AttentionQueue.evaluate(

@@ -36,10 +36,15 @@ struct AttentionQueueView: View {
 
                     Spacer()
 
-                    Text("\(rows.count)/\(AttentionQueue.maximumRowCount)")
-                        .microText()
-                        .foregroundStyle(.secondary)
-                        .accessibilityHidden(true)
+                    if let countText = AttentionQueue.countText(
+                        rowCount: rows.count,
+                        isMasked: appState.shouldMaskFinancialValues
+                    ) {
+                        Text(countText)
+                            .microText()
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+                    }
                 }
 
                 VStack(spacing: Spacing.xs) {
@@ -51,7 +56,11 @@ struct AttentionQueueView: View {
                 }
             }
             .accessibilityElement(children: .contain)
-            .accessibilityLabel("\(title), \(rows.count) item\(rows.count == 1 ? "" : "s")")
+            .accessibilityLabel(AttentionQueue.containerAccessibilityLabel(
+                title: title,
+                rowCount: rows.count,
+                isMasked: appState.shouldMaskFinancialValues
+            ))
         }
     }
 

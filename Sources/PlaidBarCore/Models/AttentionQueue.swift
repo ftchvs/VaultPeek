@@ -109,6 +109,23 @@ public struct AttentionQueue: Equatable, Sendable {
     public static let maximumRowCount = 3
     private static let maxRenderedErrorLength = 160
 
+    /// Compact visible count for attention surfaces. Exact alert counts are
+    /// behavioral finance metadata, so Privacy Mask withholds the value instead
+    /// of rendering a numeric badge/count chip.
+    public static func countText(rowCount: Int, isMasked: Bool) -> String? {
+        guard !isMasked else { return nil }
+        return "\(max(0, rowCount))/\(maximumRowCount)"
+    }
+
+    /// VoiceOver label for the queue container. Mirrors the visible count privacy
+    /// contract so masked mode does not leak the exact number of active items.
+    public static func containerAccessibilityLabel(title: String, rowCount: Int, isMasked: Bool) -> String {
+        if isMasked {
+            return "\(title), private items"
+        }
+        return "\(title), \(rowCount) item\(rowCount == 1 ? "" : "s")"
+    }
+
     public let rows: [AttentionQueueRow]
 
     public init(rows: [AttentionQueueRow]) {
