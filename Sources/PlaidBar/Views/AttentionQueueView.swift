@@ -46,6 +46,15 @@ struct AttentionQueueView: View {
         return rows
     }
 
+    private var countPresentation: AttentionQueueCountPresentation.Result {
+        AttentionQueueCountPresentation.evaluate(
+            title: title,
+            rowCount: rows.count,
+            maximumRowCount: AttentionQueue.maximumRowCount,
+            isMasked: appState.shouldMaskFinancialValues
+        )
+    }
+
     var body: some View {
         // A `Group` (always present, even when `rows` is momentarily empty —
         // e.g. everything visible got acknowledged) so the self-heal below
@@ -62,7 +71,7 @@ struct AttentionQueueView: View {
 
                         Spacer()
 
-                        Text("\(rows.count)/\(AttentionQueue.maximumRowCount)")
+                        Text(countPresentation.visibleText)
                             .microText()
                             .foregroundStyle(.secondary)
                             .accessibilityHidden(true)
@@ -86,7 +95,7 @@ struct AttentionQueueView: View {
                     }
                 }
                 .accessibilityElement(children: .contain)
-                .accessibilityLabel("\(title), \(rows.count) item\(rows.count == 1 ? "" : "s")")
+                .accessibilityLabel(countPresentation.accessibilityLabel)
             }
         }
         // Self-heal: an acknowledged id whose row is no longer live (the

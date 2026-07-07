@@ -4,6 +4,44 @@ import Testing
 
 @Suite("AttentionQueue Tests")
 struct AttentionQueueTests {
+    @Test("Count presentation masks visible and spoken queue counts")
+    func countPresentationMasksVisibleAndSpokenCounts() {
+        let presentation = AttentionQueueCountPresentation.evaluate(
+            title: "Attention",
+            rowCount: 2,
+            maximumRowCount: 3,
+            isMasked: true
+        )
+
+        #expect(presentation.visibleText == "Active")
+        #expect(presentation.accessibilityLabel == "Attention, item count hidden while Privacy Mask is on")
+        #expect(!presentation.visibleText.contains("2"))
+        #expect(!presentation.visibleText.contains("3"))
+        #expect(!presentation.accessibilityLabel.contains("2"))
+        #expect(!presentation.accessibilityLabel.contains("3"))
+    }
+
+    @Test("Count presentation preserves exact queue counts when unmasked")
+    func countPresentationPreservesExactCountsWhenUnmasked() {
+        let singular = AttentionQueueCountPresentation.evaluate(
+            title: "Attention",
+            rowCount: 1,
+            maximumRowCount: 3,
+            isMasked: false
+        )
+        let plural = AttentionQueueCountPresentation.evaluate(
+            title: "Attention",
+            rowCount: 2,
+            maximumRowCount: 3,
+            isMasked: false
+        )
+
+        #expect(singular.visibleText == "1/3")
+        #expect(singular.accessibilityLabel == "Attention, 1 item")
+        #expect(plural.visibleText == "2/3")
+        #expect(plural.accessibilityLabel == "Attention, 2 items")
+    }
+
     @Test("Severity exposes status text and shaped symbols")
     func severityExposesStatusTextAndSymbols() {
         #expect(AttentionQueueSeverity.healthy.statusLabel == "Healthy")
