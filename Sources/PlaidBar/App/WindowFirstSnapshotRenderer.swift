@@ -55,8 +55,13 @@ import SwiftUI
 @MainActor
 enum WindowFirstSnapshotRenderer {
     /// The in-shell destinations the harness renders, in sidebar order.
-    /// `Settings` is excluded (native scene, never an in-split pane).
-    static let destinations: [RouteDestination] = RouteDestination.allCases.filter { $0 != .settings }
+    /// `Settings` is excluded (native scene, never an in-split pane), as are
+    /// deprecated-in-place destinations (`canonicalRedirect != nil`) — the
+    /// router renders their canonical target, so capturing them would emit
+    /// pixel-duplicates of the destination they redirect to.
+    static let destinations: [RouteDestination] = RouteDestination.allCases.filter {
+        $0 != .settings && $0.canonicalRedirect == nil
+    }
 
     /// Number of PNGs a successful run writes: one per destination plus the
     /// whole-shell reference. Exposed so the smoke test asserts the count

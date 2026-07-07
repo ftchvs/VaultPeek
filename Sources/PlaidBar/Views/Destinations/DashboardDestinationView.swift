@@ -235,7 +235,12 @@ struct DashboardDestinationView: View {
             .accessibilityAddTraits(.isHeader)
 
             ConnectionHealthStripView()
-            AttentionQueueView(title: "Attention", onAddAccount: { openRoute(.accounts()) })
+            // Alerts folded here 2026-07-02 (Gate-0, AND-979): the inline home
+            // for what used to be the standalone Alerts destination's
+            // detail+acknowledge workflow. Row detail was always shown inline;
+            // `supportsAcknowledge` adds the "dismiss without resolving"
+            // affordance the destination's inspector carried.
+            AttentionQueueView(title: "Attention", onAddAccount: { openRoute(.accounts()) }, supportsAcknowledge: true)
             DashboardReadinessPanel(
                 openSettings: { openSettings() },
                 onAddAccount: { openRoute(.accounts()) }

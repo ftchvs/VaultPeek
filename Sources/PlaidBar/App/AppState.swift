@@ -1751,13 +1751,16 @@ final class AppState {
             .count ?? 0
     }
 
-    /// Unacknowledged "alerts" backing the Alerts sidebar badge. The dedicated
-    /// Alerts feed lands in Epic 6; until then this is the
-    /// count of non-healthy `AttentionQueue` rows — the same "do I need to act?"
-    /// rollup the menu-bar glance and Dashboard already key off, so the
-    /// badge stays truthful and consistent across all three surfaces.
+    /// Unacknowledged "alerts" backing the Dashboard sidebar badge (the alert
+    /// badge's home since the Alerts fold, Gate-0 AND-979): the count of
+    /// non-healthy `AttentionQueue` rows the user has not acknowledged — the
+    /// same "do I need to act?" rollup the menu-bar glance and Dashboard's
+    /// attention card key off, minus the same session-scoped acknowledgements
+    /// the card subtracts, so the badge always matches what the card shows.
     var sidebarUnacknowledgedAlertCount: Int {
-        attentionQueue.rows.filter { $0.severity != .healthy }.count
+        attentionQueue.rows.filter {
+            $0.severity != .healthy && !navigationModel.acknowledgedAlertIDs.contains($0.id)
+        }.count
     }
 
     /// The per-destination textual count badges for the window-first sidebar.

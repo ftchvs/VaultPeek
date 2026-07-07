@@ -157,9 +157,20 @@ public enum RouteDestination: String, CaseIterable, Sendable, Hashable, Codable 
     /// moved to Insights' Cashflow/Commitments columns. The case, `⌘4`, and
     /// `Route.planning(section:)` all stay decode-safe; hard-deletion is a
     /// separate, later cleanup issue after a release's confirmation window.
+    ///
+    /// `.alerts` folded into an enriched inline ``AttentionQueueView`` on
+    /// Dashboard 2026-07-02 (Felipe: "design a richer inline treatment that
+    /// keeps detail+acknowledge, don't compress it into the existing card as-is").
+    /// The full list+detail workspace (severity sections, per-row inspector) is
+    /// retired in favor of the same acknowledge state (`NavigationModel.
+    /// acknowledgedAlertIDs`) surfaced directly on the rows Dashboard already
+    /// shows — detail was always visible inline on a row, only the
+    /// acknowledge-without-resolving affordance was new. `AlertsDestinationView.swift`
+    /// stays in the tree, unreferenced, for a later hard-delete pass.
     public var canonicalRedirect: RouteDestination? {
         switch self {
         case .planning: .insights
+        case .alerts: .dashboard
         default: nil
         }
     }
@@ -283,7 +294,7 @@ public enum Route: Sendable, Hashable, Codable {
         case .planning: .planning() // unreachable: redirected above
         case .goals: .goals()
         case .insights: .insights()
-        case .alerts: .alerts()
+        case .alerts: .alerts() // unreachable: redirected above
         case .accounts: .accounts()
         case .settings: .settings()
         }

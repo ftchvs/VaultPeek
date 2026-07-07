@@ -18,9 +18,9 @@ import Foundation
 ///
 /// | Destination | Count source | Hidden when |
 /// |-------------|--------------|-------------|
+/// | Dashboard | unacknowledged-alert count (non-healthy `AttentionQueue` rows minus acknowledged — the canonical "do I need to act?" signal). Carried by Dashboard since the Alerts fold (Gate-0, AND-979): Dashboard's attention card is the alerts surface now, so the badge follows it | none unacked |
 /// | Review   | unreviewed inbox count (`TransactionReviewInboxSnapshot.totalCount`) | queue clear |
 /// | Budgets  | over-budget category count (`CategoryBudgetPresentation.overBudgetCount`) | nothing over |
-/// | Alerts   | unacknowledged-alert count (non-healthy `AttentionQueue` rows — the canonical "do I need to act?" signal until the Alerts feed lands in Epic 6) | none unacked |
 /// | Accounts | reconnect-needed count (`ConnectionHealthStrip` reconnect bucket) | all healthy |
 ///
 /// All other destinations carry no badge.
@@ -83,10 +83,10 @@ public struct SidebarBadgeModel: Sendable, Equatable {
     ///     (`AppState.transactionReviewCount`).
     ///   - overBudgetCount: categories over their limit
     ///     (`AppState.categoryBudgetPresentation.overBudgetCount`).
-    ///   - unacknowledgedAlertCount: alerts needing acknowledgement. Until the
-    ///     Alerts feed lands (Epic 6) the caller passes the count of non-healthy
-    ///     `AttentionQueue` rows — the same "do I need to act?" rollup the
-    ///     menu-bar glance and Dashboard use.
+    ///   - unacknowledgedAlertCount: alerts needing acknowledgement — the count
+    ///     of non-healthy `AttentionQueue` rows not yet acknowledged, the same
+    ///     "do I need to act?" rollup the menu-bar glance and Dashboard's
+    ///     attention card use. Badged on `.dashboard` since the Alerts fold.
     ///   - reconnectNeededCount: items needing reconnect
     ///     (`ConnectionHealthStrip` reconnect-needed bucket).
     ///   - isMasked: Privacy Mask / App Lock state. When true, every badge is
@@ -119,14 +119,17 @@ public struct SidebarBadgeModel: Sendable, Equatable {
         }
 
         // Emit in sidebar order so `badges` reads top-to-bottom like the list.
+        // The alert badge lives on Dashboard since the Alerts fold (AND-979):
+        // the sidebar no longer renders an `.alerts` row, and Dashboard's
+        // attention card is where the badge's count is acted on.
+        appendBadge(.dashboard, count: unacknowledgedAlertCount) { count in
+            "\(count) unacknowledged \(count == 1 ? "alert" : "alerts")"
+        }
         appendBadge(.review, count: unreviewedCount) { count in
             "\(count) \(count == 1 ? "item" : "items") to review"
         }
         appendBadge(.budgets, count: overBudgetCount) { count in
             "\(count) \(count == 1 ? "category" : "categories") over budget"
-        }
-        appendBadge(.alerts, count: unacknowledgedAlertCount) { count in
-            "\(count) unacknowledged \(count == 1 ? "alert" : "alerts")"
         }
         appendBadge(.accounts, count: reconnectNeededCount) { count in
             "\(count) \(count == 1 ? "account needs" : "accounts need") reconnecting"

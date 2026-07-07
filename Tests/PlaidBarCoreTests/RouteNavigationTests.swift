@@ -275,7 +275,7 @@ struct AttentionRowRoutingTests {
         // caller falls back to the action — preserving today's behavior.
         let noRoute = [
             "server-offline", "credentials-missing", "local-auth-missing",
-            "local-auth-rejected", "server-mode-mismatch", "recent-error",
+            "local-auth-rejected", "server-mode-mismatch", "recent-error-abc123",
             "no-items", "balances-not-loaded", "first-sync-needed",
             "first-sync-incomplete", "sync-stale", "healthy", "demo-healthy",
         ]
@@ -421,6 +421,15 @@ struct NavigationStateTransitionTests {
         var state = NavigationState()
         state.go(to: .planning)
         #expect(state.destination == .insights)
+    }
+
+    @Test("go(to: .alerts) redirects to Dashboard (deprecate-in-place, Gate-0 AND-979)")
+    func goToAlertsRedirectsToDashboard() {
+        // Alerts folded into an enriched inline AttentionQueueView on
+        // Dashboard 2026-07-02. Same decode-safety reasoning as .planning.
+        var state = NavigationState()
+        state.go(to: .alerts)
+        #expect(state.destination == .dashboard)
     }
 
     @Test("NavigationState round-trips through Codable")
