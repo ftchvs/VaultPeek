@@ -610,9 +610,15 @@ struct PlaidBarApp: App {
     /// Destinations that own a `⌘N` shortcut (Dashboard…Accounts), in shortcut
     /// order. Drives the "Go" menu's numbered items off the single source of
     /// truth in `RouteDestination`, so the menu and the keymap never drift.
+    /// Deprecated-in-place destinations (`canonicalRedirect != nil`) are
+    /// filtered out, matching the sidebar and ⌘K: a menu item named "Planning"
+    /// or "Alerts" that lands somewhere else would read as two destinations
+    /// when it is really one. Their old key equivalents retire with them —
+    /// the shortcut *numbers* stay assigned in `RouteDestination` only so
+    /// persisted references keep decoding.
     private var destinationsWithShortcut: [RouteDestination] {
         RouteDestination.allCases
-            .filter { $0.commandShortcutNumber != nil }
+            .filter { $0.commandShortcutNumber != nil && $0.canonicalRedirect == nil }
             .sorted { ($0.commandShortcutNumber ?? 0) < ($1.commandShortcutNumber ?? 0) }
     }
 

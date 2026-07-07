@@ -12,46 +12,90 @@ struct AttentionQueueView: View {
     let title: String
     var showsHealthyRow = true
     var onAddAccount: (() -> Void)?
+    /// Opt-in richer inline treatment (Gate-0, AND-979 — the Alerts fold,
+    /// 2026-07-02): each non-healthy row gets an "Acknowledge" affordance
+    /// alongside its existing resolve action, and an acknowledged row drops out
+    /// of the visible glance list (it stays tracked in `NavigationModel.
+    /// acknowledgedAlertIDs`, so it can come back if the underlying condition
+    /// recurs with a fresh row). Acknowledging only hides — the queue is capped
+    /// upstream in `AttentionQueue.init`, so a hidden row does not backfill a
+    /// truncated one. Defaults to `false` so every existing call site
+    /// (`MainPopover`'s two glance uses and Settings' two) is byte-for-byte
+    /// unchanged — only Dashboard's status-readiness card opts in, since that is
+    /// the folded-in home for what used to be the standalone Alerts
+    /// destination's detail+acknowledge workflow. Row detail was already always
+    /// visible inline here; the only genuinely new capability is "acknowledge
+    /// without resolving."
+    var supportsAcknowledge = false
 
     /// Window-first hybrid opt-in, resolved once per render. Gates whether an
     /// attention chip routes into the window vs. runs its existing in-place
     /// action. OFF (the shipping default) ⇒ today's behavior exactly.
     private var isWindowFirstEnabled: Bool { WindowFirstFeatureFlag.resolved() }
 
+    private var navigationModel: NavigationModel { appState.navigationModel }
+
     private var rows: [AttentionQueueRow] {
-        let rows = appState.attentionQueue.rows
-        guard showsHealthyRow else {
-            return rows.filter { $0.severity != .healthy }
+        var rows = appState.attentionQueue.rows
+        if !showsHealthyRow {
+            rows = rows.filter { $0.severity != .healthy }
+        }
+        if supportsAcknowledge {
+            rows = rows.filter { !navigationModel.acknowledgedAlertIDs.contains($0.id) }
         }
         return rows
     }
 
     var body: some View {
-        if !rows.isEmpty {
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                HStack(spacing: Spacing.xs) {
-                    Text(title)
-                        .sectionTitle()
-                        .foregroundStyle(.secondary)
+        // A `Group` (always present, even when `rows` is momentarily empty —
+        // e.g. everything visible got acknowledged) so the self-heal below
+        // keeps running rather than dropping out with the hidden content, the
+        // same way it always ran on `AlertsDestinationView`'s always-present
+        // ScrollView before the fold.
+        Group {
+            if !rows.isEmpty {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    HStack(spacing: Spacing.xs) {
+                        Text(title)
+                            .sectionTitle()
+                            .foregroundStyle(.secondary)
 
-                    Spacer()
+                        Spacer()
 
-                    Text("\(rows.count)/\(AttentionQueue.maximumRowCount)")
-                        .microText()
-                        .foregroundStyle(.secondary)
-                        .accessibilityHidden(true)
-                }
+                        Text("\(rows.count)/\(AttentionQueue.maximumRowCount)")
+                            .microText()
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+                    }
 
-                VStack(spacing: Spacing.xs) {
-                    ForEach(rows) { row in
-                        AttentionQueueRowView(row: row, isDisabled: appState.isLoading) {
-                            perform(row)
+                    VStack(spacing: Spacing.xs) {
+                        ForEach(rows) { row in
+                            // The healthy row is a status readout, not an alert —
+                            // acknowledging it would only blank the whole card for
+                            // the session, so it never gets the affordance.
+                            let canAcknowledge = supportsAcknowledge && row.severity != .healthy
+                            AttentionQueueRowView(
+                                row: row,
+                                isDisabled: appState.isLoading,
+                                supportsAcknowledge: canAcknowledge,
+                                onAcknowledge: canAcknowledge ? { navigationModel.acknowledgeAlert(row.id) } : nil
+                            ) {
+                                perform(row)
+                            }
                         }
                     }
                 }
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("\(title), \(rows.count) item\(rows.count == 1 ? "" : "s")")
             }
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel("\(title), \(rows.count) item\(rows.count == 1 ? "" : "s")")
+        }
+        // Self-heal: an acknowledged id whose row is no longer live (the
+        // underlying condition resolved on its own) never lingers in
+        // NavigationModel's session-scoped set — the same self-heal
+        // `AlertsDestinationView` ran before the fold.
+        .onChange(of: appState.attentionQueue.rows.map(\.id)) { _, _ in
+            guard supportsAcknowledge else { return }
+            navigationModel.pruneAlerts(toRowsIn: appState.attentionQueue.rows)
         }
     }
 
@@ -85,6 +129,15 @@ struct AttentionQueueView: View {
 private struct AttentionQueueRowView: View {
     let row: AttentionQueueRow
     let isDisabled: Bool
+    /// Whether this row shows the "Acknowledge" affordance alongside its
+    /// resolve action (Gate-0, AND-979 — the Alerts fold). `false` for every
+    /// pre-existing call site (`MainPopover`'s two uses and Settings' two) —
+    /// byte-for-byte unchanged there.
+    var supportsAcknowledge = false
+    /// Acknowledges this row (removes it from the visible queue without
+    /// resolving the underlying condition). `nil` when `supportsAcknowledge`
+    /// is `false`.
+    var onAcknowledge: (() -> Void)?
     let perform: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -133,6 +186,23 @@ private struct AttentionQueueRowView: View {
             .accessibilityHint(row.accessibilityHint ?? "")
 
             Spacer(minLength: Spacing.xs)
+
+            if supportsAcknowledge, let onAcknowledge {
+                // Acknowledge without resolving — the capability the folded-in
+                // Alerts destination's detail pane carried, now inline. A
+                // distinct affordance from the resolve action below: this one
+                // never dispatches a recovery step, it only clears the row from
+                // the glance queue.
+                Button(action: onAcknowledge) {
+                    Label("Acknowledge", systemImage: "checkmark.circle")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.borderless)
+                .controlSize(.mini)
+                .help("Acknowledge — dismiss from the queue without resolving")
+                .accessibilityLabel("Acknowledge")
+                .accessibilityHint("Dismisses this item from the attention queue without resolving it.")
+            }
 
             if let actionTitle = row.actionTitle {
                 Button {

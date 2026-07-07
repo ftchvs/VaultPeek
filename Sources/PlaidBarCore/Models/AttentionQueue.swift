@@ -186,8 +186,11 @@ public struct AttentionQueue: Equatable, Sendable {
         if let safeError = userFacingErrorDetail(from: errorMessage),
            localServerAuthRow(from: errorMessage) == nil,
            serverModeMismatchRow(from: errorMessage) == nil {
+            // Content-keyed id: acknowledging one failure must not hide every
+            // *different* failure that appears later in the session under the
+            // same constant id.
             rows.append(AttentionQueueRow(
-                id: "recent-error",
+                id: "recent-error-\(StableHash.hex(safeError))",
                 severity: .warning,
                 title: "Recent action failed",
                 detail: safeError,
@@ -304,8 +307,13 @@ public struct AttentionQueue: Equatable, Sendable {
         )
     }
 
+    // Rows are keyed by the *item's* id, never its array position: acknowledge
+    // state (`NavigationModel.acknowledgedAlertIDs`) and SwiftUI identity both
+    // hang off `row.id`, and a positional id silently transfers an
+    // acknowledgement to whichever different institution later occupies the
+    // same index.
     private static func degradedItemRows(from itemStatuses: [ItemStatus]) -> [AttentionQueueRow] {
-        itemStatuses.enumerated().compactMap { index, item in
+        itemStatuses.compactMap { item in
             switch item.status {
             case .connected:
                 return nil
@@ -313,7 +321,7 @@ public struct AttentionQueue: Equatable, Sendable {
                 return nil
             case .error:
                 return AttentionQueueRow(
-                    id: "item-error-\(index)",
+                    id: "item-error-\(item.id)",
                     severity: .blocked,
                     title: itemTitle(item, fallback: "Institution needs attention"),
                     detail: itemDetail(item, fallback: "Plaid reported an item error. Reconnect, then refresh."),
@@ -325,7 +333,7 @@ public struct AttentionQueue: Equatable, Sendable {
                 )
             case .loginRequired, .pendingExpiration, .pendingDisconnect, .permissionRevoked, .newAccountsAvailable:
                 return AttentionQueueRow(
-                    id: "item-repair-\(index)",
+                    id: "item-repair-\(item.id)",
                     severity: .warning,
                     title: itemTitle(item, fallback: "Fresh login needed"),
                     detail: itemDetail(item, fallback: "Plaid requires a fresh bank login before sync can continue."),
@@ -340,7 +348,7 @@ public struct AttentionQueue: Equatable, Sendable {
                 // reconnect action) — VaultPeek retries automatically, so the
                 // user is told no action is needed rather than offered an Update.
                 return AttentionQueueRow(
-                    id: "item-outage-\(index)",
+                    id: "item-outage-\(item.id)",
                     severity: .warning,
                     title: itemTitle(item, fallback: "Bank temporarily unavailable"),
                     detail: itemDetail(item, fallback: "Your bank or Plaid is temporarily unavailable. VaultPeek will retry automatically — no action needed."),
@@ -638,9 +646,9 @@ public struct AttentionQueue: Equatable, Sendable {
         default:
             if row.id.hasPrefix("item-error-") { return 4 }
             if row.id.hasPrefix("item-repair-") { return 5 }
+            if row.id.hasPrefix("recent-error") { return 6 }
             switch row.id {
             case "server-mode-mismatch": return 3
-            case "recent-error": return 6
             case "no-items": return 7
             case "balances-not-loaded": return 8
             case "first-sync-needed": return 9

@@ -3797,16 +3797,22 @@ struct PlaidBarCoreTests {
     @Test("Window-first render harness renders every in-shell destination plus the shell")
     func windowFirstRenderHarnessCoversAllDestinations() {
         // The harness renders one PNG per in-shell destination (Settings is the
-        // native scene, never an in-split pane, so it is excluded) plus one
-        // whole-shell reference. Asserting the expected set here pins the PNG
-        // count the integration smoke test verifies on disk, without spawning a
-        // window. RouteDestination has 10 cases; 9 are in-shell.
-        let inShell = RouteDestination.allCases.filter { $0 != .settings }
-        #expect(inShell.count == 9)
+        // native scene, never an in-split pane, so it is excluded; so are
+        // deprecated-in-place destinations, whose captures would be pixel
+        // duplicates of their canonical target) plus one whole-shell reference.
+        // Asserting the expected set here pins the PNG count the integration
+        // smoke test verifies on disk, without spawning a window.
+        // RouteDestination has 10 cases; 7 are live in-shell.
+        let inShell = RouteDestination.allCases.filter {
+            $0 != .settings && $0.canonicalRedirect == nil
+        }
+        #expect(inShell.count == 7)
         #expect(!inShell.contains(.settings))
+        #expect(!inShell.contains(.planning))
+        #expect(!inShell.contains(.alerts))
         // expectedImageCount == destinations + 1 (the shell). Kept in lockstep
         // with the harness so the two never drift.
-        #expect(inShell.count + 1 == 10)
+        #expect(inShell.count + 1 == 8)
     }
 
     // MARK: - RecurringTransaction Model Tests

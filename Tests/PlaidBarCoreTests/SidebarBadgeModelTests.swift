@@ -17,7 +17,9 @@ struct SidebarBadgeModelTests {
 
         #expect(model.badge(for: .review)?.count == 4)
         #expect(model.badge(for: .budgets)?.count == 2)
-        #expect(model.badge(for: .alerts)?.count == 3)
+        // The alert badge lives on Dashboard since the Alerts fold (AND-979).
+        #expect(model.badge(for: .dashboard)?.count == 3)
+        #expect(model.badge(for: .alerts) == nil)
         #expect(model.badge(for: .accounts)?.count == 1)
         #expect(model.badges.count == 4)
     }
@@ -42,7 +44,7 @@ struct SidebarBadgeModelTests {
             reconnectNeededCount: 0
         )
         #expect(model.badge(for: .review) == nil)
-        #expect(model.badge(for: .alerts) == nil)
+        #expect(model.badge(for: .dashboard) == nil)
         #expect(model.badge(for: .accounts) == nil)
         #expect(model.badge(for: .budgets)?.count == 5)
         #expect(model.badges.count == 1)
@@ -73,7 +75,7 @@ struct SidebarBadgeModelTests {
         #expect(model == .empty)
         #expect(model.badge(for: .review) == nil)
         #expect(model.badge(for: .budgets) == nil)
-        #expect(model.badge(for: .alerts) == nil)
+        #expect(model.badge(for: .dashboard) == nil)
         #expect(model.badge(for: .accounts) == nil)
     }
 
@@ -97,9 +99,10 @@ struct SidebarBadgeModelTests {
             reconnectNeededCount: 1
         )
         let badged = Set(model.badges.map(\.destination))
-        #expect(badged == [.review, .budgets, .alerts, .accounts])
-        // Destinations the IA gives no badge never appear.
-        for d in [RouteDestination.dashboard, .transactions, .planning, .goals, .insights, .settings] {
+        #expect(badged == [.dashboard, .review, .budgets, .accounts])
+        // Destinations the IA gives no badge never appear. `.alerts` is
+        // deprecated-in-place (folded into Dashboard), so it never badges.
+        for d in [RouteDestination.alerts, .transactions, .planning, .goals, .insights, .settings] {
             #expect(model.badge(for: d) == nil)
         }
     }
@@ -112,9 +115,9 @@ struct SidebarBadgeModelTests {
             unacknowledgedAlertCount: 1,
             reconnectNeededCount: 1
         )
-        // Review (band Workflows) → Budgets (Workflows) → Alerts (Insights) →
+        // Dashboard (band Overview) → Review (Workflows) → Budgets (Workflows) →
         // Accounts (Money): the order they appear in RouteDestination.allCases.
-        #expect(model.badges.map(\.destination) == [.review, .budgets, .alerts, .accounts])
+        #expect(model.badges.map(\.destination) == [.dashboard, .review, .budgets, .accounts])
     }
 
     // MARK: Accessibility phrasing (singular vs plural; folded into the row label)
@@ -143,15 +146,15 @@ struct SidebarBadgeModelTests {
         )
     }
 
-    @Test("Alerts accessibility text pluralizes alert/alerts")
+    @Test("Alert accessibility text pluralizes alert/alerts (on the Dashboard badge)")
     func alertsAccessibilityPluralization() {
         #expect(
             SidebarBadgeModel.make(unreviewedCount: 0, overBudgetCount: 0, unacknowledgedAlertCount: 1, reconnectNeededCount: 0)
-                .badge(for: .alerts)?.accessibilityText == "1 unacknowledged alert"
+                .badge(for: .dashboard)?.accessibilityText == "1 unacknowledged alert"
         )
         #expect(
             SidebarBadgeModel.make(unreviewedCount: 0, overBudgetCount: 0, unacknowledgedAlertCount: 2, reconnectNeededCount: 0)
-                .badge(for: .alerts)?.accessibilityText == "2 unacknowledged alerts"
+                .badge(for: .dashboard)?.accessibilityText == "2 unacknowledged alerts"
         )
     }
 

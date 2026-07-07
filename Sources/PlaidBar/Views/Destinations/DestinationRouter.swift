@@ -15,12 +15,13 @@ import SwiftUI
 /// `.settings` arm falls back to the shared placeholder defensively, but it is
 /// unreachable in practice.
 ///
-/// **`.planning` is deprecated-in-place** (Gate-0, AND-979 — folded into Insights
-/// 2026-07-02): `NavigationState.go(to:)`/`apply(_:)` and
-/// `NavigationModel.hydrate()` all redirect it to `.insights` before the
-/// selection ever reaches this router, so the `.planning` arm below is
-/// unreachable in practice, same as `.settings` — it renders Insights
-/// defensively rather than the retired `PlanningDestinationView`.
+/// **`.planning` and `.alerts` are deprecated-in-place** (Gate-0, AND-979 —
+/// folded into Insights and Dashboard respectively, 2026-07-02):
+/// `NavigationState.go(to:)`/`apply(_:)` and `NavigationModel.hydrate()` all
+/// redirect them before the selection ever reaches this router, so both arms
+/// below are unreachable in practice, same as `.settings` — they render their
+/// redirect target defensively rather than the retired `PlanningDestinationView`
+/// / the retired-as-a-destination `AlertsDestinationView`.
 ///
 /// Window-first surface only: built solely behind `WindowFirstFeatureFlag`
 /// (default OFF), so with the flag off none of this is instantiated.
@@ -38,7 +39,9 @@ struct DestinationContentView: View {
             InsightsDestinationView()
         case .goals: GoalsDestinationView()
         case .insights: InsightsDestinationView()
-        case .alerts: AlertsDestinationView()
+        case .alerts:
+            // Unreachable — deprecated-in-place, redirected to .dashboard upstream.
+            DashboardDestinationView()
         case .accounts: AccountsDestinationView()
         case .settings:
             // Unreachable — Settings opens the native scene, not an in-split pane.

@@ -223,13 +223,14 @@ public struct CommandRegistry: Sendable, Equatable {
 
     /// Search synonyms so a destination is reachable by its job, not just its
     /// label (e.g. "spending" → Budgets, "subscriptions" → Insights). Insights'
-    /// list absorbs Planning's former keywords (folded 2026-07-02, Gate-0
-    /// AND-979) so muscle-memory searches for "forecast"/"cashflow"/etc. still
-    /// find the right destination even though `.planning` no longer has its own
-    /// navigate command.
+    /// list absorbs Planning's former keywords, and Dashboard's absorbs Alerts'
+    /// (both folded 2026-07-02, Gate-0 AND-979) so muscle-memory searches for
+    /// "forecast"/"cashflow"/"warnings"/etc. still find the right destination
+    /// even though `.planning`/`.alerts` no longer have their own navigate
+    /// command.
     private static func navigateKeywords(_ destination: RouteDestination) -> [String] {
         switch destination {
-        case .dashboard: ["home", "overview", "net worth", "summary"]
+        case .dashboard: ["home", "overview", "net worth", "summary", "notifications", "warnings", "watchlist", "alerts"]
         case .review: ["inbox", "triage", "approve", "categorize", "unreviewed"]
         case .transactions: ["ledger", "history", "spending", "payments"]
         case .budgets: ["spending", "categories", "limits", "over budget"]
@@ -239,7 +240,7 @@ public struct CommandRegistry: Sendable, Equatable {
                 "receipts", "weekly review", "trends", "ai",
                 "forecast", "recurring", "subscriptions", "runway", "cashflow", "planning",
             ]
-        case .alerts: ["notifications", "warnings", "watchlist"]
+        case .alerts: ["notifications", "warnings", "watchlist"] // unreachable: no navigate command (deprecated-in-place)
         case .accounts: ["banks", "institutions", "balances", "connections"]
         case .settings: ["preferences", "configuration", "options"]
         }

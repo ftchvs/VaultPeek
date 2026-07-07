@@ -129,6 +129,70 @@ struct AttentionQueueTests {
         #expect(joinedDisplayCopy.contains("[redacted-balance]"))
     }
 
+    @Test("Degraded-item row ids follow the item, not its array position")
+    func degradedItemRowIdsFollowTheItem() {
+        func queue(for itemStatuses: [ItemStatus]) -> AttentionQueue {
+            AttentionQueue.evaluate(
+                isDemoMode: false,
+                serverConnected: true,
+                credentialsConfigured: true,
+                linkedItemCount: itemStatuses.count,
+                accountCount: itemStatuses.count,
+                syncedItemCount: itemStatuses.count,
+                itemStatuses: itemStatuses,
+                isSyncStale: false,
+                lastSyncRelative: "now",
+                errorMessage: nil
+            )
+        }
+
+        // An acknowledged row id must never be inherited by a *different*
+        // institution that later lands at the same array index — the id is
+        // what `NavigationModel.acknowledgedAlertIDs` keys acknowledge state on.
+        let before = queue(for: [
+            ItemStatus(id: "item-chase", institutionName: "Chase", status: .loginRequired),
+        ])
+        let after = queue(for: [
+            ItemStatus(id: "item-amex", institutionName: "Amex", status: .loginRequired),
+        ])
+
+        let beforeID = before.rows.first { $0.id.hasPrefix("item-repair-") }?.id
+        let afterID = after.rows.first { $0.id.hasPrefix("item-repair-") }?.id
+        #expect(beforeID == "item-repair-item-chase")
+        #expect(afterID == "item-repair-item-amex")
+        #expect(beforeID != afterID)
+    }
+
+    @Test("Recent-error row ids are content-keyed so distinct failures get distinct ids")
+    func recentErrorRowIdsAreContentKeyed() {
+        func queue(errorMessage: String) -> AttentionQueue {
+            AttentionQueue.evaluate(
+                isDemoMode: false,
+                serverConnected: true,
+                credentialsConfigured: true,
+                linkedItemCount: 1,
+                accountCount: 1,
+                syncedItemCount: 1,
+                itemStatuses: [],
+                isSyncStale: false,
+                lastSyncRelative: "now",
+                errorMessage: errorMessage
+            )
+        }
+
+        let first = queue(errorMessage: "Refresh failed. Try again.")
+            .rows.first { $0.id.hasPrefix("recent-error") }?.id
+        let second = queue(errorMessage: "Sync timed out. Check the server.")
+            .rows.first { $0.id.hasPrefix("recent-error") }?.id
+        let firstAgain = queue(errorMessage: "Refresh failed. Try again.")
+            .rows.first { $0.id.hasPrefix("recent-error") }?.id
+
+        #expect(first != nil)
+        #expect(second != nil)
+        #expect(first != second)
+        #expect(first == firstAgain)
+    }
+
     @Test("Queue preserves server mode mismatch recovery action")
     func preservesServerModeMismatchRecoveryAction() {
         let queue = AttentionQueue.evaluate(
@@ -148,7 +212,7 @@ struct AttentionQueueTests {
         #expect(queue.rows.first?.severity == .blocked)
         #expect(queue.rows.first?.title == "Server mode mismatch")
         #expect(queue.rows.first?.action == .checkServer)
-        #expect(queue.rows.contains { $0.id == "recent-error" } == false)
+        #expect(queue.rows.contains { $0.id.hasPrefix("recent-error") } == false)
     }
 
     @Test("Queue suppresses downstream Plaid actions until credentials are configured")
@@ -286,7 +350,7 @@ struct AttentionQueueTests {
         )
 
         #expect(queue.rows.map(\.id) == [
-            "item-repair-0",
+            "item-repair-item-login-sensitive",
             "sync-stale",
             "financial-low-cash",
         ])
@@ -310,7 +374,7 @@ struct AttentionQueueTests {
             errorMessage: nil
         )
 
-        #expect(queue.rows.first?.id == "item-repair-0")
+        #expect(queue.rows.first?.id == "item-repair-item-new-accounts")
         #expect(queue.rows.first?.title == "Example Bank has new accounts")
         #expect(queue.rows.first?.detail == "Example Bank has newly available accounts. Update this item to choose what VaultPeek can access.")
         #expect(queue.rows.first?.action == .reconnect)
