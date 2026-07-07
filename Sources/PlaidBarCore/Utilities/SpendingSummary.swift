@@ -1,21 +1,37 @@
 import Foundation
 
+/// Deprecated proto-version of the period-comparison vocabulary — prefer
+/// `PeriodComparison` + `MetricDelta` for any new comparison surface, so
+/// exactly one delta vocabulary exists. This shim now derives its delta
+/// fields from an embedded ``MetricDelta`` (absorbed rather than duplicated);
+/// the legacy field names are kept for existing call sites.
+///
+/// One deliberate tightening from the legacy math: `deltaPercent` is `0` when
+/// the previous total's magnitude is below `MetricDelta.Threshold.currency`'s
+/// absolute gate — the legacy formula exploded a sub-dollar baseline into a
+/// fake multi-thousand percent figure.
 public struct SpendingPeriodSummary: Sendable {
-    public let currentTotal: Double
-    public let previousTotal: Double
-    public let delta: Double
-    public let deltaPercent: Double
+    /// The canonical comparison (spend: lower is better).
+    public let metric: MetricDelta
     public let categories: [(SpendingCategory, Double)]
+
+    public var currentTotal: Double { metric.current }
+    public var previousTotal: Double { metric.previous }
+    public var delta: Double { metric.delta }
+    public var deltaPercent: Double {
+        previousTotal > 0 ? (metric.percentChange ?? 0) : 0
+    }
 
     public init(
         currentTotal: Double,
         previousTotal: Double,
         categories: [(SpendingCategory, Double)]
     ) {
-        self.currentTotal = currentTotal
-        self.previousTotal = previousTotal
-        self.delta = currentTotal - previousTotal
-        self.deltaPercent = previousTotal > 0 ? (delta / previousTotal) * 100 : 0
+        metric = MetricDelta.evaluate(
+            current: currentTotal,
+            previous: previousTotal,
+            polarity: .lowerIsBetter
+        )
         self.categories = categories
     }
 }

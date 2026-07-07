@@ -289,6 +289,101 @@ struct BalanceProjectorTests {
         #expect(balances.count > 1)
     }
 
+    // MARK: - Uncertainty band
+
+    @Test("Band is nil-safe: default init and no-signal projections carry no band")
+    func bandNilSafe() {
+        // A hand-built projection without a band keeps compiling and equating.
+        let anchor = BalanceSnapshot(date: Self.asOf, balance: 1_000)
+        let bare = BalanceProjection(
+            series: [anchor],
+            projectedLow: anchor,
+            confidence: .insufficientData,
+            accessibilitySummary: "x"
+        )
+        #expect(bare.band == nil)
+
+        // No recurring signal → flat series → no honest basis for a band.
+        let projection = BalanceProjector.project(
+            anchor: anchor,
+            recurring: [],
+            asOf: Self.asOf,
+            horizonDays: 30,
+            calendar: Self.calendar
+        )!
+        #expect(projection.band == nil)
+    }
+
+    @Test("Band widens monotonically with days out and brackets the series")
+    func bandWidensAndBrackets() {
+        let anchor = BalanceSnapshot(date: Self.asOf, balance: 1_000)
+        let stream = Self.recurring("Rent", amount: 200, nextExpectedDate: "2026-06-11", category: .billsAndUtilities)
+        let projection = BalanceProjector.project(
+            anchor: anchor,
+            recurring: [stream],
+            asOf: Self.asOf,
+            horizonDays: 30,
+            calendar: Self.calendar
+        )!
+        let band = projection.band!
+        #expect(band.count == projection.series.count)
+        // Day 0 is a real recorded balance: zero width.
+        #expect(band[0].low == band[0].high)
+
+        var previousWidth = -1.0
+        for (index, point) in band.enumerated() {
+            let width = point.high - point.low
+            #expect(width >= previousWidth, "band narrowed at day \(index)")
+            previousWidth = width
+            // low <= series <= high on every day, dates aligned.
+            #expect(point.low <= projection.series[index].balance)
+            #expect(projection.series[index].balance <= point.high)
+            #expect(point.date == projection.series[index].date)
+        }
+        // It actually widens (not a degenerate zero ribbon).
+        #expect(band.last!.high - band.last!.low > 0)
+    }
+
+    @Test("Higher confidence produces a strictly narrower band")
+    func bandNarrowerAtHigherConfidence() {
+        // Scale ladder: ok < lowConfidence < insufficientData.
+        #expect(BalanceProjector.bandHalfWidthScale(for: .ok)
+            < BalanceProjector.bandHalfWidthScale(for: .lowConfidence))
+        #expect(BalanceProjector.bandHalfWidthScale(for: .lowConfidence)
+            < BalanceProjector.bandHalfWidthScale(for: .insufficientData))
+
+        // Same series, different confidence → proportionally narrower ribbon.
+        let series = [
+            BalanceSnapshot(date: Self.asOf, balance: 1_000),
+            BalanceSnapshot(date: Self.calendar.date(byAdding: .day, value: 1, to: Self.asOf)!, balance: 900),
+            BalanceSnapshot(date: Self.calendar.date(byAdding: .day, value: 2, to: Self.asOf)!, balance: 850),
+        ]
+        let confident = BalanceProjector.uncertaintyBand(series: series, confidence: .ok)!
+        let shaky = BalanceProjector.uncertaintyBand(series: series, confidence: .lowConfidence)!
+        for index in 1..<confident.count {
+            #expect(confident[index].high - confident[index].low
+                < shaky[index].high - shaky[index].low)
+        }
+    }
+
+    @Test("Band is byte-stable across runs with identical inputs")
+    func bandDeterministic() {
+        let anchor = BalanceSnapshot(date: Self.asOf, balance: 1_000)
+        let streams = [
+            Self.recurring("Rent", amount: 200, nextExpectedDate: "2026-06-11", category: .billsAndUtilities),
+            Self.recurring("Pay", amount: 400, nextExpectedDate: "2026-06-05", category: .income),
+        ]
+        let a = BalanceProjector.project(
+            anchor: anchor, recurring: streams, asOf: Self.asOf, horizonDays: 30, calendar: Self.calendar
+        )!
+        let b = BalanceProjector.project(
+            anchor: anchor, recurring: streams, asOf: Self.asOf, horizonDays: 30, calendar: Self.calendar
+        )!
+        #expect(a.band != nil)
+        #expect(a.band == b.band)
+        #expect(a == b)
+    }
+
     private static func recurring(
         _ merchant: String,
         amount: Double,
