@@ -255,30 +255,38 @@ not boldness.
 
 ## Elevation & Depth
 
-VaultPeek is a macOS menu bar instrument, so surfaces should feel native,
-translucent, and compact rather than like stacked web cards. The dashboard
-uses the three-rank `glassSurface(_:)` system in `SharedModifiers.swift`:
-ranks use *hierarchical* shape styles (`.quaternary`/`.quinary`) so surfaces
-participate in macOS vibrancy over the `.regularMaterial` popover root.
-Default surfaces draw **no stroke** — separation comes from spacing;
-hairlines are reserved for emphasized (attention) states. Surfaces never
-nest more than two ranks below the popover root.
+VaultPeek is a macOS menu bar instrument, so surfaces should feel native and
+compact rather than like stacked web cards. The surface system in
+`SharedModifiers.swift` splits **chrome** from **data** by surface *type*, not a
+boolean (AND-980): chrome-rank panels carry native Liquid Glass, while data
+surfaces are always solid so a financial figure never samples a translucent
+backdrop ("Liquid Glass on chrome, not data" — R-08). Surfaces draw a hairline
+stroke; separation between sibling cards comes from spacing, not from nested
+chrome.
 
-| Token/Modifier | Purpose |
+| Modifier | Purpose |
 |----------------|---------|
-| `.glassSurface(.raised)` | Primary content panels: account list, fly-out, heatmap |
-| `.glassSurface(.inset)` | Quiet secondary surfaces: metric strip, balance mix, insights |
-| `.glassSurface(.emphasized(tint))` | Attention states only — tinted fill plus hairline |
+| `.nativePanelSurface(...)` | Chrome-rank panels: fill + hairline **under native Liquid Glass**. Navigation/chrome surfaces only |
+| `.solidDataSurface(...)` | Solid (non-glass) data surfaces: lists, rows, dense cards, insight bodies — values stay legible over an opaque backdrop (R-08) |
+| `.nativeInsetSurface(...)` | Quiet inset data surface (thin wrapper over `solidDataSurface`): secondary rows, metric strips |
+| `.emphasizedDataSurface(tint:)` | Attention states only — solid tinted fill plus tinted hairline (never glass) |
+| `.heroAccentSurface(tint:)` | Decorative hero-accent solid surface: tinted gradient wash; never carries financial/status meaning alone |
 | `Radius.panel` / `.control` / `.cell` | 8 / 6 / 2pt corner radius scale |
 | `Sizing` | Icon (16/20/28), status dot (8), 28pt minimum hit target |
 | `MotionTokens.micro/.standard/.content` | 120ms / 200ms / spring(0.3, 0.85); all gated by `MotionTokens.animation(_:reduceMotion:)` |
 | `.hoverHighlight()` | Rounded, 120ms-animated hover wash for rows |
-| `.nativePanelSurface(...)` / `.nativeInsetSurface(...)` | Legacy fill+stroke treatment still used by setup/attention surfaces |
 
-Liquid Glass is the baseline surface treatment. VaultPeek's minimum floor is
-macOS 26 (Tahoe), so Apple SwiftUI's `Glass.regular` and `glassEffect` APIs are
-always available and used directly. No availability gates or SwiftUI
-material/fill fallback are required for these surfaces.
+Liquid Glass is the baseline treatment for **chrome** surfaces only. VaultPeek's
+minimum floor is macOS 26 (Tahoe), so Apple SwiftUI's `Glass.regular` and
+`glassEffect` APIs are always available and used directly on chrome-rank panels —
+no availability gates or SwiftUI material/fill fallback are required. Data
+surfaces are always solid regardless (R-08).
+
+The primitive numeric scales behind these tokens (spacing, radius, sizing,
+motion) live as pure, SwiftUI-free values in `RawDesignTokens` in `PlaidBarCore`
+(AND-979/AND-980), which the popover-scale `DesignTokens.swift` and window-scale
+`WindowMetrics.swift` token layers bridge to SwiftUI. Colors stay app-target-only
+because they must resolve per-appearance / Increase Contrast at draw time.
 
 ## Components
 
@@ -340,8 +348,8 @@ trailing primary metric (balance owed/cash balance) | secondary metric
 
 The contextual account inspector. It is the always-present RIGHT column of the
 three-column popover (post-setup); selecting a row fills it with that account's
-detail. One `raised`-rank surface, sections separated by spacing (never nested
-cards).
+detail. One chrome-rank panel surface, sections separated by spacing (never
+nested cards).
 
 **Anatomy:** header (account name + institution/type/mask metadata + close ✕)
 | Status (connection badge + sync freshness + recovery action when degraded)
