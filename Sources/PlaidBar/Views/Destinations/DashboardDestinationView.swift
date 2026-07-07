@@ -298,18 +298,21 @@ struct DashboardDestinationView: View {
     private static let heroComparisonPeriod = ComparisonPeriod.trailingDays(30)
 
     /// Period-comparison chip for the net-worth hero, from recorded balance
-    /// history via `PeriodComparison.netWorthDelta` (Core). Gated on the same
-    /// multi-currency resolution as the figure itself: a mixed-currency history
-    /// has no single net-worth number, so no delta is claimed (the same reason
-    /// the safe-to-spend hero falls back to "By currency"). Core additionally
-    /// returns `nil` when history doesn't reach the prior window (young
-    /// install) and when Privacy Mask is on.
+    /// history via `PeriodComparison.netWorthDelta` (Core). Gated on the figure
+    /// resolving to **USD specifically**, not just any single currency: a
+    /// mixed-currency history has no single net-worth number (the same reason
+    /// the safe-to-spend hero falls back to "By currency"), and the chip's
+    /// vocabulary is USD-only — `MetricDeltaChip.make` formats the amount via
+    /// `Formatters.signedCurrency` (always `$`) and speaks "dollars" — so an
+    /// all-EUR figure ("€48.000") must never carry a "+$420" chip. Core
+    /// additionally returns `nil` when history doesn't reach the prior window
+    /// (young install) and when Privacy Mask is on.
     private func netWorthDeltaChip(
         aggregation: CurrencyAggregation,
         asOf: Date,
         isMasked: Bool
     ) -> MetricDeltaChip? {
-        guard aggregation.singleCurrency != nil,
+        guard aggregation.singleCurrency == .usd,
               let delta = PeriodComparison.netWorthDelta(
                   history: appState.balanceHistory,
                   period: Self.heroComparisonPeriod,
