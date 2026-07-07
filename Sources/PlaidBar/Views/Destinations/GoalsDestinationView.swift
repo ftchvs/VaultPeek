@@ -77,46 +77,38 @@ struct GoalsDestinationView: View {
     /// meaning (the label names the figure).
     private var summaryHeroRow: some View {
         let summary = GoalsSummary.make(from: store.goals)
-        return VStack(alignment: .leading, spacing: WindowMetrics.lg) {
-            LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: WindowMetrics.heroTileMinWidth), spacing: WindowMetrics.lg)],
-                alignment: .leading,
-                spacing: WindowMetrics.lg
-            ) {
-                WindowHeroMetricTile(
-                    label: "Total saved",
-                    value: currency(summary.totalSaved),
-                    systemImage: "banknote",
-                    detail: summary.savedDetail,
-                    accent: SemanticColors.brand,
-                    reduceMotion: reduceMotion
-                )
-                WindowHeroMetricTile(
-                    label: "Total target",
-                    value: currency(summary.totalTarget),
-                    systemImage: "target",
-                    detail: summary.targetDetail,
-                    accent: .secondary,
-                    reduceMotion: reduceMotion
-                )
-                WindowHeroMetricTile(
-                    label: "Overall progress",
-                    value: percent(summary.overallPercent),
-                    systemImage: "chart.bar.fill",
-                    detail: remainingDetail(summary),
-                    accent: SemanticColors.positive,
-                    reduceMotion: reduceMotion
-                )
-            }
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel(summaryAccessibilityLabel(summary))
-
-            GoalsOverallProgressBar(
-                fraction: summary.overallFraction,
-                isComplete: false,
-                isMasked: isMasked
+        // No standalone overall-progress bar below the tiles: the "Overall
+        // progress" tile already carries the figure, and an unlabeled bar
+        // floating between the hero row and the goals list read as a stray
+        // rendering artifact rather than a deliberate element.
+        return HeroMetricGrid(itemCount: 3) {
+            WindowHeroMetricTile(
+                label: "Total saved",
+                value: currency(summary.totalSaved),
+                systemImage: "banknote",
+                detail: summary.savedDetail,
+                accent: SemanticColors.brand,
+                reduceMotion: reduceMotion
+            )
+            WindowHeroMetricTile(
+                label: "Total target",
+                value: currency(summary.totalTarget),
+                systemImage: "target",
+                detail: summary.targetDetail,
+                accent: .secondary,
+                reduceMotion: reduceMotion
+            )
+            WindowHeroMetricTile(
+                label: "Overall progress",
+                value: percent(summary.overallPercent),
+                systemImage: "chart.bar.fill",
+                detail: remainingDetail(summary),
+                accent: SemanticColors.positive,
+                reduceMotion: reduceMotion
             )
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(summaryAccessibilityLabel(summary))
     }
 
     private func remainingDetail(_ summary: GoalsSummary) -> String {
@@ -373,29 +365,6 @@ private struct GoalProgressBar: View {
             ProgressView(value: goal.fractionComplete)
                 .progressViewStyle(.linear)
                 .tint(goal.isComplete ? SemanticColors.positive : SemanticColors.brand)
-                .accessibilityHidden(true)
-        }
-    }
-}
-
-/// The aggregate progress bar under the summary hero row. Color-independent —
-/// the overall percent in the hero tile carries the meaning in text.
-private struct GoalsOverallProgressBar: View {
-    let fraction: Double
-    let isComplete: Bool
-    let isMasked: Bool
-
-    @ViewBuilder
-    var body: some View {
-        if isMasked {
-            ProgressView()
-                .progressViewStyle(.linear)
-                .tint(.secondary)
-                .accessibilityHidden(true)
-        } else {
-            ProgressView(value: fraction)
-                .progressViewStyle(.linear)
-                .tint(isComplete ? SemanticColors.positive : SemanticColors.brand)
                 .accessibilityHidden(true)
         }
     }

@@ -217,7 +217,10 @@ struct PlaidBarTests {
         #expect(goalsSource.contains("percent(summary.overallPercent)"))
         #expect(goalsSource.contains("percent(goal.percentComplete)"))
         #expect(goalsSource.contains("GoalProgressBar(goal: goal, isMasked: isMasked)"))
-        #expect(goalsSource.contains("GoalsOverallProgressBar("))
+        // The standalone overall-progress bar was removed (design polish,
+        // 2026-07-07): the "Overall progress" hero tile carries the figure, so
+        // there is no separate bar to mask.
+        #expect(!goalsSource.contains("GoalsOverallProgressBar"))
         #expect(goalsSource.contains("isMasked: isMasked"))
 
         #expect(!planningSource.contains(#"\(summary.overallPercent)% of total"#))

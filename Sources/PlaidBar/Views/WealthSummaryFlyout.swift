@@ -322,7 +322,7 @@ private struct WealthMetricGrid: View {
             WealthMetricTile(
                 title: "Assets",
                 value: aggregatedValue(assetsAggregation),
-                detail: "\(presentation.accountCount) accounts",
+                detail: "\(presentation.accountCount) account\(presentation.accountCount == 1 ? "" : "s")",
                 systemImage: "building.columns.fill",
                 reduceMotion: reduceMotion
             )

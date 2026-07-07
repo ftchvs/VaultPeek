@@ -195,11 +195,7 @@ struct AccountsDestinationView: View {
     /// through `PrivacyMaskPresentation`; none rely on color for meaning (the label
     /// names the figure).
     private var heroMetricsRow: some View {
-        LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: WindowMetrics.heroTileMinWidth), spacing: WindowMetrics.lg)],
-            alignment: .leading,
-            spacing: WindowMetrics.lg
-        ) {
+        HeroMetricGrid(itemCount: heroMetrics.count) {
             ForEach(heroMetrics) { metric in
                 WindowHeroMetricTile(
                     label: metric.label,

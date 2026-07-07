@@ -105,11 +105,7 @@ struct DashboardDestinationView: View {
     /// (the label names the figure).
     private var heroMetricsRow: some View {
         let metrics = heroMetrics
-        return LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: WindowMetrics.heroTileMinWidth), spacing: WindowMetrics.lg)],
-            alignment: .leading,
-            spacing: WindowMetrics.lg
-        ) {
+        return HeroMetricGrid(itemCount: metrics.count) {
             ForEach(metrics) { metric in
                 WindowHeroMetricTile(
                     label: metric.label,
@@ -360,7 +356,7 @@ struct DashboardDestinationView: View {
             label: "Last 30-day spend",
             value: PrivacyMaskPresentation.currency(summary.cashflow.spending, format: .compact, isEnabled: masked),
             systemImage: "creditcard",
-            detail: "Across \(summary.cashflow.transactionCount) transactions",
+            detail: "Across \(summary.cashflow.transactionCount) transaction\(summary.cashflow.transactionCount == 1 ? "" : "s")",
             accent: .secondary
         )
 
