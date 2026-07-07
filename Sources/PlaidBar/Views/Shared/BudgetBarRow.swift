@@ -105,14 +105,12 @@ struct BudgetBarRow: View {
         min(max(fillFraction, 0), 1)
     }
 
-    /// Verdict glyph — the non-color half of the verdict cue.
+    /// Verdict glyph — the non-color half of the verdict cue. Delegated to the
+    /// shared `CategoryBudgetStatus.iconName` vocabulary (with the same neutral
+    /// no-budget fallback as `statusIconName` elsewhere), so this row never
+    /// drifts from the glyphs the Budgets table and status bar use.
     private var statusGlyph: String {
-        switch status {
-        case .over: "exclamationmark.circle.fill"
-        case .nearing: "exclamationmark.triangle"
-        case .under: "checkmark.circle"
-        case nil: "minus.circle"
-        }
+        status?.iconName ?? "minus.circle"
     }
 
     /// Attention states (over/nearing) borrow the shared verdict tint so the

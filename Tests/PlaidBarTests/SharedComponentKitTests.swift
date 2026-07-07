@@ -22,14 +22,19 @@ struct SharedComponentKitTests {
         #expect(scrub.contains(".chartXSelection(value: $selectedDate)"))
     }
 
-    /// `BudgetBarRow` must delegate verdict tinting to the single shared
-    /// `CategoryBudgetStatus.verdictTint` mapping (AND-664 #4) rather than
-    /// re-declaring its own status → color switch for the verdict.
-    @Test func budgetBarRowDelegatesVerdictTint() throws {
+    /// `BudgetBarRow` must delegate the verdict's tint AND glyph to the single
+    /// shared mappings (`CategoryBudgetStatus.verdictTint` / `.iconName`,
+    /// AND-664 #4) rather than re-declaring its own status → color/symbol
+    /// switches — the glyph is the non-color half of the verdict cue, so a
+    /// forked vocabulary would contradict every other budget surface.
+    @Test func budgetBarRowDelegatesVerdictTintAndGlyph() throws {
         let row = try source(atRepoPath: "Sources/PlaidBar/Views/Shared/BudgetBarRow.swift")
 
         #expect(row.contains("status.verdictTint"))
         // The verdict Label's tint comes from the delegated mapping.
         #expect(row.contains(".foregroundStyle(status.verdictTint)"))
+        // The verdict glyph comes from the shared vocabulary, with the same
+        // neutral no-budget fallback as `statusIconName` elsewhere.
+        #expect(row.contains(#"status?.iconName ?? "minus.circle""#))
     }
 }

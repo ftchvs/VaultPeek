@@ -8,9 +8,9 @@ import SwiftUI
 // arrives as a preformatted, mask-aware string — the strip renders, it never
 // computes or formats money.
 
-/// Horizontal aggregate strip: emphasized Net, labeled In / Out, row count,
-/// and a trailing date-range caption, on a solid data surface (never glass —
-/// R-08).
+/// Horizontal aggregate strip: emphasized Net, labeled In / Out, a row-count
+/// caption, and a trailing date-range caption, on a solid data surface (never
+/// glass — R-08).
 ///
 /// The Net figure uses the tabular data role (semibold, monospaced digits),
 /// deliberately *not* the display-balance hero scale: this is a working
@@ -23,8 +23,10 @@ struct LedgerSummaryStrip<Trailing: View>: View {
     let inText: String
     /// Preformatted, mask-aware outflow total.
     let outText: String
-    /// How many rows the aggregates cover.
-    let count: Int
+    /// Preformatted, mask-aware row-count caption ("47 transactions" — or
+    /// "Count hidden" under Privacy Mask: counts are behavioral financial
+    /// metadata, withheld like the attention-queue and goals-fold counts).
+    let countText: String
     /// Preformatted range caption ("Mar 1 – Mar 31").
     let dateRangeText: String
     /// Reserved slot for a future delta chip; defaults to empty.
@@ -34,14 +36,14 @@ struct LedgerSummaryStrip<Trailing: View>: View {
         netText: String,
         inText: String,
         outText: String,
-        count: Int,
+        countText: String,
         dateRangeText: String,
         @ViewBuilder trailing: @escaping () -> Trailing = { EmptyView() }
     ) {
         self.netText = netText
         self.inText = inText
         self.outText = outText
-        self.count = count
+        self.countText = countText
         self.dateRangeText = dateRangeText
         self.trailing = trailing
     }
@@ -52,7 +54,7 @@ struct LedgerSummaryStrip<Trailing: View>: View {
             figure(label: "In", value: inText)
             figure(label: "Out", value: outText)
 
-            Text("\(count) \(count == 1 ? "transaction" : "transactions")")
+            Text(countText)
                 .microText()
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
@@ -91,8 +93,7 @@ struct LedgerSummaryStrip<Trailing: View>: View {
     }
 
     private var accessibilityText: String {
-        "Net \(netText). In \(inText). Out \(outText). "
-            + "\(count) \(count == 1 ? "transaction" : "transactions"). \(dateRangeText)."
+        "Net \(netText). In \(inText). Out \(outText). \(countText). \(dateRangeText)."
     }
 }
 
@@ -103,14 +104,14 @@ struct LedgerSummaryStrip<Trailing: View>: View {
             netText: "−$1,204.18",
             inText: "$4,820.00",
             outText: "$6,024.18",
-            count: 47,
+            countText: "47 transactions",
             dateRangeText: "Mar 1 – Mar 31"
         )
         LedgerSummaryStrip(
             netText: "••••",
             inText: "••••",
             outText: "••••",
-            count: 3,
+            countText: "Count hidden",
             dateRangeText: "This week"
         )
     }
@@ -123,7 +124,7 @@ struct LedgerSummaryStrip<Trailing: View>: View {
         netText: "+$316.40",
         inText: "$2,100.00",
         outText: "$1,783.60",
-        count: 12,
+        countText: "12 transactions",
         dateRangeText: "Feb 1 – Feb 28"
     )
     .padding(Spacing.lg)
