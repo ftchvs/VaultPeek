@@ -27,7 +27,13 @@ struct CommandPalette: View {
 
     @State private var query = ""
     @State private var highlightedIndex = 0
+    /// Bumped only by keyboard highlight moves — the scroll-to-highlight keys
+    /// off this, never off hover: hovering must not scroll (a hover-driven
+    /// scroll moves new rows under the stationary cursor, which fires more
+    /// hovers — a feedback loop that makes the list scroll itself).
+    @State private var keyboardMoveCount = 0
     @FocusState private var searchFieldFocused: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// The registry filtered by the current query, best match first. Empty query
     /// shows the full command list (registry order).
@@ -116,9 +122,9 @@ struct CommandPalette: View {
                 }
                 .padding(Spacing.xs)
             }
-            .onChange(of: highlightedIndex) { _, index in
-                withAnimation(.easeOut(duration: 0.12)) {
-                    proxy.scrollTo(index, anchor: .center)
+            .onChange(of: keyboardMoveCount) { _, _ in
+                withAnimation(MotionTokens.animation(MotionTokens.micro, reduceMotion: reduceMotion)) {
+                    proxy.scrollTo(highlightedIndex, anchor: .center)
                 }
             }
         }
@@ -148,6 +154,7 @@ struct CommandPalette: View {
         guard !results.isEmpty else { return }
         let count = results.count
         highlightedIndex = (highlightedIndex + delta + count) % count
+        keyboardMoveCount += 1
     }
 
     private func executeHighlighted() {

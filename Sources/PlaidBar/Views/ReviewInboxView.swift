@@ -729,10 +729,7 @@ private struct ReviewActionConfirmationBanner: View {
         .padding(.horizontal, Spacing.sm)
         .padding(.vertical, Spacing.xs)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(SemanticColors.positive.opacity(0.10), in: RoundedRectangle(cornerRadius: 10))
-        .overlay {
-            RoundedRectangle(cornerRadius: 10).stroke(SemanticColors.positive.opacity(0.20), lineWidth: 1)
-        }
+        .emphasizedDataSurface(tint: SemanticColors.positive)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(presentation.accessibilityLabel)
     }
@@ -793,10 +790,7 @@ private struct InlineCategoryRulePromptBanner: View {
         .padding(.horizontal, Spacing.sm)
         .padding(.vertical, Spacing.xs)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(SemanticColors.brand.opacity(0.10), in: RoundedRectangle(cornerRadius: 10))
-        .overlay {
-            RoundedRectangle(cornerRadius: 10).stroke(SemanticColors.brand.opacity(0.20), lineWidth: 1)
-        }
+        .emphasizedDataSurface(tint: SemanticColors.brand)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(message)
     }

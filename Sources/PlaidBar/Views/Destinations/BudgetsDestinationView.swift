@@ -97,11 +97,7 @@ struct BudgetsDestinationView: View {
     /// figure; the "Left/Over" tile carries its sense in the label + glyph).
     private var heroMetricsRow: some View {
         let metrics = heroMetrics
-        return LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: WindowMetrics.heroTileMinWidth), spacing: WindowMetrics.lg)],
-            alignment: .leading,
-            spacing: WindowMetrics.lg
-        ) {
+        return HeroMetricGrid(itemCount: metrics.count) {
             ForEach(metrics) { metric in
                 WindowHeroMetricTile(
                     label: metric.label,

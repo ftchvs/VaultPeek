@@ -133,12 +133,16 @@ struct MenuBarGlanceView: View {
             appState.togglePrivacyMask()
         } label: {
             // State is shape-borne (eye vs. eye.slash), never color alone.
+            // The min-frame + contentShape live *inside* the label so the whole
+            // 28pt area is clickable — outside the button they only reserve
+            // layout space (the glyph alone would be the ~16pt hit region).
             Image(systemName: PrivacyMaskPresentation.toggleSymbolName(isMasked: isMasked))
                 .accessibilityHidden(true)
+                .frame(minWidth: Sizing.hitTargetMin, minHeight: Sizing.hitTargetMin)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.borderless)
         .foregroundStyle(.secondary)
-        .frame(minWidth: Sizing.hitTargetMin, minHeight: Sizing.hitTargetMin)
         .help(label)
         .accessibilityLabel(label)
         .keyboardShortcut("p", modifiers: [.command, .shift])
@@ -149,12 +153,15 @@ struct MenuBarGlanceView: View {
             Task { await appState.refreshDashboard() }
         } label: {
             // RefreshIcon carries loading state by glyph/motion, not color alone.
+            // Min-frame + contentShape inside the label so the full 28pt area
+            // is clickable (see privacyMaskButton).
             RefreshIcon(isLoading: appState.isLoading)
                 .accessibilityHidden(true)
+                .frame(minWidth: Sizing.hitTargetMin, minHeight: Sizing.hitTargetMin)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.borderless)
         .foregroundStyle(.secondary)
-        .frame(minWidth: Sizing.hitTargetMin, minHeight: Sizing.hitTargetMin)
         .help("Refresh")
         .accessibilityLabel("Refresh")
         .keyboardShortcut("r", modifiers: .command)

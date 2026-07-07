@@ -61,16 +61,23 @@ struct CategoryTreeView: View {
     private func groupSection(_ group: CategoryDashboardPresentation.GroupRollup) -> some View {
         let isExpanded = expandedGroupIDs.contains(group.id)
         VStack(alignment: .leading, spacing: Spacing.xs) {
-            groupHeader(group, isExpanded: isExpanded)
+            // A single-leaf group renders as its leaf directly: the rollup and
+            // the leaf carry the same figures, so a disclosure header would
+            // just repeat the identical status bar twice in a row.
+            if group.leaves.count == 1, let onlyLeaf = group.leaves.first {
+                leafRow(onlyLeaf)
+            } else {
+                groupHeader(group, isExpanded: isExpanded)
 
-            if isExpanded {
-                VStack(spacing: Spacing.xs) {
-                    ForEach(group.leaves) { leaf in
-                        leafRow(leaf)
+                if isExpanded {
+                    VStack(spacing: Spacing.xs) {
+                        ForEach(group.leaves) { leaf in
+                            leafRow(leaf)
+                        }
                     }
+                    .padding(.leading, Sizing.iconInline + Spacing.sm)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
-                .padding(.leading, Sizing.iconInline + Spacing.sm)
-                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
         .padding(Spacing.sm)

@@ -77,6 +77,48 @@ struct WindowSection<Content: View, Accessory: View>: View {
     }
 }
 
+// MARK: - Hero metric grid
+
+/// The hero-row grid for a destination's headline metric tiles.
+///
+/// `LazyVGrid` with `.adaptive` columns allocates as many ≥`heroTileMinWidth`
+/// columns as *fit the width*, regardless of how many tiles exist — with three
+/// tiles in a four-column-wide canvas that leaves a phantom empty fourth slot
+/// (visible dead space), and in a two-column-wide canvas the row wraps 2+1 with
+/// a hole. This grid instead measures its width and clamps the column count to
+/// `min(itemCount, whatFits)`, with each column flexible — so the tiles always
+/// share the full row, and the row still wraps on genuinely narrow windows.
+struct HeroMetricGrid<Content: View>: View {
+    /// How many tiles the content contains (columns never exceed this).
+    let itemCount: Int
+    @ViewBuilder var content: Content
+
+    @State private var availableWidth: CGFloat = 0
+
+    private var columns: [GridItem] {
+        let spacing = WindowMetrics.lg
+        let fits: Int
+        if availableWidth <= 0 {
+            fits = itemCount // first layout pass: assume one row
+        } else {
+            fits = Int((availableWidth + spacing) / (WindowMetrics.heroTileMinWidth + spacing))
+        }
+        let count = max(1, min(itemCount, fits))
+        return Array(repeating: GridItem(.flexible(), spacing: spacing), count: count)
+    }
+
+    var body: some View {
+        LazyVGrid(columns: columns, alignment: .leading, spacing: WindowMetrics.lg) {
+            content
+        }
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.width
+        } action: { width in
+            availableWidth = width
+        }
+    }
+}
+
 // MARK: - Hero metric tile
 
 /// A single hero metric in the dashboard's top row: a large tabular figure with

@@ -173,9 +173,13 @@ struct InsightsActivityHeatmapGrid: View {
     var isPrivacyMasked: Bool = false
 
     private let spacing: CGFloat = 3
-    /// Desk-distance cell bounds — larger than the popover's 5...9pt glance cells so
-    /// the year grid reads as a comfortable window instrument, not a tiny strip.
-    private let minCell: CGFloat = 9
+    /// Desk-distance cell bounds. `preferredMinCell` is the comfortable
+    /// window-instrument size; when the Trends column is narrower than 53 weeks
+    /// at that size, cells shrink toward `hardMinCell` (the popover's glance
+    /// floor) so the grid *fits its column* instead of overflowing under the
+    /// neighboring Planning & Review column. `.clipped()` backstops the
+    /// impossible remainder.
+    private let hardMinCell: CGFloat = 4
     private let maxCell: CGFloat = 15
 
     var body: some View {
@@ -183,7 +187,7 @@ struct InsightsActivityHeatmapGrid: View {
             GeometryReader { proxy in
                 let weeks = max(layout.weekColumns.count, 1)
                 let cell = max(
-                    minCell,
+                    hardMinCell,
                     min(maxCell, floor((proxy.size.width - (CGFloat(weeks - 1) * spacing)) / CGFloat(weeks)))
                 )
                 HStack(alignment: .top, spacing: spacing) {
@@ -196,6 +200,7 @@ struct InsightsActivityHeatmapGrid: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .clipped()
             }
             .frame(height: 7 * maxCell + 6 * spacing)
 

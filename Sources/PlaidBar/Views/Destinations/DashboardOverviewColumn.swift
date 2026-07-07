@@ -36,7 +36,11 @@ struct DashboardActivityHeatmapCard: View {
 
     var body: some View {
         let layout = layout
-        WindowSection("Activity", systemImage: "square.grid.3x3.fill") {
+        // Titled distinctly from the "Activity" *column* header rendered
+        // directly above this card — the column header names the region, the
+        // card names its content (the identical stacked "Activity / Activity"
+        // pair read as a rendering bug).
+        WindowSection("Spending heatmap", systemImage: "square.grid.3x3.fill") {
             Text(layout.mode.summaryTitle)
                 .windowSupportingText()
         } content: {
@@ -138,7 +142,7 @@ struct DashboardOverviewColumn: View {
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
                 .opacity(accountsLoadState.showsSkeleton ? 0 : 1)
-                .accessibilityLabel("\(filteredAccounts.count) accounts")
+                .accessibilityLabel("\(filteredAccounts.count) account\(filteredAccounts.count == 1 ? "" : "s")")
         } content: {
             if let fallbackState {
                 DashboardOverviewFallback(presentation: fallbackState)

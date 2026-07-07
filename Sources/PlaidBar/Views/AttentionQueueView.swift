@@ -221,10 +221,11 @@ private struct AttentionQueueRowView: View {
         }
         .padding(.horizontal, Spacing.sm)
         .padding(.vertical, Spacing.rowVertical)
-        .nativePanelSurface(
-            fill: AnyShapeStyle(SurfaceTokens.panelFill(emphasisTint: emphasizedTint)),
-            stroke: panelStroke
-        )
+        // Attention rows are *data* surfaces — solid, never glass (R-08).
+        // A ternary can't pick between the two modifiers (different types), so
+        // the severity branches the surface call, matching every sibling
+        // attention surface (DashboardReadinessPanel, MainPopover readiness).
+        .modifier(AttentionRowSurface(emphasizedTint: emphasizedTint, quietStroke: panelStroke))
         .accessibilityElement(children: .contain)
     }
 
@@ -250,6 +251,26 @@ private struct AttentionQueueRowView: View {
 
     private var panelStroke: Color {
         row.severity == .healthy ? Color.primary.opacity(0.07) : tint.opacity(0.18)
+    }
+}
+
+/// The attention row's surface: solid emphasized tint for warning/blocked rows,
+/// quiet solid fill for the healthy row — never glass, since these rows are
+/// data (severity, institution, recovery detail), not chrome (R-08 / AND-980).
+private struct AttentionRowSurface: ViewModifier {
+    let emphasizedTint: Color?
+    let quietStroke: Color
+
+    func body(content: Content) -> some View {
+        if let emphasizedTint {
+            content.emphasizedDataSurface(tint: emphasizedTint)
+        } else {
+            content.solidDataSurface(
+                cornerRadius: Radius.panel,
+                fill: AnyShapeStyle(Color.primary.opacity(SurfaceTokens.controlFillOpacity)),
+                stroke: quietStroke
+            )
+        }
     }
 }
 

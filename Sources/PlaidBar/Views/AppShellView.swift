@@ -215,7 +215,10 @@ struct AppShellView: View {
                 .transition(.opacity)
             }
         }
-        .animation(.easeOut(duration: 0.15), value: paletteModel.isPresented)
+        .animation(
+            MotionTokens.animation(MotionTokens.standard, reduceMotion: reduceMotion),
+            value: paletteModel.isPresented
+        )
         // Full App Lock gate (security parity with the popover + detached host —
         // Epic 10 / AND-588). When content is LOCKED (not merely masked)
         // the entire window must be hidden behind the shared `AppLockedGateView`:
