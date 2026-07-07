@@ -296,7 +296,14 @@ struct InsightsDestinationView: View {
             .buttonStyle(.link)
             .accessibilityHint("Switches to the Goals workspace.")
         } content: {
-            if summary.isEmpty {
+            if isMasked {
+                ContentUnavailableView {
+                    Label("Goal details hidden", systemImage: "lock.fill")
+                } description: {
+                    Text("VaultPeek is private. Open Goals after unlocking to review goal details.")
+                }
+                .frame(maxWidth: .infinity, minHeight: 140)
+            } else if summary.isEmpty {
                 ContentUnavailableView {
                     Label("No goals yet", systemImage: "flag.checkered")
                 } description: {
@@ -334,13 +341,13 @@ struct InsightsDestinationView: View {
             }
 
             HStack(spacing: WindowMetrics.md) {
-                Label(summary.goalCountLabel, systemImage: "flag")
+                Label(goalsSecondaryLabel(summary), systemImage: "flag")
                     .windowSupportingText()
-                if summary.fundedCount > 0 {
+                if !isMasked, summary.fundedCount > 0 {
                     Label("\(summary.fundedCount) funded", systemImage: "checkmark.seal")
                         .windowSupportingText()
                 }
-                if summary.behindCount > 0 {
+                if !isMasked, summary.behindCount > 0 {
                     Label("\(summary.behindCount) behind", systemImage: "exclamationmark.triangle")
                         .windowSupportingText()
                 }
@@ -348,7 +355,12 @@ struct InsightsDestinationView: View {
         }
     }
 
+    private func goalsSecondaryLabel(_ summary: GoalsSummary) -> String {
+        isMasked ? "Goal details hidden" : summary.goalCountLabel
+    }
+
     private func goalsAccessibilityLabel(_ summary: GoalsSummary) -> String {
+        if isMasked { return "Goals: details hidden while VaultPeek is private." }
         guard !summary.isEmpty else { return "Goals: no goals yet." }
         var parts = ["Goals: \(goalsPercent(summary.overallPercent)) of total saved across \(summary.goalCountLabel)"]
         if summary.fundedCount > 0 { parts.append("\(summary.fundedCount) funded") }
