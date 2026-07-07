@@ -107,6 +107,24 @@ extension Color {
     }
 }
 
+extension MetricDelta.Sentiment {
+    /// Bridges the SwiftUI-free Core delta sentiment to a concrete `Color` — the
+    /// only place `MetricDelta.Sentiment` meets SwiftUI (parity with the
+    /// `AppAccentColor → Color` bridge above), so the direction × polarity
+    /// resolution stays pure and unit-tested in Core. The tint is
+    /// **reinforcement only**: the chip's glyph and signed text carry the
+    /// meaning, never the color alone (ACCESSIBILITY.md). Negative sentiment
+    /// uses the caution `warning` orange rather than red — a spend uptick is a
+    /// nudge, not an error.
+    var tint: Color {
+        switch self {
+        case .positive: SemanticColors.positive
+        case .negative: SemanticColors.warning
+        case .neutral: Color.secondary
+        }
+    }
+}
+
 // MARK: - Spacing (8pt grid)
 
 enum Spacing {

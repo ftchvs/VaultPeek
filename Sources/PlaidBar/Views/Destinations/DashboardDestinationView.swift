@@ -114,7 +114,8 @@ struct DashboardDestinationView: View {
                     detail: metric.detail,
                     accent: metric.accent,
                     reduceMotion: reduceMotion,
-                    provenance: metric.provenance
+                    provenance: metric.provenance,
+                    delta: metric.delta
                 )
             }
         }
@@ -259,6 +260,11 @@ struct DashboardDestinationView: View {
         /// Optional number-provenance for the figure (AND-641). Built masked when
         /// Privacy Mask is active, so the popover never leaks real values.
         var provenance: FigureProvenance?
+        /// Optional period-comparison chip (AND-1052). Built via
+        /// `MetricDeltaChip.make(isMasked:)`, which returns `nil` under Privacy
+        /// Mask — a delta is metadata derived from a private figure, so even the
+        /// bare arrow must vanish when values are hidden.
+        var delta: MetricDeltaChip?
     }
 
     /// The wealth summary the rail also computes — the single source for net worth,
@@ -285,14 +291,67 @@ struct DashboardDestinationView: View {
         )
     }
 
+    /// The dashboard's comparison window (AND-1052): trailing 30 days vs the 30
+    /// days before, matching the hero row's existing 30-day framing ("Last
+    /// 30-day spend", the 30-day cashflow). One constant so period choice and
+    /// chip copy stay in lockstep across the heroes.
+    private static let heroComparisonPeriod = ComparisonPeriod.trailingDays(30)
+
+    /// Period-comparison chip for the net-worth hero, from recorded balance
+    /// history via `PeriodComparison.netWorthDelta` (Core). Gated on the same
+    /// multi-currency resolution as the figure itself: a mixed-currency history
+    /// has no single net-worth number, so no delta is claimed (the same reason
+    /// the safe-to-spend hero falls back to "By currency"). Core additionally
+    /// returns `nil` when history doesn't reach the prior window (young
+    /// install) and when Privacy Mask is on.
+    private func netWorthDeltaChip(
+        aggregation: CurrencyAggregation,
+        asOf: Date,
+        isMasked: Bool
+    ) -> MetricDeltaChip? {
+        guard aggregation.singleCurrency != nil,
+              let delta = PeriodComparison.netWorthDelta(
+                  history: appState.balanceHistory,
+                  period: Self.heroComparisonPeriod,
+                  asOf: asOf
+              )
+        else { return nil }
+        return MetricDeltaChip.make(
+            delta: delta,
+            comparisonLabel: Self.heroComparisonPeriod.comparisonLabel,
+            isMasked: isMasked
+        )
+    }
+
+    /// Period-comparison chip for the last-30-day-spend hero, from
+    /// `PeriodComparison.totalSpendDelta` (Core) — the override-aware spend
+    /// kernel, fed the same live review metadata + rules the budget/category
+    /// surfaces pass, so recategorizing a transaction moves both windows of the
+    /// delta identically. `nil` under Privacy Mask (Core suppresses it).
+    private func spendDeltaChip(asOf: Date, isMasked: Bool) -> MetricDeltaChip? {
+        guard let delta = PeriodComparison.totalSpendDelta(
+            transactions: appState.transactions,
+            period: Self.heroComparisonPeriod,
+            asOf: asOf,
+            metadata: appState.transactionReviewMetadata,
+            rules: appState.transactionRules
+        ) else { return nil }
+        return MetricDeltaChip.make(
+            delta: delta,
+            comparisonLabel: Self.heroComparisonPeriod.comparisonLabel,
+            isMasked: isMasked
+        )
+    }
+
     private var heroMetrics: [HeroMetric] {
         let masked = appState.shouldMaskFinancialValues
         let summary = wealthSummary
+        let asOf = Date()
         let safeToSpend = SafeToSpendCalculator.compute(
             accounts: appState.accounts,
             recurringTransactions: appState.recurringTransactions,
             cashflow: summary.cashflow,
-            asOf: Date()
+            asOf: asOf
         )
         let freshness = appState.lastSyncDate
         let netWorthAggregation = MultiCurrencyBalancePresentation.netWorth(accounts: appState.accounts)
@@ -334,6 +393,11 @@ struct DashboardDestinationView: View {
                 accounts: appState.accounts,
                 freshness: freshness,
                 privacyMaskEnabled: masked
+            ),
+            delta: netWorthDeltaChip(
+                aggregation: netWorthAggregation,
+                asOf: asOf,
+                isMasked: masked
             )
         )
 
@@ -357,7 +421,8 @@ struct DashboardDestinationView: View {
             value: PrivacyMaskPresentation.currency(summary.cashflow.spending, format: .compact, isEnabled: masked),
             systemImage: "creditcard",
             detail: "Across \(summary.cashflow.transactionCount) transaction\(summary.cashflow.transactionCount == 1 ? "" : "s")",
-            accent: .secondary
+            accent: .secondary,
+            delta: spendDeltaChip(asOf: asOf, isMasked: masked)
         )
 
         return [netWorth, safe, spend]
