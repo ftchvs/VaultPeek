@@ -132,8 +132,55 @@ public enum BalanceProjector {
             series: series,
             projectedLow: projectedLow,
             confidence: confidence,
-            accessibilitySummary: summary
+            accessibilitySummary: summary,
+            band: uncertaintyBand(series: series, confidence: confidence)
         )
+    }
+
+    // MARK: - Uncertainty band
+
+    /// Half-width multiplier per confidence tier: higher confidence → narrower
+    /// band. Public so a chart legend can explain the band width honestly.
+    public static func bandHalfWidthScale(for confidence: SafeToSpendConfidence) -> Double {
+        switch confidence {
+        case .ok: 0.5
+        case .lowConfidence: 1.0
+        case .insufficientData: 1.5
+        }
+    }
+
+    /// Deterministic uncertainty band around a projected series.
+    ///
+    /// The band's unit is the series' own mean absolute day-over-day movement
+    /// (no randomness, no external state), scaled by the confidence tier; the
+    /// half-width then grows with the square root of days out — the standard
+    /// "uncertainty compounds like a random walk" shape. Day 0 (the anchor,
+    /// a real recorded balance) always has zero width. Returns `nil` when the
+    /// series never moves (no recurring signal): a band sized from zero
+    /// movement would be a fake-precision zero-width ribbon.
+    ///
+    /// Invariant: `low <= series balance <= high` on every day, and the width
+    /// is non-decreasing across the horizon.
+    static func uncertaintyBand(
+        series: [BalanceSnapshot],
+        confidence: SafeToSpendConfidence
+    ) -> [BalanceProjection.BandPoint]? {
+        guard series.count >= 2 else { return nil }
+        var totalMovement = 0.0
+        for index in 1..<series.count {
+            totalMovement += abs(series[index].balance - series[index - 1].balance)
+        }
+        guard totalMovement > 0 else { return nil }
+
+        let unit = bandHalfWidthScale(for: confidence) * (totalMovement / Double(series.count - 1))
+        return series.enumerated().map { dayIndex, point in
+            let halfWidth = unit * Double(dayIndex).squareRoot()
+            return BalanceProjection.BandPoint(
+                date: point.date,
+                low: point.balance - halfWidth,
+                high: point.balance + halfWidth
+            )
+        }
     }
 
     // MARK: - Classification

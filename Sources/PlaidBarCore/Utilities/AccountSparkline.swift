@@ -83,7 +83,10 @@ public enum AccountSparkline {
 
     /// Maps balances onto 0...1 by min/max. A zero-spread (flat) series maps to
     /// a constant mid-line so the chart draws a level stroke, not a NaN.
-    static func normalize(_ balances: [Double]) -> [Double] {
+    /// Public so every spark strip normalizes identically — this is also the
+    /// normalizer behind `GlanceSnapshot`'s sparkline and
+    /// `PeriodComparison.dailySpendSpark`.
+    public static func normalize(_ balances: [Double]) -> [Double] {
         guard let minimum = balances.min(), let maximum = balances.max() else {
             return []
         }
