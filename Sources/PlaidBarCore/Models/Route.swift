@@ -142,6 +142,27 @@ public enum RouteDestination: String, CaseIterable, Sendable, Hashable, Codable 
         case .dashboard, .planning, .insights, .settings: nil
         }
     }
+
+    /// The destination a **deprecated** case redirects to, or `nil` for a live
+    /// destination. Deprecate-in-place (Gate-0, AND-979): a folded destination's
+    /// case stays in the enum so a persisted `lastSelectedDestination` value or an
+    /// already-indexed `vaultpeek://route/<destination>` deep link still decodes
+    /// and lands somewhere real, instead of failing to resolve. Applied at every
+    /// entry point that turns a `RouteDestination`/`Route` into the live selection
+    /// (`NavigationState.go(to:)`/`apply(_:)`, `NavigationModel.hydrate()`,
+    /// `Route.canonical(for:)`) — never route *to* a deprecated case directly.
+    ///
+    /// `.planning` folded into `.insights` 2026-07-02: its content (Safe-to-Spend
+    /// breakdown, projected-balance forecast, upcoming recurring, goals overview)
+    /// moved to Insights' Cashflow/Commitments columns. The case, `⌘4`, and
+    /// `Route.planning(section:)` all stay decode-safe; hard-deletion is a
+    /// separate, later cleanup issue after a release's confirmation window.
+    public var canonicalRedirect: RouteDestination? {
+        switch self {
+        case .planning: .insights
+        default: nil
+        }
+    }
 }
 
 // MARK: - Sub-section enums
@@ -245,13 +266,21 @@ public enum Route: Sendable, Hashable, Codable {
     /// The canonical route for a bare destination, using each case's default
     /// selection. Lets the sidebar (which selects a `RouteDestination`) produce a
     /// full `Route` without inventing selection.
+    ///
+    /// A deprecated destination (``RouteDestination/canonicalRedirect``) resolves
+    /// straight to its redirect target's canonical route — `.planning` never
+    /// constructs `.planning()` here, only `.insights()` — so a sidebar tap, a
+    /// `⌘K` result, or a resolved deep link always lands on the live destination.
     public static func canonical(for destination: RouteDestination) -> Route {
-        switch destination {
+        if let redirect = destination.canonicalRedirect {
+            return canonical(for: redirect)
+        }
+        return switch destination {
         case .dashboard: .dashboard
         case .review: .review()
         case .transactions: .transactions()
         case .budgets: .budgets()
-        case .planning: .planning()
+        case .planning: .planning() // unreachable: redirected above
         case .goals: .goals()
         case .insights: .insights()
         case .alerts: .alerts()
@@ -262,11 +291,14 @@ public enum Route: Sendable, Hashable, Codable {
 
     /// Maps a weekly-review navigation target onto a route, so the existing
     /// `WeeklyReviewNavigationTarget` deep-links land on the new destinations.
-    /// `.safeToSpend` lives on the Dashboard canvas.
+    /// `.safeToSpend` lives on the Dashboard canvas. `.recurring` used to land on
+    /// Planning's recurring section; Planning folded into Insights (2026-07-02),
+    /// so it now lands on Insights generally — Insights has no dedicated recurring
+    /// section to scroll to yet.
     public static func from(weeklyReview target: WeeklyReviewNavigationTarget) -> Route {
         switch target {
         case .reviewInbox: .review()
-        case .recurring: .planning(section: .recurring)
+        case .recurring: .insights()
         case .safeToSpend: .dashboard
         }
     }

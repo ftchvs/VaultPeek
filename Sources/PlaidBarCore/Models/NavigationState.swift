@@ -147,9 +147,11 @@ public struct NavigationState: Sendable, Equatable, Codable {
 
     /// Navigate to a bare destination, preserving the per-destination selection
     /// already held. (Selection within a destination is preserved across
-    /// destination switches — the selection-restoration contract.)
+    /// destination switches — the selection-restoration contract.) A deprecated
+    /// destination (``RouteDestination/canonicalRedirect``) redirects to its live
+    /// target instead — the deprecate-in-place mechanism (Gate-0, AND-979).
     public mutating func go(to destination: RouteDestination) {
-        self.destination = destination
+        self.destination = destination.canonicalRedirect ?? destination
     }
 
     /// Apply a typed ``Route``: select its destination and fold any carried
@@ -157,8 +159,13 @@ public struct NavigationState: Sendable, Equatable, Codable {
     /// owns (dashboard account selection) are written here; richer per-destination
     /// selection (transaction id, category, goal id) is added as those
     /// destinations land in later Epic 2 subs.
+    ///
+    /// A route targeting a deprecated destination lands on its redirect instead
+    /// (``RouteDestination/canonicalRedirect``) — the deprecate-in-place mechanism
+    /// (Gate-0, AND-979) — so an old `.planning(section:)` construction still
+    /// resolves somewhere live rather than a destination nothing renders.
     public mutating func apply(_ route: Route) {
-        destination = route.destination
+        destination = route.destination.canonicalRedirect ?? route.destination
         switch route {
         case .accounts(let itemID):
             // An account deep-link selects that account on the dashboard surface

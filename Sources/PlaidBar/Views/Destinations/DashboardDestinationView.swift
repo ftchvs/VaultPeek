@@ -170,7 +170,9 @@ struct DashboardDestinationView: View {
         VStack(alignment: .leading, spacing: WindowMetrics.lg) {
             columnHeader("Money & insights", systemImage: "chart.pie")
 
-            DashboardRecurringCard(onOpen: { openRoute(.planning(section: .recurring)) })
+            // Planning folded into Insights 2026-07-02 (Gate-0, AND-979); the
+            // recurring detail now lives in Insights' Commitments column.
+            DashboardRecurringCard(onOpen: { openRoute(.insights()) })
 
             DashboardGoalsCard(onOpen: { openRoute(.goals()) })
 

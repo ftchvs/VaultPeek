@@ -6,14 +6,24 @@ import Testing
 struct CommandRegistryDefaultTests {
     private let registry = CommandRegistry.makeDefault()
 
-    @Test("Has a navigate command for every destination, the 4 act verbs, and find")
+    /// The destinations a navigate command exists for — every `RouteDestination`
+    /// except deprecated-in-place ones (``RouteDestination/canonicalRedirect``,
+    /// e.g. `.planning`, folded into Insights 2026-07-02, Gate-0 AND-979). A
+    /// "Go to Planning" result would just duplicate "Go to Insights", so the
+    /// deprecated case has no navigate command of its own — it's still
+    /// findable by its old keywords, folded into Insights' keyword list.
+    private var liveDestinations: [RouteDestination] {
+        RouteDestination.allCases.filter { $0.canonicalRedirect == nil }
+    }
+
+    @Test("Has a navigate command for every live destination, the 4 act verbs, and find")
     func completeness() {
         let commands = registry.commands
 
-        // Navigate: one per RouteDestination.
+        // Navigate: one per live (non-deprecated) RouteDestination.
         let navigateDestinations = commands.compactMap { $0.kind.navigationDestination }
-        #expect(Set(navigateDestinations) == Set(RouteDestination.allCases))
-        #expect(navigateDestinations.count == RouteDestination.allCases.count)
+        #expect(Set(navigateDestinations) == Set(liveDestinations))
+        #expect(navigateDestinations.count == liveDestinations.count)
 
         // Act: exactly the four global verbs.
         let actions = commands.compactMap { command -> CommandRegistry.Action? in
@@ -27,8 +37,8 @@ struct CommandRegistryDefaultTests {
         let findCount = commands.filter { $0.kind == .find }.count
         #expect(findCount == 1)
 
-        // Total = 10 destinations + 4 acts + 1 find = 15.
-        #expect(commands.count == RouteDestination.allCases.count + 4 + 1)
+        // Total = 9 live destinations + 4 acts + 1 find = 14.
+        #expect(commands.count == liveDestinations.count + 4 + 1)
     }
 
     @Test("All command ids are unique and stable")
@@ -56,11 +66,12 @@ struct CommandRegistryDefaultTests {
     @Test("Display order is navigate (sidebar order) → act → find")
     func displayOrder() {
         let kinds = registry.commands.map(\.kind)
-        let navigateCount = RouteDestination.allCases.count
+        let navigateCount = liveDestinations.count
 
-        // First N are navigate, in sidebar (allCases) order.
+        // First N are navigate, in sidebar (allCases, minus deprecated-in-place
+        // destinations) order.
         let navigatePrefix = kinds.prefix(navigateCount).compactMap(\.navigationDestination)
-        #expect(navigatePrefix == RouteDestination.allCases)
+        #expect(navigatePrefix == liveDestinations)
 
         // Then the four acts, then find last.
         #expect(kinds[navigateCount] == .act(.refresh))
@@ -124,8 +135,11 @@ struct CommandRegistrySearchTests {
 
     @Test("Keyword-driven navigation: unique synonyms surface their destination")
     func keywordNavigation() {
-        // "subscriptions" is unique to Planning; "limits" is unique to Budgets.
-        #expect(registry.search("subscriptions").first?.kind == .navigate(.planning))
+        // "subscriptions" was unique to Planning; folded into Insights' keyword
+        // list when Planning was deprecated-in-place (2026-07-02, Gate-0
+        // AND-979), so it now surfaces "Go to Insights". "limits" is unique to
+        // Budgets.
+        #expect(registry.search("subscriptions").first?.kind == .navigate(.insights))
         #expect(registry.search("limits").first?.kind == .navigate(.budgets))
         // "banks" is unique to Accounts.
         #expect(registry.search("banks").first?.kind == .navigate(.accounts))

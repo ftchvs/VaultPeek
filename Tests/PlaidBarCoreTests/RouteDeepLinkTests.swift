@@ -10,7 +10,11 @@ struct RouteDeepLinkTests {
             let urlString = RouteDeepLink.urlString(for: destination)
             let url = try #require(URL(string: urlString))
             let route = try #require(RouteDeepLink.route(from: url))
-            #expect(route.destination == destination)
+            // A deprecated-in-place destination's already-indexed deep link
+            // (e.g. an old vaultpeek://route/planning widget/Spotlight item)
+            // still resolves — to its live redirect target, not itself
+            // (Gate-0, AND-979 — decode-safety, not a dead link).
+            #expect(route.destination == destination.canonicalRedirect ?? destination)
             // The canonical route for the destination is what a bare deep link
             // resolves to (no per-row selection carried).
             #expect(route == Route.canonical(for: destination))
