@@ -1692,10 +1692,12 @@ struct PlaidBarTests {
         #expect(dashboard.contains("isMasked: masked"))
         #expect(dashboard.contains("spendDeltaChip(asOf: asOf, isMasked: masked)"))
 
-        // The net-worth chip is gated on single-currency resolution — a
-        // mixed-currency delta is meaningless (same gate as the "By currency"
-        // fallback).
-        #expect(dashboard.contains("aggregation.singleCurrency != nil"))
+        // The net-worth chip is gated on the figure resolving to USD
+        // specifically — a mixed-currency delta is meaningless (same reason as
+        // the "By currency" fallback), and the Core chip's text/spoken label
+        // are USD-only ("$", "dollars"), so a single non-USD figure must not
+        // carry a dollar-denominated chip either.
+        #expect(dashboard.contains("aggregation.singleCurrency == .usd"))
 
         // The tile folds the chip's spelled-out label into its one combined
         // VoiceOver element instead of exposing a separate glyph element.
