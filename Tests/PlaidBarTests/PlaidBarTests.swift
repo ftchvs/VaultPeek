@@ -1658,6 +1658,51 @@ struct PlaidBarTests {
         #expect(card.contains("Open Goals"))
     }
 
+    /// Source-invariant guard for AND-1052: the Dashboard hero delta chips are
+    /// built exclusively through the mask-aware Core factory
+    /// (`MetricDeltaChip.make(isMasked:)`, which returns `nil` under Privacy
+    /// Mask) and are fed the same masking source the hero values use — so a
+    /// masked figure can never leak even a bare direction arrow. The app target
+    /// is an `@main` executable that can't be `@testable import`ed, so this pins
+    /// the wiring (the mask-suppression *math* is unit-tested in
+    /// PlaidBarCoreTests).
+    @Test("Dashboard hero delta chips route through mask-aware Core construction (AND-1052)")
+    func dashboardHeroDeltaChipsAreMaskAware() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let dashboard = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/Destinations/DashboardDestinationView.swift"),
+            encoding: .utf8
+        )
+        let tile = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/Destinations/WindowSection.swift"),
+            encoding: .utf8
+        )
+
+        // The chips come only from the Core factory — never the raw memberwise
+        // init, which would bypass the Privacy Mask suppression.
+        #expect(dashboard.contains("MetricDeltaChip.make("))
+        #expect(!dashboard.contains("MetricDeltaChip(glyph:"))
+
+        // Both chip builders thread the mask through to Core, and both call
+        // sites pass the same `shouldMaskFinancialValues`-derived flag the hero
+        // values themselves run through.
+        #expect(dashboard.contains("let masked = appState.shouldMaskFinancialValues"))
+        #expect(dashboard.contains("isMasked: isMasked"))
+        #expect(dashboard.contains("delta: netWorthDeltaChip("))
+        #expect(dashboard.contains("isMasked: masked"))
+        #expect(dashboard.contains("spendDeltaChip(asOf: asOf, isMasked: masked)"))
+
+        // The net-worth chip is gated on single-currency resolution — a
+        // mixed-currency delta is meaningless (same gate as the "By currency"
+        // fallback).
+        #expect(dashboard.contains("aggregation.singleCurrency != nil"))
+
+        // The tile folds the chip's spelled-out label into its one combined
+        // VoiceOver element instead of exposing a separate glyph element.
+        #expect(tile.contains("if let delta { parts.append(delta.accessibilityLabel) }"))
+        #expect(tile.contains("DeltaChip(chip: delta)"))
+    }
+
     @Test("Demo goals never persist over real local-first goals")
     func demoGoalsStayInMemoryOnlyAndRestoreOnExit() throws {
         let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)

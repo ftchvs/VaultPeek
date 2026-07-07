@@ -144,6 +144,12 @@ struct WindowHeroMetricTile: View {
     /// explains the number's sources, freshness, and exclusions. Already
     /// privacy-mask-aware (built masked when values are hidden).
     var provenance: FigureProvenance?
+    /// Optional period-comparison chip under the figure (AND-1052) — "▲ +$420 vs
+    /// last month". Built by `MetricDeltaChip.make` in Core, which already
+    /// suppresses it under Privacy Mask (returns `nil`) and for insignificant
+    /// movement. Declared last so the memberwise init keeps every existing
+    /// call site compiling unchanged.
+    var delta: MetricDeltaChip?
 
     var body: some View {
         VStack(alignment: .leading, spacing: WindowMetrics.xs) {
@@ -189,6 +195,10 @@ struct WindowHeroMetricTile: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
 
+            if let delta {
+                DeltaChip(chip: delta)
+            }
+
             if let detail {
                 Text(detail)
                     .windowSupportingText()
@@ -201,6 +211,10 @@ struct WindowHeroMetricTile: View {
 
     private var accessibilityLabel: String {
         var parts = ["\(label): \(value)"]
+        // Spoken in visual order (value → delta → detail); the chip contributes
+        // its spelled-out Core label ("Up 420 dollars versus last month") so the
+        // tile stays one combined VoiceOver element with no glyphs to guess at.
+        if let delta { parts.append(delta.accessibilityLabel) }
         if let detail { parts.append(detail) }
         return parts.joined(separator: ". ")
     }
@@ -286,7 +300,13 @@ extension View {
                 systemImage: "chart.line.uptrend.xyaxis",
                 detail: "across 6 accounts",
                 accent: SemanticColors.brand,
-                reduceMotion: false
+                reduceMotion: false,
+                delta: MetricDeltaChip(
+                    glyph: "▲",
+                    text: "+$1,240 vs last month",
+                    sentiment: .positive,
+                    accessibilityLabel: "Up 1240 dollars versus last month"
+                )
             )
             WindowHeroMetricTile(
                 label: "Safe to spend",
