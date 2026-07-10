@@ -59,7 +59,7 @@ struct DashboardActivityHeatmapCard: View {
             ? PrivacyMaskPresentation.compactValue
             : Formatters.currency(layout.totalValue, format: .compact)
         return VStack(alignment: .leading, spacing: WindowMetrics.xs) {
-            Label("\(layout.activeDayCount) active days in the last year", systemImage: "calendar")
+            Label(masked ? "Activity summary hidden" : "\(layout.activeDayCount) active days in the last year", systemImage: "calendar")
                 .windowBodyText()
             Text(masked
                 ? "Activity totals are hidden while VaultPeek is private."
@@ -499,7 +499,7 @@ struct DashboardYearHeatmapGrid: View {
             "\(layout.mode.summaryTitle) heatmap for the last 365 days with \(layout.activeDayCount) active days. \(layout.mode.semanticDescription)."
         )
         // VoiceOver audio graph over the active days (AND-569) — same Core source.
-        .audioGraph(ChartAudioGraph.heatmap(layout, isPrivacyMasked: false))
+        .audioGraph(ChartAudioGraph.heatmap(layout, isPrivacyMasked: isPrivacyMasked))
     }
 
     /// Resolve the cell size **and** inter-cell gap so the full 53-week year fits the

@@ -1705,6 +1705,37 @@ struct PlaidBarTests {
         #expect(tile.contains("DeltaChip(chip: delta)"))
     }
 
+    @Test("Activity heatmap privacy mask withholds active-day counts from text and audio surfaces")
+    func activityHeatmapPrivacyMaskWithholdsActiveDayCounts() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let dashboard = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/Destinations/DashboardOverviewColumn.swift"),
+            encoding: .utf8
+        )
+        let insights = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/Destinations/InsightsTrendsView.swift"),
+            encoding: .utf8
+        )
+        let popover = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBar/Views/MainPopover.swift"),
+            encoding: .utf8
+        )
+        let audioGraph = try String(
+            contentsOf: root.appending(path: "Sources/PlaidBarCore/Utilities/ChartAudioGraph.swift"),
+            encoding: .utf8
+        )
+
+        #expect(dashboard.contains("Label(masked ? \"Activity summary hidden\" : \"\\(layout.activeDayCount) active days in the last year\""))
+        #expect(insights.contains("Label(isMasked ? \"Activity summary hidden\" : \"\\(layout.activeDayCount) active days in the last year\""))
+        #expect(popover.contains("if appState.shouldMaskFinancialValues { return \"Activity hidden\" }"))
+        #expect(popover.contains("heatmap details are hidden while VaultPeek is private"))
+        #expect(dashboard.contains("ChartAudioGraph.heatmap(layout, isPrivacyMasked: isPrivacyMasked)"))
+        #expect(insights.contains("ChartAudioGraph.heatmap(layout, isPrivacyMasked: isPrivacyMasked)"))
+        #expect(audioGraph.contains("if isPrivacyMasked"))
+        #expect(audioGraph.contains("points: []"))
+        #expect(audioGraph.contains("Activity heatmap details are hidden while VaultPeek is private."))
+    }
+
     @Test("Demo goals never persist over real local-first goals")
     func demoGoalsStayInMemoryOnlyAndRestoreOnExit() throws {
         let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)

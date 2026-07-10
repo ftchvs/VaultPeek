@@ -1018,7 +1018,7 @@ private struct BalanceActivityHeatmap: View {
 
                 Spacer()
 
-                Text(isInitialLoad ? "Loading activity" : "\(layout.activeDayCount) active days")
+                Text(activityCountLabel(isInitialLoad: isInitialLoad, layout: layout))
                     .microText()
                     .foregroundStyle(.secondary)
             }
@@ -1047,7 +1047,7 @@ private struct BalanceActivityHeatmap: View {
         .accessibilityLabel(
             isInitialLoad
                 ? (loadState?.loadingAccessibilityLabel ?? "Loading activity heatmap.")
-                : "\(layout.mode.summaryTitle) heatmap for the last 365 days with \(layout.activeDayCount) active days. \(layout.mode.semanticDescription). Select a day to see its detail."
+                : activityAccessibilityLabel(layout: layout)
         )
         // VoiceOver audio graph over the active days. Suppressed during the first
         // sync (placeholder grid) and honors Privacy Mask (AND-569).
@@ -1064,6 +1064,19 @@ private struct BalanceActivityHeatmap: View {
                 )
                 : ChartAudioGraph.heatmap(layout, isPrivacyMasked: appState.shouldMaskFinancialValues)
         )
+    }
+
+    private func activityCountLabel(isInitialLoad: Bool, layout: SpendingHeatmapLayout) -> String {
+        if isInitialLoad { return "Loading activity" }
+        if appState.shouldMaskFinancialValues { return "Activity hidden" }
+        return "\(layout.activeDayCount) active days"
+    }
+
+    private func activityAccessibilityLabel(layout: SpendingHeatmapLayout) -> String {
+        if appState.shouldMaskFinancialValues {
+            return "\(layout.mode.summaryTitle) heatmap details are hidden while VaultPeek is private."
+        }
+        return "\(layout.mode.summaryTitle) heatmap for the last 365 days with \(layout.activeDayCount) active days. \(layout.mode.semanticDescription). Select a day to see its detail."
     }
 
     @ViewBuilder
