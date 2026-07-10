@@ -1081,7 +1081,14 @@ private struct BalanceActivityHeatmap: View {
 
     @ViewBuilder
     private func focusedDayCaption(for layout: SpendingHeatmapLayout) -> some View {
-        if let summary = SpendingHeatmap.focusedDaySummary(for: selectedDay, in: layout, isPrivacyMasked: appState.shouldMaskFinancialValues), !isInitialLoad {
+        if selectedDay != nil, appState.shouldMaskFinancialValues, !isInitialLoad {
+            Text(maskedHeatmapDayDetailLabel(for: layout.mode))
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(AppearanceTextColors.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+                .accessibilityLabel(maskedHeatmapDayDetailLabel(for: layout.mode))
+        } else if let summary = SpendingHeatmap.focusedDaySummary(for: selectedDay, in: layout, isPrivacyMasked: appState.shouldMaskFinancialValues), !isInitialLoad {
             HStack(spacing: 4) {
                 Image(systemName: "calendar")
                     .font(.system(size: 9, weight: .semibold))
@@ -1100,6 +1107,10 @@ private struct BalanceActivityHeatmap: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
+    }
+
+    private func maskedHeatmapDayDetailLabel(for mode: SpendingHeatmapMode) -> String {
+        "\(mode.summaryTitle) day details are hidden while VaultPeek is private."
     }
 
     private func toggleSelection(_ day: String) {
@@ -1244,7 +1255,10 @@ private struct BalanceHeatmapCell: View {
     }
 
     private var helpText: String {
-        SpendingHeatmap.cellLabel(for: day, mode: mode, isPrivacyMasked: isPrivacyMasked)
+        if isPrivacyMasked {
+            return "\(mode.summaryTitle) day details are hidden while VaultPeek is private."
+        }
+        return SpendingHeatmap.cellLabel(for: day, mode: mode)
     }
 
     static func fillColor(intensity: Double, value: Double, mode: SpendingHeatmapMode) -> Color {
