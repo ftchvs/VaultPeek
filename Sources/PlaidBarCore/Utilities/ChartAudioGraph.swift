@@ -318,13 +318,30 @@ public enum ChartAudioGraph {
     /// zero-pitch noise). x is a day index across the active days (each labeled
     /// with its date), y is the day's signed value in the active mode. Discrete.
     ///
-    /// When Privacy Mask is on, the per-point spoken label drops the exact amount
-    /// but keeps the date + transaction count, mirroring the heatmap's masked
-    /// header total. Returns no points when there is no activity.
+    /// When Privacy Mask is on, the heatmap's spoken surface withholds active-day
+    /// counts, per-day dates, and transaction counts as behavioral finance
+    /// metadata. Returns no points when there is no activity or masking is active.
     public static func heatmap(
         _ layout: SpendingHeatmapLayout,
         isPrivacyMasked: Bool = false
     ) -> Descriptor {
+        if isPrivacyMasked {
+            return Descriptor(
+                title: layout.mode.summaryTitle,
+                summary: "Activity heatmap details are hidden while VaultPeek is private.",
+                xAxis: NumericAxis(title: "Active day", lowerBound: 0, upperBound: 0),
+                yAxis: NumericAxis(
+                    title: layout.mode == .spending ? "Spend" : "Net cashflow",
+                    lowerBound: 0,
+                    upperBound: 0
+                ),
+                seriesName: layout.mode.shortLabel,
+                isContinuous: false,
+                isPrivacyMasked: true,
+                points: []
+            )
+        }
+
         let activeDays = layout.days.filter { $0.transactionCount > 0 }
 
         let points = activeDays.enumerated().map { index, day -> Point in

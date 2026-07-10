@@ -191,7 +191,7 @@ struct ChartAudioGraphTests {
         #expect(descriptor.yAxis.title == "Spend")
     }
 
-    @Test("heatmap point labels carry the amount when unmasked and hide it when masked")
+    @Test("heatmap point labels carry the amount when unmasked and withhold points when masked")
     func heatmapLabelMasking() {
         let calendar = Calendar.current
         let end = calendar.startOfDay(for: Date())
@@ -202,9 +202,8 @@ struct ChartAudioGraphTests {
         #expect(try! #require(unmasked.points.first).label.contains("$75"))
 
         let masked = ChartAudioGraph.heatmap(layout, isPrivacyMasked: true)
-        let maskedPoint = try! #require(masked.points.first)
-        #expect(!maskedPoint.label.contains("$"))
-        #expect(maskedPoint.label.contains("transaction"))
+        #expect(masked.points.isEmpty)
+        #expect(masked.summary == "Activity heatmap details are hidden while VaultPeek is private.")
     }
 
     @Test("empty heatmap yields an empty descriptor")
@@ -269,7 +268,7 @@ struct ChartAudioGraphTests {
 
         let masked = ChartAudioGraph.heatmap(layout, isPrivacyMasked: true)
         #expect(masked.isPrivacyMasked)
-        #expect(!ChartAudioGraph.yAxisValueDescription(masked.points[0].yValue, isMasked: masked.isPrivacyMasked).contains("$"))
+        #expect(masked.points.isEmpty)
     }
 
     @Test("trend descriptor is unmasked (trend chart is not privacy-masked)")
@@ -343,7 +342,7 @@ struct ChartAudioGraphTests {
         #expect(leaked.isEmpty)
     }
 
-    @Test("masked heatmap's full spoken surface leaks no amount")
+    @Test("masked heatmap's full spoken surface leaks no amount or activity counts")
     func heatmapAxSpokenStringsFullyMasked() {
         let calendar = Calendar.current
         let end = calendar.startOfDay(for: Date())
@@ -351,9 +350,12 @@ struct ChartAudioGraphTests {
         let layout = heatmapLayout([transaction(day, amount: 75)])
 
         let masked = ChartAudioGraph.heatmap(layout, isPrivacyMasked: true)
+        #expect(masked.points.isEmpty)
         for line in masked.axSpokenStrings() {
             #expect(!line.contains("$"))
             #expect(!line.contains("75"))
+            #expect(!line.localizedCaseInsensitiveContains("active day"))
+            #expect(!line.localizedCaseInsensitiveContains("transaction"))
         }
     }
 

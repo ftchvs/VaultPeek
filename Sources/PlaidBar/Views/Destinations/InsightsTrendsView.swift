@@ -134,7 +134,7 @@ struct InsightsTrendsView: View {
             ? PrivacyMaskPresentation.compactValue
             : Formatters.currency(layout.totalValue, format: .compact)
         return VStack(alignment: .leading, spacing: WindowMetrics.xs) {
-            Label("\(layout.activeDayCount) active days in the last year", systemImage: "calendar")
+            Label(isMasked ? "Activity summary hidden" : "\(layout.activeDayCount) active days in the last year", systemImage: "calendar")
                 .windowBodyText()
             Text(isMasked
                 ? "Activity totals are hidden while VaultPeek is private."
@@ -211,7 +211,7 @@ struct InsightsActivityHeatmapGrid: View {
             "\(layout.mode.summaryTitle) heatmap for the last 365 days with \(layout.activeDayCount) active days. \(layout.mode.semanticDescription)."
         )
         // VoiceOver audio graph over the active days (AND-569).
-        .audioGraph(ChartAudioGraph.heatmap(layout, isPrivacyMasked: false))
+        .audioGraph(ChartAudioGraph.heatmap(layout, isPrivacyMasked: isPrivacyMasked))
     }
 
     @ViewBuilder
